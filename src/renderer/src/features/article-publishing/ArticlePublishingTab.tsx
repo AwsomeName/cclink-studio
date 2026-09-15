@@ -1,3 +1,5 @@
+import { canReduceUnsubmittedTags } from '@shared/article-publishing/reduce-unsubmitted-tags'
+import { toutiaoRecoveryPage } from '@shared/article-publishing/toutiao-recovery-page'
 import {
   eligibleBilibiliRetryEffect,
   canCarryUnusedBilibiliRetry,
@@ -436,7 +438,8 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     const attempt = affair?.attempts.find(
       (item) => item.id === affair.articlePublishing?.execution.currentAttemptId,
     )
-    if (!attempt?.tabId) {
+    const tabId = attempt?.tabId ?? toutiaoRecoveryPage(affair?.articlePublishing)?.tabId
+    if (!tabId) {
       setError('当前任务尚未绑定可见网页')
       return
     }
@@ -444,7 +447,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       source: 'toolbar',
       target: {
         kind: 'tab',
-        tabId: attempt.tabId,
+        tabId,
         tabType: 'browser',
         workspaceKey: workspaceRefKey(workspaceRef),
       },
@@ -566,6 +569,37 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                   ? 'Agent、BrowserTask、Tab 与 CDP 均仍在运行；右侧已切到对应 Agent 会话。'
                   : '主进程已重新核验 Agent、BrowserTask、Tab 与 CDP 状态。',
       )
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeTag = async (tag: string): Promise<void> => {
+    const state = affair?.articlePublishing
+    if (
+      !workspaceRef ||
+      !affairId ||
+      !state?.execution.currentAttemptId ||
+      !state.execution.currentLaunchOperationId
+    )
+      return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await window.cclinkStudio.articlePublishing.reduceTags({
+        workspaceRef,
+        affairId,
+        attemptId: state.execution.currentAttemptId,
+        executionGeneration: state.execution.currentGeneration,
+        launchOperationId: state.execution.currentLaunchOperationId,
+        expectedTags: state.fields.tags,
+        tags: state.fields.tags.filter((value) => value !== tag),
+      })
+      if (!result.success) throw new Error(result.error.message)
+      setAffair(result.data)
+      setNotice('标签已删减；原草稿、正文和图片保留，请从中断处继续重新核验。')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -1073,6 +1107,21 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <div className="article-publishing-config-item">
             <span>标签</span>
             <strong>{publishing.fields.tags.join('、') || '未填写'}</strong>
+            {canReduceUnsubmittedTags(publishing) && (
+              <div className="article-publishing-actions">
+                <small>平台不支持的标签可以移除，至少保留一个；继续后重新核验。</small>
+                {publishing.fields.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void removeTag(tag)}
+                  >
+                    移除标签：{tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="article-publishing-config-item">
             <span>分类</span>

@@ -15,7 +15,14 @@ export async function locateToutiaoDraft(
   await rowTitle.first().waitFor({ state: 'visible', timeout: 10_000 })
   const live = await readToutiaoPage(page)
   assertCurrent()
-  if (!live.management || live.uid !== expected.uid) throw new Error('头条草稿箱原账号不一致')
+  if (
+    !live.management ||
+    (live.accountIdentityCount ?? 0) > 1 ||
+    (live.uid !== undefined && live.uid !== expected.uid)
+  )
+    throw new Error(
+      `头条草稿箱原账号不一致；管理页=${live.management}；当前UID=${live.uid ?? '未读到'}；预期UID=${expected.uid}`,
+    )
   if ((await rowTitle.count()) !== 1) throw new Error('头条同标题草稿不唯一，不能按位置猜测')
   let row = rowTitle
   let edit = row.getByText('编辑', { exact: true })
@@ -41,7 +48,17 @@ export async function locateToutiaoDraft(
   const anchor = parsePlatformDraftAnchor(result.popup.url())
   if (anchor?.adapterId !== 'toutiao' || anchor.draftId !== expected.draftId)
     throw new Error('头条实际打开的草稿 ID 与原任务不一致，禁止继续')
-  if (page.url() !== TOUTIAO_MANAGEMENT_URL || (await readToutiaoPage(page)).uid !== expected.uid)
+  // This returns only a read-only candidate URL. The recovery coordinator must
+  // navigate the original visible Tab and verify its account, ID, title and
+  // saved content before marking recovery complete or granting any write.
+  const latest = await readToutiaoPage(page)
+  if (
+    page.url() !== TOUTIAO_MANAGEMENT_URL ||
+    !latest.management ||
+    (latest.accountIdentityCount ?? 0) > 1 ||
+    (latest.uid !== undefined && latest.uid !== expected.uid) ||
+    (live.uid !== undefined && latest.uid !== expected.uid)
+  )
     throw new Error('头条草稿箱在找回过程中变化，旧候选已废弃')
   assertCurrent()
   return anchor.url

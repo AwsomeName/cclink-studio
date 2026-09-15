@@ -140,6 +140,18 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     },
   )
 
+  it('blocks the closed-shadow Xiaohongshu final click without an article permit', async () => {
+    const locator = vi.fn()
+    const module = new BrowserToolModule({} as any)
+    const reason = await (module as any).getGenericSensitiveActionReason(
+      'click',
+      { selector: 'xhs-publish-btn[submit-text="发布"]' },
+      { locator },
+    )
+    expect(reason).toContain('文章发布事务的精确授权')
+    expect(locator).not.toHaveBeenCalled()
+  })
+
   it('forces one-time confirmation for a V2EX final publish control', async () => {
     const page = {
       url: () => 'https://www.v2ex.com/new/create',

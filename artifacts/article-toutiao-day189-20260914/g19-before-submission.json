@@ -1,0 +1,3256 @@
+{
+  "id": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+  "kind": "article-publishing",
+  "workspaceId": "941ad8a1-aa46-4635-b085-3aaa412fb2c5",
+  "title": "做AI眼镜第189天，它学会主动找你聊天了",
+  "objective": "将 /Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md 发布到 头条微头条",
+  "status": "needs-attention",
+  "principalId": "0ad7d020-21d0-4dde-903f-f65b7dc7480f",
+  "websiteIds": [
+    "b88c8524-1fed-443c-abb9-c4fa0022e678"
+  ],
+  "accountIds": [
+    "1345b278-f2bf-4d40-ac5f-437d8a0b3c14"
+  ],
+  "materials": [
+    {
+      "id": "d2417574-6a1b-4f28-84ef-474de8538f79",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md",
+      "name": "小红书软文.md",
+      "state": "available",
+      "size": 1418,
+      "modifiedAt": "2026-09-13T09:33:21.641Z",
+      "checkedAt": "2026-09-14T01:39:05.935Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "e19486c1-f711-4732-82e3-a9b6c673993f",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/01-封面.png",
+      "name": "01-封面.png",
+      "state": "available",
+      "size": 1925855,
+      "modifiedAt": "2026-09-13T08:40:13.822Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "67de1bdd-555b-4936-ad0f-43bfc940e038",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+      "name": "02-陪伴界面效果图.png",
+      "state": "available",
+      "size": 1743107,
+      "modifiedAt": "2026-09-13T08:40:13.829Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "527d2288-449b-4d00-ad14-c84bbb48f93c",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+      "name": "03-暂停观察真机截图.png",
+      "state": "available",
+      "size": 1083436,
+      "modifiedAt": "2026-09-13T08:40:13.835Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    }
+  ],
+  "flow": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+        "type": "web-task",
+        "title": "发布文章到 头条微头条",
+        "description": "按冻结文章、账号和平台字段执行；特殊卡点转人工。",
+        "status": "waiting-human",
+        "executor": "ai",
+        "accountIds": [
+          "1345b278-f2bf-4d40-ac5f-437d8a0b3c14"
+        ],
+        "materialIds": [
+          "d2417574-6a1b-4f28-84ef-474de8538f79",
+          "e19486c1-f711-4732-82e3-a9b6c673993f",
+          "67de1bdd-555b-4936-ad0f-43bfc940e038",
+          "527d2288-449b-4d00-ad14-c84bbb48f93c"
+        ],
+        "successCriteria": [
+          "全部正文图片已经后置核验",
+          "发布结果 URL 可复核"
+        ],
+        "availableTransitions": [
+          "ready",
+          "verifying",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "lastResultNote": "头条草稿箱原账号不一致",
+        "createdAt": "2026-09-14T01:39:05.231Z",
+        "updatedAt": "2026-09-14T03:43:08.433Z"
+      }
+    ],
+    "edges": []
+  },
+  "attempts": [
+    {
+      "id": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "number": 1,
+      "status": "interrupted",
+      "executionGeneration": 19,
+      "launchOperationId": "50155e07-79f3-45c1-afea-89f01e8e9d73",
+      "runtimeBindings": [
+        {
+          "id": "01eef87f-f3f0-412a-9c5b-fb3fb677aa86",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 6,
+          "launchOperationId": "6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:03:26.707Z",
+          "lastObservedAt": "2026-09-14T02:09:11.235Z",
+          "endedAt": "2026-09-14T02:09:11.235Z",
+          "terminalReason": "Agent Run 或 BrowserTask 已取消",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+          "agentRuntimeEpoch": 1789351371166,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "608fc0ca-c859-49a3-b16c-896d2ac26798",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 6,
+          "launchOperationId": "6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:03:26.707Z",
+          "lastObservedAt": "2026-09-14T02:09:11.235Z",
+          "endedAt": "2026-09-14T02:09:11.235Z",
+          "terminalReason": "Agent Run 或 BrowserTask 已取消",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 2,
+          "webContentsId": 3
+        },
+        {
+          "id": "8228447d-14e0-47e7-9ccc-b2159878e978",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 6,
+          "launchOperationId": "6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:03:26.707Z",
+          "lastObservedAt": "2026-09-14T02:09:11.235Z",
+          "endedAt": "2026-09-14T02:09:11.235Z",
+          "terminalReason": "Agent Run 或 BrowserTask 已取消",
+          "kind": "browser-task",
+          "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 2,
+          "webContentsId": 3,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 2
+        },
+        {
+          "id": "bc1db71b-f00d-42cb-9f8c-f35d0f716fd7",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 8,
+          "launchOperationId": "160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:14:38.644Z",
+          "lastObservedAt": "2026-09-14T02:19:18.556Z",
+          "endedAt": "2026-09-14T02:19:18.556Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+          "agentRuntimeEpoch": 1789352029300,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "b75fcef4-a04d-4348-b470-30944bc97c8e",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 8,
+          "launchOperationId": "160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:14:38.644Z",
+          "lastObservedAt": "2026-09-14T02:19:18.556Z",
+          "endedAt": "2026-09-14T02:19:18.556Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "7e3fb706-2063-49af-85be-c82feac82f31",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 8,
+          "launchOperationId": "160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:14:38.644Z",
+          "lastObservedAt": "2026-09-14T02:19:18.556Z",
+          "endedAt": "2026-09-14T02:19:18.556Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "browser-task",
+          "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "3e29d908-b6c8-4dcb-b87f-bde5258cf7ef",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 9,
+          "launchOperationId": "c94daeda-074a-46cd-a921-1dcf9e9365fd",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:20:34.880Z",
+          "lastObservedAt": "2026-09-14T02:22:32.655Z",
+          "endedAt": "2026-09-14T02:22:32.655Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+          "agentRuntimeEpoch": 1789352369450,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "ee95654c-4b49-4c50-8679-7b9c8b1243f1",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 9,
+          "launchOperationId": "c94daeda-074a-46cd-a921-1dcf9e9365fd",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:20:34.880Z",
+          "lastObservedAt": "2026-09-14T02:22:32.655Z",
+          "endedAt": "2026-09-14T02:22:32.655Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "e79bb9f2-943f-4d64-8a3d-856f16921107",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 9,
+          "launchOperationId": "c94daeda-074a-46cd-a921-1dcf9e9365fd",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:20:34.880Z",
+          "lastObservedAt": "2026-09-14T02:22:32.655Z",
+          "endedAt": "2026-09-14T02:22:32.655Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-task",
+          "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "0854863f-e763-4b73-8a08-a8eb178b9242",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 14,
+          "launchOperationId": "20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:56:35.772Z",
+          "lastObservedAt": "2026-09-14T02:58:45.861Z",
+          "endedAt": "2026-09-14T02:58:45.861Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+          "agentRuntimeEpoch": 1789354208080,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "5fb6d556-b892-4d92-bdd0-5687a3068d80",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 14,
+          "launchOperationId": "20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:56:35.772Z",
+          "lastObservedAt": "2026-09-14T02:58:45.861Z",
+          "endedAt": "2026-09-14T02:58:45.861Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "a7ebdb69-683b-440c-b3d1-9359ae68b842",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 14,
+          "launchOperationId": "20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+          "status": "terminal",
+          "boundAt": "2026-09-14T02:56:35.772Z",
+          "lastObservedAt": "2026-09-14T02:58:45.861Z",
+          "endedAt": "2026-09-14T02:58:45.861Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-task",
+          "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "300bac47-ac20-4ca9-b3c0-f0f94f13ee7b",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 16,
+          "launchOperationId": "24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:07:11.502Z",
+          "lastObservedAt": "2026-09-14T03:09:27.708Z",
+          "endedAt": "2026-09-14T03:09:27.708Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+          "agentRuntimeEpoch": 1789355188321,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "7bc39230-91c3-4264-adc9-b02b2ba79bba",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 16,
+          "launchOperationId": "24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:07:11.502Z",
+          "lastObservedAt": "2026-09-14T03:09:27.708Z",
+          "endedAt": "2026-09-14T03:09:27.708Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "bbd52954-a2ea-457a-98b3-a98464ccdd2b",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 16,
+          "launchOperationId": "24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:07:11.502Z",
+          "lastObservedAt": "2026-09-14T03:09:27.708Z",
+          "endedAt": "2026-09-14T03:09:27.708Z",
+          "terminalReason": "网页动作已派发但结果无法确认，只允许重新核验",
+          "kind": "browser-task",
+          "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "dc3dcd1e-d164-457a-af1d-c076ea3f76da",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 18,
+          "launchOperationId": "1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "status": "lost",
+          "boundAt": "2026-09-14T03:13:39.871Z",
+          "lastObservedAt": "2026-09-14T03:16:14.444Z",
+          "endedAt": "2026-09-14T03:16:14.444Z",
+          "terminalReason": "Playwright Page 已由更新的 main-owned 绑定接替",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "d453d95a-f492-4f89-ad6a-7d84171f121c",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 18,
+          "launchOperationId": "1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "status": "lost",
+          "boundAt": "2026-09-14T03:13:39.871Z",
+          "lastObservedAt": "2026-09-14T03:16:14.444Z",
+          "endedAt": "2026-09-14T03:16:14.444Z",
+          "terminalReason": "Playwright Page 已由更新的 main-owned 绑定接替",
+          "kind": "browser-task",
+          "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "355bcd3b-dad9-4437-94f4-ca8ac5674b46",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 18,
+          "launchOperationId": "1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:13:39.871Z",
+          "lastObservedAt": "2026-09-14T03:39:51.302Z",
+          "endedAt": "2026-09-14T03:39:51.302Z",
+          "terminalReason": "Runtime 仍响应但持续没有可验证进度，已安全中断；可从当前步骤重试",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+          "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "agentRuntimeEpoch": 1789355474200,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "6a015135-331d-4820-94fd-970876c2e015",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 18,
+          "launchOperationId": "1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:16:14.444Z",
+          "lastObservedAt": "2026-09-14T03:39:51.302Z",
+          "endedAt": "2026-09-14T03:39:51.302Z",
+          "terminalReason": "Runtime 仍响应但持续没有可验证进度，已安全中断；可从当前步骤重试",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "e6554952-874c-43b2-90e8-49a6e129a59a",
+          "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+          "executionGeneration": 18,
+          "launchOperationId": "1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+          "status": "terminal",
+          "boundAt": "2026-09-14T03:16:14.444Z",
+          "lastObservedAt": "2026-09-14T03:39:51.302Z",
+          "endedAt": "2026-09-14T03:39:51.302Z",
+          "terminalReason": "Runtime 仍响应但持续没有可验证进度，已安全中断；可从当前步骤重试",
+          "kind": "browser-task",
+          "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2",
+          "tabId": "tab-2-1789348052029",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 2,
+          "playwrightPageBindingGeneration": 5
+        }
+      ],
+      "processedRuntimeEventIds": [
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g1:3918c4b1-29d9-455d-9cca-fc8be8375df4:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g2:8094daf9-f61a-4242-b37a-259cf12bdd70:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g3:836bcc59-4c42-4e9e-97cf-eceff607c51b:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g4:0b45520e-b2a7-434e-928d-d71623aa55a5:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g5:876f923f-8d39-434a-8f30-b16ecabc73aa:launch-timeout",
+        "485b537987a80291f6727e0c4ab8fb402e2029f77924e2a3f3485fd9b9091bee",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g7:ec6e782e-c79c-4cfb-aeb8-48b9d2ba8ee2:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g8:160ef816-77ce-4242-bf4b-d05f5a07f5d8:agent:article-publishing-cfa02275-a4e6-4edb-bb68-62adf15bb0f7:run-160ef816-77ce-4242-bf4b-d05f5a07f5d8:error",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g10:b67e06c3-f634-408e-aee1-1e02bf491957:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g11:4a27e918-4664-42ae-be67-d3481c712348:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g12:29d69e8d-90a3-4089-9459-16d8221c0222:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g13:fd67e000-e1d5-4d2b-82fe-c5af94c5aef5:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g15:14f608a3-8447-426b-b0c8-ed9899fada79:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g17:5fb06769-ca48-49f6-917e-6d63b40c4525:launch-timeout",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g18:1e09084e-0f9a-4b7a-8bb4-5455b5f95815:watchdog:suspected:PROGRESS_LEASE_EXPIRED:29822615",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g18:1e09084e-0f9a-4b7a-8bb4-5455b5f95815:watchdog:resolved:NO_VERIFIABLE_PROGRESS:29822619",
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g19:50155e07-79f3-45c1-afea-89f01e8e9d73:launch-timeout"
+      ],
+      "profileId": "web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+      "accountId": "1345b278-f2bf-4d40-ac5f-437d8a0b3c14",
+      "entryUrl": "https://mp.toutiao.com/profile_v4/index?is_new_connect=0&is_new_user=0",
+      "sideEffectKey": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:077d2ac0-9e7d-42a9-9f60-ced64dc4ce93:flow-1",
+      "failureMessage": "头条草稿箱原账号不一致",
+      "evidence": [],
+      "startedAt": "2026-09-14T01:39:05.937Z",
+      "endedAt": "2026-09-14T03:43:08.433Z"
+    }
+  ],
+  "waitPlans": [],
+  "flowProposals": [],
+  "articlePublishing": {
+    "adapterId": "toutiao",
+    "adapterVersion": 1,
+    "source": {
+      "markdownPath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md",
+      "modifiedAt": 1789292001640.5623,
+      "size": 1418
+    },
+    "accountId": "1345b278-f2bf-4d40-ac5f-437d8a0b3c14",
+    "websiteId": "b88c8524-1fed-443c-abb9-c4fa0022e678",
+    "fields": {
+      "title": "做AI眼镜第189天，它学会主动找你聊天了",
+      "summary": "",
+      "tags": [],
+      "category": ""
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-10/素材/01-封面.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/01-封面.png",
+        "displayPath": "素材/01-封面.png",
+        "mediaType": "image/png",
+        "size": 1925855,
+        "modifiedAt": 1789288813821.53,
+        "occurrences": [
+          {
+            "start": 444,
+            "end": 456,
+            "alt": "封面：小眸陪伴场景"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/bfde9f49a9f74e229b2c8dddb33f3a7b",
+        "verifiedAt": "2026-09-14T02:56:04.728Z",
+        "manualResolution": {
+          "status": "present",
+          "resolvedAt": "2026-09-14T02:56:04.728Z"
+        },
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "retryable-failed",
+            "startedAt": "2026-09-14T02:05:15.183Z",
+            "finishedAt": "2026-09-14T02:14:38.645Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+              "Runtime 握手回读原稿 1876269094198340，图集完整且该图缺失；历史没有上传 reservation，允许首次实际上传"
+            ],
+            "error": {
+              "code": "upload_never_reserved",
+              "message": "本次原账号原稿保存及图集核验通过，历史没有该图的上传派发记录"
+            }
+          },
+          {
+            "number": 2,
+            "status": "succeeded",
+            "startedAt": "2026-09-14T02:21:54.831Z",
+            "finishedAt": "2026-09-14T02:56:04.728Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+              "已通过可见原稿确认图片存在"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "local:AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+        "displayPath": "素材/02-陪伴界面效果图.png",
+        "mediaType": "image/png",
+        "size": 1743107,
+        "modifiedAt": 1789288813828.7297,
+        "occurrences": [
+          {
+            "start": 472,
+            "end": 489,
+            "alt": "陪伴页面设计效果图"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/fe7e2499a081466b845520aea3c52450",
+        "verifiedAt": "2026-09-14T03:06:07.848Z",
+        "manualResolution": {
+          "status": "present",
+          "resolvedAt": "2026-09-14T03:06:07.848Z"
+        },
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "succeeded",
+            "startedAt": "2026-09-14T02:58:04.227Z",
+            "finishedAt": "2026-09-14T03:06:07.848Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+              "已通过可见原稿确认图片存在"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "local:AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+        "displayPath": "素材/03-暂停观察真机截图.png",
+        "mediaType": "image/png",
+        "size": 1083436,
+        "modifiedAt": 1789288813834.6372,
+        "occurrences": [
+          {
+            "start": 514,
+            "end": 532,
+            "alt": "真机截图：陪伴页面（摄像头暂停状态）"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/dc0ec3dad45645d6a7650e341853d204",
+        "verifiedAt": "2026-09-14T03:13:10.409Z",
+        "manualResolution": {
+          "status": "present",
+          "resolvedAt": "2026-09-14T03:13:10.409Z"
+        },
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "succeeded",
+            "startedAt": "2026-09-14T03:08:23.933Z",
+            "finishedAt": "2026-09-14T03:13:10.409Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+              "已通过可见原稿确认图片存在"
+            ]
+          }
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "label": "从头条草稿箱找回原微头条",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "recovery.account",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "草稿箱账号 3777529577766638",
+            "observedAt": "2026-09-14T03:13:36.628Z",
+            "generation": 18
+          },
+          {
+            "id": "recovery.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T03:13:38.525Z",
+            "generation": 18
+          },
+          {
+            "id": "recovery.verify.account",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 3777529577766638；实际 3777529577766638 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T03:13:38.583Z",
+            "generation": 18
+          },
+          {
+            "id": "recovery.verify.id",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 1876269094198340；实际 1876269094198340 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T03:13:38.654Z",
+            "generation": 18
+          },
+          {
+            "id": "recovery.verify.title",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 做AI眼镜第189天，它学会主动找你聊天了 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T03:13:38.728Z",
+            "generation": 18
+          },
+          {
+            "id": "recovery.verify.saved",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 saved；实际 saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 array；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+            "observedAt": "2026-09-14T03:13:38.807Z",
+            "generation": 18
+          },
+          {
+            "id": "runtime.ready",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "Agent run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815 · BrowserTask 0c80f585-85b6-406a-a20e-72bf13c9dfd2 · Tab tab-2-1789348052029 · View g1 · WebContents 2 · Page g1",
+            "observedAt": "2026-09-14T03:13:39.871Z",
+            "generation": 18
+          },
+          {
+            "id": "account.resolve",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+            "observedAt": "2026-09-14T03:43:05.003Z",
+            "generation": 19
+          },
+          {
+            "id": "tab.acquire",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "Tab tab-2-1789348052029 · 账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+            "observedAt": "2026-09-14T03:43:05.222Z",
+            "generation": 19
+          },
+          {
+            "id": "recovery.management",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "https://mp.toutiao.com/profile_v4/manage/draft",
+            "observedAt": "2026-09-14T03:43:07.063Z",
+            "generation": 19
+          },
+          {
+            "id": "recovery.locate",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "从唯一草稿行的实际编辑入口核对原 ID 1876269094198340",
+            "reason": "任务interrupted；没有继续派发权限，恢复后重新核验",
+            "observedAt": "2026-09-14T03:43:08.433Z",
+            "generation": 19
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-14T02:03:26.707Z",
+        "finishedAt": "2026-09-14T02:03:43.533Z",
+        "evidence": [
+          "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+        ]
+      },
+      {
+        "stepId": "verify-account",
+        "label": "核验头条账号与原稿",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "page.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "页面 editor · 账号 3777529577766638 · draftId 1876269094198340 · 标题 做AI眼镜第189天，它学会主动找你聊天了 · 保存 saved",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "startedAt": "2026-09-14T02:04:24.909Z",
+        "finishedAt": "2026-09-14T02:04:24.909Z",
+        "evidence": [
+          "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+        ]
+      },
+      {
+        "stepId": "upload-assets",
+        "label": "逐图上传、确认插入并核验",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/01-封面.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+            "observedAt": "2026-09-14T02:21:45.971Z",
+            "generation": 9
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/02-陪伴界面效果图.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+            "observedAt": "2026-09-14T02:57:54.275Z",
+            "generation": 14
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/03-暂停观察真机截图.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+            "observedAt": "2026-09-14T03:08:49.463Z",
+            "generation": 16
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-14T02:22:01.726Z · upload-asset/local:AIR/2026-09-10/素材/01-封面.png:attempt-3；结果另行核验",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-14T02:58:14.689Z · upload-asset/local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2；结果另行核验",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-14T03:08:56.366Z · upload-asset/local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2；结果另行核验",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/01-封面.png",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "用户目视确认存在 · 2026-09-14T02:56:04.728Z",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/02-陪伴界面效果图.png",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "用户目视确认存在 · 2026-09-14T03:06:07.848Z",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/03-暂停观察真机截图.png",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "用户目视确认存在 · 2026-09-14T03:13:10.409Z",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          }
+        ],
+        "resumePolicy": "skip-if-verified",
+        "attemptCount": 6,
+        "startedAt": "2026-09-14T03:13:39.871Z",
+        "finishedAt": "2026-09-14T03:14:32.892Z",
+        "evidence": [
+          "开始逐图上传：页面图集 0 张，matchedAssets 空，需按冻结顺序上传 3 张本地图（01-封面 / 02-陪伴界面效果图 / 03-暂停观察真机截图）",
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340 · matchedAssets 3/3：01-封面→bfde9f49a9f74e229b2c8dddb33f3a7b、02-陪伴界面效果图→fe7e2499a081466b845520aea3c52450、03-暂停观察真机截图→dc0ec3dad45645d6a7650e341853d204，编辑器图集 3 张全部 loaded",
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340"
+        ]
+      },
+      {
+        "stepId": "fill-body",
+        "label": "填写并回读微头条正文",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.placement",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/01-封面.png · 图集 第 1 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-14T03:14:03.180Z",
+            "generation": 18
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.placement",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/02-陪伴界面效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-14T03:14:03.180Z",
+            "generation": 18
+          },
+          {
+            "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.placement",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "素材/03-暂停观察真机截图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-14T03:14:03.180Z",
+            "generation": 18
+          },
+          {
+            "id": "body.locate",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "正文 div.ProseMirror[contenteditable=\"true\"] · iframe 主文档 · 433 字符",
+            "observedAt": "2026-09-14T03:15:27.259Z",
+            "generation": 18
+          },
+          {
+            "id": "body.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "当前冻结全文、逐图顺序和加载一致；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 array；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft、/mp/agw/draft/save_ugc_draft",
+            "observedAt": "2026-09-14T03:15:27.259Z",
+            "generation": 18
+          },
+          {
+            "id": "body.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-14T03:15:10.571Z · save-draft/autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a；结果另行核验",
+            "observedAt": "2026-09-14T03:43:04.850Z",
+            "generation": 19
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-14T03:14:50.664Z",
+        "finishedAt": "2026-09-14T03:16:05.600Z",
+        "evidence": [
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340 · bodyMatchesFrozen=false，正文期望 416 字符实际 21 字符，需按冻结原文写入 selectors.body=div.ProseMirror[contenteditable=\"true\"]",
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340 · browser_fill 后 bodyMatchesFrozen=true，正文 433 字符，saveState=saved；平台原稿回读：返回码 0、原稿ID 一致、全文 一致、图集字段 array、逐图一致（页面 3 / 原稿 3）；matchedAssets 3/3 保持对应",
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340"
+        ]
+      },
+      {
+        "stepId": "fill-fields",
+        "label": "核验首发、配乐与作品声明",
+        "adapterVersion": 1,
+        "status": "needs-reconcile",
+        "details": [
+          {
+            "id": "toutiao.declaration.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "取材网络：未选；引用站内：未选；个人观点，仅供参考：未选；引用AI：未选；虚构演绎，故事经历：未选；投资观点，仅供参考：未选；健康医疗分享，仅供参考：未选",
+            "observedAt": "2026-09-14T03:13:39.062Z",
+            "generation": 18
+          },
+          {
+            "id": "toutiao.exclusive.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "头条首发：未勾选；当前页面回读",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          },
+          {
+            "id": "field.title.inspect",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 做AI眼镜第189天，它学会主动找你聊天了",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          },
+          {
+            "id": "field.title.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 做AI眼镜第189天，它学会主动找你聊天了",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          },
+          {
+            "id": "field.title.dispatch",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "skipped",
+            "evidence": "当前字段已经与任务一致，无需再次填写",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-14T03:16:16.137Z",
+        "evidence": [
+          "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340 · 准备核验标题、头条首发与作品声明字段；作品声明保持未选，不代用户选择",
+          "csdn@1 页面回读（2026-09-14T03:16:24.973Z）· https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340 · 标题 做AI眼镜第189天，它学会主动找你聊天了 与冻结一致；头条首发 checked=false（已在其他平台发布，不声明头条首发）；作品声明七项全部未选（不代用户选择）；bodyMatchesFrozen=true，saveState=saved"
+        ]
+      },
+      {
+        "stepId": "save-draft",
+        "label": "保存并重新核验原微头条",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "publish",
+        "label": "提交这篇微头条一次",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "toutiao.music.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "开启配乐：已勾选；当前页面回读",
+            "reason": "提交前必须关闭并回读",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          },
+          {
+            "id": "publish.preflight",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "开启配乐：仍已勾选，提交前必须关闭并回读",
+            "reason": "开启配乐：仍已勾选，提交前必须关闭并回读",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "verify-publication",
+        "label": "核验微头条平台结果",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "publication.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "尚未派发公开发布；开启配乐：仍已勾选，提交前必须关闭并回读",
+            "reason": "开启配乐：仍已勾选，提交前必须关闭并回读",
+            "observedAt": "2026-09-14T03:14:03.431Z",
+            "generation": 18
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      }
+    ],
+    "sideEffects": [
+      {
+        "key": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g9:upload-asset:local:AIR/2026-09-10/素材/01-封面.png:attempt-3",
+        "affairId": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 9,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-10/素材/01-封面.png:attempt-3",
+        "status": "verified",
+        "reservedAt": "2026-09-14T02:22:01.125Z",
+        "consumedAt": "2026-09-14T02:22:01.669Z",
+        "dispatchedAt": "2026-09-14T02:22:01.726Z",
+        "observedAt": "2026-09-14T02:56:04.728Z",
+        "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+      },
+      {
+        "key": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g14:upload-asset:local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+        "affairId": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 14,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+        "status": "verified",
+        "reservedAt": "2026-09-14T02:58:14.001Z",
+        "consumedAt": "2026-09-14T02:58:14.616Z",
+        "dispatchedAt": "2026-09-14T02:58:14.689Z",
+        "observedAt": "2026-09-14T03:06:07.848Z",
+        "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+      },
+      {
+        "key": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g16:upload-asset:local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+        "affairId": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 16,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+        "status": "verified",
+        "reservedAt": "2026-09-14T03:08:55.983Z",
+        "consumedAt": "2026-09-14T03:08:56.214Z",
+        "dispatchedAt": "2026-09-14T03:08:56.366Z",
+        "observedAt": "2026-09-14T03:13:10.409Z",
+        "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+      },
+      {
+        "key": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g18:save-draft:autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a",
+        "affairId": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 18,
+        "kind": "save-draft",
+        "targetId": "autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a",
+        "status": "verified",
+        "reservedAt": "2026-09-14T03:15:10.383Z",
+        "consumedAt": "2026-09-14T03:15:10.486Z",
+        "dispatchedAt": "2026-09-14T03:15:10.571Z",
+        "observedAt": "2026-09-14T03:16:05.600Z",
+        "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+      }
+    ],
+    "executionProtocol": {
+      "version": 1,
+      "current": {
+        "operationRunId": "41f222e4-f4f0-4e77-bf97-85ee5b361939",
+        "revision": 2,
+        "definitionId": "recovery.restore-exact-draft",
+        "checkpointId": "open-editor",
+        "status": "interrupted",
+        "owner": "studio",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 19,
+        "launchOperationId": "50155e07-79f3-45c1-afea-89f01e8e9d73",
+        "startSummary": "应用从中断状态恢复原 CSDN 草稿",
+        "goalSummary": "从草稿管理页核验原账号、draftId、标题和保存状态",
+        "startedAt": "2026-09-14T03:43:04.850Z",
+        "lastTransitionAt": "2026-09-14T03:43:08.433Z"
+      },
+      "recentTransitions": [
+        {
+          "id": "cf172bea-e798-47e0-8916-a89f5b96463e",
+          "operationRunId": "3f5f4eac-111c-49ae-bfb6-229ecba4bb8a",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T01:39:05.937Z",
+          "summary": "修订任务从管理页核验同一原稿；不沿用旧内容完成记录"
+        },
+        {
+          "id": "badf300f-3a5c-4800-925b-0fe1e84b78cc",
+          "operationRunId": "3f5f4eac-111c-49ae-bfb6-229ecba4bb8a",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T01:39:24.541Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        },
+        {
+          "id": "691be5cc-bba8-43e7-97b5-6ffaf3c637bf",
+          "operationRunId": "d7764247-9a44-497b-acaa-6a11b308019f",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T01:55:39.459Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "1a96cb69-d29e-4dd1-9109-5ade55ab3b92",
+          "operationRunId": "d7764247-9a44-497b-acaa-6a11b308019f",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T01:55:55.698Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        },
+        {
+          "id": "4efcdfef-1246-4df1-85e1-f1f21dd7bdad",
+          "operationRunId": "410337c5-e38c-4ccf-bc92-72aafc5b8353",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T01:57:40.312Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "4d4bcff4-e2d2-479b-8a25-5250748b4110",
+          "operationRunId": "410337c5-e38c-4ccf-bc92-72aafc5b8353",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T01:57:57.231Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；空图诊断 main=1 composer=true toolbar=1 item=0 img=1 file=0 counter=false；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        },
+        {
+          "id": "19744ce0-c964-4401-a4e5-fbf2d8c2ebb1",
+          "operationRunId": "43b4058e-71ba-4904-9b9e-bf91ee86126a",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T01:59:31.788Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "6eedecdf-5176-4858-9f68-de8a1d7a3d86",
+          "operationRunId": "43b4058e-71ba-4904-9b9e-bf91ee86126a",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T01:59:48.524Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        },
+        {
+          "id": "721e9ecd-777c-4145-864c-2a520fd5f239",
+          "operationRunId": "c092217a-78ba-4485-8726-99831d268188",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:01:35.043Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "a18b3bc1-66e9-4973-a20e-4670e2b8be00",
+          "operationRunId": "c092217a-78ba-4485-8726-99831d268188",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:01:51.702Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 object；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        },
+        {
+          "id": "a8e5638a-784d-4b2b-bb15-eb449013d425",
+          "operationRunId": "b07a2941-426d-4c8b-866f-d2309133cf60",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:03:18.838Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "60cea8ac-14f1-48ab-a8a6-456b8e14233e",
+          "operationRunId": "b07a2941-426d-4c8b-866f-d2309133cf60",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:03:26.145Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          }
+        },
+        {
+          "id": "1c3abe94-e73c-4100-98e0-07181881603b",
+          "operationRunId": "824c3e56-ad71-4107-83cc-a3c3934fa800",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:03:26.145Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          }
+        },
+        {
+          "id": "667de4c4-0649-42e4-b243-6a09776489a3",
+          "operationRunId": "824c3e56-ad71-4107-83cc-a3c3934fa800",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T02:03:26.707Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "bda3d7de-3483-42da-912c-9d069b6ab195",
+          "operationRunId": "824c3e56-ad71-4107-83cc-a3c3934fa800",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T02:03:26.707Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "49603c7f-109b-43dc-8b51-af813f8e3901",
+          "operationRunId": "824c3e56-ad71-4107-83cc-a3c3934fa800",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T02:03:26.707Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "7498283b-3f36-4108-a2d6-29000d54e15b",
+          "operationRunId": "824c3e56-ad71-4107-83cc-a3c3934fa800",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T02:03:26.707Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "ea51c58a-2106-409c-9607-34004b167e9c",
+          "operationRunId": "23cabd0b-a5ba-4ba8-bc02-8314cb544c55",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T02:03:43.119Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "1d53f7b9-a8bf-49bc-a930-e34e13d81623",
+          "operationRunId": "23cabd0b-a5ba-4ba8-bc02-8314cb544c55",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T02:03:43.533Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "9ec79689-4bad-40ae-97db-f4320ea091b3",
+          "operationRunId": "40f5cc8e-e112-4161-a1fe-4e4ab34644db",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T02:04:24.689Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "1da0abdb-6890-41a4-b641-76585a53a58d",
+          "operationRunId": "40f5cc8e-e112-4161-a1fe-4e4ab34644db",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T02:04:24.909Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 2,
+            "webContentsId": 3,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 2,
+            "agentRunId": "run-6e7bce7c-ae63-4e1c-ad62-2cd029bb7a19",
+            "browserTaskRunId": "966a765a-fe8a-4423-a2fe-26c97c6182fc"
+          }
+        },
+        {
+          "id": "4aa99c49-370b-4044-ac5a-8358546ae674",
+          "operationRunId": "e2933561-434f-4763-8e79-721df15ee6cc",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:10:26.605Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "cebaaccc-3bc3-4d4f-b9a6-fb29a96a6454",
+          "operationRunId": "e2933561-434f-4763-8e79-721df15ee6cc",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:10:34.283Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "191e2bcb-cd6c-4d00-bf4c-48e83c8e3058",
+          "operationRunId": "7c94904d-4eba-490f-a4b0-559bf45dece4",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:10:34.283Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "0ba07736-85d3-4aa1-9305-b0986bbe0bb7",
+          "operationRunId": "7c94904d-4eba-490f-a4b0-559bf45dece4",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:10:34.798Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "88e407fd-0bdb-48bc-b514-23fd4112f794",
+          "operationRunId": "6b103d83-6050-4683-bb2b-14c268cb36a3",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:14:30.550Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "c21be33f-5dd4-4cb7-a3f5-5eaf8a9cc81b",
+          "operationRunId": "6b103d83-6050-4683-bb2b-14c268cb36a3",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:14:38.110Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "92e1213b-8add-4a31-b3c4-f22198f11f23",
+          "operationRunId": "7febca23-0a8f-4a18-aa29-d2c7c56b7fe8",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:14:38.110Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "10298691-d317-4da0-b3a9-3f73d0ae1382",
+          "operationRunId": "7febca23-0a8f-4a18-aa29-d2c7c56b7fe8",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T02:14:38.645Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "acf1cb9f-e815-4aa9-98f9-f18dea9bcd83",
+          "operationRunId": "7febca23-0a8f-4a18-aa29-d2c7c56b7fe8",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T02:14:38.645Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "dde3ec65-4938-414e-a709-5771a281fe88",
+          "operationRunId": "7febca23-0a8f-4a18-aa29-d2c7c56b7fe8",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T02:14:38.645Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "b7a70dc4-e3b2-495b-8bf7-301eafbd745a",
+          "operationRunId": "7febca23-0a8f-4a18-aa29-d2c7c56b7fe8",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T02:14:38.645Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "d302f12d-9bc0-4dba-9242-e4e1bc7c0bb5",
+          "operationRunId": "2ed101d3-f435-4281-bd90-debd1789aa1b",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T02:14:58.244Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "f80e50f8-3bb4-4bd9-ab05-f5ece1e2186a",
+          "operationRunId": "2ed101d3-f435-4281-bd90-debd1789aa1b",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T02:14:58.519Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-160ef816-77ce-4242-bf4b-d05f5a07f5d8",
+            "browserTaskRunId": "e65ddb9c-9692-4274-bc0f-3d99f6635741"
+          }
+        },
+        {
+          "id": "cb249b73-e36c-449e-989f-835d08ae9ad3",
+          "operationRunId": "aa4cad7e-a541-4bea-9e74-7cc299974563",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:20:26.889Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "9a44c64b-8207-45bd-a1d0-37749376b402",
+          "operationRunId": "aa4cad7e-a541-4bea-9e74-7cc299974563",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:20:34.323Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "731d3a33-5d99-490a-aa93-db81d58d9d2f",
+          "operationRunId": "fad55bef-d947-475b-86a3-eab5781a9eec",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:20:34.323Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "47322b64-8b87-4b38-8c75-fb697b8f5836",
+          "operationRunId": "fad55bef-d947-475b-86a3-eab5781a9eec",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T02:20:34.880Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "569346d3-8e45-40c7-a7f5-7b5329703022",
+          "operationRunId": "fad55bef-d947-475b-86a3-eab5781a9eec",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T02:20:34.880Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "1f79611c-1d49-4c82-9d7e-fb9388ca6ae0",
+          "operationRunId": "fad55bef-d947-475b-86a3-eab5781a9eec",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T02:20:34.880Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "36f86fff-f1d9-4756-8c8b-e366e5b4fcc5",
+          "operationRunId": "fad55bef-d947-475b-86a3-eab5781a9eec",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T02:20:34.880Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "14de2a6b-7a38-4d9f-b92c-0cb41321ba2c",
+          "operationRunId": "4f56f47f-8c60-41a4-a829-a0f999a2bc58",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T02:21:04.437Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "da7dd154-1c8c-498d-826a-38ac9110459b",
+          "operationRunId": "4f56f47f-8c60-41a4-a829-a0f999a2bc58",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T02:21:04.908Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-c94daeda-074a-46cd-a921-1dcf9e9365fd",
+            "browserTaskRunId": "1eb2ccc9-0d16-422a-b8ae-bdbf328aec1a"
+          }
+        },
+        {
+          "id": "dc17d00a-05f3-4c53-b251-ed3b74d676b2",
+          "operationRunId": "6ef7dcb5-f7cc-45d7-a472-88249eff4013",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:38:39.391Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "9d43e694-9d8b-41aa-9e13-c35d14a447ee",
+          "operationRunId": "6ef7dcb5-f7cc-45d7-a472-88249eff4013",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:38:48.652Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "33b549d4-c3c7-4c83-a3c5-778426a3d178",
+          "operationRunId": "f6eee918-1841-446b-8704-e32c3766b395",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:38:48.652Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "6e25bb57-2bb3-4439-8dfd-a5ff9f431513",
+          "operationRunId": "f6eee918-1841-446b-8704-e32c3766b395",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:38:49.322Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "32e27cf6-8c3e-41aa-9d7c-5d5c0fa9ef76",
+          "operationRunId": "fe55c6fe-4f05-4a56-bdf0-6d56977ead5e",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:43:07.504Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "5f0587c4-9c9d-45e3-a6eb-cfa54f94ac63",
+          "operationRunId": "fe55c6fe-4f05-4a56-bdf0-6d56977ead5e",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:43:14.900Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "1c697858-df9f-41f5-a452-6d7b84e2c67a",
+          "operationRunId": "a0f266c5-4aad-4e0f-a8ff-0fde8f54a540",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:43:14.900Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "0ce90c8a-0654-4d71-8871-3f04d27b526e",
+          "operationRunId": "a0f266c5-4aad-4e0f-a8ff-0fde8f54a540",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:43:15.403Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "e55dc7f0-a3fc-437e-9e5c-339105fa2c69",
+          "operationRunId": "d0a9fe30-086b-4524-9f31-b293335fcc0b",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:45:33.338Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "d2a9a350-a7e0-41ac-bd1f-683d4df27a91",
+          "operationRunId": "d0a9fe30-086b-4524-9f31-b293335fcc0b",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:45:40.745Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "cc721a43-3cb4-47a4-9c95-e094ebb5e843",
+          "operationRunId": "8681f9c6-8618-4d04-9ce7-8aab69864d69",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:45:40.745Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "5092568d-fc66-437f-9f90-cebad3517119",
+          "operationRunId": "8681f9c6-8618-4d04-9ce7-8aab69864d69",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:45:41.302Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "6d9374ea-5566-41b7-91ec-dd6f6d0b564a",
+          "operationRunId": "0e4bd4a5-1d47-48b6-81cd-0e2d13a14da2",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:55:01.331Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "4ad50f00-8749-4f86-9294-f4f8184f5d67",
+          "operationRunId": "0e4bd4a5-1d47-48b6-81cd-0e2d13a14da2",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:55:09.225Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "1b953e79-c7ac-4236-81f4-05b3a4ef5f4a",
+          "operationRunId": "8038f80d-9709-49d4-bca3-df1ce37def33",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:55:09.225Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "c3c051c7-f0e9-499e-932e-cca3869bbd89",
+          "operationRunId": "8038f80d-9709-49d4-bca3-df1ce37def33",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T02:55:09.806Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "e7d14b81-53f8-4a18-b9f4-5557c98cbc72",
+          "operationRunId": "071635f8-156b-4596-af01-45b7b472115a",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T02:56:27.092Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "3f1292ce-a73e-4bd9-a1d1-1f3c2e38f082",
+          "operationRunId": "071635f8-156b-4596-af01-45b7b472115a",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T02:56:35.454Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "2a70dc3c-9e55-4e2c-9e17-d9c258bf3d5a",
+          "operationRunId": "0923cbe6-a8e0-415c-9e0c-a0b3e5102d10",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T02:56:35.454Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "672d6be6-c2dc-4a37-a5ce-5bc0ac3b5b25",
+          "operationRunId": "0923cbe6-a8e0-415c-9e0c-a0b3e5102d10",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T02:56:35.772Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "6b1f010c-bf84-4c6a-a812-08f50c8afe76",
+          "operationRunId": "0923cbe6-a8e0-415c-9e0c-a0b3e5102d10",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T02:56:35.772Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "d88a3e37-c52a-406e-bff2-fe5c57ce68fd",
+          "operationRunId": "0923cbe6-a8e0-415c-9e0c-a0b3e5102d10",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T02:56:35.772Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "bcf04d90-7ae1-4864-a0d4-3903b16c55e5",
+          "operationRunId": "0923cbe6-a8e0-415c-9e0c-a0b3e5102d10",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T02:56:35.772Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "a3f50c1e-5c66-44ae-862b-8149ef678758",
+          "operationRunId": "0471adda-6d40-44a9-9261-08b605548e39",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T02:56:58.145Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "a63e9a6d-0e4c-4184-99bd-f403ec2067b1",
+          "operationRunId": "0471adda-6d40-44a9-9261-08b605548e39",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T02:56:58.346Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-20c18c0f-4444-4a4c-ba16-ef565a5c4a4a",
+            "browserTaskRunId": "fbd40363-fe96-432a-b0d4-53b524725894"
+          }
+        },
+        {
+          "id": "d4ecb7c8-2f1e-4fb2-a7a8-67935b87a93c",
+          "operationRunId": "ed8c98a8-a6cf-4790-b384-4491ed47a347",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T03:04:11.786Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "d945f118-4388-48fe-843b-a779ade79054",
+          "operationRunId": "ed8c98a8-a6cf-4790-b384-4491ed47a347",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T03:04:20.646Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "0ac939a4-1881-428e-8380-b0199dfd18e6",
+          "operationRunId": "a47d5391-2236-414c-9f2b-942531854e1d",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T03:04:20.646Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "b70fc728-5b5f-4545-9d7e-57226541fc95",
+          "operationRunId": "a47d5391-2236-414c-9f2b-942531854e1d",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T03:04:21.175Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "70e2f9bf-d6f9-4605-bacd-6493a5ef8663",
+          "operationRunId": "3cd5d266-e905-453c-a13b-b6b7f7ca4acb",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T03:07:03.222Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "7a45d4a6-2bbd-4e31-80bf-5f0d500bdaf1",
+          "operationRunId": "3cd5d266-e905-453c-a13b-b6b7f7ca4acb",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T03:07:10.997Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "c2875689-8f0f-4164-b313-ac0d1d90bb4a",
+          "operationRunId": "05e0df41-66f6-400d-99a5-43e664bac8aa",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T03:07:10.997Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "9960083e-2c82-440b-967b-cd81ca408667",
+          "operationRunId": "05e0df41-66f6-400d-99a5-43e664bac8aa",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T03:07:11.502Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "52524f51-5ade-4a7b-922c-b6f3c8f55a7d",
+          "operationRunId": "05e0df41-66f6-400d-99a5-43e664bac8aa",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T03:07:11.502Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "929fbd8c-2d62-4baa-adfe-cbcfe6585c58",
+          "operationRunId": "05e0df41-66f6-400d-99a5-43e664bac8aa",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T03:07:11.502Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "a5b2351d-982a-4107-9ad1-ae667b200eb3",
+          "operationRunId": "05e0df41-66f6-400d-99a5-43e664bac8aa",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T03:07:11.502Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "08507d99-3436-406c-8e3e-50eee0fdb2ef",
+          "operationRunId": "7fe60dec-4f27-4746-b0ba-44e9cdf459b5",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T03:07:37.409Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "9eba523d-38d6-4789-80da-f5dcd29fe652",
+          "operationRunId": "7fe60dec-4f27-4746-b0ba-44e9cdf459b5",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T03:07:37.773Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-24bbc80f-c631-4df5-ab7b-a9d1e899c79d",
+            "browserTaskRunId": "55329966-b88b-42a4-b7ba-1f3cd292d8f9"
+          }
+        },
+        {
+          "id": "dcd45e80-55b2-4b53-8c26-41daf74f1d58",
+          "operationRunId": "cb407128-f98f-43ff-baa0-5c1a4d4af843",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T03:11:55.899Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "6bdbaf9a-b464-46a7-a7d0-75cc78877d57",
+          "operationRunId": "cb407128-f98f-43ff-baa0-5c1a4d4af843",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T03:12:03.929Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "5195c3f1-4f88-418a-a901-342f9bae65b4",
+          "operationRunId": "98fcbef1-c011-4e7e-8790-bc11e5a23817",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T03:12:03.929Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "53563b59-cedb-4197-b99b-9f822eccf1b1",
+          "operationRunId": "98fcbef1-c011-4e7e-8790-bc11e5a23817",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T03:12:04.482Z",
+          "summary": "旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "56ce47b6-87d7-47de-a729-ddaaa5569549",
+          "operationRunId": "63faa023-3071-41f8-8e1d-88ae5aa58034",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T03:13:29.237Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "730b3836-cb80-4c14-b2b7-74dbb2a894b5",
+          "operationRunId": "63faa023-3071-41f8-8e1d-88ae5aa58034",
+          "kind": "draft-restored",
+          "occurredAt": "2026-09-14T03:13:39.180Z",
+          "summary": "已核验原草稿 1876269094198340",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "b4b5f7ea-e5f7-4da0-8a5d-f472d1153d55",
+          "operationRunId": "03493e08-b784-48c2-8a3b-6b4a7a0ac648",
+          "kind": "runtime-prepare-started",
+          "occurredAt": "2026-09-14T03:13:39.180Z",
+          "summary": "开始准备第一次页面检查 Runtime",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          }
+        },
+        {
+          "id": "f96cb8f5-efce-4402-b7d0-fb993149dcf8",
+          "operationRunId": "03493e08-b784-48c2-8a3b-6b4a7a0ac648",
+          "kind": "draft-reverified",
+          "occurredAt": "2026-09-14T03:13:39.871Z",
+          "summary": "BrowserTask 创建后已在最终 Page 重新核验原草稿 1876269094198340",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "fd634af2-510b-4507-8999-59aa8a79d16f",
+          "operationRunId": "03493e08-b784-48c2-8a3b-6b4a7a0ac648",
+          "kind": "lease-transferred",
+          "occurredAt": "2026-09-14T03:13:39.871Z",
+          "summary": "账号写入租约已转交当前 BrowserTask",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "71a5b6b7-84cc-4089-a76c-40d3824216d3",
+          "operationRunId": "03493e08-b784-48c2-8a3b-6b4a7a0ac648",
+          "kind": "binding-committed",
+          "occurredAt": "2026-09-14T03:13:39.871Z",
+          "summary": "Agent、BrowserTask、Tab 和 Page binding 已持久化",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "9d69fe63-0587-4089-96f0-6dab14a4ae7d",
+          "operationRunId": "03493e08-b784-48c2-8a3b-6b4a7a0ac648",
+          "kind": "runtime-ready",
+          "occurredAt": "2026-09-14T03:13:39.871Z",
+          "summary": "第一次页面检查 Runtime 已就绪",
+          "previousRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1
+          },
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "634dd7c0-c1c4-46b1-812e-42d51eed3ae3",
+          "operationRunId": "5bf74322-ad89-47ed-b851-0a88ec6f4636",
+          "kind": "first-inspect-started",
+          "occurredAt": "2026-09-14T03:14:02.572Z",
+          "summary": "Agent 已开始第一次只读页面检查",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "0689a2b9-c99c-4caf-a3b8-51ee1dcd119f",
+          "operationRunId": "5bf74322-ad89-47ed-b851-0a88ec6f4636",
+          "kind": "first-inspect-completed",
+          "occurredAt": "2026-09-14T03:14:03.344Z",
+          "summary": "Agent 第一次页面检查已由当前 Page 适配器验证",
+          "currentRuntime": {
+            "tabId": "tab-2-1789348052029",
+            "browserViewRuntimeGeneration": 1,
+            "webContentsId": 2,
+            "playwrightConnectionGeneration": 1,
+            "playwrightPageBindingGeneration": 1,
+            "agentRunId": "run-1e09084e-0f9a-4b7a-8bb4-5455b5f95815",
+            "browserTaskRunId": "0c80f585-85b6-406a-a20e-72bf13c9dfd2"
+          }
+        },
+        {
+          "id": "a58e2f1c-fc9d-441f-a3e9-d9d5383faf1f",
+          "operationRunId": "41f222e4-f4f0-4e77-bf97-85ee5b361939",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T03:43:04.850Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "bbf5272f-35d9-4ca7-b16d-49cdb03a0a54",
+          "operationRunId": "41f222e4-f4f0-4e77-bf97-85ee5b361939",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T03:43:08.433Z",
+          "summary": "头条草稿箱原账号不一致"
+        }
+      ]
+    },
+    "execution": {
+      "status": "interrupted",
+      "currentAttemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "currentGeneration": 19,
+      "currentLaunchOperationId": "50155e07-79f3-45c1-afea-89f01e8e9d73",
+      "currentStepId": "fill-fields"
+    },
+    "draft": {
+      "platformDraftId": "1876269094198340",
+      "platformAccountId": "3777529577766638",
+      "url": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+      "normalizedTitle": "做AI眼镜第189天，它学会主动找你聊天了",
+      "lastVerifiedAt": "2026-09-14T03:16:14.444Z",
+      "recovery": {
+        "operationId": "86307421-6714-4d50-a300-f9b49482dc0f",
+        "executionGeneration": 19,
+        "status": "locating",
+        "expectedDraftId": "1876269094198340",
+        "expectedTitle": "做AI眼镜第189天，它学会主动找你聊天了",
+        "startedAt": "2026-09-14T03:43:04.850Z"
+      }
+    },
+    "publication": {
+      "status": "not-started"
+    }
+  },
+  "events": [
+    {
+      "id": "f201c2fd-a984-4f20-804b-b7edb13c04bf",
+      "type": "created",
+      "summary": "头条微头条 文章发布事务已创建",
+      "occurredAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "627db772-b905-47d7-9a0a-8d0b60778096",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "发布文章到 头条微头条：已创建第 1 次办理",
+      "occurredAt": "2026-09-14T01:39:05.937Z"
+    },
+    {
+      "id": "794fce3e-1f15-4c9c-93e1-53e61f53c4be",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T01:39:24.541Z"
+    },
+    {
+      "id": "18c866ce-c3cb-4841-a1ee-e0f176355f13",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T01:55:39.459Z"
+    },
+    {
+      "id": "7c645b93-9779-4f42-9d17-ceb94e4e74c9",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T01:55:55.698Z"
+    },
+    {
+      "id": "5a4a6e7f-e891-427d-9f84-2039767a3b5c",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T01:57:40.312Z"
+    },
+    {
+      "id": "de47b2e4-51da-4f2c-b11a-4d7453dfa08c",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；空图诊断 main=1 composer=true toolbar=1 item=0 img=1 file=0 counter=false；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T01:57:57.231Z"
+    },
+    {
+      "id": "7adc30c5-12d6-4655-b29b-aff242037e5b",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T01:59:31.788Z"
+    },
+    {
+      "id": "530fd1a0-4260-4a23-8ed4-0323c3bd0575",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T01:59:48.524Z"
+    },
+    {
+      "id": "439dfa96-5580-4ab4-ba8d-6830329be8e6",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:01:35.043Z"
+    },
+    {
+      "id": "a8ba432f-c497-44e9-a899-463b1f0316cf",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 object；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T02:01:51.702Z"
+    },
+    {
+      "id": "258e7735-11c4-4879-9a59-81f946236272",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:03:18.838Z"
+    },
+    {
+      "id": "52f7ee8b-cd81-4002-872f-007e46d50d91",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:03:26.145Z"
+    },
+    {
+      "id": "6faecc45-ae1b-4547-b140-10c1003dd7dc",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T02:03:26.707Z"
+    },
+    {
+      "id": "524801f5-528a-4899-aafd-62ebb402671c",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 open-editor 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T02:03:43.533Z"
+    },
+    {
+      "id": "afa7ea35-beaa-425b-8579-772ef8da4560",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 verify-account 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T02:04:24.909Z"
+    },
+    {
+      "id": "90758d89-1807-4e26-8fb4-df40b1d543eb",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 逐图上传、确认插入并核验 → running",
+      "occurredAt": "2026-09-14T02:05:04.634Z"
+    },
+    {
+      "id": "57570949-2195-4818-8b54-ece15caba53b",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "正文图片 素材/01-封面.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-14T02:05:15.183Z"
+    },
+    {
+      "id": "ffe39e8d-702a-4280-a32b-51597ab70599",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "BROWSER_TASK_ENDED：Agent Run 或 BrowserTask 已取消",
+      "occurredAt": "2026-09-14T02:09:11.235Z"
+    },
+    {
+      "id": "c1e0f926-5448-465c-928e-82d16c8d7431",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:10:26.605Z"
+    },
+    {
+      "id": "4a3e533c-2f11-46c2-97b8-9c2c6530cbef",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:10:34.283Z"
+    },
+    {
+      "id": "78998587-a43f-45f2-8e5a-5a8b1c1179c7",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T02:10:34.798Z"
+    },
+    {
+      "id": "6593fb31-580d-4aab-8bdc-4ded91eb26d7",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:14:30.550Z"
+    },
+    {
+      "id": "8929fdc3-e454-45ab-b9a7-6046730f6bc4",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:14:38.110Z"
+    },
+    {
+      "id": "2280d853-d8ba-4823-8f00-24e110d92d75",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T02:14:38.645Z"
+    },
+    {
+      "id": "553bd332-04d1-4a7b-9f74-2094a9b3a44f",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 upload-assets 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T02:14:58.519Z"
+    },
+    {
+      "id": "5fe5dcf0-b91d-4681-b162-fe3778c684ac",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "AGENT_FAILED：Claude Agent SDK 错误: Claude Code process exited with code 143",
+      "occurredAt": "2026-09-14T02:19:18.556Z"
+    },
+    {
+      "id": "b7b1dc71-0e51-4b21-8276-7b03f1313258",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:20:26.889Z"
+    },
+    {
+      "id": "ee7817cd-1dbf-4194-8339-f164f12b1fc0",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:20:34.323Z"
+    },
+    {
+      "id": "502b81fe-f154-4ac1-a08a-f82e8baf021a",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T02:20:34.880Z"
+    },
+    {
+      "id": "ad94c42b-2989-4e0f-86d4-c46de49eaaa3",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 upload-assets 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T02:21:04.908Z"
+    },
+    {
+      "id": "5076b8c9-5b17-4188-a0dc-62c0479fe420",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "正文图片 素材/01-封面.png → uploading（第 2/3 次）",
+      "occurredAt": "2026-09-14T02:21:54.831Z"
+    },
+    {
+      "id": "6ce05a2d-36a1-4dc6-bd32-4192d3063b04",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/01-封面.png:attempt-3",
+      "occurredAt": "2026-09-14T02:22:01.125Z"
+    },
+    {
+      "id": "57f86ad4-71c8-4113-94e7-f32d2ea93dd7",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/01-封面.png:attempt-3",
+      "occurredAt": "2026-09-14T02:22:01.669Z"
+    },
+    {
+      "id": "d14b1fe6-dfba-480f-ada9-478d60cf48f9",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-10/素材/01-封面.png:attempt-3",
+      "occurredAt": "2026-09-14T02:22:01.726Z"
+    },
+    {
+      "id": "00029727-b9ab-4546-8312-89c0a2fc3973",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:38:39.391Z"
+    },
+    {
+      "id": "384819ad-a93e-44aa-8b2b-9097ef6d66f7",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:38:48.652Z"
+    },
+    {
+      "id": "2e017012-0190-414a-a4a2-875b50376a78",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T02:38:49.322Z"
+    },
+    {
+      "id": "79cccccd-b0cf-4ce7-853e-c71a1ef7b42e",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:43:07.504Z"
+    },
+    {
+      "id": "a9b748a3-ab0a-4951-ac69-4d889117a266",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:43:14.900Z"
+    },
+    {
+      "id": "2305274e-87fa-4194-a009-749984b3b43e",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T02:43:15.403Z"
+    },
+    {
+      "id": "bf778d52-e509-4e1e-b324-0de24b5c4b1e",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:45:33.338Z"
+    },
+    {
+      "id": "ad6f6b40-add1-4a0e-8d84-c250d170cb9b",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:45:40.745Z"
+    },
+    {
+      "id": "fca11e23-eb91-4d1e-8657-d173216c9d37",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T02:45:41.302Z"
+    },
+    {
+      "id": "094a7f99-fc9b-4799-9c7f-948054159be5",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:55:01.331Z"
+    },
+    {
+      "id": "9a7d824b-3299-451b-b244-976a97472e2d",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:55:09.225Z"
+    },
+    {
+      "id": "f44f33d0-b5cd-4f8f-bbb9-8099eb0a79ef",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T02:55:09.806Z"
+    },
+    {
+      "id": "1ddb41ac-6640-4e60-9089-2a3ad4def83c",
+      "type": "node-status-changed",
+      "summary": "用户确认图片已存在：素材/01-封面.png",
+      "occurredAt": "2026-09-14T02:56:04.728Z"
+    },
+    {
+      "id": "5364b081-b4a2-44ba-99ca-ef5214bc5dc2",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T02:56:27.092Z"
+    },
+    {
+      "id": "4fefc0b5-c967-4067-b5a7-1de994e50565",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T02:56:35.454Z"
+    },
+    {
+      "id": "2a64f23b-fc83-46fe-8b68-cfcc298a0e8f",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T02:56:35.772Z"
+    },
+    {
+      "id": "c9d1069f-5783-418d-ab65-66463a20990e",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 upload-assets 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T02:56:58.346Z"
+    },
+    {
+      "id": "7a87e2b5-faef-4dc0-a7b6-27e45d4dab6d",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "正文图片 素材/02-陪伴界面效果图.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-14T02:58:04.227Z"
+    },
+    {
+      "id": "8e1504c2-0d84-4753-9110-618d62473f11",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+      "occurredAt": "2026-09-14T02:58:14.001Z"
+    },
+    {
+      "id": "dd493a76-d57d-48c7-b996-763effafed65",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+      "occurredAt": "2026-09-14T02:58:14.616Z"
+    },
+    {
+      "id": "025b8939-1ffb-484a-890c-7fddd2c74a2b",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+      "occurredAt": "2026-09-14T02:58:14.689Z"
+    },
+    {
+      "id": "5e6bc8e1-557b-467b-9194-23ea049e0410",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T03:04:11.786Z"
+    },
+    {
+      "id": "55a8a842-401c-415f-8e5a-d266af40a113",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T03:04:20.646Z"
+    },
+    {
+      "id": "e37ad627-9012-45c5-af2d-853eb42ca247",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T03:04:21.175Z"
+    },
+    {
+      "id": "8deaf20f-6fa6-4113-b3f5-b6be158bddfe",
+      "type": "node-status-changed",
+      "summary": "用户确认图片已存在：素材/02-陪伴界面效果图.png",
+      "occurredAt": "2026-09-14T03:06:07.848Z"
+    },
+    {
+      "id": "c59b47e9-999f-40a9-a727-1a3b7cd0e71c",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T03:07:03.222Z"
+    },
+    {
+      "id": "ed073a4d-e059-4437-a666-01d5b47a9a5c",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T03:07:10.997Z"
+    },
+    {
+      "id": "a5a58791-cbc3-4877-b397-363af778583c",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T03:07:11.502Z"
+    },
+    {
+      "id": "01ebf3f0-4f1d-4bf3-af7f-215b7582f1bc",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 upload-assets 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T03:07:37.773Z"
+    },
+    {
+      "id": "915df36b-f5a9-4c09-b882-2609357a22c4",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "正文图片 素材/03-暂停观察真机截图.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-14T03:08:23.933Z"
+    },
+    {
+      "id": "8da8c364-b391-4b19-9c4a-d19bcb30e168",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+      "occurredAt": "2026-09-14T03:08:55.983Z"
+    },
+    {
+      "id": "021a4e84-869e-48c8-8511-81eff8e502e8",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+      "occurredAt": "2026-09-14T03:08:56.214Z"
+    },
+    {
+      "id": "9313faaf-75c5-47fb-83bc-89ed67c66470",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+      "occurredAt": "2026-09-14T03:08:56.366Z"
+    },
+    {
+      "id": "f9625fb9-9f62-424b-9bba-de681cbab8dc",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T03:11:55.899Z"
+    },
+    {
+      "id": "ce404bbf-0685-4dcd-9a9b-3cc88f04eb38",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T03:12:03.929Z"
+    },
+    {
+      "id": "9b9b458f-4d20-4d07-9215-c63b014e4aa8",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：旧代次图片或保存结果仍不确定，禁止绑定 Agent Runtime",
+      "occurredAt": "2026-09-14T03:12:04.482Z"
+    },
+    {
+      "id": "576b9ddb-2e81-4803-b0b6-8e5300c0d965",
+      "type": "node-status-changed",
+      "summary": "用户确认图片已存在：素材/03-暂停观察真机截图.png",
+      "occurredAt": "2026-09-14T03:13:10.409Z"
+    },
+    {
+      "id": "433ea619-c667-4b0b-ba29-51d0044ceb9a",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T03:13:29.237Z"
+    },
+    {
+      "id": "8903cc24-0d95-4021-9f78-72c1caff4be0",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已从当前账号草稿列表核验原草稿 1876269094198340，尚未开放网页写入",
+      "occurredAt": "2026-09-14T03:13:39.180Z"
+    },
+    {
+      "id": "b3c3e6fd-f7cd-4243-a22c-593f5d04b11d",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-14T03:13:39.871Z"
+    },
+    {
+      "id": "269a7f75-ab30-45b0-84b5-b417c347120b",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "main 已完成 upload-assets 的当前 Page 首次只读核验",
+      "occurredAt": "2026-09-14T03:14:03.344Z"
+    },
+    {
+      "id": "923c6f86-187e-4b06-ae16-24cbfef927e3",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 逐图上传、确认插入并核验 → verifying",
+      "occurredAt": "2026-09-14T03:14:16.801Z"
+    },
+    {
+      "id": "c0bdd767-1e74-4ba4-bebe-6b7097236564",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 逐图上传、确认插入并核验 → completed",
+      "occurredAt": "2026-09-14T03:14:32.892Z"
+    },
+    {
+      "id": "65498382-8f4e-42ac-8bf2-3206f28a27ef",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 填写并回读微头条正文 → running",
+      "occurredAt": "2026-09-14T03:14:50.664Z"
+    },
+    {
+      "id": "09e6628c-2b61-4f3a-84b9-d56b0ca163f6",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已预写网页副作用授权：save-draft/autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a",
+      "occurredAt": "2026-09-14T03:15:10.383Z"
+    },
+    {
+      "id": "681e9f87-bd2e-4b75-83c5-4128fd2bbb9a",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "已消费网页副作用授权：save-draft/autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a",
+      "occurredAt": "2026-09-14T03:15:10.486Z"
+    },
+    {
+      "id": "fd5c1946-612f-41f4-9638-00d429e3094f",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "即将派发网页副作用：save-draft/autosave:fill-body:8c72b11f-571a-4089-b0d0-9621a7f18e4a",
+      "occurredAt": "2026-09-14T03:15:10.571Z"
+    },
+    {
+      "id": "3e25fa20-86dd-4cc7-b97b-b30168616cc5",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 填写并回读微头条正文 → verifying",
+      "occurredAt": "2026-09-14T03:15:40.304Z"
+    },
+    {
+      "id": "e7bf1092-fcc5-4af6-893d-ac3bb20ae1fd",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 填写并回读微头条正文 → completed",
+      "occurredAt": "2026-09-14T03:16:05.600Z"
+    },
+    {
+      "id": "cea04472-f5f7-4a4f-bd4f-bc5dbd4c1899",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 核验首发、配乐与作品声明 → running",
+      "occurredAt": "2026-09-14T03:16:16.137Z"
+    },
+    {
+      "id": "5ab03811-f86f-4302-b31c-80b579d4a919",
+      "type": "node-status-changed",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布步骤 核验首发、配乐与作品声明 → verifying",
+      "occurredAt": "2026-09-14T03:16:38.145Z"
+    },
+    {
+      "id": "06bedff8-614f-4c59-a597-52b6eea322f5",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "PROGRESS_LEASE_EXPIRED：Runtime 仍响应但任务长期没有可验证进度，已冻结网页写入并等待核验",
+      "occurredAt": "2026-09-14T03:35:23.114Z"
+    },
+    {
+      "id": "2f11b594-491a-45c6-8708-8958fa1911de",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "NO_VERIFIABLE_PROGRESS：Runtime 仍响应但持续没有可验证进度，已安全中断；可从当前步骤重试",
+      "occurredAt": "2026-09-14T03:39:51.302Z"
+    },
+    {
+      "id": "d248f229-b7a7-4ffa-9ea1-7a55a9eff27a",
+      "type": "attempt-returned",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-14T03:43:04.850Z"
+    },
+    {
+      "id": "bb6e5592-9a52-4f54-96fe-a17af5b7e9d9",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：头条草稿箱原账号不一致",
+      "occurredAt": "2026-09-14T03:43:08.433Z"
+    }
+  ],
+  "workspaceRef": {
+    "kind": "local",
+    "path": "/Users/apple/Desktop/研发日记"
+  },
+  "createdAt": "2026-09-14T01:39:05.231Z",
+  "updatedAt": "2026-09-14T03:43:08.433Z"
+}

@@ -1,4 +1,7 @@
+import { fillToutiaoDraft, uploadToutiaoDraftImage } from './toutiao-draft-input'
+import { ensureJuejinEditorMode } from './juejin-editor-mode'
 import { readBrowserControls } from './browser-controls'
+import { discoverXiaohongshuDraft } from '../article-publishing/xiaohongshu-draft-discovery'
 import { uploadBilibiliImage } from './bilibili-image-upload'
 import { pasteBilibiliBody } from './bilibili-body-input'
 import {
@@ -54,6 +57,18 @@ export async function executePlaywrightAction(
       return { clicked: action.selector }
 
     case 'fill':
+      if (
+        trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://mp.toutiao.com'
+      ) {
+        await fillToutiaoDraft(
+          page!,
+          action.selector,
+          trustedArticleBodyHtml,
+          assertDispatchStillCurrent,
+        )
+        return { filled: action.selector, saveControlActivated: true }
+      }
       if (
         trustedArticleBodyHtml !== undefined &&
         new URL(page!.url()).origin === 'https://t.bilibili.com'
@@ -113,7 +128,7 @@ export async function executePlaywrightAction(
           action.selector !== '.CodeMirror textarea'
         )
           throw new Error('正文目标不是掘金原稿 Markdown 编辑器')
-        await page!.locator('.bytemd-toolbar-tab:text-is("编辑")').click()
+        await ensureJuejinEditorMode(page!, 'edit', assertDispatchStillCurrent)
         assertDispatchStillCurrent?.()
         const input = page!.locator('.CodeMirror textarea')
         await input.press('ControlOrMeta+a')
@@ -131,7 +146,7 @@ export async function executePlaywrightAction(
         assertDispatchStillCurrent?.()
         await input.fill(trustedArticleBodyHtml)
         assertDispatchStillCurrent?.()
-        await page!.locator('.bytemd-toolbar-tab:text-is("预览")').click()
+        await ensureJuejinEditorMode(page!, 'preview', assertDispatchStillCurrent)
         return { filled: action.selector }
       }
       if (trustedArticleBodyHtml !== undefined) {
@@ -177,6 +192,11 @@ export async function executePlaywrightAction(
     }
 
     case 'extract':
+      if (action.xiaohongshuDraftTitle !== undefined) {
+        if (action.selector !== 'body' || action.controls === true)
+          throw new Error('小红书草稿识别须单独使用 selector=body 和完整标题')
+        return discoverXiaohongshuDraft(page!, action.xiaohongshuDraftTitle)
+      }
       if (action.controls === true) {
         if (typeof action.selector !== 'string' || !action.selector.trim())
           throw new Error('控件读取必须指定可见范围，如 body')
@@ -297,6 +317,10 @@ export async function executePlaywrightAction(
       if (!paths || paths.length === 0) {
         throw new Error('必须提供至少一个文件路径')
       }
+      if (new URL(page!.url()).origin === 'https://mp.toutiao.com') {
+        await uploadToutiaoDraftImage(page!, selector, paths, assertDispatchStillCurrent)
+        return { files: paths.map((p) => p.split('/').pop()), saveControlActivated: true }
+      }
       if (new URL(page!.url()).origin === 'https://t.bilibili.com') {
         await uploadBilibiliImage(page!, selector, paths, () => assertDispatchStillCurrent?.())
         return {
@@ -320,7 +344,7 @@ export async function executePlaywrightAction(
         const { readFile } = await import('node:fs/promises')
         const bytes = await readFile(paths[0])
         assertDispatchStillCurrent?.()
-        await page!.locator('.bytemd-toolbar-tab:text-is("编辑")').click()
+        await ensureJuejinEditorMode(page!, 'edit', assertDispatchStillCurrent)
         assertDispatchStillCurrent?.()
         await page!.locator('.CodeMirror textarea').focus()
         assertDispatchStillCurrent?.()

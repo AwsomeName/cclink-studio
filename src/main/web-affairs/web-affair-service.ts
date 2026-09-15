@@ -1,3 +1,6 @@
+import { reduceUnsubmittedTags } from '../../shared/article-publishing/reduce-unsubmitted-tags'
+import type { ReduceArticlePublishingTagsInput } from '../../shared/article-publishing/article-publishing-types'
+import { canResumeUnsubmittedToutiaoImage } from '../article-publishing/toutiao-unsubmitted-upload'
 import {
   canCarryUnusedBilibiliRetry,
   eligibleBilibiliRetryEffect,
@@ -5,9 +8,13 @@ import {
 } from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from '../article-publishing/bilibili-publication'
 import { isIndependentBilibiliDraft } from '../article-publishing/bilibili-independent-draft'
+import { canStartAfterUnsubmittedWeiboTask } from '../article-publishing/weibo-unsubmitted-task'
 import { parseToutiaoPublicationUrl } from '../article-publishing/toutiao-publication'
 import { TOUTIAO_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
-import { parseWeiboPublicationUrl } from '../article-publishing/weibo-publication'
+import {
+  parseWeiboPublicationUrl,
+  weiboImageIdentity,
+} from '../article-publishing/weibo-publication'
 import {
   foldArticlePublishingPlanResults,
   setArticlePublishingPlanResult,
@@ -526,15 +533,31 @@ export class WebAffairService {
       if (!affair || !publishing || affair.kind !== 'article-publishing') {
         return this.notFound('文章发布事务不存在')
       }
-      const conflictingAffair = this.snapshot?.affairs.find(
-        (candidate) =>
-          candidate.id !== affairId &&
-          candidate.kind === 'article-publishing' &&
-          candidate.articlePublishing &&
-          ['preparing', 'running', 'checking-runtime', 'waiting-human'].includes(
-            candidate.articlePublishing.execution.status,
-          ),
-      )
+      const conflictingAffair = this.snapshot?.affairs.find((candidate) => {
+        const other = candidate.articlePublishing
+        if (candidate.id === affairId || candidate.kind !== 'article-publishing' || !other)
+          return false
+        if (['preparing', 'running', 'checking-runtime'].includes(other.execution.status))
+          return true
+        if (other.execution.status !== 'waiting-human') return false
+        // Human attention is not a global execution lease once the Runtime has closed.
+        // Keep the same account protected and fail closed without terminal binding evidence.
+        if (other.accountId === publishing.accountId) return true
+        const attempt = candidate.attempts.find(
+          (item) => item.id === other.execution.currentAttemptId,
+        )
+        const bindings = attempt?.runtimeBindings.filter(
+          (binding) => binding.executionGeneration === other.execution.currentGeneration,
+        )
+        return !(
+          attempt?.status === 'waiting-human' &&
+          !other.execution.lastAgentRunId &&
+          !other.execution.lastBrowserTaskRunId &&
+          bindings?.some((binding) => binding.kind === 'agent-run') &&
+          bindings.some((binding) => binding.kind === 'browser-task') &&
+          bindings.every((binding) => binding.status === 'terminal' && binding.endedAt)
+        )
+      })
       if (conflictingAffair) {
         return this.invalid(
           `另一条文章发布任务正在占用 Browser/Agent：${conflictingAffair.title}；请先完成或终止它`,
@@ -1100,6 +1123,89 @@ export class WebAffairService {
     })
   }
 
+  /** Main-only recovery from the original account Tab, after frozen body verification.
+   * This records a located result, never grants permission to send again. */
+  recordWeiboPublicationLocation(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      uid: string
+      url: string
+      imageUrls: string[]
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const anchor = parseWeiboPublicationUrl(input.url)
+      const effects =
+        publishing?.sideEffects.filter(
+          (e) => e.kind === 'publish' && e.attemptId === input.attemptId && !!e.dispatchedAt,
+        ) ?? []
+      const ids = input.imageUrls.map(weiboImageIdentity)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'weibo' ||
+        !isCurrent() ||
+        publishing.composer?.allowPublish !== true ||
+        publishing.composer.platformAccountId !== input.uid ||
+        !anchor ||
+        anchor.uid !== input.uid ||
+        found.attempt.executionGeneration !== input.executionGeneration ||
+        found.attempt.launchOperationId !== input.launchOperationId ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentStepId !== 'verify-publication' ||
+        !['preparing', 'running-ai'].includes(found.attempt.status) ||
+        publishing.publication.status !== 'result-unknown' ||
+        effects.length !== 1 ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effects[0].status) ||
+        !ids.length ||
+        ids.some((id) => !id) ||
+        new Set(ids).size !== ids.length ||
+        ids.length !== publishing.assets.length ||
+        publishing.assets.some(
+          (a, i) => !a.platformUrl || weiboImageIdentity(a.platformUrl) !== ids[i],
+        ) ||
+        (publishing.publication.url && publishing.publication.url !== anchor.url)
+      )
+        return this.transitionError(
+          '微博公开结果未对应原账号、本次单次提交及全部原图，禁止认领或重发',
+        )
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          publication: { ...publishing.publication, url: anchor.url, observedAt: now },
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+              ? {
+                  ...checkpoint,
+                  status: 'completed' as const,
+                  finishedAt: now,
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    `main 已从原账号页面核验冻结全文及全部上传图片；只读恢复 · ${anchor.url}`,
+                  ].slice(-40),
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((e) =>
+            e.key === effects[0].key ? { ...e, status: 'verified' as const, observedAt: now } : e,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   recordWeiboSubmissionReceipt(
     input: {
       affairId: string
@@ -1315,6 +1421,42 @@ export class WebAffairService {
     return this.enqueueScoped(input.affairId, workspaceId, () =>
       this.reportArticlePublishingAssetNow(input, reporter),
     )
+  }
+
+  reduceArticlePublishingTags(input: ReduceArticlePublishingTagsInput, workspaceId: string) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const state = found?.affair.articlePublishing
+      if (!found || !state) return this.notFound('发布任务不存在')
+      if (
+        found.attempt.status !== 'interrupted' ||
+        found.attempt.executionGeneration !== input.executionGeneration ||
+        found.attempt.launchOperationId !== input.launchOperationId ||
+        state.execution.currentAttemptId !== input.attemptId ||
+        state.execution.currentGeneration !== input.executionGeneration ||
+        state.execution.currentLaunchOperationId !== input.launchOperationId
+      )
+        return this.transitionError('任务执行状态已变化，不能修改标签')
+      try {
+        const publishing = reduceUnsubmittedTags(state, input.expectedTags, input.tags)
+        const now = this.timestamp()
+        return this.persistAffair({
+          ...found.affair,
+          articlePublishing: publishing,
+          updatedAt: now,
+          events: this.appendEvent(
+            found.affair,
+            this.event(
+              'node-status-changed',
+              `用户删减未提交标签：${state.fields.tags.join('、')} → ${publishing.fields.tags.join('、')}；原稿与图文保持，恢复后重新核验`,
+              now,
+            ),
+          ),
+        })
+      } catch (error) {
+        return this.transitionError(error instanceof Error ? error.message : String(error))
+      }
+    })
   }
 
   resolveArticlePublishingAsset(
@@ -1687,13 +1829,21 @@ export class WebAffairService {
       )
       for (const conflict of conflicts) {
         if (
+          adapterId === 'weibo' &&
+          conflict.workspaceId === workspaceId &&
+          canStartAfterUnsubmittedWeiboTask(conflict, input.preview)
+        )
+          continue
+        if (
           adapterId === 'bilibili' &&
           conflict.workspaceId === workspaceId &&
           (await isIndependentBilibiliDraft(conflict, input.preview))
         )
           continue
         return this.invalid(
-          '这个平台账号已有未结束任务；仅允许在旧发布已中断且原文未变时创建标题、文件和正文均不同的新稿，未知原稿仍只能核验',
+          adapterId === 'weibo'
+            ? '这个微博账号已有未结束任务；仅允许已停止且从未获提交许可的准备任务让路给不同文件和标题的新稿，未知发布仍只能核验'
+            : '这个平台账号已有未结束任务；仅允许在旧发布已中断且原文未变时创建标题、文件和正文均不同的新稿，未知原稿仍只能核验',
         )
       }
     } else if (input.composer) return this.invalid('只有微博和B站动态使用临时编辑器配置')
@@ -4432,6 +4582,13 @@ export class WebAffairService {
           )
           .map((asset) => asset.id),
       )
+      const neverDispatchedIds = new Set(
+        publishingForBind.assets
+          .filter((asset) =>
+            canResumeUnsubmittedToutiaoImage(publishingForBind, asset, recoveryVerification),
+          )
+          .map((asset) => asset.id),
+      )
       publishingForBind = {
         ...publishingForBind,
         assets: publishingForBind.assets.map((asset) =>
@@ -4455,7 +4612,29 @@ export class WebAffairService {
                     : upload,
                 ),
               }
-            : asset,
+            : neverDispatchedIds.has(asset.id)
+              ? {
+                  ...asset,
+                  status: 'retryable-failed',
+                  uploadAttempts: asset.uploadAttempts.map((upload, index) =>
+                    index === asset.uploadAttempts.length - 1
+                      ? {
+                          ...upload,
+                          status: 'retryable-failed',
+                          finishedAt: now,
+                          error: {
+                            code: 'upload_never_reserved',
+                            message: '本次原账号原稿保存及图集核验通过，历史没有该图的上传派发记录',
+                          },
+                          evidence: [
+                            ...upload.evidence,
+                            `Runtime 握手回读原稿 ${recoveryVerification.draftId}，图集完整且该图缺失；历史没有上传 reservation，允许首次实际上传`,
+                          ].slice(-40),
+                        }
+                      : upload,
+                  ),
+                }
+              : asset,
         ),
         sideEffects: publishingForBind.sideEffects.map((effect) =>
           effect.attemptId === attemptId &&

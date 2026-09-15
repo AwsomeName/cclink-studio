@@ -15,6 +15,7 @@ import { WebAffairStore } from './web-affair-store'
 const PRINCIPAL_ID = '11111111-1111-4111-8111-111111111111'
 const WEBSITE_ID = '22222222-2222-4222-8222-222222222222'
 const ACCOUNT_ID = '33333333-3333-4333-8333-333333333333'
+const SECOND_ACCOUNT_ID = '33333333-3333-4333-8333-333333333334'
 const WORKSPACE_ID = '44444444-4444-4444-8444-444444444444'
 
 describe('article publishing persistent state', () => {
@@ -32,6 +33,50 @@ describe('article publishing persistent state', () => {
 
   afterEach(async () => {
     await rm(directory, { recursive: true, force: true })
+  })
+
+  it('persists bounded tag reduction in the same task and rejects stale or cross-workspace requests', async () => {
+    const task = await createStartedTask(directory, sourcePath, imagePath)
+    const store = new WebAffairStore(join(directory, 'affairs.json'))
+    const snapshot = await store.load()
+    const affair = snapshot.affairs.find((a) => a.id === task.affairId)!
+    const state = affair.articlePublishing!
+    state.adapterId = 'juejin'
+    state.fields.tags = ['人工智能', '智能眼镜', '独立开发']
+    state.execution.status = 'interrupted'
+    state.execution.currentStepId = 'fill-fields'
+    affair.attempts[0].status = 'interrupted'
+    await store.save(snapshot, { changedAffairIds: [affair.id] })
+    const service = createService(directory)
+    await service.load()
+    const input = {
+      workspaceRef: { kind: 'local' as const, path: directory },
+      affairId: affair.id,
+      attemptId: affair.attempts[0].id,
+      executionGeneration: state.execution.currentGeneration,
+      launchOperationId: state.execution.currentLaunchOperationId!,
+      expectedTags: state.fields.tags,
+      tags: ['人工智能'],
+    }
+    expect((await service.reduceArticlePublishingTags(input, randomUUID())).success).toBe(false)
+    expect(
+      (
+        await service.reduceArticlePublishingTags(
+          { ...input, executionGeneration: 99 },
+          WORKSPACE_ID,
+        )
+      ).success,
+    ).toBe(false)
+    const results = await Promise.all([
+      service.reduceArticlePublishingTags(input, WORKSPACE_ID),
+      service.reduceArticlePublishingTags(input, WORKSPACE_ID),
+    ])
+    expect(results.map((r) => r.success)).toEqual([true, false])
+    const persisted = (await store.load()).affairs.find((a) => a.id === task.affairId)!
+    expect(persisted.articlePublishing?.fields.tags).toEqual(['人工智能'])
+    expect(persisted.articlePublishing?.assets).toEqual(state.assets)
+    expect(persisted.attempts).toEqual(affair.attempts)
+    expect(persisted.events.at(-1)?.summary).toContain('用户删减未提交标签')
   })
 
   it('creates a Toutiao original-draft task without claiming restored, saved or published', async () => {
@@ -367,6 +412,89 @@ describe('article publishing persistent state', () => {
           expect(details.find((d) => d.id === `asset.${asset.id}.published`)?.status).toBe(
             'completed',
           )
+      }
+      await created.service.flush()
+    },
+  )
+
+  it.each([
+    'accepted',
+    'stale',
+    'wrong-account',
+    'wrong-image',
+    'no-images',
+    'not-dispatched',
+    'duplicate-send',
+    'wrong-step',
+    'changed-page',
+    'conflicting-url',
+  ] as const)(
+    'recovers a Weibo public location without granting another send: %s',
+    async (mode) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const p = affair.articlePublishing
+      const attempt = affair.attempts.find((a: { id: string }) => a.id === created.attemptId)!
+      attempt.executionGeneration += 1
+      p.execution.currentGeneration = attempt.executionGeneration
+      p.adapterId = 'weibo'
+      p.composer = { platformAccountId: '5961101548', allowPublish: true }
+      p.execution.currentStepId = mode === 'wrong-step' ? 'publish' : 'verify-publication'
+      p.publication = {
+        status: 'result-unknown',
+        ...(mode === 'conflicting-url' ? { url: 'https://weibo.com/5961101548/Other123' } : {}),
+      }
+      p.assets.forEach((a: { platformUrl: string }, i: number) => {
+        a.platformUrl = `https://wx1.sinaimg.cn/large/image${i}.jpg`
+      })
+      p.sideEffects = [
+        {
+          key: 'weibo-original-send',
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration - 1,
+          kind: 'publish',
+          targetId: 'final',
+          status: 'result-unknown',
+          reservedAt: new Date().toISOString(),
+          ...(mode === 'not-dispatched' ? {} : { dispatchedAt: new Date().toISOString() }),
+        },
+      ]
+      if (mode === 'duplicate-send') p.sideEffects.push({ ...p.sideEffects[0], key: 'second' })
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.recordWeiboPublicationLocation(
+        {
+          workspaceId: WORKSPACE_ID,
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration + (mode === 'stale' ? 1 : 0),
+          launchOperationId: attempt.launchOperationId,
+          uid: mode === 'wrong-account' ? '1234567890' : '5961101548',
+          url: 'https://weibo.com/5961101548/RhYvweFVk',
+          imageUrls:
+            mode === 'no-images'
+              ? []
+              : p.assets.map(
+                  (_a: unknown, i: number) =>
+                    `https://wx2.sinaimg.cn/bmiddle/${mode === 'wrong-image' ? 'other' : `image${i}`}.jpg`,
+                ),
+        },
+        () => mode !== 'changed-page',
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        mode === 'accepted',
+      )
+      if (result.success) {
+        expect(result.data.articlePublishing?.publication.status).toBe('result-unknown')
+        expect(result.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+        expect(result.data.articlePublishing?.sideEffects).toHaveLength(1)
+        expect(result.data.articlePublishing?.sideEffects[0]).toMatchObject({
+          key: 'weibo-original-send',
+          status: 'verified',
+          executionGeneration: attempt.executionGeneration - 1,
+        })
       }
       await created.service.flush()
     },
@@ -1334,6 +1462,47 @@ describe('article publishing persistent state', () => {
         ),
       ),
     ).toHaveLength(1)
+  })
+
+  it.each([
+    ['same-account', false],
+    ['different-account', true],
+    ['running', false],
+  ] as const)('preserves a %s task while acquiring another publication', async (mode, allowed) => {
+    const first = await createStartedTask(directory, sourcePath, imagePath)
+    if (mode !== 'running') {
+      const paused = await first.service.handoffAttempt(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: first.affairId,
+          attemptId: first.attemptId,
+          reason: '等待原平台结果核验',
+        },
+        WORKSPACE_ID,
+      )
+      expect(paused.success).toBe(true)
+    }
+    const second = await createDraftTask(directory, sourcePath, imagePath, {
+      service: first.service,
+      accountId: mode === 'same-account' ? ACCOUNT_ID : SECOND_ACCOUNT_ID,
+    })
+    const before = first.service.getSnapshot()
+    if (!before.success) throw new Error(before.error.message)
+    const original = before.data.affairs.find((a) => a.id === first.affairId)
+    const acquired = await first.service.acquireArticlePublishingAttempt(
+      second.affairId,
+      WORKSPACE_ID,
+    )
+    expect(acquired.success).toBe(allowed)
+    const after = first.service.getSnapshot()
+    if (!after.success) throw new Error(after.error.message)
+    expect(after.data.affairs.find((a) => a.id === first.affairId)).toEqual(original)
+    if (allowed) {
+      // A paused task cannot resume while the other account owns the live Runtime.
+      expect(
+        (await first.service.acquireArticlePublishingAttempt(first.affairId, WORKSPACE_ID)).success,
+      ).toBe(false)
+    }
   })
 
   it('keeps one draft identity and deletes the task when its persisted schema is legacy', async () => {
@@ -4432,9 +4601,14 @@ function createService(directory: string): WebAffairService {
   )
 }
 
-async function createDraftTask(directory: string, sourcePath: string, imagePath: string) {
-  const service = createService(directory)
-  await service.load()
+async function createDraftTask(
+  directory: string,
+  sourcePath: string,
+  imagePath: string,
+  existing?: { service: WebAffairService; accountId: string },
+) {
+  const service = existing?.service ?? createService(directory)
+  if (!existing) await service.load()
   const preview: ArticlePublishingSourcePreview = {
     source: {
       markdownPath: sourcePath,
@@ -4462,7 +4636,7 @@ async function createDraftTask(directory: string, sourcePath: string, imagePath:
   const created = await service.createArticlePublishingAffair(
     {
       preview,
-      accountId: ACCOUNT_ID,
+      accountId: existing?.accountId ?? ACCOUNT_ID,
       fields: { title: 'Article', summary: 'summary', tags: [], category: '' },
       workspaceRef: { kind: 'local', path: directory },
     },
@@ -4518,6 +4692,15 @@ function resources(): WebResourceSnapshot {
         principalId: PRINCIPAL_ID,
         label: 'CSDN test',
         browserProfileId: 'csdn-profile',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: SECOND_ACCOUNT_ID,
+        websiteId: WEBSITE_ID,
+        principalId: PRINCIPAL_ID,
+        label: 'Second account',
+        browserProfileId: 'second-profile',
         createdAt: now,
         updatedAt: now,
       },

@@ -1801,7 +1801,7 @@ export class ArticlePublishingBrowserPolicy {
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) throw new Error('冻结正文不存在')
-    if (state.adapterId === 'weibo') {
+    if (state.adapterId === 'weibo' || state.adapterId === 'toutiao') {
       return (await prepareArticleMarkdown(state))
         .replace(/^# /u, '')
         .replace(/!\[[^\]]*\]\([^)]*\)/gu, '')
@@ -1902,7 +1902,22 @@ export class ArticlePublishingBrowserPolicy {
         const deadline = Date.now() + 30_000
         while (Date.now() < deadline) {
           if (!isCurrent()) throw new Error('图片上传后页面已改代，只能恢复核验，禁止重复上传')
-          const after = await this.adapter.probe(page, undefined, undefined, observedAssets)
+          let after: CsdnPageProbe
+          try {
+            after = await this.adapter.probe(page, undefined, undefined, observedAssets)
+          } catch (error) {
+            // Image load completion can invalidate the two read-only snapshots.
+            // Re-observe within this upload's deadline; never dispatch the file again.
+            if (
+              scope.adapterId !== 'xiaohongshu' ||
+              !(error instanceof Error) ||
+              error.message !== '小红书原稿在回读期间变化，旧证据已废弃'
+            )
+              throw error
+            if (!isCurrent()) throw new Error('图片回读证据已过期')
+            await page.waitForTimeout(500)
+            continue
+          }
           if (!isCurrent()) throw new Error('图片回读证据已过期')
           const added = after.editor.images.filter((i) => !urls.has(i.src))
           if (added.length > 1) throw new Error('一次上传出现多张新图片，无法确定文件对应关系')
@@ -2824,7 +2839,8 @@ export class ArticlePublishingBrowserPolicy {
               Boolean(effect.dispatchedAt),
           ),
         uploadNeverDispatched:
-          ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+          ['weibo', 'bilibili', 'toutiao'].includes(publishing.adapterId) &&
+          !asset.platformUrl &&
           !publishing.sideEffects.some(
             (effect) =>
               effect.kind === 'upload-asset' &&
@@ -3083,7 +3099,8 @@ export class ArticlePublishingBrowserPolicy {
         (asset.rebuildUploadAllowed === true ||
           (asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
           asset.manualResolution?.status === 'missing' ||
-          (['weibo', 'bilibili'].includes(scope.adapterId) &&
+          (['weibo', 'bilibili', 'toutiao'].includes(scope.adapterId) &&
+            !asset.platformUrl &&
             asset.uploadNeverDispatched === true)),
       )
       return Boolean(

@@ -25,11 +25,13 @@ describe('CsdnPublishingAdapter recovery evidence', () => {
           selectors: {},
           saveStatusTexts: ['草稿已保存'],
           savedDraftMatches: matches,
+          savedDraftDiagnostic: 'CSDN 原稿回读：正文=true；摘要=false',
           publishedLinks: [],
         })),
       }
       const probe = await new CsdnPublishingAdapter().probe(page as never)
       expect(probe.saveState).toBe(matches ? 'saved' : 'unknown')
+      if (!matches) expect(probe.saveEvidence).toBe('CSDN 原稿回读：正文=true；摘要=false')
       expect(probe).toMatchObject({
         platformAccountId: 'csdn:test-user',
         draftId: '164148817',

@@ -1,5 +1,6 @@
 import type { Page } from 'playwright-core'
 import { readToutiaoPage } from './toutiao-publishing-adapter'
+import { parseToutiaoPublicationUrl } from './toutiao-publication'
 
 export const TOUTIAO_PUBLICATION_MANAGEMENT_URL = 'https://mp.toutiao.com/profile_v4/weitoutiao'
 
@@ -41,7 +42,14 @@ export async function readToutiaoPublicationReview(
         try {
           const u = new URL(raw)
           return u.protocol === 'https:' &&
-            ['p3-sign.toutiaoimg.com', 'p11-sign.toutiaoimg.com'].includes(u.hostname)
+            !u.username &&
+            !u.password &&
+            !u.port &&
+            [
+              'p3-sign.toutiaoimg.com',
+              'p9-sign.toutiaoimg.com',
+              'p11-sign.toutiaoimg.com',
+            ].includes(u.hostname)
             ? /^\/(tos-cn-i-ezhpy3drpa\/[a-f0-9]{32})(?:~[^/]*)?$/u.exec(u.pathname)?.[1]
             : undefined
         } catch {
@@ -177,23 +185,24 @@ export async function openToutiaoPublicationResult(
   const popup = page
     .waitForEvent('popup', { timeout: 10_000 })
     .then(async (p) => {
-      await p.waitForURL((url) => url.protocol === 'https:', { timeout: 10_000 })
+      await p.waitForURL((url) => !!parseToutiaoPublicationUrl(url.href), { timeout: 10_000 })
       return p.url()
     })
     .catch(() => null)
   const navigation = page
-    .waitForURL((url) => url.href !== TOUTIAO_PUBLICATION_MANAGEMENT_URL, { timeout: 10_000 })
+    .waitForURL((url) => !!parseToutiaoPublicationUrl(url.href), { timeout: 10_000 })
     .then(() => page.url())
     .catch(() => null)
   await target.click({ timeout: 5000 })
   const urls = (await Promise.all([popup, navigation])).filter((s): s is string => !!s)
-  const valid = [...new Set(urls)].filter((raw) => {
-    const u = new URL(raw)
-    return (
-      ['https://www.toutiao.com', 'https://toutiao.com'].includes(u.origin) &&
-      /^\/(?:w\/\d+|article\/\d+|a\d+)\/?$/u.test(u.pathname)
-    )
-  })
+  const valid = [
+    ...new Set(
+      urls.flatMap((raw) => {
+        const parsed = parseToutiaoPublicationUrl(raw)
+        return parsed ? [`https://www.toutiao.com/w/${parsed.id}/`] : []
+      }),
+    ),
+  ]
   if (!isCurrent() || valid.length !== 1)
     throw new Error('头条作品入口未返回唯一公开地址；禁止重复提交')
   const url = new URL(valid[0])

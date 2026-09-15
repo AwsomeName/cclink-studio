@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Page } from 'playwright-core'
 import { JuejinPublishingAdapter } from './juejin-publishing-adapter'
-function fixture() {
+function fixture(panel?: { summary: string; category: string; pendingTag?: string }) {
   const draft = {
     id: '7683025447916847150',
     user_id: 'owner',
@@ -21,7 +21,15 @@ function fixture() {
         ? { CodeMirror: { getValue: () => editor.markdown } }
         : selector === 'input.title-input'
           ? title
-          : null,
+          : selector === '.category-list' && panel
+            ? { getBoundingClientRect: () => ({ width: 400 }) }
+            : selector === '.category-list .item.active' && panel?.category
+              ? { textContent: panel.category }
+              : selector === 'textarea[maxlength="100"]' && panel
+                ? { value: panel.summary }
+                : selector === '.tag-input[data-v-486f85f2] input' && panel
+                  ? { value: panel.pendingTag ?? '' }
+                  : null,
     querySelectorAll: () => [],
   })
   vi.stubGlobal(
@@ -43,6 +51,24 @@ function fixture() {
   return { draft, title, page, editor }
 }
 afterEach(() => vi.unstubAllGlobals())
+it('reports the actual tag search value even when no option is available', async () => {
+  const { page } = fixture({ summary: '', category: '', pendingTag: '智能眼镜' })
+  const probe = await new JuejinPublishingAdapter().probe(page)
+  expect(probe.tagEditor?.pendingValue).toBe('智能眼镜')
+  expect(probe.selectors.tags).toBeUndefined()
+})
+it('recognizes an unselected category only when server fields also match', async () => {
+  const panel = { summary: '', category: '' }
+  const { draft, page } = fixture(panel)
+  const adapter = new JuejinPublishingAdapter()
+  expect((await adapter.probe(page)).saveState).toBe('saved')
+  panel.summary = '新摘要'
+  expect((await adapter.probe(page)).saveState).toBe('unknown')
+  draft.brief_content = panel.summary
+  expect((await adapter.probe(page)).saveState).toBe('saved')
+  panel.category = '人工智能'
+  expect((await adapter.probe(page)).saveState).toBe('unknown')
+})
 it('requires exact owner, draft, title and saved Markdown', async () => {
   const { draft, title, page } = fixture()
   const adapter = new JuejinPublishingAdapter()

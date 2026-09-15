@@ -67,7 +67,7 @@ describe('Toutiao current-page evidence', () => {
       saveState: 'unknown',
       editor: { imageEnumerationComplete: false },
       publishedLinks: [],
-      selectors: {},
+      selectors: { body: 'div.ProseMirror[contenteditable="true"]', save: 'button.save-draft' },
     })
     expect(probe.submissionUnavailableReason).toContain('未读到复选框')
   })
@@ -83,7 +83,26 @@ describe('Toutiao draft comparison', () => {
   const first = 'tos-cn-i-ezhpy3drpa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
   const second = 'tos-cn-i-ezhpy3drpa/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
   async function run(
-    change: 'none' | 'id' | 'body' | 'order' | 'load' | 'navigation' | 'foreign-read',
+    change:
+      | 'none'
+      | 'private-upload'
+      | 'private-lookalike'
+      | 'id'
+      | 'body'
+      | 'order'
+      | 'load'
+      | 'navigation'
+      | 'foreign-read'
+      | 'empty'
+      | 'hidden-gallery'
+      | 'missing-toolbar'
+      | 'empty-changed'
+      | 'decorative-image'
+      | 'omitted-images'
+      | 'invalid-images'
+      | 'null-images'
+      | 'inline-icon'
+      | 'visible-image',
   ) {
     const url = 'https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=123'
     const style = { visibility: 'visible', display: 'block', backgroundImage: 'none' }
@@ -95,15 +114,30 @@ describe('Toutiao draft comparison', () => {
       style,
       getAttribute: () => null,
     })
-    const spans = [first, second].map((id, i) => ({
+    const isEmpty = [
+      'empty',
+      'hidden-gallery',
+      'missing-toolbar',
+      'empty-changed',
+      'decorative-image',
+      'omitted-images',
+      'invalid-images',
+      'null-images',
+      'inline-icon',
+      'visible-image',
+    ].includes(change)
+    const spans = (isEmpty ? [] : [first, second]).map((id, i) => ({
       ...element(),
       style: {
         ...style,
-        backgroundImage: `url("https://p${i ? 11 : 3}-sign.toutiaoimg.com/${id}~tplv-shrink:750:750.image?signature=never-log")`,
+        backgroundImage: `url("https://${i && change.startsWith('private-') ? `image-tt-private.toutiao.com${change === 'private-lookalike' ? '.evil.test' : ''}` : `p${i ? 11 : 3}-sign.toutiaoimg.com`}/${id}~tplv-shrink:750:750.image?signature=never-log")`,
       },
     }))
-    const gallery = { ...element('共 2 张，还能上传 16 张'), querySelectorAll: () => spans }
-    const editor = { ...element('原标题\n正文'), parentElement: gallery }
+    const gallery = {
+      ...element(isEmpty ? '' : '共 2 张，还能上传 16 张'),
+      querySelectorAll: () => spans,
+    }
+    const editor = { ...element('原标题\n正文'), parentElement: gallery, contains: () => false }
     const save = {
       ...element('存草稿'),
       matches: (s: string) => s === 'button.save-draft',
@@ -113,6 +147,40 @@ describe('Toutiao draft comparison', () => {
       ...element('发布'),
       matches: (s: string) => s === 'button.publish-content',
       disabled: false,
+    }
+    let emptyReads = 0
+    const imageButton = {
+      ...element('图片'),
+      matches: (s: string) => s === 'button.syl-toolbar-button',
+      disabled: false,
+    }
+    const main = {
+      ...element(),
+      contains: () => true,
+      querySelectorAll: (selector: string) => {
+        if (
+          selector === 'img:not(.exclusive-detail-image)' &&
+          ['inline-icon', 'visible-image'].includes(change)
+        )
+          return [
+            {
+              ...element(),
+              getAttribute: () =>
+                change === 'inline-icon'
+                  ? 'data:image/png;base64,icon'
+                  : 'https://unknown/image.png',
+              getBoundingClientRect: () => ({ width: 24, height: 24 }),
+            },
+          ]
+        if (selector === 'img:not(.exclusive-detail-image)')
+          return change === 'decorative-image'
+            ? [{ ...element(), getBoundingClientRect: () => ({ width: 0, height: 0 }) }]
+            : []
+        emptyReads++
+        return change === 'hidden-gallery' || (change === 'empty-changed' && emptyReads > 1)
+          ? [{}]
+          : []
+      },
     }
     const link = {
       ...element(),
@@ -124,17 +192,24 @@ describe('Toutiao draft comparison', () => {
       origin: 'https://mp.toutiao.com',
       pathname: '/profile_v4/weitoutiao/publish',
     }
-    const readIds = change === 'order' ? [second, first] : [first, second]
+    const readIds = isEmpty ? [] : change === 'order' ? [second, first] : [first, second]
     const response = {
       code: 0,
       draft: {
         gid: change === 'id' ? '456' : '123',
         origin_draft: JSON.stringify({
           content: change === 'body' ? '其他文章' : '原标题\n正文',
-          images: readIds.map((uri) => ({
-            uri,
-            url: `https://p11-sign.toutiaoimg.com/${uri}~tplv-shrink:750:750.image?signature=never-log`,
-          })),
+          images:
+            change === 'null-images'
+              ? null
+              : change === 'omitted-images'
+                ? undefined
+                : change === 'invalid-images'
+                  ? {}
+                  : readIds.map((uri) => ({
+                      uri,
+                      url: `https://p11-sign.toutiaoimg.com/${uri}~tplv-shrink:750:750.image?signature=never-log`,
+                    })),
         }),
       },
     }
@@ -160,8 +235,10 @@ describe('Toutiao draft comparison', () => {
           : s === 'a[href]'
             ? [link]
             : s === 'button'
-              ? [save, publish]
-              : [],
+              ? [save, publish, ...(change === 'missing-toolbar' ? [] : [imageButton])]
+              : s === 'main'
+                ? [main]
+                : [],
     })
     vi.stubGlobal(
       'Node',
@@ -210,6 +287,39 @@ describe('Toutiao draft comparison', () => {
     expect(live.imageEnumerationComplete).toBe(true)
     expect(live.images).toHaveLength(2)
   })
+  it('matches the observed fresh-upload host to the same saved image URI without exposing signatures', async () => {
+    expect(await run('private-upload')).toMatchObject({
+      saved: true,
+      imageEnumerationComplete: true,
+    })
+    expect(await run('private-lookalike')).toMatchObject({
+      saved: false,
+      imageEnumerationComplete: false,
+    })
+  })
+  it('accepts a saved zero-image draft only with an unchanged visible empty composer', async () => {
+    expect(await run('empty')).toMatchObject({
+      saved: true,
+      imageEnumerationComplete: true,
+      images: [],
+    })
+  })
+  it('accepts an omitted optional image field only for the proven empty composer', async () => {
+    expect((await run('omitted-images')).saved).toBe(true)
+    expect((await run('null-images')).saved).toBe(true)
+    expect((await run('invalid-images')).saved).toBe(false)
+  })
+  it('ignores hidden decoration outside the editor but never hidden gallery items', async () => {
+    expect((await run('decorative-image')).saved).toBe(true)
+    expect((await run('inline-icon')).saved).toBe(true)
+    expect((await run('visible-image')).saved).toBe(false)
+  })
+  it.each(['hidden-gallery', 'missing-toolbar', 'empty-changed'] as const)(
+    'rejects unproven empty composer: %s',
+    async (change) => {
+      expect((await run(change)).saved).toBe(false)
+    },
+  )
   it.each(['id', 'body', 'order', 'load', 'navigation', 'foreign-read'] as const)(
     'does not accept saved evidence after %s mismatch',
     async (change) => {

@@ -524,6 +524,13 @@ export const manageArticlePublishingRuntimeInputSchema = z
   })
   .strict()
 
+export const reduceArticlePublishingTagsInputSchema = manageArticlePublishingRuntimeInputSchema
+  .extend({
+    expectedTags: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+    tags: z.array(z.string().trim().min(1).max(100)).min(1).max(20),
+  })
+  .strict()
+
 export const resolveArticlePublishingAssetInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,

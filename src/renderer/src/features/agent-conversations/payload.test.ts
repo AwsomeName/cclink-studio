@@ -11,6 +11,34 @@ import {
 } from './payload'
 
 describe('buildAgentSendPayload', () => {
+  it('sends browser resources with absent optional fields through the strict IPC schema', () => {
+    const conversation = createAgentConversationState('publishing-followup')
+    conversation.mountedResources = [
+      {
+        id: 'browser-original-draft',
+        kind: 'browser',
+        label: '掘金发布页',
+        detail: undefined,
+        ref: { type: 'browser', tabId: 'original-tab', path: undefined, workspaceKey: null },
+      },
+    ]
+    const before = structuredClone(conversation.mountedResources)
+    const payload = buildAgentSendPayload('只读诊断', conversation)
+    expect(agentSendMessageInputSchema.safeParse(payload).success).toBe(true)
+    expect(payload.resources).toEqual([
+      {
+        id: 'browser-original-draft',
+        kind: 'browser',
+        label: '掘金发布页',
+        ref: { type: 'browser', tabId: 'original-tab', workspaceKey: null },
+      },
+    ])
+    expect(conversation.mountedResources).toEqual(before)
+    conversation.mountedResources[0].ref.size = Number.NaN
+    expect(
+      agentSendMessageInputSchema.safeParse(buildAgentSendPayload('诊断', conversation)).success,
+    ).toBe(false)
+  })
   it('defaults old conversations to Claude Code and preserves explicit Codex ACP binding', () => {
     const conversation = createAgentConversationState('runtime-thread')
     expect(buildAgentSendPayload('hello', conversation).runtimeBinding).toEqual({

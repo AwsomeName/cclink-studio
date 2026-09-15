@@ -55,7 +55,14 @@ export async function readToutiaoPublication(page: Page, title: string) {
               const u = new URL(img.currentSrc || img.src)
               const id = /^\/(tos-cn-i-ezhpy3drpa\/[a-f0-9]{32})(?:~[^/]*)?$/u.exec(u.pathname)?.[1]
               return u.protocol === 'https:' &&
-                ['p3-sign.toutiaoimg.com', 'p11-sign.toutiaoimg.com'].includes(u.hostname) &&
+                !u.username &&
+                !u.password &&
+                !u.port &&
+                [
+                  'p3-sign.toutiaoimg.com',
+                  'p9-sign.toutiaoimg.com',
+                  'p11-sign.toutiaoimg.com',
+                ].includes(u.hostname) &&
                 id
                 ? [
                     {

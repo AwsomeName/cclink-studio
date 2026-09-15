@@ -99,8 +99,8 @@ export class CsdnDraftRecoveryCoordinator {
       )
       await input.observe?.({
         id: 'recovery.account',
-        status: 'completed',
-        evidence: `草稿箱账号 ${input.expectedPlatformAccountId}`,
+        status: 'running',
+        evidence: '原稿候选已定位；在原可见Tab中核验平台账号后才允许写入',
       })
       await input.observe?.({
         id: 'recovery.locate',
@@ -108,7 +108,13 @@ export class CsdnDraftRecoveryCoordinator {
         evidence: `实际子页原 draftId ${input.expectedDraftId} · ${url}`,
       })
       page = await input.navigate(url)
-      return this.verifyExactDraftPage({ ...input, page })
+      const verified = await this.verifyExactDraftPage({ ...input, page })
+      await input.observe?.({
+        id: 'recovery.account',
+        status: 'completed',
+        evidence: `原稿编辑页账号 ${verified.platformAccountId}，ID、标题与保存状态均已核验`,
+      })
+      return verified
     }
     let list = await this.readSettledPage(
       page,

@@ -1,0 +1,466 @@
+{
+  "id": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7",
+  "kind": "article-publishing",
+  "workspaceId": "941ad8a1-aa46-4635-b085-3aaa412fb2c5",
+  "title": "做AI眼镜第189天，它学会主动找你聊天了",
+  "objective": "将 /Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md 发布到 头条微头条",
+  "status": "needs-attention",
+  "principalId": "0ad7d020-21d0-4dde-903f-f65b7dc7480f",
+  "websiteIds": [
+    "b88c8524-1fed-443c-abb9-c4fa0022e678"
+  ],
+  "accountIds": [
+    "1345b278-f2bf-4d40-ac5f-437d8a0b3c14"
+  ],
+  "materials": [
+    {
+      "id": "d2417574-6a1b-4f28-84ef-474de8538f79",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md",
+      "name": "小红书软文.md",
+      "state": "available",
+      "size": 1418,
+      "modifiedAt": "2026-09-13T09:33:21.641Z",
+      "checkedAt": "2026-09-14T01:39:05.935Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "e19486c1-f711-4732-82e3-a9b6c673993f",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/01-封面.png",
+      "name": "01-封面.png",
+      "state": "available",
+      "size": 1925855,
+      "modifiedAt": "2026-09-13T08:40:13.822Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "67de1bdd-555b-4936-ad0f-43bfc940e038",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+      "name": "02-陪伴界面效果图.png",
+      "state": "available",
+      "size": 1743107,
+      "modifiedAt": "2026-09-13T08:40:13.829Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "527d2288-449b-4d00-ad14-c84bbb48f93c",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+      "name": "03-暂停观察真机截图.png",
+      "state": "available",
+      "size": 1083436,
+      "modifiedAt": "2026-09-13T08:40:13.835Z",
+      "checkedAt": "2026-09-14T01:39:05.936Z",
+      "addedAt": "2026-09-14T01:39:05.231Z"
+    }
+  ],
+  "flow": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+        "type": "web-task",
+        "title": "发布文章到 头条微头条",
+        "description": "按冻结文章、账号和平台字段执行；特殊卡点转人工。",
+        "status": "waiting-human",
+        "executor": "ai",
+        "accountIds": [
+          "1345b278-f2bf-4d40-ac5f-437d8a0b3c14"
+        ],
+        "materialIds": [
+          "d2417574-6a1b-4f28-84ef-474de8538f79",
+          "e19486c1-f711-4732-82e3-a9b6c673993f",
+          "67de1bdd-555b-4936-ad0f-43bfc940e038",
+          "527d2288-449b-4d00-ad14-c84bbb48f93c"
+        ],
+        "successCriteria": [
+          "全部正文图片已经后置核验",
+          "发布结果 URL 可复核"
+        ],
+        "availableTransitions": [
+          "ready",
+          "verifying",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "lastResultNote": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+        "createdAt": "2026-09-14T01:39:05.231Z",
+        "updatedAt": "2026-09-14T01:39:24.541Z"
+      }
+    ],
+    "edges": []
+  },
+  "attempts": [
+    {
+      "id": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "number": 1,
+      "status": "interrupted",
+      "executionGeneration": 1,
+      "launchOperationId": "3918c4b1-29d9-455d-9cca-fc8be8375df4",
+      "runtimeBindings": [],
+      "processedRuntimeEventIds": [
+        "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59:g1:3918c4b1-29d9-455d-9cca-fc8be8375df4:launch-timeout"
+      ],
+      "profileId": "web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+      "accountId": "1345b278-f2bf-4d40-ac5f-437d8a0b3c14",
+      "entryUrl": "https://mp.toutiao.com/profile_v4/index?is_new_connect=0&is_new_user=0",
+      "sideEffectKey": "cfa02275-a4e6-4edb-bb68-62adf15bb0f7:077d2ac0-9e7d-42a9-9f60-ced64dc4ce93:flow-1",
+      "failureMessage": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "evidence": [],
+      "startedAt": "2026-09-14T01:39:05.937Z",
+      "endedAt": "2026-09-14T01:39:24.541Z"
+    }
+  ],
+  "waitPlans": [],
+  "flowProposals": [],
+  "articlePublishing": {
+    "adapterId": "toutiao",
+    "adapterVersion": 1,
+    "source": {
+      "markdownPath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/小红书软文.md",
+      "modifiedAt": 1789292001640.5623,
+      "size": 1418
+    },
+    "accountId": "1345b278-f2bf-4d40-ac5f-437d8a0b3c14",
+    "websiteId": "b88c8524-1fed-443c-abb9-c4fa0022e678",
+    "fields": {
+      "title": "做AI眼镜第189天，它学会主动找你聊天了",
+      "summary": "",
+      "tags": [],
+      "category": ""
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-10/素材/01-封面.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/01-封面.png",
+        "displayPath": "素材/01-封面.png",
+        "mediaType": "image/png",
+        "size": 1925855,
+        "modifiedAt": 1789288813821.53,
+        "occurrences": [
+          {
+            "start": 444,
+            "end": 456,
+            "alt": "封面：小眸陪伴场景"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      },
+      {
+        "id": "local:AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/02-陪伴界面效果图.png",
+        "displayPath": "素材/02-陪伴界面效果图.png",
+        "mediaType": "image/png",
+        "size": 1743107,
+        "modifiedAt": 1789288813828.7297,
+        "occurrences": [
+          {
+            "start": 472,
+            "end": 489,
+            "alt": "陪伴页面设计效果图"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      },
+      {
+        "id": "local:AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-10/素材/03-暂停观察真机截图.png",
+        "displayPath": "素材/03-暂停观察真机截图.png",
+        "mediaType": "image/png",
+        "size": 1083436,
+        "modifiedAt": 1789288813834.6372,
+        "occurrences": [
+          {
+            "start": 514,
+            "end": 532,
+            "alt": "真机截图：陪伴页面（摄像头暂停状态）"
+          }
+        ],
+        "status": "pending",
+        "uploadAttempts": []
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "label": "从头条草稿箱找回原微头条",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "account.resolve",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+            "observedAt": "2026-09-14T01:39:06.282Z",
+            "generation": 1
+          },
+          {
+            "id": "tab.acquire",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "Tab tab-2-1789348052029 · 账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+            "observedAt": "2026-09-14T01:39:06.815Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.management",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "https://mp.toutiao.com/profile_v4/manage/draft",
+            "observedAt": "2026-09-14T01:39:09.542Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.account",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "草稿箱账号 3777529577766638",
+            "observedAt": "2026-09-14T01:39:12.589Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.locate",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "实际子页原 draftId 1876269094198340 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T01:39:12.680Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.open",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T01:39:23.783Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.verify.account",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 3777529577766638；实际 3777529577766638 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T01:39:23.886Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.verify.id",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 1876269094198340；实际 1876269094198340 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T01:39:23.975Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.verify.title",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 做AI眼镜第189天，它学会主动找你聊天了 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+            "observedAt": "2026-09-14T01:39:24.063Z",
+            "generation": 1
+          },
+          {
+            "id": "recovery.verify.saved",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "failed",
+            "evidence": "期望 saved；实际 unknown · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+            "reason": "原稿核验不一致，禁止写入",
+            "observedAt": "2026-09-14T01:39:24.143Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "verify-account",
+        "label": "核验头条账号与原稿",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "upload-assets",
+        "label": "逐图上传、确认插入并核验",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "skip-if-verified",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "fill-body",
+        "label": "填写并回读微头条正文",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "fill-fields",
+        "label": "核验首发、配乐与作品声明",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "toutiao.exclusive.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "头条首发：未勾选",
+            "observedAt": "2026-09-14T01:39:24.243Z",
+            "generation": 1
+          },
+          {
+            "id": "toutiao.declaration.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "completed",
+            "evidence": "取材网络：未选；引用站内：未选；个人观点，仅供参考：未选；引用AI：未选；虚构演绎，故事经历：未选；投资观点，仅供参考：未选；健康医疗分享，仅供参考：未选",
+            "observedAt": "2026-09-14T01:39:24.471Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "save-draft",
+        "label": "保存并重新核验原微头条",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "publish",
+        "label": "提交这篇微头条一次",
+        "adapterVersion": 1,
+        "status": "pending",
+        "details": [
+          {
+            "id": "toutiao.music.verify",
+            "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+            "status": "waiting",
+            "evidence": "开启配乐：不可读",
+            "reason": "未读到唯一关联复选框，不能按文字或颜色推测",
+            "observedAt": "2026-09-14T01:39:24.386Z",
+            "generation": 1
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      },
+      {
+        "stepId": "verify-publication",
+        "label": "核验微头条平台结果",
+        "adapterVersion": 1,
+        "status": "pending",
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 0,
+        "evidence": []
+      }
+    ],
+    "sideEffects": [],
+    "executionProtocol": {
+      "version": 1,
+      "current": {
+        "operationRunId": "3f5f4eac-111c-49ae-bfb6-229ecba4bb8a",
+        "revision": 2,
+        "definitionId": "recovery.restore-exact-draft",
+        "checkpointId": "open-editor",
+        "status": "interrupted",
+        "owner": "studio",
+        "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+        "executionGeneration": 1,
+        "launchOperationId": "3918c4b1-29d9-455d-9cca-fc8be8375df4",
+        "startSummary": "从管理页核验待修订原稿",
+        "goalSummary": "原账号、draftId、标题与 saved 全部匹配后开始修订",
+        "startedAt": "2026-09-14T01:39:05.937Z",
+        "lastTransitionAt": "2026-09-14T01:39:24.541Z"
+      },
+      "recentTransitions": [
+        {
+          "id": "cf172bea-e798-47e0-8916-a89f5b96463e",
+          "operationRunId": "3f5f4eac-111c-49ae-bfb6-229ecba4bb8a",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-14T01:39:05.937Z",
+          "summary": "修订任务从管理页核验同一原稿；不沿用旧内容完成记录"
+        },
+        {
+          "id": "badf300f-3a5c-4800-925b-0fe1e84b78cc",
+          "operationRunId": "3f5f4eac-111c-49ae-bfb6-229ecba4bb8a",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-14T01:39:24.541Z",
+          "summary": "原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft"
+        }
+      ]
+    },
+    "execution": {
+      "status": "interrupted",
+      "currentAttemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "3918c4b1-29d9-455d-9cca-fc8be8375df4",
+      "currentStepId": "open-editor"
+    },
+    "draft": {
+      "platformDraftId": "1876269094198340",
+      "platformAccountId": "3777529577766638",
+      "url": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1876269094198340",
+      "normalizedTitle": "做AI眼镜第189天，它学会主动找你聊天了",
+      "recovery": {
+        "operationId": "c2f17626-7607-4640-bcba-f56b06a1b567",
+        "executionGeneration": 1,
+        "status": "locating",
+        "expectedDraftId": "1876269094198340",
+        "expectedTitle": "做AI眼镜第189天，它学会主动找你聊天了",
+        "startedAt": "2026-09-14T01:39:05.937Z"
+      }
+    },
+    "publication": {
+      "status": "not-started"
+    }
+  },
+  "events": [
+    {
+      "id": "f201c2fd-a984-4f20-804b-b7edb13c04bf",
+      "type": "created",
+      "summary": "头条微头条 文章发布事务已创建",
+      "occurredAt": "2026-09-14T01:39:05.231Z"
+    },
+    {
+      "id": "627db772-b905-47d7-9a0a-8d0b60778096",
+      "type": "attempt-started",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "发布文章到 头条微头条：已创建第 1 次办理",
+      "occurredAt": "2026-09-14T01:39:05.937Z"
+    },
+    {
+      "id": "794fce3e-1f15-4c9c-93e1-53e61f53c4be",
+      "type": "attempt-finished",
+      "nodeId": "077d2ac0-9e7d-42a9-9f60-ced64dc4ce93",
+      "attemptId": "cf9f375b-5dd8-4e78-a50a-a9f3ca6f7a59",
+      "summary": "MAIN_LAUNCH_FAILED：原草稿当前不是“已保存”状态；已停止自动写入；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；逐图 未通过（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+      "occurredAt": "2026-09-14T01:39:24.541Z"
+    }
+  ],
+  "workspaceRef": {
+    "kind": "local",
+    "path": "/Users/apple/Desktop/研发日记"
+  },
+  "createdAt": "2026-09-14T01:39:05.231Z",
+  "updatedAt": "2026-09-14T01:39:24.541Z"
+}

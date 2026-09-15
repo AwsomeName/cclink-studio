@@ -14,49 +14,54 @@ describe('Toutiao public result evidence', () => {
     ])
       expect(parseToutiaoPublicationUrl(url)).toBeNull()
   })
-  it.each(['current', 'duplicate', 'wrong-title', 'no-images', 'navigation'] as const)(
-    'reads a unique body/gallery without borrowing another card: %s',
-    async (mode) => {
-      const url = 'https://www.toutiao.com/w/123/'
-      const body = {}
-      const base = { getBoundingClientRect: () => ({ width: 100, height: 100 }) }
-      const image = {
-        currentSrc: `https://p11-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/${'a'.repeat(32)}~tplv-obj.image?x-signature=secret`,
-        complete: true,
-        naturalWidth: 100,
+  it.each([
+    'current',
+    'duplicate',
+    'wrong-title',
+    'no-images',
+    'navigation',
+    'p9',
+    'lookalike',
+  ] as const)('reads a unique body/gallery without borrowing another card: %s', async (mode) => {
+    const url = 'https://www.toutiao.com/w/123/'
+    const body = {}
+    const base = { getBoundingClientRect: () => ({ width: 100, height: 100 }) }
+    const image = {
+      currentSrc: `https://${mode === 'p9' ? 'p9-sign.toutiaoimg.com' : mode === 'lookalike' ? 'p9-sign.toutiaoimg.com.evil.test' : 'p11-sign.toutiaoimg.com'}/tos-cn-i-ezhpy3drpa/${'a'.repeat(32)}~tplv-obj.image?x-signature=secret`,
+      complete: true,
+      naturalWidth: 100,
+    }
+    const makeLeaf = () => ({
+      ...base,
+      innerText: mode === 'wrong-title' ? 'Other' : 'Article\nActual body',
+      children: [],
+      parentElement: body,
+      className: 'actual-content',
+      querySelectorAll: () => (mode === 'no-images' ? [] : [image]),
+    })
+    vi.stubGlobal('document', {
+      body,
+      querySelectorAll: () => [makeLeaf(), ...(mode === 'duplicate' ? [makeLeaf()] : [])],
+    })
+    vi.stubGlobal('location', {
+      href: mode === 'navigation' ? 'https://www.toutiao.com/w/456/' : url,
+    })
+    vi.stubGlobal('getComputedStyle', () => ({ visibility: 'visible', display: 'block' }))
+    const page = {
+      url: () => url,
+      getByText: () => ({ first: () => ({ waitFor: async () => undefined }) }),
+      evaluate: async (fn: (v: unknown) => unknown, args: unknown) => fn(args),
+    }
+    try {
+      const result = await readToutiaoPublication(page as never, 'Article')
+      expect(result.recognized).toBe(mode === 'current' || mode === 'p9')
+      if (mode === 'current' || mode === 'p9') {
+        expect(result.text).toBe('Article\nActual body')
+        expect(result.images[0].loaded).toBe(true)
+        expect(result.images[0].src).not.toContain('signature')
       }
-      const makeLeaf = () => ({
-        ...base,
-        innerText: mode === 'wrong-title' ? 'Other' : 'Article\nActual body',
-        children: [],
-        parentElement: body,
-        className: 'actual-content',
-        querySelectorAll: () => (mode === 'no-images' ? [] : [image]),
-      })
-      vi.stubGlobal('document', {
-        body,
-        querySelectorAll: () => [makeLeaf(), ...(mode === 'duplicate' ? [makeLeaf()] : [])],
-      })
-      vi.stubGlobal('location', {
-        href: mode === 'navigation' ? 'https://www.toutiao.com/w/456/' : url,
-      })
-      vi.stubGlobal('getComputedStyle', () => ({ visibility: 'visible', display: 'block' }))
-      const page = {
-        url: () => url,
-        getByText: () => ({ first: () => ({ waitFor: async () => undefined }) }),
-        evaluate: async (fn: (v: unknown) => unknown, args: unknown) => fn(args),
-      }
-      try {
-        const result = await readToutiaoPublication(page as never, 'Article')
-        expect(result.recognized).toBe(mode === 'current')
-        if (mode === 'current') {
-          expect(result.text).toBe('Article\nActual body')
-          expect(result.images[0].loaded).toBe(true)
-          expect(result.images[0].src).not.toContain('signature')
-        }
-      } finally {
-        vi.unstubAllGlobals()
-      }
-    },
-  )
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

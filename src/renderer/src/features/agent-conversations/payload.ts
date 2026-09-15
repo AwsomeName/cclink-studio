@@ -63,9 +63,12 @@ export function toSendResources(resources: AgentMountedResource[]): AgentSendRes
         id: resource.id,
         kind: resource.kind,
         label: resource.label,
-        detail: resource.detail,
+        ...(resource.detail !== undefined ? { detail: resource.detail } : {}),
         ref: {
-          ...ref,
+          // Optional UI fields may exist with an undefined value. IPC resources
+          // are JSON, so omit absent fields without coercing other invalid data.
+          ...Object.fromEntries(Object.entries(ref).filter(([, value]) => value !== undefined)),
+          type: ref.type,
           ...(snapshotHash && SHA256_HEX_PATTERN.test(snapshotHash)
             ? { snapshotHash: snapshotHash.toLowerCase() }
             : {}),

@@ -3,6 +3,10 @@ import type { Page } from 'playwright-core'
 import type { CsdnDraftListProbe, CsdnPageProbe } from './csdn-publishing-adapter'
 import { parsePlatformDraftAnchor } from '../../shared/article-publishing/platform-draft-anchor'
 
+export const TOUTIAO_BODY_SELECTOR = 'div.ProseMirror[contenteditable="true"]'
+export const TOUTIAO_IMAGE_OPEN_SELECTOR = 'button.syl-toolbar-button:has-text("图片"):visible'
+export const TOUTIAO_FILE_SELECTOR =
+  '.byte-drawer button.upload-btn input[type="file"][accept="image/*"]'
 export const TOUTIAO_MANAGEMENT_URL = 'https://mp.toutiao.com/profile_v4/manage/draft'
 export const TOUTIAO_MUSIC_LABEL = '开启后可在小视频场景分发，获得更多曝光'
 // The visible text is nested in a span. :text-is selects the smallest text node
@@ -120,8 +124,9 @@ export async function readToutiaoPage(page: Page) {
             original = JSON.parse(stored.draft.origin_draft)
           draftReadDiagnostic = '已回读平台原稿'
         } else draftReadDiagnostic = `原稿读取 HTTP ${response.status}`
-      } catch {
-        draftReadDiagnostic = '原稿回读失败，未采纳保存证据'
+      } catch (error) {
+        const reason = error instanceof Error ? error.name : 'UnknownError'
+        draftReadDiagnostic = `原稿回读失败（${['TimeoutError', 'AbortError', 'TypeError', 'SyntaxError'].includes(reason) ? reason : 'UnknownError'}），未采纳保存证据`
       }
     }
     let galleryRoot = editor?.parentElement
@@ -131,10 +136,48 @@ export async function readToutiaoPage(page: Page) {
       !/共\s*\d+\s*张[，,]?\s*还能上传/u.test(galleryRoot.innerText)
     )
       galleryRoot = galleryRoot.parentElement
+    const mains = [...document.querySelectorAll<HTMLElement>('main')].filter(visible)
+    const composerRoot =
+      mains.length === 1 && editor && mains[0].contains(editor) ? mains[0] : undefined
+    // A new saved title draft has no gallery counter until its first image.
+    // Require the recognized visible toolbar and an actually empty composer,
+    // rather than interpreting a missing/hidden gallery as zero images.
+    const emptyComposer = () =>
+      Boolean(
+        composerRoot?.isConnected &&
+        save.length === 1 &&
+        publish.length === 1 &&
+        buttons.filter(
+          (b) =>
+            composerRoot.contains(b) &&
+            b.matches('button.syl-toolbar-button') &&
+            b.textContent?.trim() === '图片' &&
+            !b.disabled,
+        ).length === 1 &&
+        composerRoot.querySelectorAll('span.item, input[type="file"]').length === 0 &&
+        ![...composerRoot.querySelectorAll('img:not(.exclusive-detail-image)')].some((image) => {
+          const rect = image.getBoundingClientRect()
+          const inlineIcon =
+            image.getAttribute('src')?.startsWith('data:image/') &&
+            rect.width > 0 &&
+            rect.width <= 64 &&
+            rect.height > 0 &&
+            rect.height <= 64
+          return editor?.contains(image) || (visible(image) && !inlineIcon)
+        }) &&
+        !/共\s*\d+\s*张/u.test(composerRoot.innerText),
+      )
+    const emptyBefore = emptyComposer()
+    const emptyDiagnostic = countEmptyComposer()
+    function countEmptyComposer() {
+      return `空图诊断 main=${mains.length} composer=${Boolean(composerRoot)} toolbar=${buttons.filter((b) => b.matches('button.syl-toolbar-button') && b.textContent?.trim() === '图片').length} item=${composerRoot?.querySelectorAll('span.item').length ?? -1} img=${composerRoot?.querySelectorAll('img:not(.exclusive-detail-image)').length ?? -1} file=${composerRoot?.querySelectorAll('input[type="file"]').length ?? -1} counter=${Boolean(composerRoot && /共\s*\d+\s*张/u.test(composerRoot.innerText))}`
+    }
     const count =
       galleryRoot && galleryRoot !== document.body
         ? Number(/共\s*(\d+)\s*张/u.exec(galleryRoot.innerText)?.[1] ?? NaN)
-        : NaN
+        : emptyBefore
+          ? 0
+          : NaN
     const imageIdentity = (src: string) => {
       try {
         const url = new URL(src)
@@ -143,7 +186,11 @@ export async function readToutiaoPage(page: Page) {
           url.username ||
           url.password ||
           url.port ||
-          !['p3-sign.toutiaoimg.com', 'p11-sign.toutiaoimg.com'].includes(url.hostname)
+          ![
+            'p3-sign.toutiaoimg.com',
+            'p11-sign.toutiaoimg.com',
+            'image-tt-private.toutiao.com',
+          ].includes(url.hostname)
         )
           return null
         return /^\/(tos-cn-i-ezhpy3drpa\/[a-f0-9]{32})(?:~[^/]*)?$/u.exec(url.pathname)?.[1] ?? null
@@ -197,6 +244,7 @@ export async function readToutiaoPage(page: Page) {
       Number.isInteger(count) &&
       count <= 18 &&
       beforeImages.length === count &&
+      (count !== 0 || (emptyBefore && emptyComposer())) &&
       images.every((img) => img.src && img.loaded)
     const savedImages = Array.isArray(original?.images) ? original.images : []
     const normalized = (value: string) => value.replace(/[\s\u200b]/gu, '')
@@ -209,7 +257,8 @@ export async function readToutiaoPage(page: Page) {
           new DOMParser().parseFromString(storedContent, 'text/html').body.textContent ?? '',
         ) === normalized(text))
     const galleryMatches =
-      Array.isArray(original?.images) &&
+      (Array.isArray(original?.images) ||
+        (original?.images == null && emptyBefore && images.length === 0)) &&
       imageEnumerationComplete &&
       savedImages.length === images.length &&
       savedImages.every((item, index) => {
@@ -232,11 +281,25 @@ export async function readToutiaoPage(page: Page) {
       bodyMatches &&
       galleryMatches,
     )
-    draftReadDiagnostic += `；返回码 ${typeof stored?.code === 'number' ? stored.code : '未知'}；原稿ID ${stored?.draft?.gid === draftId ? '一致' : '不一致'}；全文 ${bodyMatches ? '一致' : '不一致'}；逐图 ${galleryMatches ? '一致' : '未通过'}（页面 ${images.length} / 原稿 ${savedImages.length}）；当前文档 ${unchanged ? '未变化' : '已变化'}`
+    if (!imageEnumerationComplete && images.length === 0)
+      draftReadDiagnostic += `；${emptyDiagnostic}`
+    if (!imageEnumerationComplete && beforeImages.length > 0) {
+      const sources = beforeImages.map(({ src, id }) => {
+        try {
+          const imageUrl = new URL(src)
+          return `${imageUrl.hostname}/${imageUrl.pathname.split('/')[1]}:${Boolean(id)}`
+        } catch {
+          return 'invalid-source'
+        }
+      })
+      draftReadDiagnostic += `；图集诊断 counter=${count} nodes=${beforeImages.length} loaded=${images.filter((img) => img.loaded).length} stable=${unchanged} sources=${sources.join(',')}`
+    }
+    draftReadDiagnostic += `；返回码 ${typeof stored?.code === 'number' ? stored.code : '未知'}；原稿ID ${stored?.draft?.gid === draftId ? '一致' : '不一致'}；全文 ${bodyMatches ? '一致' : '不一致'}；图集字段 ${Array.isArray(original?.images) ? 'array' : original?.images === null ? 'null' : typeof original?.images}；逐图 ${galleryMatches ? '一致' : '未通过'}（页面 ${images.length} / 原稿 ${savedImages.length}）；当前文档 ${unchanged ? '未变化' : '已变化'}`
     return {
       observedAt: new Date().toISOString(),
       url: location.href,
       uid: ids.length === 1 ? ids[0] : undefined,
+      accountIdentityCount: ids.length,
       editorRecognized:
         !!editor &&
         save.length === 1 &&
@@ -261,6 +324,19 @@ export async function readToutiaoPage(page: Page) {
           '健康医疗分享，仅供参考',
         ].map(option),
       ],
+      hasImageOpenControl:
+        buttons.filter(
+          (b) =>
+            b.matches('button.syl-toolbar-button') &&
+            b.textContent?.trim() === '图片' &&
+            !b.disabled,
+        ).length === 1,
+      hasFileInput:
+        [
+          ...document.querySelectorAll<HTMLInputElement>(
+            '.byte-drawer button.upload-btn input[type="file"][accept="image/*"]',
+          ),
+        ].filter((e) => !e.disabled && e.parentElement && visible(e.parentElement)).length === 1,
       hasSaveControl: save.length === 1 && !save[0].disabled,
       hasPublishControl: publish.length === 1 && !publish[0].disabled,
       assistantVisible:
@@ -350,6 +426,10 @@ export class ToutiaoPublishingAdapter {
       fieldValues: { title: live.title },
       selectors: live.editorRecognized
         ? {
+            body: TOUTIAO_BODY_SELECTOR,
+            ...(live.hasSaveControl ? { save: 'button.save-draft' } : {}),
+            ...(live.hasImageOpenControl ? { imageOpen: TOUTIAO_IMAGE_OPEN_SELECTOR } : {}),
+            ...(live.hasFileInput ? { fileInput: TOUTIAO_FILE_SELECTOR } : {}),
             ...(live.hasPublishControl &&
             live.saved &&
             live.options.length === 9 &&

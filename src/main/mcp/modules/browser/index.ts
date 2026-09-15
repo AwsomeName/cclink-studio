@@ -22,6 +22,8 @@ import type { BrowserTaskRun } from '../../../../shared/ipc/browser'
 import type { WebResourceService } from '../../../web-resources/web-resource-service'
 import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 import type { FileService } from '../../../fs/file-service'
+import { XIAOHONGSHU_PUBLISH_SELECTOR } from '../../../article-publishing/xiaohongshu-publish-control'
+import { isJuejinSettingsEntry } from '../../../article-publishing/juejin-settings-entry'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -98,6 +100,11 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
       properties: {
         selector: { type: 'string', description: 'CSS 选择器，登记账号必须提供' },
         controls: { type: 'boolean', description: '只读提取有界链接与控件元数据；不读取表单值' },
+        xiaohongshuDraftTitle: {
+          type: 'string',
+          description:
+            '仅小红书创作后台：配合 selector=body 只读识别当前账号下此完整标题的唯一已保存本地草稿，返回草稿 UUID、账号 UID 和图片元数据；不读取凭证、不创建或修改草稿。不可用于替换已有发布任务的原稿 ID。',
+        },
       },
     },
     annotations: { readOnlyHint: true, destructiveHint: false },
@@ -1184,6 +1191,10 @@ export class BrowserToolModule implements ToolModule {
     page: ReturnType<PlaywrightBridge['getPage']>,
   ): Promise<string | null> {
     if (!page || !['click', 'press', 'pressKey'].includes(actionType)) return null
+    if (await isJuejinSettingsEntry(page, actionType, params.selector)) return null
+    // The closed-shadow host has no text; its native final click requires article authorization.
+    if (actionType === 'click' && params.selector === XIAOHONGSHU_PUBLISH_SELECTOR)
+      return '小红书最终发布需要文章发布事务的精确授权'
     if ((actionType === 'press' || actionType === 'pressKey') && params.key !== 'Enter') return null
     const unknown = { sensitive: true, label: '无法识别的提交控件' }
     const result = await (async () => {

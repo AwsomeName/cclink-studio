@@ -5,6 +5,7 @@ import {
 import { invokeIpcContract } from './ipc-contract-client'
 
 export const articlePublishingApi: ArticlePublishingApiContract = {
+  reduceTags: (input) => invokeIpcContract(articlePublishingIpc.reduceTags, input),
   verifyPublishedResult: (input) =>
     invokeIpcContract(articlePublishingIpc.verifyPublishedResult, input),
   inspectSource: (input) => invokeIpcContract(articlePublishingIpc.inspectSource, input),

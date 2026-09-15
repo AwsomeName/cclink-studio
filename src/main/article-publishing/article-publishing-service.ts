@@ -1,4 +1,5 @@
 import { BILIBILI_BODY } from './bilibili-publishing-adapter'
+import { toutiaoRecoveryPage } from '../../shared/article-publishing/toutiao-recovery-page'
 import { hasBilibiliRetryAuthorization } from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from './bilibili-publication'
 import {
@@ -41,6 +42,7 @@ import type {
   CreateArticlePublishingTaskInput,
   InspectArticlePublishingSourceInput,
   ManageArticlePublishingRuntimeInput,
+  ReduceArticlePublishingTagsInput,
   ResolveArticlePublishingAssetInput,
   StartArticlePublishingTaskInput,
   StartArticlePublishingTaskResult,
@@ -49,6 +51,7 @@ import {
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
   manageArticlePublishingRuntimeInputSchema,
+  reduceArticlePublishingTagsInputSchema,
   resolveArticlePublishingAssetInputSchema,
   startArticlePublishingTaskInputSchema,
 } from '../../shared/article-publishing/article-publishing-schema'
@@ -403,6 +406,75 @@ export class ArticlePublishingService {
         publicationRecoveryRequired &&
         ['weibo', 'bilibili'].includes(publishing.adapterId)
       ) {
+        let recoveredWeiboPage: ReturnType<PlaywrightBridge['getPageById']> | undefined = undefined
+        // A lost network receipt may still leave the exact public result in
+        // the original account Tab. Treat that URL only as a candidate: main
+        // must prove the frozen body and every uploaded media identity first.
+        if (publishing.adapterId === 'weibo' && !publishing.publication.url) {
+          const candidate = parseWeiboPublicationUrl(visibleUrl)
+          if (!candidate || candidate.uid !== publishing.composer?.platformAccountId)
+            throw new Error('请在原账号网页打开本篇微博公开详情，再核验发布结果；不会再次发送')
+          await playwrightBridge.ensureConnected('weibo_publication_recovery')
+          await browserManager.ensurePlaywrightPage(tabId)
+          const page = playwrightBridge.getPageById(tabId)
+          if (
+            !page ||
+            page.isClosed() ||
+            parseWeiboPublicationUrl(page.url())?.url !== candidate.url
+          )
+            throw new Error('微博原公开页面已变化，停止只读核验')
+          await page.locator('article.woo-panel-main').waitFor({ state: 'visible', timeout: 8000 })
+          const identity = browserManager.getViewRuntimeIdentity(tabId)
+          const isCurrent = () => {
+            const snapshot = this.webAffairService.getProjectSnapshot(input.workspaceId)
+            const current = snapshot.success
+              ? snapshot.data.affairs.find((a) => a.id === input.affair.id)?.articlePublishing
+              : undefined
+            const view = browserManager.getViewRuntimeIdentity(tabId)
+            return (
+              !!identity &&
+              browserManager.isViewVisible(tabId) &&
+              playwrightBridge.getPageById(tabId) === page &&
+              !page.isClosed() &&
+              parseWeiboPublicationUrl(page.url())?.url === candidate.url &&
+              view?.webContentsId === identity.webContentsId &&
+              view?.browserViewRuntimeGeneration === identity.browserViewRuntimeGeneration &&
+              view?.documentGeneration === identity.documentGeneration &&
+              current?.execution.currentAttemptId === attempt.id &&
+              current.execution.currentGeneration === attempt.executionGeneration &&
+              current.execution.currentLaunchOperationId === attempt.launchOperationId &&
+              current.execution.status === 'preparing'
+            )
+          }
+          const adapter = new PublishingAdapter()
+          const observed = await adapter.probe(page)
+          const body = await adapter.verifyBody(page, await prepareArticleBody(publishing))
+          if (
+            !isCurrent() ||
+            observed.pageKind !== 'published-article' ||
+            observed.platformAccountId !== candidate.uid ||
+            observed.publishedArticleId !== candidate.id ||
+            observed.publicationBlocker ||
+            !body.matches
+          )
+            throw new Error('微博公开页账号、公开范围、冻结全文或逐图不符；保留结果未知，不重发')
+          const located = await this.webAffairService.recordWeiboPublicationLocation(
+            {
+              workspaceId: input.workspaceId,
+              affairId: input.affair.id,
+              attemptId: attempt.id,
+              executionGeneration: attempt.executionGeneration,
+              launchOperationId: attempt.launchOperationId,
+              uid: candidate.uid,
+              url: candidate.url,
+              imageUrls: observed.editor.images.map((i) => i.src),
+            },
+            isCurrent,
+          )
+          if (!located.success) throw new Error(located.error.message)
+          publishing.publication.url = candidate.url
+          recoveredWeiboPage = page
+        }
         const parsed =
           publishing.adapterId === 'bilibili'
             ? parseBilibiliPublicationUrl(publishing.publication.url ?? '')
@@ -413,7 +485,17 @@ export class ArticlePublishingService {
         }
         if (!receipt || !receipt.uid || receipt.uid !== publishing.composer?.platformAccountId)
           throw new Error('动态提交结果未知且缺少本次回执地址，只允许核验，不会再次发送')
-        const page = await navigateForRecovery(receipt.url)
+        if (
+          !recoveredWeiboPage &&
+          publishing.adapterId === 'weibo' &&
+          parseWeiboPublicationUrl(browserManager.getCurrentURL(tabId))?.url === receipt.url
+        ) {
+          await playwrightBridge.ensureConnected('weibo_publication_recovery')
+          await browserManager.ensurePlaywrightPage(tabId)
+          recoveredWeiboPage = playwrightBridge.getPageById(tabId)
+        }
+        const page = recoveredWeiboPage ?? (await navigateForRecovery(receipt.url))
+        await page.waitForLoadState('domcontentloaded')
         const observed = await new PublishingAdapter().probe(page)
         if (
           observed.pageKind !== 'published-article' ||
@@ -1855,6 +1937,12 @@ export class ArticlePublishingService {
     })
   }
 
+  async reduceTags(rawInput: ReduceArticlePublishingTagsInput, workspaceId: string) {
+    const parsed = reduceArticlePublishingTagsInputSchema.safeParse(rawInput)
+    if (!parsed.success) return invalid('标签修改参数无效')
+    return this.webAffairService.reduceArticlePublishingTags(parsed.data, workspaceId)
+  }
+
   async resolveAsset(
     rawInput: ResolveArticlePublishingAssetInput,
     workspaceId: string,
@@ -1896,11 +1984,27 @@ export class ArticlePublishingService {
       const attempt = affair?.attempts.find((a) => a.id === state.execution.currentAttemptId)
       const manager = this.runtimeDependencies?.getBrowserManager()
       const bridge = this.runtimeDependencies?.getPlaywrightBridge()
+      const recoveryPage = toutiaoRecoveryPage(state)
       const tabId =
-        attempt?.tabId ?? manager?.getActiveViewIdForWorkspace(parsed.data.workspaceRef.path)
+        attempt?.tabId ??
+        recoveryPage?.tabId ??
+        manager?.getActiveViewIdForWorkspace(parsed.data.workspaceRef.path)
       const page = tabId ? bridge?.getPageById(tabId) : undefined
+      const recoveryPageIsCurrent = () => {
+        if (!recoveryPage || attempt?.tabId) return true
+        const view = manager?.getViewRuntimeIdentity(recoveryPage.tabId)
+        const binding = bridge?.getPageBindingIdentity(recoveryPage.tabId)
+        return Boolean(
+          view?.browserViewRuntimeGeneration === recoveryPage.browserViewRuntimeGeneration &&
+          view?.webContentsId === recoveryPage.webContentsId &&
+          binding?.page === page &&
+          binding?.connectionGeneration === recoveryPage.playwrightConnectionGeneration &&
+          binding?.generation === recoveryPage.playwrightPageBindingGeneration,
+        )
+      }
       if (
         !page ||
+        !recoveryPageIsCurrent() ||
         !attempt ||
         !tabId ||
         !manager?.isViewVisible(tabId) ||
@@ -1908,7 +2012,9 @@ export class ArticlePublishingService {
         manager.getViewAccountId(tabId) !== state.accountId ||
         manager.getViewWorkspaceKey(tabId) !== parsed.data.workspaceRef.path
       )
-        return invalid('请打开本任务原稿后再确认图片')
+        return invalid(
+          `请打开本任务原稿后再确认图片。页面 ${Boolean(page)}；任务 ${Boolean(attempt)}；绑定 ${Boolean(tabId)}；可见 ${Boolean(tabId && manager?.isViewVisible(tabId))}；Profile ${Boolean(tabId && manager?.getViewProfileId(tabId) === attempt?.profileId)}；账号 ${Boolean(tabId && manager?.getViewAccountId(tabId) === state.accountId)}；项目 ${Boolean(tabId && manager?.getViewWorkspaceKey(tabId) === workspacePath)}`,
+        )
       const adapter = new PublishingAdapter()
       const generation = adapter.documentGeneration(page)
       const probe = await adapter.probe(page)
@@ -1959,7 +2065,9 @@ export class ArticlePublishingService {
             : unknown.length !== 1 || unknown[0].id !== parsed.data.assetId) ||
         unassigned.length !== 1
       )
-        return invalid('原稿或图片无法唯一对应，请保留现场；不会猜测图片地址')
+        return invalid(
+          `原稿或图片无法唯一对应，请保留现场；不会猜测图片地址。原稿 ${probe.draftId === state.draft?.platformDraftId ? '一致' : '不一致'}；账号 ${probe.platformAccountId === state.draft?.platformAccountId ? '一致' : '不一致'}；标题 ${probe.title.value === state.fields.title ? '一致' : '不一致'}；保存 ${probe.saveState}；图集完整 ${probe.editor.imageEnumerationComplete === true}；待核对 ${unknown.length}；未关联已加载图片 ${unassigned.length}。${probe.saveEvidence ?? ''}`,
+        )
       observation = {
         platformUrl: unassigned[0].src,
         isCurrent: () => {
@@ -1972,6 +2080,7 @@ export class ArticlePublishingService {
             page.url() === probe.url &&
             adapter.documentGeneration(page) === generation &&
             bridge?.getPageById(tabId) === page &&
+            recoveryPageIsCurrent() &&
             manager.isViewVisible(tabId) &&
             manager.getViewProfileId(tabId) === attempt.profileId &&
             manager.getViewAccountId(tabId) === state.accountId &&
@@ -2252,6 +2361,10 @@ function buildAgentPrompt(
       `sourceMarkdownPath=${publishing.source.markdownPath}`,
       '先 web_affair_get，再 article_publishing_inspect_page。只使用主进程签发的当前 selectors；禁止 evaluate、网络日志、shell、坐标或猜控件。',
       '主进程已持久且当前 matchedAssets 已复核的原图对应关系，无需重新要求用户确认。每个检查点分别 running、重新 inspect、verifying、重新 inspect、completed；以返回的新 currentStepId 继续。已有 uploaded 图片且 matchedAssets 对应齐全时完成 upload-assets；bodyMatchesFrozen=true 时不重填，完成 fill-body；标题一致时完成 fill-fields；saveState=saved 且正文图集一致时不重复保存，完成 save-draft。不可因之后的配乐尚未处理而提前停止这些已能核验的步骤。',
+      '同一动作或状态回报连续两次因同一原因失败时，立即报告当前检查点 waiting-human，附结构化错误后结束。不得换 evidence 文案重复回报、截图猜测或尝试无关控件。',
+      'inspect 可能自动完成步骤；每次 inspect 后先 web_affair_get 读取 currentStepId，不能继续回报检查前的旧步骤。恢复图片为 reconciling 时，只有 main 证明此前从未派发、没有平台地址且本次完整页面不存在该图，才可报告 uploading 并附实际缺失证据；其余未知上传禁止重传。',
+      'upload-assets：每次先 inspect，如有 selectors.dismissAssistant 则先关闭遮挡并重新 inspect。若当前页面没有任何未关联图片，按需点击 selectors.imageOpen 打开上传面板并重新 inspect。每张冻结图片串行报告 uploading、browser_upload_file(selectors.fileInput,paths=[该文件])、waiting-platform、verifying，重新 inspect 对应 matchedAssets 才报告 uploaded。Studio 会核验唯一新增图并通过原生存草稿按钮保存；禁止自行重复选择文件。',
+      'fill-body：bodyMatchesFrozen 不为 true 时，用 browser_fill(selectors.body,value=原文)，由 main 注入带首行标题的冻结全文并保存，图片保持独立图集。每次写入只有服务端全文和逐图回读一致才完成。已有匹配原图不再要求用户认领。',
       '原稿保存由 Studio 比较平台回读的全文、draftId 和逐图地址，不由你报告成功。已在其他平台发布，不得声明头条首发。配乐在重新加载后可能重置，必须在最后保存之后、提交之前重新核验。作品声明不得代用户选择。',
       '到 publish 检查点，若 inspect 签发 selectors.disableMusic，先按需 click selectors.dismissAssistant 关闭遮挡，再重新 inspect 并 click 最新 selectors.disableMusic 一次，随后 inspect 回读 checked=false；不重复切换，不沿用旧 selector。没有 selectors.publish 时停止并报告其具体原因，不绕过主进程。',
       '已有图集但未关联冻结原图时，不能猜 matchedAssets 或重复上传。在 publish 且配乐已关闭后，只 click 最新 inspect.selectors.publish 一次。工具返回结果未知时，只 inspect 当前结果及读取页面，不得重发；保留主进程记录的实际响应证据。只有公开结果实际核验通过才能完成任务。当前步骤确实缺证据时报告 waiting-human，error={code:"toutiao_evidence_missing",message:"inspect 返回的具体缺口"}；不绕过工具限制。',

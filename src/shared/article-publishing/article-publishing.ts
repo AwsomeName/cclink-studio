@@ -1,6 +1,7 @@
 import { defineIpcCall } from '../ipc/contract'
 import type { WebAffair, WebAffairOperationResult } from '../web-affairs/web-affair-types'
 import type {
+  ReduceArticlePublishingTagsInput,
   ArticlePublishingApiContract,
   ArticlePublishingSourcePreview,
   CreateArticlePublishingTaskInput,
@@ -12,6 +13,10 @@ import type {
 } from './article-publishing-types'
 
 export const articlePublishingIpc = {
+  reduceTags: defineIpcCall<
+    [ReduceArticlePublishingTagsInput],
+    WebAffairOperationResult<WebAffair>
+  >('articlePublishing:reduceTags'),
   verifyPublishedResult: defineIpcCall<
     [ManageArticlePublishingRuntimeInput],
     WebAffairOperationResult<WebAffair>

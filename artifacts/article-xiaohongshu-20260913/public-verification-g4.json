@@ -1,0 +1,560 @@
+{
+  "execution": {
+    "status": "waiting-human",
+    "currentAttemptId": "210a2afe-8c8e-41b0-822d-f66e43cefefc",
+    "currentGeneration": 4,
+    "currentLaunchOperationId": "0211f862-5308-4eb5-b352-9f5e6110d831",
+    "currentStepId": "verify-publication"
+  },
+  "publication": {
+    "status": "result-unknown",
+    "url": "https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd",
+    "observedAt": "2026-09-13T13:59:34.356Z"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "找回小红书原账号本地草稿",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "recovery.management",
+          "nextAction": "核验管理页账号",
+          "status": "completed",
+          "evidence": "已打开小红书本地草稿箱所在发布页",
+          "observedAt": "2026-09-13T13:50:23.309Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.account",
+          "nextAction": "按原 draftId 定位，找不到即停止",
+          "status": "completed",
+          "evidence": "当前账号 65361844000000000301e75a",
+          "observedAt": "2026-09-13T13:50:23.538Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.locate",
+          "nextAction": "打开候选草稿",
+          "status": "completed",
+          "evidence": "本地原稿 ab161f12-becc-4b52-bd93-d9d6f1453884 · 1789307367250",
+          "observedAt": "2026-09-13T13:50:23.586Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.open",
+          "nextAction": "复核账号、ID、标题、保存状态",
+          "status": "completed",
+          "evidence": "当前编辑器 draftId ab161f12-becc-4b52-bd93-d9d6f1453884",
+          "observedAt": "2026-09-13T13:50:30.672Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.verify.account",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "当前原稿 account = 65361844000000000301e75a",
+          "observedAt": "2026-09-13T13:50:30.727Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.verify.id",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "当前原稿 id = ab161f12-becc-4b52-bd93-d9d6f1453884",
+          "observedAt": "2026-09-13T13:50:30.779Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.verify.title",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "当前原稿 title = 做AI眼镜第189天，它学会主动找你聊天了",
+          "observedAt": "2026-09-13T13:50:30.833Z",
+          "generation": 3
+        },
+        {
+          "id": "recovery.verify.saved",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "当前原稿 saved = saved",
+          "observedAt": "2026-09-13T13:50:30.883Z",
+          "generation": 3
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 49f17596-173a-44b5-a121-2286c2748601 · Profile web-draft-79fa554a-0e8d-43b4-89f7-3689f950522b",
+          "observedAt": "2026-09-13T14:11:19.339Z",
+          "generation": 4
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-2-1789304899403 · 账号 49f17596-173a-44b5-a121-2286c2748601 · Profile web-draft-79fa554a-0e8d-43b4-89f7-3689f950522b",
+          "observedAt": "2026-09-13T14:11:19.756Z",
+          "generation": 4
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-0211f862-5308-4eb5-b352-9f5e6110d831 · BrowserTask 932df8d9-648a-4097-ac87-724123147434 · Tab tab-2-1789304899403 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-13T14:11:21.846Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:36:01.021Z",
+      "finishedAt": "2026-09-13T13:36:56.887Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验账号与页面",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 65361844000000000301e75a · draftId 尚无 · 标题 做AI眼镜第189天，它学会主动找你聊天了 · 保存 unknown",
+          "observedAt": "2026-09-13T14:13:44.936Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:42:42.487Z",
+      "finishedAt": "2026-09-13T13:43:10.388Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张上传并核验笔记图集",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "skipped",
+          "evidence": "图片已核验存在，本次无需再定位上传控件；此前定位动作未记录，不补记成功",
+          "observedAt": "2026-09-13T13:41:55.914Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/02-陪伴界面效果图.png · .img-list input[type=\"file\"][multiple]",
+          "observedAt": "2026-09-13T13:44:46.468Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/03-暂停观察真机截图.png · .img-list input[type=\"file\"][multiple]",
+          "observedAt": "2026-09-13T13:51:40.428Z",
+          "generation": 3
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-13T13:44:52.079Z · upload-asset/local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-13T13:52:27.865Z · upload-asset/local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "skipped",
+          "evidence": "原稿已有该图，经人工确认并由主进程回读，无需重新上传；未补记上传成功",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-封面.png",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-13T13:41:55.914Z",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-陪伴界面效果图.png",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "用户目视确认存在 · 2026-09-13T13:46:58.415Z",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-暂停观察真机截图.png",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://sns-creator-preview.xhscdn.com/spectrum/32K8ei0rVkE9YlBOV8_XyHcLb7LWvQ3UG_s3P_DQK8WAviM · 2026-09-13T13:53:17.222Z",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 2,
+      "startedAt": "2026-09-13T13:50:31.030Z",
+      "finishedAt": "2026-09-13T13:54:03.980Z",
+      "evidence": [
+        "inspect@13:43:10 · 图集当前 1 张（01-封面已核验 uploaded）；开始按冻结顺序上传 02-陪伴界面效果图.png",
+        "inspect@13:53:09 · 草稿 ab161f12 · 账号 65361844000000000301e75a · 图集 3 张全部 loaded=true 且按冻结顺序 01-封面→02-陪伴界面效果图→03-暂停观察真机截图 · matchedAssets 三图归属明确 · saveState=saved(3 张图) · 副作用 g3 upload-asset verified",
+        "csdn@1 页面回读 · https://creator.xiaohongshu.com/publish/publish?target=image"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并核验正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/01-封面.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-13T13:53:55.333Z",
+          "generation": 3
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/02-陪伴界面效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-13T13:53:55.333Z",
+          "generation": 3
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/03-暂停观察真机截图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-13T13:53:55.333Z",
+          "generation": 3
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "账号 65361844000000000301e75a · draftId ab161f12-becc-4b52-bd93-d9d6f1453884 · 标题 做AI眼镜第189天，它学会主动找你聊天了 · 正文 405 字符 · saved · 本地原稿 ab161f12-becc-4b52-bd93-d9d6f1453884 · 账号 65361844000000000301e75a · 3 张图 · 1789307683495",
+          "observedAt": "2026-09-13T13:54:44.538Z",
+          "generation": 3
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "当前页面没有可核验的正文编辑区域；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "正文 未识别 · iframe 主文档 · 0 字符",
+            "reason": "当前页面没有可核验的正文编辑区域",
+            "observedAt": "2026-09-13T13:58:08.251Z",
+            "generation": 3
+          },
+          "status": "completed",
+          "evidence": "正文 .tiptap.ProseMirror[contenteditable=\"true\"] · iframe 主文档 · 405 字符",
+          "observedAt": "2026-09-13T13:54:49.977Z",
+          "generation": 3
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与平台保存",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-13T13:54:39.939Z · save-draft/autosave:fill-body:1cfef688-a2b0-4060-b4c5-13d65566a703；结果另行核验",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:54:29.118Z",
+      "finishedAt": "2026-09-13T13:55:11.355Z",
+      "evidence": [
+        "inspect@13:53:55 · 正文区域已定位 .tiptap.ProseMirror[contenteditable=\"true\"] · 当前 0 字符 · 三图 placement 全部通过 · 准备按冻结正文写入（期望 395 字符）",
+        "inspect@13:54:49 · browser_fill 已派发后回读 · 正文实际 405 字符 · bodyMatchesFrozen=true（main 去除标题与图片标记后与冻结正文一致）· 图集 3/3 张不变 · saveState=saved · 标题未变",
+        "csdn@1 页面回读 · https://creator.xiaohongshu.com/publish/publish?target=image"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "核验小红书标题及公开设置",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.title.verify",
+          "nextAction": "缺少字段回读证据；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 不可读",
+            "reason": "缺少字段回读证据",
+            "observedAt": "2026-09-13T14:14:42.268Z",
+            "generation": 4
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 做AI眼镜第189天，它学会主动找你聊天了",
+          "observedAt": "2026-09-13T13:51:40.428Z",
+          "generation": 3
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-13T13:51:40.428Z",
+          "generation": 3
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "当前平台字段不是受支持的唯一可读控件；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 不支持读取此字段",
+            "reason": "当前平台字段不是受支持的唯一可读控件",
+            "observedAt": "2026-09-13T14:14:42.268Z",
+            "generation": 4
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第189天，它学会主动找你聊天了；实际 ",
+          "observedAt": "2026-09-13T13:57:51.812Z",
+          "generation": 3
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:55:24.129Z",
+      "finishedAt": "2026-09-13T13:56:15.613Z",
+      "evidence": [
+        "inspect@13:55:04 · 冻结标题=做AI眼镜第189天，它学会主动找你聊天了 · 页面实际 fieldValues.title 完全一致 · 无需填写 · 不勾选任何原创/版权声明",
+        "inspect@13:55:39 · fieldValues.title=做AI眼镜第189天，它学会主动找你聊天了 与冻结标题逐字一致 · 正文 405 字符 bodyMatchesFrozen=true · 图集 3/3 · saveState=saved(1789307738498) · 未勾选任何原创/版权声明",
+        "csdn@1 页面回读 · https://creator.xiaohongshu.com/publish/publish?target=image"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "核验本地自动保存与原笔记",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "发布前复核，保存不代表发布",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 65361844000000000301e75a · draftId ab161f12-becc-4b52-bd93-d9d6f1453884 · 做AI眼镜第189天，它学会主动找你聊天了 · saved · https://creator.xiaohongshu.com/publish/publish?target=image",
+          "observedAt": "2026-09-13T13:57:04.625Z",
+          "generation": 3
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "核验同稿保存结果",
+          "status": "skipped",
+          "evidence": "已有同稿自动保存的可信回读，无需再次点击保存",
+          "observedAt": "2026-09-13T13:57:04.625Z",
+          "generation": 3
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:56:25.634Z",
+      "finishedAt": "2026-09-13T13:57:04.625Z",
+      "evidence": [
+        "inspect@13:55:53 · 平台已自动保存到本机草稿库：saveState=saved · 本地原稿 ab161f12-becc-4b52-bd93-d9d6f1453884 · 账号 65361844000000000301e75a · 3 张图 · 无需点击暂存离开",
+        "inspect@13:56:31 · saveState=saved · 本地原稿 ab161f12-becc-4b52-bd93-d9d6f1453884 · 账号 65361844000000000301e75a（原账号）· 3 张图（逐图归属一致）· 正文 bodyMatchesFrozen=true · 标题一致 · 自动保存副作用 save-draft:autosave:fill-body 已 verified",
+        "csdn@1 页面回读 · https://creator.xiaohongshu.com/publish/publish?target=image"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "提交这篇图文笔记",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "publish.dispatch",
+          "nextAction": "只核验结果，不再次发布",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-13T13:57:36.321Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-13T13:57:36.321Z",
+          "observedAt": "2026-09-13T14:11:19.124Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-13T13:57:26.690Z",
+      "finishedAt": "2026-09-13T13:58:15.062Z",
+      "outputRefs": {
+        "publicationUrl": "https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd"
+      },
+      "evidence": [
+        "inspect@13:56:57 · 当前页仍为锁定草稿 ab161f12 · 原账号 65361844000000000301e75a · 标题/正文/3 图全部与冻结一致 · saveState=saved · 准备点击一次 xhs-publish-btn[submit-text=\"发布\"]（不点击暂存离开）",
+        "inspect@13:57:51 · 点击一次 xhs-publish-btn[submit-text=\"发布\"] 后回读 · URL=https://creator.xiaohongshu.com/publish/publish?source=&published=true（平台回执 published=true）· main 绑定本次 publishedLinks=[https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd · 标题 做AI眼镜第189天，它学会主动找你聊天了] · 未出现授权/声明/验证码弹窗",
+        "csdn@1 页面回读 · https://creator.xiaohongshu.com/publish/publish?source=&published=true"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验笔记审核与公开结果",
+      "adapterVersion": 1,
+      "status": "waiting-human",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/01-封面.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/01-封面.png · 图集 第 1 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-13T14:11:53.685Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/02-陪伴界面效果图.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/02-陪伴界面效果图.png · 图集 第 2 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-13T14:11:53.685Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-10/素材/03-暂停观察真机截图.png.published",
+          "nextAction": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "素材/03-暂停观察真机截图.png · 图集 第 3 张：未匹配",
+          "reason": "发布后图片地址与上传记录不同，尚缺平台转换映射证据；请核对这张图，不得重传或重发",
+          "observedAt": "2026-09-13T14:11:53.685Z",
+          "generation": 4
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "等待公开页原账号、原文与逐张图片核验；只核验，不重复发布；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "已取得本次提交回执 · https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd",
+          "reason": "等待公开页原账号、原文与逐张图片核验；只核验，不重复发布",
+          "observedAt": "2026-09-13T14:11:53.749Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-13T14:11:21.846Z",
+      "evidence": [
+        "publish 检查点已完成 · 本次回执 https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd · 准备 browser_navigate 打开该链接核验原账号、作品 ID、正文和逐图 · 只核验不重复发布",
+        "browser_navigate 打开本次回执 https://www.xiaohongshu.com/explore/6aa6abd10000000011035ccd · 平台返回 404 页 error_msg=当前笔记暂时无法浏览（笔记已提交但公开页暂不可见，疑似审核中）· inspect 报错：不是小红书作品详情页 · 不重复发布 · 等待平台审核后重新核验"
+      ]
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "7fe17f76-e0fb-4f21-be3f-1323908065a4:210a2afe-8c8e-41b0-822d-f66e43cefefc:g2:upload-asset:local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+      "affairId": "7fe17f76-e0fb-4f21-be3f-1323908065a4",
+      "attemptId": "210a2afe-8c8e-41b0-822d-f66e43cefefc",
+      "executionGeneration": 2,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-10/素材/02-陪伴界面效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-13T13:44:51.927Z",
+      "consumedAt": "2026-09-13T13:44:52.024Z",
+      "dispatchedAt": "2026-09-13T13:44:52.079Z",
+      "observedAt": "2026-09-13T13:46:58.415Z",
+      "browserTaskRunId": "43ee3ea4-46d9-4f29-ba6d-e4b8a96561fc"
+    },
+    {
+      "key": "7fe17f76-e0fb-4f21-be3f-1323908065a4:210a2afe-8c8e-41b0-822d-f66e43cefefc:g3:upload-asset:local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+      "affairId": "7fe17f76-e0fb-4f21-be3f-1323908065a4",
+      "attemptId": "210a2afe-8c8e-41b0-822d-f66e43cefefc",
+      "executionGeneration": 3,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-10/素材/03-暂停观察真机截图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-13T13:52:27.537Z",
+      "consumedAt": "2026-09-13T13:52:27.790Z",
+      "dispatchedAt": "2026-09-13T13:52:27.865Z",
+      "observedAt": "2026-09-13T13:53:17.222Z",
+      "browserTaskRunId": "fcb2af03-34da-4542-8742-67c755a6c6e1"
+    },
+    {
+      "key": "7fe17f76-e0fb-4f21-be3f-1323908065a4:210a2afe-8c8e-41b0-822d-f66e43cefefc:g3:save-draft:autosave:fill-body:1cfef688-a2b0-4060-b4c5-13d65566a703",
+      "affairId": "7fe17f76-e0fb-4f21-be3f-1323908065a4",
+      "attemptId": "210a2afe-8c8e-41b0-822d-f66e43cefefc",
+      "executionGeneration": 3,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:1cfef688-a2b0-4060-b4c5-13d65566a703",
+      "status": "verified",
+      "reservedAt": "2026-09-13T13:54:39.806Z",
+      "consumedAt": "2026-09-13T13:54:39.886Z",
+      "dispatchedAt": "2026-09-13T13:54:39.939Z",
+      "observedAt": "2026-09-13T13:57:04.625Z",
+      "browserTaskRunId": "fcb2af03-34da-4542-8742-67c755a6c6e1"
+    },
+    {
+      "key": "7fe17f76-e0fb-4f21-be3f-1323908065a4:210a2afe-8c8e-41b0-822d-f66e43cefefc:g3:publish:final",
+      "affairId": "7fe17f76-e0fb-4f21-be3f-1323908065a4",
+      "attemptId": "210a2afe-8c8e-41b0-822d-f66e43cefefc",
+      "executionGeneration": 3,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "verified",
+      "reservedAt": "2026-09-13T13:57:36.013Z",
+      "consumedAt": "2026-09-13T13:57:36.129Z",
+      "dispatchedAt": "2026-09-13T13:57:36.321Z",
+      "observedAt": "2026-09-13T13:57:37.546Z",
+      "browserTaskRunId": "fcb2af03-34da-4542-8742-67c755a6c6e1"
+    }
+  ]
+}

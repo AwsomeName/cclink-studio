@@ -5,7 +5,17 @@ import {
 } from './toutiao-publication-review'
 
 describe('Toutiao management result identity', () => {
-  it.each(['current', 'duplicate', 'title', 'order', 'load', 'account', 'navigation'] as const)(
+  it.each([
+    'current',
+    'duplicate',
+    'title',
+    'order',
+    'load',
+    'account',
+    'navigation',
+    'p9',
+    'lookalike',
+  ] as const)(
     'reads the actual card without treating a title or count alone as submission evidence: %s',
     async (mode) => {
       const sources = ['a', 'b', 'c'].map(
@@ -17,7 +27,12 @@ describe('Toutiao management result identity', () => {
         const images = (mode === 'order' ? [...sources].reverse() : sources).map((src) => ({
           ...base,
           src,
-          currentSrc: src,
+          currentSrc:
+            mode === 'p9'
+              ? src.replace('p3-sign.', 'p9-sign.')
+              : mode === 'lookalike'
+                ? src.replace('toutiaoimg.com', 'toutiaoimg.com.evil.test')
+                : src,
           complete: mode !== 'load',
           naturalWidth: 200,
         }))
@@ -74,8 +89,10 @@ describe('Toutiao management result identity', () => {
             title: 'Article',
             images: sources,
           })
-          expect(result.current && result.candidates.length === 1).toBe(mode === 'current')
-          if (mode === 'current')
+          expect(result.current && result.candidates.length === 1).toBe(
+            mode === 'current' || mode === 'p9',
+          )
+          if (mode === 'current' || mode === 'p9')
             expect(result.candidates[0]).toMatchObject({
               status: '审核中',
               urls: [],

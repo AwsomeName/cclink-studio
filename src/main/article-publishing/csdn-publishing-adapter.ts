@@ -89,6 +89,7 @@ interface RawCsdnPageProbe {
   fieldValues?: CsdnPageProbe['fieldValues']
   saveStatusTexts: string[]
   savedDraftMatches?: boolean
+  savedDraftDiagnostic?: string
   publishedLinks: Array<{ url: string; title: string }>
 }
 
@@ -460,12 +461,14 @@ export class CsdnPublishingAdapter {
           )
           .slice(0, 40)
         let savedDraftMatches: boolean | undefined
+        let savedDraftDiagnostic: string | undefined
         let initialDraftBodyEmpty = false
         let initialDraftBodyText: string | undefined
         if (isEditorUrl && usesFrame) {
           // The loaded editor's signed READ client is required by CSDN. Do not copy cookies,
           // keys or headers, and never call its write methods. A button/toast is not evidence.
           savedDraftMatches = false
+          savedDraftDiagnostic = 'CSDN 原稿回读前置条件未满足'
           const draftId = /\/creation\/editor\/(\d+)\/?$/u.exec(location.pathname)?.[1]
           const entryScripts = Array.from(document.scripts)
             .map((script) => script.src)
@@ -540,6 +543,7 @@ export class CsdnPublishingAdapter {
                   }),
                 ]).finally(() => clearTimeout(timeout))
                 const saved = response.data
+                savedDraftDiagnostic = `CSDN 原稿回读：响应=${response.code === 200}；草稿=${saved?.status === 2}；ID=${String(saved?.article_id) === draftId}；标题=${saved?.title?.trim() === initialTitle}；正文=${typeof saved?.content === 'string' && saved.content.length <= 2_000_000 && savedBody(saved.content) === savedBody(initialContent)}；摘要=${!summary || saved?.description?.trim() === initialSummary}`
                 savedDraftMatches = Boolean(
                   response.code === 200 &&
                   saved?.status === 2 &&
@@ -563,6 +567,7 @@ export class CsdnPublishingAdapter {
                 )
               }
             } catch {
+              savedDraftDiagnostic = 'CSDN 原稿回读异常或超时，未采纳保存证据'
               // Read unavailable or page changed: unknown, never promote a stale saved toast.
             }
           }
@@ -687,6 +692,7 @@ export class CsdnPublishingAdapter {
           fieldValues,
           saveStatusTexts,
           ...(savedDraftMatches !== undefined ? { savedDraftMatches } : {}),
+          ...(savedDraftDiagnostic ? { savedDraftDiagnostic } : {}),
           publishedLinks,
         }
       },
@@ -707,7 +713,7 @@ export class CsdnPublishingAdapter {
               state: 'saved' as const,
               evidence: 'CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿',
             }
-          : { state: 'unknown' as const }
+          : { state: 'unknown' as const, evidence: raw.savedDraftDiagnostic }
     return {
       adapterId: this.id,
       adapterVersion: this.version,

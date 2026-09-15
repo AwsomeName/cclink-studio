@@ -407,7 +407,13 @@ export interface ReportArticlePublishingAssetInput {
   error?: { code: string; message: string }
 }
 
+export interface ReduceArticlePublishingTagsInput extends ManageArticlePublishingRuntimeInput {
+  expectedTags: string[]
+  tags: string[]
+}
+
 export interface ArticlePublishingApiContract {
+  reduceTags(input: ReduceArticlePublishingTagsInput): Promise<WebAffairOperationResult<WebAffair>>
   verifyPublishedResult(
     input: ManageArticlePublishingRuntimeInput,
   ): Promise<WebAffairOperationResult<WebAffair>>

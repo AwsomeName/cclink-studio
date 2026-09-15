@@ -108,9 +108,8 @@ export class JuejinPublishingAdapter {
         )
         const author = accountLink ? /\/user\/(\d+)/u.exec(accountLink.href)?.[1] : undefined
         const category = detail?.category?.category_name ?? ''
-        const panelCategory = document
-          .querySelector('.category-list .item.active')
-          ?.textContent?.trim()
+        const panelCategory =
+          document.querySelector('.category-list .item.active')?.textContent?.trim() ?? ''
         const panelSummary = document.querySelector<HTMLTextAreaElement>(
           'textarea[maxlength="100"]',
         )?.value
@@ -191,7 +190,9 @@ export class JuejinPublishingAdapter {
             ? {
                 tagEditor: {
                   inputSelector: unique('.tag-input[data-v-486f85f2] input'),
-                  pendingValue: '',
+                  pendingValue:
+                    document.querySelector<HTMLInputElement>('.tag-input[data-v-486f85f2] input')
+                      ?.value ?? '',
                 },
               }
             : {}),

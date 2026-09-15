@@ -3,6 +3,7 @@ import { bindIpcParser, ipcArgs, type IpcInvokeDefinition } from '../ipc/contrac
 import type { WebAffairOperationResult } from '../web-affairs/web-affair-types'
 import { articlePublishingIpc } from './article-publishing'
 import {
+  reduceArticlePublishingTagsInputSchema,
   createArticlePublishingTaskInputSchema,
   inspectArticlePublishingSourceInputSchema,
   manageArticlePublishingRuntimeInputSchema,
@@ -29,6 +30,7 @@ function bindSingle<Input, Output>(
 }
 
 export const articlePublishingIpcContracts = {
+  reduceTags: bindSingle(articlePublishingIpc.reduceTags, reduceArticlePublishingTagsInputSchema),
   verifyPublishedResult: bindSingle(
     articlePublishingIpc.verifyPublishedResult,
     manageArticlePublishingRuntimeInputSchema,

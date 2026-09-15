@@ -83,6 +83,30 @@ describe('WebResourceToolModule', () => {
     ])
       expect(accountNavigationOrigins(origin)).toEqual([origin])
   })
+  it('allows the observed Xiaohongshu profile and creator origins without wildcard access', () => {
+    const origins = ['https://www.xiaohongshu.com', 'https://creator.xiaohongshu.com']
+    for (const origin of origins) expect(accountNavigationOrigins(origin)).toEqual(origins)
+    for (const origin of [
+      'https://www.xiaohongshu.com.attacker.test',
+      'https://edith.xiaohongshu.com',
+      'https://other.xiaohongshu.com',
+      'http://creator.xiaohongshu.com',
+      'https://creator.xiaohongshu.com:8443',
+    ])
+      expect(accountNavigationOrigins(origin)).toEqual([origin])
+  })
+  it('allows Zhihu profile and article editing origins without broadening account access', () => {
+    const origins = ['https://www.zhihu.com', 'https://zhuanlan.zhihu.com']
+    for (const origin of origins) expect(accountNavigationOrigins(origin)).toEqual(origins)
+    for (const origin of [
+      'https://zhuanlan.zhihu.com.attacker.test',
+      'https://account.zhihu.com',
+      'https://pic.zhihu.com',
+      'http://zhuanlan.zhihu.com',
+      'https://zhuanlan.zhihu.com:8443',
+    ])
+      expect(accountNavigationOrigins(origin)).toEqual([origin])
+  })
   it('lists safe global account metadata without exposing session or profile data', async () => {
     const getSnapshot = vi.fn(() => ({
       success: true as const,

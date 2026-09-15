@@ -251,12 +251,16 @@ export class WebResourceToolModule implements ToolModule {
   }
 }
 
-/** B站保存的登录入口、动态和本人空间属于同一账号的三个已验证入口。 */
+/** Only explicitly verified first-party account and publishing entry points. */
 export function accountNavigationOrigins(origin: string): string[] {
   const bilibili = [
     'https://passport.bilibili.com',
     'https://t.bilibili.com',
     'https://space.bilibili.com',
   ]
-  return bilibili.includes(origin) ? bilibili : [origin]
+  const xiaohongshu = ['https://www.xiaohongshu.com', 'https://creator.xiaohongshu.com']
+  if (bilibili.includes(origin)) return bilibili
+  const zhihu = ['https://www.zhihu.com', 'https://zhuanlan.zhihu.com']
+  if (zhihu.includes(origin)) return zhihu
+  return xiaohongshu.includes(origin) ? xiaohongshu : [origin]
 }
