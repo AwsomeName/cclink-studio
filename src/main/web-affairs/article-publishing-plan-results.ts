@@ -85,6 +85,19 @@ export function foldArticlePublishingPlanResults(
           '已观察到创建请求，尚未取得与本稿对应的成功回执。',
         )
     }
+    if (
+      state.adapterId === 'bilibili' &&
+      effect.kind === 'publish' &&
+      effect.bilibiliPublicFeedAbsence
+    ) {
+      const facts = effect.bilibiliPublicFeedAbsence
+      put(
+        'publication.verify',
+        'unknown',
+        `截至 ${facts.observedAt}：同 UID ${facts.uid} 的公开动态列表已读到末尾，共 ${facts.observedItemCount} 条；未发现冻结标题。`,
+        '这是旧提交的只读公开结果核验，不证明平台从未接收；如重试仍须用户明确接受可能重复。',
+      )
+    }
     let id: string | undefined
     if (effect.kind === 'upload-asset')
       id = `asset.${effect.targetId.replace(/:attempt-\d+$/u, '')}.dispatch`

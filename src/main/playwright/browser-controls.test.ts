@@ -14,28 +14,37 @@ describe('bounded browser controls', () => {
       visibility: 'visible',
       cursor: 'pointer',
     }))
-    const make = (id: string, textContent: string, hidden = false) => ({
+    const make = (id: string, textContent: string, hidden = false, left = 10) => ({
       id,
       tagName: 'DIV',
       classList: [],
       children: [],
       textContent,
       hidden,
-      getBoundingClientRect: () => ({ width: 20, height: 20 }),
+      getBoundingClientRect: () => ({
+        width: 20,
+        height: 20,
+        left,
+        right: left + 20,
+        top: 10,
+        bottom: 30,
+      }),
       getAttribute: () => null,
       matches: (s: string) => s.includes('div,span,label'),
     })
     const send = make('send', '发布'),
       icon = make('icon', ''),
-      hidden = make('hidden', 'secret', true)
+      hidden = make('hidden', 'secret', true),
+      outside = make('outside', '发布', false, -200)
     const parent = { ...make('parent', '发布'), children: [send] }
-    const nodes = [parent, send, icon, hidden]
+    const nodes = [parent, send, icon, hidden, outside]
     const root = {
       ...make('root', ''),
       contains: (node: unknown) => nodes.includes(node as typeof send),
       querySelectorAll: (s: string) => (s === 'div,span,label' ? nodes : []),
     }
     vi.stubGlobal('document', {
+      documentElement: { clientWidth: 800, clientHeight: 600 },
       querySelectorAll: (s: string) => nodes.filter((e) => `#${e.id}` === s),
     })
     const page = {
@@ -47,10 +56,11 @@ describe('bounded browser controls', () => {
     }
     try {
       const result = await readBrowserControls(page as never, 'main > section:nth-child(1)')
-      expect(result.controls).toHaveLength(2)
-      expect(result.controls.map((c) => [c.selector, c.label])).toEqual([
-        ['#send', '发布'],
-        ['#icon', ''],
+      expect(result.controls).toHaveLength(3)
+      expect(result.controls.map((c) => [c.selector, c.label, c.inViewport])).toEqual([
+        ['#send', '发布', true],
+        ['#icon', '', true],
+        ['#outside', '发布', false],
       ])
       expect(JSON.stringify(result)).not.toContain('secret')
     } finally {

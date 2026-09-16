@@ -614,6 +614,7 @@ describe('article publishing persistent state', () => {
     'observed',
     'open-observer',
     'legacy',
+    'legacy-reconciled',
     'other-platform',
     'second-explicit',
     'second-ordinary',
@@ -662,7 +663,7 @@ describe('article publishing persistent state', () => {
       status: 'result-unknown',
       reservedAt: new Date().toISOString(),
       dispatchedAt: new Date().toISOString(),
-      ...(mode === 'legacy'
+      ...(['legacy', 'legacy-reconciled'].includes(mode)
         ? {}
         : {
             bilibiliSubmission: {
@@ -672,6 +673,18 @@ describe('article publishing persistent state', () => {
               observedAt: new Date().toISOString(),
             },
           }),
+    }
+    if (mode === 'legacy-reconciled') {
+      Object.assign(effect, {
+        bilibiliPublicFeedAbsence: {
+          uid: '5961101548',
+          profileUrl: 'https://space.bilibili.com/5961101548/dynamic',
+          observedItemCount: 1,
+          reachedEnd: true,
+          titleAbsent: true,
+          observedAt: new Date().toISOString(),
+        },
+      })
     }
     p.sideEffects = [effect]
     if (second) {
@@ -706,7 +719,15 @@ describe('article publishing persistent state', () => {
       WORKSPACE_ID,
       ['ordinary', 'second-ordinary'].includes(mode) ? undefined : authorization,
     )
-    if (!['authorized', 'ordinary', 'second-explicit', 'second-ordinary'].includes(mode)) {
+    if (
+      ![
+        'authorized',
+        'ordinary',
+        'legacy-reconciled',
+        'second-explicit',
+        'second-ordinary',
+      ].includes(mode)
+    ) {
       expect(result.success).toBe(false)
       return
     }
@@ -715,7 +736,7 @@ describe('article publishing persistent state', () => {
     const next = result.data.articlePublishing!
     expect(next.publication.status).toBe('result-unknown')
     expect(next.sideEffects).toEqual(historicalEffects)
-    if (['authorized', 'second-explicit'].includes(mode)) {
+    if (['authorized', 'legacy-reconciled', 'second-explicit'].includes(mode)) {
       const details = next.checkpoints.flatMap((checkpoint) => checkpoint.details ?? [])
       expect(details.find((detail) => detail.id === 'publish.dispatch')?.status).not.toBe('unknown')
       expect(details.find((detail) => detail.id === 'publish.preflight')?.status).not.toBe(
@@ -726,10 +747,12 @@ describe('article publishing persistent state', () => {
       ).not.toBe('completed')
     }
     expect(next.execution.currentStepId).toBe(
-      ['authorized', 'second-explicit'].includes(mode) ? 'open-editor' : 'verify-publication',
+      ['authorized', 'legacy-reconciled', 'second-explicit'].includes(mode)
+        ? 'open-editor'
+        : 'verify-publication',
     )
     expect(hasBilibiliRetryAuthorization(next)).toBe(
-      ['authorized', 'second-explicit'].includes(mode),
+      ['authorized', 'legacy-reconciled', 'second-explicit'].includes(mode),
     )
     expect(eligibleBilibiliRetryEffect(next)).toBeUndefined()
     if (mode === 'second-explicit') {

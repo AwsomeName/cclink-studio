@@ -1,0 +1,175 @@
+1514 HTML 内容 哔哩哔哩弹幕视频网 - ( ゜- ゜)つロ 乾杯~ - bilibili, URL: account.bilibili.com/account/home?spm_id_from=333.1387.0.0
+				1515 container
+					1516 内容列表
+						1517 link Description: 首页, Value: bilibili.com/
+						1518 link Description: 番剧, Value: bilibili.com/anime/
+						1519 link Description: 直播, Value: live.bilibili.com/
+						1520 link Description: 游戏中心, Value: game.bilibili.com/platform
+						1521 link Description: 会员购, Value: show.bilibili.com/platform/home.html?msource=pc_web
+						1522 link Description: 漫画, Value: manga.bilibili.com/?from=bill_top_mnav
+						1523 link Description: 赛事, Value: bilibili.com/match/home/
+					1524 container
+						1525 文本栏 (settable) 桌面cnc
+						1526 图像
+					1527 内容列表
+						1528 link space.bilibili.com/3546384070347419
+						1529 link account.bilibili.com/big
+						1530 container
+							1531 文本 1
+							1532 link message.bilibili.com/
+						1533 link t.bilibili.com/
+						1534 link space.bilibili.com/3546384070347419/favlist
+						1535 link bilibili.com/history
+						1536 link member.bilibili.com/platform/home
+						1537 link member.bilibili.com/platform/upload/video/frame
+				1538 container
+					1539 文本 个人中心
+					1540 内容列表
+						1541 container
+							1542 text 首 页
+						1543 container
+							1544 文本 大会员
+						1545 container
+							1546 文本 会员积分
+						1547 container
+							1548 文本 我的信息
+						1549 container
+							1550 文本 我的头像
+						1551 container
+							1552 文本 粉丝勋章
+						1553 container
+							1554 文本 成就勋章
+						1555 container
+							1556 文本 账号安全
+						1557 container
+							1558 文本 黑名单管理
+						1559 container
+							1560 文本 我的硬币
+						1561 container
+							1562 文本 我的记录
+						1563 container
+							1564 文本 实名认证
+						1565 container
+							1566 文本 邀请注册
+						1567 container
+							1568 文本 通知设置
+					1569 内容列表
+						1570 link Description: 个人空间, Value: space.bilibili.com/
+						1571 link Description: 我的钱包, Value: pay.bilibili.com/pay-v2-web/bcoin_index
+						1572 link Description: 创作中心, Value: member.bilibili.com/v2#/home
+						1573 link Description: 直播中心, Value: link.bilibili.com/p/center/index
+					1574 未加标签的图片 要获取缺失的图片说明，请打开上下文菜单。
+					1575 container
+						1576 文本 艾瑞_B
+						1577 文本 注册会员
+						1578 container
+							1579 text LV0 进度条
+						1580 text 0 / 1
+						1581 文本 修改资料
+						1582 link Description: 个人空间, Value: space.bilibili.com/3546384070347419/
+						1583 link Description: B币, Value: pay.bilibili.com/paywallet-fe/bb_balance.html
+						1584 文本 0
+						1585 link account.bilibili.com/account/coin
+						1586 文本 0
+					1587 container
+						1588 文本 转正成为正式会员，打开新世界的大门 (｀・ω・´)
+						1589 container
+							1590 文本 距离转正会员 还差一点点!
+						1591 文本 或
+						1592 文本栏 (settable) 请输入邀请码
+						1593 文本 激活转正
+					1594 text 每日奖励 成为正式会员才能获得每日奖励哦
+					1595 container
+						1596 container
+							1597 text 5 EXP
+						1598 文本 每日登录
+						1599 文本 未完成
+						1600 container
+							1601 text 5 EXP
+						1602 文本 每日观看视频
+						1603 文本 未完成
+						1604 container
+							1605 text 50 EXP
+						1606 文本 每日投币
+						1607 文本 已获得0/50
+						1608 container
+							1609 text 5 EXP
+						1610 文本 每日分享视频(客户端)
+						1611 文本 未完成
+					1612 文本 成就勋章
+					1613 container
+						1614 文本 你还没有领取过勋章哦！
+						1615 文本 查看勋章详情
+					1616 文本 账号安全
+					1617 container
+						1618 文本 更多账号安全
+					1619 container
+						1620 container
+							1621 text 首次绑定邮箱，获得20经验值 绑定邮箱后即可使用邮箱登录 去绑定
+						1622 container
+							1623 text 我的手机 绑定手机后即可使用手机号登录 已绑定 更改手机>
+						1624 container
+							1625 text 首次设置密保，获得30经验值 设置密保，账号更安全 去设置
+						1626 container
+							1627 text 实名认证 实名认证成功后，可享受开通直播间等服务 已认证
+				1628 container
+					1629 文本 bilibili
+					1630 link Description: 关于我们, Value: bilibili.com/blackboard/aboutUs.html
+					1631 link Description: 联系我们, Value: bilibili.com/blackboard/contact.html
+					1632 link Description: 用户协议, Value: bilibili.com/protocal/licence.html
+					1633 link Description: 加入我们, Value: bilibili.com/blackboard/join.html
+					1634 link Description: 隐私协议, Value: bilibili.com/blackboard/privacy-pc.html
+					1635 link Description: bilibili认证, Value: account.bilibili.com/account/official/home
+					1636 link Description: Investor Relations, Value: ir.bilibili.com/
+					1637 文本 传送门
+					1638 link Description: 协议汇总, Value: bilibili.com/blackboard/topic/activity-cn8bxPLzz.html
+					1639 link Description: 活动中心, Value: bilibili.com/blackboard/activity-list.html
+					1640 link Description: 活动专题页, Value: bilibili.com/blackboard/topic_list.html
+					1641 link Description: 侵权申诉, Value: bilibili.com/v/copyright/intro/
+					1642 link Description: 帮助中心, Value: bilibili.com/blackboard/help.html
+					1643 link Description: 社区中心, Value: bilibili.com/blackboard/activity-5zJxM3spoS.html
+					1644 link Description: 壁纸站, Value: space.bilibili.com/6823116#/album
+					1645 link Description: 广告合作, Value: e.bilibili.com/
+					1646 link Description: 名人堂, Value: bilibili.com/blackboard/activity-S1jfy69Jz.html
+					1647 link Description: MCN管理中心, Value: mcn.bilibili.com/studio/mcn/entry
+					1648 link Description: 高级弹幕, Value: bilibili.com/video/BV1Xx411c7cH/
+					1649 link Description: 品牌号官网, Value: b.bilibili.com/
+					1650 link Description: 下载APP, Value: app.bilibili.com/
+					1651 link Description: 公益, Value: love.bilibili.com/
+					1652 link Description: 官方微博, Value: weibo.com/bilibiliweb
+					1653 图像
+					1654 文本 官方微信
+					1655 link Description: 营业执照, Value: i0.hdslb.com/bfs/activity-plat/static/20240516/9ccf041718e5d6d6dfaebc91b85c791c/gd85E6tDco.jpg
+					1656 文本 信息网络传播视听节目许可证：0910417
+					1657 link Description: 网络文化经营许可证 沪网文【2025】0258-085号, Value: i0.hdslb.com/bfs/activity-plat/static/20260209/3b3c5705bda98d50983f6f47df360fef/K4t52YryBV.jpeg
+					1658 text 广播电视节目制作经营许可证：（沪）字第01248号 增值电信业务经营许可证 沪B2-20100043
+					1659 link Description: 互联网ICP备案：沪ICP备13002172号-3, Value: beian.miit.gov.cn/
+					1660 link Description: 出版物经营许可证 沪批字第U6699 号, Value: i0.hdslb.com/bfs/activity-plat/static/20240516/9ccf041718e5d6d6dfaebc91b85c791c/4ainzbFKao.jpg
+					1661 text 互联网药品信息服务资格证 沪-非经营性-2022-0011 营业性演出许可证 沪市文演（经）00-2253 |
+					1662 link Description: 不良信息举报邮箱：help@bilibili.com, Value: mailto:help@bilibili.com
+					1663 link Description: 涉未成年举报邮箱：teenprotect@bilibili.com, Value: mailto:teenprotect@bilibili.com
+					1664 文本 不良信息举报电话：4006262233转3
+					1665 link Description: 上海互联网举报中心 |, Value: shjbzx.cn/
+					1666 link Description: 12345政务服务便民热线 |, Value: sh12345.gov.cn/
+					1667 link Description: 沪公网安备31011002002436号 |, Value: beian.gov.cn/portal/registerSystemInfo?recordcode=31011002002436
+					1668 link Description: 儿童色情信息举报专区 |, Value: mailto:userreport@bilibili.com
+					1669 link Description: 扫黄打非举报, Value: bzpt.shdf.gov.cn/www/shouye/gzfw/wsjb/index.shtml
+					1670 link Description: 网信算备310110764385705230011号, Value: beian.cac.gov.cn/api/static/fileUpload/principalOrithm/additional/user_699bbd78-36f4-459c-aeb0-bf98a2a562d8_6185ea2c-c84c-404a-9280-c5465af05948.pdf
+					1671 link Description: 网信算备310110764385702230013号, Value: beian.cac.gov.cn/api/static/fileUpload/principalOrithm/additional/user_699bbd78-36f4-459c-aeb0-bf98a2a562d8_e03e6855-76a6-43fb-b799-d090e7fce25d.pdf
+					1672 文本 网上有害信息举报专区：
+					1673 link Description: 中国互联网违法和不良信息举报中心, Value: 12377.cn/
+					1674 text 亲爱的市民朋友，上海警方反诈劝阻电话"96110"系专门针对避免您财产被骗受损而设，请您一旦收到来电，立即接听。 公司名称：上海宽娱数码科技有限公司 | 公司地址：上海市杨浦区政立路489号 | 电话：021-25099888
+					1675 未加标签的图片 /Dm9M9DZArS.png
+					1676 未加标签的图片 /2xfuvJItn3.png
+					1677 未加标签的图片 /iUlvDrrAnu.png
+	1678 关闭按钮
+	1679 全屏幕按钮 Help: 此按钮也可以执行缩放窗口的操作, Secondary Actions: 缩放窗口
+	1680 最小化按钮
+1681 menu bar
+	1682 CCLink Studio 开源版
+	1683 File
+	1684 Edit
+	1685 View
+	1686 Window
+
+The focused UI element is 1514 HTML 内容 哔哩哔哩弹幕视频网 - ( ゜- ゜)つロ 乾杯~ - bilibili, URL: account.bilibili.com/account/home?spm_id_from=333.1387.0.0

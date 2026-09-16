@@ -51,6 +51,35 @@ function fixture(panel?: { summary: string; category: string; pendingTag?: strin
   return { draft, title, page, editor }
 }
 afterEach(() => vi.unstubAllGlobals())
+it('re-resolves a replaced preview image once without inventing loaded image evidence', async () => {
+  const { page } = fixture()
+  const scroll = vi
+    .fn()
+    .mockRejectedValueOnce(new Error('Element is not attached to the DOM'))
+    .mockResolvedValueOnce(undefined)
+  page.locator = vi.fn((selector: string) =>
+    selector.includes(' img')
+      ? { count: async (): Promise<number> => 1, nth: () => ({ scrollIntoViewIfNeeded: scroll }) }
+      : { count: async (): Promise<number> => 0 },
+  ) as unknown as Page['locator']
+  const probe = await new JuejinPublishingAdapter().probe(page)
+  expect(scroll).toHaveBeenCalledTimes(2)
+  expect(probe.editor.images).toEqual([])
+})
+it.each(['Element is not attached to the DOM', 'Target page has been closed'])(
+  'keeps persistent or unrelated preview failures visible: %s',
+  async (message) => {
+    const { page } = fixture()
+    const scroll = vi.fn().mockRejectedValue(new Error(message))
+    page.locator = vi.fn((selector: string) =>
+      selector.includes(' img')
+        ? { count: async (): Promise<number> => 1, nth: () => ({ scrollIntoViewIfNeeded: scroll }) }
+        : { count: async (): Promise<number> => 0 },
+    ) as unknown as Page['locator']
+    await expect(new JuejinPublishingAdapter().probe(page)).rejects.toThrow(message)
+    expect(scroll).toHaveBeenCalledTimes(message.includes('not attached') ? 2 : 1)
+  },
+)
 it('reports the actual tag search value even when no option is available', async () => {
   const { page } = fixture({ summary: '', category: '', pendingTag: '智能眼镜' })
   const probe = await new JuejinPublishingAdapter().probe(page)

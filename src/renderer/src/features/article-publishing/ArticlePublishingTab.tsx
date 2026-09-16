@@ -64,6 +64,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const updateTitle = useTabStore((state) => state.updateTabTitle)
   const [revisionOf, setRevisionOf] = useState<string | null>(null)
   const [preview, setPreview] = useState<ArticlePublishingSourcePreview | null>(null)
+  const [sourcePathInput, setSourcePathInput] = useState('')
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
@@ -121,15 +122,27 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
 
   useEffect(() => {
     if (!affairId) return
-    void reload().catch((reason) =>
-      setError(reason instanceof Error ? reason.message : String(reason)),
-    )
-    return window.cclinkStudio.webAffairs.onChanged(({ affairId: changedId }) => {
-      if (changedId !== affairId) return
+    const refresh = (): void => {
       void reload().catch((reason) =>
         setError(reason instanceof Error ? reason.message : String(reason)),
       )
+    }
+    const refreshWhenVisible = (): void => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    refresh()
+    const unsubscribe = window.cclinkStudio.webAffairs.onChanged(({ affairId: changedId }) => {
+      if (changedId === affairId) refresh()
     })
+    // A detached browser can keep publishing while this window is backgrounded.
+    // Re-read the sole state owner on return; never infer progress from focus.
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      unsubscribe()
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
   }, [affairId, reload])
 
   const csdnAccounts = useMemo(() => {
@@ -204,14 +217,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     return <div className="article-publishing-state">文章发布只支持当前本地工作空间。</div>
   }
 
-  const selectMarkdown = async (): Promise<void> => {
-    const selected = await window.cclinkStudio.dialog.showOpenDialog(
-      createArticleMarkdownOpenDialogOptions(workspaceRef),
-    )
-    const markdownPath = selected.filePaths[0]
-    if (selected.canceled || !markdownPath) return
+  const readMarkdown = async (markdownPath: string): Promise<void> => {
+    if (!markdownPath.trim()) return
+    setSourcePathInput(markdownPath)
+    setPreview(null)
     setBusy(true)
     setError(null)
+    setNotice(null)
     try {
       const result = await window.cclinkStudio.articlePublishing.inspectSource({
         workspaceRef,
@@ -227,6 +239,14 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     } finally {
       setBusy(false)
     }
+  }
+
+  const selectMarkdown = async (): Promise<void> => {
+    const selected = await window.cclinkStudio.dialog.showOpenDialog(
+      createArticleMarkdownOpenDialogOptions(workspaceRef),
+    )
+    const markdownPath = selected.filePaths[0]
+    if (!selected.canceled && markdownPath) await readMarkdown(markdownPath)
   }
 
   const updateAccountLabel = async (): Promise<void> => {
@@ -650,6 +670,26 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           <h2>1. 文章</h2>
           <button type="button" onClick={() => void selectMarkdown()} disabled={busy}>
             {preview ? '重新选择 Markdown' : '选择 Markdown…'}
+          </button>
+          <label>
+            原稿完整路径
+            <input
+              value={sourcePathInput}
+              placeholder="也可粘贴当前工作空间内的 Markdown 完整路径"
+              disabled={busy}
+              onChange={(event) => {
+                setSourcePathInput(event.target.value)
+                setPreview(null)
+                setNotice(null)
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || !sourcePathInput.trim()}
+            onClick={() => void readMarkdown(sourcePathInput.trim())}
+          >
+            读取原稿
           </button>
           {preview ? (
             <SourcePreview preview={preview} workspacePath={workspaceRef.path} />

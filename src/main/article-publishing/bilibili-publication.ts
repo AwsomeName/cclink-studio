@@ -51,7 +51,18 @@ export async function readBilibiliPublication(page: Page) {
     const recognized = Boolean(card && paragraphs?.length && !card.querySelector('.folded'))
     const headings = card?.querySelectorAll('h1,h2,h3,[class*="__title"]')
     const title = headings?.length === 1 ? (headings[0].textContent?.trim() ?? '') : ''
-    const text = [...(paragraphs ?? [])].map((p) => (p as HTMLElement).innerText).join('\n')
+    const text = [...(paragraphs ?? [])]
+      .map((paragraph) => {
+        const copy = paragraph.cloneNode(true) as HTMLElement
+        // Expanded/collapsed controls are nested in the paragraph container but are not part of
+        // the submitted dynamic. Keep topic-link text intact: Bilibili places the next topic's
+        // opening `#` at the end of the preceding link.
+        for (const element of [...copy.querySelectorAll<HTMLElement>('*')].reverse()) {
+          if (/^(?:\.{3}|…|展开|收起)$/u.test((element.innerText ?? '').trim())) element.remove()
+        }
+        return copy.innerText
+      })
+      .join('\n')
     const images = [...(card?.querySelectorAll<HTMLImageElement>('img') ?? [])].map((img) => ({
       src: img.currentSrc || img.src,
       alt: img.alt,
@@ -70,12 +81,17 @@ export async function readBilibiliPublication(page: Page) {
       url: location.href,
     }
   })
+  const images = live.images.reduce<Array<(typeof live.images)[number]>>((result, image) => {
+    const src = bilibiliImageUrl(image.src)
+    if (!src || result.some((candidate) => candidate.src === src)) return result
+    result.push({ ...image, src })
+    return result
+  }, [])
   return {
     ...live,
     id: anchor.id,
-    images: live.images.map((i) => ({ ...i, src: bilibiliImageUrl(i.src) ?? i.src })),
-    imageEnumerationComplete:
-      live.recognized && live.images.every((i) => !!bilibiliImageUrl(i.src)),
+    images,
+    imageEnumerationComplete: live.recognized && images.length > 0,
   }
 }
 

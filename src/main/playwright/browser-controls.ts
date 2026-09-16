@@ -9,6 +9,8 @@ interface BrowserControl {
   href?: string
   accept?: string
   disabled: boolean
+  /** Rectangle intersects the current viewport; not a guarantee of clickability. */
+  inViewport?: boolean
   checked?: boolean | 'mixed'
   /** Actual DOM classes around a visual control, diagnostic only, never checked state. */
   markers?: string[]
@@ -29,6 +31,16 @@ export async function readBrowserControls(page: Page, selector: string) {
         bounds.height > 0 &&
         style.visibility !== 'hidden' &&
         style.display !== 'none'
+      )
+    }
+    const inViewport = (e: Element) => {
+      const bounds = e.getBoundingClientRect()
+      return (
+        visible(e) &&
+        bounds.right > 0 &&
+        bounds.bottom > 0 &&
+        bounds.left < document.documentElement.clientWidth &&
+        bounds.top < document.documentElement.clientHeight
       )
     }
     if (!visible(root)) throw new Error('控件读取范围不可见')
@@ -143,6 +155,7 @@ export async function readBrowserControls(page: Page, selector: string) {
                     : undefined
               : undefined,
         disabled: e.matches(':disabled') || e.getAttribute('aria-disabled') === 'true',
+        inViewport: inViewport(e),
       })),
     }
   })
@@ -192,6 +205,7 @@ export function sanitizeBrowserControls(controls: BrowserControl[]): BrowserCont
     href: control.href ? safeControlUrl(control.href) : undefined,
     accept: control.accept?.slice(0, 160),
     disabled: control.disabled,
+    inViewport: typeof control.inViewport === 'boolean' ? control.inViewport : undefined,
     checked:
       typeof control.checked === 'boolean' || control.checked === 'mixed'
         ? control.checked

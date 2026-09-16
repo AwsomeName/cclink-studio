@@ -186,6 +186,30 @@ describe('WebAffairToolModule', () => {
     expect(reportArticlePublishingCheckpoint).not.toHaveBeenCalled()
   })
 
+  it('rejects malformed checkpoint errors before they reach transaction persistence', async () => {
+    const reportArticlePublishingCheckpoint = vi.fn()
+    const module = new WebAffairToolModule(
+      { reportArticlePublishingCheckpoint } as never,
+      async () => 'workspace-a-id',
+    )
+    const result = await module.execute(
+      'article_publishing_report_checkpoint',
+      {
+        affairId: 'affair-1',
+        attemptId: 'attempt-1',
+        stepId: 'verify-publication',
+        status: 'waiting-human',
+        error: { adapterId: 'zhihu', blocker: 'cdn-image-mismatch' },
+      },
+      { workspaceKey: '/workspace/a', conversationId: 'conversation-a', agentRunId: 'run-a' },
+    )
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('error 必须为') },
+    })
+    expect(reportArticlePublishingCheckpoint).not.toHaveBeenCalled()
+  })
+
   it('injects the trusted generation and run identity instead of accepting model identity fields', async () => {
     const reportArticlePublishingCheckpoint = vi.fn(async () => ({ success: true }))
     const module = new WebAffairToolModule(

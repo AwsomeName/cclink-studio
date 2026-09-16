@@ -25,16 +25,24 @@ export function eligibleBilibiliRetryEffect(state: ArticlePublishingState) {
     ),
   )
   if (retry ? !afterConsumedRetry : effects.length !== 1) return undefined
-  const current = effects.filter((e) => e.executionGeneration === state.execution.currentGeneration)
-  if (current.length !== 1) return undefined
-  const effect = current[0]
+  const candidates = afterConsumedRetry
+    ? effects.filter((e) => e.executionGeneration === state.execution.currentGeneration)
+    : effects
+  if (candidates.length !== 1) return undefined
+  const effect = candidates[0]
   const observation = effect.bilibiliSubmission
+  const publicFeedAbsence = effect.bilibiliPublicFeedAbsence
+  const boundedUnknownResult = Boolean(
+    (observation?.observationEnded &&
+      (afterConsumedRetry ||
+        (!observation.confirmationAttempted && !observation.requestObserved))) ||
+    (publicFeedAbsence?.reachedEnd && publicFeedAbsence.titleAbsent),
+  )
   return effect.status === 'result-unknown' &&
     effect.dispatchedAt &&
     effect.attemptId === state.execution.currentAttemptId &&
-    effect.executionGeneration === state.execution.currentGeneration &&
-    observation?.observationEnded &&
-    (afterConsumedRetry || (!observation.confirmationAttempted && !observation.requestObserved)) &&
+    effect.executionGeneration <= state.execution.currentGeneration &&
+    boundedUnknownResult &&
     state.assets.every((a) => a.status === 'uploaded' && a.uploadAttempts.length < 3) &&
     state.sideEffects.every(
       (e) =>
@@ -58,7 +66,7 @@ export function hasBilibiliRetryAuthorization(state: ArticlePublishingState): bo
     state.composer?.allowPublish &&
     retry &&
     retry.attemptId === state.execution.currentAttemptId &&
-    retry.executionGeneration === state.execution.currentGeneration &&
+    retry.executionGeneration <= state.execution.currentGeneration &&
     state.publication.status === 'result-unknown' &&
     !state.publication.url &&
     state.sideEffects.some(
@@ -67,7 +75,7 @@ export function hasBilibiliRetryAuthorization(state: ArticlePublishingState): bo
     !state.sideEffects.some(
       (e) =>
         e.kind === 'publish' &&
-        e.executionGeneration === retry.executionGeneration &&
+        e.executionGeneration >= retry.executionGeneration &&
         (e.dispatchedAt || e.status !== 'reserved'),
     ),
   )

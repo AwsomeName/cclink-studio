@@ -288,7 +288,7 @@ export class BilibiliPublishingAdapter {
           alt: img.alt,
         }))
         doc.querySelectorAll('img,h1').forEach((e) => e.remove())
-        const norm = (s: string) => s.replace(/[\s\u200b]/gu, '')
+        const norm = (s: string) => s.replace(/[\s\p{Cf}]/gu, '')
         const textMatches =
           live.recognized &&
           (!('bodyStructureValid' in live) || live.bodyStructureValid) &&

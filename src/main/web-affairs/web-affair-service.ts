@@ -500,6 +500,26 @@ export class WebAffairService {
     return this.enqueue(() => this.createArticlePublishingAffairNow(input, workspaceId))
   }
 
+  relocateArticlePublishingSource(
+    affairId: string,
+    workspaceId: string,
+    input: {
+      previousMarkdownPath: string
+      source: ArticlePublishingSourcePreview['source']
+      assets: Array<{
+        id: string
+        sourcePath: string
+        size: number
+        modifiedAt: number
+      }>
+      evidence: string
+    },
+  ) {
+    return this.enqueueScoped(affairId, workspaceId, () =>
+      this.relocateArticlePublishingSourceNow(affairId, input),
+    )
+  }
+
   resumeArticlePublishingAttempt(affairId: string, attemptId: string, workspaceId: string) {
     return this.enqueueScoped(affairId, workspaceId, () =>
       this.resumeArticlePublishingAttemptNow(affairId, attemptId),
@@ -1329,6 +1349,85 @@ export class WebAffairService {
     })
   }
 
+  /**
+   * Main-process reconciliation for legacy sends that predate the request observer. This only
+   * records a bounded read of the account's complete public feed; it never issues a retry permit.
+   */
+  recordBilibiliPublicFeedAbsence(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      sideEffectKey: string
+      uid: string
+      profileUrl: string
+      observedItemCount: number
+      reachedEnd: true
+      titleAbsent: true
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find(
+        (candidate) => candidate.key === input.sideEffectKey,
+      )
+      const expectedProfileUrl = `https://space.bilibili.com/${encodeURIComponent(input.uid)}/dynamic`
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'bilibili' ||
+        publishing.execution.status !== 'result-unknown' ||
+        publishing.publication.status !== 'result-unknown' ||
+        publishing.publication.url ||
+        publishing.composer?.platformAccountId !== input.uid ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        input.profileUrl !== expectedProfileUrl ||
+        !Number.isInteger(input.observedItemCount) ||
+        input.observedItemCount < 0 ||
+        !input.reachedEnd ||
+        !input.titleAbsent ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.status !== 'result-unknown' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.executionGeneration > publishing.execution.currentGeneration ||
+        !effect.dispatchedAt
+      )
+        return this.transitionError('B站公开动态核验不属于当前未知提交')
+      const now = this.timestamp()
+      const reconciled = {
+        uid: input.uid,
+        profileUrl: input.profileUrl,
+        observedItemCount: input.observedItemCount,
+        reachedEnd: true as const,
+        titleAbsent: true as const,
+        observedAt: now,
+      }
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...setArticlePublishingPlanResult(publishing, {
+            id: 'publication.verify',
+            status: 'unknown',
+            observedAt: now,
+            generation: input.executionGeneration,
+            evidence: `同 UID 公开动态列表已读到末尾，共 ${input.observedItemCount} 条；未发现冻结标题`,
+            reason: '旧提交仍无平台回执；仅记录公开列表未发现，不推断平台从未接收',
+          }),
+          sideEffects: publishing.sideEffects.map((candidate) =>
+            candidate.key === effect.key
+              ? { ...candidate, bilibiliPublicFeedAbsence: reconciled }
+              : candidate,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   recordBilibiliSubmissionReceipt(
     input: {
       affairId: string
@@ -1725,6 +1824,69 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistNewAffair(affair)
+  }
+
+  private async relocateArticlePublishingSourceNow(
+    affairId: string,
+    input: {
+      previousMarkdownPath: string
+      source: ArticlePublishingSourcePreview['source']
+      assets: Array<{
+        id: string
+        sourcePath: string
+        size: number
+        modifiedAt: number
+      }>
+      evidence: string
+    },
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const affair = this.findAffair(affairId)
+    const publishing = affair?.articlePublishing
+    if (!affair || !publishing) return this.notFound('文章发布事务不存在')
+    if (
+      publishing.adapterId !== 'bilibili' ||
+      publishing.execution.status !== 'result-unknown' ||
+      publishing.publication.status !== 'result-unknown' ||
+      publishing.source.markdownPath !== input.previousMarkdownPath
+    )
+      return this.transitionError('只有原路径已丢失的 B站结果未知任务可以登记可信搬迁')
+    if (
+      input.source.size !== publishing.source.size ||
+      input.assets.length !== publishing.assets.filter((asset) => asset.kind === 'local').length
+    )
+      return this.invalid('搬迁后的原稿或图片与冻结任务不一致')
+    const relocated = new Map(input.assets.map((asset) => [asset.id, asset]))
+    if (
+      publishing.assets.some((asset) => {
+        if (asset.kind !== 'local') return false
+        const next = relocated.get(asset.id)
+        return !next || next.size !== asset.size
+      })
+    )
+      return this.invalid('搬迁后的图片没有完整对应冻结资产')
+    const now = this.timestamp()
+    return this.persistAffair({
+      ...affair,
+      articlePublishing: {
+        ...publishing,
+        source: input.source,
+        assets: publishing.assets.map((asset) => {
+          if (asset.kind !== 'local') return asset
+          const next = relocated.get(asset.id)!
+          return {
+            ...asset,
+            sourcePath: next.sourcePath,
+            size: next.size,
+            modifiedAt: next.modifiedAt,
+          }
+        }),
+      },
+      events: this.appendEvent(
+        affair,
+        this.event('material-checked', `已核验原稿仅发生路径搬迁：${input.evidence}`, now),
+      ),
+      updatedAt: now,
+    })
   }
 
   private async createArticlePublishingAffairNow(
@@ -4046,6 +4208,7 @@ export class WebAffairService {
         (effect) =>
           effect.kind === 'publish' && effect.attemptId === attemptId && !!effect.dispatchedAt,
       )
+    const carryUnusedRetry = canCarryUnusedBilibiliRetry(publishing)
     const now = this.timestamp()
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
@@ -4117,12 +4280,19 @@ export class WebAffairService {
       ),
       articlePublishing: {
         ...publishing,
+        ...(carryUnusedRetry
+          ? { bilibiliRetry: { ...publishing.bilibiliRetry!, executionGeneration } }
+          : {}),
         executionProtocol: resultVerificationOnly
           ? { ...publishing.executionProtocol, current: undefined }
-          : { ...recoveryProtocol, current: recoveryOperation },
+          : carryUnusedRetry
+            ? { ...recoveryProtocol, current: undefined }
+            : { ...recoveryProtocol, current: recoveryOperation },
         draft: resultVerificationOnly
           ? publishing.draft
-          : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
+          : carryUnusedRetry
+            ? undefined
+            : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         checkpoints,
         execution: {
           ...publishing.execution,

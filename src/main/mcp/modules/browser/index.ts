@@ -24,6 +24,7 @@ import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing
 import type { FileService } from '../../../fs/file-service'
 import { XIAOHONGSHU_PUBLISH_SELECTOR } from '../../../article-publishing/xiaohongshu-publish-control'
 import { isJuejinSettingsEntry } from '../../../article-publishing/juejin-settings-entry'
+import { isZhihuCreatorEntry } from '../../../article-publishing/zhihu-creator-entry'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -173,7 +174,8 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   // ── 交互工具（写入操作） ──────────────────
   {
     name: 'browser_click',
-    description: '点击页面上匹配 Playwright 选择器的唯一可见元素。',
+    description:
+      '点击页面上匹配 Playwright 选择器的唯一可见元素。同名控件可能包含屏幕外副本，优先使用 browser_extract controls 返回的精确 selector 与 inViewport=true 目标；inViewport 仅表示与视口相交，不保证可点击，不得用 force 绕过遮挡或最终提交保护。小红书原编辑页的闭合 Shadow DOM 暂存按钮使用已有有界选择器 xhs-publish-btn[save-text="暂存离开"]，Studio 会核验唯一性、可用性和实际点击目标；最终发布仍必须走文章发布事务。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1192,6 +1194,7 @@ export class BrowserToolModule implements ToolModule {
   ): Promise<string | null> {
     if (!page || !['click', 'press', 'pressKey'].includes(actionType)) return null
     if (await isJuejinSettingsEntry(page, actionType, params.selector)) return null
+    if (await isZhihuCreatorEntry(page, actionType, params.selector)) return null
     // The closed-shadow host has no text; its native final click requires article authorization.
     if (actionType === 'click' && params.selector === XIAOHONGSHU_PUBLISH_SELECTOR)
       return '小红书最终发布需要文章发布事务的精确授权'

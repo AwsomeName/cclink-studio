@@ -1,12 +1,16 @@
 import { BILIBILI_BODY } from './bilibili-publishing-adapter'
 import { toutiaoRecoveryPage } from '../../shared/article-publishing/toutiao-recovery-page'
-import { hasBilibiliRetryAuthorization } from '../../shared/article-publishing/bilibili-retry'
+import {
+  eligibleBilibiliRetryEffect,
+  hasBilibiliRetryAuthorization,
+} from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from './bilibili-publication'
 import {
   canRetryEmptyBilibiliComposer,
   isEmptyBilibiliComposer,
 } from './bilibili-composer-recovery'
 import { prepareArticleBody } from './article-body'
+import { findGitRelocatedArticleSource } from './git-relocated-article-source'
 import { parseWeiboPublicationUrl } from './weibo-publication'
 import {
   readToutiaoPublicationReview,
@@ -250,17 +254,32 @@ export class ArticlePublishingService {
             ['dispatched', 'verifying'].includes(publishing.publication.status))) &&
         (publishing.draft?.platformDraftId || ['weibo', 'bilibili'].includes(publishing.adapterId)),
       )
+      // The saved website entry may be an account/login page. Bilibili's publisher is a
+      // dedicated origin, so a fresh publishing run must always enter through the bounded
+      // composer URL instead of replaying a stale registration URL from the account record.
+      const freshEditorUrl =
+        publishing.adapterId === 'bilibili'
+          ? publishingPlatform(publishing.adapterId).editorUrl
+          : attempt.entryUrl
       const tabId = await browserManager.waitForAccountView(
         input.workspacePath,
         attempt.profileId,
         attempt.accountId,
         recoveryRequired || publicationRecoveryRequired
           ? publishingPlatform(publishing.adapterId).managementUrl
-          : (persistedDraftAnchor?.url ?? attempt.entryUrl),
+          : (persistedDraftAnchor?.url ?? freshEditorUrl),
         8_000,
         input.preferredBrowserTabId,
       )
       if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
+      if (
+        publishing.adapterId === 'bilibili' &&
+        !publicationRecoveryRequired &&
+        !persistedDraftAnchor &&
+        browserManager.getCurrentURL(tabId) !== freshEditorUrl
+      ) {
+        await browserManager.navigate(tabId, freshEditorUrl)
+      }
       await recordPlan({
         id: 'tab.acquire',
         status: 'completed',
@@ -1659,6 +1678,77 @@ export class ArticlePublishingService {
     )
   }
 
+  private async reconcileLegacyBilibiliPublicFeed(
+    affair: WebAffair,
+    attempt: WebAffair['attempts'][number],
+    workspaceId: string,
+    workspacePath: string,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    const publishing = affair.articlePublishing!
+    const uid = publishing.composer?.platformAccountId
+    const effect = publishing.sideEffects.filter((candidate) => candidate.kind === 'publish').at(-1)
+    const manager = this.runtimeDependencies?.getBrowserManager()
+    const bridge = this.runtimeDependencies?.getPlaywrightBridge()
+    if (!uid || !effect || !manager || !bridge)
+      return invalid('B站旧提交缺少账号、提交记录或浏览器 Runtime，无法核验公开结果')
+    const profileUrl = `https://space.bilibili.com/${encodeURIComponent(uid)}/dynamic`
+    const tabId = await manager.waitForAccountView(
+      workspacePath,
+      attempt.profileId,
+      attempt.accountId,
+      profileUrl,
+      8_000,
+      attempt.tabId,
+    )
+    if (!tabId) return invalid('B站公开动态页创建超时')
+    await bridge.ensureConnected('bilibili_legacy_public_feed_reconciliation')
+    await manager.ensurePlaywrightPage(tabId)
+    await bridge.switchToPage(tabId)
+    const page = bridge.getPageById(tabId)
+    if (!page || page.isClosed()) return invalid('B站公开动态页不可用')
+    if (page.url() !== profileUrl) await manager.navigate(tabId, profileUrl)
+    await page.waitForLoadState('domcontentloaded')
+    let observed = { reachedEnd: false, titleAbsent: false, observedItemCount: 0 }
+    for (let index = 0; index < 40; index += 1) {
+      observed = await page.evaluate((title) => {
+        const text = document.body?.innerText ?? ''
+        const counts = [
+          document.querySelectorAll('.bili-dyn-list__item').length,
+          document.querySelectorAll('.bili-dyn-item').length,
+          document.querySelectorAll('[class*="dynamic-item"]').length,
+        ]
+        return {
+          reachedEnd: text.includes('你已经到达世界的尽头'),
+          titleAbsent: !text.includes(title),
+          observedItemCount: Math.max(...counts),
+        }
+      }, publishing.fields.title)
+      if (observed.reachedEnd) break
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+      await page.waitForTimeout(250)
+    }
+    if (!observed.reachedEnd || !observed.titleAbsent)
+      return invalid(
+        observed.titleAbsent
+          ? 'B站公开动态列表未能读到末尾；保留结果未知，不允许重发'
+          : 'B站公开动态列表发现冻结标题；必须核验该作品，不能重发',
+      )
+    return this.webAffairService.recordBilibiliPublicFeedAbsence(
+      {
+        affairId: affair.id,
+        attemptId: attempt.id,
+        executionGeneration: effect.executionGeneration,
+        sideEffectKey: effect.key,
+        uid,
+        profileUrl,
+        observedItemCount: observed.observedItemCount,
+        reachedEnd: true,
+        titleAbsent: true,
+      },
+      workspaceId,
+    )
+  }
+
   async startTask(
     rawInput: StartArticlePublishingTaskInput,
     workspaceId: string,
@@ -1669,15 +1759,63 @@ export class ArticlePublishingService {
     }
     const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
     if (!snapshot.success) return snapshot
-    const affair = snapshot.data.affairs.find(
+    let affair = snapshot.data.affairs.find(
       (item) => item.id === parsed.data.affairId && item.kind === 'article-publishing',
     )
-    const publishing = affair?.articlePublishing
+    let publishing = affair?.articlePublishing
     if (!affair || !publishing) return notFound('文章发布事务不存在')
-    const preview = await this.buildPreview(
+    let preview = await this.buildPreview(
       publishing.source.markdownPath,
       parsed.data.workspaceRef.path,
     ).catch(() => null)
+    if (!preview && publishing.adapterId === 'bilibili') {
+      const relocated = await findGitRelocatedArticleSource({
+        workspacePath: parsed.data.workspaceRef.path,
+        state: publishing,
+      }).catch(() => undefined)
+      if (relocated) {
+        const candidate = await this.buildPreview(
+          relocated.markdownPath,
+          parsed.data.workspaceRef.path,
+        ).catch(() => null)
+        if (candidate && candidate.title === publishing.fields.title) {
+          const relocatedAssets = publishing.assets
+            .filter((asset) => asset.kind === 'local')
+            .map((asset) => {
+              const current = candidate.assets.find(
+                (item) => item.kind === 'local' && item.displayPath === asset.displayPath,
+              )
+              return current && current.size !== undefined && current.modifiedAt !== undefined
+                ? {
+                    id: asset.id,
+                    sourcePath: current.sourcePath,
+                    size: current.size,
+                    modifiedAt: current.modifiedAt,
+                  }
+                : null
+            })
+          const completeAssets = relocatedAssets.filter(
+            (asset): asset is NonNullable<typeof asset> => asset !== null,
+          )
+          if (completeAssets.length === relocatedAssets.length) {
+            const rebound = await this.webAffairService.relocateArticlePublishingSource(
+              affair.id,
+              workspaceId,
+              {
+                previousMarkdownPath: publishing.source.markdownPath,
+                source: candidate.source,
+                assets: completeAssets,
+                evidence: relocated.evidence,
+              },
+            )
+            if (!rebound.success) return rebound
+            affair = rebound.data
+            publishing = affair.articlePublishing!
+            preview = candidate
+          }
+        }
+      }
+    }
     if (
       !preview ||
       preview.source.modifiedAt !== publishing.source.modifiedAt ||
@@ -1686,7 +1824,13 @@ export class ArticlePublishingService {
       return invalid('源 Markdown 已变化，不能恢复旧 Attempt；请以新内容创建发布任务')
     }
     const currentAssets = preview.assets
-      .map((asset) => [asset.id, asset.sourcePath, asset.size, asset.modifiedAt])
+      .map((asset) => {
+        const frozen = publishing.assets.find(
+          (candidate) =>
+            candidate.kind === asset.kind && candidate.displayPath === asset.displayPath,
+        )
+        return [frozen?.id ?? asset.id, asset.sourcePath, asset.size, asset.modifiedAt]
+      })
       .sort((left, right) => String(left[0]).localeCompare(String(right[0])))
     const frozenAssets = publishing.assets
       .map((asset) => [asset.id, asset.sourcePath, asset.size, asset.modifiedAt])
@@ -1698,6 +1842,31 @@ export class ArticlePublishingService {
     const currentAttempt = publishing.execution.currentAttemptId
       ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
       : undefined
+    if (
+      publishing.adapterId === 'bilibili' &&
+      publishing.execution.status === 'result-unknown' &&
+      publishing.publication.status === 'result-unknown' &&
+      !parsed.data.bilibiliRetry &&
+      currentAttempt?.status === 'interrupted'
+    ) {
+      if (eligibleBilibiliRetryEffect(publishing))
+        return invalid('公开结果核验已完成；请使用“接受可能重复”按钮继续')
+      const effects = publishing.sideEffects.filter((effect) => effect.kind === 'publish')
+      const legacyEffect =
+        effects.length === 1 &&
+        !effects[0].bilibiliSubmission &&
+        !effects[0].bilibiliPublicFeedAbsence
+      if (legacyEffect) {
+        const reconciled = await this.reconcileLegacyBilibiliPublicFeed(
+          affair,
+          currentAttempt,
+          workspaceId,
+          parsed.data.workspaceRef.path,
+        )
+        if (!reconciled.success) return reconciled
+        return invalid('公开动态列表已读到末尾且未发现本稿；请使用“接受可能重复”按钮继续')
+      }
+    }
     const resumed = Boolean(
       publishing.draft?.platformDraftId ||
       currentAttempt?.status === 'interrupted' ||

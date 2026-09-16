@@ -18,8 +18,17 @@ export class JuejinPublishingAdapter {
       await previewTab.click()
     }
     const pictures = page.locator('.bytemd-preview img, .article-viewer.markdown-body img')
-    for (let i = 0; i < (await pictures.count()); i++)
-      await pictures.nth(i).scrollIntoViewIfNeeded({ timeout: 3000 })
+    for (let i = 0; i < (await pictures.count()); i++) {
+      try {
+        await pictures.nth(i).scrollIntoViewIfNeeded({ timeout: 3000 })
+      } catch (error) {
+        // Bytemd may replace preview images just after the Markdown changes.
+        // Re-resolve once; loading and identity still come from the fresh probe.
+        if (!(error instanceof Error) || !error.message.includes('Element is not attached'))
+          throw error
+        await pictures.nth(i).scrollIntoViewIfNeeded({ timeout: 3000 })
+      }
+    }
     return page.evaluate(
       async ({ expected, expectedDraftId }) => {
         const read = async (path: string, body?: object) => {

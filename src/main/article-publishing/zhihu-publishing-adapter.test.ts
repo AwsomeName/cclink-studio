@@ -165,3 +165,69 @@ describe('Zhihu public image fallback text', () => {
     },
   )
 })
+
+describe('Zhihu published CDN image identity', () => {
+  const imageId = 'v2-669d9f0745fa2df1d433d066ea748b44'
+  const publicPath = `/80/${imageId}_1440w.webp`
+  it.each([
+    [`https://pica.zhimg.com${publicPath}`, true, true, '正文'],
+    [`https://pic3.zhimg.com${publicPath}`, true, true, '正文'],
+    [`https://pica.zhimg.com${publicPath}`, false, false, '正文'],
+    [`https://pica.zhimg.com${publicPath}`, true, false, '不同位置'],
+    [`https://pica.zhimg.com${publicPath.replace('669d', '0000')}`, true, false, '正文'],
+    [`https://pica.zhimg.com.evil.test${publicPath}`, true, false, '正文'],
+    [`https://untrusted.zhimg.com${publicPath}`, true, false, '正文'],
+    [`https://user@pica.zhimg.com${publicPath}`, true, false, '正文'],
+    [`https://pica.zhimg.com:444${publicPath}`, true, false, '正文'],
+    [`http://pica.zhimg.com${publicPath}`, true, false, '正文'],
+  ])('verifies CDN URL %s (loaded=%s, matches=%s)', async (src, loaded, matches, preceding) => {
+    const makeBody = (imageSrc: string, complete: boolean, precedingText: string) => {
+      const image = {
+        getAttribute: () => imageSrc,
+        alt: '',
+        complete,
+        naturalWidth: complete ? 1536 : 0,
+      }
+      const body = {
+        textContent: '正文',
+        ownerDocument: {
+          createRange: () => ({
+            selectNodeContents: () => {},
+            setEndBefore: () => {},
+            toString: () => precedingText,
+          }),
+        },
+        querySelectorAll: (selector: string) => (selector.startsWith('img') ? [image] : []),
+        cloneNode: () => body,
+      }
+      return body
+    }
+    const expected = makeBody(
+      `https://pic-private.zhihu.com/${imageId}~resize:1440:q75.png`,
+      true,
+      '正文',
+    )
+    const actual = makeBody(src, loaded, preceding)
+    vi.stubGlobal('document', {
+      querySelectorAll: (selector: string) =>
+        selector.includes('Post-RichTextContainer') ? [actual] : [],
+    })
+    vi.stubGlobal(
+      'DOMParser',
+      class {
+        parseFromString() {
+          return { body: expected }
+        }
+      },
+    )
+    const page = {
+      url: () => `https://zhuanlan.zhihu.com/p/${id}`,
+      locator: () => ({ count: async () => 0 }),
+      evaluate: async (fn: (html: string) => unknown, html: string) => fn(html),
+    }
+    const result = await new ZhihuPublishingAdapter().verifyBody(page as never, '<p>正文</p>')
+    expect(result.textMatches).toBe(true)
+    expect(result.images[0].matches).toBe(matches)
+    expect(result.matches).toBe(matches)
+  })
+})

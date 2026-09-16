@@ -213,6 +213,17 @@ const sideEffectSchema = z
       })
       .strict()
       .optional(),
+    bilibiliPublicFeedAbsence: z
+      .object({
+        uid: z.string().trim().min(1).max(100),
+        profileUrl: z.url().max(4_096),
+        observedItemCount: z.number().int().nonnegative().max(100_000),
+        reachedEnd: z.literal(true),
+        titleAbsent: z.literal(true),
+        observedAt: timestampSchema,
+      })
+      .strict()
+      .optional(),
   })
   .strict()
 

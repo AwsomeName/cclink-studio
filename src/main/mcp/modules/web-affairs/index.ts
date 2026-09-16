@@ -10,6 +10,17 @@ import type {
 } from '../../../../shared/web-affairs/web-affair-types'
 import type { ArticlePublishingBrowserPolicy } from '../../../article-publishing/article-publishing-browser-policy'
 import type { ImageResearchService } from '../../../image-research/image-research-service'
+import { reportArticlePublishingCheckpointInputSchema } from '../../../../shared/article-publishing/article-publishing-schema'
+
+const publishingErrorInput = {
+  type: 'object',
+  properties: {
+    code: { type: 'string', minLength: 1, maxLength: 120 },
+    message: { type: 'string', minLength: 1, maxLength: 2000 },
+  },
+  required: ['code', 'message'],
+  additionalProperties: false,
+}
 
 const TOOLS: ToolDefinition[] = [
   {
@@ -155,7 +166,7 @@ const TOOLS: ToolDefinition[] = [
         },
         evidence: { type: 'string' },
         outputRefs: { type: 'object' },
-        error: { type: 'object' },
+        error: publishingErrorInput,
       },
       required: ['affairId', 'attemptId', 'stepId', 'status'],
     },
@@ -291,6 +302,12 @@ export class WebAffairToolModule implements ToolModule {
       return this.service.completeCheck({ ...params, workspaceRef } as never, workspaceId)
     }
     if (toolName === 'article_publishing_report_checkpoint') {
+      const error = reportArticlePublishingCheckpointInputSchema.shape.error.safeParse(params.error)
+      if (!error.success) {
+        return publishingPolicyError(
+          'error 必须为 {code:非空字符串,message:非空字符串}，不得添加其他字段；此次回报未写入事务',
+        )
+      }
       const reporter = this.resolvePublishingReporter(params, context, workspaceId)
       if (!reporter.success) return reporter
       const trustedReporter = this.authorizeTrustedReport(toolName, params, context, reporter.data)

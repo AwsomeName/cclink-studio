@@ -148,6 +148,16 @@ export interface BilibiliSubmissionObservation {
   observedAt: string
 }
 
+/** Read-only reconciliation of a legacy unknown send against the complete public feed. */
+export interface BilibiliPublicFeedAbsence {
+  uid: string
+  profileUrl: string
+  observedItemCount: number
+  reachedEnd: true
+  titleAbsent: true
+  observedAt: string
+}
+
 export interface ArticlePublishingSideEffect {
   key: string
   affairId: string
@@ -162,6 +172,7 @@ export interface ArticlePublishingSideEffect {
   observedAt?: string
   browserTaskRunId?: string
   bilibiliSubmission?: BilibiliSubmissionObservation
+  bilibiliPublicFeedAbsence?: BilibiliPublicFeedAbsence
 }
 
 export type ArticlePublishingOperationDefinitionId =

@@ -248,7 +248,11 @@ export class ZhihuPublishingAdapter {
           const url = new URL(raw)
           if (
             url.protocol === 'https:' &&
-            (url.hostname === 'pic-private.zhihu.com' || /^pic\d+\.zhimg\.com$/u.test(url.hostname))
+            !url.username &&
+            !url.password &&
+            !url.port &&
+            (url.hostname === 'pic-private.zhihu.com' ||
+              /^pic(?:\d+|a)\.zhimg\.com$/u.test(url.hostname))
           )
             return (
               /^\/(?:80\/)?(v2-[a-f0-9]{32})(?:~resize:\d+:q\d+|_\d+w)\.(?:png|jpg|webp)$/u.exec(
