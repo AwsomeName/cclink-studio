@@ -3234,23 +3234,8 @@ async function main() {
     )
 
     const navigationFailureUrl = 'http://127.0.0.1:99999/navigation-failure'
-    let navigationFailureSubmitted = false
-    for (let attempt = 0; attempt < 3 && !navigationFailureSubmitted; attempt += 1) {
-      await page.locator('.url-input').fill(navigationFailureUrl)
-      await page.locator('.url-input').press('Enter')
-      navigationFailureSubmitted = await page
-        .waitForFunction(
-          async ({ tabId, url }) => {
-            const { useBrowserStore } = await import('/src/stores/browser-store.ts')
-            return useBrowserStore.getState().tabs[tabId]?.navigation?.targetUrl === url
-          },
-          { tabId: activeBrowserTabId, url: navigationFailureUrl },
-          { timeout: 2_000 },
-        )
-        .then(() => true)
-        .catch(() => false)
-    }
-    assert(navigationFailureSubmitted, 'failed address was overwritten before submission')
+    await page.locator('.url-input').fill(navigationFailureUrl)
+    await page.locator('.url-input').press('Enter')
     await page.waitForFunction(
       async ({ tabId, url }) => {
         const [{ useBrowserStore }, { useTabStore }] = await Promise.all([
