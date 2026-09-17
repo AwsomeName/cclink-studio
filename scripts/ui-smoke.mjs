@@ -3233,7 +3233,7 @@ async function main() {
       { timeout: 10_000 },
     )
 
-    const navigationFailureUrl = 'http://127.0.0.1:99999/navigation-failure'
+    const navigationFailureUrl = 'http://[::1/navigation-failure'
     await page.locator('.url-input').fill(navigationFailureUrl)
     await page.locator('.url-input').press('Enter')
     await page.waitForFunction(
