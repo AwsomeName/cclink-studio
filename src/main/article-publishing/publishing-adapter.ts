@@ -64,15 +64,7 @@ export class PublishingAdapter {
   }
 }
 export function publishingPlatform(
-  id:
-    | 'csdn'
-    | 'zhihu'
-    | 'juejin'
-    | 'xiaohongshu'
-    | 'weibo'
-    | 'toutiao'
-    | 'bilibili'
-    | 'jike',
+  id: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike',
 ) {
   if (id === 'bilibili')
     return {

@@ -139,10 +139,7 @@ export interface JikeFeedRecoveryTarget {
  * same account, full frozen text, ordered picture keys, and a creation time at the dispatch edge.
  * This is read-only and intentionally rejects zero or multiple matches.
  */
-export async function readExactJikeFeedPublication(
-  page: Page,
-  expected: JikeFeedRecoveryTarget,
-) {
+export async function readExactJikeFeedPublication(page: Page, expected: JikeFeedRecoveryTarget) {
   if (page.url() !== 'https://web.okjike.com/following')
     throw new Error('即刻结果恢复只允许读取原账号当前信息流')
   const candidates = await page.evaluate((expected) => {
@@ -236,8 +233,7 @@ export async function readExactJikeFeedPublication(
     throw new Error(`即刻信息流未唯一匹配本次冻结图文（实际 ${candidates.length} 条）`)
   const candidate = candidates[0]
   const parsed = parseJikePublicationUrl(candidate.url)
-  if (!parsed || parsed.id !== candidate.id)
-    throw new Error('即刻信息流候选作品地址不可核验')
+  if (!parsed || parsed.id !== candidate.id) throw new Error('即刻信息流候选作品地址不可核验')
   return { ...candidate, url: parsed.url }
 }
 
@@ -246,8 +242,12 @@ export function observeJikeSubmission(page: Page, expected: JikeSubmissionTarget
   let armed = false
   let disposed = false
   let matchedRequest: Request | undefined
-  let resolve: (receipt: { accountId: string; id: string; username: string; url: string }) => void =
-    () => undefined
+  let resolve: (receipt: {
+    accountId: string
+    id: string
+    username: string
+    url: string
+  }) => void = () => undefined
   let reject: (error: Error) => void = () => undefined
   const result = new Promise<{ accountId: string; id: string; username: string; url: string }>(
     (yes, no) => {
@@ -303,7 +303,10 @@ export function observeJikeSubmission(page: Page, expected: JikeSubmissionTarget
         accountId !== expected.accountId ||
         !username ||
         data?.content !== expected.text ||
-        !same(data?.pictures?.map((picture) => picture.key), expected.imageKeys)
+        !same(
+          data?.pictures?.map((picture) => picture.key),
+          expected.imageKeys,
+        )
       )
         throw new Error('即刻提交回执未能同时证明账号、正文、文章 ID 与逐图标识')
       if (!disposed)

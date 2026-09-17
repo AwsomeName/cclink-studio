@@ -86,15 +86,16 @@ export function observeBilibiliImageUpload(page: Page) {
     void Promise.resolve()
       .then(() =>
         page.evaluate(() => {
-        const body = document.querySelector('div[placeholder="有什么想和大家分享的？"]')
-        const root = body?.closest('main > section:nth-child(1)')
-        return Boolean(
-          root &&
+          const body = document.querySelector('div[placeholder="有什么想和大家分享的？"]')
+          const root = body?.closest('main > section:nth-child(1)')
+          return Boolean(
+            root &&
             [...root.querySelectorAll<HTMLElement>('*')].some(
               (element) =>
-                element.children.length === 0 && element.textContent?.trim() === '上传失败 点击重试',
+                element.children.length === 0 &&
+                element.textContent?.trim() === '上传失败 点击重试',
             ),
-        )
+          )
         }),
       )
       .then((failed) =>

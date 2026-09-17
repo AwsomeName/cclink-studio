@@ -6,7 +6,7 @@ import type { ArticlePublishingState } from './article-publishing-types'
 export function toutiaoRecoveryPage(state: ArticlePublishingState | undefined) {
   if (!state) return undefined
   const { execution, draft, executionProtocol } = state
-  const operation = executionProtocol.current
+  const operation = executionProtocol?.current
   if (
     state.adapterId !== 'toutiao' ||
     execution.status !== 'interrupted' ||

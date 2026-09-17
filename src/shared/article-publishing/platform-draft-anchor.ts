@@ -61,15 +61,7 @@ export function isSamePlatformDraft(left: string, right: string, localDraftId?: 
 }
 
 export function isPlatformImageUrl(
-  platform:
-    | 'csdn'
-    | 'zhihu'
-    | 'juejin'
-    | 'xiaohongshu'
-    | 'weibo'
-    | 'toutiao'
-    | 'bilibili'
-    | 'jike',
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike',
   rawUrl: string,
 ): boolean {
   try {

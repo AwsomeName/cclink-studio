@@ -69,14 +69,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
   const [platform, setPlatform] = useState<
-    | 'csdn'
-    | 'zhihu'
-    | 'juejin'
-    | 'xiaohongshu'
-    | 'weibo'
-    | 'toutiao'
-    | 'bilibili'
-    | 'jike'
+    'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   >('csdn')
   const [localDraftId, setLocalDraftId] = useState('')
   const [existingDraftUrl, setExistingDraftUrl] = useState('')
@@ -94,13 +87,13 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           ? '即刻'
           : platform === 'weibo'
             ? '微博'
-          : platform === 'xiaohongshu'
-            ? '小红书'
-            : platform === 'juejin'
-              ? '掘金'
-              : platform === 'zhihu'
-                ? '知乎'
-                : 'CSDN'
+            : platform === 'xiaohongshu'
+              ? '小红书'
+              : platform === 'juejin'
+                ? '掘金'
+                : platform === 'zhihu'
+                  ? '知乎'
+                  : 'CSDN'
   const [accountLabelDraft, setAccountLabelDraft] = useState('')
   const [savingAccountLabel, setSavingAccountLabel] = useState(false)
   const [title, setTitle] = useState('')

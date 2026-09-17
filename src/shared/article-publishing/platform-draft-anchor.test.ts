@@ -111,10 +111,7 @@ it('keeps Juejin draft IDs exact and isolates its image hosts', () => {
 
 it('accepts only stable Jike CDN image identities', () => {
   expect(
-    isPlatformImageUrl(
-      'jike',
-      'https://cdnv2.ruguoapp.com/FvYZi-0ACXVxduE_Ikfj09mcXkSRv3.png',
-    ),
+    isPlatformImageUrl('jike', 'https://cdnv2.ruguoapp.com/FvYZi-0ACXVxduE_Ikfj09mcXkSRv3.png'),
   ).toBe(true)
   for (const url of [
     'blob:https://web.okjike.com/preview',

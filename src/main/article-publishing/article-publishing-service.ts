@@ -514,11 +514,7 @@ export class ArticlePublishingService {
           const imageKeys = publishing.assets.map((asset) =>
             jikeImageIdentity(asset.platformUrl ?? ''),
           )
-          if (
-            !effect?.dispatchedAt ||
-            !effect.browserTaskRunId ||
-            imageKeys.some((key) => !key)
-          )
+          if (!effect?.dispatchedAt || !effect.browserTaskRunId || imageKeys.some((key) => !key))
             throw new Error('即刻结果未知，但本次提交时间或冻结图片标识不完整；不会重发')
           await playwrightBridge.ensureConnected('jike_publication_feed_recovery')
           await browserManager.ensurePlaywrightPage(tabId)

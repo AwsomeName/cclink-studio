@@ -1591,8 +1591,7 @@ export class ArticlePublishingBrowserPolicy {
             probe.editor.images[index]?.loaded === true &&
             probe.editor.images[index]?.src === asset.platformUrl,
         )
-      if (!exactRestoredGallery)
-        throw new Error('即刻原生草稿恢复后未读回冻结三图，停止继续写入')
+      if (!exactRestoredGallery) throw new Error('即刻原生草稿恢复后未读回冻结三图，停止继续写入')
       return
     }
     if (
@@ -3223,10 +3222,7 @@ export class ArticlePublishingBrowserPolicy {
               selectors.uploadConfirm,
             ]
           : stepId === 'fill-body'
-            ? [
-                selectors.body,
-                ...(jikeExactDraftRestoreAllowed ? [selectors.restoreDraft] : []),
-              ]
+            ? [selectors.body, ...(jikeExactDraftRestoreAllowed ? [selectors.restoreDraft] : [])]
             : stepId === 'fill-fields'
               ? [
                   selectors.openPublishSettings,

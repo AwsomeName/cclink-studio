@@ -17,10 +17,7 @@ import {
   parseWeiboPublicationUrl,
   weiboImageIdentity,
 } from '../article-publishing/weibo-publication'
-import {
-  jikeImageIdentity,
-  parseJikePublicationUrl,
-} from '../article-publishing/jike-publication'
+import { jikeImageIdentity, parseJikePublicationUrl } from '../article-publishing/jike-publication'
 import {
   foldArticlePublishingPlanResults,
   setArticlePublishingPlanResult,

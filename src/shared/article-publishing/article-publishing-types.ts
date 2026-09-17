@@ -280,15 +280,7 @@ export interface ArticlePublishingState {
     authorizedAt: string
   }
   composer?: ArticlePublishingComposer
-  adapterId:
-    | 'csdn'
-    | 'zhihu'
-    | 'juejin'
-    | 'xiaohongshu'
-    | 'weibo'
-    | 'toutiao'
-    | 'bilibili'
-    | 'jike'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   adapterVersion: 1
   source: {
     markdownPath: string
