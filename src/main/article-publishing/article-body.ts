@@ -2,12 +2,16 @@ import { readFile, stat } from 'node:fs/promises'
 import MarkdownIt from 'markdown-it'
 import type { ArticlePublishingState } from '../../shared/article-publishing/article-publishing-types'
 
-/** Frozen source + observed image URLs, never Agent-authored replacement HTML. */
-export async function prepareArticleMarkdown(state: ArticlePublishingState): Promise<string> {
+async function readFrozenMarkdown(state: ArticlePublishingState): Promise<string> {
   const info = await stat(state.source.markdownPath)
   if (info.size !== state.source.size || info.mtimeMs !== state.source.modifiedAt)
     throw new Error('原 Markdown 已变化，不能填写冻结任务')
-  let markdown = await readFile(state.source.markdownPath, 'utf8')
+  return readFile(state.source.markdownPath, 'utf8')
+}
+
+/** Frozen source + observed image URLs, never Agent-authored replacement HTML. */
+export async function prepareArticleMarkdown(state: ArticlePublishingState): Promise<string> {
+  let markdown = await readFrozenMarkdown(state)
   const replacements = state.assets
     .flatMap((asset) => {
       const url = asset.kind === 'local' ? asset.platformUrl : asset.sourcePath
@@ -20,6 +24,11 @@ export async function prepareArticleMarkdown(state: ArticlePublishingState): Pro
   for (const occurrence of replacements)
     markdown = markdown.slice(0, occurrence.start) + occurrence.url + markdown.slice(occurrence.end)
   return markdown
+}
+
+/** Frozen source rendered before platform image URLs exist. Used only for text comparison. */
+export async function prepareArticleUnresolvedBody(state: ArticlePublishingState): Promise<string> {
+  return new MarkdownIt({ html: false, linkify: false }).render(await readFrozenMarkdown(state))
 }
 
 export async function prepareArticleBody(state: ArticlePublishingState): Promise<string> {

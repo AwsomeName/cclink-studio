@@ -61,7 +61,15 @@ export function isSamePlatformDraft(left: string, right: string, localDraftId?: 
 }
 
 export function isPlatformImageUrl(
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili',
+  platform:
+    | 'csdn'
+    | 'zhihu'
+    | 'juejin'
+    | 'xiaohongshu'
+    | 'weibo'
+    | 'toutiao'
+    | 'bilibili'
+    | 'jike',
   rawUrl: string,
 ): boolean {
   try {
@@ -85,6 +93,13 @@ export function isPlatformImageUrl(
       return (
         /^[a-z0-9-]+\.sinaimg\.cn$/u.test(url.hostname) &&
         /\/[^/]+\.(?:jpg|jpeg|png)$/iu.test(url.pathname)
+      )
+    if (platform === 'jike')
+      return (
+        ['cdnv2.ruguoapp.com', 'cdn.ruguoapp.com'].includes(url.hostname) &&
+        /^\/[A-Za-z0-9_-]+\.(?:png|jpe?g|webp)$/iu.test(url.pathname) &&
+        !url.search &&
+        !url.hash
       )
     if (platform === 'xiaohongshu')
       return (

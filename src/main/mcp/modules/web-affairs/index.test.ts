@@ -210,6 +210,30 @@ describe('WebAffairToolModule', () => {
     expect(reportArticlePublishingCheckpoint).not.toHaveBeenCalled()
   })
 
+  it('rejects non-string checkpoint output refs before transaction persistence', async () => {
+    const reportArticlePublishingCheckpoint = vi.fn()
+    const module = new WebAffairToolModule(
+      { reportArticlePublishingCheckpoint } as never,
+      async () => 'workspace-a-id',
+    )
+    const result = await module.execute(
+      'article_publishing_report_checkpoint',
+      {
+        affairId: 'affair-1',
+        attemptId: 'attempt-1',
+        stepId: 'upload-assets',
+        status: 'completed',
+        outputRefs: { imageUrls: ['https://i0.hdslb.com/bfs/new_dyn/a.png'] },
+      },
+      { workspaceKey: '/workspace/a', conversationId: 'conversation-a', agentRunId: 'run-a' },
+    )
+    expect(result).toMatchObject({
+      success: false,
+      error: { message: expect.stringContaining('outputRefs 只能包含字符串值') },
+    })
+    expect(reportArticlePublishingCheckpoint).not.toHaveBeenCalled()
+  })
+
   it('injects the trusted generation and run identity instead of accepting model identity fields', async () => {
     const reportArticlePublishingCheckpoint = vi.fn(async () => ({ success: true }))
     const module = new WebAffairToolModule(

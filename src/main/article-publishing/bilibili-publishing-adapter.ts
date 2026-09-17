@@ -12,6 +12,12 @@ export const BILIBILI_TITLE = 'input[placeholder="好的标题更容易获得支
 export const BILIBILI_BODY = 'div[placeholder="有什么想和大家分享的？"]'
 export const BILIBILI_IMAGE_OPEN = 'div.bili-dyn-publishing__tools__item.pic'
 export const BILIBILI_IMAGE_ADD = 'div.bili-pics-uploader__add'
+export const BILIBILI_TITLE_MAX_CODE_POINTS = 20
+
+/** B站动态标题输入框只保留前 20 个 Unicode 字符。 */
+export function bilibiliPublishingTitle(title: string): string {
+  return Array.from(title.trim()).slice(0, BILIBILI_TITLE_MAX_CODE_POINTS).join('')
+}
 export interface BilibiliImageSource {
   sourcePath: string
   platformUrl?: string
@@ -63,7 +69,9 @@ export async function readBilibiliComposer(
           uid = /^\/(\d{5,20})\/?$/u.exec(url.pathname)?.[1]
       }
       const sourceImages = root
-        ? [...root.querySelectorAll<HTMLImageElement>('.bili-pics-uploader img')]
+        ? [...root.querySelectorAll<HTMLImageElement>('.bili-pics-uploader img')].filter((img) =>
+            Boolean(img.currentSrc || img.src),
+          )
         : []
       const images = sourceImages.map((img) => ({
         src: img.currentSrc || img.src,
@@ -71,30 +79,32 @@ export async function readBilibiliComposer(
         loaded: visible(img) && img.complete && img.naturalWidth > 0,
       }))
       const items = root ? [...root.querySelectorAll<HTMLElement>('.bili-pics-uploader__item')] : []
-      const previews = await Promise.all(
-        items.map(async (item) => {
-          const nodes = item.querySelectorAll('.bili-pics-uploader-item-preview__pic')
-          const node = nodes.length === 1 ? nodes[0] : undefined
-          const css = node ? getComputedStyle(node).backgroundImage : ''
-          const dataUrl =
-            /^url\(["']?(data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+)["']?\)$/u.exec(
-              css,
-            )?.[1] ?? ''
-          let loaded = false
-          if (node && visible(node) && item.classList.contains('success') && dataUrl) {
-            const image = new Image()
-            image.src = dataUrl
-            loaded = await Promise.race([
-              image
-                .decode()
-                .then(() => image.naturalWidth > 0 && image.naturalHeight > 0)
-                .catch(() => false),
-              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000)),
-            ])
-          }
-          return { dataUrl, loaded }
-        }),
-      )
+      const previews = (
+        await Promise.all(
+          items.map(async (item) => {
+            const nodes = item.querySelectorAll('.bili-pics-uploader-item-preview__pic')
+            const node = nodes.length === 1 ? nodes[0] : undefined
+            const css = node ? getComputedStyle(node).backgroundImage : ''
+            const dataUrl =
+              /^url\(["']?(data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+)["']?\)$/u.exec(
+                css,
+              )?.[1] ?? ''
+            let loaded = false
+            if (node && visible(node) && item.classList.contains('success') && dataUrl) {
+              const image = new Image()
+              image.src = dataUrl
+              loaded = await Promise.race([
+                image
+                  .decode()
+                  .then(() => image.naturalWidth > 0 && image.naturalHeight > 0)
+                  .catch(() => false),
+                new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000)),
+              ])
+            }
+            return { dataUrl, loaded }
+          }),
+        )
+      ).filter((preview) => Boolean(preview.dataUrl))
       const uploadSelector =
         recognized && one(imageAdd) && root?.contains(one(imageAdd)!)
           ? imageAdd
@@ -192,6 +202,24 @@ export async function readBilibiliComposer(
         return { src, alt: '', loaded: preview.loaded && Boolean(src) }
       })
     : live.images.map((i) => ({ ...i, src: bilibiliImageUrl(i.src) ?? i.src }))
+  if (previews.length) {
+    console.info(
+      '[BilibiliPublishing] native preview reconciliation',
+      previews.map((preview, index) => {
+        const bytes = Buffer.from(preview.dataUrl.split(',')[1] ?? '', 'base64')
+        return {
+          index,
+          mime: /^data:([^;,]+)/u.exec(preview.dataUrl)?.[1] ?? 'none',
+          encodedCharacters: preview.dataUrl.length,
+          decodedBytes: bytes.length,
+          loaded: preview.loaded,
+          sourceMatches: sources
+            .filter((asset) => bytes.length > 0 && asset.bytes.equals(bytes))
+            .map((asset) => asset.sourcePath.split('/').at(-1)),
+        }
+      }),
+    )
+  }
   return {
     ...facts,
     images,
@@ -210,6 +238,7 @@ export class BilibiliPublishingAdapter {
         adapterVersion: 1,
         observedAt: live.observedAt,
         url: live.url,
+        platformAccountId: live.uid,
         publishedArticleId: live.id,
         pageKind: live.recognized ? 'published-article' : 'unsupported',
         editor: {

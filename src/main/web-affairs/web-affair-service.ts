@@ -7,7 +7,9 @@ import {
   hasBilibiliRetryAuthorization,
 } from '../../shared/article-publishing/bilibili-retry'
 import { parseBilibiliPublicationUrl } from '../article-publishing/bilibili-publication'
+import { bilibiliPublishingTitle } from '../article-publishing/bilibili-publishing-adapter'
 import { isIndependentBilibiliDraft } from '../article-publishing/bilibili-independent-draft'
+import { findGitRelocatedArticleSource } from '../article-publishing/git-relocated-article-source'
 import { canStartAfterUnsubmittedWeiboTask } from '../article-publishing/weibo-unsubmitted-task'
 import { parseToutiaoPublicationUrl } from '../article-publishing/toutiao-publication'
 import { TOUTIAO_ARTICLE_PUBLISHING_PLAN } from '../../shared/article-publishing/article-publishing-plan'
@@ -15,6 +17,10 @@ import {
   parseWeiboPublicationUrl,
   weiboImageIdentity,
 } from '../article-publishing/weibo-publication'
+import {
+  jikeImageIdentity,
+  parseJikePublicationUrl,
+} from '../article-publishing/jike-publication'
 import {
   foldArticlePublishingPlanResults,
   setArticlePublishingPlanResult,
@@ -180,7 +186,15 @@ export interface ArticlePublishingAgentReporter {
   trustedPageEvidence?: {
     /** Main-only live guard; never persisted or accepted from IPC. */
     isCurrent?: () => boolean
-    adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+    adapterId:
+      | 'csdn'
+      | 'zhihu'
+      | 'juejin'
+      | 'xiaohongshu'
+      | 'weibo'
+      | 'toutiao'
+      | 'bilibili'
+      | 'jike'
     adapterVersion: 1
     observedAt: string
     url: string
@@ -1014,6 +1028,88 @@ export class WebAffairService {
     })
   }
 
+  /** Recover an interrupted Jike upload from its exact native File + CDN receipt on the live page. */
+  reconcileArticlePublishingImageObservation(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      assetId: string
+      platformUrl: string
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const asset = publishing?.assets.find((candidate) => candidate.id === input.assetId)
+      const effects = publishing?.sideEffects.filter(
+        (effect) =>
+          effect.kind === 'upload-asset' &&
+          effect.targetId.replace(/:attempt-\d+$/u, '') === input.assetId &&
+          ['dispatched', 'result-unknown'].includes(effect.status),
+      )
+      const effect = effects?.at(-1)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'jike' ||
+        !asset ||
+        asset.status !== 'reconciling' ||
+        asset.platformUrl ||
+        !effect ||
+        effect.executionGeneration >= input.executionGeneration ||
+        publishing.execution.status !== 'running' ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        !isCurrent() ||
+        !isPlatformImageUrl('jike', input.platformUrl) ||
+        publishing.assets.some(
+          (candidate) => candidate.id !== asset.id && candidate.platformUrl === input.platformUrl,
+        )
+      )
+        return this.transitionError('即刻图片恢复回执与当前任务、文件或执行代次不一致')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        updatedAt: now,
+        articlePublishing: {
+          ...publishing,
+          assets: publishing.assets.map((candidate) =>
+            candidate.id === asset.id
+              ? {
+                  ...candidate,
+                  status: 'uploaded' as const,
+                  platformUrl: input.platformUrl,
+                  verifiedAt: now,
+                  uploadAttempts: candidate.uploadAttempts.map((attempt, index) =>
+                    index === candidate.uploadAttempts.length - 1
+                      ? {
+                          ...attempt,
+                          status: 'succeeded' as const,
+                          finishedAt: now,
+                          error: undefined,
+                          evidence: [
+                            ...attempt.evidence,
+                            `恢复即刻原生上传回执；文件名、大小、修改时间与 ${input.platformUrl} 唯一对应`,
+                          ].slice(-40),
+                        }
+                      : attempt,
+                  ),
+                }
+              : candidate,
+          ),
+          sideEffects: publishing.sideEffects.map((candidate) =>
+            candidate.key === effect.key
+              ? { ...candidate, status: 'verified' as const, observedAt: now }
+              : candidate,
+          ),
+        },
+      })
+    })
+  }
+
   recordXiaohongshuSubmissionReceipt(
     input: {
       affairId: string
@@ -1284,6 +1380,159 @@ export class WebAffairService {
     })
   }
 
+  /** Main-only recovery of one exact visible Jike feed card after a result-unknown dispatch. */
+  recordJikePublicationLocation(
+    input: {
+      workspaceId: string
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      launchOperationId: string
+      accountId: string
+      url: string
+      imageUrls: string[]
+    },
+    isCurrent: () => boolean,
+  ) {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const anchor = parseJikePublicationUrl(input.url)
+      const effects =
+        publishing?.sideEffects.filter(
+          (effect) =>
+            effect.kind === 'publish' &&
+            effect.attemptId === input.attemptId &&
+            Boolean(effect.dispatchedAt),
+        ) ?? []
+      const imageIds = input.imageUrls.map(jikeImageIdentity)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'jike' ||
+        !isCurrent() ||
+        publishing.composer?.allowPublish !== true ||
+        publishing.composer.platformAccountId !== input.accountId ||
+        !anchor ||
+        ('username' in anchor && anchor.username !== input.accountId) ||
+        found.attempt.executionGeneration !== input.executionGeneration ||
+        found.attempt.launchOperationId !== input.launchOperationId ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentStepId !== 'verify-publication' ||
+        !['preparing', 'running-ai'].includes(found.attempt.status) ||
+        publishing.publication.status !== 'result-unknown' ||
+        effects.length !== 1 ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effects[0].status) ||
+        !imageIds.length ||
+        imageIds.some((id) => !id) ||
+        new Set(imageIds).size !== imageIds.length ||
+        imageIds.length !== publishing.assets.length ||
+        publishing.assets.some(
+          (asset, index) =>
+            !asset.platformUrl || jikeImageIdentity(asset.platformUrl) !== imageIds[index],
+        ) ||
+        (publishing.publication.url && publishing.publication.url !== anchor.url)
+      )
+        return this.transitionError(
+          '即刻公开结果未对应原账号、本次单次提交及全部原图，禁止认领或重发',
+        )
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          publication: { ...publishing.publication, url: anchor.url, observedAt: now },
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+              ? {
+                  ...checkpoint,
+                  status: 'completed' as const,
+                  finishedAt: now,
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    `main 已从原账号信息流核验冻结全文及全部上传图片；只读恢复 · ${anchor.url}`,
+                  ].slice(-40),
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((effect) =>
+            effect.key === effects[0].key
+              ? { ...effect, status: 'verified' as const, observedAt: now }
+              : effect,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
+  recordJikeSubmissionReceipt(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      browserTaskRunId: string
+      sideEffectKey: string
+      accountId: string
+      postId: string
+      url: string
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find(
+        (candidate) => candidate.key === input.sideEffectKey,
+      )
+      const anchor = parseJikePublicationUrl(input.url)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'jike' ||
+        publishing.composer?.allowPublish !== true ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        (found.attempt.browserTaskRunId !== input.browserTaskRunId &&
+          effect?.browserTaskRunId !== input.browserTaskRunId) ||
+        publishing.composer.platformAccountId !== input.accountId ||
+        !anchor ||
+        anchor.id !== input.postId ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        effect.browserTaskRunId !== input.browserTaskRunId ||
+        !['dispatched', 'result-unknown', 'verified'].includes(effect.status)
+      )
+        return this.transitionError('即刻提交回执不属于本次文章及已派发发布动作')
+      if (publishing.publication.url && publishing.publication.url !== anchor.url)
+        return this.transitionError('即刻提交结果 ID 冲突，禁止替换或重发')
+      const now = this.timestamp()
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...setArticlePublishingPlanResult(publishing, {
+            id: 'publication.verify',
+            status: 'waiting',
+            observedAt: now,
+            generation: input.executionGeneration,
+            evidence: `平台已接受本次提交 · 作品 ${input.postId}`,
+            reason: '等待公开页账号、正文与逐张图片核验；禁止重复发布',
+          }),
+          publication: { ...publishing.publication, url: anchor.url, observedAt: now },
+          sideEffects: publishing.sideEffects.map((candidate) =>
+            candidate.key === effect.key
+              ? { ...candidate, status: 'verified' as const, observedAt: now }
+              : candidate,
+          ),
+        },
+        updatedAt: now,
+      })
+    })
+  }
+
   /** Main-only facts from the original observer. This never resets a publication or issues a permit. */
   recordBilibiliSubmissionObservation(
     input: {
@@ -1465,6 +1714,19 @@ export class WebAffairService {
       if (publishing.publication.url && publishing.publication.url !== url)
         return this.transitionError('B站提交结果 ID 冲突，禁止替换或重发')
       const now = this.timestamp()
+      const receiptEvidence = `B站原生提交回执已确认平台接受 · 作品 ${input.postId} · 账号 ${input.uid}`
+      const checkpoints = publishing.checkpoints.map((checkpoint) =>
+        checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+          ? {
+              ...checkpoint,
+              status: 'completed' as const,
+              finishedAt: now,
+              error: undefined,
+              evidence: [...checkpoint.evidence, receiptEvidence].slice(-40),
+            }
+          : checkpoint,
+      )
+      const nextStep = checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
       return this.persistAffair({
         ...found.affair,
         articlePublishing: {
@@ -1477,12 +1739,110 @@ export class WebAffairService {
             reason: '等待公开页账号、正文与逐张图片核验；禁止重复发布',
           }),
           publication: { ...publishing.publication, url, observedAt: now },
+          checkpoints,
           sideEffects: publishing.sideEffects.map((e) =>
             e.key === effect.key ? { ...e, status: 'verified' as const, observedAt: now } : e,
           ),
+          execution: {
+            ...publishing.execution,
+            currentStepId: nextStep?.stepId,
+          },
         },
         updatedAt: now,
       })
+    })
+  }
+
+  /** Resolve an unknown B站 send when its public page proves that the platform
+   * accepted the post but published a gallery with the wrong cardinality. */
+  recordBilibiliMismatchedPublication(
+    input: {
+      affairId: string
+      attemptId: string
+      executionGeneration: number
+      sideEffectKey: string
+      uid: string
+      url: string
+      titleMatches: true
+      bodyMatches: true
+      expectedImages: number
+      actualImages: number
+    },
+    workspaceId: string,
+  ) {
+    return this.enqueueScoped(input.affairId, workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      const effect = publishing?.sideEffects.find(
+        (candidate) => candidate.key === input.sideEffectKey,
+      )
+      const publication = parseBilibiliPublicationUrl(input.url)
+      if (
+        !found ||
+        !publishing ||
+        publishing.adapterId !== 'bilibili' ||
+        publishing.execution.status !== 'result-unknown' ||
+        publishing.publication.status !== 'result-unknown' ||
+        publishing.composer?.platformAccountId !== input.uid ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        !publication ||
+        !input.titleMatches ||
+        !input.bodyMatches ||
+        !Number.isInteger(input.expectedImages) ||
+        !Number.isInteger(input.actualImages) ||
+        input.expectedImages < 1 ||
+        input.actualImages < 1 ||
+        input.expectedImages === input.actualImages ||
+        !effect ||
+        effect.kind !== 'publish' ||
+        effect.status !== 'result-unknown' ||
+        effect.attemptId !== input.attemptId ||
+        effect.executionGeneration !== input.executionGeneration ||
+        !effect.dispatchedAt
+      )
+        return this.transitionError('B站异常公开结果不属于当前未知提交')
+      const now = this.timestamp()
+      const reason = `B站已公开冻结标题与全文，但图片数量错误：期望 ${input.expectedImages}，实际 ${input.actualImages}；${publication.url}`
+      const resolvedPublishing = setArticlePublishingPlanResult(
+        {
+          ...publishing,
+          publication: { status: 'published' as const, url: publication.url, observedAt: now },
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            checkpoint.stepId === 'verify-publication'
+              ? {
+                  ...checkpoint,
+                  status: 'failed' as const,
+                  finishedAt: now,
+                  evidence: [...checkpoint.evidence, reason].slice(-40),
+                  error: { code: 'PUBLIC_IMAGE_COUNT_MISMATCH', message: reason },
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((candidate) =>
+            candidate.key === effect.key
+              ? { ...candidate, status: 'verified' as const, observedAt: now }
+              : candidate,
+          ),
+        },
+        {
+          id: 'publication.verify',
+          status: 'failed',
+          observedAt: now,
+          generation: input.executionGeneration,
+          evidence: reason,
+          reason: '平台已接受并公开，但公开图集与冻结稿不一致；旧任务结束，禁止把异常作品计为成功',
+        },
+      )
+      return this.persistAffair(
+        this.reduceArticlePublishingLifecycle(
+          { ...found.affair, articlePublishing: resolvedPublishing, updatedAt: now },
+          found.attempt,
+          'failed',
+          now,
+          reason,
+          { publicationUrl: publication.url },
+        ),
+      )
     })
   }
 
@@ -1920,34 +2280,41 @@ export class WebAffairService {
       hostname,
     )
       ? 'bilibili'
-      : ['toutiao.com', 'www.toutiao.com', 'mp.toutiao.com'].includes(hostname)
-        ? 'toutiao'
-        : hostname === 'weibo.com'
-          ? 'weibo'
-          : hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
-            ? 'xiaohongshu'
-            : hostname === 'juejin.cn'
-              ? 'juejin'
-              : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
-                ? 'zhihu'
-                : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
-                  ? 'csdn'
-                  : null
+      : hostname === 'web.okjike.com'
+        ? 'jike'
+        : ['toutiao.com', 'www.toutiao.com', 'mp.toutiao.com'].includes(hostname)
+          ? 'toutiao'
+          : hostname === 'weibo.com'
+            ? 'weibo'
+            : hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com')
+              ? 'xiaohongshu'
+              : hostname === 'juejin.cn'
+                ? 'juejin'
+                : hostname === 'zhihu.com' || hostname.endsWith('.zhihu.com')
+                  ? 'zhihu'
+                  : hostname === 'csdn.net' || hostname.endsWith('.csdn.net')
+                    ? 'csdn'
+                    : null
     if (!adapterId) return this.resourceError('请选择支持的图文发布平台账号')
+    if (String(adapterId) === 'xiaohongshu') {
+      return this.invalid('小红书禁止自动化投稿；Studio 已停用新建、续写和提交小红书发布任务')
+    }
     const platformLabel =
       adapterId === 'bilibili'
         ? 'B站动态'
-        : adapterId === 'toutiao'
-          ? '头条微头条'
-          : adapterId === 'weibo'
-            ? '微博'
-            : adapterId === 'xiaohongshu'
-              ? '小红书'
-              : adapterId === 'juejin'
-                ? '掘金'
-                : adapterId === 'zhihu'
-                  ? '知乎'
-                  : 'CSDN'
+        : adapterId === 'jike'
+          ? '即刻'
+          : adapterId === 'toutiao'
+            ? '头条微头条'
+            : adapterId === 'weibo'
+              ? '微博'
+              : adapterId === 'xiaohongshu'
+                ? '小红书'
+                : adapterId === 'juejin'
+                  ? '掘金'
+                  : adapterId === 'zhihu'
+                    ? '知乎'
+                    : 'CSDN'
     const importedAnchor = input.existingDraft
       ? parsePlatformDraftAnchor(input.existingDraft.url, input.existingDraft.localDraftId)
       : null
@@ -1967,10 +2334,14 @@ export class WebAffairService {
         ))
     )
       return this.invalid('头条微头条使用原文首行标题及最多18张本地图片，每张只引用一次')
-    if (['weibo', 'bilibili'].includes(adapterId)) {
+    if (['weibo', 'bilibili', 'jike'].includes(adapterId)) {
       if (
         !input.composer ||
-        !/^\d{5,20}$/u.test(input.composer.platformAccountId) ||
+        !(adapterId === 'jike'
+          ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+              input.composer.platformAccountId,
+            )
+          : /^\d{5,20}$/u.test(input.composer.platformAccountId)) ||
         typeof input.composer.allowPublish !== 'boolean' ||
         input.existingDraft ||
         input.reviseDraftFromAffairId
@@ -1990,6 +2361,38 @@ export class WebAffairService {
           !['cancelled', 'failed', 'published'].includes(a.articlePublishing.execution.status),
       )
       for (const conflict of conflicts) {
+        let independentBilibiliDraft = false
+        if (adapterId === 'bilibili' && conflict.workspaceId === workspaceId) {
+          independentBilibiliDraft = await isIndependentBilibiliDraft(conflict, input.preview)
+          if (
+            !independentBilibiliDraft &&
+            conflict.workspaceRef.kind === 'local' &&
+            conflict.articlePublishing
+          ) {
+            const relocation = await findGitRelocatedArticleSource({
+              workspacePath: conflict.workspaceRef.path,
+              state: conflict.articlePublishing,
+            })
+            if (relocation) {
+              const relocatedStat = await stat(relocation.markdownPath)
+              const relocatedConflict: WebAffair = {
+                ...conflict,
+                articlePublishing: {
+                  ...conflict.articlePublishing,
+                  source: {
+                    ...conflict.articlePublishing.source,
+                    markdownPath: relocation.markdownPath,
+                    modifiedAt: relocatedStat.mtimeMs,
+                  },
+                },
+              }
+              independentBilibiliDraft = await isIndependentBilibiliDraft(
+                relocatedConflict,
+                input.preview,
+              )
+            }
+          }
+        }
         if (
           adapterId === 'weibo' &&
           conflict.workspaceId === workspaceId &&
@@ -1999,7 +2402,7 @@ export class WebAffairService {
         if (
           adapterId === 'bilibili' &&
           conflict.workspaceId === workspaceId &&
-          (await isIndependentBilibiliDraft(conflict, input.preview))
+          independentBilibiliDraft
         )
           continue
         return this.invalid(
@@ -2008,11 +2411,15 @@ export class WebAffairService {
             : '这个平台账号已有未结束任务；仅允许在旧发布已中断且原文未变时创建标题、文件和正文均不同的新稿，未知原稿仍只能核验',
         )
       }
-    } else if (input.composer) return this.invalid('只有微博和B站动态使用临时编辑器配置')
-    if (adapterId !== 'csdn' && !['weibo', 'bilibili'].includes(adapterId) && !importedAnchor)
+    } else if (input.composer) return this.invalid('只有微博、B站和即刻动态使用临时编辑器配置')
+    if (
+      adapterId !== 'csdn' &&
+      !['weibo', 'bilibili', 'jike'].includes(adapterId) &&
+      !importedAnchor
+    )
       return this.invalid('当前平台请提供已有草稿地址和原账号标识；不会新建替代稿')
     if (
-      ['zhihu', 'weibo', 'toutiao', 'bilibili'].includes(adapterId) &&
+      ['zhihu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(adapterId) &&
       (input.fields.summary ||
         input.fields.tags.length ||
         input.fields.category ||
@@ -2095,7 +2502,7 @@ export class WebAffairService {
         ? BILIBILI_ARTICLE_PUBLISHING_PLAN
         : adapterId === 'toutiao'
           ? TOUTIAO_ARTICLE_PUBLISHING_PLAN
-          : adapterId === 'weibo'
+          : ['weibo', 'jike'].includes(adapterId)
             ? WEIBO_ARTICLE_PUBLISHING_PLAN
             : adapterId === 'xiaohongshu'
               ? XIAOHONGSHU_ARTICLE_PUBLISHING_PLAN
@@ -3036,7 +3443,7 @@ export class WebAffairService {
           success: false,
           error: {
             code: 'EVIDENCE_REQUIRED',
-            message: '文章发布成功必须由当前 CSDN 页面适配器读回并核验',
+            message: '文章发布成功必须由当前平台页面适配器读回并核验',
           },
         }
       }
@@ -3049,7 +3456,10 @@ export class WebAffairService {
       if (!isPlatformPublicationUrl(input.url, found.affair.articlePublishing.adapterId)) {
         return {
           success: false,
-          error: { code: 'EVIDENCE_REQUIRED', message: '文章发布 URL 不是可复核的 CSDN 文章地址' },
+          error: {
+            code: 'EVIDENCE_REQUIRED',
+            message: '文章发布 URL 不是当前平台可复核的公开作品地址',
+          },
         }
       }
       if (
@@ -4335,41 +4745,80 @@ export class WebAffairService {
     const launchOperationId = randomUUID()
     const publishing = found.affair.articlePublishing
     const carryUnusedRetry = canCarryUnusedBilibiliRetry(publishing)
+    const receiptBoundBilibiliPublish =
+      publishing.adapterId === 'bilibili' &&
+      publishing.publication.status === 'result-unknown' &&
+      Boolean(parseBilibiliPublicationUrl(publishing.publication.url ?? '')) &&
+      publishing.sideEffects.filter(
+        (effect) =>
+          effect.kind === 'publish' &&
+          effect.attemptId === found.attempt.id &&
+          effect.status === 'verified' &&
+          Boolean(effect.dispatchedAt),
+      ).length === 1
     const resultVerificationOnly =
       !retryEffectKey &&
       !carryUnusedRetry &&
       publishing.execution.status === 'result-unknown' &&
       (publishing.publication.status === 'result-unknown' ||
+        receiptBoundBilibiliPublish ||
         publishing.sideEffects.some(
           (effect) =>
             effect.kind === 'publish' &&
             (effect.status === 'dispatched' || effect.status === 'result-unknown'),
         ))
     const checkpoints = publishing.checkpoints.map((checkpoint) =>
-      retryEffectKey
+      receiptBoundBilibiliPublish &&
+      checkpoint.stepId === 'publish' &&
+      checkpoint.status !== 'completed'
         ? {
             ...checkpoint,
-            status: 'pending' as const,
-            startedAt: undefined,
-            finishedAt: undefined,
-            outputRefs: undefined,
-            details: [],
+            status: 'completed' as const,
+            finishedAt: now,
             error: undefined,
             evidence: [
               ...checkpoint.evidence,
-              '用户另行授权本稿重建；上代证据不能证明新现场完成',
+              `恢复时确认 B站原生成功回执及唯一公开地址；发布步骤已结算 · ${publishing.publication.url}`,
             ].slice(-40),
           }
-        : ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(checkpoint.status)
+        : retryEffectKey
           ? {
               ...checkpoint,
-              status: 'needs-reconcile' as const,
+              status: 'pending' as const,
+              startedAt: undefined,
               finishedAt: undefined,
-              ...(checkpoint.stepId === 'verify-publication'
-                ? { resumePolicy: 'reconcile-then-run' as const }
-                : {}),
+              outputRefs: undefined,
+              details: [],
+              error: undefined,
+              evidence: [
+                ...checkpoint.evidence,
+                '用户另行授权本稿重建；上代证据不能证明新现场完成',
+              ].slice(-40),
             }
-          : checkpoint,
+          : ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(
+                checkpoint.status,
+              )
+            ? {
+                ...checkpoint,
+                status: 'needs-reconcile' as const,
+                finishedAt: undefined,
+                ...(checkpoint.stepId === 'verify-publication'
+                  ? { resumePolicy: 'reconcile-then-run' as const }
+                  : {}),
+              }
+            : checkpoint.status === 'failed'
+              ? {
+                  ...checkpoint,
+                  status: 'pending' as const,
+                  startedAt: undefined,
+                  finishedAt: undefined,
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    '用户从中断处继续；上一执行代次已明确失败，本代重新执行该步骤',
+                  ].slice(-40),
+                }
+              : checkpoint,
     )
     const currentStep = resultVerificationOnly
       ? checkpoints.find((checkpoint) => checkpoint.stepId === 'verify-publication')
@@ -5529,7 +5978,7 @@ export class WebAffairService {
         return this.evidenceRequired('账号核验必须保存真实 CSDN 平台账号标识')
       }
       if (
-        !['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        !['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
         ['upload-assets', 'fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
         (!reporter.trustedPageEvidence.platformAccountId ||
           !reporter.trustedPageEvidence.draftId ||
@@ -5544,7 +5993,7 @@ export class WebAffairService {
         return this.transitionError('仍有正文图片未完成页面核验，不能完成上传步骤')
       }
       if (
-        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
         (reporter.trustedPageEvidence.platformAccountId !==
           publishing.composer?.platformAccountId ||
           (['fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
@@ -5552,7 +6001,7 @@ export class WebAffairService {
       )
         return this.evidenceRequired('图文动态完成步骤必须核验目标 UID、冻结正文和逐图现场')
       if (
-        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
         ['publish', 'verify-publication'].includes(input.stepId) &&
         publishing.composer?.allowPublish !== true
       )
@@ -5578,7 +6027,7 @@ export class WebAffairService {
       // An already matching Zhihu title is a read-only branch. Main must have
       // observed both the skipped write and its current-generation verification.
       const verifiedWeiboPreparation =
-        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
         ['fill-fields', 'save-draft'].includes(input.stepId) &&
         reporter.trustedPageEvidence.bodyMatchesFrozen === true
       // A recovered Toutiao draft may already contain the complete frozen article.
@@ -5669,7 +6118,7 @@ export class WebAffairService {
         const publicationUrl = input.outputRefs?.['publicationUrl']
         const publishEffect = eligibleEffects.find((effect) => effect.kind === 'publish')
         if (!publicationUrl || !isPlatformPublicationUrl(publicationUrl, publishing.adapterId)) {
-          return this.transitionError('发布核验必须返回可复核的 CSDN 文章 URL')
+          return this.transitionError('发布核验必须返回当前平台可复核的公开作品 URL')
         }
         if (
           !publishEffect ||
@@ -5783,7 +6232,7 @@ export class WebAffairService {
         detailedPublishing = setArticlePublishingPlanResult(detailedPublishing, {
           id: 'save.dispatch',
           status: 'skipped',
-          evidence: ['weibo', 'bilibili'].includes(publishing.adapterId)
+          evidence: ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId)
             ? '当前动态流程没有平台保存动作，不声明草稿已保存'
             : '已有同稿自动保存的可信回读，无需再次点击保存',
           observedAt: now,
@@ -5802,7 +6251,7 @@ export class WebAffairService {
         ...detailedPublishing,
         draft:
           input.status === 'completed' &&
-          !['weibo', 'bilibili'].includes(publishing.adapterId) &&
+          !['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
           reporter.trustedPageEvidence?.platformAccountId
             ? {
                 ...publishing.draft,
@@ -6076,7 +6525,7 @@ export class WebAffairService {
         input.saveState === 'saved')
     if (
       completed &&
-      ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+      ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
       input.platformAccountId !== publishing.composer?.platformAccountId
     )
       return this.evidenceRequired('动态页面真实 UID 与任务账号不一致')
@@ -6086,7 +6535,7 @@ export class WebAffairService {
         : current.checkpointId === 'verify-account'
           ? Boolean(input.platformAccountId) && exactRecoveredDraftProven
           : (input.pageKind === 'editor' && exactRecoveredDraftProven) ||
-            (['weibo', 'toutiao', 'bilibili'].includes(publishing.adapterId) &&
+            (['weibo', 'toutiao', 'bilibili', 'jike'].includes(publishing.adapterId) &&
               ['publish', 'verify-publication'].includes(current.checkpointId) &&
               input.pageKind === 'published-article' &&
               Boolean(publishing.publication.url) &&
@@ -6577,9 +7026,18 @@ export class WebAffairService {
       publishing.draft?.recovery?.status === 'verified' &&
       resolution === 'present' &&
       Boolean(observation)
+    const recoveringLostBilibiliUpload =
+      publishing.adapterId === 'bilibili' &&
+      resolution === 'missing' &&
+      asset.status === 'uploaded' &&
+      publishing.execution.status === 'interrupted' &&
+      publishing.execution.currentStepId === 'upload-assets' &&
+      publishing.publication.status === 'not-started'
     if (
       asset.kind !== 'local' ||
-      (!importingExisting && !['result-unknown', 'reconciling'].includes(asset.status))
+      (!importingExisting &&
+        !recoveringLostBilibiliUpload &&
+        !['result-unknown', 'reconciling'].includes(asset.status))
     ) {
       return this.transitionError('只有结果未知的本地图片可以人工确认')
     }
@@ -6601,7 +7059,11 @@ export class WebAffairService {
         ? {
             ...candidate,
             status: nextStatus,
-            ...(observation ? { platformUrl: observation.platformUrl } : {}),
+            ...(observation
+              ? { platformUrl: observation.platformUrl }
+              : resolution === 'missing'
+                ? { platformUrl: undefined, verifiedAt: undefined }
+                : {}),
             manualResolution: { status: resolution, resolvedAt: now },
             verifiedAt: resolution === 'present' ? now : candidate.verifiedAt,
             uploadAttempts: candidate.uploadAttempts.map((attempt, index) =>
@@ -6661,6 +7123,306 @@ export class WebAffairService {
         ),
       ),
       updatedAt: now,
+    })
+  }
+
+  rebuildCorruptedJikeComposer(input: {
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    nativeFileName: string
+    nativePlatformUrl: string
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      if (!found || !publishing || found.affair.kind !== 'article-publishing')
+        return this.notFound('文章发布 Attempt 不存在')
+      const nativeAsset = publishing.assets.find(
+        (asset) => basename(asset.sourcePath) === input.nativeFileName,
+      )
+      const hasMissingVerifiedAsset = publishing.assets.some(
+        (asset) =>
+          asset.id !== nativeAsset?.id &&
+          asset.status === 'uploaded' &&
+          Boolean(asset.platformUrl && asset.verifiedAt),
+      )
+      if (
+        publishing.adapterId !== 'jike' ||
+        publishing.publication.status !== 'not-started' ||
+        publishing.execution.status !== 'preparing' ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+        publishing.execution.currentStepId !== 'upload-assets' ||
+        publishing.assets.length === 0 ||
+        !nativeAsset ||
+        !['reconciling', 'result-unknown'].includes(nativeAsset.status) ||
+        nativeAsset.platformUrl ||
+        !hasMissingVerifiedAsset ||
+        !isPlatformImageUrl('jike', input.nativePlatformUrl) ||
+        publishing.sideEffects.some((effect) => effect.kind === 'publish')
+      )
+        return this.transitionError('当前即刻事务不满足重复附件 ID 的安全重建条件')
+
+      const now = this.timestamp()
+      const rewindSteps = new Set([
+        'upload-assets',
+        'fill-body',
+        'fill-fields',
+        'save-draft',
+        'publish',
+        'verify-publication',
+      ])
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          assets: publishing.assets.map((asset) => ({
+            ...asset,
+            status: 'pending' as const,
+            platformUrl: undefined,
+            verifiedAt: undefined,
+            manualResolution: { status: 'missing' as const, resolvedAt: now },
+            uploadAttempts: [],
+          })),
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            rewindSteps.has(checkpoint.stepId)
+              ? {
+                  ...checkpoint,
+                  status: 'pending' as const,
+                  startedAt: undefined,
+                  finishedAt: undefined,
+                  outputRefs: undefined,
+                  details: [],
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    `即刻原生草稿仅保留 ${input.nativeFileName}，先前附件已被重复 ID 覆盖；尚未发送，回到空图集顺序重建`,
+                  ].slice(-40),
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((effect) =>
+            effect.kind === 'upload-asset'
+              ? { ...effect, status: 'rejected' as const, observedAt: now }
+              : effect,
+          ),
+          execution: { ...publishing.execution, currentStepId: 'upload-assets' },
+        },
+        events: this.appendEvent(
+          found.affair,
+          this.event(
+            'node-status-changed',
+            '即刻未发送图集出现重复附件 ID；Studio 已授权 Agent 清空附件并从第一张顺序重建',
+            now,
+            { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+          ),
+        ),
+        updatedAt: now,
+      })
+    })
+  }
+
+  reconcileRejectedJikeBodyWrite(input: {
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    nativeUploads: Array<{ fileName: string; platformUrl: string }>
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      if (!found || !publishing || found.affair.kind !== 'article-publishing')
+        return this.notFound('文章发布 Attempt 不存在')
+      const exactGallery =
+        input.nativeUploads.length === publishing.assets.length &&
+        publishing.assets.every(
+          (asset, index) =>
+            asset.status === 'uploaded' &&
+            Boolean(asset.platformUrl && asset.verifiedAt) &&
+            basename(asset.sourcePath) === input.nativeUploads[index]?.fileName &&
+            asset.platformUrl === input.nativeUploads[index]?.platformUrl &&
+            isPlatformImageUrl('jike', input.nativeUploads[index]?.platformUrl ?? ''),
+        )
+      const unknownBodyEffects = publishing.sideEffects.filter(
+        (effect) =>
+          effect.kind === 'save-draft' &&
+          effect.targetId.startsWith('autosave:fill-body:') &&
+          effect.status === 'result-unknown',
+      )
+      if (
+        publishing.adapterId !== 'jike' ||
+        publishing.publication.status !== 'not-started' ||
+        publishing.execution.status !== 'preparing' ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+        publishing.execution.currentStepId !== 'fill-body' ||
+        !exactGallery ||
+        unknownBodyEffects.length !== 1 ||
+        publishing.sideEffects.some((effect) => effect.kind === 'publish')
+      )
+        return this.transitionError('当前即刻事务不满足正文未派发的安全对账条件')
+
+      const now = this.timestamp()
+      const rewindSteps = new Set([
+        'fill-body',
+        'fill-fields',
+        'save-draft',
+        'publish',
+        'verify-publication',
+      ])
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            rewindSteps.has(checkpoint.stepId)
+              ? {
+                  ...checkpoint,
+                  status: 'pending' as const,
+                  startedAt: undefined,
+                  finishedAt: undefined,
+                  outputRefs: undefined,
+                  details: [],
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    '即刻原生未发送草稿保留完整三图且正文为空；先前正文动作在平台写入前被拒绝，回到正文填写',
+                  ].slice(-40),
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((effect) =>
+            effect.key === unknownBodyEffects[0].key
+              ? { ...effect, status: 'rejected' as const, observedAt: now }
+              : effect,
+          ),
+          execution: { ...publishing.execution, currentStepId: 'fill-body' },
+        },
+        events: this.appendEvent(
+          found.affair,
+          this.event(
+            'node-status-changed',
+            '即刻原生草稿已证明正文写入未发生；完整三图保留，Studio 回到正文填写步骤',
+            now,
+            { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+          ),
+        ),
+        updatedAt: now,
+      })
+    })
+  }
+
+  rebuildLostBilibiliComposer(input: {
+    workspaceId: string
+    affairId: string
+    attemptId: string
+    executionGeneration: number
+    launchOperationId: string
+    observedTitle: string
+  }): Promise<WebAffairOperationResult<WebAffair>> {
+    return this.enqueueScoped(input.affairId, input.workspaceId, async () => {
+      const found = this.findAttempt(input.affairId, input.attemptId)
+      const publishing = found?.affair.articlePublishing
+      if (!found || !publishing || found.affair.kind !== 'article-publishing')
+        return this.notFound('文章发布 Attempt 不存在')
+      if (
+        publishing.adapterId !== 'bilibili' ||
+        publishing.publication.status !== 'not-started' ||
+        publishing.execution.status !== 'preparing' ||
+        publishing.execution.currentAttemptId !== input.attemptId ||
+        publishing.execution.currentGeneration !== input.executionGeneration ||
+        publishing.execution.currentLaunchOperationId !== input.launchOperationId ||
+        !['upload-assets', 'fill-body', 'fill-fields', 'save-draft', 'publish'].includes(
+          publishing.execution.currentStepId ?? '',
+        ) ||
+        !['', bilibiliPublishingTitle(publishing.fields.title)].includes(input.observedTitle) ||
+        publishing.assets.length === 0 ||
+        !(
+          publishing.assets.every(
+            (asset) =>
+              asset.status === 'uploaded' && Boolean(asset.platformUrl && asset.verifiedAt),
+          ) ||
+          publishing.assets.every(
+            (asset) =>
+              asset.status === 'pending' && !asset.platformUrl && asset.uploadAttempts.length === 0,
+          )
+        ) ||
+        publishing.sideEffects.some((effect) => effect.kind === 'publish')
+      )
+        return this.transitionError('当前 B站事务不满足临时编辑器安全重建条件')
+
+      const now = this.timestamp()
+      const rewindSteps = new Set([
+        'upload-assets',
+        'fill-body',
+        'fill-fields',
+        'save-draft',
+        'publish',
+        'verify-publication',
+      ])
+      return this.persistAffair({
+        ...found.affair,
+        articlePublishing: {
+          ...publishing,
+          assets: publishing.assets.map((asset) => ({
+            ...asset,
+            status: 'pending' as const,
+            platformUrl: undefined,
+            verifiedAt: undefined,
+            manualResolution: undefined,
+            uploadAttempts: [],
+          })),
+          checkpoints: publishing.checkpoints.map((checkpoint) =>
+            rewindSteps.has(checkpoint.stepId)
+              ? {
+                  ...checkpoint,
+                  status: 'pending' as const,
+                  startedAt: undefined,
+                  finishedAt: undefined,
+                  outputRefs: undefined,
+                  details: [],
+                  error: undefined,
+                  evidence: [
+                    ...checkpoint.evidence,
+                    '同账号 B站临时编辑器在应用重启后被核验为空；尚无发布副作用，回到上传步骤重建',
+                  ].slice(-40),
+                }
+              : checkpoint,
+          ),
+          sideEffects: publishing.sideEffects.map((effect) =>
+            effect.kind === 'save-draft' &&
+            effect.targetId.startsWith('autosave:fill-fields:title:') &&
+            effect.status === 'result-unknown'
+              ? {
+                  ...effect,
+                  status: input.observedTitle ? ('verified' as const) : ('rejected' as const),
+                  observedAt: now,
+                }
+              : effect,
+          ),
+          execution: {
+            ...publishing.execution,
+            currentStepId: 'upload-assets',
+          },
+        },
+        events: this.appendEvent(
+          found.affair,
+          this.event(
+            'node-status-changed',
+            '同账号 B站临时编辑器已清空且从未派发发布；Studio 回到上传步骤重建现场',
+            now,
+            { nodeId: found.attempt.nodeId, attemptId: found.attempt.id },
+          ),
+        ),
+        updatedAt: now,
+      })
     })
   }
 
@@ -6937,7 +7699,7 @@ export class WebAffairService {
     }
     if (kind === 'publish') {
       if (
-        ['weibo', 'bilibili'].includes(publishing.adapterId) &&
+        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
         publishing.composer?.allowPublish !== true
       )
         return this.transitionError('本任务没有授权动态提交')
@@ -7664,7 +8426,7 @@ export class WebAffairService {
 
 function isPlatformPublicationUrl(
   rawUrl: string,
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili',
+  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike',
 ): boolean {
   try {
     const url = new URL(rawUrl)
@@ -7673,6 +8435,7 @@ function isPlatformPublicationUrl(
       ((platform === 'toutiao' && Boolean(parseToutiaoPublicationUrl(rawUrl))) ||
         (platform === 'weibo' && Boolean(parseWeiboPublicationUrl(rawUrl))) ||
         (platform === 'bilibili' && Boolean(parseBilibiliPublicationUrl(rawUrl))) ||
+        (platform === 'jike' && Boolean(parseJikePublicationUrl(rawUrl))) ||
         (platform === 'xiaohongshu' &&
           url.origin === 'https://www.xiaohongshu.com' &&
           /^\/explore\/[a-f\d]{24}\/?$/iu.test(url.pathname)) ||

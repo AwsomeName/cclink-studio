@@ -463,14 +463,14 @@ export function articlePublishingDetailDefinitions(
       if (row.id === 'save.verify')
         row.completion = '同账号本地原稿 ID、标题、完整正文及图集回读一致'
     }
-  if (publishing.adapterId === 'weibo' || publishing.adapterId === 'bilibili') {
+  if (['weibo', 'bilibili', 'jike'].includes(publishing.adapterId ?? '')) {
     const omitted = /^(initial\.|recovery\.)/u
     for (let i = rows.length - 1; i >= 0; i--) if (omitted.test(rows[i].id)) rows.splice(i, 1)
     for (const row of rows) {
       row.entry = row.entry.replace(/原草稿/g, '当前编辑现场').replace(/原 draftId/g, '现场身份')
       row.next = row.next.replace(/平台保存/g, '当前正文回读').replace(/正文保存/g, '正文现场')
       if (row.id === 'page.inspect') {
-        row.action = `读取${publishing.adapterId === 'bilibili' ? 'B站' : '微博'}真实 UID 与编辑器`
+        row.action = `读取${publishing.adapterId === 'bilibili' ? 'B站' : publishing.adapterId === 'jike' ? '即刻' : '微博'}真实 UID 与编辑器`
         row.completion = 'UID 与任务目标一致；正文区域唯一；图集可完整枚举'
       }
       if (row.id === 'body.verify') {

@@ -144,6 +144,8 @@ export interface BilibiliSubmissionObservation {
     | 'multiple-requests'
   responseStatus?: number
   platformCode?: number
+  /** Safe public identifier returned by B站 even when payload reconciliation fails. */
+  postId?: string
   transportFailed?: boolean
   observedAt: string
 }
@@ -278,7 +280,15 @@ export interface ArticlePublishingState {
     authorizedAt: string
   }
   composer?: ArticlePublishingComposer
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+  adapterId:
+    | 'csdn'
+    | 'zhihu'
+    | 'juejin'
+    | 'xiaohongshu'
+    | 'weibo'
+    | 'toutiao'
+    | 'bilibili'
+    | 'jike'
   adapterVersion: 1
   source: {
     markdownPath: string

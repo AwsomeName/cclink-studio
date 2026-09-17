@@ -208,6 +208,10 @@ const sideEffectSchema = z
           .optional(),
         responseStatus: z.number().int().min(100).max(599).optional(),
         platformCode: z.number().int().safe().optional(),
+        postId: z
+          .string()
+          .regex(/^\d{10,22}$/u)
+          .optional(),
         transportFailed: z.boolean().optional(),
         observedAt: timestampSchema,
       })
@@ -330,14 +334,25 @@ const operationTransitionSchema = z
 
 const articlePublishingComposerSchema = z
   .object({
-    platformAccountId: z.string().regex(/^\d{5,20}$/u),
+    platformAccountId: z
+      .string()
+      .regex(/^(?:\d{5,20}|[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu),
     allowPublish: z.boolean(),
   })
   .strict()
 
 export const articlePublishingStateSchema = z
   .object({
-    adapterId: z.enum(['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili']),
+    adapterId: z.enum([
+      'csdn',
+      'zhihu',
+      'juejin',
+      'xiaohongshu',
+      'weibo',
+      'toutiao',
+      'bilibili',
+      'jike',
+    ]),
     composer: articlePublishingComposerSchema.optional(),
     adapterVersion: z.literal(1),
     source: z
@@ -463,14 +478,14 @@ export const articlePublishingStateSchema = z
   .strict()
   .superRefine((state, ctx) => {
     if (
-      ['weibo', 'bilibili'].includes(state.adapterId)
+      ['weibo', 'bilibili', 'jike'].includes(state.adapterId)
         ? !state.composer || !!state.draft
         : !!state.composer
     )
       ctx.addIssue({
         code: 'custom',
         path: ['composer'],
-        message: '微博必须使用临时编辑器配置，不得伪造草稿身份；其他平台不使用此配置',
+        message: '动态平台必须使用临时编辑器配置，不得伪造草稿身份；其他平台不使用此配置',
       })
     for (const id of [
       state.draft?.platformDraftId,

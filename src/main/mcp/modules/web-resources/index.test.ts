@@ -2,6 +2,76 @@ import { describe, expect, it, vi } from 'vitest'
 import { accountNavigationOrigins, WebResourceToolModule } from '.'
 
 describe('WebResourceToolModule', () => {
+  it('keeps the exact main-bound publishing BrowserTask when the Agent opens the same account again', async () => {
+    const cancelTaskForConversation = vi.fn()
+    const requestLaunch = vi.fn()
+    const existing = {
+      id: 'existing-task',
+      tabId: 'existing-tab',
+      correlation: {
+        conversationId: 'conversation',
+        agentRunId: 'run',
+        accountId: 'selected-account',
+        affairId: '11111111-1111-4111-8111-111111111111',
+        affairAttemptId: '22222222-2222-4222-8222-222222222222',
+      },
+    }
+    const module = new WebResourceToolModule(
+      {
+        resolveLaunch: () => ({
+          success: true,
+          data: {
+            entryUrl: 'https://passport.bilibili.com/register',
+            browserProfileId: 'original-profile',
+          },
+        }),
+        getSnapshot: () => ({
+          success: true,
+          data: {
+            accounts: [
+              { id: 'selected-account', websiteId: 'site', principalId: 'person', label: 'B站' },
+            ],
+            websites: [{ id: 'site', name: 'B站' }],
+            principals: [{ id: 'person', name: '作者' }],
+          },
+        }),
+      } as never,
+      {
+        launchCoordinator: { requestLaunch } as never,
+        browserManager: {} as never,
+        browserTaskRuntime: {
+          getActiveTaskForConversation: vi.fn(() => existing),
+          cancelTaskForConversation,
+        } as never,
+      },
+    )
+
+    await expect(
+      module.execute(
+        'web_account_open',
+        {
+          accountId: 'selected-account',
+          affairId: '11111111-1111-4111-8111-111111111111',
+          attemptId: '22222222-2222-4222-8222-222222222222',
+        },
+        {
+          conversationId: 'conversation',
+          agentRunId: 'run',
+          trustedWorkspace: {
+            kind: 'local',
+            rootPath: '/workspace',
+            workspaceKey: '/workspace',
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
+      success: true,
+      data: { tabId: 'existing-tab', browserTaskId: 'existing-task' },
+    })
+    expect(cancelTaskForConversation).not.toHaveBeenCalled()
+    expect(requestLaunch).not.toHaveBeenCalled()
+  })
+
   it('binds B站 navigation scope to the selected account and its exact visible Profile', async () => {
     const startTask = vi.fn().mockReturnValue({ id: 'task' })
     const waitForViewBinding = vi.fn().mockResolvedValue(true)
@@ -30,7 +100,11 @@ describe('WebResourceToolModule', () => {
           requestLaunch: vi.fn().mockResolvedValue({ tabId: 'visible-tab' }),
         } as never,
         browserManager: { waitForViewBinding } as never,
-        browserTaskRuntime: { cancelTaskForConversation: vi.fn(), startTask } as never,
+        browserTaskRuntime: {
+          getActiveTaskForConversation: vi.fn(() => null),
+          cancelTaskForConversation: vi.fn(),
+          startTask,
+        } as never,
       },
     )
     const context = {
@@ -286,6 +360,7 @@ describe('WebResourceToolModule', () => {
       launchCoordinator: { requestLaunch } as never,
       browserManager: { waitForViewBinding } as never,
       browserTaskRuntime: {
+        getActiveTaskForConversation: vi.fn(() => null),
         cancelTaskForConversation: vi.fn(),
         startTask,
         updateCorrelation,

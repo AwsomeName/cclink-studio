@@ -4,10 +4,16 @@ import {
   observeBilibiliSubmission,
   finishBilibiliSubmission,
 } from './bilibili-publication'
-import { readBilibiliComposer } from './bilibili-publishing-adapter'
+import { bilibiliPublishingTitle, readBilibiliComposer } from './bilibili-publishing-adapter'
 import { observeBilibiliImageUpload } from './bilibili-upload-receipt'
 import { parseToutiaoPublicationUrl } from './toutiao-publication'
 import { readWeiboComposer } from './weibo-publishing-adapter'
+import { readJikeComposer } from './jike-publishing-adapter'
+import {
+  jikeImageIdentity,
+  observeJikeSubmission,
+  parseJikePublicationUrl,
+} from './jike-publication'
 import { observeToutiaoSubmission } from './toutiao-submission'
 import { readToutiaoPage, TOUTIAO_DISABLE_MUSIC_SELECTOR } from './toutiao-publishing-adapter'
 import {
@@ -23,7 +29,11 @@ import {
 } from './xiaohongshu-publish-control'
 import { PublishingAdapter, publishingPlatform } from './publishing-adapter'
 import { randomUUID } from 'node:crypto'
-import { prepareArticleBody, prepareArticleMarkdown } from './article-body'
+import {
+  prepareArticleBody,
+  prepareArticleMarkdown,
+  prepareArticleUnresolvedBody,
+} from './article-body'
 import type { BrowserTaskRun } from '../../shared/ipc/browser'
 import type { ToolExecutionContext } from '../mcp/types'
 import type { PlaywrightBridge } from '../playwright/playwright-bridge'
@@ -63,7 +73,7 @@ export type ArticlePublishingBrowserActionDecision =
   | { kind: 'unknown'; reason: string }
 
 interface ArticlePublishingExecutionScope {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   workspaceId: string
   workspacePath: string
   affairId: string
@@ -89,6 +99,7 @@ interface ArticlePublishingExecutionScope {
   allowPublish?: boolean
   publicationUrl?: string
   bilibiliRetryAuthorized?: boolean
+  jikeGalleryResetAllowed?: boolean
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
   executionGeneration: number
@@ -111,6 +122,8 @@ interface ArticlePublishingExecutionScope {
     kind: 'local' | 'remote'
     sourcePath: string
     displayPath: string
+    size?: number
+    modifiedAt?: number
     platformUrl?: string
     manualResolution?: { status: 'present' | 'missing'; resolvedAt: string }
     status:
@@ -130,6 +143,8 @@ interface ArticlePublishingExecutionScope {
 }
 
 export interface ArticlePublishingPageInspection extends CsdnPageProbe {
+  /** Main-owned checkpoint the current Agent run is allowed to report. */
+  currentStepId?: string
   bodyMatchesFrozen?: boolean
   matchedAssets: Record<string, string>
 }
@@ -161,6 +176,7 @@ interface ResolveExecutionInput {
 const HUMAN_ONLY_CONTROL =
   /支付|付款|购买|下单|充值|删除|注销|撤回|签署|签名|授权|权限|所有权|实名认证|人脸|验证码|扫码|同意|接受|原创|转载|翻译|版权|\bpay\b|purchase|delete|withdraw|sign|authorize|ownership|agree\s*(?:to\s*)?(?:terms|agreement)/iu
 const PAGE_MUTATION_ACTIONS = new Set([
+  'hover',
   'click',
   'fill',
   'select',
@@ -412,13 +428,80 @@ export class ArticlePublishingBrowserPolicy {
       // never inferred from the logged-in header on someone else's public page.
       probe = { ...probe, platformAccountId: scope.expectedPlatformAccountId }
     }
-    if (['weibo', 'bilibili'].includes(scope.adapterId)) {
+    if (scope.adapterId === 'jike' && probe.pageKind === 'published-article') {
+      const receipt = parseJikePublicationUrl(scope.publicationUrl ?? '')
+      if (
+        !receipt ||
+        receipt.id !== probe.publishedArticleId ||
+        receipt.url !== parseJikePublicationUrl(probe.url)?.url ||
+        !scope.expectedPlatformAccountId
+      )
+        return publishingEvidenceError('即刻动态尚未与本账号的单次提交回执绑定')
+      probe = { ...probe, platformAccountId: scope.expectedPlatformAccountId }
+    }
+    if (
+      scope.adapterId === 'jike' &&
+      !scope.jikeGalleryResetAllowed &&
+      probe.pageKind === 'editor' &&
+      probe.editor.imageEnumerationComplete &&
+      probe.editor.recoveredUploads?.length
+    ) {
+      for (const asset of scope.assets.filter(
+        (candidate) => candidate.status === 'reconciling' && !candidate.platformUrl,
+      )) {
+        const receipt = probe.editor.recoveredUploads.find(
+          (candidate) =>
+            candidate.fileName === asset.sourcePath.split('/').at(-1) &&
+            probe.editor.images.some(
+              (image) => image.loaded && image.src === candidate.platformUrl,
+            ) &&
+            ((typeof candidate.size === 'number' &&
+              typeof candidate.lastModified === 'number' &&
+              typeof asset.size === 'number' &&
+              typeof asset.modifiedAt === 'number' &&
+              candidate.size === asset.size &&
+              Math.trunc(candidate.lastModified) === Math.trunc(asset.modifiedAt)) ||
+              (probe.editor.pendingDraftRestore?.content === '' &&
+                probe.editor.pendingDraftRestore.attachmentIdsUnique &&
+                probe.editor.pendingDraftRestore.uploads.length === 1 &&
+                scope.assets.filter(
+                  (current) => current.status === 'reconciling' && !current.platformUrl,
+                ).length === 1)),
+        )
+        if (!receipt) continue
+        const reconciled = await this.webAffairService.reconcileArticlePublishingImageObservation(
+          {
+            workspaceId: scope.workspaceId,
+            affairId: scope.affairId,
+            attemptId: scope.attemptId,
+            executionGeneration: scope.executionGeneration,
+            assetId: asset.id,
+            platformUrl: receipt.platformUrl,
+          },
+          observationIsCurrent,
+        )
+        if (!reconciled.success) return publishingEvidenceError(reconciled.error.message)
+        asset.status = 'uploaded'
+        asset.platformUrl = receipt.platformUrl
+      }
+      scope.localAssetsReady = scope.assets.every(
+        (candidate) => candidate.kind !== 'local' || candidate.status === 'uploaded',
+      )
+    }
+    const bilibiliPreservedBodyMatches =
+      scope.adapterId === 'bilibili' &&
+      scope.currentStepId === 'upload-assets' &&
+      probe.editor.bodyTextLength > 0
+        ? await this.verifyFrozenBodyText(scope, page, observationIsCurrent)
+        : false
+    if (!observationIsCurrent()) return retryCurrentPage()
+    if (['weibo', 'bilibili', 'jike'].includes(scope.adapterId)) {
       const reason =
         probe.platformAccountId !== scope.expectedPlatformAccountId ||
         (!probe.editor.recognized && probe.pageKind !== 'published-article')
           ? `图文账号或编辑区域不能核验：${probe.publicationBlocker ?? 'UID 不一致'}`
           : ['open-editor', 'upload-assets'].includes(scope.currentStepId ?? '') &&
-              (probe.editor.bodyTextLength > 0 ||
+              ((probe.editor.bodyTextLength > 0 && !bilibiliPreservedBodyMatches) ||
                 (scope.currentStepId === 'open-editor' && probe.editor.images.length > 0) ||
                 !probe.editor.imageEnumerationComplete)
             ? '图文编辑器存在未归属内容或无法完整核验图集，不能自动覆盖'
@@ -467,19 +550,21 @@ export class ArticlePublishingBrowserPolicy {
     }
     const inspection: ArticlePublishingPageInspection = {
       ...probe,
+      currentStepId: scope.currentStepId,
       matchedAssets,
-      ...(['weibo', 'bilibili'].includes(scope.adapterId) && !scope.allowPublish
+      ...(['weibo', 'bilibili', 'jike'].includes(scope.adapterId) && !scope.allowPublish
         ? {
             submissionUnavailableReason:
               '本任务只授权准备图文，未授权提交；不会发送或将准备标为发布成功',
           }
         : {}),
-      ...(['xiaohongshu', 'weibo', 'bilibili'].includes(scope.adapterId) && scope.publicationUrl
+      ...(['xiaohongshu', 'weibo', 'bilibili', 'jike'].includes(scope.adapterId) &&
+      scope.publicationUrl
         ? { publishedLinks: [{ url: scope.publicationUrl, title: scope.expectedTitle }] }
         : {}),
     }
     if (
-      (scope.assets.length || ['weibo', 'bilibili'].includes(scope.adapterId)) &&
+      (scope.assets.length || ['weibo', 'bilibili', 'jike'].includes(scope.adapterId)) &&
       scope.localAssetsReady &&
       (probe.editor.recognized || probe.pageKind === 'published-article')
     ) {
@@ -653,7 +738,7 @@ export class ArticlePublishingBrowserPolicy {
             : '先打开正文图片上传面板；不能使用封面或反馈上传框',
         })
     }
-    for (const field of ['zhihu', 'weibo', 'toutiao', 'bilibili'].includes(scope.adapterId)
+    for (const field of ['zhihu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(scope.adapterId)
       ? (['title'] as const)
       : (['title', 'summary', 'tags', 'category', 'cover'] as const)) {
       const expected =
@@ -1025,7 +1110,7 @@ export class ArticlePublishingBrowserPolicy {
     }
     if (
       isMutation &&
-      !['weibo', 'bilibili'].includes(scope.adapterId) &&
+      !['weibo', 'bilibili', 'jike'].includes(scope.adapterId) &&
       !READ_ONLY_STEPS.has(scope.currentStepId ?? '') &&
       scope.currentStepId !== 'open-editor'
     ) {
@@ -1432,7 +1517,7 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     if (semanticControl !== 'publish') return { kind: 'allow' }
-    if (['weibo', 'bilibili'].includes(scope.adapterId) && scope.allowPublish !== true)
+    if (['weibo', 'bilibili', 'jike'].includes(scope.adapterId) && scope.allowPublish !== true)
       return this.stopDecision(
         scope,
         actionType,
@@ -1481,13 +1566,41 @@ export class ArticlePublishingBrowserPolicy {
     if (!PAGE_MUTATION_ACTIONS.has(actionType) || !page) return
     const scope = await this.resolveTaskScope(task, context)
     if (!scope) return
+    const attestation = this.attestations.get(this.attestationKey(context))
+    if (
+      scope.adapterId === 'jike' &&
+      scope.currentStepId === 'fill-body' &&
+      actionType === 'click' &&
+      mutationSelector &&
+      mutationSelector === attestation?.inspection.selectors.restoreDraft
+    ) {
+      if (!this.attestationRuntimeIsCurrent(attestation))
+        throw new Error('即刻恢复草稿后页面绑定已变化，必须重新核验')
+      const probe = await this.adapter.probe(page, undefined, undefined, scope.assets)
+      const exactRestoredGallery =
+        probe.pageKind === 'editor' &&
+        probe.platformAccountId === scope.expectedPlatformAccountId &&
+        probe.editor.recognized &&
+        probe.editor.bodyTextLength === 0 &&
+        probe.editor.imageEnumerationComplete &&
+        probe.editor.images.length === scope.assets.length &&
+        scope.assets.every(
+          (asset, index) =>
+            asset.status === 'uploaded' &&
+            Boolean(asset.platformUrl) &&
+            probe.editor.images[index]?.loaded === true &&
+            probe.editor.images[index]?.src === asset.platformUrl,
+        )
+      if (!exactRestoredGallery)
+        throw new Error('即刻原生草稿恢复后未读回冻结三图，停止继续写入')
+      return
+    }
     if (
       scope.adapterId === 'toutiao' &&
       scope.currentStepId === 'publish' &&
       actionType === 'click' &&
       mutationSelector === TOUTIAO_DISABLE_MUSIC_SELECTOR
     ) {
-      const attestation = this.attestations.get(this.attestationKey(context))
       const result = await this.webAffairService.recordArticlePublishingPlanResults(
         {
           ...scope,
@@ -1569,7 +1682,7 @@ export class ArticlePublishingBrowserPolicy {
         editorDocumentGeneration,
         inspection: { url } as ArticlePublishingPageInspection,
       })
-    if (['weibo', 'bilibili'].includes(scope.adapterId)) {
+    if (['weibo', 'bilibili', 'jike'].includes(scope.adapterId)) {
       const probe = await this.adapter.probe(page, undefined, undefined, scope.assets)
       if (
         !isCurrent() ||
@@ -1739,11 +1852,12 @@ export class ArticlePublishingBrowserPolicy {
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) return false
-    const observed = await this.adapter.verifyBody(
-      page,
-      await prepareArticleBody(state),
-      scope.assets,
-    )
+    const body =
+      scope.adapterId === 'bilibili' &&
+      state.assets.some((asset) => asset.kind === 'local' && asset.status !== 'uploaded')
+        ? await prepareArticleUnresolvedBody(state)
+        : await prepareArticleBody(state)
+    const observed = await this.adapter.verifyBody(page, body, scope.assets)
     if (!isCurrent()) return false
     const results = state.assets
       .filter((a) => a.kind === 'local')
@@ -1751,9 +1865,11 @@ export class ArticlePublishingBrowserPolicy {
         const images = observed.images.filter((i) => i.src === asset.platformUrl)
         const matches = images.length === asset.occurrences.length && images.every((i) => i.matches)
         return {
-          id: `asset.${asset.id}.${Boolean(parseBilibiliPublicationUrl(page.url())) || Boolean(parseToutiaoPublicationUrl(page.url())) || Boolean(parseWeiboPublicationUrl(page.url())) || page.url().startsWith('https://www.xiaohongshu.com/explore/') || page.url().startsWith('https://juejin.cn/post/') || page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
+          id: `asset.${asset.id}.${Boolean(parseBilibiliPublicationUrl(page.url())) || Boolean(parseToutiaoPublicationUrl(page.url())) || Boolean(parseWeiboPublicationUrl(page.url())) || Boolean(parseJikePublicationUrl(page.url())) || page.url().startsWith('https://www.xiaohongshu.com/explore/') || page.url().startsWith('https://juejin.cn/post/') || page.url().startsWith('https://blog.csdn.net/') || /^https:\/\/zhuanlan\.zhihu\.com\/p\/\d+\/?$/u.test(page.url()) ? 'published' : 'placement'}`,
           status: matches ? ('completed' as const) : ('waiting' as const),
-          evidence: ['xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(scope.adapterId)
+          evidence: ['xiaohongshu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(
+            scope.adapterId,
+          )
             ? `${asset.displayPath} · 图集 ${images.map((i) => `第 ${i.index + 1} 张：${i.matches ? '顺序、平台地址和加载通过' : '未匹配'}`).join('；')}`
             : `${asset.displayPath} · 期望 ${asset.occurrences.length} 处，实际对应 ${images.filter((i) => i.matches).length} 处；${images.map((i) => `第 ${i.index + 1} 张，前文 ${i.precedingCharacters} 字符，${i.matches ? (scope.adapterId === 'zhihu' ? '位置/地址/加载一致（知乎不保留替代文字）' : '位置/地址/替代文字/加载一致') : '不匹配'}`).join('；')}`,
           reason: matches
@@ -1770,6 +1886,7 @@ export class ArticlePublishingBrowserPolicy {
           Boolean(parseBilibiliPublicationUrl(page.url())) ||
           Boolean(parseToutiaoPublicationUrl(page.url())) ||
           Boolean(parseWeiboPublicationUrl(page.url())) ||
+          Boolean(parseJikePublicationUrl(page.url())) ||
           page.url().startsWith('https://www.xiaohongshu.com/explore/') ||
           page.url().startsWith('https://juejin.cn/post/') ||
           page.url().startsWith('https://blog.csdn.net/') ||
@@ -1788,12 +1905,30 @@ export class ArticlePublishingBrowserPolicy {
     return observed.matches
   }
 
+  private async verifyFrozenBodyText(
+    scope: ArticlePublishingExecutionScope,
+    page: NonNullable<ReturnType<PlaywrightBridge['getPage']>>,
+    isCurrent: () => boolean,
+  ) {
+    const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+    const state = snapshot.success
+      ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
+      : undefined
+    if (!state) return false
+    const observed = await this.adapter.verifyBody(
+      page,
+      await prepareArticleUnresolvedBody(state),
+      scope.assets,
+    )
+    return isCurrent() && observed.textMatches === true
+  }
+
   async prepareBodyWrite(task: BrowserTaskRun, context?: ToolExecutionContext) {
     const scope = await this.resolveTaskScope(task, context)
     if (
       !scope ||
       scope.currentStepId !== 'fill-body' ||
-      (!scope.assets.length && !['weibo', 'bilibili'].includes(scope.adapterId))
+      (!scope.assets.length && !['weibo', 'bilibili', 'jike'].includes(scope.adapterId))
     )
       return undefined
     const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
@@ -1801,7 +1936,11 @@ export class ArticlePublishingBrowserPolicy {
       ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
       : undefined
     if (!state) throw new Error('冻结正文不存在')
-    if (state.adapterId === 'weibo' || state.adapterId === 'toutiao') {
+    if (
+      state.adapterId === 'weibo' ||
+      state.adapterId === 'jike' ||
+      state.adapterId === 'toutiao'
+    ) {
       return (await prepareArticleMarkdown(state))
         .replace(/^# /u, '')
         .replace(/!\[[^\]]*\]\([^)]*\)/gu, '')
@@ -1867,7 +2006,7 @@ export class ArticlePublishingBrowserPolicy {
     const before = await this.adapter.probe(page, undefined, undefined, scope.assets)
     if (
       !before.editor.imageEnumerationComplete ||
-      (['weibo', 'bilibili'].includes(scope.adapterId)
+      (['weibo', 'bilibili', 'jike'].includes(scope.adapterId)
         ? !before.platformAccountId ||
           before.platformAccountId !== scope.expectedPlatformAccountId ||
           before.editor.images.some((i) => !scope.assets.some((a) => a.platformUrl === i.src))
@@ -2056,7 +2195,7 @@ export class ArticlePublishingBrowserPolicy {
       )
         throw new Error('B站提交前账号、冻结正文、独立标题、公开设置或逐图证据未同时通过')
       if (!isCurrent()) throw new Error('B站提交前页面已改代')
-      const observer = observeBilibiliSubmission(
+      const observer = await observeBilibiliSubmission(
         page,
         {
           uid: live.uid!,
@@ -2197,6 +2336,66 @@ export class ArticlePublishingBrowserPolicy {
               sideEffectKey,
               uid: receipt.uid,
               postId: receipt.id,
+            },
+            scope.workspaceId,
+          )
+          if (!saved.success) throw new Error(saved.error.message)
+        },
+      }
+    }
+    if (scope?.adapterId === 'jike' && page && scope.currentStepId === 'publish') {
+      if (scope.allowPublish !== true) throw new Error('本次即刻提交未授权或步骤不符')
+      const runtime = this.runtimeSnapshot(scope, context)
+      const documentGeneration = this.browserManager?.getViewRuntimeIdentity(
+        task.tabId,
+      )?.documentGeneration
+      const editorDocumentGeneration = this.adapter.documentGeneration(page)
+      const url = page.url()
+      const isCurrent = () =>
+        !context?.abortSignal?.aborted &&
+        this.attestationRuntimeIsCurrent({
+          scope,
+          runtime,
+          page,
+          documentGeneration,
+          editorDocumentGeneration,
+          inspection: { url } as ArticlePublishingPageInspection,
+        })
+      const live = await readJikeComposer(page)
+      const imageKeys = live.images.map((image) => jikeImageIdentity(image.src))
+      if (
+        !live.recognized ||
+        live.accountId !== scope.expectedPlatformAccountId ||
+        !live.imageEnumerationComplete ||
+        imageKeys.some((key) => !key) ||
+        live.images.length !== scope.assets.length ||
+        live.images.some(
+          (image, index) => !image.loaded || image.src !== scope.assets[index].platformUrl,
+        ) ||
+        !(await this.verifyFrozenBody(scope, page, isCurrent))
+      )
+        throw new Error('即刻提交前账号、冻结正文与逐图未同时核验通过')
+      if (!isCurrent()) throw new Error('即刻提交前页面已改代，禁止派发')
+      const observer = observeJikeSubmission(page, {
+        accountId: live.accountId!,
+        text: live.text,
+        imageKeys: imageKeys as string[],
+      })
+      return {
+        arm: observer.arm,
+        dispose: observer.dispose,
+        finish: async () => {
+          const receipt = await observer.finish()
+          const saved = await this.webAffairService.recordJikeSubmissionReceipt(
+            {
+              affairId: scope.affairId,
+              attemptId: scope.attemptId,
+              executionGeneration: scope.executionGeneration,
+              browserTaskRunId: task.id,
+              sideEffectKey,
+              accountId: receipt.accountId,
+              postId: receipt.id,
+              url: receipt.url,
             },
             scope.workspaceId,
           )
@@ -2543,7 +2742,7 @@ export class ArticlePublishingBrowserPolicy {
     compare(
       'adapter',
       affair?.articlePublishing &&
-        ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(
+        ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(
           affair.articlePublishing.adapterId,
         )
         ? `${affair.articlePublishing.adapterId}@1`
@@ -2715,7 +2914,7 @@ export class ArticlePublishingBrowserPolicy {
     if (!attempt) mismatches.push('attempt')
     if (
       !publishing ||
-      !['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(
+      !['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(
         publishing.adapterId,
       ) ||
       publishing?.adapterVersion !== 1
@@ -2798,6 +2997,19 @@ export class ArticlePublishingBrowserPolicy {
       allowPublish: publishing.composer?.allowPublish,
       publicationStatus: publishing.publication.status,
       bilibiliRetryAuthorized: hasBilibiliRetryAuthorization(publishing),
+      jikeGalleryResetAllowed:
+        publishing.adapterId === 'jike' &&
+        publishing.publication.status === 'not-started' &&
+        publishing.execution.currentStepId === 'upload-assets' &&
+        publishing.assets.length > 0 &&
+        publishing.assets.every(
+          (asset) =>
+            asset.status === 'pending' &&
+            !asset.platformUrl &&
+            asset.uploadAttempts.length === 0 &&
+            asset.manualResolution?.status === 'missing',
+        ) &&
+        !publishing.sideEffects.some((effect) => effect.kind === 'publish'),
       publicationUrl: publishing.publication.url,
       localAssetsReady: publishing.assets.every(
         (asset) => asset.kind !== 'local' || asset.status === 'uploaded',
@@ -2816,13 +3028,18 @@ export class ArticlePublishingBrowserPolicy {
       expectedPlatformAccountId:
         publishing.composer?.platformAccountId ?? publishing.draft?.platformAccountId,
       expectedPlatformDraftId: publishing.draft?.platformDraftId,
-      expectedTitle: publishing.fields.title,
+      expectedTitle:
+        publishing.adapterId === 'bilibili'
+          ? bilibiliPublishingTitle(publishing.fields.title)
+          : publishing.fields.title,
       expectedFields: publishing.fields,
       assets: publishing.assets.map((asset) => ({
         id: asset.id,
         kind: asset.kind,
         sourcePath: asset.sourcePath,
         displayPath: asset.displayPath,
+        size: asset.size,
+        modifiedAt: asset.modifiedAt,
         platformUrl: asset.platformUrl,
         manualResolution: asset.manualResolution,
         status: asset.status,
@@ -2839,7 +3056,7 @@ export class ArticlePublishingBrowserPolicy {
               Boolean(effect.dispatchedAt),
           ),
         uploadNeverDispatched:
-          ['weibo', 'bilibili', 'toutiao'].includes(publishing.adapterId) &&
+          ['weibo', 'bilibili', 'toutiao', 'jike'].includes(publishing.adapterId) &&
           !asset.platformUrl &&
           !publishing.sideEffects.some(
             (effect) =>
@@ -2947,6 +3164,28 @@ export class ArticlePublishingBrowserPolicy {
     const selector = String(params.selector ?? '').trim()
     const stepId = scope.currentStepId ?? ''
     const selectors = inspection.selectors
+    const pendingJikeDraft = inspection.editor.pendingDraftRestore
+    const jikeExactDraftRestoreAllowed = Boolean(
+      scope.adapterId === 'jike' &&
+      stepId === 'fill-body' &&
+      scope.publicationStatus === 'not-started' &&
+      inspection.pageKind === 'editor' &&
+      inspection.platformAccountId === scope.expectedPlatformAccountId &&
+      inspection.editor.bodyTextLength === 0 &&
+      inspection.editor.images.length === 0 &&
+      inspection.editor.imageEnumerationComplete &&
+      selectors.restoreDraft &&
+      pendingJikeDraft?.content === '' &&
+      pendingJikeDraft.attachmentIdsUnique &&
+      pendingJikeDraft.uploads.length === scope.assets.length &&
+      scope.assets.every(
+        (asset, index) =>
+          asset.status === 'uploaded' &&
+          Boolean(asset.platformUrl) &&
+          asset.sourcePath.split('/').at(-1) === pendingJikeDraft.uploads[index]?.fileName &&
+          asset.platformUrl === pendingJikeDraft.uploads[index]?.platformUrl,
+      ),
+    )
     const dismissAssistant =
       actionType === 'click' &&
       [selectors.dismissAssistant, selectors.dismissTagEditor].some(
@@ -2974,9 +3213,20 @@ export class ArticlePublishingBrowserPolicy {
           ? [selectors.openEditor]
           : [selectors.openEditor, selectors.title, selectors.body, selectors.save]
         : stepId === 'upload-assets'
-          ? [selectors.imageOpen, selectors.fileInput, selectors.uploadConfirm]
+          ? [
+              selectors.restoreDraft,
+              ...(scope.jikeGalleryResetAllowed
+                ? [selectors.attachmentHover, selectors.removeAttachment]
+                : []),
+              selectors.imageOpen,
+              selectors.fileInput,
+              selectors.uploadConfirm,
+            ]
           : stepId === 'fill-body'
-            ? [selectors.body]
+            ? [
+                selectors.body,
+                ...(jikeExactDraftRestoreAllowed ? [selectors.restoreDraft] : []),
+              ]
             : stepId === 'fill-fields'
               ? [
                   selectors.openPublishSettings,
@@ -3099,7 +3349,7 @@ export class ArticlePublishingBrowserPolicy {
         (asset.rebuildUploadAllowed === true ||
           (asset.status !== 'reconciling' && asset.uploadAttemptCount === 0) ||
           asset.manualResolution?.status === 'missing' ||
-          (['weibo', 'bilibili', 'toutiao'].includes(scope.adapterId) &&
+          (['weibo', 'bilibili', 'toutiao', 'jike'].includes(scope.adapterId) &&
             !asset.platformUrl &&
             asset.uploadNeverDispatched === true)),
       )
@@ -3108,7 +3358,7 @@ export class ArticlePublishingBrowserPolicy {
         inspection.editor.imageEnumerationComplete &&
         asset &&
         absenceCanAuthorizeFirstUpload &&
-        (!['xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(scope.adapterId) ||
+        (!['xiaohongshu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(scope.adapterId) ||
           inspection.editor.images.every((image) =>
             scope.assets.some((known) => known.platformUrl === image.src),
           )) &&
@@ -3122,14 +3372,16 @@ export class ArticlePublishingBrowserPolicy {
       )
     }
     const stepId = String(params['stepId'] ?? '')
-    if (['weibo', 'bilibili'].includes(scope.adapterId)) {
+    if (['weibo', 'bilibili', 'jike'].includes(scope.adapterId)) {
       if (['publish', 'verify-publication'].includes(stepId))
         return Boolean(
           scope.allowPublish &&
           scope.publicationUrl &&
           (scope.adapterId === 'bilibili'
             ? parseBilibiliPublicationUrl(inspection.url)?.url
-            : parseWeiboPublicationUrl(inspection.url)?.url) === scope.publicationUrl &&
+            : scope.adapterId === 'jike'
+              ? parseJikePublicationUrl(inspection.url)?.url
+              : parseWeiboPublicationUrl(inspection.url)?.url) === scope.publicationUrl &&
           inspection.pageKind === 'published-article' &&
           !inspection.publicationBlocker &&
           inspection.platformAccountId === scope.expectedPlatformAccountId &&
@@ -3277,6 +3529,19 @@ export class ArticlePublishingBrowserPolicy {
       )
         return null
     }
+    if (scope.adapterId === 'jike') {
+      const receipt = parseJikePublicationUrl(scope.publicationUrl ?? '')
+      if (
+        !scope.allowPublish ||
+        !receipt ||
+        receipt.url !== parseJikePublicationUrl(inspection.url)?.url ||
+        receipt.url !== parseJikePublicationUrl(requestedUrl)?.url ||
+        inspection.platformAccountId !== scope.expectedPlatformAccountId ||
+        inspection.publishedArticleId !== receipt.id ||
+        inspection.bodyMatchesFrozen !== true
+      )
+        return null
+    }
     if (
       scope.adapterId === 'xiaohongshu' &&
       (!scope.publicationUrl ||
@@ -3324,7 +3589,7 @@ export class ArticlePublishingBrowserPolicy {
     return Boolean(
       affair?.kind === 'article-publishing' &&
       publishing &&
-      ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili'].includes(
+      ['csdn', 'zhihu', 'juejin', 'xiaohongshu', 'weibo', 'toutiao', 'bilibili', 'jike'].includes(
         publishing.adapterId,
       ) &&
       publishing.adapterVersion === 1 &&
@@ -3351,6 +3616,12 @@ export class ArticlePublishingBrowserPolicy {
       if (
         ['publish', 'verify-publication'].includes(stepId ?? '') &&
         parseWeiboPublicationUrl(rawUrl)
+      )
+        return true
+      if (u.origin === 'https://web.okjike.com' && u.pathname === '/following') return true
+      if (
+        ['publish', 'verify-publication'].includes(stepId ?? '') &&
+        parseJikePublicationUrl(rawUrl)
       )
         return true
       if (u.origin === 'https://creator.xiaohongshu.com' && u.pathname === '/publish/publish')

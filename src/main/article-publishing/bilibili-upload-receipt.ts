@@ -1,6 +1,13 @@
 import type { Page, Request, Response } from 'playwright-core'
 import { bilibiliImageUrl } from './bilibili-publication'
 
+export class BilibiliImageUploadRejectedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BilibiliImageUploadRejectedError'
+  }
+}
+
 /** Only project non-secret native receipt fields into the existing operation failure. */
 export function bilibiliUploadReceiptFailure(value: unknown): string {
   const object = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -75,10 +82,32 @@ export function observeBilibiliImageUpload(page: Page) {
   }
   page.on('request', onRequest)
   page.on('response', onResponse)
-  const timer = setTimeout(
-    () => reject(new Error('未取得本次 B站上传回执；只核验，不重传')),
-    30_000,
-  )
+  const timer = setTimeout(() => {
+    void Promise.resolve()
+      .then(() =>
+        page.evaluate(() => {
+        const body = document.querySelector('div[placeholder="有什么想和大家分享的？"]')
+        const root = body?.closest('main > section:nth-child(1)')
+        return Boolean(
+          root &&
+            [...root.querySelectorAll<HTMLElement>('*')].some(
+              (element) =>
+                element.children.length === 0 && element.textContent?.trim() === '上传失败 点击重试',
+            ),
+        )
+        }),
+      )
+      .then((failed) =>
+        reject(
+          failed
+            ? new BilibiliImageUploadRejectedError(
+                'B站页面明确显示“上传失败 点击重试”；本次上传已失败，可以重新核验后有界重试',
+              )
+            : new Error('未取得本次 B站上传回执；只核验，不重传'),
+        ),
+      )
+      .catch(() => reject(new Error('未取得本次 B站上传回执；只核验，不重传')))
+  }, 30_000)
   timer.unref?.()
   return {
     arm: () => {

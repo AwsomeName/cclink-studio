@@ -107,6 +107,27 @@ export async function executePlaywrightAction(
       }
       if (
         trustedArticleBodyHtml !== undefined &&
+        new URL(page!.url()).origin === 'https://web.okjike.com'
+      ) {
+        if (new URL(page!.url()).pathname !== '/following' || !assertDispatchStillCurrent)
+          throw new Error('即刻正文需要当前编辑器的主进程派发许可')
+        const body = page!.locator(action.selector)
+        if (
+          (await body.count()) !== 1 ||
+          !(await body.evaluate(
+            (element) =>
+              element instanceof HTMLElement &&
+              element.isContentEditable &&
+              element.getAttribute('role') === 'textbox',
+          ))
+        )
+          throw new Error('即刻正文目标不是当前图文编辑器')
+        assertDispatchStillCurrent()
+        await body.fill(trustedArticleBodyHtml)
+        return { filled: action.selector }
+      }
+      if (
+        trustedArticleBodyHtml !== undefined &&
         new URL(page!.url()).origin === 'https://creator.xiaohongshu.com'
       ) {
         if (

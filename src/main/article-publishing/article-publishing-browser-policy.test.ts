@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { BilibiliPublishingAdapter } from './bilibili-publishing-adapter'
 import { WeiboPublishingAdapter } from './weibo-publishing-adapter'
+import { JikePublishingAdapter } from './jike-publishing-adapter'
 import { CsdnPublishingAdapter } from './csdn-publishing-adapter'
 import { TOUTIAO_DISABLE_MUSIC_SELECTOR } from './toutiao-publishing-adapter'
 vi.mock('./article-body', () => ({ prepareArticleBody: vi.fn(async () => '<p>Article</p>') }))
@@ -21,6 +22,14 @@ vi.spyOn(WeiboPublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
   actualImages: 0,
   images: [],
 })
+vi.spyOn(JikePublishingAdapter.prototype, 'verifyBody').mockResolvedValue({
+  matches: true,
+  textMatches: true,
+  textEvidence: 'current composer',
+  expectedImages: 0,
+  actualImages: 0,
+  images: [],
+})
 import {
   ArticlePublishingBrowserPolicy,
   CSDN_ARTICLE_SUPPORTED_ORIGINS,
@@ -29,7 +38,7 @@ import {
 const DRAFT_URL = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
 
 function createPolicy(options?: {
-  adapterId?: 'csdn' | 'weibo' | 'toutiao' | 'bilibili'
+  adapterId?: 'csdn' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   musicChecked?: boolean | null
   weiboUid?: string
   stepId?: string
@@ -39,6 +48,7 @@ function createPolicy(options?: {
   assetId?: string
   platformUrl?: string
   assetStatus?: string
+  manualResolution?: { status: 'present' | 'missing'; resolvedAt: string }
   executionStatus?: string
   draftUrl?: string | null
   recovery?: Record<string, unknown>
@@ -57,6 +67,11 @@ function createPolicy(options?: {
   tagEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
   fieldValues?: Record<string, string>
   sideEffects?: Array<Record<string, unknown>>
+  pendingDraftRestore?: {
+    content: string
+    uploads: Array<{ platformUrl: string; fileName: string }>
+    attachmentIdsUnique: boolean
+  }
 }) {
   let documentGeneration = 1
   let viewVisible = true
@@ -123,10 +138,13 @@ function createPolicy(options?: {
     ],
     articlePublishing: {
       adapterId: options?.adapterId ?? 'csdn',
-      ...(['weibo', 'bilibili'].includes(options?.adapterId ?? '')
+      ...(['weibo', 'bilibili', 'jike'].includes(options?.adapterId ?? '')
         ? {
             composer: {
-              platformAccountId: '5961101548',
+              platformAccountId:
+                options?.adapterId === 'jike'
+                  ? 'd62b6850-51a6-4177-a439-dac3ea92dbbf'
+                  : '5961101548',
               allowPublish: options?.allowPublish ?? false,
             },
           }
@@ -149,6 +167,7 @@ function createPolicy(options?: {
           displayPath: 'a.png',
           occurrences: [],
           status: options?.assetStatus ?? 'uploaded',
+          manualResolution: options?.manualResolution,
           uploadAttempts: [],
         },
       ],
@@ -316,6 +335,20 @@ function createPolicy(options?: {
                   uploadSelector: selectors.fileInput,
                   immediatePublishPresent: Boolean(selectors.publish),
                   visibility: options.stepId === 'publish' ? 'public' : 'unknown',
+                  observedAt: new Date().toISOString(),
+                }
+              : {}),
+            ...(options?.adapterId === 'jike'
+              ? {
+                  accountId: 'd62b6850-51a6-4177-a439-dac3ea92dbbf',
+                  recognized: true,
+                  text: '',
+                  publishSelector: selectors.publish,
+                  fileInputSelector: selectors.fileInput,
+                  attachmentHoverSelector: selectors.attachmentHover,
+                  removeAttachmentSelector: selectors.removeAttachment,
+                  restoreDraftSelector: selectors.restoreDraft,
+                  pendingDraftRestore: options.pendingDraftRestore,
                   observedAt: new Date().toISOString(),
                 }
               : {}),
@@ -584,6 +617,7 @@ describe('ArticlePublishingBrowserPolicy', () => {
           requestMatch: 'matched',
           responseStatus: 200,
           platformCode: 0,
+          postId: '1246694229973925912',
         },
       }),
       'workspace-a',
@@ -729,6 +763,138 @@ describe('ArticlePublishingBrowserPolicy', () => {
       ),
     ).toMatchObject({ kind: 'allow-once' })
     expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
+  })
+
+  it('allows a bounded Jike upload on the attested following composer', async () => {
+    const { policy, inspect, webAffairService } = createPolicy({
+      adapterId: 'jike',
+      draftUrl: null,
+      stepId: 'upload-assets',
+      assetStatus: 'uploading',
+      imageEnumerationComplete: true,
+    })
+    const selector = 'input[type="file"]'
+    const page = await inspect({ fileInput: selector }, 'https://web.okjike.com/following')
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'uploadFile',
+        { selector, paths: ['/workspace/a.png'] },
+        page as never,
+        context,
+      ),
+    ).toMatchObject({ kind: 'allow-once' })
+    expect(webAffairService.recordArticlePublishingDraftAnchor).not.toHaveBeenCalled()
+  })
+
+  it('allows only attested Jike attachment cleanup for a main-authorized gallery rebuild', async () => {
+    const { policy, inspect } = createPolicy({
+      adapterId: 'jike',
+      draftUrl: null,
+      stepId: 'upload-assets',
+      assetStatus: 'pending',
+      manualResolution: { status: 'missing', resolvedAt: '2026-09-16T00:00:00.000Z' },
+      imageEnumerationComplete: true,
+      images: [{ src: 'https://cdnv2.ruguoapp.com/second.png', alt: '', loaded: true }],
+    })
+    const page = await inspect(
+      { attachmentHover: '#attachment', removeAttachment: '#remove' },
+      'https://web.okjike.com/following',
+    )
+    Object.assign(page, {
+      locator: (selector: string) => ({
+        count: async () => 1,
+        isVisible: async () => true,
+        evaluate: async () => ({
+          label: selector === '#remove' ? '移除附件' : '',
+          type: '',
+          role: 'button',
+        }),
+      }),
+    })
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'hover',
+        { selector: '#attachment' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow' })
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '#remove' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow' })
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '#unattested' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'unknown' })
+  })
+
+  it('allows Jike fill-body to restore only the exact frozen native draft', async () => {
+    const platformUrl = 'https://cdnv2.ruguoapp.com/exact.png'
+    const { policy, inspect } = createPolicy({
+      adapterId: 'jike',
+      draftUrl: null,
+      stepId: 'fill-body',
+      assetStatus: 'uploaded',
+      platformUrl,
+      imageEnumerationComplete: true,
+      pendingDraftRestore: {
+        content: '',
+        uploads: [{ platformUrl, fileName: 'a.png' }],
+        attachmentIdsUnique: true,
+      },
+    })
+    const page = await inspect(
+      { body: 'div[role="textbox"]', restoreDraft: '#restore' },
+      'https://web.okjike.com/following',
+    )
+    Object.assign(page, {
+      locator: () => ({
+        count: async () => 1,
+        isVisible: async () => true,
+        evaluate: async () => ({ label: '恢复草稿', type: 'button', role: 'button' }),
+      }),
+    })
+
+    await expect(
+      policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '#restore' },
+        page as never,
+        context,
+      ),
+    ).resolves.toMatchObject({ kind: 'allow' })
+
+    const raw = await (page as any).evaluate()
+    ;(page as any).evaluate = vi.fn(async () => ({
+      ...raw,
+      images: [{ src: platformUrl, alt: '', loaded: true }],
+      imageEnumerationComplete: true,
+    }))
+    await expect(
+      policy.completeMutation(
+        task as never,
+        'click',
+        page as never,
+        context,
+        undefined,
+        '#restore',
+      ),
+    ).resolves.toBeUndefined()
   })
 
   it('blocks Weibo submit even with a current matching composer and publish selector', async () => {

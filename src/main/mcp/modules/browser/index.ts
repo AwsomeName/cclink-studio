@@ -25,6 +25,7 @@ import type { FileService } from '../../../fs/file-service'
 import { XIAOHONGSHU_PUBLISH_SELECTOR } from '../../../article-publishing/xiaohongshu-publish-control'
 import { isJuejinSettingsEntry } from '../../../article-publishing/juejin-settings-entry'
 import { isZhihuCreatorEntry } from '../../../article-publishing/zhihu-creator-entry'
+import { BilibiliImageUploadRejectedError } from '../../../article-publishing/bilibili-upload-receipt'
 
 const ACCOUNT_FORBIDDEN_ACTIONS = new Set([
   'evaluate',
@@ -929,6 +930,7 @@ export class BrowserToolModule implements ToolModule {
       }
       return activeTask?.correlation?.accountId ? this.sanitizeAccountActionResult(result) : result
     } catch (error) {
+      const knownUploadFailure = error instanceof BilibiliImageUploadRejectedError
       // A click can throw after the server accepted the save. Preserve its exact ID even on
       // cancellation, but never navigate, advance progress or dispatch another save from catch.
       if (dispatched && publicationSubmit)
@@ -942,7 +944,7 @@ export class BrowserToolModule implements ToolModule {
             actionType,
             params,
             error instanceof Error ? error.message : String(error),
-            dispatched,
+            dispatched && !knownUploadFailure,
             context,
           )
           .catch(() => undefined)
@@ -951,7 +953,7 @@ export class BrowserToolModule implements ToolModule {
           ?.observeSideEffect(
             activeTask,
             sideEffectCapability.sideEffectKey,
-            dispatched ? 'result-unknown' : 'rejected',
+            dispatched && !knownUploadFailure ? 'result-unknown' : 'rejected',
             context,
           )
           .catch(() => undefined)

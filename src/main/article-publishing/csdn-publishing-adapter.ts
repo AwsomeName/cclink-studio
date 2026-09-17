@@ -14,7 +14,7 @@ export interface CsdnPageImageProbe {
 }
 
 export interface CsdnPageProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   adapterVersion: 1
   observedAt: string
   url: string
@@ -32,6 +32,20 @@ export interface CsdnPageProbe {
     initialDraftBodyText?: string
     imageEnumerationComplete: boolean
     images: CsdnPageImageProbe[]
+    /** Exact native upload receipts recovered from the live composer UI. */
+    recoveredUploads?: Array<{
+      platformUrl: string
+      fileName: string
+      size?: number
+      lastModified?: number
+    }>
+    /** Jike's own unsent-draft payload, read before the user restores it into the composer. */
+    pendingDraftRestore?: {
+      content: string
+      uploads: Array<{ platformUrl: string; fileName: string }>
+      /** False only when the platform persisted duplicate attachment ids. */
+      attachmentIdsUnique: boolean
+    }
     fileInputSelector?: string
   }
   title: {
@@ -52,6 +66,12 @@ export interface CsdnPageProbe {
     category?: string
     cover?: string
     imageOpen?: string
+    /** Jike: restore the site's own persisted unsent composer before reconciliation. */
+    restoreDraft?: string
+    /** Jike: hover the first attachment while rebuilding a corrupted unsent gallery. */
+    attachmentHover?: string
+    /** Jike: remove the currently hovered attachment while rebuilding. */
+    removeAttachment?: string
     fileInput?: string
     uploadConfirm?: string
     save?: string
@@ -100,7 +120,7 @@ export interface CsdnDraftListCandidate {
 }
 
 export interface CsdnDraftListProbe {
-  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili'
+  adapterId: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
   adapterVersion: 1
   observedAt: string
   platformAccountId?: string

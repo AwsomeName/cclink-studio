@@ -4,12 +4,20 @@ import {
   BILIBILI_BODY,
   BILIBILI_TITLE,
   BILIBILI_IMAGE_OPEN,
+  bilibiliPublishingTitle,
 } from './bilibili-publishing-adapter'
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(async () => Buffer.from('frozen-image-bytes')),
 }))
 
 describe('B站 visible dynamic facts', () => {
+  it('derives the deterministic 20-character platform title', () => {
+    expect(bilibiliPublishingTitle('做AI眼镜第189天，它学会主动找你聊天了')).toBe(
+      '做AI眼镜第189天，它学会主动找你聊天',
+    )
+    expect(bilibiliPublishingTitle('  short title  ')).toBe('short title')
+  })
+
   it.each([
     'current',
     'duplicate-body',

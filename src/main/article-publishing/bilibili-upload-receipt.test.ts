@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { observeBilibiliImageUpload, bilibiliUploadReceiptFailure } from './bilibili-upload-receipt'
+import {
+  BilibiliImageUploadRejectedError,
+  observeBilibiliImageUpload,
+  bilibiliUploadReceiptFailure,
+} from './bilibili-upload-receipt'
 
 describe('B站 native single-file upload receipt', () => {
   it('explains a rejected receipt without exposing response secrets', () => {
@@ -76,6 +80,20 @@ describe('B站 native single-file upload receipt', () => {
     }
     observer.dispose()
     expect(page.listenerCount('request') + page.listenerCount('response')).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it('distinguishes the native visible upload failure from an unknown timeout', async () => {
+    vi.useFakeTimers()
+    const page = Object.assign(new EventEmitter(), { evaluate: async () => true })
+    const observer = observeBilibiliImageUpload(page as never)
+    observer.arm()
+    const result = expect(observer.finish()).rejects.toBeInstanceOf(
+      BilibiliImageUploadRejectedError,
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+    await result
+    observer.dispose()
     vi.useRealTimers()
   })
 })

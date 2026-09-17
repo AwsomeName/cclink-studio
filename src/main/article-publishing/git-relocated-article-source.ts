@@ -49,9 +49,10 @@ async function hasExactRename(root: string, from: string, to: string): Promise<b
 }
 
 /**
- * Finds a tracked, unmodified 100%-rename of a missing frozen article bundle.
- * This is deliberately stricter than matching names or sizes: Git must prove the
- * Markdown and every local image kept the exact blob while only their paths moved.
+ * Finds a tracked, unmodified relocation of a missing frozen article bundle.
+ * Git's 100%-rename record is preferred. For files first committed after a directory
+ * move, the complete bundle may instead prove identity by preserving every frozen
+ * byte size and millisecond mtime. A unique clean candidate is required either way.
  */
 export async function findGitRelocatedArticleSource(input: {
   workspacePath: string
@@ -72,6 +73,7 @@ export async function findGitRelocatedArticleSource(input: {
   const originalRelative = relative(root, state.source.markdownPath)
   const tracked = (await git(root, ['ls-files', '-z'])).split('\0').filter(Boolean)
   const candidates: string[] = []
+  const evidenceByCandidate = new Map<string, string>()
   for (const candidateRelative of tracked) {
     if (
       candidateRelative === originalRelative ||
@@ -81,7 +83,9 @@ export async function findGitRelocatedArticleSource(input: {
     const candidatePath = join(root, candidateRelative)
     const candidateStat = await stat(candidatePath).catch(() => null)
     if (!candidateStat?.isFile() || candidateStat.size !== state.source.size) continue
-    if (!(await hasExactRename(root, originalRelative, candidateRelative))) continue
+    const markdownExactRename = await hasExactRename(root, originalRelative, candidateRelative)
+    const preservedMetadata = candidateStat.mtimeMs === state.source.modifiedAt
+    if (!markdownExactRename && !preservedMetadata) continue
     const imagePaths: string[] = []
     let valid = true
     for (const asset of state.assets.filter((item) => item.kind === 'local')) {
@@ -92,7 +96,8 @@ export async function findGitRelocatedArticleSource(input: {
         !imageStat?.isFile() ||
         imageStat.size !== asset.size ||
         !isInside(root, relocatedPath) ||
-        !(await hasExactRename(root, relative(root, asset.sourcePath), relocatedRelative))
+        (!(await hasExactRename(root, relative(root, asset.sourcePath), relocatedRelative)) &&
+          (!preservedMetadata || imageStat.mtimeMs !== asset.modifiedAt))
       ) {
         valid = false
         break
@@ -110,11 +115,17 @@ export async function findGitRelocatedArticleSource(input: {
     ])
     if (status.trim()) continue
     candidates.push(candidatePath)
+    evidenceByCandidate.set(
+      candidatePath,
+      markdownExactRename
+        ? `Git 100% rename: ${originalRelative} → ${candidateRelative}`
+        : `Frozen bundle size+mtime relocation: ${originalRelative} → ${candidateRelative}`,
+    )
   }
   if (candidates.length !== 1) return undefined
   return {
     markdownPath: candidates[0],
-    evidence: `Git 100% rename: ${originalRelative} → ${relative(root, candidates[0])}`,
+    evidence: evidenceByCandidate.get(candidates[0])!,
   }
 }
 

@@ -14,7 +14,7 @@ describe('B站 single native submission evidence', () => {
     async (mode) => {
       vi.useFakeTimers()
       const page = new EventEmitter()
-      const observer = observeBilibiliSubmission(page as never, {
+      const observer = await observeBilibiliSubmission(page as never, {
         uid: '3546384070347419',
         text: '冻结正文',
         images: [img],
@@ -55,6 +55,8 @@ describe('B站 single native submission evidence', () => {
       expect(parseBilibiliPublicationUrl(bad)).toBeNull()
     expect(bilibiliImageUrl(`${img}@402w_536h_1c_1s.webp`)).toBe(img)
     expect(bilibiliImageUrl(img.replace('https:', 'http:'))).toBe(img)
+    expect(bilibiliImageUrl(img.replace('i0.hdslb.com', 'i1.hdslb.com'))).toBe(img)
+    expect(bilibiliImageUrl(img.replace('i0.hdslb.com', 'i2.hdslb.com'))).toBe(img)
     expect(bilibiliImageUrl('http://evil.test/bfs/new_dyn/example.png')).toBeNull()
     expect(bilibiliImageUrl('http://i0.hdslb.com:8080/bfs/new_dyn/example.png')).toBeNull()
     for (const bad of [
@@ -78,7 +80,7 @@ describe('B站 single native submission evidence', () => {
   ] as const)('does not invent a receipt: %s', async (mode) => {
     vi.useFakeTimers()
     const page = new EventEmitter()
-    const observer = observeBilibiliSubmission(page as never, {
+    const observer = await observeBilibiliSubmission(page as never, {
       uid: '3546384070347419',
       text: '冻结正文',
       images: [img],
@@ -124,6 +126,45 @@ describe('B站 single native submission evidence', () => {
     vi.useRealTimers()
   })
 
+  it('blocks a mismatched native request before it reaches B站', async () => {
+    let handler:
+      | ((
+          route: { continue: () => Promise<void>; abort: (reason: string) => Promise<void> },
+          request: unknown,
+        ) => Promise<void>)
+      | undefined
+    const page = Object.assign(new EventEmitter(), {
+      route: vi.fn(async (_pattern: string, callback: typeof handler) => {
+        handler = callback
+      }),
+      unroute: vi.fn(async () => undefined),
+    })
+    const observer = await observeBilibiliSubmission(page as never, {
+      uid: '3546384070347419',
+      text: '冻结正文',
+      images: [img],
+    })
+    const route = { continue: vi.fn(async () => undefined), abort: vi.fn(async () => undefined) }
+    const request = {
+      method: () => 'POST',
+      url: () => 'https://api.bilibili.com/x/dynamic/feed/create/dyn',
+      postDataJSON: () => ({
+        dyn_req: {
+          content: { contents: [{ raw_text: '冻结正文' }] },
+          pics: [{ img_src: img }, { img_src: img.replace('example', 'hidden') }],
+        },
+      }),
+    }
+    observer.arm()
+    const rejected = expect(observer.finish()).rejects.toThrow('网络派发前阻止')
+    await handler!(route, request)
+    await rejected
+    expect(route.abort).toHaveBeenCalledWith('blockedbyclient')
+    expect(route.continue).not.toHaveBeenCalled()
+    await observer.dispose()
+    expect(page.unroute).toHaveBeenCalled()
+  })
+
   it.each([
     'text-mismatch',
     'invalid-body',
@@ -133,7 +174,7 @@ describe('B站 single native submission evidence', () => {
   ] as const)('preserves bounded diagnostics and never claims success after %s', async (mode) => {
     const page = new EventEmitter()
     const facts: unknown[] = []
-    const observer = observeBilibiliSubmission(
+    const observer = await observeBilibiliSubmission(
       page as never,
       {
         uid: '3546384070347419',
@@ -215,7 +256,7 @@ describe('B站 first publication agreement continuation', () => {
         getByRole: () => ({ waitFor: async () => undefined, click }),
         evaluate: async () => 'recognized',
       })
-      const observer = observeBilibiliSubmission(
+      const observer = await observeBilibiliSubmission(
         page as never,
         {
           uid: '3546384070347419',
@@ -345,7 +386,7 @@ describe('B站 first publication agreement continuation', () => {
         getByRole: () => ({ waitFor: async () => undefined, click }),
       })
       const click = vi.fn()
-      const observer = observeBilibiliSubmission(page as never, {
+      const observer = await observeBilibiliSubmission(page as never, {
         uid: '3546384070347419',
         text: '冻结正文',
         images: [img],

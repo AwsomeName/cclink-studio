@@ -144,6 +144,11 @@ export class WebResourceToolModule implements ToolModule {
     }
     const accountId = typeof params['accountId'] === 'string' ? params['accountId'] : ''
     if (!accountId) throw new Error('accountId 不能为空')
+    const affairId = typeof params['affairId'] === 'string' ? params['affairId'] : ''
+    const attemptId = typeof params['attemptId'] === 'string' ? params['attemptId'] : ''
+    if (Boolean(affairId) !== Boolean(attemptId)) {
+      throw new Error('affairId 和 attemptId 必须同时提供')
+    }
 
     const launch = this.service.resolveLaunch(accountId)
     if (!launch.success) return launch
@@ -158,6 +163,38 @@ export class WebResourceToolModule implements ToolModule {
       (candidate) => candidate.id === account.principalId,
     )
 
+    // Article publishing launches and binds its BrowserTask in main before the Agent
+    // receives tools. Models may still defensively call web_account_open. Make that call
+    // idempotent for the exact current run; cancelling it here would destroy the binding
+    // and leave a resumed Attempt with an Agent but no usable BrowserTask.
+    const currentTask = this.execution.browserTaskRuntime.getActiveTaskForConversation(
+      context.conversationId,
+    )
+    if (
+      affairId &&
+      attemptId &&
+      context.agentRunId &&
+      currentTask?.correlation?.agentRunId === context.agentRunId &&
+      currentTask.correlation.accountId === accountId &&
+      currentTask.correlation.affairId === affairId &&
+      currentTask.correlation.affairAttemptId === attemptId
+    ) {
+      return {
+        success: true,
+        data: {
+          accountId,
+          accountName: account.label,
+          websiteName: website?.name ?? '未知网站',
+          websiteOrigin: new URL(launch.data.entryUrl).origin,
+          principalName: principal?.name ?? '未知主体',
+          tabId: currentTask.tabId,
+          browserTaskId: currentTask.id,
+          loginStatus: account.loginConfirmedAt ? 'user-confirmed' : 'not-confirmed',
+          notice: '当前发布任务已绑定该账号和可见 Tab；沿用现有 BrowserTask。',
+        },
+      }
+    }
+
     this.execution.browserTaskRuntime.cancelTaskForConversation(context.conversationId)
     const opened = await this.execution.launchCoordinator.requestLaunch(
       { kind: 'local', path: context.trustedWorkspace.rootPath },
@@ -170,11 +207,6 @@ export class WebResourceToolModule implements ToolModule {
     )
     if (!bound) throw new Error('账号 Tab 未能绑定到预期项目和隔离登录环境')
 
-    const affairId = typeof params['affairId'] === 'string' ? params['affairId'] : ''
-    const attemptId = typeof params['attemptId'] === 'string' ? params['attemptId'] : ''
-    if (Boolean(affairId) !== Boolean(attemptId)) {
-      throw new Error('affairId 和 attemptId 必须同时提供')
-    }
     const origin = new URL(launch.data.entryUrl).origin
     const articleOrigins =
       affairId && attemptId

@@ -109,6 +109,22 @@ it('keeps Juejin draft IDs exact and isolates its image hosts', () => {
   expect(isPlatformImageUrl('juejin', 'https://picx.zhimg.com/a.png')).toBe(false)
 })
 
+it('accepts only stable Jike CDN image identities', () => {
+  expect(
+    isPlatformImageUrl(
+      'jike',
+      'https://cdnv2.ruguoapp.com/FvYZi-0ACXVxduE_Ikfj09mcXkSRv3.png',
+    ),
+  ).toBe(true)
+  for (const url of [
+    'blob:https://web.okjike.com/preview',
+    'https://cdnv2.ruguoapp.com/FvYZi.png?thumbnail=1',
+    'https://cdnv2.ruguoapp.com.evil.test/FvYZi.png',
+    'https://user@cdnv2.ruguoapp.com/FvYZi.png',
+  ])
+    expect(isPlatformImageUrl('jike', url)).toBe(false)
+})
+
 it('requires an explicit local XHS draft ID, never treats the shared editor URL as identity', () => {
   const url = 'https://creator.xiaohongshu.com/publish/publish?target=image'
   const id = '071c3c48-ca3e-49c3-bb52-a43c1a73def8'

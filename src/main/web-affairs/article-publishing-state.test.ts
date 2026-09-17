@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ArticlePublishingSourcePreview } from '../../shared/article-publishing/article-publishing-types'
 import type { WebResourceSnapshot } from '../../shared/web-resources/web-resource-types'
+import type { WebAffairSnapshot } from '../../shared/web-affairs/web-affair-types'
 import { WebAffairService, type ArticlePublishingAgentReporter } from './web-affair-service'
 import { WebAffairStore } from './web-affair-store'
 
@@ -566,6 +567,11 @@ describe('article publishing persistent state', () => {
       delete publishing.draft
       publishing.composer = { platformAccountId: uid, allowPublish: scenario !== 'not-authorized' }
       publishing.publication = { status: 'dispatched' }
+      publishing.checkpoints.forEach((checkpoint: { stepId: string; status: string }) => {
+        if (checkpoint.stepId === 'publish') checkpoint.status = 'running'
+        else if (checkpoint.stepId !== 'verify-publication') checkpoint.status = 'completed'
+      })
+      publishing.execution.currentStepId = 'publish'
       const effect = {
         key: 'weibo-submit',
         affairId: affair.id,
@@ -601,10 +607,136 @@ describe('article publishing persistent state', () => {
           'https://t.bilibili.com/1246694229973925912',
         )
         expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+        expect(
+          result.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'publish')?.status,
+        ).toBe('completed')
+        expect(result.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
       }
       await created.service.flush()
     },
   )
+
+  it('settles a legacy waiting-human Bilibili publish from its bound native receipt before read-only verification', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+    const publishing = affair.articlePublishing!
+    const attempt = affair.attempts[0]
+    const now = new Date().toISOString()
+    publishing.adapterId = 'bilibili'
+    delete publishing.draft
+    publishing.composer = { platformAccountId: '5961101548', allowPublish: true }
+    publishing.publication = {
+      status: 'result-unknown',
+      url: 'https://t.bilibili.com/1246694229973925912',
+      observedAt: now,
+    }
+    publishing.execution.status = 'result-unknown'
+    publishing.execution.currentStepId = 'verify-publication'
+    attempt.status = 'interrupted'
+    attempt.endedAt = now
+    publishing.checkpoints.forEach((checkpoint: { stepId: string; status: string }) => {
+      if (checkpoint.stepId === 'publish') checkpoint.status = 'waiting-human'
+      else if (checkpoint.stepId === 'verify-publication') checkpoint.status = 'verifying'
+      else checkpoint.status = 'completed'
+    })
+    publishing.sideEffects = [
+      {
+        key: 'legacy-receipted-bilibili-submit',
+        affairId: affair.id,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        kind: 'publish',
+        targetId: 'final',
+        status: 'verified',
+        reservedAt: now,
+        dispatchedAt: now,
+        observedAt: now,
+      },
+    ]
+    Reflect.set(created.service, 'snapshot', snapshot)
+
+    const resumed = await created.service.resumeArticlePublishingAttempt(
+      affair.id,
+      attempt.id,
+      WORKSPACE_ID,
+    )
+    expect(resumed.success, JSON.stringify(resumed)).toBe(true)
+    if (!resumed.success) return
+    expect(
+      resumed.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'publish'),
+    ).toMatchObject({ status: 'completed' })
+    expect(resumed.data.articlePublishing?.execution).toMatchObject({
+      status: 'preparing',
+      currentStepId: 'verify-publication',
+    })
+
+    const started = await created.service.markArticlePublishingAttemptStarted(
+      affair.id,
+      attempt.id,
+      WORKSPACE_ID,
+    )
+    expect(started.success, JSON.stringify(started)).toBe(true)
+    if (!started.success) return
+    expect(started.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+  })
+
+  it('ends an unknown Bilibili task after the public page proves an image-count mismatch', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+    const publishing = affair.articlePublishing!
+    publishing.adapterId = 'bilibili'
+    delete publishing.draft
+    publishing.composer = { platformAccountId: '5961101548', allowPublish: true }
+    publishing.publication = { status: 'result-unknown' }
+    publishing.execution.status = 'result-unknown'
+    affair.attempts[0].status = 'interrupted'
+    const effect = {
+      key: 'unknown-bilibili-submit',
+      affairId: affair.id,
+      attemptId: created.attemptId,
+      executionGeneration: publishing.execution.currentGeneration,
+      kind: 'publish' as const,
+      targetId: 'publish',
+      status: 'result-unknown' as const,
+      reservedAt: new Date().toISOString(),
+      dispatchedAt: new Date().toISOString(),
+    }
+    publishing.sideEffects = [effect]
+    Reflect.set(created.service, 'snapshot', snapshot)
+
+    const result = await created.service.recordBilibiliMismatchedPublication(
+      {
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: effect.executionGeneration,
+        sideEffectKey: effect.key,
+        uid: '5961101548',
+        url: 'https://t.bilibili.com/1246694229973925912',
+        titleMatches: true,
+        bodyMatches: true,
+        expectedImages: 3,
+        actualImages: 12,
+      },
+      WORKSPACE_ID,
+    )
+
+    expect(result.success, JSON.stringify(result)).toBe(true)
+    if (!result.success) return
+    expect(result.data.articlePublishing?.execution.status).toBe('failed')
+    expect(result.data.articlePublishing?.publication).toMatchObject({
+      status: 'published',
+      url: 'https://t.bilibili.com/1246694229973925912',
+    })
+    expect(result.data.articlePublishing?.sideEffects[0].status).toBe('verified')
+    expect(result.data.attempts[0].status).toBe('failed')
+    expect(
+      result.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'verify-publication'),
+    ).toMatchObject({ status: 'failed' })
+  })
 
   it.each([
     'authorized',
@@ -1930,6 +2062,61 @@ describe('article publishing persistent state', () => {
       status: 'preparing',
     })
     await reloaded.flush()
+  })
+
+  it('retries an explicitly failed checkpoint in a new execution generation', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot = JSON.parse(
+      await readFile(join(directory, 'affairs.json'), 'utf8'),
+    ) as WebAffairSnapshot
+    const affair = snapshot.affairs.find((candidate) => candidate.id === created.affairId)!
+    const publishing = affair.articlePublishing!
+    const attempt = affair.attempts.find((candidate) => candidate.id === created.attemptId)!
+    const checkpoint = publishing.checkpoints.find(
+      (candidate) => candidate.stepId === 'open-editor',
+    )!
+    const previousGeneration = attempt.executionGeneration
+    const now = new Date().toISOString()
+    checkpoint.status = 'failed'
+    checkpoint.startedAt = now
+    checkpoint.finishedAt = now
+    checkpoint.error = { code: 'ADAPTER_UNAVAILABLE', message: '上一代尚未支持该平台' }
+    checkpoint.evidence.push('页面未发生写入')
+    publishing.execution.status = 'interrupted'
+    publishing.execution.currentStepId = checkpoint.stepId
+    attempt.status = 'interrupted'
+    attempt.endedAt = now
+    attempt.failureMessage = '上一代适配器不可用'
+    Reflect.set(created.service, 'snapshot', snapshot)
+
+    const resumed = await created.service.resumeArticlePublishingAttempt(
+      created.affairId,
+      created.attemptId,
+      WORKSPACE_ID,
+    )
+
+    expect(resumed.success, JSON.stringify(resumed)).toBe(true)
+    if (!resumed.success) return
+    expect(resumed.data.attempts[0]).toMatchObject({
+      id: created.attemptId,
+      status: 'preparing',
+      executionGeneration: previousGeneration + 1,
+    })
+    expect(
+      resumed.data.articlePublishing?.checkpoints.find(
+        (candidate) => candidate.stepId === 'open-editor',
+      ),
+    ).toMatchObject({
+      status: 'pending',
+      startedAt: undefined,
+      finishedAt: undefined,
+      error: undefined,
+    })
+    expect(resumed.data.articlePublishing?.execution).toMatchObject({
+      status: 'preparing',
+      currentStepId: 'open-editor',
+    })
   })
 
   it.each(['present', 'missing', 'not-loaded'] as const)(

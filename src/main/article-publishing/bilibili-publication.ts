@@ -1,4 +1,4 @@
-import type { Page, Request, Response } from 'playwright-core'
+import type { Page, Request, Response, Route } from 'playwright-core'
 import type { BilibiliSubmissionObservation } from '../../shared/article-publishing/article-publishing-types'
 
 /** Observed native dynamic URLs; keep the long platform ID as text. */
@@ -14,7 +14,7 @@ export function parseBilibiliPublicationUrl(raw: string) {
   }
 }
 
-/** Normalize only B站's native image rendition suffix, never another host or path. */
+/** Normalize B站's interchangeable native CDN shards and rendition suffix. */
 export function bilibiliImageUrl(raw: string): string | null {
   try {
     const u = new URL(raw)
@@ -31,9 +31,10 @@ export function bilibiliImageUrl(raw: string): string | null {
     const path = /^(\/bfs\/new_dyn\/[^/@]+\.(?:png|jpe?g|webp))(?:@[\w_!.]+)?$/iu.exec(
       u.pathname,
     )?.[1]
-    // The native upload receipt returns HTTP. Normalize only the allowed CDN
-    // origin to HTTPS; availability still requires a separate result check.
-    return path ? `https://${u.hostname}${path}` : null
+    // Upload receipts and the public page can use different i0/i1/i2 shards for
+    // the same immutable BFS path. Canonicalize that bounded native host set so
+    // public verification compares image identity instead of CDN routing.
+    return path ? `https://i0.hdslb.com${path}` : null
   } catch {
     return null
   }
@@ -42,6 +43,34 @@ export function bilibiliImageUrl(raw: string): string | null {
 export async function readBilibiliPublication(page: Page) {
   const anchor = parseBilibiliPublicationUrl(page.url())
   if (!anchor) throw new Error('不是本次 B站动态详情地址')
+  const identity = await page
+    .evaluate(async (id) => {
+      try {
+        const response = await fetch(
+          `https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?id=${encodeURIComponent(id)}`,
+          { credentials: 'include' },
+        )
+        const payload = await response.json()
+        const item = payload?.data?.item
+        const mid = item?.modules?.module_author?.mid
+        const imageUrls = item?.modules?.module_dynamic?.major?.draw?.items
+        const images = Array.isArray(imageUrls)
+          ? imageUrls.flatMap((image: { src?: unknown }) =>
+              typeof image?.src === 'string' ? [image.src] : [],
+            )
+          : []
+        return response.ok &&
+          payload?.code === 0 &&
+          item?.id_str === id &&
+          (typeof mid === 'number' || typeof mid === 'string') &&
+          /^\d{5,20}$/u.test(String(mid))
+          ? { uid: String(mid), images }
+          : null
+      } catch {
+        return null
+      }
+    }, anchor.id)
+    .catch(() => null)
   const live = await page.evaluate(() => {
     const roots = document.querySelectorAll('.bili-dyn-item')
     const root = roots.length === 1 ? roots[0] : null
@@ -81,14 +110,22 @@ export async function readBilibiliPublication(page: Page) {
       url: location.href,
     }
   })
-  const images = live.images.reduce<Array<(typeof live.images)[number]>>((result, image) => {
+  const renderedImages = live.images.flatMap((image) => {
     const src = bilibiliImageUrl(image.src)
-    if (!src || result.some((candidate) => candidate.src === src)) return result
-    result.push({ ...image, src })
-    return result
-  }, [])
+    return src ? [{ ...image, src }] : []
+  })
+  const loaded = new Set(renderedImages.filter((image) => image.loaded).map((image) => image.src))
+  // The native detail API is the exact ordered public gallery. The DOM also
+  // mounts hidden duplicate previews and can collapse positions after nine,
+  // so counting every <img> either doubles a valid post or misses extras.
+  const apiImages = identity?.images.flatMap((raw) => {
+    const src = bilibiliImageUrl(raw)
+    return src ? [{ src, alt: '', loaded: loaded.has(src) }] : []
+  })
+  const images = apiImages?.length ? apiImages : renderedImages
   return {
     ...live,
+    ...(identity ? identity : {}),
     id: anchor.id,
     images,
     imageEnumerationComplete: live.recognized && images.length > 0,
@@ -96,7 +133,7 @@ export async function readBilibiliPublication(page: Page) {
 }
 
 /** Passive observer of this single guarded native click; no network write or credentials. */
-export function observeBilibiliSubmission(
+export async function observeBilibiliSubmission(
   page: Page,
   expected: { uid: string; text: string; images: string[] },
   recordObservation?: (facts: Omit<BilibiliSubmissionObservation, 'observedAt'>) => Promise<void>,
@@ -114,6 +151,7 @@ export function observeBilibiliSubmission(
   let requestMatch: BilibiliSubmissionObservation['requestMatch']
   let responseStatus: number | undefined
   let platformCode: number | undefined
+  let postId: string | undefined
   let transportFailed: boolean | undefined
   let submissionSeen = false
   let confirmationAttempted = false
@@ -127,6 +165,7 @@ export function observeBilibiliSubmission(
       ...(requestMatch ? { requestMatch } : {}),
       ...(responseStatus !== undefined ? { responseStatus } : {}),
       ...(platformCode !== undefined ? { platformCode } : {}),
+      ...(postId ? { postId } : {}),
       ...(transportFailed !== undefined ? { transportFailed } : {}),
     }
     observationWrites = observationWrites.then(() => recordObservation?.(facts))
@@ -152,15 +191,34 @@ export function observeBilibiliSubmission(
   })
   void result.catch(() => undefined)
   const norm = (s: string) => s.replace(/[\s\u200b]/gu, '')
+  const classify = (r: Request): NonNullable<BilibiliSubmissionObservation['requestMatch']> => {
+    try {
+      const data = r.postDataJSON()?.dyn_req
+      if (!data || !Array.isArray(data.content?.contents) || !Array.isArray(data.pics))
+        return 'invalid-body'
+      if (data.content.contents.some((c: { raw_text?: unknown }) => typeof c.raw_text !== 'string'))
+        return 'invalid-body'
+      const text = data.content.contents.map((c: { raw_text: string }) => c.raw_text).join('')
+      if (norm(text) !== norm(expected.text)) return 'text-mismatch'
+      if (
+        data.pics.length !== expected.images.length ||
+        data.pics.some(
+          (p: { img_src?: string }, i: number) =>
+            bilibiliImageUrl(p.img_src ?? '') !== bilibiliImageUrl(expected.images[i]),
+        )
+      )
+        return 'image-mismatch'
+      return 'matched'
+    } catch {
+      return 'invalid-body'
+    }
+  }
+  const isSubmissionRequest = (r: Request) =>
+    r.method() === 'POST' &&
+    new URL(r.url()).origin === 'https://api.bilibili.com' &&
+    new URL(r.url()).pathname === '/x/dynamic/feed/create/dyn'
   const onRequest = (r: Request) => {
-    if (
-      !armed ||
-      disposed ||
-      r.method() !== 'POST' ||
-      new URL(r.url()).origin !== 'https://api.bilibili.com' ||
-      new URL(r.url()).pathname !== '/x/dynamic/feed/create/dyn'
-    )
-      return
+    if (!armed || disposed || !isSubmissionRequest(r)) return
     // Even a mismatched native submission forbids a second send.
     submissionSeen = true
     if (request) {
@@ -170,34 +228,28 @@ export function observeBilibiliSubmission(
       return
     }
     request = r
-    requestMatch = 'invalid-body'
-    try {
-      const data = r.postDataJSON()?.dyn_req
-      if (!data || !Array.isArray(data.content?.contents) || !Array.isArray(data.pics)) return
-      if (data.content.contents.some((c: { raw_text?: unknown }) => typeof c.raw_text !== 'string'))
-        return
-      const text = data.content.contents.map((c: { raw_text: string }) => c.raw_text).join('')
-      if (norm(text) !== norm(expected.text)) {
-        requestMatch = 'text-mismatch'
-        return
-      }
-      if (
-        data.pics.length !== expected.images.length ||
-        data.pics.some(
-          (p: { img_src?: string }, i: number) =>
-            bilibiliImageUrl(p.img_src ?? '') !== bilibiliImageUrl(expected.images[i]),
-        )
-      ) {
-        requestMatch = 'image-mismatch'
-        return
-      }
-      requestMatch = 'matched'
-    } catch {
-      /* An unrelated request cannot establish a receipt. */
-    } finally {
-      void recordFacts().catch(() => undefined)
-    }
+    requestMatch = classify(r)
+    void recordFacts().catch(() => undefined)
   }
+  const routeHandler = async (route: Route, routedRequest: Request) => {
+    if (!armed || disposed || !isSubmissionRequest(routedRequest)) {
+      await route.continue()
+      return
+    }
+    const match = classify(routedRequest)
+    if (match === 'matched') {
+      await route.continue()
+      return
+    }
+    submissionSeen = true
+    request = routedRequest
+    requestMatch = match
+    await recordFacts().catch(() => undefined)
+    await route.abort('blockedbyclient')
+    reject(new Error(`B站创建请求与冻结稿不匹配（${match}）；已在网络派发前阻止`))
+  }
+  if (typeof page.route === 'function')
+    await page.route('**/x/dynamic/feed/create/dyn', routeHandler)
   const onResponse = (r: Response) => {
     if (!armed || disposed || !request || r.request() !== request) return
     void (async () => {
@@ -206,6 +258,11 @@ export function observeBilibiliSubmission(
       const data = await r.json()
       if (disposed || settled) return
       if (Number.isSafeInteger(data?.code)) platformCode = data.code
+      const anchor =
+        typeof data?.data?.dyn_id_str === 'string'
+          ? parseBilibiliPublicationUrl(`https://t.bilibili.com/${data.data.dyn_id_str}`)
+          : null
+      if (anchor) postId = anchor.id
       await recordFacts()
       if (data?.code !== 0)
         throw new Error(
@@ -213,9 +270,6 @@ export function observeBilibiliSubmission(
         )
       if (requestMatch !== 'matched')
         throw new Error(`B站创建请求与冻结稿不匹配（${requestMatch}）；不能认领回执，禁止重发`)
-      const id = data?.data?.dyn_id_str
-      const anchor =
-        typeof id === 'string' ? parseBilibiliPublicationUrl(`https://t.bilibili.com/${id}`) : null
       if (data?.code !== 0 || !anchor) throw new Error('B站提交回执未能证明动态 ID；只核验，不重发')
       if (!disposed) resolve({ ...anchor, uid: expected.uid })
     })().catch((e) => reject(e instanceof Error ? e : new Error('B站回执不可核验')))
@@ -271,7 +325,7 @@ export function observeBilibiliSubmission(
       confirmationAttempted = true
       await recordFacts()
     },
-    dispose: () => {
+    dispose: async () => {
       if (disposed) return observationWrites
       disposed = true
       if (!settled) reject(new Error('B站提交观察已释放；只核验，不再发送'))
@@ -281,6 +335,8 @@ export function observeBilibiliSubmission(
       page.off('requestfailed', onRequestFailed)
       page.off('close', onPageLost)
       page.off('crash', onPageLost)
+      if (typeof page.unroute === 'function')
+        await page.unroute('**/x/dynamic/feed/create/dyn', routeHandler).catch(() => undefined)
       return armed ? recordFacts() : observationWrites
     },
   }
@@ -297,7 +353,7 @@ export interface BilibiliConfirmationProgress {
  * belongs to that same guarded operation, never to a retry or unknown-result run. */
 export async function finishBilibiliSubmission(
   page: Page,
-  observer: ReturnType<typeof observeBilibiliSubmission>,
+  observer: Awaited<ReturnType<typeof observeBilibiliSubmission>>,
   guard: {
     isCurrent: () => boolean
     revalidate: () => Promise<void>

@@ -165,7 +165,11 @@ const TOOLS: ToolDefinition[] = [
           ],
         },
         evidence: { type: 'string' },
-        outputRefs: { type: 'object' },
+        outputRefs: {
+          type: 'object',
+          description: '可选字符串键值；图片列表不要放入 outputRefs',
+          additionalProperties: { type: 'string' },
+        },
         error: publishingErrorInput,
       },
       required: ['affairId', 'attemptId', 'stepId', 'status'],
@@ -306,6 +310,14 @@ export class WebAffairToolModule implements ToolModule {
       if (!error.success) {
         return publishingPolicyError(
           'error 必须为 {code:非空字符串,message:非空字符串}，不得添加其他字段；此次回报未写入事务',
+        )
+      }
+      const outputRefs = reportArticlePublishingCheckpointInputSchema.shape.outputRefs.safeParse(
+        params.outputRefs,
+      )
+      if (!outputRefs.success) {
+        return publishingPolicyError(
+          'outputRefs 只能包含字符串值；图片 URL 已由逐图回读保存，不要在检查点回报图片数组',
         )
       }
       const reporter = this.resolvePublishingReporter(params, context, workspaceId)
@@ -459,6 +471,12 @@ function publishingExecutionResult(result: WebAffairOperationResult<WebAffair>):
   return {
     success: true,
     data: {
+      currentExecution: {
+        status: publishing.execution.status,
+        currentStepId: publishing.execution.currentStepId,
+        currentAttemptId: publishing.execution.currentAttemptId,
+        currentGeneration: publishing.execution.currentGeneration,
+      },
       ...affair,
       events: [],
       attempts: attempts.map(

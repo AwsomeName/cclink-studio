@@ -4,7 +4,7 @@ import { executePlaywrightAction, PLAYWRIGHT_ACTION_TYPES } from './playwright-a
 it('does not claim upload success when only file selection has completed', async () => {
   const setInputFiles = vi.fn().mockResolvedValue(undefined)
   const page = {
-    url: () => 'https://mp.toutiao.com/profile_v4/weitoutiao/publish',
+    url: () => 'https://example.com/upload',
     locator: () => ({ setInputFiles }),
   }
   const result = await executePlaywrightAction(page as never, {
@@ -56,6 +56,41 @@ it.each(['current', 'cancelled', 'wrong-editor'] as const)(
       {
         type: 'fill',
         selector: 'textarea[placeholder="有什么新鲜事想分享给大家？"]',
+        value: 'Agent invented text',
+      },
+      undefined,
+      () => {
+        if (scenario === 'cancelled') throw new Error('cancelled')
+      },
+      'Frozen title\nFrozen body',
+    )
+    if (scenario === 'current') {
+      await result
+      expect(fill).toHaveBeenCalledWith('Frozen title\nFrozen body')
+    } else {
+      await expect(result).rejects.toThrow()
+      expect(fill).not.toHaveBeenCalled()
+    }
+  },
+)
+
+it.each(['current', 'cancelled', 'wrong-editor'] as const)(
+  'writes only frozen Jike text through the signed live contenteditable: %s',
+  async (scenario) => {
+    const fill = vi.fn()
+    const page = {
+      url: () => 'https://web.okjike.com/following',
+      locator: () => ({
+        count: async () => (scenario === 'wrong-editor' ? 2 : 1),
+        evaluate: async () => true,
+        fill,
+      }),
+    }
+    const result = executePlaywrightAction(
+      page as never,
+      {
+        type: 'fill',
+        selector: '[contenteditable="true"][role="textbox"]',
         value: 'Agent invented text',
       },
       undefined,
@@ -585,6 +620,8 @@ it('dispatches Juejin image paste at the input handler and checks cancellation b
   const page = {
     url: () => 'https://juejin.cn/editor/drafts/7683025447916847150',
     locator: () => ({
+      count: async () => 1,
+      isVisible: async () => true,
       click: vi.fn(),
       focus: vi.fn(),
       evaluate: async (fn: (element: unknown, payload: unknown) => unknown, payload: unknown) =>

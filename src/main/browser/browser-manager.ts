@@ -2217,6 +2217,41 @@ export class BrowserManager {
     return this.views.get(tabId)?.accountId
   }
 
+  /** Find only an already visible view owned by this exact account identity. */
+  getVisibleViewIdForAccount(
+    workspaceKey: string | null,
+    accountId: string,
+    profileId: string,
+  ): string | null {
+    return (
+      [...this.views]
+        .filter(
+          ([tabId, entry]) =>
+            entry.workspaceKey === workspaceKey &&
+            entry.accountId === accountId &&
+            entry.profileId === profileId &&
+            this.isViewVisible(tabId),
+        )
+        .at(-1)?.[0] ?? null
+    )
+  }
+
+  /** Return an account view only when its identity is unique inside the workspace. */
+  getUniqueViewIdForAccount(
+    workspaceKey: string | null,
+    accountId: string,
+    profileId: string,
+  ): string | null {
+    const matches = [...this.views].filter(
+      ([, entry]) =>
+        entry.workspaceKey === workspaceKey &&
+        entry.accountId === accountId &&
+        entry.profileId === profileId &&
+        !entry.view.webContents.isDestroyed(),
+    )
+    return matches.length === 1 ? matches[0][0] : null
+  }
+
   /** Read only this live account Tab's own adopted children; never enumerate other tabs. */
   getAccountChildPageUrls(sourceTabId: string): string[] {
     const source = this.views.get(sourceTabId)
