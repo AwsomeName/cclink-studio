@@ -495,6 +495,7 @@ export async function bootstrapMainProcessServices(
     getAgentRoleRegistry: () => runtime.agentRoleRegistry,
     getDefaultAgentRoleRef: () => runtime.settingsService!.getAll().defaultAgentRoleRef,
     permissionManager: runtime.permissionManager,
+    getSettingsService: () => runtime.settingsService,
     getMcpClientMgr: () => runtime.mcpClientMgr,
     getCapabilities: () => getAgentCapabilities(runtime),
     getToolModules: () => getAgentToolModules(runtime),

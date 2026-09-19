@@ -167,6 +167,8 @@ export interface ToolConfirmationRequest {
   riskLevel: 'read' | 'write' | 'destructive'
   /** false 表示该操作每次都必须单独确认。 */
   allowAlways?: boolean
+  /** 主进程生成的静态守卫说明（如删除/终止类原因）；不承载工具参数。 */
+  guard?: string
 }
 
 export interface ToolConfirmationSummaryRow {
@@ -400,9 +402,12 @@ export interface AgentApiContract {
   setToolModuleEnabled(moduleId: string, enabled: boolean): Promise<AgentCommandResult>
 
   onRequestConfirmation(callback: (request: ToolConfirmationRequest) => void): () => void
+  onConfirmationsInvalidated(
+    callback: (event: import('./ipc/agent').AgentConfirmationsInvalidatedEvent) => void,
+  ): () => void
   resolveToolConfirmation(id: string, approved: boolean, alwaysAllow?: boolean): Promise<void>
-  getPermissionMode(): Promise<'auto' | 'categorized' | 'strict'>
-  setPermissionMode(mode: 'auto' | 'categorized' | 'strict'): Promise<void>
+  getPermissionMode(): Promise<import('./settings-constants').PermissionMode>
+  setPermissionMode(mode: import('./settings-constants').PermissionMode): Promise<void>
 
   listMcpServers(): Promise<ExternalMcpServer[]>
   addMcpServer(server: ExternalMcpServerInput): Promise<AgentCommandResult>

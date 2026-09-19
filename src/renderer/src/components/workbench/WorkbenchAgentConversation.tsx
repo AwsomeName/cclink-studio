@@ -10,12 +10,12 @@ import {
 import {
   useAgentStore,
   useDataSourceStore,
-  useEditorStore,
   useFsStore,
   useSettingsStore,
   useTabStore,
   useWorkspaceStore,
 } from '../../stores'
+import { useEditorFileStatus } from '../../features/agent-conversations/use-editor-file-status'
 import type { ConversationRuntimeRef, PermissionMode } from '../../types'
 import type { ToolConfirmationRequest } from '../../types'
 import type { AgentSkillRef } from '@shared/agent-role'
@@ -100,7 +100,8 @@ export function WorkbenchAgentConversation({
   const updateTabTitle = useTabStore((state) => state.updateTabTitle)
   const settings = useSettingsStore((state) => state.settings)
   const loadSettings = useSettingsStore((state) => state.loadSettings)
-  const editorFiles = useEditorStore((state) => state.files)
+  const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const editorFiles = useEditorFileStatus()
   const selectedPath = useFsStore((state) => state.selectedPath)
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const dataSources = useDataSourceStore((state) => state.sources)
@@ -304,10 +305,15 @@ export function WorkbenchAgentConversation({
   const handlePermissionModeChange = useCallback(
     async (nextMode: PermissionMode) => {
       if (nextMode === permissionMode) return
-      await window.cclinkStudio.agent.setPermissionMode(nextMode)
+      // 统一走 settings:set 持久化（ADR 0020），两个入口显示一致
+      const saved = await updateSettings({ permissionMode: nextMode })
+      if (!saved) {
+        showToast('权限模式保存失败，已保持原模式', 'error')
+        return
+      }
       setPermissionMode(nextMode)
     },
-    [permissionMode, setPermissionMode],
+    [permissionMode, setPermissionMode, updateSettings, showToast],
   )
   const handleRoleChange = useCallback(
     async (role: AgentRoleSummary) => {
@@ -626,7 +632,9 @@ function ConversationActivityPanel({
               <div className="conversation-confirmation-main">
                 <IconTool size={12} />
                 <span title={request.toolName}>{request.toolName}</span>
-                <em>{riskLabel(request.riskLevel)}</em>
+                <em title={request.guard ?? riskLabel(request.riskLevel)}>
+                  {request.guard ?? riskLabel(request.riskLevel)}
+                </em>
               </div>
               <div className="conversation-confirmation-actions">
                 <button onClick={() => void onApprove(request.id, false)} title="允许这次操作">

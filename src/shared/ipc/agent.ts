@@ -2,6 +2,7 @@ export * from '../agent-protocol'
 
 import { defineIpcCall } from './contract'
 import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
+import type { PermissionMode } from '../settings-constants'
 import type { ImageAttachmentMediaType, TransientImageAttachment } from '../image-attachment'
 import type {
   AgentApiContract as CoreAgentApiContract,
@@ -138,7 +139,7 @@ export type AgentSendMessageArgs =
 
 export type AgentSetScopeArgs = [scope: AgentScope] | [conversationId: string, scope: AgentScope]
 
-export type AgentPermissionMode = 'auto' | 'categorized' | 'strict'
+export type AgentPermissionMode = PermissionMode
 
 export interface AgentErrorEvent {
   message: string
@@ -251,6 +252,7 @@ export const agentIpcEvents = {
   error: 'agent:error',
   runStatus: 'agent:runStatus',
   requestConfirmation: 'agent:requestConfirmation',
+  confirmationsInvalidated: 'agent:confirmationsInvalidated',
 } as const
 
 export interface AgentIpcEventPayloads {
@@ -259,6 +261,15 @@ export interface AgentIpcEventPayloads {
   [agentIpcEvents.error]: AgentErrorEvent
   [agentIpcEvents.runStatus]: AgentRuntimeRunRecord
   [agentIpcEvents.requestConfirmation]: ToolConfirmationRequest
+  [agentIpcEvents.confirmationsInvalidated]: AgentConfirmationsInvalidatedEvent
+}
+
+/** 权限模式切换等原因撤销等待中确认时，通知渲染进程移除对应确认卡。 */
+export interface AgentConfirmationsInvalidatedEvent {
+  /** 被撤销的确认请求 ID。 */
+  ids: string[]
+  /** 面向用户的撤销原因。 */
+  reason: string
 }
 
 const agentRunStatuses = new Set(['running', 'cancelling', 'succeeded', 'failed', 'cancelled'])
@@ -359,9 +370,27 @@ export function parseAgentConfirmationRequest(value: unknown): ToolConfirmationR
           typeof (row as Record<string, unknown>)['monospace'] === 'boolean'),
     ) ||
     !agentRiskLevels.has(String(value['riskLevel'])) ||
-    (value['allowAlways'] !== undefined && typeof value['allowAlways'] !== 'boolean')
+    (value['allowAlways'] !== undefined && typeof value['allowAlways'] !== 'boolean') ||
+    (value['guard'] !== undefined && !isBoundedIpcEventString(value['guard'], 128))
   ) {
     return null
   }
   return value as unknown as ToolConfirmationRequest
+}
+
+export function parseAgentConfirmationsInvalidated(
+  value: unknown,
+): AgentConfirmationsInvalidatedEvent | null {
+  if (!isAgentEventObject(value)) return null
+  const ids = value['ids']
+  if (
+    !Array.isArray(ids) ||
+    ids.length < 1 ||
+    ids.length > 200 ||
+    !ids.every((id) => isBoundedIpcEventString(id, 512)) ||
+    !isBoundedIpcEventString(value['reason'], 512)
+  ) {
+    return null
+  }
+  return value as unknown as AgentConfirmationsInvalidatedEvent
 }

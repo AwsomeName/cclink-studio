@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAgentStore } from '../stores/agent-store'
+import { useSettingsStore } from '../stores/settings-store'
 import type { ContentBlock, PermissionMode, ToolConfirmationRequest } from '../types'
 import type { AgentContextUsageSnapshot, AgentRuntimeRunRecord } from '@shared/agent-protocol'
 
@@ -421,8 +422,23 @@ export function useAgentStreamEvents(): void {
       },
     )
 
+    // 权限模式切换等原因撤销等待中确认时，同步移除确认卡（工具已按拒绝结束，不会执行）。
+    const offInvalidated = window.cclinkStudio.agent.onConfirmationsInvalidated((event) => {
+      const store = useAgentStore.getState()
+      for (const id of event.ids) store.removePendingConfirmation(id)
+    })
+
+    // SettingsService 的已保存设置同步到会话显示，包括设置页更新和恢复默认。
+    const syncPermission = (): void => {
+      const { settings, loading } = useSettingsStore.getState()
+      if (!loading) useAgentStore.getState().setPermissionMode(settings.permissionMode)
+    }
+    const offSettings = useSettingsStore.subscribe(syncPermission)
+    syncPermission()
     window.cclinkStudio.agent.getPermissionMode().then((mode: string) => {
-      useAgentStore.getState().setPermissionMode(mode as PermissionMode)
+      if (useSettingsStore.getState().loading) {
+        useAgentStore.getState().setPermissionMode(mode as PermissionMode)
+      } else syncPermission()
     })
 
     return () => {
@@ -431,6 +447,8 @@ export function useAgentStreamEvents(): void {
       offError()
       offRunStatus()
       offConfirmation()
+      offInvalidated()
+      offSettings()
     }
   }, [])
 }

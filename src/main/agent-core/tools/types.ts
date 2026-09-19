@@ -5,6 +5,9 @@
  * 供 McpToolHost 和各工具模块使用。
  */
 
+// 权限模式联合类型唯一声明源在 shared/settings-constants（ADR 0020）。
+export type { PermissionMode } from '../../../shared/settings-constants'
+
 /** 工具注解（Phase 2 权限分类用） */
 export interface ToolAnnotations {
   /** true = 只读操作，不改变页面/系统状态 */
@@ -116,6 +119,3 @@ export interface ToolModule {
     context?: ToolExecutionContext,
   ): Promise<unknown>
 }
-
-/** 权限模式（Phase 1 硬编码 'auto'，Phase 2 实现完整逻辑） */
-export type PermissionMode = 'auto' | 'categorized' | 'strict'

@@ -150,4 +150,53 @@ describe('PermissionManager confirmation IPC boundary', () => {
     manager.resolveConfirmation(String(payload.id), false)
     await expect(pending).resolves.toBe(false)
   })
+
+  it('rejects pending confirmations and broadcasts invalidation when the mode changes', async () => {
+    const send = vi.fn()
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send },
+    } as never)
+    const pending = manager.requestConfirmation({
+      conversationId: 'conversation-a',
+      runId: 'run-a',
+      toolName: 'Bash',
+      params: { command: 'rm -rf /tmp/canary' },
+      riskLevel: 'destructive',
+      allowAlways: false,
+    })
+    const requestPayload = send.mock.calls[0]?.[1] as { id: string }
+
+    manager.setMode('auto-except-destructive')
+
+    await expect(pending).resolves.toBe(false)
+    const invalidation = send.mock.calls[1]?.[1] as { ids: string[]; reason: string }
+    expect(invalidation.ids).toEqual([requestPayload.id])
+    expect(invalidation.reason).toContain('权限模式已切换')
+  })
+
+  it('does not reject pending confirmations when the mode value does not change', async () => {
+    const send = vi.fn()
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send },
+    } as never)
+    manager.setMode('auto-except-destructive')
+    const pending = manager.requestConfirmation({
+      conversationId: 'conversation-a',
+      runId: 'run-a',
+      toolName: 'Bash',
+      params: { command: 'rm -rf /tmp/canary' },
+      riskLevel: 'destructive',
+      allowAlways: false,
+    })
+
+    manager.setMode('auto-except-destructive')
+
+    // 未变化不撤销；确认仍等待用户处理。
+    expect(send).toHaveBeenCalledTimes(1)
+    const requestPayload = send.mock.calls[0]?.[1] as { id: string }
+    manager.resolveConfirmation(requestPayload.id, true)
+    await expect(pending).resolves.toBe(true)
+  })
 })

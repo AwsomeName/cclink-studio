@@ -5,6 +5,7 @@ import {
   boundedTextSchema,
   httpUrlSchema,
 } from './input-schema'
+import { PERMISSION_MODES } from '../settings-constants'
 import { workspaceRefSchema } from './workspace-ref-schema'
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024
@@ -256,7 +257,7 @@ export const agentToolModuleIdSchema = z
   .max(128)
   .regex(/^[A-Za-z0-9._-]+$/)
 export const agentConfirmationIdSchema = boundedIdentifierSchema()
-export const agentPermissionModeSchema = z.enum(['auto', 'categorized', 'strict'])
+export const agentPermissionModeSchema = z.enum(PERMISSION_MODES)
 
 const boundedStringRecordSchema = z
   .record(boundedIdentifierSchema(256), boundedTextSchema(8_192))

@@ -172,6 +172,13 @@ describe('markdown-codec', () => {
     )
   })
 
+  it('preserves ordinary Markdown and normalizes newlines when the last formula is removed', () => {
+    const source = '# 标题\r\n\r\n**正文**、`code` 和 &amp;\r\n'
+    expect(normalizeMarkdownEditorOutput(source, '$x_1$')).toBe(
+      '# 标题\n\n**正文**、`code` 和 &amp;\n',
+    )
+  })
+
   it('keeps the exact source of an unchanged formula when a reference is available', () => {
     const reference = '字面下划线 $x\\_label + \\Delta$。'
     const serialized = '字面下划线 $x\\_label + \\\\Delta$。'

@@ -13,6 +13,7 @@ import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
 import { listBuiltinAgentSkills } from '../agent/agent-skill-registry'
 import type { PermissionManager } from '../mcp/permission'
+import type { SettingsService } from '../settings/settings-service'
 import type { McpClientManager } from '../mcp/client-manager'
 import type {
   AgentCapabilityStatus,
@@ -45,6 +46,8 @@ interface AgentIpcDeps {
   getAgentRoleRegistry?: () => AgentRoleRegistry | null
   getDefaultAgentRoleRef?: () => AgentRoleRef
   permissionManager: PermissionManager
+  /** 用于把权限模式写入持久设置；缺失时 agent:setPermissionMode 只改运行时。 */
+  getSettingsService?: () => SettingsService | null
   getMcpClientMgr: () => McpClientManager | null
   getCapabilities?: () => AgentCapabilityStatus[]
   getToolModules?: () => AgentToolModuleStatus[]
@@ -556,8 +559,12 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     return permissionManager.getMode()
   })
 
-  // 设置权限模式
-  handle(agentIpc.setPermissionMode, (_event, mode) => {
+  // 设置权限模式（ADR 0020：与 settings:set 一样落盘，避免两个入口状态分叉）
+  handle(agentIpc.setPermissionMode, async (_event, mode) => {
+    const settingsService = deps.getSettingsService?.() ?? null
+    if (settingsService) {
+      await settingsService.set({ permissionMode: mode })
+    }
     permissionManager.setMode(mode)
   })
 

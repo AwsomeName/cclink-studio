@@ -280,12 +280,16 @@ export function AgentCapabilitiesSettings({
             }
           >
             <option value="auto">自动</option>
+            <option value="auto-except-destructive">除删除/终止外自动</option>
             <option value="categorized">按风险确认</option>
             <option value="strict">每次确认</option>
           </select>
         </div>
         <p className="agent-capabilities-note">
-          自动模式仍会尊重工具声明的强制确认策略；严格模式不会改变工具本身的可用范围。
+          自动模式仍会尊重工具声明的强制确认策略；除删除/终止外自动模式只对删除类与终止进程类操作逐次确认（不可“始终允许”），其余工具调用直接执行；严格模式不会改变工具本身的可用范围。
+        </p>
+        <p className="agent-capabilities-note">
+          删除/终止识别基于命令行文本。无法可靠判断的动态命令、条件和循环语句仍需确认；脚本文件内容与构建工具内部行为无法静态透视，不承诺绝对保证。验证码、付款、法律声明等人工卡点不受权限模式影响。
         </p>
       </div>
 

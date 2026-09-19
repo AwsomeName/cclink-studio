@@ -3,6 +3,7 @@ import type { AppSettings } from '../settings-constants'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
+  PERMISSION_MODES,
   SUPPORTED_AGENT_PROVIDERS,
 } from '../settings-constants'
 import { MAX_BINDINGS_PER_COMMAND, MAX_KEYBINDING_OVERRIDES } from '../keybindings'
@@ -16,7 +17,7 @@ const settingsUpdateSchema = z
     updateTrack: z.enum(['stable', 'beta']),
     agentEngine: z.literal('local-claude-code'),
     backendType: z.literal('claude-code'),
-    permissionMode: z.enum(['auto', 'categorized', 'strict']),
+    permissionMode: z.enum(PERMISSION_MODES),
     disabledAgentToolModules: z.array(z.string().min(1).max(256)).max(128),
     defaultAgentRoleRef: z
       .object({

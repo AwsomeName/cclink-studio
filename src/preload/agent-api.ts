@@ -5,6 +5,7 @@ import {
   agentMcpIpc,
   parseAgentCompleteEvent,
   parseAgentConfirmationRequest,
+  parseAgentConfirmationsInvalidated,
   parseAgentErrorEvent,
   parseAgentRunStatusEvent,
   parseAgentStreamEvent,
@@ -130,6 +131,14 @@ export const agentApi: AgentApiContract = {
     }
     ipcRenderer.on(agentIpcEvents.requestConfirmation, listener)
     return () => ipcRenderer.removeListener(agentIpcEvents.requestConfirmation, listener)
+  },
+  onConfirmationsInvalidated: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
+      const data = parseAgentConfirmationsInvalidated(value)
+      if (data) callback(data)
+    }
+    ipcRenderer.on(agentIpcEvents.confirmationsInvalidated, listener)
+    return () => ipcRenderer.removeListener(agentIpcEvents.confirmationsInvalidated, listener)
   },
   resolveToolConfirmation: (id, approved, alwaysAllow) =>
     invokeIpcContract(agentIpc.resolveToolConfirmation, id, approved, alwaysAllow),

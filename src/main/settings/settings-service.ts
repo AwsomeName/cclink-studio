@@ -15,6 +15,7 @@ import {
   normalizeClaudeRuntimeSettingsUpdate,
   type AppSettings,
 } from './types'
+import { PERMISSION_MODES } from '../../shared/settings-constants'
 import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 import { CredentialService } from '../credentials/credential-service'
@@ -33,7 +34,7 @@ const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 const VALID_VALUES: Record<string, Set<string>> = {
   updateTrack: new Set<string>(['stable', 'beta']),
   backendType: new Set<string>(['claude-code']),
-  permissionMode: new Set<string>(['auto', 'categorized', 'strict']),
+  permissionMode: new Set<string>(PERMISSION_MODES),
   defaultZoomMode: new Set<string>(['fit', 'manual']),
   defaultDeviceMode: new Set<string>(['desktop', 'mobile']),
   agentEngine: new Set<string>(['local-claude-code']),

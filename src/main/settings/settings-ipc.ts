@@ -21,6 +21,7 @@ import {
   DEFAULT_SETTINGS,
   isSupportedAgentApiConfiguration,
   normalizeClaudeRuntimeSettingsUpdate,
+  PERMISSION_MODES,
   type PermissionMode,
 } from './types'
 import { detectClaudeCode } from '../agent/claude-code-detector'
@@ -35,8 +36,8 @@ import {
 } from '../agent/claude-model-connection-test'
 import { probeCodexAcpExecutable } from '../agent-core/backends/local-acp-backend'
 
-/** 合法的 permissionMode 值 */
-const VALID_PERMISSION_MODES = new Set<string>(['auto', 'categorized', 'strict'])
+/** 合法的 permissionMode 值（唯一声明源：shared/settings-constants） */
+const VALID_PERMISSION_MODES = new Set<string>(PERMISSION_MODES)
 
 /** 影响 Agent 后端的设置字段 */
 const AGENT_SETTING_KEYS = new Set([

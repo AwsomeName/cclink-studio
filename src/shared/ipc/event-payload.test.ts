@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   parseAgentCompleteEvent,
   parseAgentConfirmationRequest,
+  parseAgentConfirmationsInvalidated,
   parseAgentErrorEvent,
   parseAgentRunStatusEvent,
   parseAgentStreamEvent,
@@ -98,6 +99,22 @@ describe('preload event payload parsers', () => {
     expect(parseAgentRunStatusEvent({ ...run, status: 'unknown' })).toBeNull()
     expect(
       parseAgentConfirmationRequest({ ...confirmation, params: { command: 'pwd' } }),
+    ).toBeNull()
+  })
+
+  it('validates confirmations-invalidated events and drops malformed payloads', () => {
+    const event = { ids: ['confirmation-1', 'confirmation-2'], reason: '权限模式已切换' }
+    expect(parseAgentConfirmationsInvalidated(event)).toBe(event)
+    expect(parseAgentConfirmationsInvalidated({ ids: [], reason: 'x' })).toBeNull()
+    expect(parseAgentConfirmationsInvalidated({ ids: 'confirmation-1', reason: 'x' })).toBeNull()
+    expect(parseAgentConfirmationsInvalidated({ ids: [42], reason: 'x' })).toBeNull()
+    expect(parseAgentConfirmationsInvalidated({ ids: ['a'], reason: '' })).toBeNull()
+    expect(parseAgentConfirmationsInvalidated({ ids: ['a'], reason: 'x'.repeat(513) })).toBeNull()
+    expect(
+      parseAgentConfirmationsInvalidated({
+        ids: Array.from({ length: 201 }, () => 'id'),
+        reason: 'x',
+      }),
     ).toBeNull()
   })
 

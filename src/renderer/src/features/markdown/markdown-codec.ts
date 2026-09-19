@@ -794,6 +794,8 @@ function expandSameLineListHeadings(source: string): string {
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
   const normalized = normalizeMarkdownSource(source)
+  // This pass only restores math and escapes literal dollars. Most documents need neither.
+  if (!normalized.includes('$')) return normalized
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
   const expressions = scanMathExpressions(masked)
   const normalizedReference =

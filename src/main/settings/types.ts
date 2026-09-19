@@ -24,6 +24,7 @@ export {
   PROVIDER_PRESETS,
   DEFAULT_SETTINGS,
   MANAGED_CLAUDE_RUNTIME_VERSION,
+  PERMISSION_MODES,
   getPresetBaseUrl,
   normalizeClaudeRuntimeSettingsUpdate,
   SUPPORTED_AGENT_API_FORMATS,

@@ -23,8 +23,19 @@ export type ClaudeRuntimeSource = 'bundled' | 'managed' | 'system' | 'custom'
 /** 当前 Studio 允许按需安装的 Claude Code Runtime 版本。 */
 export const MANAGED_CLAUDE_RUNTIME_VERSION = '2.1.211'
 
+/**
+ * 权限模式唯一声明源（ADR 0020）。
+ * `auto-except-destructive` 表示除删除/终止类操作外自动放行；删除/终止类在所有模式下逐次确认。
+ */
+export const PERMISSION_MODES = [
+  'auto',
+  'auto-except-destructive',
+  'categorized',
+  'strict',
+] as const
+
 /** 权限模式 */
-export type PermissionMode = 'auto' | 'categorized' | 'strict'
+export type PermissionMode = (typeof PERMISSION_MODES)[number]
 
 /** 浏览器缩放模式 */
 export type ZoomMode = 'fit' | 'manual'

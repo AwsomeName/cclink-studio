@@ -1,8 +1,10 @@
 /**
  * PermissionManager — 工具权限管理器
  *
- * 管理三种权限模式（auto / categorized / strict），
+ * 管理四种权限模式（auto / auto-except-destructive / categorized / strict，ADR 0020），
  * 在 MCP tool call 执行前检查是否需要用户确认。
+ * 策略判定入口是 AgentToolAuthorizationBroker；本类负责模式运行时状态、
+ * 用户确认交互与会话内 Always 记忆。
  *
  * 确认流程：
  * 1. McpToolHost.handleToolCall() 检查 needsConfirmation()
@@ -15,7 +17,11 @@
 import { randomUUID } from 'node:crypto'
 import type { BrowserWindow } from 'electron'
 import type { PermissionMode, ToolAnnotations } from './types'
-import { agentIpcEvents, type ToolConfirmationRequest } from '../../shared/ipc/agent'
+import {
+  agentIpcEvents,
+  type AgentConfirmationsInvalidatedEvent,
+  type ToolConfirmationRequest,
+} from '../../shared/ipc/agent'
 import { summarizeToolConfirmation } from './tool-confirmation-summary'
 
 export type { ToolConfirmationRequest } from '../../shared/ipc/agent'
@@ -29,6 +35,7 @@ interface PermissionConfirmationInput {
   riskLevel: 'read' | 'write' | 'destructive'
   reason?: string
   allowAlways?: boolean
+  guard?: string
 }
 
 /** 等待中的确认 */
@@ -55,16 +62,29 @@ export class PermissionManager {
     this.mainWindow = mainWindow
   }
 
-  /** 设置权限模式 */
+  /** 设置权限模式；值真实变化时撤销所有等待中的确认（按拒绝结束并通知渲染进程撤卡）。 */
   setMode(mode: PermissionMode): void {
+    const changed = this.mode !== mode
     this.mode = mode
-    // 切换模式时清除所有等待中的确认（全部拒绝）
-    for (const pending of this.pending.values()) {
+    console.log(`[PermissionManager] 权限模式切换为: ${mode}`)
+    if (!changed) return
+    this.invalidatePendingConfirmations('权限模式已切换，等待中的确认已失效并按拒绝处理')
+  }
+
+  /** 撤销等待中的确认：工具不执行、不重复执行；渲染进程收到事件后移除确认卡。 */
+  private invalidatePendingConfirmations(reason: string): void {
+    if (this.pending.size === 0) return
+    const ids: string[] = []
+    for (const [id, pending] of this.pending) {
       clearTimeout(pending.timeout)
       pending.resolve(false)
+      ids.push(id)
     }
     this.pending.clear()
-    console.log(`[PermissionManager] 权限模式切换为: ${mode}`)
+    const event: AgentConfirmationsInvalidatedEvent = { ids, reason }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send(agentIpcEvents.confirmationsInvalidated, event)
+    }
   }
 
   /** 获取当前权限模式 */
@@ -88,6 +108,10 @@ export class PermissionManager {
     switch (this.mode) {
       case 'auto':
         // 全部放行
+        return false
+
+      case 'auto-except-destructive':
+        // 除删除/终止类外自动放行；删除/终止类由 broker 强制确认，不经过这里
         return false
 
       case 'categorized':
@@ -120,6 +144,8 @@ export class PermissionManager {
         riskLevel: req.riskLevel,
         summary: summarizeToolConfirmation(req.toolName, req.params, req.workspaceRoot),
         ...(req.allowAlways === false ? { allowAlways: false } : {}),
+        // guard 是主进程生成的静态守卫说明；按 IPC 契约截断到有界长度。
+        ...(req.guard ? { guard: req.guard.slice(0, 128) } : {}),
       }
 
       // 超时自动拒绝

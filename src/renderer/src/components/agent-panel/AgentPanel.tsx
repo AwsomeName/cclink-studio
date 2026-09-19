@@ -4,12 +4,12 @@ import {
   useBrowserDownloadStore,
   useBrowserTaskStore,
   useDataSourceStore,
-  useEditorStore,
   useFsStore,
   useSettingsStore,
   useTabStore,
   useWorkspaceStore,
 } from '../../stores'
+import { useEditorFileStatus } from '../../features/agent-conversations/use-editor-file-status'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
 import {
   importAgentImageFiles,
@@ -125,7 +125,8 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const openTab = useTabStore((s) => s.openTab)
   const settings = useSettingsStore((s) => s.settings)
   const loadSettings = useSettingsStore((s) => s.loadSettings)
-  const editorFiles = useEditorStore((s) => s.files)
+  const updateSettings = useSettingsStore((s) => s.updateSettings)
+  const editorFiles = useEditorFileStatus()
   const selectedPath = useFsStore((s) => s.selectedPath)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const browserTasks = useBrowserTaskStore((s) => s.tasks)
@@ -453,14 +454,18 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     [removePendingConfirmation],
   )
 
-  // 切换权限模式
+  // 切换权限模式：统一走 settings:set 持久化（ADR 0020），两个入口显示一致
   const handlePermissionModeChange = useCallback(
     async (nextMode: PermissionMode) => {
       if (nextMode === permissionMode) return
-      await window.cclinkStudio.agent.setPermissionMode(nextMode)
+      const saved = await updateSettings({ permissionMode: nextMode })
+      if (!saved) {
+        showToast('权限模式保存失败，已保持原模式', 'error')
+        return
+      }
       setPermissionMode(nextMode)
     },
-    [permissionMode, setPermissionMode],
+    [permissionMode, setPermissionMode, updateSettings, showToast],
   )
 
   const handleRoleChange = useCallback(
@@ -988,6 +993,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       { label: '操作', value: request.toolName },
       ...request.summary,
       { label: '风险', value: riskLabel[request.riskLevel] },
+      ...(request.guard ? [{ label: '原因', value: request.guard }] : []),
     ],
     actions: [
       {
