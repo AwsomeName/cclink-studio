@@ -517,6 +517,10 @@ function FileTreeNodeView({
   /** 新建文件夹输入框（在此目录的子节点列表中） */
   const isNewFolderHere = editingPath === 'new-folder' && newFolderParent === node.path
   const isNewFileHere = editingPath === 'new-file' && newFolderParent === node.path
+  const errorText = node.loadError
+    ?? (node.symbolicLink?.error
+      ? `${node.symbolicLink.error}${node.symbolicLink.rawTarget ? ` (${node.symbolicLink.rawTarget})` : ''}`
+      : undefined)
 
   return (
     <div className="file-tree-node">
@@ -528,7 +532,7 @@ function FileTreeNodeView({
         role="treeitem"
         tabIndex={0}
         aria-expanded={isDir ? Boolean(node.expanded) : undefined}
-        title={node.symbolicLink?.error ?? node.symbolicLink?.target ?? node.path}
+        title={errorText ?? node.symbolicLink?.target ?? node.path}
         onDragStart={(event) => onDragStart(node, event)}
         onDragEnd={onDragEnd}
         onDragOver={(event) => {
@@ -598,7 +602,7 @@ function FileTreeNodeView({
         )}
       </div>
 
-      {(node.loadError || node.symbolicLink?.error) && (
+      {errorText && (
         <div
           role="status"
           style={{
@@ -608,7 +612,7 @@ function FileTreeNodeView({
             whiteSpace: 'normal',
           }}
         >
-          {node.loadError || node.symbolicLink?.error}
+          {errorText}
         </div>
       )}
 

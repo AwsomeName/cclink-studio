@@ -142,6 +142,61 @@ describe('fs-store workspace switching', () => {
     expect(useFsStore.getState().tree[0].children).toEqual([])
   })
 
+  it('re-probes a broken linked directory before failing so a fixed target recovers on click', async () => {
+    const workspacePath = '/Users/apple/project'
+    const path = `${workspacePath}/研发日记`
+    useFsStore.setState({
+      workspacePath,
+      tree: [
+        {
+          name: '研发日记',
+          path,
+          type: 'directory',
+          symbolicLink: { error: '链接目标不存在', rawTarget: '/Users/apple/notes/研发日记' },
+        },
+      ],
+      expandedPaths: [],
+    })
+    const readDir = window.cclinkStudio.fs.readDir as ReturnType<typeof vi.fn>
+    readDir.mockImplementation((dir: string) => {
+      if (dir === workspacePath) {
+        return Promise.resolve([
+          {
+            name: '研发日记',
+            path,
+            type: 'directory',
+            symbolicLink: { target: '/Users/apple/notes/研发日记' },
+            size: 0,
+            modifiedAt: 1,
+          },
+        ])
+      }
+      return Promise.resolve([
+        {
+          name: 'note.md',
+          path: `${path}/note.md`,
+          type: 'file',
+          extension: '.md',
+          size: 0,
+          modifiedAt: 1,
+        },
+      ])
+    })
+
+    await useFsStore.getState().toggleDir(path)
+
+    expect(readDir).toHaveBeenCalledWith(workspacePath)
+    expect(window.cclinkStudio.fs.authorizeLinkedDirectory).toHaveBeenCalledWith(path)
+    expect(useFsStore.getState().tree[0]?.expanded).toBe(true)
+    expect(useFsStore.getState().tree[0]?.symbolicLink).toEqual({
+      target: '/Users/apple/notes/研发日记',
+    })
+    expect(useFsStore.getState().tree[0]?.children).toEqual([
+      expect.objectContaining({ name: 'note.md' }),
+    ])
+    expect(useFsStore.getState().tree[0]?.loadError).toBeUndefined()
+  })
+
   it('does not expand a stale directory after switching during approval', async () => {
     const approval = deferred<boolean>()
     const path = '/Users/apple/project/notes'

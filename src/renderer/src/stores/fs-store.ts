@@ -815,7 +815,14 @@ export const useFsStore = create<FsState>((set, get) => ({
 
   toggleDir: async (dirPath) => {
     const workspacePath = get().workspacePath
-    const before = findFileTreeNode(get().tree, dirPath)
+    let before = findFileTreeNode(get().tree, dirPath)
+    if (!before?.expanded && before?.symbolicLink?.error) {
+      // 链接目标可能事后已修复（目标目录建好/软链重建）：先重读父目录拿最新链接状态，
+      // 避免点击时直接抛出缓存的悬空错误、永远显示旧的「链接目标不存在」
+      await get().refreshDir(parentDir(dirPath))
+      if (get().workspacePath !== workspacePath) return
+      before = findFileTreeNode(get().tree, dirPath)
+    }
     if (!before?.expanded && before?.symbolicLink) {
       try {
         if (before.symbolicLink.error) throw new Error(before.symbolicLink.error)

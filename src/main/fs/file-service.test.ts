@@ -198,10 +198,16 @@ describe('linked directories in the local file tree', () => {
       content: 'inside',
     })
     expect(await ui(() => service.readDir(workspace))).toContainEqual(
-      expect.objectContaining({ name: 'broken', symbolicLink: { error: '链接目标不存在' } }),
+      expect.objectContaining({
+        name: 'broken',
+        symbolicLink: { error: '链接目标不存在', rawTarget: join(tempDir, 'missing') },
+      }),
     )
     expect(await ui(() => service.readDir(internal))).toContainEqual(
-      expect.objectContaining({ name: 'cycle', symbolicLink: { error: '链接循环或目标不可访问' } }),
+      expect.objectContaining({
+        name: 'cycle',
+        symbolicLink: { error: '链接循环或目标不可访问', rawTarget: workspace },
+      }),
     )
     await expect(ui(() => service.readDir(join(internal, 'cycle')))).rejects.toThrow('LINK_CYCLE')
   })

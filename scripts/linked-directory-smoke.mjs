@@ -109,8 +109,13 @@ try {
   await editor.press('Meta+s')
   await page.waitForFunction(
     async (filePath) => {
-      const value = await window.cclinkStudio.fs.readTextDocument(filePath)
-      return value.content.includes('Edited through linked directory')
+      try {
+        const value = await window.cclinkStudio.fs.readTextDocument(filePath)
+        return value.content.includes('Edited through linked directory')
+      } catch {
+        // 保存的原子 rename 与并发读取竞争时会瞬态失败（TOCTOU 防护），继续轮询即可
+        return false
+      }
     },
     join(link, 'linked-note.md'),
   )
@@ -131,6 +136,18 @@ try {
   assert.ok((await page.locator('body').innerText()).includes('链接目标不存在'))
   assert.ok((await page.locator('body').innerText()).includes('链接循环或目标不可访问'))
   console.log('PASS restart retains authorization; broken and cyclic links show inline reasons')
+
+  // 悬空链接的目标事后创建：点击时应先重读父目录再判定，无需重启即可恢复展开
+  await mkdir(join(fixture, 'missing'))
+  await writeFile(join(fixture, 'missing', 'recovered.md'), '# recovered\n')
+  await app.evaluate(() => {
+    globalThis.linkSmokeResponse = 1
+  })
+  const brokenRow = page.locator('.file-tree-item').filter({ hasText: 'broken-link' })
+  await brokenRow.click()
+  await page.locator('.file-tree-item').filter({ hasText: 'recovered.md' }).waitFor()
+  assert.ok(!((await page.locator('body').innerText()).includes('链接目标不存在')))
+  console.log('PASS broken link recovers on click after its target is created')
 
   const other = join(fixture, 'other')
   await mkdir(other)

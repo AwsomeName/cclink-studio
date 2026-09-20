@@ -8,7 +8,7 @@ export interface FsDirEntry {
   extension?: string
   size: number
   modifiedAt: number
-  symbolicLink?: { target?: string; error?: string }
+  symbolicLink?: { target?: string; rawTarget?: string; error?: string }
 }
 
 export interface FsSearchWorkspaceInput {

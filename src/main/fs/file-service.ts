@@ -5,6 +5,7 @@ import {
   open,
   readdir,
   readFile,
+  readlink,
   realpath,
   rename,
   rm,
@@ -556,6 +557,8 @@ export class FileService {
                   path,
                   type: 'directory',
                   symbolicLink: {
+                    // 回传原始链接文本，悬空链接也能看出它想指向哪里
+                    rawTarget: await readlink(path).catch(() => undefined),
                     error:
                       code === 'ENOENT'
                         ? '链接目标不存在'
@@ -1291,7 +1294,7 @@ export interface DirEntry {
   path: string
   type: 'directory' | 'file'
   extension?: string
-  symbolicLink?: { target?: string; error?: string }
+  symbolicLink?: { target?: string; rawTarget?: string; error?: string }
 }
 
 /** 文件元数据 */
