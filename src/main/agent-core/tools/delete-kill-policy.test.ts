@@ -158,6 +158,56 @@ describe('deleteKillReasonForShellCommand ordinary commands pass', () => {
   }
 })
 
+describe('deleteKillReasonForShellCommand control structures analyze transparently', () => {
+  const passingCommands = [
+    'for f in *.png; do cp "$f" "/tmp/$f"; done',
+    'for f in a b c; do echo "$f"; done',
+    'for file in src/*.ts; do wc -l "$file"; done',
+    'while read -r line; do echo "$line" >> out.log; done < input.txt',
+    'until ping -c 1 host; do sleep 1; done',
+    'if [ -f config.json ]; then echo exists; fi',
+    'if grep -q foo bar.txt; then echo found; else echo missing; fi',
+    'case "$mode" in a) echo 1;; b) echo 2;; *) echo other;; esac',
+    'function greet { echo hi; }',
+    'greet() { echo hi; }',
+    'for ((i = 0; i < 5; i++)); do echo "$i"; done',
+    'then echo later',
+    'select opt in a b; do echo "$opt"; done',
+  ]
+  for (const command of passingCommands) {
+    it(`allows "${command}"`, () => {
+      expect(deleteKillReasonForShellCommand(command)).toBeNull()
+    })
+  }
+
+  const flaggedCommands = [
+    'for f in *.log; do rm "$f"; done',
+    'for f in *; do rm -rf "$f"; done',
+    'while read -r pid; do kill "$pid"; done',
+    'if [ -f x ]; then rm -rf x; fi',
+    'if rm /tmp/a; then echo done; fi',
+    'case "$1" in clean) git clean -fd;; esac',
+    'case $branch in main) rm ./canary;; esac',
+    'function cleanup { rm -rf build; }',
+    'cleanup() { kill 123; }',
+    'else rm /tmp/a',
+    'elif true; then pkill canary',
+    'do rm /tmp/a',
+  ]
+  for (const command of flaggedCommands) {
+    it(`flags "${command}"`, () => {
+      expect(deleteKillReasonForShellCommand(command)).not.toBeNull()
+    })
+  }
+
+  it('fail-closes on dynamic command positions inside control structures', () => {
+    expect(deleteKillReasonForShellCommand('for f in *; do $f; done')).toContain('动态构造')
+    expect(deleteKillReasonForShellCommand('if [ -n "$x" ]; then bash -c "$CMD"; fi')).toContain(
+      '动态构造',
+    )
+  })
+})
+
 describe('deleteKillReasonForShellCommand quoting and edge cases', () => {
   it('does not treat quoted mentions of command words as calls', () => {
     expect(deleteKillReasonForShellCommand("echo 'rm'")).toBeNull()

@@ -8,12 +8,16 @@
  * - 复合结构：`&&`、`||`、`;`、`|`、`&`、换行分段，任一段命中即命中；
  *   `sudo`/`env`/`nohup`/`nice` 等包装前缀与环境变量赋值前缀会被剥离；
  *   `xargs` 的命令操作数按剩余命令行递归判定。
+ * - 控制结构：控制关键字按透明前缀跳过后继续判定剩余命令位（`then rm x` 与
+ *   `rm x` 同判）；`for/select var in <words>` 的循环项、`case` 的主题词与
+ *   分支模式（`pat)`）不是命令词，跳过。命令替换在分段前已抽出递归分析。
  * - 内联代码：`bash/sh/zsh/... -c <字面量>`（含 `bash -lc` 等合并 flag）、`node -e`、
  *   `python -c`、`osascript -e`、`eval <字面量>` 与 `$()`/反引号/进程替换内容递归分析。
  *
  * fail-closed（无法可靠判断 → 返回确认理由）：
  * - Bash 缺少 command 参数；
  * - 命令位或解释器代码位由变量动态构造（`eval "$VAR"`、`bash -c "$CMD"`）；
+ * - `case` 语句找不到 `in` 关键字（退回主题词命令位分析）；
  * - 递归深度超限或 heredoc 命中删除/终止词。
  *
  * 明确不判定（放行，残余风险见 ADR 0020）：
@@ -58,6 +62,27 @@ const CODE_INTERPRETER_FLAGS: Record<string, string> = {
 
 /** `git` 需要跳过并消费操作数的全局参数。 */
 const GIT_GLOBAL_FLAG_ARGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace'])
+
+/**
+ * 透明控制关键字：跳过后剩余 token 继续按命令位分析（`do rm x` 与 `rm x` 同判），
+ * 不再对控制结构整体 fail-closed。
+ */
+const TRANSPARENT_CONTROL_KEYWORDS = new Set([
+  'if',
+  'then',
+  'elif',
+  'else',
+  'while',
+  'until',
+  'do',
+  'done',
+  'fi',
+  'esac',
+  'case',
+  'for',
+  'select',
+  'function',
+])
 
 /** 解释器携带代码参数的 flag 形态：`-c`、合并短 flag `-lc`、长 flag `--eval`。 */
 function isInterpreterCodeFlag(token: string, codeFlag: string): boolean {
@@ -130,19 +155,52 @@ function analyzeCommandLine(command: string, depth: number): string | null {
 function analyzeSegment(segment: string, depth: number): string | null {
   const args = stripRedirections(tokenize(segment))
   let index = 0
-  // 环境变量赋值前缀、子 shell 起始符、包装命令前缀及其 flag 都跳过。
+  // 环境变量赋值前缀、子 shell 起始符、控制关键字、case 模式、包装命令前缀及其
+  // flag 都跳过；剩余部分继续按普通命令位分析。
   while (index < args.length) {
-    const token = args[index].text
-    if (token === '(' || token === '{' || isEnvironmentAssignment(token)) {
+    const token = args[index]
+    const text = token.text
+    if (text === '(' || text === '{' || isEnvironmentAssignment(text)) {
       index += 1
       continue
     }
-    if (token.startsWith('-')) {
+    // case 分支模式（`pat)`）与函数定义形态（`name()`）以 `)` 结尾，不会是命令词。
+    if (text.endsWith(')')) {
       index += 1
       continue
     }
-    if (WRAPPER_COMMANDS.has(commandBasename(token))) {
-      const wrapper = commandBasename(token)
+    if (text.startsWith('-')) {
+      index += 1
+      continue
+    }
+    const keyword = commandBasename(text)
+    if (TRANSPARENT_CONTROL_KEYWORDS.has(keyword)) {
+      if (keyword === 'case') {
+        // 跳过主题词到 `in`；分支模式由 `)` 后缀规则跳过。找不到 `in` 时保持
+        // 主题词命令位分析（变量主题会 fail-closed）。
+        let cursor = index + 1
+        while (cursor < args.length && args[cursor].text !== 'in') cursor += 1
+        if (cursor >= args.length) break
+        index = cursor + 1
+        continue
+      }
+      if (keyword === 'function') {
+        // `function name { ... }` 的函数名不是命令词，连同关键字一起跳过。
+        index = Math.min(index + 2, args.length)
+        continue
+      }
+      if ((keyword === 'for' || keyword === 'select') && index < args.length) {
+        // `for var in <words>`：`in` 之后是循环项而非命令，头段放行；
+        // 循环体在 `do ...` 段另行分析。非 `var in` 形态跳过循环变量继续分析。
+        if (args[index].text === 'in') return null
+        index += 1
+        continue
+      }
+      index += 1
+      continue
+    }
+    if (WRAPPER_COMMANDS.has(commandBasename(text))) {
+      const wrapper = commandBasename(text)
       index += 1
       const valueFlags =
         wrapper === 'sudo'
@@ -190,23 +248,6 @@ function analyzeSegment(segment: string, depth: number): string | null {
     return '命令位由变量动态构造，无法可靠判断删除/终止风险，需要逐次确认'
   }
   const executable = commandBasename(commandToken.text)
-  if (
-    [
-      'if',
-      'then',
-      'elif',
-      'else',
-      'for',
-      'while',
-      'until',
-      'do',
-      'case',
-      'function',
-      'select',
-    ].includes(executable)
-  ) {
-    return 'Shell 控制结构无法可靠判定删除/终止风险，需要确认'
-  }
   const directReason = deleteReasonForWord(executable)
   if (directReason) return directReason
   if (executable === 'git') return gitDeleteReason(rest)

@@ -80,7 +80,10 @@ kill 仍逐次确认且不能被「始终允许」跳过。同时暴露出两个
 - **fail-closed 转确认**：命令行动态构造且无法解析出确定命令词的场景，如
   `eval "$VAR"`、`bash -c "$CMD"`（命令位是变量）。理由：模型没有正当理由动态拼接
   自身要执行的命令，该形态按未知默认暂停处理。
-- Shell 条件、循环、函数等控制结构，以及 `env -S` 动态拆分命令暂不可靠解析，需确认。
+- Shell 控制结构按透明前缀处理：控制关键字（`if/then/elif/else/for/select/while/
+  until/do/done/fi/esac/case/function`）跳过后，剩余命令词照常判定（`then rm x` 与
+  `rm x` 同判）；`for var in <words>` 的循环项、`case` 的主题词与分支模式不是命令词，
+  跳过。循环体/分支体在各自的 `do`/分支段中另行分析。`env -S` 动态拆分命令仍需确认。
   已覆盖包装命令的常用带值参数、xargs 带值参数和注释后继续执行的多行命令。
 - **无法透视、按普通命令放行**：脚本文件执行（`bash x.sh`、`node x.js`、`./x.sh`、
   `source x`）与包管理器/构建工具内部行为（`pnpm test`、`make` 内部可能删除文件）。
