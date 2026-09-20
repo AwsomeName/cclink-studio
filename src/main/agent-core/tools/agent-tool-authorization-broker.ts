@@ -248,13 +248,6 @@ export class AgentToolAuthorizationBroker {
     // Bash 按命令内容判定删除/终止类（ADR 0020）：命中才映射为 destructive 注解。
     const deleteKillReason = deleteKillReasonFor(request.toolName, request.params)
     const annotations = sdkToolAnnotations(request.toolName, deleteKillReason)
-    if (
-      annotations &&
-      request.toolName === 'Bash' &&
-      this.currentMode() !== 'auto-except-destructive'
-    ) {
-      annotations.destructiveHint = true
-    }
     if (!annotations) {
       return {
         behavior: 'deny',

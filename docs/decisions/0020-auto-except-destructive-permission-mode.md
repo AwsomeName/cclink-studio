@@ -57,8 +57,10 @@ kill 仍逐次确认且不能被「始终允许」跳过。同时暴露出两个
   `params.command` 做静态单行分析：
   - 命中删除/终止类（见下）→ destructive，逐次确认、`allowAlways: false`；
   - 未命中 → write 级，走当前模式的通用判定。
-- 按命令分类放行仅对新模式生效。旧 `auto/categorized/strict` 保留全部 Bash 逐次确认，
-  不在用户未显式选择新模式时扩大权限。
+- 按命令分类对所有模式生效：未命中删除/终止类的 Bash 归为普通 write。`auto` 与
+  `auto-except-destructive` 均直接放行普通 Bash；`categorized/strict` 仍按各自模式确认。
+  两种自动模式的区别仍在于非删除/终止但由工具声明为 destructive 的操作：`auto` 保留
+  工具声明的强制确认，`auto-except-destructive` 自动放行。
 - `KillShell` 维持 kill 类 destructive。
 - 删除/终止类识别范围（`deleteKillReasonFor`）：
   - 结构化工具：`KillShell`、`browser_clear_cookies`、`android_uninstall_package`、
@@ -115,8 +117,9 @@ kill 仍逐次确认且不能被「始终允许」跳过。同时暴露出两个
 
 ## 备选方案
 
-- **在 `auto` 模式内直接放宽**：无法区分「自动放行但保留 destructive 注解确认」与
-  「只保留删除/终止确认」两种用户意图，且改变现有模式语义，被否决。
+- **让 `auto` 继续确认所有 Bash**：这会把普通构建、测试和诊断错误地当作 destructive，
+  与界面“低风险操作自动放行”的承诺冲突，被否决。`auto` 仍保留非 Bash 工具的 destructive
+  注解确认；`auto-except-destructive` 只保留删除/终止和产品级人工卡点。
 - **对脚本文件执行也 fail-closed**：会让 `bash scripts/x.sh`、构建脚本全部退回逐次
   确认，与产品验收目标冲突，被否决（改为披露残余风险）。
 - **把删除/kill 判定放进 `PermissionManager`**：制造第二套策略状态，违反 broker

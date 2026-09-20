@@ -203,16 +203,25 @@ describe('AgentToolAuthorizationBroker', () => {
 })
 
 describe('AgentToolAuthorizationBroker in auto-except-destructive mode', () => {
-  it.each(['auto', 'categorized', 'strict'] as const)(
-    'keeps Bash confirmation in legacy %s mode',
-    async (mode) => {
-      const { broker, requestConfirmation } = createBroker({ mode })
-      await broker.authorizeSdkTool({ toolName: 'Bash', params: { command: 'pnpm test' }, context })
-      expect(requestConfirmation).toHaveBeenCalledWith(
-        expect.objectContaining({ allowAlways: false }),
-      )
-    },
-  )
+  it('auto-allows ordinary Bash in auto mode', async () => {
+    const { broker, requestConfirmation } = createBroker({ mode: 'auto' })
+    await expect(
+      broker.authorizeSdkTool({ toolName: 'Bash', params: { command: 'pnpm test' }, context }),
+    ).resolves.toEqual({ behavior: 'allow' })
+    expect(requestConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('keeps ordinary Bash confirmation in categorized and strict modes', async () => {
+    for (const mode of ['categorized', 'strict'] as const) {
+      const { broker, requestConfirmation } = createBroker({ mode, needsConfirmation: true })
+      await broker.authorizeSdkTool({
+        toolName: 'Bash',
+        params: { command: 'pnpm test' },
+        context,
+      })
+      expect(requestConfirmation).toHaveBeenCalledOnce()
+    }
+  })
 
   it.each([
     'sudo -u root rm /tmp/example',
