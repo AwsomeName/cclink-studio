@@ -517,8 +517,9 @@ function FileTreeNodeView({
   /** 新建文件夹输入框（在此目录的子节点列表中） */
   const isNewFolderHere = editingPath === 'new-folder' && newFolderParent === node.path
   const isNewFileHere = editingPath === 'new-file' && newFolderParent === node.path
-  const errorText = node.loadError
-    ?? (node.symbolicLink?.error
+  const errorText =
+    node.loadError ??
+    (node.symbolicLink?.error
       ? `${node.symbolicLink.error}${node.symbolicLink.rawTarget ? ` (${node.symbolicLink.rawTarget})` : ''}`
       : undefined)
 
