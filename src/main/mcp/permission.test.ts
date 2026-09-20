@@ -2,6 +2,32 @@ import { describe, it, expect, vi } from 'vitest'
 import { PermissionManager } from './permission'
 import type { ToolAnnotations } from './types'
 
+// permission.ts 运行时使用 electron 的 Notification/shell；测试里替换为可控桩。
+const { mockBeep, mockNotificationShow, setNotificationSupported, isSupported } = vi.hoisted(() => {
+  let supported = true
+  return {
+    mockBeep: vi.fn(),
+    mockNotificationShow: vi.fn(),
+    setNotificationSupported: (value: boolean) => {
+      supported = value
+    },
+    isSupported: () => supported,
+  }
+})
+
+vi.mock('electron', () => ({
+  Notification: class {
+    static isSupported = isSupported
+    on() {
+      return this
+    }
+    show() {
+      mockNotificationShow()
+    }
+  },
+  shell: { beep: mockBeep },
+}))
+
 // ─── getRiskLevel（静态方法，纯函数） ────────────────
 
 describe('PermissionManager.getRiskLevel', () => {
@@ -125,6 +151,50 @@ describe('PermissionManager 模式管理', () => {
 })
 
 describe('PermissionManager confirmation IPC boundary', () => {
+  it('notifies via system notification while the confirmation is pending', async () => {
+    mockNotificationShow.mockClear()
+    mockBeep.mockClear()
+    setNotificationSupported(true)
+    const send = vi.fn()
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send },
+    } as never)
+    const pending = manager.requestConfirmation({
+      toolName: 'Bash',
+      params: { command: 'rm -rf /tmp/canary' },
+      riskLevel: 'destructive',
+      allowAlways: false,
+    })
+    expect(mockNotificationShow).toHaveBeenCalledTimes(1)
+    expect(mockBeep).not.toHaveBeenCalled()
+    const requestPayload = send.mock.calls[0]?.[1] as { id: string }
+    manager.resolveConfirmation(requestPayload.id, false)
+    await expect(pending).resolves.toBe(false)
+  })
+
+  it('falls back to a beep when system notifications are unsupported', async () => {
+    mockNotificationShow.mockClear()
+    mockBeep.mockClear()
+    setNotificationSupported(false)
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() },
+    } as never)
+    const pending = manager.requestConfirmation({
+      conversationId: 'conversation-a',
+      runId: 'run-a',
+      toolName: 'Bash',
+      params: { command: 'rm -rf /tmp/canary' },
+      riskLevel: 'destructive',
+      allowAlways: false,
+    })
+    expect(mockNotificationShow).not.toHaveBeenCalled()
+    expect(mockBeep).toHaveBeenCalledTimes(1)
+    manager.cancelForRun('conversation-a', 'run-a')
+    await expect(pending).resolves.toBe(false)
+  })
+
   it('sends only a bounded redacted summary to the renderer', async () => {
     const send = vi.fn()
     const manager = new PermissionManager({

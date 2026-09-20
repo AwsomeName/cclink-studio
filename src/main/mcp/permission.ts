@@ -8,14 +8,14 @@
  *
  * 确认流程：
  * 1. McpToolHost.handleToolCall() 检查 needsConfirmation()
- * 2. 需要确认 → requestConfirmation() → IPC 发送到渲染进程
+ * 2. 需要确认 → requestConfirmation() → IPC 发送到渲染进程，并发出系统通知/提示音
  * 3. 渲染进程展示确认卡片，用户点击允许/拒绝
  * 4. IPC 回传 resolveConfirmation() → Promise resolve
  * 5. 超时 60 秒自动拒绝
  */
 
 import { randomUUID } from 'node:crypto'
-import type { BrowserWindow } from 'electron'
+import { Notification, shell, type BrowserWindow } from 'electron'
 import type { PermissionMode, ToolAnnotations } from './types'
 import {
   agentIpcEvents,
@@ -161,6 +161,7 @@ export class PermissionManager {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send(agentIpcEvents.requestConfirmation, request)
         console.log(`[PermissionManager] 请求确认: ${req.toolName} (${req.riskLevel})`)
+        this.notifyConfirmationRequested(req)
       } else {
         // 窗口已关闭，直接拒绝
         clearTimeout(timeout)
@@ -168,6 +169,28 @@ export class PermissionManager {
         resolve(false)
       }
     })
+  }
+
+  /**
+   * 确认卡在后台窗口容易被忽略，而超时是静默自动拒绝；发系统级提醒兜底。
+   * 通知点击后聚焦主窗口；系统不支持通知时退回提示音。
+   */
+  private notifyConfirmationRequested(req: PermissionConfirmationInput): void {
+    if (Notification.isSupported()) {
+      const notification = new Notification({
+        title: 'CCLink Studio 工具审批',
+        body: `${req.toolName}（${req.riskLevel}）等待确认，超时将自动拒绝`,
+      })
+      notification.on('click', () => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.show()
+          this.mainWindow.focus()
+        }
+      })
+      notification.show()
+      return
+    }
+    shell.beep()
   }
 
   cancelForRun(conversationId: string, runId: string): void {
