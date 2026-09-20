@@ -44,6 +44,29 @@ const CHECKPOINT_LABELS: Record<string, string> = {
   failed: '失败',
 }
 
+type ArticlePublishingPlatform =
+  | 'csdn'
+  | 'zhihu'
+  | 'juejin'
+  | 'xiaohongshu'
+  | 'weibo'
+  | 'toutiao'
+  | 'bilibili'
+  | 'jike'
+
+const ARTICLE_PUBLISHING_PLATFORM_OPTIONS: ReadonlyArray<{
+  value: Exclude<ArticlePublishingPlatform, 'xiaohongshu'>
+  label: string
+}> = [
+  { value: 'csdn', label: 'CSDN' },
+  { value: 'zhihu', label: '知乎' },
+  { value: 'juejin', label: '掘金' },
+  { value: 'weibo', label: '微博图文' },
+  { value: 'toutiao', label: '头条微头条' },
+  { value: 'bilibili', label: 'B站图文动态' },
+  { value: 'jike', label: '即刻图文动态' },
+]
+
 const EXECUTION_LABELS: Record<string, string> = {
   draft: '尚未开始',
   preparing: '正在启动',
@@ -68,9 +91,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const [resources, setResources] = useState<WebResourceSnapshot | null>(null)
   const [affair, setAffair] = useState<WebAffair | null>(null)
   const [accountId, setAccountId] = useState('')
-  const [platform, setPlatform] = useState<
-    'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike'
-  >('csdn')
+  const [platform, setPlatform] = useState<ArticlePublishingPlatform>('csdn')
   const [localDraftId, setLocalDraftId] = useState('')
   const [existingDraftUrl, setExistingDraftUrl] = useState('')
   const [platformAccountId, setPlatformAccountId] = useState('')
@@ -722,17 +743,7 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
             <select
               value={platform}
               onChange={(event) => {
-                setPlatform(
-                  event.target.value as
-                    | 'csdn'
-                    | 'zhihu'
-                    | 'juejin'
-                    | 'xiaohongshu'
-                    | 'weibo'
-                    | 'toutiao'
-                    | 'bilibili'
-                    | 'jike',
-                )
+                setPlatform(event.target.value as ArticlePublishingPlatform)
                 setAccountId('')
               }}
             >
@@ -744,6 +755,22 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
               <option value="bilibili">B站图文动态</option>
               <option value="jike">即刻图文动态</option>
             </select>
+            <div className="article-publishing-choice-grid" role="group" aria-label="网站快捷选择">
+              {ARTICLE_PUBLISHING_PLATFORM_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={platform === option.value}
+                  className={platform === option.value ? 'selected' : undefined}
+                  onClick={() => {
+                    setPlatform(option.value)
+                    setAccountId('')
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <small>小红书禁止自动化投稿，Studio 已停用该平台的新发布任务。</small>
           </label>
           <label>
@@ -756,6 +783,25 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
                 </option>
               ))}
             </select>
+            {csdnAccounts.length > 0 ? (
+              <div
+                className="article-publishing-choice-grid"
+                role="group"
+                aria-label={`${platformLabel}账号快捷选择`}
+              >
+                {csdnAccounts.map(({ account }) => (
+                  <button
+                    key={account.id}
+                    type="button"
+                    aria-pressed={accountId === account.id}
+                    className={accountId === account.id ? 'selected' : undefined}
+                    onClick={() => setAccountId(account.id)}
+                  >
+                    {formatArticlePublishingAccountOption(account.label, platformLabel)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </label>
           {selectedCsdnAccount ? (
             <div className="article-publishing-account-identity">

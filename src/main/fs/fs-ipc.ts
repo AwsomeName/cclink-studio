@@ -1,4 +1,4 @@
-import { type IpcMainInvokeEvent, type WebContents } from 'electron'
+import { BrowserWindow, dialog, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { FileService } from './file-service'
 import { SettingsService } from '../settings/settings-service'
 import { randomUUID } from 'crypto'
@@ -48,6 +48,24 @@ export function registerFsIpc(
       showHiddenFiles: settingsService.getAll().showHiddenFiles,
     })
   })
+
+  handle(fsIpc.authorizeLinkedDirectory, async (event, dirPath) =>
+    fs.authorizeLinkedDirectory(dirPath, async (target) => {
+      const owner = BrowserWindow.fromWebContents(event.sender)
+      if (!owner || owner.isDestroyed()) return false
+      const result = await dialog.showMessageBox(owner, {
+        type: 'question',
+        title: '允许访问链接目录',
+        message: '允许在此项目中访问外部目录？',
+        detail: `${dirPath}\n→ ${target}\n\n允许后可浏览和编辑其中的文件，修改会作用于原目录。此授权仅用于 Studio 文件操作，不自动授予 Agent。删除链接本身不会删除原目录。`,
+        buttons: ['取消', '允许访问'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      })
+      return !event.sender.isDestroyed() && result.response === 1
+    }),
+  )
 
   handle(fsIpc.searchWorkspace, async (_event, input) => fs.searchWorkspace(input))
   handle(fsIpc.beginFileRelocation, async (_event, input) => fs.beginFileRelocation(input))

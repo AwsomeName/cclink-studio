@@ -5,6 +5,7 @@ import { invokeIpcContract } from './ipc-contract-client'
 export const fsApi: FsApiContract = {
   getHomePath: () => invokeIpcContract(fsIpc.getHomePath),
   readDir: (dirPath) => invokeIpcContract(fsIpc.readDir, dirPath),
+  authorizeLinkedDirectory: (dirPath) => invokeIpcContract(fsIpc.authorizeLinkedDirectory, dirPath),
   searchWorkspace: (input) => invokeIpcContract(fsIpc.searchWorkspace, input),
   beginFileRelocation: (input) => invokeIpcContract(fsIpc.beginFileRelocation, input),
   markFileRelocationCommitted: (input) =>

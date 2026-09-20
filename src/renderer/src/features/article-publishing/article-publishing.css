@@ -72,6 +72,23 @@
   resize: vertical;
 }
 
+.article-publishing-choice-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.article-publishing-choice-grid button {
+  padding: 5px 9px;
+}
+
+.article-publishing-choice-grid button.selected,
+.article-publishing-choice-grid button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .article-publishing-account-identity {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

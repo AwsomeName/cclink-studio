@@ -50,6 +50,7 @@ import type {
 import { isMarkdownDocumentPath, markdownAssetDirectoryName } from '../../shared/markdown-document'
 import { MarkdownDocumentService } from './markdown-document-service'
 import { FileRelocationJournal } from './file-relocation-journal'
+import { LinkedDirectoryGrants, type LinkedDirectoryGrant } from './linked-directory-grants'
 
 const MAX_INLINE_VIDEO_BYTES = 300 * 1024 * 1024
 const MAX_OFFICE_PREVIEW_BLOCKS = 400
@@ -91,6 +92,7 @@ export interface FileServiceOptions {
   getActiveWorkspace: () => string | null
   now?: () => number
   relocationJournalPath?: string
+  linkedDirectoryGrantsPath?: string
 }
 
 interface PickerCapability {
@@ -119,10 +121,13 @@ export class FileService {
   private readonly getActiveWorkspace: () => string | null
   private readonly now: () => number
   private readonly relocationJournal: FileRelocationJournal | null
+  private readonly linkedDirectories: LinkedDirectoryGrants
+  private readonly pendingLinkApprovals = new Set<string>()
 
   constructor(options: FileServiceOptions) {
     this.getActiveWorkspace = options.getActiveWorkspace
     this.now = options.now ?? Date.now
+    this.linkedDirectories = new LinkedDirectoryGrants(options.linkedDirectoryGrantsPath)
     this.markdownDocuments = new MarkdownDocumentService((filePath) => this.validatePath(filePath))
     this.relocationJournal = options.relocationJournalPath
       ? new FileRelocationJournal(options.relocationJournalPath, this.now)
@@ -222,6 +227,7 @@ export class FileService {
   private async validatePath(
     targetPath: string,
     intent: FileAccessIntent = 'read',
+    canonicalResult = false,
   ): Promise<string> {
     const resolved = resolve(targetPath)
     const context = this.accessContexts.getStore()
@@ -243,7 +249,10 @@ export class FileService {
     const canonical = await canonicalizeExistingOrParent(resolved)
     if (trustedRoot && !pickerCapability) {
       const canonicalRoot = await realpath(trustedRoot)
-      if (!isPathWithin(canonicalRoot, canonical)) {
+      if (
+        !isPathWithin(canonicalRoot, canonical) &&
+        !(await this.hasLinkedDirectoryAccess(trustedRoot, resolved, canonical))
+      ) {
         throw new Error(`OUTSIDE_WORKSPACE: 路径的真实目标不属于可信工作空间: ${resolved}`)
       }
     } else if (pickerCapability) {
@@ -257,16 +266,121 @@ export class FileService {
       }
     }
     if (pickerCapability) pickerCapability.remainingUses -= 1
-    return resolved
+    return canonicalResult ? canonical : resolved
+  }
+
+  private isInteractiveFileAccess(): boolean {
+    const context = this.accessContexts.getStore()
+    return context?.rendererId !== undefined && !context.trustedWorkspace
+  }
+
+  private async linkedDirectorySnapshot(root: string, link: string): Promise<LinkedDirectoryGrant> {
+    const [workspace, target, linkStat, rootStat] = await Promise.all([
+      realpath(root),
+      realpath(link),
+      lstat(link),
+      stat(root),
+    ])
+    const targetStat = await stat(target)
+    if (!linkStat.isSymbolicLink() || !targetStat.isDirectory()) {
+      throw new Error('LINK_NOT_DIRECTORY: 目标不是链接目录')
+    }
+    return {
+      workspace,
+      link,
+      target,
+      identity: `${rootStat.dev}:${rootStat.ino}:${linkStat.dev}:${linkStat.ino}:${linkStat.ctimeMs}:${targetStat.dev}:${targetStat.ino}`,
+    }
+  }
+
+  private async hasLinkedDirectoryAccess(
+    root: string,
+    path: string,
+    canonical: string,
+  ): Promise<boolean> {
+    if (!this.isInteractiveFileAccess() || !isPathWithin(root, path)) return false
+    const workspace = await realpath(root)
+    for (const grant of await this.linkedDirectories.list()) {
+      if (
+        grant.workspace !== workspace ||
+        !isPathWithin(root, grant.link) ||
+        !isPathWithin(grant.link, path) ||
+        !isPathWithin(grant.target, canonical)
+      )
+        continue
+      try {
+        const current = await this.linkedDirectorySnapshot(root, grant.link)
+        if (current.target === grant.target && current.identity === grant.identity) return true
+      } catch {
+        /* Removed, replaced or inaccessible links cannot retain a grant. */
+      }
+    }
+    return false
+  }
+
+  /** Only the trusted renderer IPC can request approval; the main process owns the prompt. */
+  async authorizeLinkedDirectory(
+    linkPath: string,
+    confirm: (target: string) => Promise<boolean>,
+  ): Promise<boolean> {
+    const root = this.getCurrentAccessRoot()
+    const link = resolve(linkPath)
+    if (
+      !this.isInteractiveFileAccess() ||
+      !root ||
+      link === resolve(root) ||
+      !isPathWithin(resolve(root), link)
+    ) {
+      throw new Error('OUTSIDE_WORKSPACE: 链接不属于当前本地工作空间')
+    }
+    await this.validatePath(dirname(link), 'workspace-browse')
+    const snapshot = await this.linkedDirectorySnapshot(root, link)
+    await this.assertNoDirectoryCycle(root, link)
+    if (
+      isPathWithin(snapshot.workspace, snapshot.target) ||
+      (await this.hasLinkedDirectoryAccess(resolve(root), link, snapshot.target))
+    )
+      return true
+    if (this.pendingLinkApprovals.has(link)) return false
+    this.pendingLinkApprovals.add(link)
+    try {
+      if (!(await confirm(snapshot.target))) return false
+      if (this.getCurrentAccessRoot() !== root)
+        throw new Error('STALE_WORKSPACE: 确认期间工作空间已切换')
+      await this.validatePath(dirname(link), 'workspace-browse')
+      const current = await this.linkedDirectorySnapshot(root, link)
+      if (JSON.stringify(current) !== JSON.stringify(snapshot)) {
+        throw new Error('LINK_CHANGED: 确认期间链接目标发生变化，请重试')
+      }
+      await this.linkedDirectories.add(snapshot)
+      return true
+    } finally {
+      this.pendingLinkApprovals.delete(link)
+    }
+  }
+
+  private async assertNoDirectoryCycle(root: string, directory: string): Promise<void> {
+    const target = await realpath(directory)
+    for (
+      let parent = dirname(directory);
+      isPathWithin(resolve(root), parent);
+      parent = dirname(parent)
+    ) {
+      if ((await realpath(parent)) === target)
+        throw new Error('LINK_CYCLE: 链接指向上级目录，无法重复展开')
+      if (parent === dirname(parent)) break
+    }
   }
 
   private async validateWorkspaceTarget(
     workspacePath: string,
     targetPath: string,
-    options: { allowWorkspaceRoot: boolean },
+    options: { allowWorkspaceRoot: boolean; entryOnly?: boolean },
   ): Promise<{ workspacePath: string; targetPath: string }> {
     const safeWorkspacePath = await this.validatePath(workspacePath)
-    const safeTargetPath = await this.validatePath(targetPath)
+    const safeTargetPath = options.entryOnly
+      ? await this.validateEntryPath(targetPath)
+      : await this.validatePath(targetPath)
     const relativeTarget = relative(safeWorkspacePath, safeTargetPath)
     const isWithinWorkspace =
       relativeTarget === '' ||
@@ -278,6 +392,21 @@ export class FileService {
       throw new Error('不能从文件树删除工作区根目录')
     }
     return { workspacePath: safeWorkspacePath, targetPath: safeTargetPath }
+  }
+
+  /** Rename/trash operate on the link entry, never on its referent (including broken links). */
+  private async validateEntryPath(targetPath: string): Promise<string> {
+    const path = resolve(targetPath)
+    const root = this.getCurrentAccessRoot()
+    if (root && path !== resolve(root) && isPathWithin(resolve(root), path)) {
+      await this.validatePath(dirname(path), 'write')
+      try {
+        if ((await lstat(path)).isSymbolicLink()) return path
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+    }
+    return this.validatePath(path, 'write')
   }
 
   private getLivePickerCapabilities(rendererId: number): PickerCapability[] {
@@ -355,17 +484,19 @@ export class FileService {
     options: { exclusive?: boolean } = {},
   ): Promise<string> {
     const safe = await this.validatePath(filePath, 'write')
-    await mkdir(dirname(safe), { recursive: true })
+    // Pin the authorized parent before creating/truncating anything through a directory link.
+    const diskPath = await this.authorizedWriteTarget(safe)
+    await mkdir(dirname(diskPath), { recursive: true })
     await this.validatePath(safe, 'write')
-    const parentBefore = await realpath(dirname(safe))
+    const parentBefore = await realpath(dirname(diskPath))
     const flags =
       fsConstants.O_WRONLY |
       fsConstants.O_CREAT |
       fsConstants.O_NOFOLLOW |
       (options.exclusive ? fsConstants.O_EXCL : fsConstants.O_TRUNC)
-    const handle = await open(safe, flags, 0o600)
+    const handle = await open(diskPath, flags, 0o600)
     try {
-      const parentAfter = await realpath(dirname(safe))
+      const parentAfter = await realpath(dirname(diskPath))
       if (parentAfter !== parentBefore) {
         throw new Error('OUTSIDE_WORKSPACE: 目标父目录在打开过程中发生变化')
       }
@@ -378,24 +509,76 @@ export class FileService {
     }
   }
 
+  private async authorizedWriteTarget(path: string): Promise<string> {
+    const canonical = await this.validatePath(path, 'write', true)
+    try {
+      if ((await lstat(path)).isSymbolicLink()) {
+        throw new Error('LINK_NOT_FILE: 不支持直接写入文件符号链接')
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    return canonical
+  }
+
   /** 读取目录内容（options.showHiddenFiles 为真时不过滤 . 开头的隐藏文件） */
   async readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]> {
     const safe = await this.validatePath(dirPath, 'workspace-browse')
-    const entries = await readdir(safe, { withFileTypes: true })
+    const root = this.getCurrentAccessRoot()
+    if (root && safe !== resolve(root)) await this.assertNoDirectoryCycle(root, safe)
+    const directory = await this.validatePath(safe, 'workspace-browse', true)
+    const entries = await readdir(directory, { withFileTypes: true })
 
-    return entries
-      .filter((e) => options?.showHiddenFiles || !e.name.startsWith('.'))
-      .map((e) => ({
-        name: e.name,
-        path: join(safe, e.name),
-        type: e.isDirectory() ? ('directory' as const) : ('file' as const),
-        extension: e.isFile() ? extname(e.name).toLowerCase() : undefined,
-      }))
-      .sort((a, b) => {
-        // 目录优先，然后按名称排序
-        if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
-        return a.name.localeCompare(b.name)
-      })
+    return (
+      await Promise.all(
+        entries
+          .filter((e) => options?.showHiddenFiles || !e.name.startsWith('.'))
+          .map(async (e): Promise<DirEntry> => {
+            const path = join(safe, e.name)
+            if (e.isSymbolicLink()) {
+              try {
+                const target = await realpath(path)
+                const targetStat = await stat(target)
+                if (targetStat.isDirectory()) {
+                  if (root) await this.assertNoDirectoryCycle(root, path)
+                  return { name: e.name, path, type: 'directory', symbolicLink: { target } }
+                }
+                return {
+                  name: e.name,
+                  path,
+                  type: 'file',
+                  symbolicLink: { target, error: '暂不支持直接打开文件符号链接' },
+                }
+              } catch (error) {
+                const code = (error as NodeJS.ErrnoException).code
+                return {
+                  name: e.name,
+                  path,
+                  type: 'directory',
+                  symbolicLink: {
+                    error:
+                      code === 'ENOENT'
+                        ? '链接目标不存在'
+                        : code === 'EACCES'
+                          ? '没有权限访问链接目标'
+                          : '链接循环或目标不可访问',
+                  },
+                }
+              }
+            }
+            return {
+              name: e.name,
+              path,
+              type: e.isDirectory() ? ('directory' as const) : ('file' as const),
+              extension: e.isFile() ? extname(e.name).toLowerCase() : undefined,
+            }
+          }),
+      )
+    ).sort((a, b) => {
+      // 目录优先，然后按名称排序
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
   }
 
   /** 主进程拥有的有界工作空间搜索；不跟随符号链接，且在扫描期间持续复核工作空间。 */
@@ -457,8 +640,8 @@ export class FileService {
     const workspacePath = await this.validatePath(input.workspacePath)
     const moves = await Promise.all(
       input.moves.map(async (move) => ({
-        sourcePath: await this.validatePath(move.sourcePath),
-        targetPath: await this.validatePath(move.targetPath, 'write'),
+        sourcePath: await this.validateEntryPath(move.sourcePath),
+        targetPath: await this.validateEntryPath(move.targetPath),
       })),
     )
     for (const move of moves) {
@@ -478,8 +661,8 @@ export class FileService {
     if (!workspacePath) throw new Error('OUTSIDE_WORKSPACE: relocation has no active workspace')
     const moves = await Promise.all(
       input.moves.map(async (move) => ({
-        sourcePath: await this.validatePath(move.sourcePath),
-        targetPath: await this.validatePath(move.targetPath),
+        sourcePath: await this.validateEntryPath(move.sourcePath),
+        targetPath: await this.validateEntryPath(move.targetPath),
       })),
     )
     await journal.markCommitted(input.operationId, resolve(workspacePath), moves)
@@ -662,7 +845,9 @@ export class FileService {
     force?: boolean
   }): Promise<FsSaveTextDocumentResult> {
     const safe = await this.validatePath(input.filePath, 'write')
-    await mkdir(dirname(safe), { recursive: true })
+    const diskPath = await this.authorizedWriteTarget(safe)
+    await mkdir(dirname(diskPath), { recursive: true })
+    await this.validatePath(safe, 'write')
 
     const current = await readTextDocumentIfExists(safe)
     if (!input.force && input.expectedHash !== undefined && current?.hash !== input.expectedHash) {
@@ -673,10 +858,14 @@ export class FileService {
       ? await this.markdownDocuments.prepareSave(safe, input.content)
       : null
     const content = prepared?.content ?? input.content
-    const tempPath = join(dirname(safe), `.${basename(safe)}.${randomUUID()}.tmp`)
+    const tempPath = join(dirname(diskPath), `.${basename(safe)}.${randomUUID()}.tmp`)
     try {
       await writeFile(tempPath, content, 'utf-8')
-      await rename(tempPath, safe)
+      await this.validatePath(safe, 'write')
+      if ((await realpath(dirname(safe))) !== (await realpath(dirname(diskPath)))) {
+        throw new Error('LINK_CHANGED: 保存期间目录目标发生变化')
+      }
+      await rename(tempPath, diskPath)
       if (prepared) await this.markdownDocuments.finalizeSave(prepared)
     } catch (error) {
       await unlink(tempPath).catch(() => {})
@@ -904,6 +1093,7 @@ export class FileService {
       input.targetPath,
       {
         allowWorkspaceRoot: false,
+        entryOnly: true,
       },
     )
     await shell.trashItem(targetPath)
@@ -963,13 +1153,13 @@ export class FileService {
 
   /** 重命名/移动文件 */
   async rename(oldPath: string, newPath: string): Promise<void> {
-    const safeOld = await this.validatePath(oldPath, 'write')
-    const safeNew = await this.validatePath(newPath, 'write')
+    const safeOld = await this.validateEntryPath(oldPath)
+    const safeNew = await this.validateEntryPath(newPath)
     if (safeOld === safeNew) return
     const targetParent = await stat(dirname(safeNew))
     if (!targetParent.isDirectory()) throw new Error('ENOTDIR: 重命名目标不是文件夹')
     try {
-      await stat(safeNew)
+      await lstat(safeNew)
       throw new Error('EEXIST: 目标文件夹中已存在同名文件或文件夹')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -979,11 +1169,11 @@ export class FileService {
 
   /** 移动文件/目录，不允许覆盖目标中的同名项。 */
   async move(oldPath: string, newPath: string): Promise<void> {
-    const safeOld = await this.validatePath(oldPath, 'write')
-    const safeNew = await this.validatePath(newPath, 'write')
+    const safeOld = await this.validateEntryPath(oldPath)
+    const safeNew = await this.validateEntryPath(newPath)
     if (safeOld === safeNew) return
 
-    const source = await stat(safeOld)
+    const source = await lstat(safeOld)
     const targetParent = await stat(dirname(safeNew))
     if (!targetParent.isDirectory()) throw new Error('ENOTDIR: 移动目标不是文件夹')
     if (source.isDirectory()) {
@@ -994,7 +1184,7 @@ export class FileService {
     }
 
     try {
-      await stat(safeNew)
+      await lstat(safeNew)
       throw new Error('EEXIST: 目标文件夹中已存在同名文件或文件夹')
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
@@ -1074,7 +1264,7 @@ export class FileService {
 
   /** 删除文件 */
   async delete(filePath: string): Promise<void> {
-    const safe = await this.validatePath(filePath, 'write')
+    const safe = await this.validateEntryPath(filePath)
     await unlink(safe)
   }
 
@@ -1101,6 +1291,7 @@ export interface DirEntry {
   path: string
   type: 'directory' | 'file'
   extension?: string
+  symbolicLink?: { target?: string; error?: string }
 }
 
 /** 文件元数据 */

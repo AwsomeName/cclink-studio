@@ -48,6 +48,7 @@ describe('fs-store workspace switching', () => {
       cclinkStudio: {
         fs: {
           readDir: vi.fn().mockResolvedValue([]),
+          authorizeLinkedDirectory: vi.fn().mockResolvedValue(true),
           beginFileRelocation: vi.fn().mockResolvedValue(undefined),
           markFileRelocationCommitted: vi.fn().mockResolvedValue(undefined),
           completeFileRelocation: vi.fn().mockResolvedValue(undefined),
@@ -115,6 +116,61 @@ describe('fs-store workspace switching', () => {
     vi.unstubAllGlobals()
     setWorkspaceStatePath(null)
     setWorkspaceStateOwnerKey(null)
+  })
+
+  it('expands a linked directory only after approval and shows read failures inline', async () => {
+    const workspacePath = '/Users/apple/project'
+    const path = `${workspacePath}/notes`
+    useFsStore.setState({
+      workspacePath,
+      tree: [{ name: 'notes', path, type: 'directory', symbolicLink: { target: '/outside' } }],
+      expandedPaths: [],
+    })
+    vi.mocked(window.cclinkStudio.fs.authorizeLinkedDirectory).mockResolvedValueOnce(false)
+    await useFsStore.getState().toggleDir(path)
+    expect(useFsStore.getState().tree[0].expanded).toBeFalsy()
+    expect(window.cclinkStudio.fs.readDir).not.toHaveBeenCalled()
+    vi.mocked(window.cclinkStudio.fs.readDir).mockRejectedValueOnce(
+      new Error('OUTSIDE_WORKSPACE: target changed'),
+    )
+    await useFsStore.getState().toggleDir(path)
+    expect(useFsStore.getState().tree[0].loadError).toContain('target changed')
+    expect(useFsStore.getState().error).toBeNull()
+    await useFsStore.getState().toggleDir(path)
+    await useFsStore.getState().toggleDir(path)
+    expect(useFsStore.getState().tree[0].loadError).toBeUndefined()
+    expect(useFsStore.getState().tree[0].children).toEqual([])
+  })
+
+  it('does not expand a stale directory after switching during approval', async () => {
+    const approval = deferred<boolean>()
+    const path = '/Users/apple/project/notes'
+    useFsStore.setState({
+      workspacePath: '/Users/apple/project',
+      tree: [{ name: 'notes', path, type: 'directory', symbolicLink: { target: '/outside' } }],
+      expandedPaths: [],
+    })
+    vi.mocked(window.cclinkStudio.fs.authorizeLinkedDirectory).mockReturnValueOnce(approval.promise)
+    const pending = useFsStore.getState().toggleDir(path)
+    useFsStore.setState({ workspacePath: '/Users/apple/other', tree: [], expandedPaths: [] })
+    approval.resolve(true)
+    await pending
+    expect(useFsStore.getState().tree).toEqual([])
+    expect(window.cclinkStudio.fs.readDir).not.toHaveBeenCalled()
+  })
+
+  it('renames a directory link ending in .md as an entry instead of a Markdown resource group', async () => {
+    const workspacePath = '/Users/apple/project'
+    const path = `${workspacePath}/notes.md`
+    useFsStore.setState({
+      workspacePath,
+      tree: [{ name: 'notes.md', path, type: 'directory', symbolicLink: { target: '/outside' } }],
+      expandedPaths: [],
+    })
+    window.cclinkStudio.fs.relocateMarkdownDocument = vi.fn()
+    await useFsStore.getState().confirmRename(path, 'renamed.md')
+    expect(window.cclinkStudio.fs.rename).toHaveBeenCalledWith(path, `${workspacePath}/renamed.md`)
+    expect(window.cclinkStudio.fs.relocateMarkdownDocument).not.toHaveBeenCalled()
   })
 
   it('creates a new file through the exclusive create API', async () => {

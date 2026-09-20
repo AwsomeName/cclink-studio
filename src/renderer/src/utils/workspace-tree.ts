@@ -5,6 +5,8 @@ export interface FileTreeNode {
   path: string
   type: 'directory' | 'file'
   extension?: string
+  symbolicLink?: FsDirEntry['symbolicLink']
+  loadError?: string
   children?: FileTreeNode[]
   expanded?: boolean
   loading?: boolean
@@ -82,6 +84,7 @@ export async function prepareWorkspaceTree(
       path: entry.path,
       type: entry.type,
       extension: entry.extension,
+      symbolicLink: entry.symbolicLink,
       children: undefined,
       expanded: expandedSet.has(entry.path),
     })),

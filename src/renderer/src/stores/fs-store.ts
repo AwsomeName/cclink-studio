@@ -147,6 +147,20 @@ function applyExpandedFlags(nodes: FileTreeNode[], expandedPaths: Set<string>): 
   return changed ? nextNodes : nodes
 }
 
+function updateDirectoryError(nodes: FileTreeNode[], path: string, error?: string): FileTreeNode[] {
+  const next = nodes.map((node) => {
+    if (node.path === path) {
+      return node.loadError === error
+        ? node
+        : { ...node, loadError: error, ...(error ? { children: undefined } : {}) }
+    }
+    if (!node.children) return node
+    const children = updateDirectoryError(node.children, path, error)
+    return children === node.children ? node : { ...node, children }
+  })
+  return next.every((node, index) => node === nodes[index]) ? nodes : next
+}
+
 function reconcileDirectoryEntries(
   entries: FsDirEntry[],
   currentNodes: FileTreeNode[],
@@ -161,6 +175,7 @@ function reconcileDirectoryEntries(
       current.name === entry.name &&
       current.type === entry.type &&
       current.extension === entry.extension &&
+      JSON.stringify(current.symbolicLink) === JSON.stringify(entry.symbolicLink) &&
       current.expanded === expanded
     ) {
       return current
@@ -170,7 +185,12 @@ function reconcileDirectoryEntries(
       path: entry.path,
       type: entry.type,
       extension: entry.extension,
-      children: current?.type === 'directory' ? current.children : undefined,
+      symbolicLink: entry.symbolicLink,
+      children:
+        current?.type === 'directory' &&
+        JSON.stringify(current.symbolicLink) === JSON.stringify(entry.symbolicLink)
+          ? current.children
+          : undefined,
       expanded,
     }
   })
@@ -743,8 +763,10 @@ export const useFsStore = create<FsState>((set, get) => ({
   },
 
   refreshDir: async (dirPath) => {
+    const workspacePath = get().workspacePath
     try {
       const entries = await window.cclinkStudio.fs.readDir(dirPath)
+      if (get().workspacePath !== workspacePath) return false
       set((state) => {
         const currentChildren =
           dirPath === state.workspacePath
@@ -759,11 +781,13 @@ export const useFsStore = create<FsState>((set, get) => ({
           dirPath === state.workspacePath
             ? newChildren
             : replaceDirectoryChildren(state.tree, dirPath, newChildren)
-        return tree === state.tree ? state : { tree }
+        return { tree: updateDirectoryError(tree, dirPath) }
       })
       return true
     } catch (err) {
-      // 子目录加载失败（如无权限）不应污染全局 error（会让 FileTree 切错误态隐藏整棵树），静默即可
+      if (get().workspacePath === workspacePath) {
+        set((state) => ({ tree: updateDirectoryError(state.tree, dirPath, describeError(err)) }))
+      }
       console.warn('[fs-store] refreshDir 失败:', dirPath, err)
       return false
     }
@@ -790,6 +814,22 @@ export const useFsStore = create<FsState>((set, get) => ({
   },
 
   toggleDir: async (dirPath) => {
+    const workspacePath = get().workspacePath
+    const before = findFileTreeNode(get().tree, dirPath)
+    if (!before?.expanded && before?.symbolicLink) {
+      try {
+        if (before.symbolicLink.error) throw new Error(before.symbolicLink.error)
+        if (!(await window.cclinkStudio.fs.authorizeLinkedDirectory(dirPath))) return
+        if (get().workspacePath !== workspacePath) return
+      } catch (error) {
+        if (get().workspacePath === workspacePath) {
+          set((state) => ({
+            tree: updateDirectoryError(state.tree, dirPath, describeError(error)),
+          }))
+        }
+        return
+      }
+    }
     let nextExpandedPaths = get().expandedPaths
     let found = false
     const findAndToggle = (nodes: FileTreeNode[]): FileTreeNode[] =>
@@ -820,7 +860,7 @@ export const useFsStore = create<FsState>((set, get) => ({
     // 刚展开且从未加载过子节点（children===undefined）才加载
     // 区分"未加载"(undefined) 与 "加载过但为空目录"([])，避免空目录每次展开都重读
     const node = findFileTreeNode(get().tree, dirPath)
-    if (node?.expanded && node.children === undefined) {
+    if (node?.expanded && (node.children === undefined || node.loadError || node.symbolicLink)) {
       await get().refreshDir(dirPath)
     }
   },
@@ -876,12 +916,15 @@ export const useFsStore = create<FsState>((set, get) => ({
     try {
       const workspacePath = get().workspacePath
       if (!workspacePath) throw new Error('当前没有打开的工作空间')
+      const sourceEntry = findFileTreeNode(get().tree, oldPath)
       const result = await executeFileRelocationTransition({
         workspacePath,
         sourcePath: oldPath,
         targetPath: newPath,
         commitDisk: async () => {
           if (
+            sourceEntry?.type !== 'directory' &&
+            !sourceEntry?.symbolicLink &&
             isMarkdownDocumentPath(oldPath) &&
             isMarkdownDocumentPath(newPath) &&
             window.cclinkStudio.fs.relocateMarkdownDocument
@@ -1044,12 +1087,15 @@ export const useFsStore = create<FsState>((set, get) => ({
 
     try {
       const sourceParent = parentDir(sourcePath)
+      const sourceEntry = findFileTreeNode(get().tree, sourcePath)
       const result = await executeFileRelocationTransition({
         workspacePath,
         sourcePath,
         targetPath: destinationPath,
         commitDisk: async () => {
           if (
+            sourceEntry?.type !== 'directory' &&
+            !sourceEntry?.symbolicLink &&
             isMarkdownDocumentPath(sourcePath) &&
             isMarkdownDocumentPath(destinationPath) &&
             window.cclinkStudio.fs.relocateMarkdownDocument

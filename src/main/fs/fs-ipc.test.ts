@@ -5,6 +5,8 @@ import type { SettingsService } from '../settings/settings-service'
 
 const mockIpcMain = vi.hoisted(() => ({
   handle: vi.fn(),
+  showMessageBox: vi.fn(),
+  fromWebContents: vi.fn(),
 }))
 const trustedRendererGuard = {
   assert: vi.fn(),
@@ -14,6 +16,8 @@ const trustedRendererGuard = {
 vi.mock('electron', () => ({
   ipcMain: mockIpcMain,
   shell: { openPath: vi.fn() },
+  dialog: { showMessageBox: mockIpcMain.showMessageBox },
+  BrowserWindow: { fromWebContents: mockIpcMain.fromWebContents },
 }))
 
 import { registerFsIpc } from './fs-ipc'
@@ -48,6 +52,33 @@ describe('registerFsIpc directory watcher lifecycle', () => {
     trustedRendererGuard.assert.mockReset()
     trustedRendererGuard.isTrusted.mockReset()
     trustedRendererGuard.isTrusted.mockReturnValue(true)
+  })
+
+  it('uses a main-owned native prompt for linked directory approval', async () => {
+    const owner = { isDestroyed: () => false }
+    mockIpcMain.fromWebContents.mockReturnValue(owner)
+    mockIpcMain.showMessageBox
+      .mockResolvedValueOnce({ response: 0 })
+      .mockResolvedValueOnce({ response: 1 })
+    const authorizeLinkedDirectory = vi.fn(async (_path, confirm) => confirm('/actual/notes'))
+    registerFsIpc(
+      withAccess({ authorizeLinkedDirectory }) as unknown as FileService,
+      { getAll: vi.fn() } as unknown as SettingsService,
+      trustedRendererGuard as never,
+    )
+    const sender = createSender()
+    const handler = getHandler('fs:authorizeLinkedDirectory')
+    expect(await handler({ sender }, '/project/notes')).toBe(false)
+    expect(await handler({ sender }, '/project/notes')).toBe(true)
+    expect(mockIpcMain.showMessageBox).toHaveBeenLastCalledWith(
+      owner,
+      expect.objectContaining({
+        detail: expect.stringContaining('/actual/notes'),
+        cancelId: 0,
+        defaultId: 0,
+      }),
+    )
+    expect(() => handler({ sender }, '/project/notes', true)).toThrow()
   })
 
   it('rejects an untrusted sender before reading a path', () => {

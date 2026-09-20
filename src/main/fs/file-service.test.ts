@@ -4,6 +4,8 @@ import {
   readFile,
   readdir,
   rename,
+  realpath,
+  lstat,
   rm,
   stat,
   symlink,
@@ -48,6 +50,173 @@ afterEach(async () => {
 function createFileService(): FileService {
   return new FileService({ getActiveWorkspace: () => tempDir })
 }
+
+describe('linked directories in the local file tree', () => {
+  async function fixture() {
+    const workspace = join(tempDir, 'project')
+    const outside = join(tempDir, 'notes')
+    const link = join(workspace, '研发日记')
+    const grants = join(tempDir, 'private-state', 'links.json')
+    await Promise.all([mkdir(workspace), mkdir(outside)])
+    await writeFile(join(outside, 'note.md'), '# Original')
+    await symlink(outside, link)
+    const service = new FileService({
+      getActiveWorkspace: () => workspace,
+      linkedDirectoryGrantsPath: grants,
+    })
+    const ui = <T>(operation: () => T) => service.withAccess({ rendererId: 7 }, operation)
+    return { workspace, outside, link, grants, service, ui }
+  }
+
+  it('lists directory links and supports approved browse, read, save and restart', async () => {
+    const { workspace, outside, link, grants, service, ui } = await fixture()
+    expect(await ui(() => service.readDir(workspace))).toContainEqual({
+      name: '研发日记',
+      path: link,
+      type: 'directory',
+      symbolicLink: { target: await realpath(outside) },
+    })
+    await expect(ui(() => service.readDir(link))).rejects.toThrow('OUTSIDE_WORKSPACE')
+    const confirm = vi.fn(async () => true)
+    await expect(ui(() => service.authorizeLinkedDirectory(link, confirm))).resolves.toBe(true)
+    expect(confirm).toHaveBeenCalledWith(await realpath(outside))
+    expect(await ui(() => service.readDir(link))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'note.md' })]),
+    )
+    const file = join(link, 'note.md')
+    const opened = await ui(() => service.readTextDocument(file))
+    expect(
+      await ui(() =>
+        service.saveTextDocument({
+          filePath: file,
+          expectedHash: opened.hash,
+          content: '# Edited',
+        }),
+      ),
+    ).toMatchObject({ status: 'saved' })
+    expect(await readFile(join(outside, 'note.md'), 'utf8')).toBe('# Edited')
+    await ui(() => service.createFile(join(link, 'new.txt')))
+    expect((await stat(join(outside, 'new.txt'))).isFile()).toBe(true)
+    const restarted = new FileService({
+      getActiveWorkspace: () => workspace,
+      linkedDirectoryGrantsPath: grants,
+    })
+    await expect(
+      restarted.withAccess({ rendererId: 8 }, () =>
+        restarted.authorizeLinkedDirectory(link, confirm),
+      ),
+    ).resolves.toBe(true)
+    expect(confirm).toHaveBeenCalledTimes(1)
+    await expect(
+      restarted.withAccess({ rendererId: 8 }, () => restarted.readTextDocument(file)),
+    ).resolves.toMatchObject({ content: '# Edited' })
+    expect((await stat(grants)).mode & 0o777).toBe(0o600)
+  })
+
+  it('does not extend grants to Agent runs, direct external paths or another workspace', async () => {
+    const { workspace, outside, link, grants, service, ui } = await fixture()
+    await ui(() => service.authorizeLinkedDirectory(link, async () => true))
+    await expect(service.readDir(link)).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(
+      service.withAccess(
+        { rendererId: 7, trustedWorkspace: { kind: 'local', rootPath: workspace } },
+        () => service.readDir(link),
+      ),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(ui(() => service.readFile(join(outside, 'note.md')))).rejects.toThrow(
+      'OUTSIDE_WORKSPACE',
+    )
+    const other = join(tempDir, 'other')
+    await mkdir(other)
+    await symlink(outside, join(other, 'notes'))
+    const otherService = new FileService({
+      getActiveWorkspace: () => other,
+      linkedDirectoryGrantsPath: grants,
+    })
+    await expect(
+      otherService.withAccess({ rendererId: 7 }, () => otherService.readDir(join(other, 'notes'))),
+    ).rejects.toThrow('OUTSIDE_WORKSPACE')
+  })
+
+  it('requires new approval after a link changes and rejects nested escapes', async () => {
+    const { outside, link, service, ui } = await fixture()
+    const other = join(tempDir, 'secrets')
+    await mkdir(other)
+    await writeFile(join(other, 'secret.txt'), 'secret')
+    await symlink(other, join(outside, 'nested'))
+    await ui(() => service.authorizeLinkedDirectory(link, async () => true))
+    await expect(ui(() => service.readFile(join(link, 'nested', 'secret.txt')))).rejects.toThrow(
+      'OUTSIDE_WORKSPACE',
+    )
+    await rm(link)
+    await symlink(other, link)
+    await expect(ui(() => service.readDir(link))).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(ui(() => service.writeFile(join(link, 'secret.txt'), 'changed'))).rejects.toThrow(
+      'OUTSIDE_WORKSPACE',
+    )
+    expect(await readFile(join(other, 'secret.txt'), 'utf8')).toBe('secret')
+  })
+
+  it('rejects cancellation, changes during confirmation and a workspace switch', async () => {
+    const { workspace, outside, link, service, ui } = await fixture()
+    expect(await ui(() => service.authorizeLinkedDirectory(link, async () => false))).toBe(false)
+    await expect(ui(() => service.readDir(link))).rejects.toThrow('OUTSIDE_WORKSPACE')
+    await expect(
+      ui(() =>
+        service.authorizeLinkedDirectory(link, async () => {
+          await rename(link, `${link}-old`)
+          await symlink(outside, link)
+          return true
+        }),
+      ),
+    ).rejects.toThrow('LINK_CHANGED')
+    let active = workspace
+    const switching = new FileService({ getActiveWorkspace: () => active })
+    await expect(
+      switching.withAccess({ rendererId: 7 }, () =>
+        switching.authorizeLinkedDirectory(link, async () => {
+          active = outside
+          return true
+        }),
+      ),
+    ).rejects.toThrow('STALE_WORKSPACE')
+  })
+
+  it('opens internal directory links without confirmation and labels broken/cyclic links', async () => {
+    const { workspace, service, ui } = await fixture()
+    const folder = join(workspace, 'folder')
+    await mkdir(folder)
+    await writeFile(join(folder, 'inside.txt'), 'inside')
+    const internal = join(workspace, 'internal')
+    await symlink(folder, internal)
+    await symlink(workspace, join(folder, 'cycle'))
+    await symlink(join(tempDir, 'missing'), join(workspace, 'broken'))
+    const confirm = vi.fn(async () => true)
+    expect(await ui(() => service.authorizeLinkedDirectory(internal, confirm))).toBe(true)
+    expect(confirm).not.toHaveBeenCalled()
+    expect(await ui(() => service.readFile(join(internal, 'inside.txt')))).toMatchObject({
+      content: 'inside',
+    })
+    expect(await ui(() => service.readDir(workspace))).toContainEqual(
+      expect.objectContaining({ name: 'broken', symbolicLink: { error: '链接目标不存在' } }),
+    )
+    expect(await ui(() => service.readDir(internal))).toContainEqual(
+      expect.objectContaining({ name: 'cycle', symbolicLink: { error: '链接循环或目标不可访问' } }),
+    )
+    await expect(ui(() => service.readDir(join(internal, 'cycle')))).rejects.toThrow('LINK_CYCLE')
+  })
+
+  it('renames and removes only the link entry, including without target authorization', async () => {
+    const { workspace, outside, link, service, ui } = await fixture()
+    const renamed = join(workspace, 'renamed')
+    await ui(() => service.rename(link, renamed))
+    expect((await lstat(renamed)).isSymbolicLink()).toBe(true)
+    await ui(() => service.trashPath({ workspacePath: workspace, targetPath: renamed }))
+    expect(electronMock.trashItem).toHaveBeenCalledWith(renamed)
+    await ui(() => service.delete(renamed))
+    expect(await readFile(join(outside, 'note.md'), 'utf8')).toBe('# Original')
+  })
+})
 
 describe('FileService', () => {
   it('searches deep workspace paths, skips ignored directories and symlinks, and reports truncation', async () => {

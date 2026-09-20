@@ -208,6 +208,7 @@ export function FileTree(): React.ReactElement {
 
   /** 点击文件 → HTML 默认预览，其他文件按类型打开 */
   const handleFileClick = (node: FileTreeNode): void => {
+    if (node.symbolicLink?.error) return
     if (node.type === 'file') {
       setSelectedPath(node.path)
       if (workspacePath && isGerberFileExtension(node.extension)) {
@@ -527,6 +528,7 @@ function FileTreeNodeView({
         role="treeitem"
         tabIndex={0}
         aria-expanded={isDir ? Boolean(node.expanded) : undefined}
+        title={node.symbolicLink?.error ?? node.symbolicLink?.target ?? node.path}
         onDragStart={(event) => onDragStart(node, event)}
         onDragEnd={onDragEnd}
         onDragOver={(event) => {
@@ -576,6 +578,11 @@ function FileTreeNodeView({
         <span className="file-tree-icon">
           {isDir ? <IconFolder size={14} /> : <span style={{ fontSize: 14 }}>{icon}</span>}
         </span>
+        {node.symbolicLink && (
+          <span aria-label="符号链接" title="符号链接">
+            ↗
+          </span>
+        )}
 
         {/* 名称 */}
         {isRenaming ? (
@@ -590,6 +597,20 @@ function FileTreeNodeView({
           <span className="file-tree-name">{node.name}</span>
         )}
       </div>
+
+      {(node.loadError || node.symbolicLink?.error) && (
+        <div
+          role="status"
+          style={{
+            paddingLeft: `${depth * 16 + 24}px`,
+            fontSize: 12,
+            color: 'var(--vscode-errorForeground, #f48771)',
+            whiteSpace: 'normal',
+          }}
+        >
+          {node.loadError || node.symbolicLink?.error}
+        </div>
+      )}
 
       {/* 子节点（展开时显示） */}
       {isDir && node.expanded && node.children && (

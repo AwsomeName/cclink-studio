@@ -216,6 +216,7 @@ export async function bootstrapMainProcessServices(
     getActiveWorkspace: () =>
       runtime.workspaceStateService?.getActiveLocalWorkspace().workspacePath ?? null,
     relocationJournalPath: join(app.getPath('userData'), 'file-relocation-journal.json'),
+    linkedDirectoryGrantsPath: join(app.getPath('userData'), 'linked-directory-grants.json'),
   })
 
   registerWorkspaceStateIpc(

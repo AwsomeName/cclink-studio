@@ -8,6 +8,7 @@ export interface FsDirEntry {
   extension?: string
   size: number
   modifiedAt: number
+  symbolicLink?: { target?: string; error?: string }
 }
 
 export interface FsSearchWorkspaceInput {
@@ -285,6 +286,7 @@ export interface FsCopyEntryResult {
 export interface FsApiContract {
   getHomePath: () => Promise<string>
   readDir: (dirPath: string) => Promise<FsDirEntry[]>
+  authorizeLinkedDirectory: (dirPath: string) => Promise<boolean>
   searchWorkspace: (input: FsSearchWorkspaceInput) => Promise<FsSearchWorkspaceResult>
   beginFileRelocation: (input: FsBeginFileRelocationInput) => Promise<void>
   markFileRelocationCommitted: (input: FsCommitFileRelocationInput) => Promise<void>
@@ -320,6 +322,7 @@ export interface FsApiContract {
 export const fsIpc = {
   getHomePath: defineIpcCall<[], string>('fs:getHomePath'),
   readDir: defineIpcCall<[string], FsDirEntry[]>('fs:readDir'),
+  authorizeLinkedDirectory: defineIpcCall<[string], boolean>('fs:authorizeLinkedDirectory'),
   searchWorkspace: defineIpcCall<[FsSearchWorkspaceInput], FsSearchWorkspaceResult>(
     'fs:searchWorkspace',
   ),

@@ -42,6 +42,7 @@ function bindPathPair<Result>(definition: IpcInvokeDefinition<[string, string], 
 export const fsIpcContracts = {
   getHomePath: bindNoArgsIpc(fsIpc.getHomePath),
   readDir: bindPath(fsIpc.readDir),
+  authorizeLinkedDirectory: bindPath(fsIpc.authorizeLinkedDirectory),
   searchWorkspace: bindIpcParser(fsIpc.searchWorkspace, (args) => {
     requireArgs(args, 1, fsIpc.searchWorkspace.channel)
     return ipcArgs(fsSearchWorkspaceSchema.parse(args[0]))
