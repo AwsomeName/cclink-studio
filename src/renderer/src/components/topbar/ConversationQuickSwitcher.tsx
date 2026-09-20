@@ -20,7 +20,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { workspaceRefKey } from '@shared/workspace-ref'
-import { IconPlus } from '../common/Icons'
+import { IconClose, IconPlus } from '../common/Icons'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 import {
@@ -178,6 +178,21 @@ export function ConversationQuickSwitcher({
     if (!result.ok) showToast(result.message ?? '新建会话失败', 'error')
   }
 
+  const closeConversation = async (conversationId: string): Promise<void> => {
+    const target = getConversationTarget(conversationId)
+    if (!target) {
+      showToast('会话已不存在', 'error')
+      return
+    }
+    const result = await executeCommand(
+      activeWorkspaceRef.kind === 'remote'
+        ? 'remoteAgent.archiveConversation'
+        : 'agent.archiveConversation',
+      { source: 'toolbar', target },
+    )
+    if (!result.ok) showToast(result.message ?? '会话关闭失败', 'error')
+  }
+
   const getConversationTarget = (conversationId: string) => {
     if (activeWorkspaceRef.kind === 'remote') {
       const session = remoteSessions.find(
@@ -281,6 +296,21 @@ export function ConversationQuickSwitcher({
             <span className="conversation-quick-title">
               {formatQuickSwitcherTitle(conversation.title)}
             </span>
+            <span
+              className="conversation-quick-close"
+              title={
+                isRemoteWorkspace && conversation.statusKind === 'running'
+                  ? '远程任务仍在运行，暂不能关闭'
+                  : '关闭会话'
+              }
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                event.stopPropagation()
+                void closeConversation(conversation.id)
+              }}
+            >
+              <IconClose size={10} />
+            </span>
           </button>
         ))}
       </div>
@@ -346,6 +376,21 @@ export function ConversationQuickSwitcher({
                   <span className="conversation-quick-status" aria-hidden="true" />
                   <span>{conversation.title}</span>
                   <small>{conversation.statusLabel}</small>
+                  <span
+                    className="conversation-quick-close"
+                    title={
+                      isRemoteWorkspace && conversation.statusKind === 'running'
+                        ? '远程任务仍在运行，暂不能关闭'
+                        : '关闭会话'
+                    }
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void closeConversation(conversation.id)
+                    }}
+                  >
+                    <IconClose size={10} />
+                  </span>
                 </button>
               ))}
             </div>

@@ -561,6 +561,31 @@ input:focus {
   white-space: nowrap;
 }
 
+.conversation-quick-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  padding: 0;
+  border-radius: 3px;
+  color: var(--text-muted);
+  opacity: 0;
+  cursor: pointer;
+}
+
+.conversation-quick-tab:hover .conversation-quick-close,
+.conversation-quick-close:focus-visible,
+.conversation-quick-close:hover {
+  opacity: 1;
+}
+
+.conversation-quick-close:hover {
+  background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+  color: var(--text-primary);
+}
+
 .conversation-quick-status {
   width: 7px;
   height: 7px;
@@ -676,7 +701,7 @@ input:focus {
   min-width: 0;
   height: 32px;
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 7px;
   padding: 0 8px;
@@ -686,6 +711,16 @@ input:focus {
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
+}
+
+.conversation-quick-overflow-menu .conversation-quick-close {
+  width: 18px;
+  height: 18px;
+  opacity: 0.5;
+}
+
+.conversation-quick-overflow-menu .conversation-quick-close:hover {
+  opacity: 1;
 }
 
 .conversation-quick-overflow-menu button:hover,

@@ -96,6 +96,18 @@ describe('conversation quick switcher', () => {
     }
   })
 
+  it('renders a close affordance on each visible quick tab', () => {
+    // renderToStaticMarkup 走 zustand 的 SSR 初始快照：默认会话属于全局工作区，
+    // 因此这里稳定渲染出至少一个 tab；只断言每个 tab 都带关闭按钮。
+    const markup = renderToStaticMarkup(
+      createElement(ConversationQuickSwitcher, { panelMode: 'right', panelWidth: 560 }),
+    )
+    const tabCount = (markup.match(/role="tab"/g) ?? []).length
+    expect(tabCount).toBeGreaterThan(0)
+    expect((markup.match(/class="conversation-quick-close"/g) ?? []).length).toBe(tabCount)
+    expect(markup).toContain('title="关闭会话"')
+  })
+
   it('maps only the current remote workspace into the shared quick switcher model', () => {
     const items = buildRemoteQuickSwitcherItems({
       sessions: [
