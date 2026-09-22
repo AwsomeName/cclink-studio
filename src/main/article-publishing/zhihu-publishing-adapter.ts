@@ -4,6 +4,34 @@ import type { CsdnPageProbe, CsdnDraftListProbe } from './csdn-publishing-adapte
 export const ZHIHU_MANAGEMENT_URL =
   'https://www.zhihu.com/creator/manage/creation/draft?type=article'
 
+/** Match a previously verified image across official CDN variants; ambiguity stays blocked. */
+export function findVerifiedZhihuImage(live: string[], verified: string): string | undefined {
+  const identity = (raw: string): string => {
+    try {
+      const u = new URL(raw)
+      if (
+        u.protocol !== 'https:' ||
+        u.username ||
+        u.password ||
+        u.port ||
+        !(
+          u.hostname === 'pic-private.zhihu.com' || /^pic(?:\d+|a|x)\.zhimg\.com$/u.test(u.hostname)
+        )
+      )
+        return raw
+      return (
+        /^\/(?:80\/)?(v2-[a-f0-9]{32})(?:~resize:\d+:q\d+|_\d+w)\.(?:png|jpg|webp)$/u.exec(
+          u.pathname,
+        )?.[1] ?? raw
+      )
+    } catch {
+      return raw
+    }
+  }
+  const matches = live.filter((src) => identity(src) === identity(verified))
+  return matches.length === 1 ? matches[0] : undefined
+}
+
 /** Bounded read-only observations of the signed-in article editor. No publishing state here. */
 export class ZhihuPublishingAdapter {
   async probe(page: Page): Promise<CsdnPageProbe> {
@@ -12,6 +40,29 @@ export class ZhihuPublishingAdapter {
         const u = new URL(value)
         u.search = ''
         return u.href
+      }
+      // The editor and saved draft can use different official CDN hosts/sizes.
+      // Compare only recognized platform image IDs, preserving raw URLs otherwise.
+      const imageIdentity = (raw: string) => {
+        try {
+          const u = new URL(raw)
+          if (
+            u.protocol === 'https:' &&
+            !u.username &&
+            !u.password &&
+            !u.port &&
+            (u.hostname === 'pic-private.zhihu.com' ||
+              /^pic(?:\d+|a|x)\.zhimg\.com$/u.test(u.hostname))
+          )
+            return (
+              /^\/(?:80\/)?(v2-[a-f0-9]{32})(?:~resize:\d+:q\d+|_\d+w)\.(?:png|jpg|webp)$/u.exec(
+                u.pathname,
+              )?.[1] ?? raw
+            )
+        } catch {
+          /* Unknown image addresses must still match exactly. */
+        }
+        return raw
       }
       const normalize = (value: string) => value.replace(/[\s\u200b]/gu, '')
       const editor = document.querySelector<HTMLElement>(
@@ -69,7 +120,7 @@ export class ZhihuPublishingAdapter {
         titleInput?.value === draft?.title &&
         normalize(bodyText) === normalize(draftBody.textContent ?? '') &&
         savedImages.length === images.length &&
-        savedImages.every((src, index) => src === images[index].src),
+        savedImages.every((src, index) => imageIdentity(src) === imageIdentity(images[index].src)),
       )
       const publicAuthor = document.querySelector<HTMLAnchorElement>(
         '.Post-Header a[href*="/people/"], .Post-Author a[href*="/people/"]',
@@ -145,7 +196,16 @@ export class ZhihuPublishingAdapter {
         saveState: saved ? ('saved' as const) : ('unknown' as const),
         saveEvidence: saved
           ? `知乎原稿 GET 回读：账号、draftId、标题、正文和 ${images.length} 张图片与编辑器一致`
-          : '编辑器与知乎原稿回读尚未一致',
+          : `编辑器与知乎原稿回读尚未一致：id=${String(draft?.id) === id}，账号=${Boolean(me?.url_token && draft?.author?.url_token === me.url_token)}，标题=${titleInput?.value === draft?.title}，正文=${normalize(bodyText).length}/${normalize(draftBody.textContent ?? '').length}（${normalize(bodyText) === normalize(draftBody.textContent ?? '')}），图片=${images.length}/${savedImages.length}；差异=${
+              savedImages
+                .flatMap((src, index) =>
+                  src === images[index]?.src
+                    ? []
+                    : [`${index + 1}: 页面 ${images[index]?.src ?? '缺失'} / 原稿 ${src}`],
+                )
+                .join('; ')
+                .slice(0, 700) || '无同序地址差异'
+            }`,
         publicationBlocker: /审核中|审核未通过|仅自己可见/u.test(statusRegion)
           ? statusRegion.slice(0, 500)
           : undefined,
@@ -252,7 +312,7 @@ export class ZhihuPublishingAdapter {
             !url.password &&
             !url.port &&
             (url.hostname === 'pic-private.zhihu.com' ||
-              /^pic(?:\d+|a)\.zhimg\.com$/u.test(url.hostname))
+              /^pic(?:\d+|a|x)\.zhimg\.com$/u.test(url.hostname))
           )
             return (
               /^\/(?:80\/)?(v2-[a-f0-9]{32})(?:~resize:\d+:q\d+|_\d+w)\.(?:png|jpg|webp)$/u.exec(

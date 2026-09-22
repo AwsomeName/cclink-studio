@@ -1,5 +1,27 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ZhihuPublishingAdapter } from './zhihu-publishing-adapter'
+import { findVerifiedZhihuImage, ZhihuPublishingAdapter } from './zhihu-publishing-adapter'
+
+describe('verified Zhihu image lookup for body writing', () => {
+  const verified = 'https://picx.zhimg.com/80/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png'
+  const current =
+    'https://pic1.zhimg.com/80/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png?auth_key=current'
+  it('returns the current signed URL for the same verified image after CDN rotation', () => {
+    expect(findVerifiedZhihuImage([current], verified)).toBe(current)
+  })
+  it.each([
+    current.replace('c6d587c64b8a1db97d1d63185171198e', '00000000000000000000000000000000'),
+    current.replace('pic1.zhimg.com', 'pic1.zhimg.com.evil.test'),
+    current.replace('pic1.zhimg.com', 'untrusted.zhimg.com'),
+    current.replace('https:', 'http:'),
+    current.replace('https://', 'https://user@'),
+  ])('rejects changed identity or untrusted URL %s', (url) => {
+    expect(findVerifiedZhihuImage([url], verified)).toBeUndefined()
+  })
+  it('rejects duplicate occurrences rather than guessing one', () => {
+    expect(findVerifiedZhihuImage([current, verified], verified)).toBeUndefined()
+    expect(findVerifiedZhihuImage([], verified)).toBeUndefined()
+  })
+})
 
 const id = '2080754524944339658'
 function fixture() {
@@ -49,7 +71,7 @@ function fixture() {
     })),
   )
   const page = { evaluate: async (fn: () => unknown) => fn() }
-  return { draft, image, page }
+  return { draft, image, savedImage, page }
 }
 afterEach(() => vi.unstubAllGlobals())
 describe('Zhihu server-backed page evidence', () => {
@@ -84,6 +106,34 @@ describe('Zhihu server-backed page evidence', () => {
     expect(result.editor.images).toHaveLength(1)
     expect(result.selectors.publish).toBeUndefined()
     expect(result.editor.fileInputSelector).toBeUndefined()
+  })
+
+  it.each([
+    ['https://picx.zhimg.com/80/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png', true],
+    ['https://picx.zhimg.com/80/v2-00000000000000000000000000000000_1440w.png', false],
+    ['https://untrusted.zhimg.com/80/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png', false],
+    ['https://picx.zhimg.com.evil.test/80/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png', false],
+  ])(
+    'checks saved draft CDN identity without accepting a different image: %s',
+    async (src, saved) => {
+      const { page, image, savedImage } = fixture()
+      image.currentSrc = src
+      savedImage.getAttribute = () =>
+        'https://pic1.zhimg.com/v2-c6d587c64b8a1db97d1d63185171198e_1440w.png'
+      expect((await new ZhihuPublishingAdapter().probe(page as never)).saveState).toBe(
+        saved ? 'saved' : 'unknown',
+      )
+    },
+  )
+
+  it('reports an unsigned image mismatch without treating an unsaved draft as saved', async () => {
+    const { page, image } = fixture()
+    image.currentSrc = 'https://pic-private.zhihu.com/v2-other.png?auth_key=secret'
+    const result = await new ZhihuPublishingAdapter().probe(page as never)
+    expect(result.saveState).toBe('unknown')
+    expect(result.saveEvidence).toContain('图片=1/1')
+    expect(result.saveEvidence).toContain('页面 https://pic-private.zhihu.com/v2-other.png')
+    expect(result.saveEvidence).not.toContain('auth_key')
   })
 
   it('verifies the actual saved body despite image signature rotation and never returns the signed query', async () => {
@@ -172,6 +222,7 @@ describe('Zhihu published CDN image identity', () => {
   it.each([
     [`https://pica.zhimg.com${publicPath}`, true, true, '正文'],
     [`https://pic3.zhimg.com${publicPath}`, true, true, '正文'],
+    [`https://picx.zhimg.com${publicPath}`, true, true, '正文'],
     [`https://pica.zhimg.com${publicPath}`, false, false, '正文'],
     [`https://pica.zhimg.com${publicPath}`, true, false, '不同位置'],
     [`https://pica.zhimg.com${publicPath.replace('669d', '0000')}`, true, false, '正文'],

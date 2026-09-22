@@ -8,6 +8,7 @@ import { bilibiliPublishingTitle, readBilibiliComposer } from './bilibili-publis
 import { observeBilibiliImageUpload } from './bilibili-upload-receipt'
 import { parseToutiaoPublicationUrl } from './toutiao-publication'
 import { readWeiboComposer } from './weibo-publishing-adapter'
+import { findVerifiedZhihuImage } from './zhihu-publishing-adapter'
 import { readJikeComposer } from './jike-publishing-adapter'
 import {
   jikeImageIdentity,
@@ -541,9 +542,16 @@ export class ArticlePublishingBrowserPolicy {
     if (probe.editor.recognized && probe.editor.imageEnumerationComplete) {
       for (const asset of scope.assets) {
         const existing = asset.platformUrl
-          ? probe.editor.images.find(
-              (image) => image.src === asset.platformUrl && image.loaded === true,
-            )?.src
+          ? scope.adapterId === 'zhihu'
+            ? findVerifiedZhihuImage(
+                probe.editor.images
+                  .filter((image) => image.loaded === true)
+                  .map((image) => image.src),
+                asset.platformUrl,
+              )
+            : probe.editor.images.find(
+                (image) => image.src === asset.platformUrl && image.loaded === true,
+              )?.src
           : null
         if (existing) matchedAssets[asset.id] = existing
       }
@@ -1233,6 +1241,32 @@ export class ArticlePublishingBrowserPolicy {
       params.selector === fieldPanel
     )
       return { kind: 'allow' }
+    const categoryEditor = this.attestations.get(this.attestationKey(context))?.inspection
+      .categoryEditor
+    if (scope.adapterId === 'csdn' && scope.currentStepId === 'fill-fields' && categoryEditor) {
+      if (actionType === 'click' && params.selector === categoryEditor.openSelector)
+        return { kind: 'allow' }
+      if (params.selector === categoryEditor.inputSelector) {
+        const pending =
+          actionType === 'fill' ? String(params.value ?? '') : categoryEditor.pendingValue
+        if (!pending || pending !== scope.expectedFields.category)
+          return { kind: 'runtime-error', reason: '只能填写任务冻结的分类专栏' }
+        if (actionType === 'fill') return { kind: 'allow' }
+        if (actionType === 'press' && params.key === 'Tab') {
+          if ((await page.locator(String(params.selector)).innerText()).trim() !== pending)
+            return { kind: 'runtime-error', reason: '分类输入已变化，重新 inspect 后再提交' }
+          return this.reserveSideEffect(
+            scope,
+            'save-draft',
+            `autosave:fill-fields:category:${randomUUID()}`,
+            actionType,
+            params,
+            pageUrl,
+          )
+        }
+        return { kind: 'runtime-error', reason: '分类只允许填写冻结值后按 Tab 失焦提交并回读' }
+      }
+    }
     const tagEditor = this.attestations.get(this.attestationKey(context))?.inspection.tagEditor
     if (scope.currentStepId === 'fill-fields' && tagEditor) {
       if (actionType === 'click' && params.selector === tagEditor.openSelector)
@@ -1975,7 +2009,9 @@ export class ArticlePublishingBrowserPolicy {
         .locator('.public-DraftEditor-content img')
         .evaluateAll((images) => images.map((e) => (e as HTMLImageElement).src))
       for (const asset of state.assets.filter((a) => a.kind === 'local')) {
-        const current = live.find((src) => src.split('?')[0] === asset.platformUrl)
+        const current = asset.platformUrl
+          ? findVerifiedZhihuImage(live, asset.platformUrl)
+          : undefined
         if (!current || !asset.platformUrl)
           throw new Error(`当前原稿无法取得已核验图片：${asset.displayPath}`)
         html = html
@@ -3231,6 +3267,8 @@ export class ArticlePublishingBrowserPolicy {
                   selectors.summary,
                   selectors.tags,
                   inspection.tagEditor?.openSelector,
+                  inspection.categoryEditor?.openSelector,
+                  inspection.categoryEditor?.inputSelector,
                   selectors.category,
                   selectors.cover,
                 ]

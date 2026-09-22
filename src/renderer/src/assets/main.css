@@ -5551,6 +5551,12 @@ body.is-resizing-panels .main-area > div {
   justify-content: center;
 }
 
+.tab-pin {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .tab-title {
   min-width: 0;
   overflow: hidden;

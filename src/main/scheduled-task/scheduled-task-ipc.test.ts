@@ -58,27 +58,31 @@ describe('registerScheduledTaskIpc', () => {
     expect(service.save).not.toHaveBeenCalled()
   })
 
-  it('forwards a bounded valid save command', async () => {
-    const service = createService()
-    registerScheduledTaskIpc(service as never, createGuard('trusted') as never)
-    const input = {
-      workspacePath: '/Users/example/project',
-      title: '日报',
-      instruction: '读取资料并生成日报',
-      schedule: { kind: 'daily', time: '09:00', timezone: 'Asia/Shanghai' },
-      resources: [{ kind: 'workspace' }],
-      outputPolicy: {
-        directory: 'docs/reports',
-        fileNameTemplate: 'report-{date}.md',
-        mode: 'create-only',
-      },
-      enable: true,
-    }
+  it.each([undefined, '# Daily template'])(
+    'forwards a bounded valid save command with template %s',
+    async (failureTemplate) => {
+      const service = createService()
+      registerScheduledTaskIpc(service as never, createGuard('trusted') as never)
+      const input = {
+        workspacePath: '/Users/example/project',
+        title: '日报',
+        instruction: '读取资料并生成日报',
+        schedule: { kind: 'daily', time: '09:00', timezone: 'Asia/Shanghai' },
+        resources: [{ kind: 'workspace' }],
+        outputPolicy: {
+          directory: 'docs/reports',
+          fileNameTemplate: 'report-{date}.md',
+          mode: 'create-only',
+          ...(failureTemplate === undefined ? {} : { failureTemplate }),
+        },
+        enable: true,
+      }
 
-    await mockIpcMain.handlers.get('scheduledTasks:save')?.({ sender: 'trusted' }, input)
+      await mockIpcMain.handlers.get('scheduledTasks:save')?.({ sender: 'trusted' }, input)
 
-    expect(service.save).toHaveBeenCalledWith(input)
-  })
+      expect(service.save).toHaveBeenCalledWith(input)
+    },
+  )
 })
 
 function createService() {

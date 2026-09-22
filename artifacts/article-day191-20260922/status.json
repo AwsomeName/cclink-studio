@@ -1,0 +1,105 @@
+[
+  {
+    "id": "eb2c0a69-c200-486f-bcb1-21b6ce516a06",
+    "title": "做AI眼镜第191天，它第一次离开手机跑起来了",
+    "status": "completed",
+    "platform": "bilibili",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "059882c3-ce71-4825-98ff-51594517c8dd",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "3b0105b1-4b63-4388-b13e-45f08a384dde"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://t.bilibili.com/1249973308685811731",
+      "observedAt": "2026-09-20T02:16:04.746Z"
+    },
+    "assets": [
+      {
+        "path": "素材/01-AR观察效果图.png",
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/c67995e28458810e6db6dd5e54ad84bd3546384070347419.png"
+      },
+      {
+        "path": "素材/02-导航场景效果图.png",
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/e476ad18fb4266c547ab226315258e8a3546384070347419.png"
+      },
+      {
+        "path": "素材/03-A7Z首次运行截图.png",
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/ac6259b127194387d006c7a28e76ea003546384070347419.png"
+      }
+    ]
+  },
+  {
+    "id": "e4422236-6532-439b-94b7-c915d047237b",
+    "title": "做AI眼镜第191天，它第一次离开手机跑起来了",
+    "status": "completed",
+    "platform": "weibo",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "01565a35-ce39-455d-a31b-c6eba0a74142",
+      "currentGeneration": 4,
+      "currentLaunchOperationId": "dd92f9b0-05ac-41a8-861b-10e92b2a0cfc"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://weibo.com/5961101548/RiX22ovwL",
+      "observedAt": "2026-09-22T02:06:48.522Z"
+    },
+    "assets": [
+      {
+        "path": "素材/01-AR观察效果图.png",
+        "status": "uploaded",
+        "platformUrl": "https://wx1.sinaimg.cn/bmiddle/006vqaPaly1ih9x4e09lsj31fy0ndb29.jpg"
+      },
+      {
+        "path": "素材/02-导航场景效果图.png",
+        "status": "uploaded",
+        "platformUrl": "https://wx3.sinaimg.cn/bmiddle/006vqaPaly1ih9x4urgx9j31fa0no4qp.jpg"
+      },
+      {
+        "path": "素材/03-A7Z首次运行截图.png",
+        "status": "uploaded",
+        "platformUrl": "https://wx1.sinaimg.cn/bmiddle/006vqaPaly1ih9x57rs3rj31hc0u0djn.jpg"
+      }
+    ]
+  },
+  {
+    "id": "3ce3ee38-c230-4c3a-8c00-1ef18510dc34",
+    "title": "做AI眼镜第191天，它第一次离开手机跑起来了",
+    "status": "active",
+    "platform": "csdn",
+    "execution": {
+      "status": "running",
+      "currentAttemptId": "0a52ff33-25bc-441b-8976-be070bec7a55",
+      "currentGeneration": 3,
+      "currentLaunchOperationId": "47f20da3-76f2-4488-a9c8-0c7536fa0e21",
+      "currentStepId": "open-editor",
+      "lastAgentRunId": "run-47f20da3-76f2-4488-a9c8-0c7536fa0e21",
+      "lastBrowserTaskRunId": "5b418702-bc3c-4e17-9f24-5c30c4e1c3ad"
+    },
+    "publication": {
+      "status": "not-started"
+    },
+    "assets": [
+      {
+        "path": "素材/01-AR观察效果图.png",
+        "status": "pending",
+        "platformUrl": null
+      },
+      {
+        "path": "素材/02-导航场景效果图.png",
+        "status": "pending",
+        "platformUrl": null
+      },
+      {
+        "path": "素材/03-A7Z首次运行截图.png",
+        "status": "pending",
+        "platformUrl": null
+      }
+    ]
+  }
+]

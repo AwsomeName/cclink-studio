@@ -154,6 +154,8 @@ export interface Tab {
   type: TabType
   title: string
   icon: string
+  /** 固定标签排在前面，批量关闭时保留；随所属工作空间恢复。 */
+  pinned?: boolean
   /** Tab 所属工作空间；设置页等全局 Tab 可省略。 */
   workspaceRef?: WorkspaceRef
   /** 关联的文件路径（编辑器 Tab 使用） */
@@ -177,7 +179,7 @@ export interface Tab {
   webResourceRef?: {
     accountId: string
   }
-  /** 尚未保存的网站账号草稿；不进入 WorkspaceState。 */
+  /** 尚未保存的网站账号草稿引用；随 Tab 恢复，草稿事实由 WebResourceService 拥有。 */
   webResourceDraftRef?: {
     draftId: string
   }

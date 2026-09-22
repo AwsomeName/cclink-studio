@@ -64,6 +64,8 @@ function createPolicy(options?: {
   titleValue?: string
   summary?: string
   tags?: string[]
+  category?: string
+  categoryEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
   tagEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
   fieldValues?: Record<string, string>
   sideEffects?: Array<Record<string, unknown>>
@@ -156,7 +158,7 @@ function createPolicy(options?: {
         title: 'Article',
         summary: options?.summary ?? '',
         tags: options?.tags ?? [],
-        category: '',
+        category: options?.category ?? '',
       },
       assets: [
         {
@@ -368,6 +370,7 @@ function createPolicy(options?: {
             titleValue: options?.titleValue ?? 'Article',
             selectors,
             tagEditor: options?.tagEditor,
+            categoryEditor: options?.categoryEditor,
             fieldValues: options?.fieldValues,
             saveStatusTexts: ['草稿已保存'],
             publishedLinks: options?.publishedLinks ?? [],
@@ -1051,6 +1054,59 @@ describe('ArticlePublishingBrowserPolicy', () => {
       expect.stringContaining('autosave:fill-fields:tags:'),
       'task-a',
       'workspace-a',
+    )
+  })
+
+  it('commits only the inspected frozen CSDN category on blur, never the edit buffer alone', async () => {
+    const harness = createPolicy({
+      stepId: 'fill-fields',
+      category: '人工智能',
+      categoryEditor: {
+        openSelector: '#add-category',
+        inputSelector: '#category-buffer',
+        pendingValue: '人工智能',
+      },
+      fieldValues: { category: '' },
+    })
+    await harness.inspect({ category: '#category-buffer', title: '#title' })
+    let live = '人工智能'
+    const page = { url: () => DRAFT_URL, locator: () => ({ innerText: async () => live }) }
+    const act = (action: string, params: Record<string, unknown>) =>
+      harness.policy.classifyAction(task as never, action, params, page as never, context)
+    expect(await act('click', { selector: '#add-category' })).toMatchObject({ kind: 'allow' })
+    expect(await act('fill', { selector: '#category-buffer', value: '人工智能' })).toMatchObject({
+      kind: 'allow',
+    })
+    expect(harness.webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    expect(await act('fill', { selector: '#category-buffer', value: '未授权分类' })).toMatchObject({
+      kind: 'runtime-error',
+    })
+    expect(await act('press', { selector: '#category-buffer', key: 'Enter' })).toMatchObject({
+      kind: 'runtime-error',
+    })
+    live = '已被修改'
+    expect(await act('press', { selector: '#category-buffer', key: 'Tab' })).toMatchObject({
+      kind: 'runtime-error',
+    })
+    expect(harness.webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    live = '人工智能'
+    await act('press', { selector: '#category-buffer', key: 'Tab' })
+    expect(harness.webAffairService.reserveArticlePublishingSideEffect).toHaveBeenCalledWith(
+      'affair-a',
+      'attempt-a',
+      1,
+      'save-draft',
+      expect.stringContaining('autosave:fill-fields:category:'),
+      'task-a',
+      'workspace-a',
+    )
+    expect(harness.webAffairService.recordArticlePublishingPlanResults).toHaveBeenCalledWith(
+      expect.objectContaining({
+        results: expect.arrayContaining([
+          expect.objectContaining({ id: 'field.category.verify', status: 'waiting' }),
+        ]),
+      }),
+      expect.any(Function),
     )
   })
 

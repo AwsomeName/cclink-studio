@@ -44,4 +44,15 @@ describe('computeScheduledTaskExecutionDigest', () => {
       computeScheduledTaskExecutionDigest(first),
     )
   })
+
+  it('binds confirmation to the fallback template', () => {
+    const original = definition()
+    const changed = {
+      ...original,
+      outputPolicy: { ...original.outputPolicy, failureTemplate: '# Daily log' },
+    }
+    expect(computeScheduledTaskExecutionDigest(changed)).not.toBe(
+      computeScheduledTaskExecutionDigest(original),
+    )
+  })
 })

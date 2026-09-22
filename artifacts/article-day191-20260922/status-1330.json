@@ -1,0 +1,202 @@
+{
+  "observedAt": "2026-09-22T05:31:16.856477+00:00",
+  "affairs": [
+    {
+      "affairId": "eb2c0a69-c200-486f-bcb1-21b6ce516a06",
+      "adapterId": "bilibili",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "059882c3-ce71-4825-98ff-51594517c8dd",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "3b0105b1-4b63-4388-b13e-45f08a384dde"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://t.bilibili.com/1249973308685811731",
+        "observedAt": "2026-09-20T02:16:04.746Z"
+      },
+      "events": [
+        {
+          "id": "8b4f0095-4078-42cd-8d72-f214ac1ff808",
+          "type": "node-status-changed",
+          "nodeId": "7e10ada8-36da-4b64-bbd9-f9694ac25a1c",
+          "attemptId": "059882c3-ce71-4825-98ff-51594517c8dd",
+          "summary": "文章发布步骤 核验动态 ID、作者、全文与逐图结果 → completed",
+          "occurredAt": "2026-09-20T02:15:54.894Z"
+        },
+        {
+          "id": "30ac5afa-3641-4665-8c02-071284cb3f15",
+          "type": "attempt-finished",
+          "nodeId": "7e10ada8-36da-4b64-bbd9-f9694ac25a1c",
+          "attemptId": "059882c3-ce71-4825-98ff-51594517c8dd",
+          "summary": "发布文章到 B站动态：succeeded，B站图文动态单篇发布完成：账号 UID 3546384070347419 与冻结 targetUID 一致；3 张冻结图片（01-AR观察效果图/02-导航场景效果图/03-A7Z首次运行截图）逐张上传并后置核验通过；正文（源稿 H1 后段落+话题行，不含 Markdown 图片语法）回读 bodyMatchesFrozen=true；独立标题按冻结平台值填写并回读\"做AI眼镜第191天，它第一次离开手机跑\"（平台保留前20字符）；可见范围核验为 public；发布仅点击一次（原生回执 HTTP 200、平台码 0、动态 ID 1249973308685811731）；公开动态页核验通过：ID、作者、标题、全文与 3/3 图片顺序/平台地址/加载一致，发布 URL 可复核。",
+          "occurredAt": "2026-09-20T02:16:04.746Z"
+        }
+      ]
+    },
+    {
+      "affairId": "e4422236-6532-439b-94b7-c915d047237b",
+      "adapterId": "weibo",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "01565a35-ce39-455d-a31b-c6eba0a74142",
+        "currentGeneration": 4,
+        "currentLaunchOperationId": "dd92f9b0-05ac-41a8-861b-10e92b2a0cfc"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://weibo.com/5961101548/RiX22ovwL",
+        "observedAt": "2026-09-22T02:06:48.522Z"
+      },
+      "events": [
+        {
+          "id": "d1770967-1ea1-4629-8a8b-64dc7e2c31f4",
+          "type": "node-status-changed",
+          "nodeId": "b8d1e6d6-a694-4940-b154-ca1e615b09c5",
+          "attemptId": "01565a35-ce39-455d-a31b-c6eba0a74142",
+          "summary": "文章发布步骤 核验平台实际发布结果 → completed",
+          "occurredAt": "2026-09-22T02:06:40.361Z"
+        },
+        {
+          "id": "15aecff1-0509-4e15-b7cf-bcb74d8497bb",
+          "type": "attempt-finished",
+          "nodeId": "b8d1e6d6-a694-4940-b154-ca1e615b09c5",
+          "attemptId": "01565a35-ce39-455d-a31b-c6eba0a74142",
+          "summary": "发布文章到 微博：succeeded，微博单篇图文任务完成：公开页 https://weibo.com/5961101548/RiX22ovwL 已核验，UID 5961101548 与作品 ID RiX22ovwL 一致，标题\"做AI眼镜第191天，它第一次离开手机跑起来了\"逐字一致，正文 bodyMatchesFrozen=true（525 字符），3 张图片全部 loaded=true 且与上传平台 URL 一一对应，publishedLinks 返回本作品地址；发布仅执行一次，无重发",
+          "occurredAt": "2026-09-22T02:06:48.522Z"
+        }
+      ]
+    },
+    {
+      "affairId": "3ce3ee38-c230-4c3a-8c00-1ef18510dc34",
+      "adapterId": "csdn",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "0a52ff33-25bc-441b-8976-be070bec7a55",
+        "currentGeneration": 5,
+        "currentLaunchOperationId": "a862c703-200c-4964-8af5-05b8aae225d2"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://blog.csdn.net/weixin_36388257/article/details/166343596",
+        "observedAt": "2026-09-22T05:30:03.962Z"
+      },
+      "events": [
+        {
+          "id": "e3ee80e6-7605-4493-8434-ca0a3abc8531",
+          "type": "node-status-changed",
+          "nodeId": "6b7916fe-9c72-4ce5-ad80-e3db0ff53e00",
+          "attemptId": "0a52ff33-25bc-441b-8976-be070bec7a55",
+          "summary": "文章发布步骤 核验文章结果 → completed",
+          "occurredAt": "2026-09-22T05:29:57.134Z"
+        },
+        {
+          "id": "1715982b-7a5d-4787-9adf-41cd63c42ed2",
+          "type": "attempt-finished",
+          "nodeId": "6b7916fe-9c72-4ce5-ad80-e3db0ff53e00",
+          "attemptId": "0a52ff33-25bc-441b-8976-be070bec7a55",
+          "summary": "发布文章到 CSDN：succeeded，verify-publication 只读核验完成：csdn@1 适配器在重新打开的公开页面 https://blog.csdn.net/weixin_36388257/article/details/166343596 上确认 pageKind=published-article、publishedArticleId=166343596、platformAccountId=csdn:weixin_36388257、标题《做AI眼镜第191天，它第一次离开手机跑起来了》与冻结标题一致、bodyMatchesFrozen=true，无 publicationBlocker。未执行任何填写、上传、保存或再次发布操作。",
+          "occurredAt": "2026-09-22T05:30:03.962Z"
+        }
+      ]
+    },
+    {
+      "affairId": "181c0f55-beb1-4e45-b86d-0e476fefa870",
+      "adapterId": "zhihu",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "e8872f42-03bd-41ad-b636-cdfeeed03b99",
+        "currentGeneration": 9,
+        "currentLaunchOperationId": "032152ff-f516-4d9e-b884-a0ed30375cf7"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://zhuanlan.zhihu.com/p/2085684921817896224",
+        "observedAt": "2026-09-22T03:43:13.965Z"
+      },
+      "events": [
+        {
+          "id": "ab246a08-afa2-4165-90d2-d4441f8b5fc6",
+          "type": "node-status-changed",
+          "nodeId": "573d5f42-9540-4584-b591-88e8c3f47791",
+          "attemptId": "e8872f42-03bd-41ad-b636-cdfeeed03b99",
+          "summary": "文章发布步骤 核验文章结果 → completed",
+          "occurredAt": "2026-09-22T03:43:07.265Z"
+        },
+        {
+          "id": "11cb4620-fd50-4d47-849b-4d5f21a17c5f",
+          "type": "attempt-finished",
+          "nodeId": "573d5f42-9540-4584-b591-88e8c3f47791",
+          "attemptId": "e8872f42-03bd-41ad-b636-cdfeeed03b99",
+          "summary": "发布文章到 知乎：succeeded，知乎单篇图文发布成功并完成只读核验：账号 zhidfc1e，原稿《做AI眼镜第191天，它第一次离开手机跑起来了》（/Users/apple/Desktop/研发日记/AIR/2026-09-12/小红书软文.md）。正文 514 字符与冻结原稿一致，三张图片（01-AR观察效果图/02-导航场景效果图/03-A7Z首次运行截图）全部上传并在公开页加载正常、位置一致。发布按钮仅点击一次，无验证码/声明/风控弹窗。发布结果 URL 已复核：publishedArticleId=2085684921817896224 与原稿 draftId 一致，标题、正文、三图在公开页全部核验通过，无 publicationBlocker。",
+          "occurredAt": "2026-09-22T03:43:13.965Z"
+        }
+      ]
+    },
+    {
+      "affairId": "40e14925-cb41-4389-ae43-1be71e5a347c",
+      "adapterId": "juejin",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "4bebeb4c-a3bb-4e4b-bff0-187e775ed71a",
+        "currentGeneration": 3,
+        "currentLaunchOperationId": "aba867e1-2cdf-4562-9883-a364859d1c9f"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://juejin.cn/post/7687897973762359306",
+        "observedAt": "2026-09-22T05:00:07.645Z"
+      },
+      "events": [
+        {
+          "id": "3f113ae5-cd97-4eac-b522-1235946ef97c",
+          "type": "node-status-changed",
+          "nodeId": "201d3290-f064-4bf3-b38b-bc7cadc3a4af",
+          "attemptId": "4bebeb4c-a3bb-4e4b-bff0-187e775ed71a",
+          "summary": "文章发布步骤 核验文章结果 → completed",
+          "occurredAt": "2026-09-22T04:59:58.816Z"
+        },
+        {
+          "id": "26ece0fa-947b-4f88-80bb-8dbee649b526",
+          "type": "attempt-finished",
+          "nodeId": "201d3290-f064-4bf3-b38b-bc7cadc3a4af",
+          "attemptId": "4bebeb4c-a3bb-4e4b-bff0-187e775ed71a",
+          "summary": "发布文章到 掘金：succeeded，掘金单篇三图文章发布成功。复用锁定原稿 draftId=7688013345149157376 与原账号 4382008413004393（深芯智造），未新建草稿。fill-fields/save-draft 核验通过后，经主进程一次性派发闸门仅点击一次「确定并发布」；publishedLinks 返回文章 URL https://juejin.cn/post/7687897973762359306。公开页核验：pageKind=published-article，标题「做AI眼镜第191天，它第一次离开手机跑起来了」、正文 bodyMatchesFrozen=true、三张图片（AR观察设计效果图/导航场景设计效果图/A7Z首次运行实机截图）全部 loaded=true 且 src 与上传核验平台地址一一对应。发布后仅核验未重复提交。",
+          "occurredAt": "2026-09-22T05:00:07.645Z"
+        }
+      ]
+    },
+    {
+      "affairId": "b75c91ce-e36f-4420-9443-7eb8e2b366bc",
+      "adapterId": "toutiao",
+      "execution": {
+        "status": "waiting-human",
+        "currentAttemptId": "96eba9e5-f246-49e1-a54a-8ead6f490519",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "5dd27dd9-29f6-4237-bbde-35bf4a1721ed",
+        "currentStepId": "verify-publication"
+      },
+      "publication": {
+        "status": "dispatched"
+      },
+      "events": [
+        {
+          "id": "cbe3d2ee-1383-4206-a132-5c91d7fd7efa",
+          "type": "node-status-changed",
+          "nodeId": "498169b1-6b6b-4b0d-b8c2-0811688a628b",
+          "attemptId": "96eba9e5-f246-49e1-a54a-8ead6f490519",
+          "summary": "文章发布步骤 核验微头条平台结果 → verifying",
+          "occurredAt": "2026-09-22T05:26:44.562Z"
+        },
+        {
+          "id": "3682bff2-be3a-4a57-b5d5-d5874f9afe2a",
+          "type": "node-status-changed",
+          "nodeId": "498169b1-6b6b-4b0d-b8c2-0811688a628b",
+          "attemptId": "96eba9e5-f246-49e1-a54a-8ead6f490519",
+          "summary": "文章发布步骤 核验微头条平台结果 → waiting-human",
+          "occurredAt": "2026-09-22T05:27:20.982Z"
+        }
+      ]
+    }
+  ]
+}

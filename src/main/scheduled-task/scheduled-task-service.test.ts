@@ -10,6 +10,7 @@ vi.mock('electron', () => ({
 
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import { ScheduledTaskService } from './scheduled-task-service'
+import { ScheduledTaskAgentRunner } from './scheduled-task-agent-runner'
 import { ScheduledTaskToolModule } from '../mcp/modules/scheduled-task'
 import type {
   ScheduledTaskAgentRunInput,
@@ -32,6 +33,141 @@ afterEach(async () => {
 })
 
 describe('ScheduledTaskService', () => {
+  it('keeps the real fallback file openable on a failed run after reloading', async () => {
+    const executor = new ScheduledTaskAgentRunner({
+      onRuntimeEvent: () => () => {},
+      sendScheduledTaskMessage: async () => {
+        throw new Error('API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容]')
+      },
+    } as never)
+    const service = createService(executor)
+    await service.load()
+    const input = createInput(false)
+    const saved = await service.save({
+      ...input,
+      outputPolicy: { ...input.outputPolicy, failureTemplate: '今日体重：\n\n## 昨日总结\n' },
+    })
+    const taskId = saved.task!.definition.id
+    await service.startRuntime({} as never)
+    try {
+      await service.runNow({ workspacePath, taskId })
+      await vi.waitFor(async () => {
+        expect((await service.listRuns(workspacePath, taskId)).runs[0]).toMatchObject({
+          status: 'failed',
+          currentStep: '模板已保存，AI 补充失败；可打开文件继续填写',
+          error: { code: 'SCHEDULED_TASK_CONTENT_REJECTED' },
+          artifact: { relativePath: expect.any(String) },
+        })
+      })
+      const reloaded = createService()
+      await reloaded.load()
+      const history = await reloaded.listRuns(workspacePath, taskId)
+      const artifact = history.runs[0].artifact!
+      expect(await readFile(join(workspacePath, artifact.relativePath), 'utf8')).toContain(
+        '今日体重：',
+      )
+      expect(
+        (await reloaded.get(workspacePath, taskId)).task?.definition.outputPolicy.failureTemplate,
+      ).toBe('今日体重：\n\n## 昨日总结\n')
+    } finally {
+      await service.stopRuntime()
+    }
+  })
+
+  it('continues other tasks and the next daily occurrence after a provider rejection', async () => {
+    vi.useFakeTimers()
+    let now = Date.parse('2026-07-29T00:00:00.000Z')
+    vi.setSystemTime(now)
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error('API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容]'),
+      )
+      .mockResolvedValue({
+        artifact: { relativePath: 'docs/周报/result.md', bytes: 1, sha256: 'a'.repeat(64) },
+      })
+    const service = createService({ run, cancel: vi.fn(async () => {}) }, () => now)
+    try {
+      await service.load()
+      const saved = await service.save({
+        ...createInput(true),
+        schedule: { kind: 'daily', time: '00:01', timezone: 'UTC' },
+      })
+      const other = await service.save({ ...createInput(false), title: '另一份简报' })
+      const taskId = saved.task!.definition.id
+      await service.startRuntime({} as never)
+      now += 60_000
+      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.waitFor(async () => {
+        expect((await service.listRuns(workspacePath, taskId)).runs[0]?.status).toBe('failed')
+      })
+      expect((await service.get(workspacePath, taskId)).task?.activation).toMatchObject({
+        enabled: true,
+        nextRunAt: now + 86_400_000,
+      })
+      await service.runNow({ workspacePath, taskId: other.task!.definition.id })
+      await vi.waitFor(async () => {
+        expect(
+          (await service.listRuns(workspacePath, other.task!.definition.id)).runs[0]?.status,
+        ).toBe('completed')
+      })
+      now += 86_400_000
+      await vi.advanceTimersByTimeAsync(86_400_000)
+      await vi.waitFor(async () => {
+        expect((await service.listRuns(workspacePath, taskId)).runs.map((r) => r.status)).toEqual([
+          'completed',
+          'failed',
+        ])
+      })
+      expect(run).toHaveBeenCalledTimes(3)
+    } finally {
+      await service.stopRuntime()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    [
+      'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容，请您避免输入易产生敏感内容的提示语，感谢您的配合。][request-id]',
+      'SCHEDULED_TASK_CONTENT_REJECTED',
+    ],
+    [
+      'API Error: 系统检测到输入或生成内容可能包含不安全或敏感内容（Markdown 输出）',
+      'SCHEDULED_TASK_CONTENT_REJECTED',
+    ],
+    ['API Error: [1301] connection failed', 'SCHEDULED_TASK_AGENT_UNAVAILABLE'],
+    ['Agent 运行超时', 'SCHEDULED_TASK_AGENT_UNAVAILABLE'],
+    ['Agent 未返回可写入的 Markdown', 'SCHEDULED_TASK_OUTPUT_INVALID'],
+    ['输出文件已存在，create-only', 'SCHEDULED_TASK_OUTPUT_EXISTS'],
+  ])('persists the failure category for %s', async (message, code) => {
+    const run = vi.fn().mockRejectedValue(new Error(message))
+    const service = createService({ run, cancel: vi.fn(async () => {}) })
+    await service.load()
+    const saved = await service.save(createInput(false))
+    const taskId = saved.task!.definition.id
+    await service.startRuntime({} as never)
+    try {
+      expect((await service.runNow({ workspacePath, taskId })).success).toBe(true)
+      await vi.waitFor(async () => {
+        const history = await service.listRuns(workspacePath, taskId)
+        expect(history.runs[0]).toMatchObject({ status: 'failed', error: { code } })
+        expect(history.runs[0].artifact).toBeUndefined()
+      })
+      const reloaded = createService()
+      await reloaded.load()
+      const history = await reloaded.listRuns(workspacePath, taskId)
+      expect(history.runs[0].error?.code).toBe(code)
+      if (code === 'SCHEDULED_TASK_CONTENT_REJECTED') {
+        expect(history.runs[0].error?.message).toBe(message)
+        expect(history.runs[0].error?.recovery).toContain('联系模型服务商')
+        expect(history.runs[0].error?.recovery).not.toContain('网络后重试')
+      }
+      expect(run).toHaveBeenCalledTimes(1)
+    } finally {
+      await service.stopRuntime()
+    }
+  })
+
   it('persists workspace definitions separately from local activation state', async () => {
     const service = createService()
     await service.load()

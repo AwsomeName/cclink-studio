@@ -5960,6 +5960,9 @@ export class WebAffairService {
     const eligibleEffects = publishing.sideEffects.filter(
       (effect) =>
         effect.attemptId === found.attempt.id &&
+        // A pre-dispatch rejection has no platform effect and must not shadow a
+        // later real write. Dispatched/unknown writes still require reconciliation.
+        !(effect.status === 'rejected' && !effect.dispatchedAt) &&
         (effect.status !== 'reconciled' || effect === recoveredBodyEffect),
     )
     if (input.status === 'completed') {
@@ -6075,8 +6078,22 @@ export class WebAffairService {
             checkpoint.details?.some(
               (detail) =>
                 detail.id === id &&
-                detail.generation === found.attempt.executionGeneration &&
-                detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed'),
+                ((detail.generation === found.attempt.executionGeneration &&
+                  detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed')) ||
+                  (id.endsWith('.dispatch') &&
+                    detail.status === 'completed' &&
+                    detail.generation < found.attempt.executionGeneration &&
+                    reporter.trustedPageEvidence?.isCurrent?.() === true &&
+                    reporter.trustedPageEvidence.bodyMatchesFrozen === true &&
+                    publishing.sideEffects.some(
+                      (effect) =>
+                        effect.attemptId === found.attempt.id &&
+                        effect.executionGeneration === detail.generation &&
+                        effect.kind === 'save-draft' &&
+                        effect.status === 'reconciled' &&
+                        Boolean(effect.dispatchedAt) &&
+                        effect.targetId.startsWith(`autosave:fill-fields:${id.split('.')[1]}:`),
+                    ))),
             ),
           ) &&
         !eligibleEffects.some(

@@ -21,7 +21,10 @@ export interface ScheduledTaskAgentRunInput {
 
 export interface ScheduledTaskAgentRunResult {
   artifact: ScheduledTaskArtifact
+  generationError?: string
 }
+
+class ScheduledTaskCancelledError extends Error {}
 
 export interface ScheduledTaskRunExecutor {
   run(input: ScheduledTaskAgentRunInput): Promise<ScheduledTaskAgentRunResult>
@@ -32,7 +35,8 @@ interface ActiveAgentRun {
   conversationId: string
   reject: (error: Error) => void
   unsubscribe: () => void
-  timeout: ReturnType<typeof setTimeout>
+  timeout: ReturnType<typeof setTimeout> | null
+  cancelled: boolean
 }
 
 export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
@@ -41,6 +45,27 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
   constructor(private readonly agentBridge: AgentBridge) {}
 
   async run(input: ScheduledTaskAgentRunInput): Promise<ScheduledTaskAgentRunResult> {
+    const active: ActiveAgentRun = {
+      conversationId: input.conversationId,
+      reject: () => {},
+      unsubscribe: () => {},
+      timeout: null,
+      cancelled: false,
+    }
+    this.active.set(input.runId, active)
+    try {
+      return await this.execute(input, active)
+    } finally {
+      if (active.timeout) clearTimeout(active.timeout)
+      active.unsubscribe()
+      this.active.delete(input.runId)
+    }
+  }
+
+  private async execute(
+    input: ScheduledTaskAgentRunInput,
+    active: ActiveAgentRun,
+  ): Promise<ScheduledTaskAgentRunResult> {
     const { definition } = input
     const workspaceRoot = await realpath(definition.workspaceRef.path)
     const readRoots = await resolveReadRoots(definition, workspaceRoot)
@@ -51,23 +76,31 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
       input.runId,
     )
     await assertOutputDoesNotExist(output.absolutePath)
+    assertNotCancelled(active)
 
+    let generationError: string | undefined
     const markdown = await new Promise<string>((resolvePromise, rejectPromise) => {
       let settled = false
       const settle = (callback: () => void): void => {
         if (settled) return
         settled = true
-        const active = this.active.get(input.runId)
-        if (active) {
-          clearTimeout(active.timeout)
-          active.unsubscribe()
-          this.active.delete(input.runId)
-        }
+        if (active.timeout) clearTimeout(active.timeout)
+        active.timeout = null
+        active.unsubscribe()
         callback()
       }
       const unsubscribe = this.agentBridge.onRuntimeEvent((event) => {
         if (event.conversationId !== input.conversationId || event.runId !== input.runId) return
         if (event.type === 'complete') {
+          if (
+            event.data &&
+            typeof event.data === 'object' &&
+            'is_error' in event.data &&
+            event.data.is_error === true
+          ) {
+            settle(() => rejectPromise(new Error(extractAgentError(event))))
+            return
+          }
           const result = extractAgentResult(event)
           settle(() =>
             result
@@ -79,15 +112,12 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         }
       })
       const timeout = setTimeout(() => {
-        void this.agentBridge.abort(input.conversationId, input.runId)
+        void this.agentBridge.abort(input.conversationId, input.runId).catch(() => {})
         settle(() => rejectPromise(new Error('定时任务 Agent 运行超时')))
       }, RUN_TIMEOUT_MS)
-      this.active.set(input.runId, {
-        conversationId: input.conversationId,
-        reject: rejectPromise,
-        unsubscribe,
-        timeout,
-      })
+      active.reject = (error) => settle(() => rejectPromise(error))
+      active.unsubscribe = unsubscribe
+      active.timeout = timeout
 
       void this.agentBridge
         .sendScheduledTaskMessage({
@@ -103,6 +133,21 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
           settle(() => rejectPromise(error instanceof Error ? error : new Error(String(error))))
         })
     })
+      .then((value) => {
+        if (Buffer.byteLength(value, 'utf-8') > MAX_OUTPUT_BYTES) {
+          throw new Error('Agent 生成的 Markdown 超过 2 MiB')
+        }
+        return value
+      })
+      .catch((error: unknown) => {
+        assertNotCancelled(active)
+        const template = definition.outputPolicy.failureTemplate
+        if (error instanceof ScheduledTaskCancelledError || !template?.trim()) throw error
+        generationError = error instanceof Error ? error.message : String(error)
+        return normalizeMarkdown(
+          `${template}\n\n> 本次 AI 补充失败，仅保存预设模板。未核实的内容留空，详情见定时任务运行记录。`,
+        )
+      })
 
     const bytes = Buffer.byteLength(markdown, 'utf-8')
     if (bytes === 0 || bytes > MAX_OUTPUT_BYTES) {
@@ -112,6 +157,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     if (currentOutputDirectory !== output.canonicalDirectory) {
       throw new Error('输出目录在运行期间发生变化，已拒绝写入')
     }
+    assertNotCancelled(active)
     await writeFile(output.absolutePath, markdown, {
       encoding: 'utf-8',
       flag: 'wx',
@@ -120,6 +166,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     const persisted = await readFile(output.absolutePath, 'utf-8')
     if (persisted !== markdown) throw new Error('Markdown 写后校验失败')
     return {
+      ...(generationError === undefined ? {} : { generationError }),
       artifact: {
         relativePath: output.relativePath,
         bytes,
@@ -131,12 +178,15 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
   async cancel(runId: string): Promise<void> {
     const active = this.active.get(runId)
     if (!active) return
-    clearTimeout(active.timeout)
-    active.unsubscribe()
-    this.active.delete(runId)
-    await this.agentBridge.abort(active.conversationId, runId)
-    active.reject(new Error('定时任务运行已取消'))
+    const agentRunning = active.timeout !== null
+    active.cancelled = true
+    active.reject(new ScheduledTaskCancelledError('定时任务运行已取消'))
+    if (agentRunning) await this.agentBridge.abort(active.conversationId, runId)
   }
+}
+
+function assertNotCancelled(active: ActiveAgentRun): void {
+  if (active.cancelled) throw new ScheduledTaskCancelledError('定时任务运行已取消')
 }
 
 async function resolveReadRoots(
@@ -208,6 +258,12 @@ function buildScheduledPrompt(
     `任务：${definition.instruction}`,
     `允许读取的资源：${resources}`,
     `目标产物：${relativeOutputPath}`,
+    ...(definition.outputPolicy.failureTemplate
+      ? [
+          '以下是用户预设的 Markdown 结构，请在此结构内补充有资料依据的内容；未知事实留空，示例不能当作实际记录：',
+          definition.outputPolicy.failureTemplate,
+        ]
+      : []),
     '只可使用 editor_read 和 editor_list 读取资料。',
     '禁止使用 Terminal、Browser、Android、Git、数据源、网络、删除、追加或任何外部动作。',
     '不要调用写入工具。最终回答必须只包含完整 Markdown 正文，不要解释，不要使用代码围栏。',
@@ -222,8 +278,18 @@ function extractAgentResult(event: AgentRuntimeEvent): string | null {
 
 function extractAgentError(event: AgentRuntimeEvent): string {
   if (!event.data || typeof event.data !== 'object') return 'Agent 运行失败'
-  const message = (event.data as { message?: unknown }).message
-  return typeof message === 'string' && message.trim() ? message : 'Agent 运行失败'
+  const { message, result, errors } = event.data as {
+    message?: unknown
+    result?: unknown
+    errors?: unknown
+  }
+  if (typeof message === 'string' && message.trim()) return message
+  if (typeof result === 'string' && result.trim()) return result
+  if (Array.isArray(errors)) {
+    const text = errors.filter((item): item is string => typeof item === 'string').join('\n')
+    if (text.trim()) return text
+  }
+  return 'Agent 运行失败'
 }
 
 function normalizeMarkdown(value: string): string {

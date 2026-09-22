@@ -903,10 +903,16 @@ export class ScheduledTaskService {
       const current = this.runStore.get(run.id)
       if (current?.status === 'running') {
         await this.updateRun(current, {
-          status: 'completed',
-          currentStep: '任务已完成，运行结果已保存',
+          status: result.generationError === undefined ? 'completed' : 'failed',
+          currentStep:
+            result.generationError === undefined
+              ? '任务已完成，运行结果已保存'
+              : '模板已保存，AI 补充失败；可打开文件继续填写',
           finishedAt: this.now(),
           artifact: result.artifact,
+          ...(result.generationError === undefined
+            ? {}
+            : { error: classifyRunFailure(new Error(result.generationError)) }),
         })
       }
     } catch (error) {
@@ -1948,6 +1954,18 @@ function toFailure(error: unknown): ScheduledTaskFailure {
 
 function classifyRunFailure(error: unknown): ScheduledTaskFailure {
   const message = error instanceof Error ? error.message : String(error)
+  // Match the explicit provider refusal, not a provider-specific numeric code alone.
+  if (
+    /API Error\s*:/i.test(message) &&
+    message.includes('系统检测到输入或生成内容可能包含不安全或敏感内容')
+  ) {
+    return {
+      code: 'SCHEDULED_TASK_CONTENT_REJECTED',
+      message,
+      recovery:
+        '模型服务因内容安全策略拒绝了本次请求；无法判断是输入还是生成内容触发。请检查任务指令与绑定资料是否符合服务政策；如认为是误判，请联系模型服务商并提供请求编号。',
+    }
+  }
   if (message.includes('create-only') || message.includes('已存在')) {
     return {
       code: 'SCHEDULED_TASK_OUTPUT_EXISTS',

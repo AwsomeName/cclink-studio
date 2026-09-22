@@ -1100,3 +1100,36 @@ describe('useTabStore', () => {
     })
   })
 })
+
+describe('pinned tab restore', () => {
+  it('restores ordinary draft-backed browsing with its Profile, URL and pin', () => {
+    const tab = {
+      id: 'draft-browser',
+      type: 'browser' as const,
+      title: '实验室',
+      icon: '🌐',
+      workspaceRef: { kind: 'local' as const, path: '/project' },
+      browserProfile: 'draft-profile',
+      webResourceDraftRef: { draftId: 'draft-1' },
+      initialUrl: 'https://example.com/lab',
+      pinned: true,
+    }
+    useTabStore.getState().hydrateFromWorkspaceState({ tabs: [], activeTabId: null })
+    useTabStore.getState().hydrateFromWorkspaceState({ tabs: [tab], activeTabId: tab.id })
+    expect(useTabStore.getState().tabs).toEqual([tab])
+    expect(useTabStore.getState().activeTabId).toBe(tab.id)
+  })
+
+  it('pins any tab without changing activation and prevents dragging across the pinned boundary', () => {
+    useTabStore.getState().openTab({ type: 'editor', title: '笔记', icon: '📄' })
+    const active = useTabStore.getState().activeTabId!
+    useTabStore.getState().setTabPinned(active, true)
+    expect(useTabStore.getState().tabs[0]).toMatchObject({ id: active, pinned: true })
+    expect(useTabStore.getState().activeTabId).toBe(active)
+    useTabStore.getState().reorderTabs(active, 'browser')
+    expect(useTabStore.getState().tabs[0].id).toBe(active)
+    useTabStore.getState().setTabPinned(active, false)
+    useTabStore.getState().reorderTabs(active, 'browser')
+    expect(useTabStore.getState().tabs[1]).toMatchObject({ id: active, pinned: false })
+  })
+})

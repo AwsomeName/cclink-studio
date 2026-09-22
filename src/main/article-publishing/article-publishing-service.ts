@@ -3009,6 +3009,7 @@ function buildAgentPrompt(
   if (publishing.adapterId === 'zhihu')
     return [
       '执行用户已授权的知乎单篇图文提交。使用当前绑定原稿，不新建、不换账号。',
+      '同一动作或状态回报连续两次因同一原因失败，立即报告当前步骤 waiting-human，附 error={code:"zhihu_evidence_missing",message:实际卡点} 后结束。不得刷新碰运气、换证据文案重复回报、倒退图片状态或改用通用完成工具绕过发布检查点。',
       `affairId=${affair.id}; attemptId=${attemptId}; accountId=${publishing.accountId}`,
       `sourceMarkdownPath=${publishing.source.markdownPath}`,
       '先 web_affair_get，再 article_publishing_inspect_page。每次动作前和完成回报前重新 inspect，只使用适配器签发的唯一 selector。',
@@ -3049,6 +3050,7 @@ function buildAgentPrompt(
     `若 inspect 返回 editor.bodyFrameSelector，正文只用 browser_frame_execute，frameAction=fill，frameSelector=该值，selector=selectors.body；不得操作旁边的 AI Chat iframe。保存按钮不代表已保存，必须读回 saveState=saved 后才能报告保存完成。`,
     `核对已有正文时，使用 browser_frame_content，frameSelector=inspect 返回的 editor.bodyFrameSelector，selector=selectors.body，读取正文文本与源 Markdown 比对；不要猜 frameUrl/frameName，iframe 可能没有独立 URL。不要使用 browser_evaluate，不要把 bodyTextLength 非零当成完整正文证据；已有完整正文无需重填。若 inspect.bodyMatchesFrozen=true 且 saveState=saved，Studio 已完成正文和逐图位置核验，直接继续检查点核验，不重复填写。`,
     `fill-fields 若 inspect 返回 tagEditor：先点击 openSelector，重新 inspect；用 browser_fill 在 inputSelector 填入一个尚缺失的冻结 tags 值，再 inspect；用 browser_press（selector=inputSelector,key=Enter）提交这个标签，再 inspect 核验 fieldValues.tags。输入框里的搜索词不算已添加标签；不得用无目标的 browser_press_key。`,
+    'fill-fields 若 inspect 返回 categoryEditor 且 fieldValues.category 不匹配：已有 inputSelector 时直接使用，否则点击 openSelector 再 inspect；只 fill 冻结 category，重新 inspect 后在该 inputSelector 用 browser_press(key=Tab) 触发原生失焦提交，再 inspect 核验 fieldValues.category。pendingValue 只是临时输入，不能当作已选分类；不要按 Enter，它会额外新建空白分类。已匹配的分类不得重建。',
     '若 inspect 返回 selectors.dismissTagEditor 且冻结标签已经全部匹配，用 browser_click 点击该唯一关闭按钮，再 inspect 确认面板关闭后继续保存或发布，避免下拉层挡住按钮。不要使用无目标 Escape。',
     `每次 inspect 可能由 main 推进检查点。inspect 后先读取 web_affair_get 的 currentStepId/current operation，再选择动作，不回报旧检查点。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,

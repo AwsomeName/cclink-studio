@@ -1039,7 +1039,17 @@ describe('article publishing persistent state', () => {
     ).toMatchObject(observation)
   })
 
-  it.each(['current', 'stale', 'not-skipped', 'wrong-account'])(
+  it.each([
+    'current',
+    'stale',
+    'not-skipped',
+    'wrong-account',
+    'recovered',
+    'recovered-stale',
+    'recovered-mismatch',
+    'recovered-undispatched',
+    'recovered-wrong-field',
+  ])(
     'completes an unchanged Zhihu title only with current read-only evidence: %s',
     async (scenario) => {
       const created = await createStartedTask(directory, sourcePath, imagePath)
@@ -1103,6 +1113,45 @@ describe('article publishing persistent state', () => {
           generation: publishing.execution.currentGeneration,
         },
       ]
+      const recovered = scenario.startsWith('recovered')
+      if (recovered) {
+        publishing.adapterId = 'juejin'
+        publishing.execution.currentGeneration = 2
+        affair.attempts[0].executionGeneration = 2
+        for (const binding of affair.attempts[0].runtimeBindings) binding.executionGeneration = 2
+        for (const detail of checkpoint.details) detail.generation = 2
+        checkpoint.details.push(
+          {
+            id: 'field.summary.dispatch',
+            status: 'completed',
+            generation: 1,
+            evidence: 'old dispatched summary',
+            observedAt: new Date().toISOString(),
+            nextAction: 'verify',
+          },
+          {
+            id: 'field.summary.verify',
+            status: 'completed',
+            generation: 2,
+            evidence: 'current summary matches frozen',
+            observedAt: new Date().toISOString(),
+            nextAction: 'save',
+          },
+        )
+        const prior = publishing.sideEffects.find((e: { targetId: string }) =>
+          e.targetId.startsWith('autosave:fill-body:'),
+        )
+        publishing.sideEffects.push({
+          ...prior,
+          key: `${created.affairId}:${created.attemptId}:g1:save-draft:autosave:fill-fields:summary:old`,
+          targetId:
+            scenario === 'recovered-wrong-field'
+              ? 'autosave:fill-fields:title:old'
+              : 'autosave:fill-fields:summary:old',
+          status: 'reconciled',
+          ...(scenario === 'recovered-undispatched' ? { dispatchedAt: undefined } : {}),
+        })
+      }
       await writeFile(path, JSON.stringify(snapshot))
       const service = created.service
       Reflect.set(service, 'snapshot', snapshot)
@@ -1112,6 +1161,12 @@ describe('article publishing persistent state', () => {
         'https://zhuanlan.zhihu.com/p/164148817/edit',
       )
       reporter.trustedPageEvidence!.adapterId = 'zhihu'
+      if (recovered) {
+        reporter.executionGeneration = 2
+        reporter.trustedPageEvidence!.adapterId = 'juejin'
+        reporter.trustedPageEvidence!.bodyMatchesFrozen = scenario !== 'recovered-mismatch'
+        reporter.trustedPageEvidence!.isCurrent = () => scenario !== 'recovered-stale'
+      }
       if (scenario === 'wrong-account') reporter.trustedPageEvidence!.platformAccountId = 'other'
       const result = await service.reportArticlePublishingCheckpoint(
         {
@@ -1126,7 +1181,7 @@ describe('article publishing persistent state', () => {
         reporter,
       )
       expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
-        scenario === 'current',
+        scenario === 'current' || scenario === 'recovered',
       )
       await service.flush()
     },
@@ -2299,6 +2354,8 @@ describe('article publishing persistent state', () => {
 
   it.each([
     'verified',
+    'rejected-before-write',
+    'rejected-only',
     'wrong-draft',
     'wrong-account',
     'wrong-title',
@@ -2336,7 +2393,33 @@ describe('article publishing persistent state', () => {
         )
         if (!result.success) throw new Error(result.error.message)
       }
+      if (scenario === 'rejected-before-write') {
+        // Seed history in this isolated fixture without triggering startup recovery.
+        const snapshot = (created.service as unknown as { snapshot: WebAffairSnapshot }).snapshot
+        const affair = snapshot.affairs.find((a) => a.id === created.affairId)!
+        const effect = affair.articlePublishing!.sideEffects[0]
+        affair.articlePublishing!.sideEffects.unshift({
+          ...effect,
+          key: `${created.affairId}:${created.attemptId}:g1:save-draft:autosave:fill-body:rejected`,
+          kind: 'save-draft',
+          targetId: 'autosave:fill-body:rejected',
+          status: 'rejected',
+          consumedAt: undefined,
+          dispatchedAt: undefined,
+        })
+      }
       await advanceToSaveCheckpoint(created)
+      if (scenario === 'rejected-only') {
+        // Seed history in this isolated fixture without triggering startup recovery.
+        const snapshot = (created.service as unknown as { snapshot: WebAffairSnapshot }).snapshot
+        const affair = snapshot.affairs.find((a) => a.id === created.affairId)!
+        for (const effect of affair.articlePublishing!.sideEffects) {
+          if (effect.kind !== 'save-draft') continue
+          effect.status = 'rejected'
+          delete effect.dispatchedAt
+          delete effect.consumedAt
+        }
+      }
       if (scenario === 'pending-save') {
         const result = await created.service.reserveArticlePublishingSideEffect(
           created.affairId,
@@ -2369,7 +2452,7 @@ describe('article publishing persistent state', () => {
         WORKSPACE_ID,
         reporter,
       )
-      expect(result.success).toBe(scenario === 'verified')
+      expect(result.success).toBe(['verified', 'rejected-before-write'].includes(scenario))
       if (result.success) {
         expect(result.data.articlePublishing?.execution.currentStepId).toBe('publish')
         expect(result.data.articlePublishing?.publication.status).toBe('not-started')

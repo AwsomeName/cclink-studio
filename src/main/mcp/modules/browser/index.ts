@@ -514,7 +514,7 @@ const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'browser_get_tab_info',
     description:
-      '获取任务绑定标签页的ID、URL、标题。openedPageUrls只含该账号当前Tab自行打开的同站点子页，可据此在原任务Tab导航核验；不会切换绑定，也不列举其他Tab。',
+      '获取任务绑定标签页的ID、URL、标题。openedPageUrls只含该账号当前Tab自行打开的同源子页及知乎专栏新建页，可据此在原任务Tab导航核验；不会切换绑定，也不列举其他Tab。',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
@@ -1208,7 +1208,8 @@ export class BrowserToolModule implements ToolModule {
       const selector = actionType === 'pressKey' ? ':focus' : String(params.selector ?? '')
       if (!selector.trim()) return unknown
       const locator = page.locator(selector)
-      if ((await locator.count()) !== 1) return unknown
+      const count = await locator.count()
+      if (count !== 1) return { sensitive: false, label: '', selectorMismatch: count }
       return locator.evaluate((element, action) => {
         const target = element.closest('button, input, a, [role="button"]') ?? element
         const label = String(
@@ -1231,6 +1232,12 @@ export class BrowserToolModule implements ToolModule {
         }
       }, actionType)
     })().catch(() => unknown)
+    // No unique target means no dispatch is allowed. Let the Agent observe and
+    // correct its selector; this is not evidence of a final action requiring takeover.
+    if ('selectorMismatch' in result)
+      throw new Error(
+        `点击或按键目标匹配 ${result.selectorMismatch} 个元素，未执行动作；请重新读取页面并使用唯一控件选择器`,
+      )
     return result.sensitive
       ? `检测到敏感最终动作${result.label ? `（${result.label}）` : ''}`
       : null
@@ -1433,8 +1440,11 @@ export class BrowserToolModule implements ToolModule {
               .filter(
                 (url): url is string =>
                   typeof url === 'string' &&
-                  safeUrlOrigin(url) ===
-                    safeUrlOrigin(this.browserManager!.getCurrentURL(tabId) ?? ''),
+                  (safeUrlOrigin(url) ===
+                    safeUrlOrigin(this.browserManager!.getCurrentURL(tabId) ?? '') ||
+                    (safeUrlOrigin(this.browserManager!.getCurrentURL(tabId) ?? '') ===
+                      'https://www.zhihu.com' &&
+                      url === 'https://zhuanlan.zhihu.com/write')),
               ),
           }
         default: {

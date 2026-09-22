@@ -105,7 +105,6 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
   const tabs = (parsed.tabs ?? [])
     .filter((tab): tab is Tab => Boolean(tab?.id && tab.type && tab.title && tab.icon))
-    .filter((tab) => !tab.webResourceDraftRef)
     // 普通浏览使用默认 Session；Profile-only 或引用冲突的非法旧状态仍不得恢复。
     .filter(isRestorableBrowserTab)
     .filter(
@@ -120,6 +119,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
           Boolean(tab.articlePublishing.affairId)),
     )
     .map(normalizeFileTab)
+    .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true))
   if (tabs.length === 0 && Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null }
   if (tabs.length === 0) return null
   const activeTabId =
@@ -133,7 +133,6 @@ function saveStoredTabs(state: TabState): void {
   try {
     if (isWorkspaceStateRestoring()) return
     const allTabs = state.tabs
-      .filter((tab) => !tab.webResourceDraftRef)
       .filter(
         (tab) => tab.type !== 'article-publishing' || Boolean(tab.articlePublishing?.affairId),
       )
@@ -241,6 +240,7 @@ interface TabState {
   }) => boolean
   /** 关闭 Tab */
   closeTab: (id: string) => void
+  setTabPinned: (id: string, pinned: boolean) => void
   /** 激活 Tab */
   activateTab: (id: string | null) => void
   /** 拖拽排序：把 fromId 移动到 toId 的位置 */
@@ -615,6 +615,13 @@ export const useTabStore = create<TabState>((set, get) => ({
     })
   },
 
+  setTabPinned: (id, pinned) =>
+    set((state) => ({
+      tabs: state.tabs
+        .map((tab) => (tab.id === id ? { ...tab, pinned } : tab))
+        .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)),
+    })),
+
   activateTab: (id) => set({ activeTabId: id }),
 
   reorderTabs: (fromId, toId) => {
@@ -623,6 +630,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       const fromIdx = state.tabs.findIndex((t) => t.id === fromId)
       const toIdx = state.tabs.findIndex((t) => t.id === toId)
       if (fromIdx === -1 || toIdx === -1) return state
+      if (Boolean(state.tabs[fromIdx].pinned) !== Boolean(state.tabs[toIdx].pinned)) return state
       const next = [...state.tabs]
       const [moved] = next.splice(fromIdx, 1)
       next.splice(toIdx, 0, moved)
@@ -833,7 +841,9 @@ export const useTabStore = create<TabState>((set, get) => ({
       const preservedDetachedTabs = state.tabs.filter(
         (tab) => isProjectTab(tab) && preserveTabIds.has(tab.id) && !incomingIds.has(tab.id),
       )
-      const tabs = [...globalTabs, ...preservedDetachedTabs, ...next.tabs]
+      const tabs = [...globalTabs, ...preservedDetachedTabs, ...next.tabs].sort(
+        (a, b) => Number(b.pinned === true) - Number(a.pinned === true),
+      )
       const activeTabId =
         state.activeTabId && globalTabs.some((tab) => tab.id === state.activeTabId)
           ? state.activeTabId

@@ -37,11 +37,39 @@ interface TaskForm {
   resultMode: 'history' | 'workspace-file'
   outputDirectory: string
   fileNameTemplate: string
+  failureTemplate: string
   definitionSource: ScheduledTaskDefinitionSource
 }
 
 const HISTORY_OUTPUT_DIRECTORY = '.cclink-studio/scheduled-task-results'
 const HISTORY_FILE_NAME_TEMPLATE = 'task-{taskId}-{date}-{time}-{runId}.md'
+
+const DAILY_LOG_TEMPLATE = `今日体重：
+昨日睡眠：
+昨日花销：
+AI剩余额度：
+昨日办公地点：
+昨日运动：
+昨日收入：
+
+## 昨日总结
+
+进度：
+
+遗留问题：
+
+## 今日待做
+
+## 强调事项
+
+长期目标：
+
+07:00–23:00 生活作息：
+
+## 今日打卡
+
+示例：07:00｜事项｜详细说明（仅格式示例，非实际记录）
+`
 
 const WEEKDAYS = [
   { value: 1, label: '一' },
@@ -724,6 +752,29 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           )}
         </TaskSection>
 
+        <TaskSection title="失败时保留内容">
+          <label>
+            <span>AI 失败时保存的 Markdown 模板（可选）</span>
+            <textarea
+              value={form.failureTemplate}
+              rows={10}
+              maxLength={32_000}
+              placeholder="未配置时，AI 失败不会创建文件。"
+              onChange={(event) => setForm({ ...form, failureTemplate: event.target.value })}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, failureTemplate: DAILY_LOG_TEMPLATE })}
+          >
+            填入每日日志模板
+          </button>
+          <p className="scheduled-task-help">
+            AI 失败时仍保存此模板，未知内容留空；运行仍标记为失败，可打开文件继续填写。
+            取消、路径无效或文件已存在时不写入。修改后请保存任务。
+          </p>
+        </TaskSection>
+
         {task && (
           <TaskSection title="运行历史">
             {runs.length === 0 ? (
@@ -741,6 +792,9 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                     </div>
                     <p>{run.currentStep}</p>
                     {run.error && <p className="scheduled-task-run-error">{run.error.message}</p>}
+                    {run.error?.recovery && (
+                      <p className="scheduled-task-run-error">建议：{run.error.recovery}</p>
+                    )}
                     <ScheduledTaskRunActions
                       run={run}
                       onCopyLog={handleCopyRunLog}
@@ -854,6 +908,7 @@ function createDefaultForm(): TaskForm {
     resultMode: 'history',
     outputDirectory: 'docs/定时任务',
     fileNameTemplate: 'report-{date}.md',
+    failureTemplate: '',
     definitionSource: 'local',
   }
 }
@@ -881,6 +936,7 @@ function formFromTask(task: ScheduledTaskSnapshot): TaskForm {
     resultMode: isHistoryOutputPolicy(task.definition.outputPolicy) ? 'history' : 'workspace-file',
     outputDirectory: task.definition.outputPolicy.directory,
     fileNameTemplate: task.definition.outputPolicy.fileNameTemplate,
+    failureTemplate: task.definition.outputPolicy.failureTemplate ?? '',
     definitionSource: task.definition.source,
   }
 }
@@ -934,12 +990,14 @@ function outputPolicyFromForm(
       directory: HISTORY_OUTPUT_DIRECTORY,
       fileNameTemplate: HISTORY_FILE_NAME_TEMPLATE,
       mode: 'create-only',
+      ...(form.failureTemplate.trim() ? { failureTemplate: form.failureTemplate } : {}),
     }
   }
   return {
     directory: normalizeWorkspaceRelativePath(form.outputDirectory, workspacePath, '输出目录'),
     fileNameTemplate: form.fileNameTemplate,
     mode: 'create-only',
+    ...(form.failureTemplate.trim() ? { failureTemplate: form.failureTemplate } : {}),
   }
 }
 

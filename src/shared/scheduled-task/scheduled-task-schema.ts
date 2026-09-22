@@ -368,7 +368,11 @@ function parseResources(value: unknown): ScheduledTaskResourceRef[] {
 
 function parseOutputPolicy(value: unknown): ScheduledTaskOutputPolicy {
   const input = requireRecord(value, '输出约定无效')
-  assertAllowedKeys(input, ['directory', 'fileNameTemplate', 'mode'], '输出约定包含未知字段')
+  assertAllowedKeys(
+    input,
+    ['directory', 'fileNameTemplate', 'mode', 'failureTemplate'],
+    '输出约定包含未知字段',
+  )
   if (input.mode !== 'create-only') throw new Error('首版只允许新建输出文件')
   const fileNameTemplate = requireString(input.fileNameTemplate, '输出文件名无效', 180)
   if (
@@ -387,7 +391,18 @@ function parseOutputPolicy(value: unknown): ScheduledTaskOutputPolicy {
     directory: parseRelativePath(input.directory, '输出目录无效'),
     fileNameTemplate,
     mode: 'create-only',
+    ...(input.failureTemplate === undefined
+      ? {}
+      : { failureTemplate: parseFailureTemplate(input.failureTemplate) }),
   }
+}
+
+function parseFailureTemplate(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > 32_000 || value.includes('\0')) {
+    throw new Error('失败时保存的模板无效')
+  }
+  // Markdown whitespace is content and participates in the execution digest.
+  return value
 }
 
 export function parseRunScheduledTaskInput(value: unknown): RunScheduledTaskInput {

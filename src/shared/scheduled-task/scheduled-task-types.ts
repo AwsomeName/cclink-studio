@@ -14,6 +14,7 @@ export type ScheduledTaskErrorCode =
   | 'SCHEDULED_TASK_STORE_INVALID'
   | 'SCHEDULED_TASK_WRITE_FAILED'
   | 'SCHEDULED_TASK_AGENT_UNAVAILABLE'
+  | 'SCHEDULED_TASK_CONTENT_REJECTED'
   | 'SCHEDULED_TASK_ALREADY_RUNNING'
   | 'SCHEDULED_TASK_RUN_NOT_FOUND'
   | 'SCHEDULED_TASK_OUTPUT_EXISTS'
@@ -57,6 +58,8 @@ export interface ScheduledTaskOutputPolicy {
   directory: string
   fileNameTemplate: string
   mode: 'create-only'
+  /** User-authored Markdown saved when Agent generation fails; never a successful AI result. */
+  failureTemplate?: string
 }
 
 export interface ScheduledTaskDefinition {

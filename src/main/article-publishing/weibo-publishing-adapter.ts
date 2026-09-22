@@ -146,7 +146,8 @@ export class WeiboPublishingAdapter {
         adapterId: 'weibo',
         adapterVersion: 1,
         observedAt: live.observedAt,
-        url: live.url,
+        // Attest the exact observed document; the canonical link is only a publication reference.
+        url: live.documentUrl,
         platformAccountId: live.uid,
         publishedArticleId: live.id,
         pageKind: live.recognized ? 'published-article' : 'unsupported',

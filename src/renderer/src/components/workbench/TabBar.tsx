@@ -253,7 +253,7 @@ export function TabBar({
         <div
           key={tab.id}
           data-workbench-tab-id={tab.id}
-          className={`tab ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+          className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
           role="tab"
           tabIndex={activeTabId === tab.id ? 0 : -1}
           aria-selected={activeTabId === tab.id}
@@ -292,15 +292,21 @@ export function TabBar({
             <WorkbenchTabTitle tab={tab} />
             {tab.dirty && <span className="tab-dirty-dot" />}
           </span>
-          <span
-            className="tab-close"
-            onClick={(event) => {
-              event.stopPropagation()
-              onClose(tab.id)
-            }}
-          >
-            <IconClose size={12} />
-          </span>
+          {tab.pinned ? (
+            <span className="tab-pin" title="已固定（右键解除固定）" aria-label="已固定">
+              ⚑
+            </span>
+          ) : (
+            <span
+              className="tab-close"
+              onClick={(event) => {
+                event.stopPropagation()
+                onClose(tab.id)
+              }}
+            >
+              <IconClose size={12} />
+            </span>
+          )}
         </div>
       ))}
 

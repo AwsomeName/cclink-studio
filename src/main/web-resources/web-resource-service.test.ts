@@ -159,6 +159,32 @@ describe('WebResourceService', () => {
     expect(service.getSnapshot()).toMatchObject({ success: true, data: { revision: 1 } })
   })
 
+  it('preserves open and interrupted-saving draft Profiles across restart without creating accounts', async () => {
+    const draftStore = new WebResourceDraftStore(join(tempDir, 'web-resource-drafts.json'))
+    const service = new WebResourceService(new WebResourceStore(storePath), draftStore)
+    await service.load()
+    const first = await service.beginDraft(PROJECT_ID)
+    const second = await service.beginDraft(PROJECT_ID)
+    if (!first.success || !second.success) throw new Error('draft creation failed')
+    await draftStore.save(
+      (await draftStore.load()).map((draft) => ({
+        ...draft,
+        state: draft.id === second.data.draftId ? 'saving' : 'open',
+      })),
+    )
+    const reloaded = new WebResourceService(new WebResourceStore(storePath), draftStore)
+    await reloaded.load()
+    const cleanup = vi.fn()
+    await reloaded.reconcileDrafts(cleanup)
+    expect(cleanup).not.toHaveBeenCalled()
+    expect(await draftStore.load()).toEqual([
+      expect.objectContaining({ id: first.data.draftId, state: 'open' }),
+      expect.objectContaining({ id: second.data.draftId, state: 'open' }),
+    ])
+    expect(await reloaded.beginDraft(PROJECT_ID, first.data.browserProfileId)).toEqual(first)
+    expect(reloaded.getSnapshot()).toMatchObject({ success: true, data: { accounts: [] } })
+  })
+
   it('keeps cleanup-pending drafts for startup reconciliation after profile cleanup fails', async () => {
     const draftPath = join(tempDir, 'web-resource-drafts.json')
     const service = new WebResourceService(

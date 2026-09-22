@@ -18,6 +18,85 @@ afterEach(async () => {
 })
 
 describe('ScheduledTaskAgentRunner', () => {
+  it.each(['error', 'complete'] as const)(
+    'saves a configured template on provider refusal (%s) without copying the refused content',
+    async (type) => {
+      const listeners = new Set<(event: AgentRuntimeEvent) => void>()
+      const runner = new ScheduledTaskAgentRunner({
+        onRuntimeEvent: (listener: (event: AgentRuntimeEvent) => void) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        sendScheduledTaskMessage: async (input: { runId: string; conversationId: string }) => {
+          for (const listener of listeners) {
+            listener({
+              ...input,
+              type,
+              data:
+                type === 'error'
+                  ? { message: 'API Error: [1301] provider refusal with private details' }
+                  : {
+                      is_error: true,
+                      result: 'API Error: [1301] provider refusal with private details',
+                    },
+            })
+          }
+        },
+        abort: vi.fn(),
+      } as never)
+      const task = definition()
+      task.outputPolicy.failureTemplate = '今日体重：\n\n## 昨日总结\n\n## 今日待做\n'
+      const result = await runner.run({
+        runId: 'fallback',
+        conversationId: 'scheduled-task:fallback',
+        definition: task,
+        scheduledFor: Date.parse('2026-07-29T01:00:00Z'),
+      })
+      const persisted = await readFile(join(root, result.artifact.relativePath), 'utf-8')
+      expect(persisted).toContain(task.outputPolicy.failureTemplate)
+      expect(persisted).toContain('本次 AI 补充失败，仅保存预设模板')
+      expect(persisted).not.toContain('private details')
+      expect(result.generationError).toContain('[1301]')
+      expect(result.artifact.bytes).toBe(Buffer.byteLength(persisted))
+      expect(listeners.size).toBe(0)
+    },
+  )
+
+  it.each([false, true])(
+    'does not write a fallback when cancelled (abort rejects: %s)',
+    async (abortRejects) => {
+      const listeners = new Set<(event: AgentRuntimeEvent) => void>()
+      const send = vi.fn(async () => {})
+      const runner = new ScheduledTaskAgentRunner({
+        onRuntimeEvent: (listener: (event: AgentRuntimeEvent) => void) => {
+          listeners.add(listener)
+          return () => listeners.delete(listener)
+        },
+        sendScheduledTaskMessage: send,
+        abort: async () => {
+          if (abortRejects) throw new Error('abort failed')
+        },
+      } as never)
+      const task = definition()
+      task.outputPolicy.fileNameTemplate = 'cancelled.md'
+      task.outputPolicy.failureTemplate = '# Template'
+      const pending = runner.run({
+        runId: 'cancel',
+        conversationId: 'cancel',
+        definition: task,
+        scheduledFor: null,
+      })
+      const rejected = expect(pending).rejects.toThrow('已取消')
+      await vi.waitFor(() => expect(send).toHaveBeenCalledOnce())
+      await runner.cancel('cancel').catch(() => {})
+      await rejected
+      await expect(readFile(join(root, 'docs/generated/cancelled.md'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      })
+      expect(listeners.size).toBe(0)
+    },
+  )
+
   it('uses the scheduled origin and atomically verifies a Markdown artifact', async () => {
     const listeners = new Set<(event: AgentRuntimeEvent) => void>()
     const sendScheduledTaskMessage = vi.fn(
@@ -47,6 +126,7 @@ describe('ScheduledTaskAgentRunner', () => {
     taskDefinition.schedule.timezone = 'America/Los_Angeles'
     taskDefinition.outputPolicy.fileNameTemplate =
       'report-{taskId}-{runId}-{date}-{monthDay}-{weekday}.md'
+    taskDefinition.outputPolicy.failureTemplate = '# Fallback must not replace success'
     const result = await runner.run({
       runId: 'run-1',
       conversationId: 'scheduled-task:run-1',
@@ -54,6 +134,7 @@ describe('ScheduledTaskAgentRunner', () => {
       scheduledFor: Date.parse('2026-07-29T01:00:00.000Z'),
     })
     const canonicalRoot = await realpath(root)
+    expect(result.generationError).toBeUndefined()
 
     expect(sendScheduledTaskMessage).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -85,12 +166,14 @@ describe('ScheduledTaskAgentRunner', () => {
       sendScheduledTaskMessage,
       abort: vi.fn(),
     } as never)
+    const task = definition()
+    task.outputPolicy.failureTemplate = '# Never replace an existing daily log'
 
     await expect(
       runner.run({
         runId: 'run-2',
         conversationId: 'scheduled-task:run-2',
-        definition: definition(),
+        definition: task,
         scheduledFor: Date.parse('2026-07-29T01:00:00.000Z'),
       }),
     ).rejects.toThrow('create-only')

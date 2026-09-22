@@ -251,6 +251,12 @@ export class WebResourceService {
       const remaining: WebResourceDraftRecord[] = []
       for (const draft of this.drafts) {
         if (this.getConnectionByProfile(draft.browserProfileId)) continue
+        // 普通网页也使用草稿 Profile。重启不能把仍可恢复的网页登录环境当作垃圾清理。
+        // saving 且尚无账号记录表示保存被中断，恢复为可重试草稿。
+        if (draft.state !== 'cleanup-pending') {
+          remaining.push({ ...draft, state: 'open' })
+          continue
+        }
         try {
           await cleanupProfile(draft.browserProfileId)
         } catch (error) {

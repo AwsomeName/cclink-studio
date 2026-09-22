@@ -110,14 +110,14 @@ describe('renameWorkbenchTab', () => {
   })
 })
 
-describe('tab management context commands', () => {
-  function openBrowserTabs(...titles: string[]): string[] {
-    for (const title of titles) {
-      useTabStore.getState().openTab({ type: 'browser', title, icon: '🌐', forceNew: true })
-    }
-    return useTabStore.getState().tabs.map((tab) => tab.id)
+function openBrowserTabs(...titles: string[]): string[] {
+  for (const title of titles) {
+    useTabStore.getState().openTab({ type: 'browser', title, icon: '🌐', forceNew: true })
   }
+  return useTabStore.getState().tabs.map((tab) => tab.id)
+}
 
+describe('tab management context commands', () => {
   it('closes only tabs to the right of the target', async () => {
     const [first, second] = openBrowserTabs('一', '二', '三')
     const command = createTabContextCommands().find(
@@ -218,5 +218,41 @@ describe('file-backed tab path context commands', () => {
     expect(contributionIds(remoteTab.id, 'cclink://endpoint-1/workspace-1')).not.toEqual(
       expect.arrayContaining(['tab.copy-absolute-path', 'tab.copy-relative-path']),
     )
+  })
+})
+
+describe('pinned tab commands', () => {
+  it('toggles the clicked tab and preserves it when closing other tabs', async () => {
+    const [first, second, third] = openBrowserTabs('一', '二', '三')
+    const commands = createTabContextCommands()
+    const context = (tabId: string) => ({
+      source: 'context-menu' as const,
+      target: { kind: 'tab' as const, workspaceKey: null, tabId, tabType: 'browser' },
+    })
+    const pin = commands.find((item) => item.id === 'workbench.toggleTabPinned')!
+    await pin.action(context(first))
+    expect(pin.contextLabel?.(context(first))).toBe('解除固定')
+    expect(useTabStore.getState().activeTabId).toBe(third)
+    await commands.find((item) => item.id === 'workbench.closeOtherTabs')!.action(context(second))
+    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([first, second])
+    await pin.action(context(first))
+    expect(pin.contextLabel?.(context(first))).toBe('固定标签')
+    await commands.find((item) => item.id === 'workbench.closeOtherTabs')!.action(context(second))
+    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([second])
+  })
+
+  it('skips a pinned tab to the right, including a projection with mixed ordering', async () => {
+    const [first, second, third] = openBrowserTabs('一', '二', '三')
+    useTabStore.setState({
+      tabs: useTabStore.getState().tabs.map((tab) => ({ ...tab, pinned: tab.id === third })),
+    })
+    await createTabContextCommands()
+      .find((item) => item.id === 'workbench.closeTabsToRight')!
+      .action({
+        source: 'context-menu',
+        target: { kind: 'tab', workspaceKey: null, tabId: first, tabType: 'browser' },
+      })
+    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual([first, third])
+    expect(useTabStore.getState().tabs.some((tab) => tab.id === second)).toBe(false)
   })
 })

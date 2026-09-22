@@ -22,6 +22,10 @@ export const workbenchTabDescriptorSchema = jsonRecordSchema.superRefine((value,
     }
   }
 
+  if (value.pinned !== undefined && typeof value.pinned !== 'boolean') {
+    context.addIssue({ code: 'custom', path: ['pinned'], message: '固定状态必须为布尔值' })
+  }
+
   if (value.type !== 'browser') return
   const workspaceRef = value.workspaceRef
   const isLocalBrowser = isJsonObject(workspaceRef) && workspaceRef.kind === 'local'

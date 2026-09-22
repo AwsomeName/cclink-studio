@@ -78,6 +78,7 @@ export interface CsdnPageProbe {
     publish?: string
   }
   tagEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
+  categoryEditor?: { openSelector?: string; inputSelector?: string; pendingValue: string }
   fieldValues?: Partial<Record<'title' | 'summary' | 'tags' | 'category' | 'cover', string>>
   saveState: 'saved' | 'saving' | 'unknown'
   saveEvidence?: string
@@ -106,6 +107,7 @@ interface RawCsdnPageProbe {
   titleValue: string
   selectors: CsdnPageProbe['selectors']
   tagEditor?: CsdnPageProbe['tagEditor']
+  categoryEditor?: CsdnPageProbe['categoryEditor']
   fieldValues?: CsdnPageProbe['fieldValues']
   saveStatusTexts: string[]
   savedDraftMatches?: boolean
@@ -647,6 +649,28 @@ export class CsdnPublishingAdapter {
               }
             : undefined
         if (tagEditor) selectors.tags = tagEditor.inputSelector ?? tagEditor.openSelector
+        // CSDN's native TagSelection commits categories on blur. Its editable span
+        // is only a buffer; the component's hidden form field owns selected values.
+        const categoryRoot = uniqueVisible(['.column-name-selection'])
+        const categoryForms = categoryRoot?.element.querySelectorAll(
+          'input[type="hidden"][name="categories"]',
+        )
+        const categoryOpen = uniqueVisible(['.column-name-selection .tag__btn-tag'])
+        const categoryInput = uniqueVisible([
+          '.column-name-selection span.tag__name[contenteditable="true"]',
+        ])
+        const categoryEditor =
+          categoryRoot && categoryForms?.length === 1
+            ? {
+                ...(categoryOpen && valueOf(categoryOpen.element) === '新建分类专栏'
+                  ? { openSelector: categoryOpen.selector }
+                  : {}),
+                ...(categoryInput ? { inputSelector: categoryInput.selector } : {}),
+                pendingValue: categoryInput ? valueOf(categoryInput.element) : '',
+              }
+            : undefined
+        if (categoryEditor)
+          selectors.category = categoryEditor.inputSelector ?? categoryEditor.openSelector
         const fieldValues: Partial<
           Record<'title' | 'summary' | 'tags' | 'category' | 'cover', string>
         > = {}
@@ -672,6 +696,7 @@ export class CsdnPublishingAdapter {
             fieldValues[field] = element.innerText
         }
         if (tagEditor) fieldValues.tags = (tagForms[0] as HTMLInputElement).value
+        if (categoryEditor) fieldValues.category = (categoryForms![0] as HTMLInputElement).value
         const reviewRegions = document.querySelectorAll(
           '.article-info-box .article-bar-top .bar-content.active',
         )
@@ -687,6 +712,7 @@ export class CsdnPublishingAdapter {
           url,
           publicationBlocker,
           tagEditor,
+          categoryEditor,
           pageKind: publishedMatch
             ? 'published-article'
             : isEditorUrl && body
@@ -763,6 +789,7 @@ export class CsdnPublishingAdapter {
       },
       selectors: raw.selectors,
       tagEditor: raw.tagEditor,
+      categoryEditor: raw.categoryEditor,
       fieldValues: { ...raw.fieldValues, title: raw.titleValue },
       saveState: save.state,
       ...(save.evidence ? { saveEvidence: save.evidence } : {}),

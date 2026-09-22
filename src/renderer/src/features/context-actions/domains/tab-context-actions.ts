@@ -54,6 +54,28 @@ function renameTabLabel(context?: CommandContext): string {
 export function createTabContextCommands(): Command[] {
   return [
     {
+      id: 'workbench.toggleTabPinned',
+      label: '固定标签',
+      category: 'Tab',
+      contextLabel: (context) => {
+        const tabId = tabIdFromContext(context) ?? useTabStore.getState().activeTabId
+        return useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.pinned
+          ? '解除固定'
+          : '固定标签'
+      },
+      enabled: (context) => {
+        const tabId = tabIdFromContext(context) ?? useTabStore.getState().activeTabId
+        return useTabStore.getState().tabs.some((tab) => tab.id === tabId)
+      },
+      action: (context) => {
+        const state = useTabStore.getState()
+        const tabId = tabIdFromContext(context) ?? state.activeTabId
+        const tab = state.tabs.find((item) => item.id === tabId)
+        if (!tab) throw new Error('标签页已不存在')
+        state.setTabPinned(tab.id, !tab.pinned)
+      },
+    },
+    {
       id: 'workbench.renameTab',
       label: '重命名标签',
       contextOnly: true,
@@ -132,7 +154,11 @@ export function createTabContextCommands(): Command[] {
         const tabId = tabIdFromContext(context)
         const tabs = useTabStore.getState().tabs
         return {
-          enabled: Boolean(tabId && tabs.some((tab) => tab.id === tabId) && tabs.length > 1),
+          enabled: Boolean(
+            tabId &&
+            tabs.some((tab) => tab.id === tabId) &&
+            tabs.some((tab) => tab.id !== tabId && !tab.pinned),
+          ),
           reason: '没有其他可关闭的标签页',
         }
       },
@@ -141,7 +167,7 @@ export function createTabContextCommands(): Command[] {
         if (!tabId) throw new Error('标签页已不存在')
         const tabs = useTabStore.getState().tabs
         const ids = tabs
-          .filter((tab) => tab.id !== tabId)
+          .filter((tab) => tab.id !== tabId && !tab.pinned)
           .map((tab) => tab.id)
           .reverse()
         await closeTabsWithDraftPolicy(ids)
@@ -157,8 +183,8 @@ export function createTabContextCommands(): Command[] {
         const tabs = useTabStore.getState().tabs
         const index = tabs.findIndex((tab) => tab.id === tabId)
         return {
-          enabled: index >= 0 && index < tabs.length - 1,
-          reason: index < 0 ? '标签页已关闭' : '右侧没有标签页',
+          enabled: index >= 0 && tabs.slice(index + 1).some((tab) => !tab.pinned),
+          reason: index < 0 ? '标签页已关闭' : '右侧没有可关闭的标签页',
         }
       },
       action: async (context) => {
@@ -169,6 +195,7 @@ export function createTabContextCommands(): Command[] {
         await closeTabsWithDraftPolicy(
           tabs
             .slice(index + 1)
+            .filter((tab) => !tab.pinned)
             .map((tab) => tab.id)
             .reverse(),
         )
@@ -178,6 +205,14 @@ export function createTabContextCommands(): Command[] {
 }
 
 export const tabMenuContributions: MenuContribution[] = [
+  {
+    id: 'tab.pin',
+    targetKinds: ['tab'],
+    group: '20-edit',
+    order: 20,
+    commandId: 'workbench.toggleTabPinned',
+    icon: '⚑',
+  },
   {
     id: 'tab.rename',
     targetKinds: ['tab'],

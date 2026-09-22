@@ -366,7 +366,7 @@ Cookie 与 Session 不进入资源文件。
 | 正式网站账号元数据                   | `{userData}/web-resources/web-resources.json`         | 否           | `WebResourceStore` 原子写与备份恢复     |
 | 未保存 draft 清理账本                | `{userData}/web-resources/web-resource-drafts.json`   | 否           | `WebResourceService` 启动对账和清理     |
 | 临时或正式 Profile 的 Cookie/Session | Electron `persist:` Session 分区                      | 是           | `BrowserManager` 使用，draft 取消时清理 |
-| Browser Tab 的 draft/正式引用        | 工作空间 Tab 可丢弃投影；draft 不允许跨重启恢复       | 否           | renderer 恢复正式引用，丢弃 draft       |
+| Browser Tab 的 draft/正式引用        | 工作空间 Tab 投影；draft 引用与 Profile 随标签恢复       | 否           | renderer 恢复正式或 draft 引用       |
 | 密码、验证码、2FA 内容               | 本轮不采集、不写资源文件                              | 是           | 只由用户在实际网页处理                  |
 
 draft 清理账本使用权限受限的本地文件，只记录 draft、项目、Profile、Tab 和时间，不记录 URL、
@@ -382,7 +382,7 @@ draft 清理账本使用权限受限的本地文件，只记录 draft、项目�
 | 保存中           | draft 为 `saving`                       | 同一 Tab 显示保存中，不重复提交   | 写入失败回到 `open`，保留网页和登录现场  |
 | 保存成功         | 原子新增正式资源并删除 draft 记录       | 当前 Tab 原地转正式，侧栏新增一行 | 资源写入和转正不可出现一半成功           |
 | 主动关闭未保存   | draft 转 `cleanup-pending`              | Tab 关闭，侧栏无新增              | 清理失败留待下次启动重试，不伪装已完成   |
-| App 异常退出     | 清理账本保留 draft/Profile 引用         | 下次启动不恢复成正式资源          | 启动对账并清理陈旧 Profile；失败进入诊断 |
+| App 异常退出     | 清理账本保留 draft/Profile 引用         | 下次启动不恢复成正式资源          | 恢复 open 草稿；仅重试 cleanup-pending 清理 |
 | 正式资源关闭 Tab | 正式资源与 Session 保留                 | 侧栏资源仍存在                    | 再次点击通过 `resolveLaunch` 重建        |
 | 登录失效         | 正式资源保留，登录状态变为需重新登录    | 同一资源可重新打开并人工登录      | AI 暂停；不得新建或猜测另一个账号        |
 
@@ -587,7 +587,7 @@ Preload 不另造手写字符串 API；shared contract、main handler 和 preloa
   Tab 的 URL、标题、Profile 和 Session 事实；`WorkspaceStateService` 解析项目。
 - `saveDraft` 只接受 `workspaceRef + draftId + tabId + displayName`，其他字段由主进程
   反查；保存和转正使用同一串行写事务。
-- 定义启动时对账：未转正 draft 不恢复成正式资源，陈旧临时 Profile 重试清理。
+- 定义启动时对账：未转正 draft 随网页恢复但不成为正式资源；只重试 cleanup-pending Profile 清理。
 
 文档任务：
 
@@ -658,7 +658,7 @@ Preload 不另造手写字符串 API；shared contract、main handler 和 preloa
 - 保存失败保留页面、Session 和显示名称，允许原地重试。
 - 疑似重复只给两个动作：“打开已有账号”和“作为另一个账号保存”。
 - 同一网站第二个账号重新走 W1-A，并自动获得不同 Profile。
-- App 重启后正式资源和 Session 可恢复；残留 draft 不恢复成正式资源并进入清理对账。
+- App 重启后正式资源和 Session 可恢复；open draft 随网页恢复但不成为正式资源，cleanup-pending 进入清理对账。
 
 架构与数据生命周期：
 

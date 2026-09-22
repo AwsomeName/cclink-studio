@@ -117,6 +117,29 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     expect(getAccountChildPageUrls).toHaveBeenCalledExactlyOnceWith('account-source')
   })
 
+  it('exposes the adopted Zhihu write child without accepting arbitrary cross-origin pages', async () => {
+    const child = 'https://zhuanlan.zhihu.com/write'
+    const module = new BrowserToolModule({} as any, null, {
+      getCurrentURL: () => 'https://www.zhihu.com/creator/manage/creation/draft?type=article',
+      getTitle: () => '知乎草稿箱',
+      getAccountChildPageUrls: () => [
+        child,
+        'https://zhuanlan.zhihu.com/p/123/edit',
+        'https://other.example/write',
+        'http://zhuanlan.zhihu.com/write',
+        `${child}?token=secret`,
+      ],
+    } as any)
+    const result = await (module as any).executeVisibleBrowserAction(
+      'getTabInfo',
+      {},
+      null,
+      'account-source',
+      '/workspace/a',
+    )
+    expect(result).toMatchObject({ tabId: 'account-source', openedPageUrls: [child] })
+  })
+
   it.each([
     ['text=/^草稿箱/', '草稿箱 (1)', 1, false],
     ['text="发布"', '发布', 1, true],
@@ -129,14 +152,18 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       const evaluate = vi.fn(async (fn, action) => fn(element, action))
       const locator = vi.fn(() => ({ count: async () => count, evaluate }))
       const module = new BrowserToolModule({} as any)
-      const reason = await (module as any).getGenericSensitiveActionReason(
+      const result = (module as any).getGenericSensitiveActionReason(
         'click',
         { selector },
         { locator },
       )
+      if (count !== 1) {
+        await expect(result).rejects.toThrow(`目标匹配 ${count} 个元素，未执行动作`)
+        expect(evaluate).not.toHaveBeenCalled()
+      } else {
+        expect(Boolean(await result)).toBe(blocked)
+      }
       expect(locator).toHaveBeenCalledWith(selector)
-      expect(Boolean(reason)).toBe(blocked)
-      if (count !== 1) expect(evaluate).not.toHaveBeenCalled()
     },
   )
 
@@ -222,8 +249,8 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     const page = {
       url: () => 'https://example.com/form',
       evaluate: vi.fn().mockResolvedValue({ sensitive: true, label: '提交申请' }),
-      locator: () => ({
-        count: async () => 1,
+      locator: (selector: string) => ({
+        count: async () => (selector === '#missing' ? 0 : selector === '.ambiguous' ? 2 : 1),
         evaluate: async () => ({ sensitive: true, label: '提交申请' }),
       }),
       click: vi.fn(),
@@ -261,6 +288,13 @@ describe('BrowserToolModule 可视浏览器同步', () => {
     await expect(module.execute('browser_get_cookies', {}, context)).rejects.toThrow(
       '通用 Agent 不开放 Cookie 读取或写入',
     )
+    for (const selector of ['#missing', '.ambiguous']) {
+      await expect(module.execute('browser_click', { selector }, context)).rejects.toThrow(
+        '未执行动作；请重新读取页面',
+      )
+      expect(browserTaskRuntime.pauseForTakeover).not.toHaveBeenCalled()
+      expect(page.click).not.toHaveBeenCalled()
+    }
     await expect(module.execute('browser_click', { selector: '#submit' }, context)).rejects.toThrow(
       '敏感最终动作',
     )

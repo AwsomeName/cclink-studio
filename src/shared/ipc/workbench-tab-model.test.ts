@@ -73,3 +73,13 @@ describe('workbenchTabDescriptorSchema Browser ownership', () => {
     ).toBe(true)
   })
 })
+
+it('validates optional pinned state while accepting older descriptors', () => {
+  expect(workbenchTabDescriptorSchema.safeParse(localBrowser).success).toBe(true)
+  expect(workbenchTabDescriptorSchema.safeParse({ ...localBrowser, pinned: true }).success).toBe(
+    true,
+  )
+  expect(workbenchTabDescriptorSchema.safeParse({ ...localBrowser, pinned: 'true' }).success).toBe(
+    false,
+  )
+})

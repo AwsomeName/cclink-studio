@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -84,6 +84,7 @@ function shouldSkip(path) {
 function scanFile(relativePath) {
   const absolutePath = join(root, relativePath)
   if (!existsSync(absolutePath)) return
+  if (!statSync(absolutePath).isFile()) return
   const text = readFileSync(absolutePath, 'utf8')
   if (text.includes('\0')) return
 

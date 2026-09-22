@@ -74,6 +74,7 @@ export async function readWeiboPublication(page: Page) {
       }))
     return {
       observedAt: new Date().toISOString(),
+      documentUrl: location.href,
       url: anchor.url,
       id: anchor.id,
       uid: authorIds.length === 1 ? authorIds[0] : undefined,

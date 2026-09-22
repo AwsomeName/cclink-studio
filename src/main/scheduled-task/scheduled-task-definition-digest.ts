@@ -26,6 +26,9 @@ export function computeScheduledTaskExecutionDigest(definition: ExecutableDefini
       directory: definition.outputPolicy.directory,
       fileNameTemplate: definition.outputPolicy.fileNameTemplate,
       mode: definition.outputPolicy.mode,
+      ...(definition.outputPolicy.failureTemplate === undefined
+        ? {}
+        : { failureTemplate: definition.outputPolicy.failureTemplate }),
     },
   }
   return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
