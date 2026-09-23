@@ -187,6 +187,13 @@ function getSystemPromptAppend(): string {
 }
 
 describe('LocalClaudeCodeBackend visible browser policy', () => {
+async function getPromptContent(): Promise<unknown> {
+  const prompt = getLastQueryParams().prompt as AsyncIterable<{
+    message: { content: unknown }
+  }>
+  return (await prompt[Symbol.asyncIterator]().next()).value.message.content
+}
+
   beforeEach(() => {
     queryMock.mockReset()
     queryMock.mockImplementation(() => createMockQuery())
@@ -210,7 +217,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await createBackend().sendMessage('普通问答')
 
     const params = getLastQueryParams()
-    expect(params.prompt).toBe('普通问答')
+    expect(await getPromptContent()).toBe('普通问答')
     expect(params.options).toMatchObject({
       cwd: '/Users/apple/Desktop/project',
       additionalDirectories: ['/Users/apple/Desktop/project'],
@@ -1065,7 +1072,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       },
     })
 
-    expect(getLastQueryParams().prompt).toBe('继续')
+    expect(await getPromptContent()).toBe('继续')
     const prompt = getSystemPromptAppend()
     expect(prompt).toContain('CCLink Studio 会话连续性快照')
     expect(prompt).toContain('按顺序读取第九篇和第十篇')
@@ -1150,7 +1157,6 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
 
     const params = getLastQueryParams()
     expect(params).toMatchObject({
-      prompt: '/compact 保留当前方案和未完成任务',
       options: { resume: '123e4567-e89b-12d3-a456-426614174000' },
     })
     expect(params.options.disallowedTools).toEqual([
@@ -1183,6 +1189,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
 
     await vi.waitFor(() =>
       expect(backend.getSessionId()).toBe('123e4567-e89b-12d3-a456-426614174001'),
+    expect(await getPromptContent()).toBe('/compact 保留当前方案和未完成任务')
     )
     expect(events.some((event) => event.type === 'system')).toBe(true)
   })
@@ -1221,6 +1228,147 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
           total_cost_usd: 0.01,
         },
       ]),
+  it.each([false, true])(
+    'keeps input and run ownership through a restored notification result (error=%s)',
+    async (notificationFailed) => {
+      const { backend, authorizeSdkTool, releaseToolSession } = createBackendFixture()
+      backend.setSessionId('restored-session')
+      const events: Array<{ type: string; data: any }> = []
+      backend.onEvent((type, data) => events.push({ type, data }))
+      let inputEnded = false
+      const actualResult = { type: 'result', is_error: false, result: 'pwd succeeded' }
+      const sdkQuery = createMockQuery()
+      queryMock.mockImplementationOnce(({ prompt, options }) => ({
+        ...sdkQuery,
+        async *[Symbol.asyncIterator]() {
+          const input = prompt[Symbol.asyncIterator]()
+          await expect(input.next()).resolves.toMatchObject({ done: false })
+          const eof = input.next().then(() => {
+            inputEnded = true
+          })
+          yield {
+            type: 'result',
+            origin: { kind: 'task-notification' },
+            subtype: notificationFailed ? 'error_during_execution' : 'success',
+            is_error: notificationFailed,
+            result: '',
+            num_turns: 0,
+          }
+          expect(inputEnded).toBe(false)
+          expect(events.some((event) => event.type === 'complete' || event.type === 'error')).toBe(
+            false,
+          )
+          expect(sdkQuery.getContextUsage).not.toHaveBeenCalled()
+          expect(releaseToolSession).not.toHaveBeenCalled()
+          // The same bidirectional channel must still serve real tool authorization.
+          const hook = options.hooks.PreToolUse[0].hooks[0]
+          await expect(
+            hook(
+              {
+                hook_event_name: 'PreToolUse',
+                tool_name: 'Bash',
+                tool_input: { command: 'pwd' },
+                tool_use_id: 'pwd-after-resume',
+              },
+              'pwd-after-resume',
+            ),
+          ).resolves.toMatchObject({
+            hookSpecificOutput: { permissionDecision: 'allow' },
+          })
+          yield { type: 'stream_event', event: { type: 'message_start', message: { id: 'reply' } } }
+          yield {
+            type: 'stream_event',
+            event: {
+              type: 'content_block_delta',
+              delta: { type: 'text_delta', text: 'pwd succeeded' },
+            },
+          }
+          yield actualResult
+          // A real CLI exits only after the host input finishes.
+          await eof
+        },
+      }))
+
+      await backend.sendMessage('pwd')
+      await vi.waitFor(() => expect(backend.getStatus().connected).toBe(false))
+      expect(authorizeSdkTool).toHaveBeenCalledTimes(1)
+      expect(inputEnded).toBe(true)
+      expect(events.filter((event) => event.type === 'complete')).toEqual([
+        { type: 'complete', data: actualResult },
+      ])
+      expect(events.some((event) => event.type === 'error')).toBe(false)
+      expect(events.some((event) => event.data.event?.delta?.text === 'pwd succeeded')).toBe(true)
+      expect(releaseToolSession).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([undefined, { kind: 'human' }])(
+    'accepts a legitimate empty user result (origin=%j)',
+    async (origin) => {
+      const backend = createBackend()
+      const events: Array<{ type: string; data: any }> = []
+      backend.onEvent((type, data) => events.push({ type, data }))
+      queryMock.mockReturnValueOnce(
+        createMockQuery([{ type: 'result', is_error: false, result: '', num_turns: 0, origin }]),
+      )
+      await backend.sendMessage('无正文操作')
+      await vi.waitFor(() =>
+        expect(events.filter((event) => event.type === 'complete')).toHaveLength(1),
+      )
+    },
+  )
+
+  it('does not count a notification as success if the stream dies before the user result', async () => {
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        { type: 'result', origin: { kind: 'task-notification' }, is_error: false, result: '' },
+      ]),
+    )
+    await backend.sendMessage('继续')
+    await vi.waitFor(() =>
+      expect(events).toContainEqual({
+        type: 'error',
+        data: expect.objectContaining({ code: 'stream_ended_without_result' }),
+      }),
+    )
+    expect(events.some((event) => event.type === 'complete')).toBe(false)
+  })
+
+  it('releases the waiting prompt on cancellation', async () => {
+    const deferred = createDeferredQuery()
+    queryMock.mockReturnValueOnce(deferred)
+    const backend = createBackend()
+    await backend.sendMessage('等待取消')
+    const input = (getLastQueryParams().prompt as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    await input.next()
+    const eof = input.next()
+    await backend.abort()
+    await expect(eof).resolves.toMatchObject({ done: true })
+    expect(backend.getStatus().connected).toBe(false)
+  })
+
+  it('releases the waiting prompt when SDK startup throws', async () => {
+    let prompt: AsyncIterable<unknown> | undefined
+    queryMock.mockImplementationOnce((params) => {
+      prompt = params.prompt
+      throw new Error('spawn failed')
+    })
+    const backend = createBackend()
+    const onEvent = vi.fn()
+    backend.onEvent(onEvent)
+    await backend.sendMessage('启动')
+    const input = prompt![Symbol.asyncIterator]()
+    await input.next()
+    await expect(input.next()).resolves.toMatchObject({ done: true })
+    expect(onEvent).toHaveBeenCalledWith(
+      'error',
+      expect.objectContaining({ message: expect.stringContaining('spawn failed') }),
+    )
+  })
+
     )
     const backend = createBackend()
     const events: Array<{ type: string; data: any }> = []

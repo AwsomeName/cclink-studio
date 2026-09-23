@@ -578,6 +578,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       sdkOptions.disallowedTools.push(...VISIBLE_BROWSER_DISALLOWED_TOOLS)
     }
 
+    const sdkInput = createSdkPrompt(userMessage, options?.images, abortController.signal)
     try {
       if (options?.images?.length) {
         console.info(
@@ -587,16 +588,17 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         )
       }
       const sdkQuery = query({
-        prompt: createSdkPrompt(userMessage, options?.images),
+        prompt: sdkInput.prompt,
         options: sdkOptions,
       })
       this.currentQuery = sdkQuery
       this.currentOperation = operation
       this.abortController = abortController
-      const queryDone = this.consumeQuery(sdkQuery, operation)
+      const queryDone = this.consumeQuery(sdkQuery, operation, sdkInput.close)
       this.currentQueryDone = queryDone
       void queryDone
     } catch (err) {
+      sdkInput.close()
       void this.cleanupMcpConfig()
       this.terminalEventEmitted = true
       this.emit('error', {
@@ -676,7 +678,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
   }
 
-  private async consumeQuery(sdkQuery: Query, operation: AgentQueryOperation): Promise<void> {
+  private async consumeQuery(
+    sdkQuery: Query,
+    operation: AgentQueryOperation,
+    closeInput: () => void,
+  ): Promise<void> {
     try {
       for await (const event of sdkQuery) {
         // abort() 期间 run 仍保持 cancelling 所有权，直到迭代器退出。
@@ -684,10 +690,23 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         if (this.currentQuery !== sdkQuery) break
         const record = event as Record<string, unknown>
         if (record.type === 'result') {
+          // Restoring an interrupted background shell can finish its notification turn
+          // before processing our prompt. Its result does not own this Agent Run.
+          // Use the Runtime's explicit origin, never empty text or timing heuristics.
+          const origin = record.origin as { kind?: unknown } | undefined
+          if (origin?.kind === 'task-notification') {
+            console.info('[ClaudeCodeBackend] 保留当前 Run，忽略后台任务通知终态', {
+              origin: origin.kind,
+              subtype: record.subtype,
+              isError: record.is_error === true,
+            })
+            continue
+          }
           await this.captureContextUsage(sdkQuery, true)
         }
         if (this.currentQuery !== sdkQuery) break
         this.handleEvent(record, operation)
+        if (record.type === 'result') closeInput()
         if (this.shouldCaptureContextUsage(record)) {
           await this.captureContextUsage(sdkQuery, record.subtype === 'compact_boundary')
         }
@@ -724,6 +743,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         })
       }
     } finally {
+      closeInput()
       if (this.currentQuery === sdkQuery) {
         this.currentQuery = null
         this.currentOperation = null
@@ -894,29 +914,47 @@ function isInvisibleWebTool(toolName: string): boolean {
 function createSdkPrompt(
   message: string,
   images: AgentImageAttachment[] | undefined,
-): string | AsyncIterable<SDKUserMessage> {
-  if (!images?.length) return message
+  signal: AbortSignal,
+): { prompt: AsyncIterable<SDKUserMessage>; close: () => void } {
+  let release!: () => void
+  const closed = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const close = (): void => {
+    signal.removeEventListener('abort', close)
+    release()
+  }
+  signal.addEventListener('abort', close, { once: true })
+  if (signal.aborted) close()
 
-  return (async function* (): AsyncGenerator<SDKUserMessage> {
+  const prompt = (async function* (): AsyncGenerator<SDKUserMessage> {
+    if (signal.aborted) return
     yield {
       type: 'user',
       message: {
         role: 'user',
-        content: [
-          { type: 'text', text: message },
-          ...images.map((image) => ({
-            type: 'image' as const,
-            source: {
-              type: 'base64' as const,
-              media_type: image.mediaType,
-              data: image.data,
-            },
-          })),
-        ],
+        content: images?.length
+          ? [
+              { type: 'text', text: message },
+              ...images.map((image) => ({
+                type: 'image' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: image.mediaType,
+                  data: image.data,
+                },
+              })),
+            ]
+          : message,
       },
       parent_tool_use_id: null,
     }
+    // Both a string prompt and an exhausted generator make SDK 0.3.211 close
+    // stdin on the FIRST result. Keep the bidirectional permission/hook channel
+    // open until our user turn ends, or cancellation/transport failure releases it.
+    await closed
   })()
+  return { prompt, close }
 }
 
 interface SdkFailureClassification {
