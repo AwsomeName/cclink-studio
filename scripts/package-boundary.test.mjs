@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { extname, join, resolve } from 'node:path'
 import test from 'node:test'
@@ -43,6 +44,26 @@ function collectSourceFiles(directory) {
     return ['.ts', '.tsx', '.js', '.mjs', '.cjs'].includes(extname(entry.name)) ? [path] : []
   })
 }
+
+test('tracked symlinks do not depend on machine-specific absolute paths', () => {
+  const entries = execFileSync('git', ['ls-files', '--stage', '-z'], {
+    cwd: projectRoot,
+    encoding: 'utf8',
+  }).split('\0')
+  for (const entry of entries) {
+    if (!entry.startsWith('120000 ')) continue
+    const [metadata, path] = entry.split('\t')
+    const blob = metadata.split(' ')[1]
+    const target = execFileSync('git', ['cat-file', 'blob', blob], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+    })
+    assert.ok(
+      !target.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(target),
+      `${path} has an absolute symlink target`,
+    )
+  }
+})
 
 test('packaged application uses an allowlist instead of copying the repository', () => {
   const filesBlock = builderConfig.match(/^files:\n([\s\S]*?)^asar:/m)?.[1]

@@ -51,3 +51,6 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local journal shortcut is not portable to release runners.
+/研发日记
