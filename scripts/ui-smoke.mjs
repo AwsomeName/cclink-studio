@@ -95,6 +95,23 @@ function skip(name, dependency) {
   console.warn(`SKIP ${name} - blocked by ${dependency}`)
 }
 
+// Playwright 1.60 waitForFunction tests the Promise itself for truthiness.
+// Await the renderer/IPC result before polling again; keep JSHandle semantics
+// for callers that consume the successful state snapshot.
+async function waitForAsyncFunction(page, predicate, arg, options = {}) {
+  const timeout = options.timeout ?? 30_000
+  const deadline = Date.now() + timeout
+  while (true) {
+    const handle = await page.evaluateHandle(predicate, arg)
+    if (await handle.evaluate((value) => Boolean(value))) return handle
+    await handle.dispose()
+    if (Date.now() >= deadline) {
+      throw new Error(`Async UI condition did not become true within ${timeout}ms`)
+    }
+    await page.waitForTimeout(50)
+  }
+}
+
 function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
@@ -178,7 +195,10 @@ async function startWebFixture() {
       'cache-control': 'no-store',
       'content-type': 'text/html; charset=utf-8',
       ...(request.url === '/login-popup-source'
-        ? { 'set-cookie': 'cclink_auth_marker=logged-in; Path=/; HttpOnly; SameSite=Lax' }
+        ? {
+            'set-cookie':
+              'cclink_auth_marker=logged-in; Max-Age=3600; Path=/; HttpOnly; SameSite=Lax',
+          }
         : {}),
     })
     response.end(`<!doctype html>
@@ -490,7 +510,8 @@ async function main() {
             })
           ).tabId
         }, uploadUrl)
-        await page.waitForFunction(
+        await waitForAsyncFunction(
+          page,
           async ({ tabId: id, expectedUrl }) =>
             (await window.cclinkStudio.browser.getRuntimeDiagnostics(id)).visibleUrl ===
             expectedUrl,
@@ -593,7 +614,8 @@ async function main() {
         await page.waitForLoadState('domcontentloaded')
         await page.waitForSelector('.main-window', { timeout: uiReadyTimeoutMs })
 
-        await page.waitForFunction(
+        await waitForAsyncFunction(
+          page,
           async ({ operationId, sourcePath, targetPath, tabId, workspacePath }) => {
             const { useTabStore } = await import('/src/stores/tab-store.ts')
             const tab = useTabStore.getState().tabs.find((candidate) => candidate.id === tabId)
@@ -601,7 +623,7 @@ async function main() {
             let targetReadable = false
             let sourceMissing = false
             try {
-              targetReadable = (await window.cclinkStudio.fs.readFile(targetPath)).includes(
+              targetReadable = (await window.cclinkStudio.fs.readFile(targetPath)).content.includes(
                 'relocation restart canary',
               )
             } catch {
@@ -1336,7 +1358,8 @@ async function main() {
     }, conversationId)
 
     await quickTab.dragTo(page.locator('.tab-bar'))
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (id) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const state = useTabStore.getState()
@@ -1730,7 +1753,8 @@ async function main() {
         return result.tabId
       }, `${webFixtureOrigin}/git-native-view-occlusion`)
       assert(browserTabId, 'browser tab did not become active for Git occlusion coverage')
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
         browserTabId,
         { timeout: 10_000 },
@@ -1760,7 +1784,8 @@ async function main() {
         !scopeProjectionResult.agentReady || scopeProjectionResult.scopeSwitched,
         'Agent browser scope could not bind to the test page',
       )
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
         undefined,
         { timeout: 10_000 },
@@ -1769,7 +1794,8 @@ async function main() {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         useTabStore.getState().activateTab(tabId)
       }, browserTabId)
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
         browserTabId,
         { timeout: 10_000 },
@@ -1782,7 +1808,8 @@ async function main() {
       await popover.getByRole('button', { name: '提交…', exact: true }).click()
       const dialog = page.locator('.git-operation-dialog')
       await dialog.waitFor({ state: 'visible', timeout: 10_000 })
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
         undefined,
         { timeout: 10_000 },
@@ -1847,7 +1874,8 @@ async function main() {
       await dialog
         .locator('.git-operation-notice.success', { hasText: 'Push 成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (path) => (await window.cclinkStudio.git.getSnapshot(path)).ahead === 0,
         workspacePath,
         { timeout: 10_000 },
@@ -1869,7 +1897,8 @@ async function main() {
       await dialog
         .locator('.git-operation-notice.success', { hasText: '提交并 Push 成功' })
         .waitFor({ state: 'visible', timeout: 10_000 })
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (path) => (await window.cclinkStudio.git.getSnapshot(path)).ahead === 0,
         workspacePath,
         { timeout: 10_000 },
@@ -1918,7 +1947,8 @@ async function main() {
     }, webFixtureOrigin)
     assert(ordinarySourceTabId, 'ordinary source tab was not created')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, expectedUrl }) =>
         (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl === expectedUrl,
       {
@@ -1927,7 +1957,8 @@ async function main() {
       },
       { timeout: 10_000 },
     )
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) =>
         (
           await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
@@ -1953,7 +1984,8 @@ async function main() {
       ).tabId
     }, webFixtureOrigin)
     assert(ordinarySiblingTabId, 'ordinary sibling tab was not created')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, expectedUrl }) =>
         (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl === expectedUrl,
       {
@@ -2024,7 +2056,8 @@ async function main() {
     await agentLink.waitFor({ state: 'visible', timeout: 10_000 })
     await agentLink.click()
 
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (expectedUrl) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const tabId = useTabStore.getState().activeTabId
@@ -2048,7 +2081,8 @@ async function main() {
     })
     assert(ordinaryAgentTabId, 'Agent link did not open an ordinary browser tab')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) =>
         (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl?.endsWith(
           '/login-popup-source',
@@ -2083,7 +2117,7 @@ async function main() {
       // transition instead of deciding from the stale snapshot captured above.
       if (!useUIStore.getState().sidebarVisible) useUIStore.getState().toggleSidebar()
     }, ordinaryAgentTabId)
-    await page.waitForFunction(async () => {
+    await waitForAsyncFunction(page, async () => {
       const { useUIStore } = await import('/src/stores/ui-store.ts')
       const state = useUIStore.getState()
       return (
@@ -2097,7 +2131,7 @@ async function main() {
       .waitFor({ state: 'visible', timeout: 10_000 })
 
     await page.locator('.tab-new-browser-button').click()
-    await page.waitForFunction(async () => {
+    await waitForAsyncFunction(page, async () => {
       const { useTabStore } = await import('/src/stores/tab-store.ts')
       const state = useTabStore.getState()
       const tab = state.tabs.find((item) => item.id === state.activeTabId)
@@ -2133,7 +2167,8 @@ async function main() {
     )
     await page.locator('.url-input').fill(`${webFixtureOrigin}/login-popup-source`)
     await page.locator('.url-input').press('Enter')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) =>
         (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl?.endsWith(
           '/login-popup-source',
@@ -2155,7 +2190,8 @@ async function main() {
       throw new Error('embedded browser fixture page was not found over CDP')
     })()
     await sourcePage.locator('#open-login').click()
-    const popupTab = await page.waitForFunction(
+    const popupTab = await waitForAsyncFunction(
+      page,
       async ({ sourceTabId, draftId }) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const popup = useTabStore
@@ -2237,7 +2273,8 @@ async function main() {
       .waitFor({ state: 'visible', timeout: 5_000 })
     await accountNameInput.fill(accountLabel)
     await page.getByRole('button', { name: '保存', exact: true }).click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (label) => {
         const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
         const result = await window.cclinkStudio.webResources.getSnapshot({
@@ -2287,7 +2324,8 @@ async function main() {
     assert(savedProjection?.profileId === draftBrowser.profileId, 'saved Tab changed Profile')
     assert(savedProjection?.accountId, 'saved Tab has no account binding')
     assert(!savedProjection?.draftId, 'saved Tab still has a draft binding')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) => {
         const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
         return runtime.viewState?.zoomMode === 'fit' && runtime.viewState.zoomFactor >= 0.99
@@ -2331,7 +2369,8 @@ async function main() {
       const accountFixtureUrl = `${webFixtureOrigin}/cclink-web-affairs-smoke`
       await page.locator('.url-input').fill(accountFixtureUrl)
       await page.locator('.url-input').press('Enter')
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (expectedUrl) => {
           const { useTabStore } = await import('/src/stores/tab-store.ts')
           const tabId = useTabStore.getState().activeTabId
@@ -2342,7 +2381,8 @@ async function main() {
         accountFixtureUrl,
         { timeout: 10_000 },
       )
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (expectedUrl) => {
           const [{ useTabStore }, { useBrowserStore }] = await Promise.all([
             import('/src/stores/tab-store.ts'),
@@ -2374,7 +2414,8 @@ async function main() {
       )
       await accountNameInput.fill(accountLabel)
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async (label) => {
           const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
           const result = await window.cclinkStudio.webResources.getSnapshot({
@@ -2388,7 +2429,8 @@ async function main() {
         accountLabel,
         { timeout: 30_000 },
       )
-      await page.waitForFunction(
+      await waitForAsyncFunction(
+        page,
         async () => {
           const { useTabStore } = await import('/src/stores/tab-store.ts')
           const tabId = useTabStore.getState().activeTabId
@@ -2463,7 +2505,8 @@ async function main() {
       baselineWorkbenchWidth,
       { timeout: 10_000 },
     )
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, expectedWidth }) => {
         const dataUrl = await window.cclinkStudio.browser.capturePage(tabId)
         if (!dataUrl?.startsWith('data:image/png;base64,')) return false
@@ -2481,7 +2524,8 @@ async function main() {
     )
     await zoomInput.fill('125')
     await zoomInput.press('Enter')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async () => {
         const viewState = await window.cclinkStudio.browser.getViewState()
         return viewState?.zoomMode === 'manual' && Math.abs(viewState.zoomFactor - 1.25) < 0.001
@@ -2497,14 +2541,26 @@ async function main() {
       'zoom controls shifted horizontally when fit mode changed to manual mode',
     )
     await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
-    await page.waitForFunction(
-      async () => (await window.cclinkStudio.browser.getViewState())?.zoomMode === 'fit',
+    await waitForAsyncFunction(
+      page,
+      async () => {
+        const state = await window.cclinkStudio.browser.getViewState()
+        const input = document.querySelector('.zoom-percent-input')
+        // Main can acknowledge fit mode before React applies its new input value.
+        // Filling during that render resets selection and appends "30" to "100".
+        return (
+          state?.zoomMode === 'fit' &&
+          input?.value === String(Math.round(state.zoomFactor * 100)) &&
+          Boolean(document.querySelector('.browser-zoom-value .zoom-mode-label'))
+        )
+      },
       undefined,
       { timeout: 10_000 },
     )
     await zoomInput.fill('30')
     await zoomInput.press('Enter')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async () => {
         const viewState = await window.cclinkStudio.browser.getViewState()
         return viewState?.zoomMode === 'manual' && Math.abs(viewState.zoomFactor - 0.3) < 0.001
@@ -2520,7 +2576,8 @@ async function main() {
       await window.cclinkStudio.browser.reload(tabId)
       return { tabId, previousClaimAt: before.lastClaim?.timestamp ?? 0 }
     })
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, previousClaimAt }) => {
         const diagnostic = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
         return (diagnostic.lastClaim?.timestamp ?? 0) > previousClaimAt
@@ -2529,7 +2586,8 @@ async function main() {
       { timeout: 10_000 },
     )
     await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async () => {
         const viewState = await window.cclinkStudio.browser.getViewState()
         return viewState?.zoomMode === 'fit' && viewState.zoomFactor >= 0.99
@@ -2557,7 +2615,8 @@ async function main() {
     )
     await historySourceByTitle.first().waitFor({ state: 'visible', timeout: 10_000 })
     await historySourceByTitle.first().click()
-    const historyOrdinary = await page.waitForFunction(
+    const historyOrdinary = await waitForAsyncFunction(
+      page,
       async ({ accountTabId }) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const state = useTabStore.getState()
@@ -2628,7 +2687,8 @@ async function main() {
     })
     await markdownLink.waitFor({ state: 'visible', timeout: 10_000 })
     await markdownLink.click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ expectedUrl, editorTabId }) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const state = useTabStore.getState()
@@ -2780,20 +2840,23 @@ async function main() {
     await primaryRow()
       .locator('.web-resource-row-open')
       .evaluate((element) => element.click())
-    const restartedSavedTabId = await page.evaluate(async () => {
-      const { useTabStore } = await import('/src/stores/tab-store.ts')
-      return useTabStore.getState().activeTabId
-    })
-    await page.waitForFunction(
-      async ({ tabId, profileId }) => {
-        const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+    await waitForAsyncFunction(
+      page,
+      async ({ accountId, profileId }) => {
+        // The click starts an async account open; do not capture the previously
+        // active Tab and then poll that stale identity for the entire timeout.
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const state = useTabStore.getState()
+        const tab = state.tabs.find((item) => item.id === state.activeTabId)
+        if (tab?.webResourceRef?.accountId !== accountId) return false
+        const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tab.id)
         return (
           runtime.profileId === profileId &&
           runtime.session?.likelyAuthCookies.some((cookie) => cookie.name === 'cclink_auth_marker')
         )
       },
       {
-        tabId: restartedSavedTabId,
+        accountId: globalIdentity.accountId,
         profileId: globalIdentity.browserProfileId,
       },
       { timeout: 10_000 },
@@ -3130,12 +3193,14 @@ async function main() {
       return result.tabId
     }, recentUrl)
     assert(seededBrowserTabId, 'recent browser fixture did not become active')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
       seededBrowserTabId,
       { timeout: 10_000 },
     )
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) =>
         (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).visibleUrl?.endsWith(
           '/new-tab-recent',
@@ -3143,7 +3208,8 @@ async function main() {
       seededBrowserTabId,
       { timeout: 10_000 },
     )
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (url) =>
         (await window.cclinkStudio.browser.listHistory(20)).some((entry) => entry.url === url),
       recentUrl,
@@ -3168,7 +3234,8 @@ async function main() {
       return active?.type === 'browser' ? active.id : null
     })
     assert(activeBrowserTabId, 'new browser tab did not become active')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
       undefined,
       { timeout: 10_000 },
@@ -3203,7 +3270,8 @@ async function main() {
     )
     await page.locator('.url-input').fill(recentUrl)
     await page.locator('.url-input').press('Enter')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, url }) => {
         const [{ useBrowserStore }, runtime] = await Promise.all([
           import('/src/stores/browser-store.ts'),
@@ -3219,7 +3287,8 @@ async function main() {
       { tabId: activeBrowserTabId, url: recentUrl },
       { timeout: 10_000 },
     )
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) => {
         const layout = (await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)).layout
         return (
@@ -3236,7 +3305,8 @@ async function main() {
     const navigationFailureUrl = 'http://[::1/navigation-failure'
     await page.locator('.url-input').fill(navigationFailureUrl)
     await page.locator('.url-input').press('Enter')
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, url }) => {
         const [{ useBrowserStore }, { useTabStore }] = await Promise.all([
           import('/src/stores/browser-store.ts'),
@@ -3263,7 +3333,8 @@ async function main() {
       'failed address did not expose retry and return actions',
     )
     await navigationFailure.getByRole('button', { name: '返回' }).click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, previousUrl }) => {
         const [{ useBrowserStore }, runtime] = await Promise.all([
           import('/src/stores/browser-store.ts'),
@@ -3284,13 +3355,15 @@ async function main() {
     await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
     const browserUpdatePanel = page.locator('.update-panel')
     await browserUpdatePanel.waitFor({ state: 'visible', timeout: 10_000 })
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async () => (await window.cclinkStudio.browser.getActiveViewId()) === null,
       undefined,
       { timeout: 10_000 },
     )
     await browserUpdatePanel.locator('.update-panel-header button[title="关闭"]').click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
       activeBrowserTabId,
       { timeout: 10_000 },
@@ -3328,7 +3401,8 @@ async function main() {
     const restartButton = page.locator('button[title="重新启动 Terminal"]')
     await restartButton.waitFor({ state: 'visible', timeout: 10_000 })
     await restartButton.click()
-    await page.waitForFunction(
+    await waitForAsyncFunction(
+      page,
       async ({ tabId, sessionId }) => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const active = useTabStore.getState().tabs.find((tab) => tab.id === tabId)

@@ -186,7 +186,6 @@ function getSystemPromptAppend(): string {
   return params.options.systemPrompt.append
 }
 
-describe('LocalClaudeCodeBackend visible browser policy', () => {
 async function getPromptContent(): Promise<unknown> {
   const prompt = getLastQueryParams().prompt as AsyncIterable<{
     message: { content: unknown }
@@ -194,6 +193,7 @@ async function getPromptContent(): Promise<unknown> {
   return (await prompt[Symbol.asyncIterator]().next()).value.message.content
 }
 
+describe('LocalClaudeCodeBackend visible browser policy', () => {
   beforeEach(() => {
     queryMock.mockReset()
     queryMock.mockImplementation(() => createMockQuery())
@@ -1156,6 +1156,7 @@ async function getPromptContent(): Promise<unknown> {
     await backend.compact('保留当前方案和未完成任务')
 
     const params = getLastQueryParams()
+    expect(await getPromptContent()).toBe('/compact 保留当前方案和未完成任务')
     expect(params).toMatchObject({
       options: { resume: '123e4567-e89b-12d3-a456-426614174000' },
     })
@@ -1189,45 +1190,10 @@ async function getPromptContent(): Promise<unknown> {
 
     await vi.waitFor(() =>
       expect(backend.getSessionId()).toBe('123e4567-e89b-12d3-a456-426614174001'),
-    expect(await getPromptContent()).toBe('/compact 保留当前方案和未完成任务')
     )
     expect(events.some((event) => event.type === 'system')).toBe(true)
   })
 
-  it('emits an error when the SDK stream ends without a result event', async () => {
-    queryMock.mockReturnValueOnce(
-      createMockQuery([
-        {
-          type: 'stream_event',
-          event: { type: 'message_start', message: { id: 'message-1' } },
-        },
-      ]),
-    )
-    const backend = createBackend()
-    const events: Array<{ type: string; data: any }> = []
-    backend.onEvent((type, data) => events.push({ type, data }))
-
-    await backend.sendMessage('继续')
-
-    await vi.waitFor(() =>
-      expect(events).toContainEqual({
-        type: 'error',
-        data: expect.objectContaining({
-          code: 'stream_ended_without_result',
-        }),
-      }),
-    )
-  })
-
-  it('does not emit a silent-end error after a normal result', async () => {
-    queryMock.mockReturnValueOnce(
-      createMockQuery([
-        {
-          type: 'result',
-          is_error: false,
-          total_cost_usd: 0.01,
-        },
-      ]),
   it.each([false, true])(
     'keeps input and run ownership through a restored notification result (error=%s)',
     async (notificationFailed) => {
@@ -1369,6 +1335,40 @@ async function getPromptContent(): Promise<unknown> {
     )
   })
 
+  it('emits an error when the SDK stream ends without a result event', async () => {
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'stream_event',
+          event: { type: 'message_start', message: { id: 'message-1' } },
+        },
+      ]),
+    )
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+
+    await backend.sendMessage('继续')
+
+    await vi.waitFor(() =>
+      expect(events).toContainEqual({
+        type: 'error',
+        data: expect.objectContaining({
+          code: 'stream_ended_without_result',
+        }),
+      }),
+    )
+  })
+
+  it('does not emit a silent-end error after a normal result', async () => {
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'result',
+          is_error: false,
+          total_cost_usd: 0.01,
+        },
+      ]),
     )
     const backend = createBackend()
     const events: Array<{ type: string; data: any }> = []
