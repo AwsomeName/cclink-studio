@@ -360,7 +360,10 @@ function createStoryboard(
 function createSceneSubtitle(narration: string, title: string, order: number): string {
   const source = (order === 0 ? title : narration).replace(/\s+/g, ' ').trim()
   if (source.length <= DEFAULT_SUBTITLE_MAX_CHARACTERS) return source
-  const sentence = source.split(/(?<=[。！？!?])/u).find((value) => value.trim().length >= 8)?.trim()
+  const sentence = source
+    .split(/(?<=[。！？!?])/u)
+    .find((value) => value.trim().length >= 8)
+    ?.trim()
   const candidate = sentence || source
   if (candidate.length <= DEFAULT_SUBTITLE_MAX_CHARACTERS) return candidate
   const prefix = candidate.slice(0, DEFAULT_SUBTITLE_MAX_CHARACTERS)
