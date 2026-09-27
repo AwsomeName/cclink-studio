@@ -93,6 +93,7 @@ describe('manual Toutiao original-image correspondence', () => {
             'present',
             'workspace',
             expect.objectContaining({ platformUrl: urls[1] }),
+            undefined,
           )
         else if (mode !== 'stale') expect(resolved).not.toHaveBeenCalled()
       } finally {
