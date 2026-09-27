@@ -1232,6 +1232,31 @@ describe('ArticlePublishingBrowserPolicy', () => {
     },
   )
 
+  it('closes only a freshly attested CSDN outline without a publishing effect', async () => {
+    const { policy, inspect, webAffairService, advanceDocument } = createPolicy({
+      stepId: 'fill-fields',
+    })
+    const selector = '.catlog-guide-box button.btn-hide-catlog'
+    const page = await inspect({ dismissOutline: selector })
+    expect(
+      await policy.classifyAction(task as never, 'click', { selector }, page as never, context),
+    ).toMatchObject({ kind: 'allow' })
+    expect(webAffairService.reserveArticlePublishingSideEffect).not.toHaveBeenCalled()
+    expect(
+      await policy.classifyAction(
+        task as never,
+        'click',
+        { selector: '.catlog-guide-box' },
+        page as never,
+        context,
+      ),
+    ).not.toMatchObject({ kind: 'allow' })
+    advanceDocument()
+    expect(
+      await policy.classifyAction(task as never, 'click', { selector }, page as never, context),
+    ).not.toMatchObject({ kind: 'allow' })
+  })
+
   it('only allows the frozen title in a proven empty first editor, not arbitrary no-ID writes', async () => {
     const { policy, inspect, webAffairService } = createPolicy({
       stepId: 'open-editor',

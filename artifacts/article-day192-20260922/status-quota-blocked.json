@@ -1,0 +1,153 @@
+{
+  "observedAt": "2026-09-22T09:23:55.783841+00:00",
+  "affairs": [
+    {
+      "id": "2119bb5e-549b-47cb-afbd-eb1698c00add",
+      "adapterId": "bilibili",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "7db61973-4c47-431a-aa39-b5c29a4f311a",
+        "currentGeneration": 3,
+        "currentLaunchOperationId": "a498a053-c021-4b84-b619-a2aabe672288"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://t.bilibili.com/1250805269620850689",
+        "observedAt": "2026-09-22T08:34:12.539Z"
+      },
+      "assets": [
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        }
+      ],
+      "lastEvent": {
+        "id": "0986a4c2-bef6-44fe-b50d-bfca68a845fb",
+        "type": "attempt-finished",
+        "nodeId": "f23f83cc-dfcf-45d0-b96a-f90b02aa7162",
+        "attemptId": "7db61973-4c47-431a-aa39-b5c29a4f311a",
+        "summary": "发布文章到 B站动态：succeeded，B站图文动态单篇发布完成并核验：原生提交回执 platformCode=0 返回动态 ID 1250805269620850689（账号 3546384070347419=targetUID）；公开页回读 pageKind=published-article，标题「做AI眼镜第192天，给它换了个新耳朵」与冻结平台值一致，正文 bodyMatchesFrozen=true，3 张图（随行助手概念效果图/翻译真机测试截图/USB镜头调焦实测）src 与上传平台 URL 逐一相同且 loaded=true。全部检查点（open-editor、verify-account、upload-assets、fill-body、fill-fields、save-draft、publish、verify-publication）已完成，未重复发送。",
+        "occurredAt": "2026-09-22T08:34:12.539Z"
+      }
+    },
+    {
+      "id": "14eb29b2-671e-43e9-91ca-e60d11499e20",
+      "adapterId": "weibo",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "a101e08d-fa61-478c-8071-79e6e6c314cf",
+        "currentGeneration": 3,
+        "currentLaunchOperationId": "7f7dfcb1-fdb7-49f5-804c-8c09720191cc"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://weibo.com/5961101548/RjidbpQLs",
+        "observedAt": "2026-09-22T08:24:04.425Z"
+      },
+      "assets": [
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        }
+      ],
+      "lastEvent": {
+        "id": "ffd42a54-592a-4285-b6b3-285f2454daf1",
+        "type": "attempt-finished",
+        "nodeId": "6b2a484c-d33e-4e72-9f09-571681eca9ce",
+        "attemptId": "a101e08d-fa61-478c-8071-79e6e6c314cf",
+        "summary": "发布文章到 微博：succeeded，微博单篇图文已发布并核验：锁定地址 https://weibo.com/5961101548/RjidbpQLs 公开页回读 UID 5961101548、作品 ID RjidbpQLs、正文 506 字符 bodyMatchesFrozen=true、标题「做AI眼镜第192天，给它换了个新耳朵」一致，3 张图片全部 loaded 且与上传回执一一对应；publish 仅派发一次，未重发",
+        "occurredAt": "2026-09-22T08:24:04.425Z"
+      }
+    },
+    {
+      "id": "31da4f7a-242d-41e7-ac44-8734564e517a",
+      "adapterId": "csdn",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "d1ae6314-64bb-4c2e-889f-0563af614e7b",
+        "currentGeneration": 2,
+        "currentLaunchOperationId": "92e2a6c8-09a7-4445-9403-fa7e402114b4"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://blog.csdn.net/weixin_36388257/article/details/166367569?sharetype=blogdetail&sharerId=166367569&sharerefer=PC&sharesource=weixin_36388257",
+        "observedAt": "2026-09-22T09:03:58.351Z"
+      },
+      "assets": [
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        }
+      ],
+      "lastEvent": {
+        "id": "84a52492-990e-4c6f-8b43-43cc81aff102",
+        "type": "attempt-finished",
+        "nodeId": "d5bc3fd2-81d5-43f7-bd03-eb1e52ace6c0",
+        "attemptId": "d1ae6314-64bb-4c2e-889f-0563af614e7b",
+        "summary": "发布文章到 CSDN：succeeded，《做AI眼镜第192天，给它换了个新耳朵》已发布到 CSDN（账号 weixin_36388257，draftId/文章ID 166367569）。检查点全部完成：open-editor、verify-account、upload-assets（3 张正文图片全部 uploaded 且逐图核验）、fill-body（511 字符与冻结原稿一致）、fill-fields（标题/摘要/标签/分类全部匹配，分类\"人工智能\"经 Tab 失焦提交核验）、save-draft（saveState=saved）、publish（单次派发后跳转成功页）、verify-publication（打开实际文章页，pageKind=published-article，文章 ID/账号/标题与冻结任务一致，无 publicationBlocker，公开可访问）。发布动作仅派发一次，未重复提交。",
+        "occurredAt": "2026-09-22T09:03:58.351Z"
+      }
+    },
+    {
+      "id": "08a0d26c-2c99-49b2-bc8e-34b84eec296d",
+      "adapterId": "zhihu",
+      "execution": {
+        "status": "result-unknown",
+        "currentAttemptId": "adf6dc74-b63b-400d-91a4-f05f82f3e2d1",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "0f052d40-a4f2-4c18-8109-5dc7db1a91d9",
+        "currentStepId": "verify-publication"
+      },
+      "publication": {
+        "status": "result-unknown",
+        "observedAt": "2026-09-22T09:21:07.316Z"
+      },
+      "assets": [
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        },
+        {
+          "status": "uploaded",
+          "attemptCount": 1
+        }
+      ],
+      "lastEvent": {
+        "id": "6a13b595-62f5-4d0b-a3c2-f7ca752cc0b2",
+        "type": "attempt-finished",
+        "nodeId": "57649138-9f39-47e8-8d8f-c24856bc14aa",
+        "attemptId": "adf6dc74-b63b-400d-91a4-f05f82f3e2d1",
+        "summary": "AGENT_FAILED：API Error: Request rejected (429) · [1308][已达到 5 小时的使用上限。您的限额将在 2026-09-22 19:38:34 重置。][2026092217210727351536cd1c477c]",
+        "occurredAt": "2026-09-22T09:21:07.316Z"
+      }
+    }
+  ]
+}

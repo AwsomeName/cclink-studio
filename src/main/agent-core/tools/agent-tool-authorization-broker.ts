@@ -245,6 +245,10 @@ export class AgentToolAuthorizationBroker {
       }
     }
 
+    // 内置 WebFetch 只读抓取在所有权限模式下直接放行，不按 URL 逐次确认。
+    // 仅匹配 SDK 精确工具名；同名外部 MCP 仍遵循上面的默认拒绝策略。
+    if (request.toolName === 'WebFetch') return { behavior: 'allow' }
+
     // Bash 按命令内容判定删除/终止类（ADR 0020）：命中才映射为 destructive 注解。
     const deleteKillReason = deleteKillReasonFor(request.toolName, request.params)
     const annotations = sdkToolAnnotations(request.toolName, deleteKillReason)

@@ -1,0 +1,404 @@
+[
+  {
+    "affairId": "ca548fd3-3322-4788-94ea-069bca1671da",
+    "adapterId": "bilibili",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "b8c9d81f-bcde-49ea-80e9-cadbaee043d5",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "53e52a39-3790-4fa7-a9cc-b3fc3276d928"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://t.bilibili.com/1252766935773347847",
+      "observedAt": "2026-09-27T14:57:08.075Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  },
+  {
+    "affairId": "ed7fe886-3d4b-4c7e-85ba-f0335e2303aa",
+    "adapterId": "weibo",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "7713963e-27f1-485d-bc78-ae88138188e6",
+      "currentGeneration": 2,
+      "currentLaunchOperationId": "9845e446-b59d-4160-8459-5fa346539211"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://weibo.com/5961101548/Rk60y3Mdr",
+      "observedAt": "2026-09-27T15:05:18.926Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  },
+  {
+    "affairId": "1d2b8fe5-e320-4693-831e-eaa9ec20b1c8",
+    "adapterId": "csdn",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "aa0836f0-0d2f-485c-a295-d6dabb82b69b",
+      "currentGeneration": 3,
+      "currentLaunchOperationId": "d6108a14-b642-4269-abbf-7c7acfcb5f57"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/166741339",
+      "observedAt": "2026-09-27T16:13:58.198Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  },
+  {
+    "affairId": "7d8cea17-4f65-4790-9173-2c77cf68c481",
+    "adapterId": "zhihu",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "31d4dc0e-e0c2-4d4f-8bf1-683dfb895f52",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "8f0622e6-d56b-4985-a666-5267466ae9a7"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://zhuanlan.zhihu.com/p/2087684014370972347",
+      "observedAt": "2026-09-27T15:31:49.077Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  },
+  {
+    "affairId": "8f82c3f8-ed06-4622-b8a7-4b9e1fc55e9b",
+    "adapterId": "juejin",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "eaab12f8-b4b9-4956-9e0c-1965786cc861",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "21126391-c887-4486-9224-b6be91b1cea5"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://juejin.cn/post/7689751707002224659",
+      "observedAt": "2026-09-27T15:47:44.768Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  },
+  {
+    "affairId": "42c842c7-1f0a-421f-a10c-ca25a5445120",
+    "adapterId": "toutiao",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "7c159797-fe9a-4ae2-a430-a14aceca0053",
+      "currentGeneration": 2,
+      "currentLaunchOperationId": "2ebe02ef-d3d3-4381-8249-5b5d46f2c146"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://www.toutiao.com/w/1877501378685067/",
+      "observedAt": "2026-09-27T16:10:57.090Z"
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-16/素材/01-观景舱首页效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/02-记忆与提醒效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-16/素材/03-翻译句子卡片效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "publishDispatchCount": 1
+  }
+]

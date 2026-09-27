@@ -501,6 +501,65 @@ describe('article publishing persistent state', () => {
     },
   )
 
+  it.each([
+    'accepted',
+    'missing-evidence',
+    'stale-page',
+    'running',
+    'submitted',
+    'reserved-publish',
+  ] as const)(
+    'requires current editor evidence for a Weibo missing-image confirmation: %s',
+    async (mode) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const state = affair.articlePublishing
+      state.adapterId = 'weibo'
+      state.composer = { platformAccountId: '5961101548', allowPublish: true }
+      delete state.draft
+      state.execution.status = mode === 'running' ? 'running' : 'interrupted'
+      state.execution.currentStepId = 'upload-assets'
+      state.publication.status = mode === 'submitted' ? 'dispatched' : 'not-started'
+      const asset = state.assets.find((a: { id: string }) => a.id === created.assetId)!
+      asset.status = 'reconciling'
+      if (mode === 'reserved-publish')
+        state.sideEffects.push({
+          ...state.sideEffects[0],
+          key: 'reserved-send',
+          kind: 'publish',
+          targetId: 'final',
+          status: 'reserved',
+          dispatchedAt: undefined,
+        })
+      Reflect.set(created.service, 'snapshot', snapshot)
+      const result = await created.service.resolveArticlePublishingAsset(
+        created.affairId,
+        created.assetId,
+        'missing',
+        WORKSPACE_ID,
+        undefined,
+        mode === 'missing-evidence' ? undefined : () => mode !== 'stale-page',
+      )
+      expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
+        mode === 'accepted',
+      )
+      if (result.success) {
+        expect(
+          result.data.articlePublishing?.assets.find((a) => a.id === created.assetId),
+        ).toMatchObject({
+          status: 'retryable-failed',
+          manualResolution: { status: 'missing' },
+        })
+        expect(result.data.articlePublishing?.publication.status).toBe('not-started')
+      }
+      await created.service.flush()
+    },
+  )
+
   it.each(['accepted', 'stale', 'wrong-account', 'not-dispatched', 'not-authorized'] as const)(
     'binds only a current dispatched Weibo receipt without declaring publication: %s',
     async (scenario) => {
@@ -616,71 +675,82 @@ describe('article publishing persistent state', () => {
     },
   )
 
-  it('settles a legacy waiting-human Bilibili publish from its bound native receipt before read-only verification', async () => {
-    const created = await createStartedTask(directory, sourcePath, imagePath)
-    await created.service.flush()
-    const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
-    const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
-    const publishing = affair.articlePublishing!
-    const attempt = affair.attempts[0]
-    const now = new Date().toISOString()
-    publishing.adapterId = 'bilibili'
-    delete publishing.draft
-    publishing.composer = { platformAccountId: '5961101548', allowPublish: true }
-    publishing.publication = {
-      status: 'result-unknown',
-      url: 'https://t.bilibili.com/1246694229973925912',
-      observedAt: now,
-    }
-    publishing.execution.status = 'result-unknown'
-    publishing.execution.currentStepId = 'verify-publication'
-    attempt.status = 'interrupted'
-    attempt.endedAt = now
-    publishing.checkpoints.forEach((checkpoint: { stepId: string; status: string }) => {
-      if (checkpoint.stepId === 'publish') checkpoint.status = 'waiting-human'
-      else if (checkpoint.stepId === 'verify-publication') checkpoint.status = 'verifying'
-      else checkpoint.status = 'completed'
-    })
-    publishing.sideEffects = [
-      {
-        key: 'legacy-receipted-bilibili-submit',
-        affairId: affair.id,
-        attemptId: attempt.id,
-        executionGeneration: attempt.executionGeneration,
-        kind: 'publish',
-        targetId: 'final',
-        status: 'verified',
-        reservedAt: now,
-        dispatchedAt: now,
+  it.each(['verifying', 'completed'] as const)(
+    'reopens Bilibili publication verification from %s while preserving its single submission receipt',
+    async (verificationStatus) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const snapshot = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+      const affair = snapshot.affairs.find((a: { id: string }) => a.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      const attempt = affair.attempts[0]
+      const now = new Date().toISOString()
+      publishing.adapterId = 'bilibili'
+      delete publishing.draft
+      publishing.composer = { platformAccountId: '5961101548', allowPublish: true }
+      publishing.publication = {
+        status: 'result-unknown',
+        url: 'https://t.bilibili.com/1246694229973925912',
         observedAt: now,
-      },
-    ]
-    Reflect.set(created.service, 'snapshot', snapshot)
+      }
+      publishing.execution.status = 'result-unknown'
+      publishing.execution.currentStepId = 'verify-publication'
+      attempt.status = 'interrupted'
+      attempt.endedAt = now
+      publishing.checkpoints.forEach((checkpoint: { stepId: string; status: string }) => {
+        if (checkpoint.stepId === 'publish') checkpoint.status = 'waiting-human'
+        else if (checkpoint.stepId === 'verify-publication') checkpoint.status = verificationStatus
+        else checkpoint.status = 'completed'
+      })
+      publishing.sideEffects = [
+        {
+          key: 'legacy-receipted-bilibili-submit',
+          affairId: affair.id,
+          attemptId: attempt.id,
+          executionGeneration: attempt.executionGeneration,
+          kind: 'publish',
+          targetId: 'final',
+          status: 'verified',
+          reservedAt: now,
+          dispatchedAt: now,
+          observedAt: now,
+        },
+      ]
+      Reflect.set(created.service, 'snapshot', snapshot)
 
-    const resumed = await created.service.resumeArticlePublishingAttempt(
-      affair.id,
-      attempt.id,
-      WORKSPACE_ID,
-    )
-    expect(resumed.success, JSON.stringify(resumed)).toBe(true)
-    if (!resumed.success) return
-    expect(
-      resumed.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'publish'),
-    ).toMatchObject({ status: 'completed' })
-    expect(resumed.data.articlePublishing?.execution).toMatchObject({
-      status: 'preparing',
-      currentStepId: 'verify-publication',
-    })
+      const resumed = await created.service.resumeArticlePublishingAttempt(
+        affair.id,
+        attempt.id,
+        WORKSPACE_ID,
+      )
+      expect(resumed.success, JSON.stringify(resumed)).toBe(true)
+      if (!resumed.success) return
+      expect(
+        resumed.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'publish'),
+      ).toMatchObject({ status: 'completed' })
+      expect(resumed.data.articlePublishing?.execution).toMatchObject({
+        status: 'preparing',
+        currentStepId: 'verify-publication',
+      })
 
-    const started = await created.service.markArticlePublishingAttemptStarted(
-      affair.id,
-      attempt.id,
-      WORKSPACE_ID,
-    )
-    expect(started.success, JSON.stringify(started)).toBe(true)
-    if (!started.success) return
-    expect(started.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
-  })
+      const started = await created.service.markArticlePublishingAttemptStarted(
+        affair.id,
+        attempt.id,
+        WORKSPACE_ID,
+      )
+      expect(started.success, JSON.stringify(started)).toBe(true)
+      if (!started.success) return
+      expect(started.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+      expect(
+        started.data.articlePublishing?.checkpoints.find((c) => c.stepId === 'verify-publication'),
+      ).toMatchObject({
+        status: 'needs-reconcile',
+        resumePolicy: 'reconcile-then-run',
+      })
+      expect(started.data.articlePublishing?.publication.status).toBe('result-unknown')
+      expect(started.data.articlePublishing?.sideEffects).toEqual(publishing.sideEffects)
+    },
+  )
 
   it('ends an unknown Bilibili task after the public page proves an image-count mismatch', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)

@@ -21,6 +21,7 @@ import { MediaAssetService } from './media-asset-service'
 
 const MEDIA_PROJECT_DIRECTORY = join('.cclink-studio', 'media-projects')
 const MAX_SOURCE_BYTES = 1_000_000
+const DEFAULT_SUBTITLE_MAX_CHARACTERS = 32
 
 class MediaProjectServiceError extends Error {
   constructor(
@@ -344,7 +345,7 @@ function createStoryboard(
       order,
       durationSeconds: duration,
       narration,
-      subtitle: narration.slice(0, 80),
+      subtitle: createSceneSubtitle(narration, title, order),
       visualDescription:
         order === 0
           ? `用清晰的开场画面介绍「${title}」`
@@ -354,6 +355,24 @@ function createStoryboard(
       materialKind: 'unassigned',
     }
   })
+}
+
+function createSceneSubtitle(narration: string, title: string, order: number): string {
+  const source = (order === 0 ? title : narration).replace(/\s+/g, ' ').trim()
+  if (source.length <= DEFAULT_SUBTITLE_MAX_CHARACTERS) return source
+  const sentence = source.split(/(?<=[。！？!?])/u).find((value) => value.trim().length >= 8)?.trim()
+  const candidate = sentence || source
+  if (candidate.length <= DEFAULT_SUBTITLE_MAX_CHARACTERS) return candidate
+  const prefix = candidate.slice(0, DEFAULT_SUBTITLE_MAX_CHARACTERS)
+  const punctuation = Math.max(
+    prefix.lastIndexOf('，'),
+    prefix.lastIndexOf(','),
+    prefix.lastIndexOf('；'),
+    prefix.lastIndexOf(';'),
+    prefix.lastIndexOf('：'),
+    prefix.lastIndexOf(':'),
+  )
+  return `${prefix.slice(0, punctuation >= 12 ? punctuation : DEFAULT_SUBTITLE_MAX_CHARACTERS).trim()}…`
 }
 
 function markdownToSegments(markdown: string): string[] {

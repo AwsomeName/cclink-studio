@@ -1,0 +1,8 @@
+{"type": "system", "subtype": "task_notification", "partial": 0}
+{"type": "system", "subtype": "init", "partial": 0}
+{"type": "result", "subtype": "success", "partial": 0, "denials": [], "resultLength": 0}
+{"type": "system", "subtype": "init", "partial": 0}
+{"type": "system", "subtype": "status", "partial": 0}
+{"type": "user", "partial": 131, "message": {"role": "user", "content": [{"type": "tool_result", "content": "The user doesn't want to take this action right now. STOP what you are doing and wait for the user to tell you how to proceed.", "is_error": true, "tool_use_id": "call_c26bdd34b3694acebea5b348"}]}}
+{"type": "system", "subtype": "status", "partial": 133}
+{"type": "result", "subtype": "success", "partial": 311, "denials": [], "resultLength": 242}

@@ -44,7 +44,6 @@ const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
   'mcp__cclink_studio__browser_new_tab',
   'AskUserQuestion',
   'WebSearch',
-  'WebFetch',
   'webReader',
 ] as const
 const DISALLOWED_TOOL_NAMES = new Set(['browser_new_tab'])
@@ -310,7 +309,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
               '- 默认不要新开 Tab：先用 browser_navigate 在当前可视页打开目标 URL，再用 browser_fill / browser_click / browser_press 操作页面',
               '- 访问站点后必须用 browser_get_tab_info 或 browser_title 验证当前 URL/标题；只有 URL host 已匹配目标站点时，才能声称已经打开该站点或登录页',
               '- 如果当前 URL 仍是搜索引擎结果页，不要把搜索结果摘要、AI 摘要或页面文本当作目标站点内容；应继续直接 browser_navigate 到目标 URL、点击官方结果，或明确说明导航失败',
-              '- 不要使用 Claude Code 内置 WebSearch/WebFetch 或其他不可见搜索；需要搜索时就在可视浏览器里的搜索引擎页面完成',
+              '- WebFetch 可直接用于读取网页资料；它不能证明可见 Tab 已导航、已登录或已完成提交，页面操作和结果核验仍须使用 browser_* 工具',
+              '- 不要使用 Claude Code 内置 WebSearch 或其他不可见搜索；需要搜索时就在可视浏览器里的搜索引擎页面完成',
               '- 不要调用 AskUserQuestion；需要用户选择、输入验证码或手动操作时，直接用普通 assistant 文本向用户说明并停止等待',
               '- browser_new_tab 当前被禁用，因为它会创建不可见后台页；如确需多页，请提示用户手动新建可视浏览器 Tab',
             ]
@@ -574,7 +574,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
     sdkOptions.disallowedTools = [...CLAUDE_NATIVE_SCHEDULING_TOOLS]
     if (options?.forceVisibleBrowser || options?.disableBuiltinTools) {
-      sdkOptions.tools = []
+      sdkOptions.tools = ['WebFetch']
       sdkOptions.disallowedTools.push(...VISIBLE_BROWSER_DISALLOWED_TOOLS)
     }
 
@@ -619,7 +619,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       if (input.hook_event_name !== 'PreToolUse') return { continue: true }
       if (visibleBrowserOnly && isInvisibleWebTool(input.tool_name)) {
         const reason =
-          '当前任务已绑定 CCLink Studio 可见浏览器 Tab，禁止使用站外 WebReader/WebFetch/WebSearch。' +
+          '当前任务已绑定 CCLink Studio 可见浏览器 Tab，禁止使用站外 WebReader/WebSearch。' +
           '请只使用 browser_* 工具操作并验证左侧可见页面；如果可见操作失败，必须如实报告失败。'
         console.warn(`[ClaudeCodeBackend] ${reason}`)
         return denyPreToolUse(reason)
@@ -908,7 +908,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
 
 function isInvisibleWebTool(toolName: string): boolean {
   const normalized = toolName.replace(/[^a-z]/gi, '').toLowerCase()
-  return normalized === 'webreader' || normalized === 'webfetch' || normalized === 'websearch'
+  return normalized === 'webreader' || normalized === 'websearch'
 }
 
 function createSdkPrompt(

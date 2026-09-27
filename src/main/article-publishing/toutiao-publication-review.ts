@@ -2,6 +2,18 @@ import type { Page } from 'playwright-core'
 import { readToutiaoPage } from './toutiao-publishing-adapter'
 import { parseToutiaoPublicationUrl } from './toutiao-publication'
 
+function parseManagementResultUrl(raw: string) {
+  try {
+    const url = new URL(raw)
+    // The real management-card link adds this source marker. Do not broaden
+    // the public-page parser or accept arbitrary redirect/query parameters.
+    if (url.search === '?enter_from=mp_group_management') url.search = ''
+    return parseToutiaoPublicationUrl(url.href)
+  } catch {
+    return null
+  }
+}
+
 export const TOUTIAO_PUBLICATION_MANAGEMENT_URL = 'https://mp.toutiao.com/profile_v4/weitoutiao'
 
 /** Match the actual management card by account, title and all previously
@@ -41,7 +53,9 @@ export async function readToutiaoPublicationReview(
       const imageId = (raw: string) => {
         try {
           const u = new URL(raw)
-          return u.protocol === 'https:' &&
+          // The management page can expose http thumbnail URLs for the same CDN
+          // asset. Read identity only; returned URLs remain canonical HTTPS.
+          return ['https:', 'http:'].includes(u.protocol) &&
             !u.username &&
             !u.password &&
             !u.port &&
@@ -162,6 +176,7 @@ export async function openToutiaoPublicationResult(
   page: Page,
   expected: Parameters<typeof readToutiaoPublicationReview>[1],
   isCurrent: () => boolean,
+  getAccountChildPageUrls: () => string[] = () => [],
 ) {
   const review = await readToutiaoPublicationReview(page, expected)
   const card = review.candidates[0]
@@ -182,23 +197,29 @@ export async function openToutiaoPublicationResult(
     !isCurrent()
   )
     throw new Error('头条作品标题入口已变化，不能打开')
+  // Electron adopts window.open into BrowserManager; CDP may never emit a
+  // Playwright popup. Only accept new children of this exact account/document.
+  const previousChildren = new Set(getAccountChildPageUrls())
   const popup = page
     .waitForEvent('popup', { timeout: 10_000 })
     .then(async (p) => {
-      await p.waitForURL((url) => !!parseToutiaoPublicationUrl(url.href), { timeout: 10_000 })
+      await p.waitForURL((url) => !!parseManagementResultUrl(url.href), { timeout: 10_000 })
       return p.url()
     })
     .catch(() => null)
   const navigation = page
-    .waitForURL((url) => !!parseToutiaoPublicationUrl(url.href), { timeout: 10_000 })
+    .waitForURL((url) => !!parseManagementResultUrl(url.href), { timeout: 10_000 })
     .then(() => page.url())
     .catch(() => null)
   await target.click({ timeout: 5000 })
-  const urls = (await Promise.all([popup, navigation])).filter((s): s is string => !!s)
+  const urls = [
+    ...(await Promise.all([popup, navigation])).filter((s): s is string => !!s),
+    ...getAccountChildPageUrls().filter((url) => !previousChildren.has(url)),
+  ]
   const valid = [
     ...new Set(
       urls.flatMap((raw) => {
-        const parsed = parseToutiaoPublicationUrl(raw)
+        const parsed = parseManagementResultUrl(raw)
         return parsed ? [`https://www.toutiao.com/w/${parsed.id}/`] : []
       }),
     ),

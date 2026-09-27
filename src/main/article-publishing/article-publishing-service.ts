@@ -16,6 +16,10 @@ import { prepareArticleBody, prepareArticleUnresolvedBody } from './article-body
 import { findGitRelocatedArticleSource } from './git-relocated-article-source'
 import { parseWeiboPublicationUrl } from './weibo-publication'
 import {
+  canRetryConfirmedMissingWeiboComposer,
+  isEmptyWeiboComposer,
+} from './weibo-composer-recovery'
+import {
   jikeImageIdentity,
   parseJikePublicationUrl,
   readExactJikeFeedPublication,
@@ -259,7 +263,9 @@ export class ArticlePublishingService {
         input.resumed &&
         !hasBilibiliRetryAuthorization(publishing) &&
         (publishing.publication.status === 'result-unknown' ||
-          (publishing.adapterId === 'toutiao' &&
+          // A submitted CSDN article leaves the draft list while review is pending.
+          // Resuming must inspect its publication, never try to recover a draft.
+          (['csdn', 'toutiao'].includes(publishing.adapterId) &&
             ['dispatched', 'verifying'].includes(publishing.publication.status))) &&
         (publishing.draft?.platformDraftId ||
           ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId)),
@@ -378,6 +384,7 @@ export class ArticlePublishingService {
                   return false
                 }
               },
+              () => browserManager.getAccountChildPageUrls(tabId),
             ),
           ]
         }
@@ -910,6 +917,22 @@ export class ArticlePublishingService {
                 : resumesExactGallery
                   ? '原账号编辑器保留与已验证 URL 完全一致的三图；正文标题为空且从未提交，允许从上传核验继续'
                   : '原账号编辑器当前为空；此前上传已经明确核对为缺失，仅允许继续未完成的上传',
+          })
+        } else if (publishing.adapterId === 'weibo') {
+          await playwrightBridge.ensureConnected('weibo_confirmed_missing_retry_check')
+          await browserManager.ensurePlaywrightPage(tabId)
+          const page = playwrightBridge.getPageById(tabId)
+          if (!page) throw new Error('微博原账号页面尚未连接，不能核验恢复条件')
+          const probe = await new PublishingAdapter().probe(page)
+          if (!canRetryConfirmedMissingWeiboComposer(publishing, probe))
+            throw new Error(
+              '微博上传结果尚未核清，或原账号编辑器仍有内容。请先检查原编辑器中的待确认图片；只有明确确认图片缺失且从未提交的原任务才能补传。确认帖子未发布不能代替确认图片缺失。',
+            )
+          await recordPlan({
+            id: 'editor.open',
+            status: 'completed',
+            evidence:
+              '此前上传已通过图片缺失确认完成对账；原账号编辑器为空、没有正文写入或发布副作用，允许原任务补传未完成图片',
           })
         } else {
           throw new Error(
@@ -2493,7 +2516,12 @@ export class ArticlePublishingService {
       : undefined
     const state = affair?.articlePublishing
     const workspacePath = parsed.data.workspaceRef.path
-    if (state?.adapterId === 'bilibili' && parsed.data.resolution === 'missing') {
+    let missingConfirmationIsCurrent: (() => boolean) | undefined
+    if (
+      state &&
+      ['bilibili', 'weibo'].includes(state.adapterId) &&
+      parsed.data.resolution === 'missing'
+    ) {
       const attempt = affair?.attempts.find((a) => a.id === state.execution.currentAttemptId)
       const manager = this.runtimeDependencies?.getBrowserManager()
       const bridge = this.runtimeDependencies?.getPlaywrightBridge()
@@ -2529,14 +2557,50 @@ export class ArticlePublishingService {
         manager.getViewAccountId(tabId) !== state.accountId ||
         manager.getViewWorkspaceKey(tabId) !== workspacePath ||
         state.publication.status !== 'not-started' ||
-        state.execution.currentStepId !== 'upload-assets'
+        state.execution.currentStepId !== 'upload-assets' ||
+        state.sideEffects.some((effect) => effect.kind === 'publish') ||
+        (state.adapterId === 'weibo' &&
+          !['interrupted', 'waiting-human'].includes(state.execution.status))
       )
         return invalid('必须在原账号唯一的空白编辑器核验缺图，且不能存在发布动作')
-      const probe = await new PublishingAdapter().probe(page, undefined, undefined, state.assets)
-      if (!isEmptyBilibiliComposer(probe, state.composer?.platformAccountId))
+      const adapter = new PublishingAdapter()
+      const documentGeneration = adapter.documentGeneration(page)
+      const probe = await adapter.probe(page, undefined, undefined, state.assets)
+      const empty =
+        state.adapterId === 'weibo'
+          ? isEmptyWeiboComposer(probe, state.composer?.platformAccountId)
+          : isEmptyBilibiliComposer(probe, state.composer?.platformAccountId)
+      if (!empty)
         return invalid(
-          `B站编辑器仍有内容或无法完整核验，不能把图片标记为缺失。页面 ${probe.url}；适配 ${probe.adapterId}；账号 ${probe.platformAccountId ?? '未知'}；正文 ${probe.editor.bodyTextLength}；初始空白 ${probe.editor.initialDraftBodyEmpty}；标题 ${probe.title.value || '空'}；图集完整 ${probe.editor.imageEnumerationComplete === true}；图片 ${probe.editor.images.length}`,
+          `原账号编辑器仍有内容或无法完整核验，不能把图片标记为缺失。页面 ${probe.url}；适配 ${probe.adapterId}；账号 ${probe.platformAccountId ?? '未知'}；正文 ${probe.editor.bodyTextLength}；初始空白 ${probe.editor.initialDraftBodyEmpty}；标题 ${probe.title.value || '空'}；图集完整 ${probe.editor.imageEnumerationComplete === true}；图片 ${probe.editor.images.length}`,
         )
+      if (state.adapterId === 'weibo') {
+        missingConfirmationIsCurrent = () => {
+          const snapshot = this.webAffairService.getProjectSnapshot(workspaceId)
+          const current = snapshot.success
+            ? snapshot.data.affairs.find((item) => item.id === affair?.id)?.articlePublishing
+            : undefined
+          return Boolean(
+            current?.execution.currentAttemptId === state.execution.currentAttemptId &&
+            current?.execution.currentGeneration === state.execution.currentGeneration &&
+            current?.execution.status === state.execution.status &&
+            page.url() === probe.url &&
+            adapter.documentGeneration(page) === documentGeneration &&
+            bridge?.getPageById(tabId) === page &&
+            // The confirmation lives in the Studio task tab; switching to it
+            // may hide the browser. Keep the unique exact-account page bound.
+            (manager.isViewVisible(tabId) ||
+              manager.getUniqueViewIdForAccount(
+                workspacePath,
+                state.accountId,
+                attempt.profileId,
+              ) === tabId) &&
+            manager.getViewProfileId(tabId) === attempt.profileId &&
+            manager.getViewAccountId(tabId) === state.accountId &&
+            manager.getViewWorkspaceKey(tabId) === workspacePath,
+          )
+        }
+      }
     }
     let observation: { platformUrl: string; isCurrent: () => boolean } | undefined
     if (state && state.adapterId !== 'csdn' && parsed.data.resolution === 'present') {
@@ -2654,6 +2718,7 @@ export class ArticlePublishingService {
       parsed.data.resolution,
       workspaceId,
       observation,
+      missingConfirmationIsCurrent,
     )
   }
 
@@ -3051,6 +3116,7 @@ function buildAgentPrompt(
     `核对已有正文时，使用 browser_frame_content，frameSelector=inspect 返回的 editor.bodyFrameSelector，selector=selectors.body，读取正文文本与源 Markdown 比对；不要猜 frameUrl/frameName，iframe 可能没有独立 URL。不要使用 browser_evaluate，不要把 bodyTextLength 非零当成完整正文证据；已有完整正文无需重填。若 inspect.bodyMatchesFrozen=true 且 saveState=saved，Studio 已完成正文和逐图位置核验，直接继续检查点核验，不重复填写。`,
     `fill-fields 若 inspect 返回 tagEditor：先点击 openSelector，重新 inspect；用 browser_fill 在 inputSelector 填入一个尚缺失的冻结 tags 值，再 inspect；用 browser_press（selector=inputSelector,key=Enter）提交这个标签，再 inspect 核验 fieldValues.tags。输入框里的搜索词不算已添加标签；不得用无目标的 browser_press_key。`,
     'fill-fields 若 inspect 返回 categoryEditor 且 fieldValues.category 不匹配：已有 inputSelector 时直接使用，否则点击 openSelector 再 inspect；只 fill 冻结 category，重新 inspect 后在该 inputSelector 用 browser_press(key=Tab) 触发原生失焦提交，再 inspect 核验 fieldValues.category。pendingValue 只是临时输入，不能当作已选分类；不要按 Enter，它会额外新建空白分类。已匹配的分类不得重建。',
+    '若 inspect 返回 selectors.dismissOutline，使用该唯一按钮收起遮挡字段的正文目录，再重新 inspect；目录只是页面辅助面板，不是分类字段，不使用 force 点击被遮挡控件。',
     '若 inspect 返回 selectors.dismissTagEditor 且冻结标签已经全部匹配，用 browser_click 点击该唯一关闭按钮，再 inspect 确认面板关闭后继续保存或发布，避免下拉层挡住按钮。不要使用无目标 Escape。',
     `每次 inspect 可能由 main 推进检查点。inspect 后先读取 web_affair_get 的 currentStepId/current operation，再选择动作，不回报旧检查点。`,
     `图片共有 ${localAssets.length} 张。每张上传必须依次报告 uploading、waiting-platform、verifying；只有重新读取编辑器取得平台 URL 和页面证据后才能报告 uploaded。`,

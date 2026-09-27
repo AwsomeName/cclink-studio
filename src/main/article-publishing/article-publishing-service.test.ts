@@ -5,6 +5,40 @@ import { ArticlePublishingBrowserPolicy } from './article-publishing-browser-pol
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
 describe('ArticlePublishingService', () => {
+  it.each(['dispatched', 'verifying', 'result-unknown'] as const)(
+    'recovers a submitted CSDN article through publication readback, never the draft list: %s',
+    async (publicationStatus) => {
+      const harness = createResumeHarness({
+        draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+        visibleUrl: 'https://mp.csdn.net/',
+        publicationStatus,
+      })
+      try {
+        const result = await harness.service.startTask(
+          { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+          '11111111-1111-4111-8111-111111111111',
+        )
+        expect(result).toMatchObject({
+          success: false,
+          error: { message: expect.stringContaining('公开结果暂不可核验') },
+        })
+        expect(harness.draftRecoveryCoordinator.recoverExactPublication).toHaveBeenCalledWith(
+          expect.objectContaining({
+            expectedPlatformAccountId: 'csdn:test-user',
+            expectedTitle: 'Article',
+          }),
+        )
+        expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
+        expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+        expect(harness.browserTaskRuntime.releaseAccountRecoveryLease).toHaveBeenCalledWith(
+          'recovery-lease-a',
+        )
+      } finally {
+        harness.service.dispose()
+      }
+    },
+  )
+
   it('durably terminates publishing without waiting for the Agent cancellation receipt', async () => {
     const harness = createResumeHarness({
       draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
@@ -1167,6 +1201,7 @@ describe('ArticlePublishingService', () => {
 function createResumeHarness(options: {
   draftUrl?: string
   visibleUrl: string
+  publicationStatus?: 'dispatched' | 'verifying' | 'result-unknown'
   recoveryError?: string
   unresolvedSave?: boolean
   verifyError?: string
@@ -1245,7 +1280,7 @@ function createResumeHarness(options: {
           },
         }
       : undefined,
-    publication: { status: 'not-started' },
+    publication: { status: options.publicationStatus ?? 'not-started' },
   }
   const resumedAffair = {
     id: affairId,
@@ -1493,6 +1528,9 @@ function createResumeHarness(options: {
     isConnected: vi.fn(() => true),
   }
   const draftRecoveryCoordinator = {
+    recoverExactPublication: vi.fn(async () => {
+      throw new Error('公开结果暂不可核验')
+    }),
     recoverExactDraft: vi.fn(async (input) => {
       if (options.recoveryError) throw new Error(options.recoveryError)
       await input.navigate('https://mp.csdn.net/mp_blog/manage/article')

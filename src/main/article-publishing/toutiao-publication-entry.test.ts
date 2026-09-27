@@ -5,6 +5,50 @@ import {
 } from './toutiao-publication-review'
 
 describe('Toutiao published entry navigation', () => {
+  it.each(['adopted', 'existing', 'ambiguous', 'foreign', 'unknown-query', 'cancelled'] as const)(
+    'handles BrowserManager-adopted children without a CDP popup: %s',
+    async (mode) => {
+      let clicked = false
+      const url = 'https://www.toutiao.com/w/123/?enter_from=mp_group_management'
+      const page = {
+        url: () => TOUTIAO_PUBLICATION_MANAGEMENT_URL,
+        getByText: () => ({ first: () => ({ waitFor: async () => undefined }) }),
+        evaluate: async (_fn: unknown, args?: unknown) =>
+          args
+            ? { current: true, candidates: [{ status: '已发布', titleSelector: 'body > p' }] }
+            : { uid: '12345' },
+        locator: () => ({
+          count: async () => 1,
+          innerText: async () => 'Article',
+          click: async () => {
+            clicked = true
+          },
+        }),
+        waitForEvent: async () => {
+          throw new Error('BrowserManager owns popup')
+        },
+        waitForURL: async () => {
+          throw new Error('source stays on management page')
+        },
+      }
+      const result = openToutiaoPublicationResult(
+        page as never,
+        { uid: '12345', title: 'Article', images: [] },
+        () => !(mode === 'cancelled' && clicked),
+        () => {
+          if (mode === 'existing') return [url]
+          if (!clicked) return []
+          if (mode === 'ambiguous') return [url, 'https://www.toutiao.com/w/456/']
+          if (mode === 'foreign') return ['https://www.toutiao.com.evil.test/w/123/']
+          if (mode === 'unknown-query') return [url + '&redirect=https://evil.test']
+          return [url]
+        },
+      )
+      if (mode === 'adopted') await expect(result).resolves.toBe('https://www.toutiao.com/w/123/')
+      else await expect(result).rejects.toThrow('未返回唯一公开地址')
+    },
+  )
+
   it.each(['popup', 'same-tab', 'aliases', 'different', 'cancelled'] as const)(
     'waits for an exact public URL and rejects ambiguous results: %s',
     async (mode) => {

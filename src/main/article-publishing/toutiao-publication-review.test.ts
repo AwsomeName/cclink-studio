@@ -14,6 +14,11 @@ describe('Toutiao management result identity', () => {
     'account',
     'navigation',
     'p9',
+    'mixed-protocol',
+    'http-lookalike',
+    'credentials',
+    'port',
+    'ftp',
     'lookalike',
   ] as const)(
     'reads the actual card without treating a title or count alone as submission evidence: %s',
@@ -24,7 +29,7 @@ describe('Toutiao management result identity', () => {
       const base = { getBoundingClientRect: () => ({ width: 100, height: 100 }) }
       const body = { ...base, children: [] as unknown[] }
       const makeCard = () => {
-        const images = (mode === 'order' ? [...sources].reverse() : sources).map((src) => ({
+        const images = (mode === 'order' ? [...sources].reverse() : sources).map((src, index) => ({
           ...base,
           src,
           currentSrc:
@@ -32,7 +37,19 @@ describe('Toutiao management result identity', () => {
               ? src.replace('p3-sign.', 'p9-sign.')
               : mode === 'lookalike'
                 ? src.replace('toutiaoimg.com', 'toutiaoimg.com.evil.test')
-                : src,
+                : mode === 'mixed-protocol' && index < 2
+                  ? src.replace('https:', 'http:').replace('p3-sign.', 'p11-sign.')
+                  : mode === 'http-lookalike'
+                    ? src
+                        .replace('https:', 'http:')
+                        .replace('toutiaoimg.com', 'toutiaoimg.com.evil.test')
+                    : mode === 'credentials'
+                      ? src.replace('https://', 'http://user@')
+                      : mode === 'port'
+                        ? src.replace('.com/', '.com:8080/')
+                        : mode === 'ftp'
+                          ? src.replace('https:', 'ftp:')
+                          : src,
           complete: mode !== 'load',
           naturalWidth: 200,
         }))
@@ -90,9 +107,9 @@ describe('Toutiao management result identity', () => {
             images: sources,
           })
           expect(result.current && result.candidates.length === 1).toBe(
-            mode === 'current' || mode === 'p9',
+            mode === 'current' || mode === 'p9' || mode === 'mixed-protocol',
           )
-          if (mode === 'current' || mode === 'p9')
+          if (mode === 'current' || mode === 'p9' || mode === 'mixed-protocol')
             expect(result.candidates[0]).toMatchObject({
               status: '审核中',
               urls: [],

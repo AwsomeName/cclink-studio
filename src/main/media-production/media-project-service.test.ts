@@ -50,6 +50,8 @@ describe('MediaProjectService', () => {
     })
     expect(created.project.scenes).toHaveLength(5)
     expect(created.project.scenes[0]).toMatchObject({ order: 0, materialKind: 'unassigned' })
+    expect(created.project.scenes[0].subtitle).toBe('CCLink Studio 新版本')
+    expect(created.project.scenes.every((scene) => scene.subtitle.length <= 33)).toBe(true)
 
     const projectFile = join(
       workspacePath,

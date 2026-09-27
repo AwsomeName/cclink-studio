@@ -1,0 +1,9 @@
+{"type": "system", "subtype": "task_notification", "partial": 0}
+{"type": "system", "subtype": "init", "partial": 0}
+{"type": "result", "subtype": "success", "partial": 0, "denials": [], "resultLength": 0}
+{"type": "system", "subtype": "init", "partial": 0}
+{"type": "system", "subtype": "status", "partial": 0}
+HOOK Bash {"command":"pwd","description":"Show current working directory"}
+{"type": "user", "partial": 127, "message": {"role": "user", "content": [{"tool_use_id": "call_b9e71f54480a467fa565bc25", "type": "tool_result", "content": "/Users/apple/Desktop/cclink-dev/cclink-studio", "is_error": false}]}}
+{"type": "system", "subtype": "status", "partial": 127}
+{"type": "result", "subtype": "success", "partial": 140, "denials": [], "resultLength": 45}

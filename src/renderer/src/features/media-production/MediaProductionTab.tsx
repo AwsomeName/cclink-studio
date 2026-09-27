@@ -727,7 +727,9 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
               <span className="media-scene-number">{String(index + 1).padStart(2, '0')}</span>
               <span className="media-scene-copy">
                 <strong>{scene.subtitle || '未命名场景'}</strong>
-                <small>{scene.durationSeconds}s · 尚未选择素材</small>
+                <small>
+                  {scene.durationSeconds}s · {scene.assetId ? '素材已选择' : '尚未选择素材'}
+                </small>
               </span>
             </button>
           ))}

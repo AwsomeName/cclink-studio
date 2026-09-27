@@ -89,7 +89,7 @@ export interface AgentSendOptions {
   /** 当前会话绑定的本地工作目录；优先级高于全局当前工作区。 */
   workspacePath?: string
   /**
-   * true 时强制走宿主可视浏览器：禁用 Claude Code 内置工具，避免 WebSearch/WebFetch 绕过 UI。
+   * true 时页面操作与核验走宿主可视浏览器；内置工具仅保留只读 WebFetch。
    */
   forceVisibleBrowser?: boolean
   /** 宿主采样的结构化资源事实包，供后端 prompt 和诊断使用。 */
@@ -98,7 +98,7 @@ export interface AgentSendOptions {
   continuity?: import('../../../shared/ipc/agent').AgentConversationContinuity
   /** 宿主强制的精确 MCP allowlist；只供非交互式受限 origin 使用。 */
   allowedTools?: string[]
-  /** 禁用 Claude Code 内置文件、Shell 和网络工具。 */
+  /** 禁用 Claude Code 内置工具，只保留免确认的只读 WebFetch。 */
   disableBuiltinTools?: boolean
   /** 随一次 MCP session 固定的定时任务权限事实。 */
   scheduledTaskPolicy?: import('../tools/types.js').ToolExecutionContext['scheduledTaskPolicy']

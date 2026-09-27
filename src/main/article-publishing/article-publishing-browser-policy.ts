@@ -1171,9 +1171,11 @@ export class ArticlePublishingBrowserPolicy {
       .selectors
     if (
       actionType === 'click' &&
-      [dismissSelectors?.dismissAssistant, dismissSelectors?.dismissTagEditor].some(
-        (s) => s && params.selector === s,
-      )
+      [
+        dismissSelectors?.dismissAssistant,
+        dismissSelectors?.dismissTagEditor,
+        dismissSelectors?.dismissOutline,
+      ].some((s) => s && params.selector === s)
     ) {
       return (
         this.validateAttestedSelector(scope, actionType, params, pageUrl, context) ?? {
@@ -3223,7 +3225,7 @@ export class ArticlePublishingBrowserPolicy {
     )
     const dismissAssistant =
       actionType === 'click' &&
-      [selectors.dismissAssistant, selectors.dismissTagEditor].some(
+      [selectors.dismissAssistant, selectors.dismissTagEditor, selectors.dismissOutline].some(
         (s) => Boolean(s) && selector === s,
       )
     if (
@@ -3278,9 +3280,12 @@ export class ArticlePublishingBrowserPolicy {
                   ? [selectors.openPublishSettings, selectors.disableMusic, selectors.publish]
                   : []
     const allowedSelectors = new Set(
-      [...allowed, selectors.dismissAssistant, selectors.dismissTagEditor].filter(
-        (value): value is string => Boolean(value),
-      ),
+      [
+        ...allowed,
+        selectors.dismissAssistant,
+        selectors.dismissTagEditor,
+        selectors.dismissOutline,
+      ].filter((value): value is string => Boolean(value)),
     )
     if (!selector || !allowedSelectors.has(selector)) {
       return this.stopDecision(

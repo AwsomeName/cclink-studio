@@ -1,0 +1,413 @@
+{
+  "observedAt": "2026-09-27T14:11:20.867346+00:00",
+  "platforms": [
+    {
+      "affairId": "ecbac63a-7099-413a-87ad-e022c8bc153b",
+      "platform": "bilibili",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "23eab87f-fed2-4b9b-9fa0-05e5e02f4b69",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "4d0885f7-7a9b-4334-a1c2-0cdbcfa351be"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://t.bilibili.com/1252080501214150662",
+        "observedAt": "2026-09-25T18:33:14.562Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    },
+    {
+      "affairId": "0cf66ceb-2fd5-4114-8aa0-d944a4736d3a",
+      "platform": "weibo",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "bf4e1530-20fc-4b50-aadb-eb87dc246887",
+        "currentGeneration": 5,
+        "currentLaunchOperationId": "91d25962-f7f5-4f49-8b9d-86899718db48"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://weibo.com/5961101548/Rk5CD72Wq",
+        "observedAt": "2026-09-27T14:07:09.681Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 2
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    },
+    {
+      "affairId": "caf71a37-20c5-481a-8372-14c6fbb36f6b",
+      "platform": "csdn",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "7c08eb1d-86ef-4cf8-9be4-86b74546d03b",
+        "currentGeneration": 5,
+        "currentLaunchOperationId": "696af1ac-cab6-4379-9234-6fbb3169febb"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://blog.csdn.net/weixin_36388257/article/details/166652934",
+        "observedAt": "2026-09-27T14:10:57.215Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    },
+    {
+      "affairId": "434d6979-87fe-4bab-aada-2c7f72f060c4",
+      "platform": "zhihu",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "803b2870-0185-47ad-9f28-a670dc030809",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "adfff270-b770-47be-a951-3d2912b4e404"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://zhuanlan.zhihu.com/p/2087013170728661195",
+        "observedAt": "2026-09-25T19:05:57.904Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    },
+    {
+      "affairId": "76dab584-f421-4a79-be93-3a6905d7c7d1",
+      "platform": "juejin",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "e8857b81-dae9-4850-9c74-5ccbcc3bacb7",
+        "currentGeneration": 1,
+        "currentLaunchOperationId": "ba752356-e647-445e-87d1-0dec19fdd387"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://juejin.cn/post/7689076563438583862",
+        "observedAt": "2026-09-25T19:20:08.124Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    },
+    {
+      "affairId": "5c908de2-5bc5-498b-a3bb-7c8bfed38d8d",
+      "platform": "toutiao",
+      "title": "做AI眼镜第194天，专门留一天还体验债",
+      "execution": {
+        "status": "published",
+        "currentAttemptId": "f53eead6-7f3d-44d0-9df1-6a5809affa1f",
+        "currentGeneration": 3,
+        "currentLaunchOperationId": "6cf2917a-6249-4a82-a654-72a6b0e9ff5f"
+      },
+      "publication": {
+        "status": "published",
+        "url": "https://www.toutiao.com/w/1877332981831692/",
+        "observedAt": "2026-09-25T19:44:51.275Z"
+      },
+      "assets": [
+        {
+          "id": "local:AIR/2026-09-15/素材/01-日记阅读效果图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/02-室内导览提案图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        },
+        {
+          "id": "local:AIR/2026-09-15/素材/03-当天缩放测试截图.png",
+          "status": "uploaded",
+          "uploadAttempts": 1
+        }
+      ],
+      "checkpoints": [
+        {
+          "stepId": "open-editor",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-account",
+          "status": "completed"
+        },
+        {
+          "stepId": "upload-assets",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-body",
+          "status": "completed"
+        },
+        {
+          "stepId": "fill-fields",
+          "status": "completed"
+        },
+        {
+          "stepId": "save-draft",
+          "status": "completed"
+        },
+        {
+          "stepId": "publish",
+          "status": "completed"
+        },
+        {
+          "stepId": "verify-publication",
+          "status": "completed"
+        }
+      ],
+      "publishDispatchCount": 1
+    }
+  ]
+}

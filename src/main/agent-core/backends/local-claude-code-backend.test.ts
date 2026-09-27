@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { McpToolHost } from '../tools/tool-host'
 import type { ToolDefinition } from '../tools/types'
+import { AgentToolAuthorizationBroker } from '../tools/agent-tool-authorization-broker'
 import {
   LocalClaudeCodeBackend,
   type BrowserAutomationHost,
@@ -859,7 +860,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     await createBackend().sendMessage('操作这个网页', { forceVisibleBrowser: true })
 
     const params = getLastQueryParams()
-    expect(params.options.tools).toEqual([])
+    expect(params.options.tools).toEqual(['WebFetch'])
     expect(params.options.strictMcpConfig).toBe(true)
     expect(params.options.disallowedTools).toEqual([
       'CronCreate',
@@ -870,12 +871,12 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       'mcp__cclink_studio__browser_new_tab',
       'AskUserQuestion',
       'WebSearch',
-      'WebFetch',
       'webReader',
     ])
 
     const prompt = getSystemPromptAppend()
-    expect(prompt).toContain('不要使用 Claude Code 内置 WebSearch/WebFetch')
+    expect(prompt).toContain('WebFetch 可直接用于读取网页资料')
+    expect(prompt).toContain('页面操作和结果核验仍须使用 browser_* 工具')
     expect(prompt).toContain('只有 URL host 已匹配目标站点时')
     expect(prompt).toContain('不要调用 AskUserQuestion')
     expect(prompt).not.toContain('| browser_new_tab |')
@@ -899,6 +900,39 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       },
     })
   })
+
+  it.each([{}, { forceVisibleBrowser: true }, { disableBuiltinTools: true }])(
+    'allows WebFetch through both SDK authorization entries with policy %j',
+    async (options) => {
+      const { backend, authorizeSdkTool } = createBackendFixture()
+      const requestConfirmation = vi.fn(async () => false)
+      const broker = new AgentToolAuthorizationBroker({
+        getMode: () => 'strict',
+        needsConfirmation: () => true,
+        requestConfirmation,
+      })
+      authorizeSdkTool.mockImplementation((request) => broker.authorizeSdkTool(request))
+      await backend.sendMessage('读取网页资料', options)
+      const sdkOptions = getLastQueryParams().options
+      expect(sdkOptions.disallowedTools).not.toContain('WebFetch')
+      if ('forceVisibleBrowser' in options || 'disableBuiltinTools' in options) {
+        expect(sdkOptions.tools).toEqual(['WebFetch'])
+      }
+      const input = { url: 'https://example.com/article', prompt: 'Summarize' }
+      const hook = sdkOptions.hooks.PreToolUse[0].hooks[0]
+      await expect(
+        hook(
+          { hook_event_name: 'PreToolUse', tool_name: 'WebFetch', tool_input: input },
+          'fetch-hook',
+          { signal: new AbortController().signal },
+        ),
+      ).resolves.toMatchObject({ hookSpecificOutput: { permissionDecision: 'allow' } })
+      await expect(
+        sdkOptions.canUseTool('WebFetch', input, { toolUseID: 'fetch-callback' }),
+      ).resolves.toMatchObject({ behavior: 'allow', updatedInput: input })
+      expect(requestConfirmation).not.toHaveBeenCalled()
+    },
+  )
 
   it('does not expose or start configured external MCP servers before broker support', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'cclink-external-mcp-canary-'))

@@ -26,6 +26,36 @@ function createBroker(
 }
 
 describe('AgentToolAuthorizationBroker', () => {
+  it.each<PermissionMode>(['auto', 'categorized', 'strict', 'auto-except-destructive'])(
+    'allows built-in WebFetch across URLs and runs without confirmation in %s mode',
+    async (mode) => {
+      const { broker, requestConfirmation } = createBroker({
+        mode,
+        needsConfirmation: true,
+        approved: false,
+      })
+      for (const [index, url] of ['https://example.com', 'https://example.org/page'].entries()) {
+        await expect(
+          broker.authorizeSdkTool({
+            toolName: 'WebFetch',
+            params: { url, prompt: 'Read the page' },
+            context: { ...context, agentRunId: `run-${index}` },
+            authorizationId: `fetch-${index}`,
+            reason: 'Domain requires permission',
+          }),
+        ).resolves.toEqual({ behavior: 'allow' })
+      }
+      await expect(
+        broker.authorizeSdkTool({
+          toolName: 'mcp__external__WebFetch',
+          params: {},
+          context,
+        }),
+      ).resolves.toMatchObject({ behavior: 'deny' })
+      expect(requestConfirmation).not.toHaveBeenCalled()
+    },
+  )
+
   it('forces destructive internal tools through one-shot confirmation in auto mode', async () => {
     const { broker, requestConfirmation } = createBroker()
 

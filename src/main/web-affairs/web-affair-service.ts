@@ -1921,9 +1921,16 @@ export class WebAffairService {
     resolution: 'present' | 'missing',
     workspaceId: string,
     observation?: { platformUrl: string; isCurrent: () => boolean },
+    missingConfirmationIsCurrent?: () => boolean,
   ) {
     return this.enqueueScoped(affairId, workspaceId, () =>
-      this.resolveArticlePublishingAssetNow(affairId, assetId, resolution, observation),
+      this.resolveArticlePublishingAssetNow(
+        affairId,
+        assetId,
+        resolution,
+        observation,
+        missingConfirmationIsCurrent,
+      ),
     )
   }
 
@@ -4792,7 +4799,8 @@ export class WebAffairService {
                 '用户另行授权本稿重建；上代证据不能证明新现场完成',
               ].slice(-40),
             }
-          : ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(
+          : (resultVerificationOnly && checkpoint.stepId === 'verify-publication') ||
+              ['running', 'waiting-platform', 'verifying', 'result-unknown'].includes(
                 checkpoint.status,
               )
             ? {
@@ -7024,6 +7032,7 @@ export class WebAffairService {
     assetId: string,
     resolution: 'present' | 'missing',
     observation?: { platformUrl: string; isCurrent: () => boolean },
+    missingConfirmationIsCurrent?: () => boolean,
   ): Promise<WebAffairOperationResult<WebAffair>> {
     if (observation && !observation.isCurrent())
       return this.transitionError('图片确认期间原稿已变化')
@@ -7033,6 +7042,18 @@ export class WebAffairService {
     if (!affair || affair.kind !== 'article-publishing' || !publishing || !asset) {
       return this.notFound('待确认的文章图片不存在')
     }
+    if (
+      publishing.adapterId === 'weibo' &&
+      resolution === 'missing' &&
+      (!missingConfirmationIsCurrent?.() ||
+        !['interrupted', 'waiting-human'].includes(publishing.execution.status) ||
+        publishing.execution.currentStepId !== 'upload-assets' ||
+        publishing.publication.status !== 'not-started' ||
+        publishing.sideEffects.some((effect) => effect.kind === 'publish'))
+    )
+      return this.transitionError(
+        '微博缺图确认需要当前原账号编辑器证据，且原任务必须暂停并从未提交',
+      )
     const importingExisting =
       ['xiaohongshu', 'toutiao'].includes(publishing.adapterId) &&
       asset.status === 'pending' &&

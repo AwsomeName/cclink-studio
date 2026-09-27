@@ -59,6 +59,8 @@ export interface CsdnPageProbe {
     /** Toutiao: only a currently checked music label, never an enable action. */
     disableMusic?: string
     dismissTagEditor?: string
+    /** CSDN's visible document outline can overlap platform fields. */
+    dismissOutline?: string
     body?: string
     title?: string
     summary?: string
@@ -595,6 +597,9 @@ export class CsdnPublishingAdapter {
           }
         }
         const selectors: CsdnPageProbe['selectors'] = {
+          ...(body && uniqueVisible(['.catlog-guide-box button.btn-hide-catlog'])
+            ? { dismissOutline: '.catlog-guide-box button.btn-hide-catlog' }
+            : {}),
           ...(uniqueVisible(['.mark_selection_box .modal__close-button[aria-label="关闭"]'])
             ? { dismissTagEditor: '.mark_selection_box .modal__close-button[aria-label="关闭"]' }
             : {}),

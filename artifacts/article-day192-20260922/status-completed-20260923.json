@@ -1,0 +1,446 @@
+[
+  {
+    "affairId": "2119bb5e-549b-47cb-afbd-eb1698c00add",
+    "platform": "bilibili",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "7db61973-4c47-431a-aa39-b5c29a4f311a",
+      "currentGeneration": 3,
+      "currentLaunchOperationId": "a498a053-c021-4b84-b619-a2aabe672288"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://t.bilibili.com/1250805269620850689",
+      "observedAt": "2026-09-22T08:34:12.539Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "0986a4c2-bef6-44fe-b50d-bfca68a845fb",
+      "type": "attempt-finished",
+      "nodeId": "f23f83cc-dfcf-45d0-b96a-f90b02aa7162",
+      "attemptId": "7db61973-4c47-431a-aa39-b5c29a4f311a",
+      "summary": "发布文章到 B站动态：succeeded，B站图文动态单篇发布完成并核验：原生提交回执 platformCode=0 返回动态 ID 1250805269620850689（账号 3546384070347419=targetUID）；公开页回读 pageKind=published-article，标题「做AI眼镜第192天，给它换了个新耳朵」与冻结平台值一致，正文 bodyMatchesFrozen=true，3 张图（随行助手概念效果图/翻译真机测试截图/USB镜头调焦实测）src 与上传平台 URL 逐一相同且 loaded=true。全部检查点（open-editor、verify-account、upload-assets、fill-body、fill-fields、save-draft、publish、verify-publication）已完成，未重复发送。",
+      "occurredAt": "2026-09-22T08:34:12.539Z"
+    }
+  },
+  {
+    "affairId": "14eb29b2-671e-43e9-91ca-e60d11499e20",
+    "platform": "weibo",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "a101e08d-fa61-478c-8071-79e6e6c314cf",
+      "currentGeneration": 3,
+      "currentLaunchOperationId": "7f7dfcb1-fdb7-49f5-804c-8c09720191cc"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://weibo.com/5961101548/RjidbpQLs",
+      "observedAt": "2026-09-22T08:24:04.425Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "ffd42a54-592a-4285-b6b3-285f2454daf1",
+      "type": "attempt-finished",
+      "nodeId": "6b2a484c-d33e-4e72-9f09-571681eca9ce",
+      "attemptId": "a101e08d-fa61-478c-8071-79e6e6c314cf",
+      "summary": "发布文章到 微博：succeeded，微博单篇图文已发布并核验：锁定地址 https://weibo.com/5961101548/RjidbpQLs 公开页回读 UID 5961101548、作品 ID RjidbpQLs、正文 506 字符 bodyMatchesFrozen=true、标题「做AI眼镜第192天，给它换了个新耳朵」一致，3 张图片全部 loaded 且与上传回执一一对应；publish 仅派发一次，未重发",
+      "occurredAt": "2026-09-22T08:24:04.425Z"
+    }
+  },
+  {
+    "affairId": "31da4f7a-242d-41e7-ac44-8734564e517a",
+    "platform": "csdn",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "d1ae6314-64bb-4c2e-889f-0563af614e7b",
+      "currentGeneration": 2,
+      "currentLaunchOperationId": "92e2a6c8-09a7-4445-9403-fa7e402114b4"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/166367569?sharetype=blogdetail&sharerId=166367569&sharerefer=PC&sharesource=weixin_36388257",
+      "observedAt": "2026-09-22T09:03:58.351Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "84a52492-990e-4c6f-8b43-43cc81aff102",
+      "type": "attempt-finished",
+      "nodeId": "d5bc3fd2-81d5-43f7-bd03-eb1e52ace6c0",
+      "attemptId": "d1ae6314-64bb-4c2e-889f-0563af614e7b",
+      "summary": "发布文章到 CSDN：succeeded，《做AI眼镜第192天，给它换了个新耳朵》已发布到 CSDN（账号 weixin_36388257，draftId/文章ID 166367569）。检查点全部完成：open-editor、verify-account、upload-assets（3 张正文图片全部 uploaded 且逐图核验）、fill-body（511 字符与冻结原稿一致）、fill-fields（标题/摘要/标签/分类全部匹配，分类\"人工智能\"经 Tab 失焦提交核验）、save-draft（saveState=saved）、publish（单次派发后跳转成功页）、verify-publication（打开实际文章页，pageKind=published-article，文章 ID/账号/标题与冻结任务一致，无 publicationBlocker，公开可访问）。发布动作仅派发一次，未重复提交。",
+      "occurredAt": "2026-09-22T09:03:58.351Z"
+    }
+  },
+  {
+    "affairId": "08a0d26c-2c99-49b2-bc8e-34b84eec296d",
+    "platform": "zhihu",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "adf6dc74-b63b-400d-91a4-f05f82f3e2d1",
+      "currentGeneration": 2,
+      "currentLaunchOperationId": "1d5be30a-e340-41f6-a020-cd82e1010260"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://zhuanlan.zhihu.com/p/2085777800296916861",
+      "observedAt": "2026-09-23T02:30:02.808Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "64b59265-7f24-4810-b16e-b00852320cdd",
+      "type": "attempt-finished",
+      "nodeId": "57649138-9f39-47e8-8d8f-c24856bc14aa",
+      "attemptId": "adf6dc74-b63b-400d-91a4-f05f82f3e2d1",
+      "summary": "发布文章到 知乎：succeeded，知乎单篇图文发布完成并经只读核验：公开文章 https://zhuanlan.zhihu.com/p/2085777800296916861（pageKind=published-article）· 账号 zhidfc1e 与绑定账号一致 · 文章 ID 2085777800296916861 与原稿 draftId 一致 · 标题「做AI眼镜第192天，给它换了个新耳朵」与冻结标题一致 · bodyMatchesFrozen=true（正文 495 字符）· 三张正文图片全部 loaded=true、位置/地址/加载一致 · publish 副作用原 result-unknown，本轮仅读回核验未重复发布，现已核验通过 · 全部检查点 completed",
+      "occurredAt": "2026-09-23T02:30:02.808Z"
+    }
+  },
+  {
+    "affairId": "17ef8ba7-cb45-4fe2-ab96-b4468350dc0d",
+    "platform": "juejin",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "0a1ce323-c946-43b9-84c3-ec41184fcfbb",
+      "currentGeneration": 1,
+      "currentLaunchOperationId": "a6a3434e-89d0-4a2e-892e-287399dfc3ce"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://juejin.cn/post/7688232642778529832",
+      "observedAt": "2026-09-23T02:47:08.800Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "81516fbe-9e7d-4abc-b576-632faf53012a",
+      "type": "attempt-finished",
+      "nodeId": "c3be8a61-97c5-4c75-8c86-d16d2130558d",
+      "attemptId": "0a1ce323-c946-43b9-84c3-ec41184fcfbb",
+      "summary": "发布文章到 掘金：succeeded，掘金单篇三图文章发布成功：复用原账号（4382008413004393 深芯智造）与原平台草稿 7688298824981037071，未新建、未重复提交。三张正文图片（01-随行助手概念效果图/02-翻译真机测试截图/03-USB镜头调焦实测）均一次上传并后置核验（uploadAttempts=1，平台地址 15bbe7f1…/b392f9e0…/2886b85c…）。冻结全文与图片位置核验一致（bodyMatchesFrozen=true），标题/摘要/分类/标签全部与冻结字段一致，saveState=saved 后仅执行一次「确定并发布」。公开文章页已核验：pageKind=published-article、原账号、标题「做AI眼镜第192天，给它换了个新耳朵」、正文一致、三图加载正常，publishedArticleId=7688232642778529832。",
+      "occurredAt": "2026-09-23T02:47:08.800Z"
+    }
+  },
+  {
+    "affairId": "3136738a-41bf-4e89-9a54-2654c6fccc84",
+    "platform": "toutiao",
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "1c1476ad-bca7-4fff-8177-108f0a5a617f",
+      "currentGeneration": 3,
+      "currentLaunchOperationId": "a78e6f81-8e2a-436a-90f4-c8fb30b61c6d"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://www.toutiao.com/w/1877089851948036/",
+      "observedAt": "2026-09-23T03:21:21.133Z"
+    },
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ],
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-13/素材/01-随行助手概念效果图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/02-翻译真机测试截图.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      },
+      {
+        "id": "local:AIR/2026-09-13/素材/03-USB镜头调焦实测.png",
+        "status": "uploaded",
+        "uploadAttempts": 1
+      }
+    ],
+    "lastEvent": {
+      "id": "8d32aa99-f6c8-4759-ab25-59b534a65d2c",
+      "type": "attempt-finished",
+      "nodeId": "4d625917-5b55-4b7b-9122-f11692ec7d81",
+      "attemptId": "1c1476ad-bca7-4fff-8177-108f0a5a617f",
+      "summary": "发布文章到 头条微头条：succeeded，头条微头条原稿任务完成：原 draftId 1877089851948036 未新建、未重复上传或提交；3 张冻结图逐图上传并后置核验（平台地址一一对应），正文与冻结全文一致，saveState=saved；配乐在提交前关闭并回读 checked=false；publish:final 仅派发一次。公开结果已由 toutiao@1 在公开页核验：pageKind=published-article，publishedArticleId=1877089851948036，标题一致，bodyMatchesFrozen=true，公开页图集 3 张全部 loaded 且与冻结图平台地址一致，publishedLinks 含锁定 URL。发布 URL：https://www.toutiao.com/w/1877089851948036/",
+      "occurredAt": "2026-09-23T03:21:21.133Z"
+    }
+  }
+]
