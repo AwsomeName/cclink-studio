@@ -5551,10 +5551,22 @@ body.is-resizing-panels .main-area > div {
   justify-content: center;
 }
 
-.tab-pin {
-  flex-shrink: 0;
-  color: var(--text-secondary);
-  font-size: 12px;
+.tab.pinned {
+  flex: 0 0 40px;
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  box-sizing: border-box;
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+
+.tab.pinned .tab-dirty-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  margin: 0;
 }
 
 .tab-title {
@@ -5627,6 +5639,7 @@ body.is-resizing-panels .main-area > div {
 
 /* 未保存修改圆点 */
 .tab-dirty-dot {
+  flex-shrink: 0;
   display: inline-block;
   width: 6px;
   height: 6px;

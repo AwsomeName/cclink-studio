@@ -184,6 +184,14 @@ try {
   console.log('PASS ordinary draft-backed browser survives workspace A → B → A')
   await contextAction(id, 'tab.pin')
   await page.locator(`[data-workbench-tab-id="${id}"].pinned`).waitFor()
+  const pinnedTab = page.locator(`[data-workbench-tab-id="${id}"]`)
+  assert.equal(await pinnedTab.locator('.tab-title, .tab-close, .tab-pin').count(), 0)
+  const pinnedWidth = await pinnedTab.evaluate((element) =>
+    parseFloat(getComputedStyle(element).width),
+  )
+  assert.equal(pinnedWidth, 40)
+  assert((await pinnedTab.getAttribute('title')).includes('保留网页'))
+
   const editorId = await page.evaluate(async () => {
     const { useTabStore } = await import('/src/stores/tab-store.ts')
     useTabStore.getState().openTab({ type: 'editor', title: '固定笔记', icon: '📄' })
@@ -239,6 +247,7 @@ try {
   )
   console.log('PASS restart restores pinned tabs, navigated URL and Profile cookie')
   await contextAction(id, 'tab.pin')
+  await page.locator(`[data-workbench-tab-id="${id}"] .tab-title`).waitFor()
   assert.equal((await tabSnapshot()).find((tab) => tab.id === id).pinned, false)
   await openWorkspace(b)
   await page.locator(`[data-project-path="${a}"]`).click()

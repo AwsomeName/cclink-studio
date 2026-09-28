@@ -45,13 +45,6 @@ function WorkbenchTabIcon({ tab }: { tab: Tab }): React.ReactElement {
   return <>{tab.icon || TAB_ICONS[tab.type]}</>
 }
 
-function WorkbenchTabTitle({ tab }: { tab: Tab }): React.ReactElement {
-  const pageTitle = useBrowserStore((state) =>
-    tab.type === 'browser' ? state.tabs[tab.id]?.title : null,
-  )
-  return <>{tab.type === 'browser' ? getBrowserDisplayTitle(tab.title, pageTitle) : tab.title}</>
-}
-
 interface TabBarProps {
   tabBarRef: RefObject<HTMLDivElement | null>
   tabs: Tab[]
@@ -91,6 +84,7 @@ export function TabBar({
   onCreateMenuOpenChange,
   conversationDropActive,
 }: TabBarProps): React.ReactElement {
+  const browserTabs = useBrowserStore((state) => state.tabs)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
@@ -249,66 +243,69 @@ export function TabBar({
       ref={tabBarRef}
       className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}
     >
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          data-workbench-tab-id={tab.id}
-          className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
-          role="tab"
-          tabIndex={activeTabId === tab.id ? 0 : -1}
-          aria-selected={activeTabId === tab.id}
-          onPointerDown={(event) => handlePointerDown(event, tab)}
-          onPointerMove={handlePointerMove}
-          onPointerUp={(event) => finishPointerDrag(event, false)}
-          onPointerCancel={(event) => finishPointerDrag(event, true)}
-          onClick={(event) => {
-            if (suppressClickTabIdRef.current === tab.id) {
-              suppressClickTabIdRef.current = null
+      {tabs.map((tab) => {
+        const title =
+          tab.type === 'browser'
+            ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
+            : tab.title
+        const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
+        return (
+          <div
+            key={tab.id}
+            data-workbench-tab-id={tab.id}
+            className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+            role="tab"
+            title={label}
+            aria-label={label}
+            tabIndex={activeTabId === tab.id ? 0 : -1}
+            aria-selected={activeTabId === tab.id}
+            onPointerDown={(event) => handlePointerDown(event, tab)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={(event) => finishPointerDrag(event, false)}
+            onPointerCancel={(event) => finishPointerDrag(event, true)}
+            onClick={(event) => {
+              if (suppressClickTabIdRef.current === tab.id) {
+                suppressClickTabIdRef.current = null
+                event.preventDefault()
+                return
+              }
+              onActivate(tab.id)
+            }}
+            onContextMenu={(event) => {
               event.preventDefault()
-              return
-            }
-            onActivate(tab.id)
-          }}
-          onContextMenu={(event) => {
-            event.preventDefault()
-            onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
-          }}
-          onKeyDown={(event) => {
-            if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
-            event.preventDefault()
-            const rect = event.currentTarget.getBoundingClientRect()
-            onShowMenu(
-              tab.id,
-              rect.left + Math.min(24, rect.width / 2),
-              rect.top + Math.min(24, rect.height),
-              event.currentTarget,
-            )
-          }}
-        >
-          <span className="tab-icon">
-            <WorkbenchTabIcon tab={tab} />
-          </span>
-          <span className="tab-title">
-            <WorkbenchTabTitle tab={tab} />
-            {tab.dirty && <span className="tab-dirty-dot" />}
-          </span>
-          {tab.pinned ? (
-            <span className="tab-pin" title="已固定（右键解除固定）" aria-label="已固定">
-              ⚑
+              onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
+            }}
+            onKeyDown={(event) => {
+              if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+              event.preventDefault()
+              const rect = event.currentTarget.getBoundingClientRect()
+              onShowMenu(
+                tab.id,
+                rect.left + Math.min(24, rect.width / 2),
+                rect.top + Math.min(24, rect.height),
+                event.currentTarget,
+              )
+            }}
+          >
+            <span className="tab-icon">
+              <WorkbenchTabIcon tab={tab} />
             </span>
-          ) : (
-            <span
-              className="tab-close"
-              onClick={(event) => {
-                event.stopPropagation()
-                onClose(tab.id)
-              }}
-            >
-              <IconClose size={12} />
-            </span>
-          )}
-        </div>
-      ))}
+            {!tab.pinned && <span className="tab-title">{title}</span>}
+            {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
+            {!tab.pinned && (
+              <span
+                className="tab-close"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onClose(tab.id)
+                }}
+              >
+                <IconClose size={12} />
+              </span>
+            )}
+          </div>
+        )
+      })}
 
       <div className="tab-create-menu-wrap" ref={createMenuRef}>
         <button
