@@ -658,9 +658,10 @@ export class ArticlePublishingService {
             /^https:\/\/zhuanlan\.zhihu\.com\/p\/(\d+)\/?$/u.exec(visibleUrl)?.[1] ===
               publishing.draft?.platformDraftId) ||
           (publishing.adapterId === 'csdn' &&
-            /^https:\/\/blog\.csdn\.net\/([^/]+)\/article\/details\/(\d+)\/?$/u.exec(
-              visibleUrl,
-            )?.slice(1).join(':') ===
+            /^https:\/\/blog\.csdn\.net\/([^/]+)\/article\/details\/(\d+)\/?$/u
+              .exec(visibleUrl)
+              ?.slice(1)
+              .join(':') ===
               `${expectedPlatformAccountId.slice('csdn:'.length)}:${publishing.draft?.platformDraftId}`)
             ? { visiblePublicationUrl: visibleUrl }
             : {}),
