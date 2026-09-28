@@ -1,0 +1,798 @@
+{
+  "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+  "title": "做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+  "adapterId": "csdn",
+  "publication": {
+    "status": "result-unknown",
+    "observedAt": "2026-09-27T19:19:58.745Z"
+  },
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+    "currentGeneration": 2,
+    "currentLaunchOperationId": "b00082f1-41ae-4fcf-8651-28ea299a76dc",
+    "currentStepId": "verify-publication"
+  },
+  "assets": [
+    {
+      "id": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "displayPath": "素材/01-太空舱提示效果图.png",
+      "mediaType": "image/png",
+      "size": 1703676,
+      "modifiedAt": 1789735320791.8857,
+      "occurrences": [
+        {
+          "start": 846,
+          "end": 864,
+          "alt": "太空舱提示设计效果图（示例数据，非实机截图）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i-blog.csdnimg.cn/direct/aed004f935554651b87d438ff8141a9e.png",
+      "verifiedAt": "2026-09-27T17:49:37.145Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T17:47:47.571Z",
+          "finishedAt": "2026-09-27T17:49:37.145Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+            "已向 selectors.fileInput（.up_img_model_box #pane-upimg input[type=\"file\"]）单次派发冻结文件 01-太空舱提示效果图.png；文件选择完成，平台上传结果待核验",
+            "inspect matchedAssets 返回该图唯一平台地址；编辑器 images 中同 src 图片 loaded=true（页面枚举 imageEnumerationComplete=true），该文件为本次上传后唯一新增且已加载的图片",
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+      "mediaType": "image/png",
+      "size": 33903,
+      "modifiedAt": 1789735320792.1543,
+      "occurrences": [
+        {
+          "start": 891,
+          "end": 911,
+          "alt": "紧凑模式面板生产布局本地渲染（测试样本）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i-blog.csdnimg.cn/direct/f797347086844214b22d7bf4aa236f2a.png",
+      "verifiedAt": "2026-09-27T17:51:27.304Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T17:49:47.502Z",
+          "finishedAt": "2026-09-27T17:51:27.304Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+            "已向 selectors.fileInput（.up_img_model_box #pane-upimg input[type=\"file\"]）单次派发冻结文件 02-紧凑模式面板本地渲染.png；文件选择完成，平台上传结果待核验",
+            "inspect（2026-09-27T17:51:16Z）回读：matchedAssets 匹配该图平台地址；编辑器 images 中该 src 图片 loaded=true，imageEnumerationComplete=true，为本次上传后唯一新增且已加载的图片（第 1 张图仍保持 loaded=true）",
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "displayPath": "素材/03-陪伴页面本地渲染.png",
+      "mediaType": "image/png",
+      "size": 309681,
+      "modifiedAt": 1789735320793.082,
+      "occurrences": [
+        {
+          "start": 935,
+          "end": 953,
+          "alt": "陪伴页面生产布局本地渲染（测试值）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i-blog.csdnimg.cn/direct/3696d205bc67463a97996ac110165477.png",
+      "verifiedAt": "2026-09-27T17:53:13.572Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T17:51:31.305Z",
+          "finishedAt": "2026-09-27T17:53:13.572Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+            "已向 selectors.fileInput（.up_img_model_box #pane-upimg input[type=\"file\"]）单次派发冻结文件 03-陪伴页面本地渲染.png；文件选择完成，平台上传结果待核验",
+            "inspect（2026-09-27T17:53:00Z）回读：matchedAssets 匹配该图平台地址；编辑器 images 中该 src 图片 loaded=true，imageEnumerationComplete=true，为本次上传后唯一新增且已加载的图片（前两张图保持 loaded=true）",
+            "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+          ]
+        }
+      ]
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:initial-draft:title",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "initial-draft:title",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-27T17:46:07.367Z",
+      "consumedAt": "2026-09-27T17:46:07.691Z",
+      "dispatchedAt": "2026-09-27T17:46:07.852Z",
+      "observedAt": "2026-09-27T18:02:00.192Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:initial-draft:body",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "initial-draft:body",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-27T17:46:19.872Z",
+      "consumedAt": "2026-09-27T17:46:20.192Z",
+      "dispatchedAt": "2026-09-27T17:46:20.339Z",
+      "observedAt": "2026-09-27T18:02:00.192Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:initial-draft:save",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "initial-draft:save",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-27T17:46:28.193Z",
+      "consumedAt": "2026-09-27T17:46:28.570Z",
+      "dispatchedAt": "2026-09-27T17:46:28.722Z",
+      "observedAt": "2026-09-27T18:02:00.192Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:upload-asset:local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:48:06.128Z",
+      "consumedAt": "2026-09-27T17:48:06.520Z",
+      "dispatchedAt": "2026-09-27T17:48:06.680Z",
+      "observedAt": "2026-09-27T17:49:37.145Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:upload-asset:local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:50:04.174Z",
+      "consumedAt": "2026-09-27T17:50:04.582Z",
+      "dispatchedAt": "2026-09-27T17:50:04.728Z",
+      "observedAt": "2026-09-27T17:51:27.304Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:upload-asset:local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:51:45.748Z",
+      "consumedAt": "2026-09-27T17:51:46.101Z",
+      "dispatchedAt": "2026-09-27T17:51:46.248Z",
+      "observedAt": "2026-09-27T17:53:13.572Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:autosave:fill-body:b02230e5-a285-4358-be48-1cf2ff37fce0",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:b02230e5-a285-4358-be48-1cf2ff37fce0",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:53:59.823Z",
+      "consumedAt": "2026-09-27T17:54:00.038Z",
+      "dispatchedAt": "2026-09-27T17:54:00.195Z",
+      "observedAt": "2026-09-27T17:55:30.020Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:autosave:fill-fields:summary:ad7208ee-0c21-418f-8f22-eadb2d34fc8c",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-fields:summary:ad7208ee-0c21-418f-8f22-eadb2d34fc8c",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:55:43.681Z",
+      "consumedAt": "2026-09-27T17:55:43.985Z",
+      "dispatchedAt": "2026-09-27T17:55:44.148Z",
+      "observedAt": "2026-09-27T18:00:41.632Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:autosave:fill-fields:tags:ead15a02-bbc2-4aad-b21e-3a953d70deeb",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-fields:tags:ead15a02-bbc2-4aad-b21e-3a953d70deeb",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:58:58.715Z",
+      "consumedAt": "2026-09-27T17:58:59.012Z",
+      "dispatchedAt": "2026-09-27T17:58:59.164Z",
+      "observedAt": "2026-09-27T18:00:41.632Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:autosave:fill-fields:tags:0f2c20d8-6a8a-441f-8435-cddbf3e31aec",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-fields:tags:0f2c20d8-6a8a-441f-8435-cddbf3e31aec",
+      "status": "verified",
+      "reservedAt": "2026-09-27T17:59:21.049Z",
+      "consumedAt": "2026-09-27T17:59:21.349Z",
+      "dispatchedAt": "2026-09-27T17:59:21.645Z",
+      "observedAt": "2026-09-27T18:00:41.632Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:autosave:fill-fields:category:14135987-9fcb-4b68-9c56-1b73326f430e",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-fields:category:14135987-9fcb-4b68-9c56-1b73326f430e",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:00:07.311Z",
+      "consumedAt": "2026-09-27T18:00:07.609Z",
+      "dispatchedAt": "2026-09-27T18:00:07.765Z",
+      "observedAt": "2026-09-27T18:00:41.632Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:save-draft:manual-save:save-draft",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "manual-save:save-draft",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:00:56.781Z",
+      "consumedAt": "2026-09-27T18:00:57.099Z",
+      "dispatchedAt": "2026-09-27T18:00:57.248Z",
+      "observedAt": "2026-09-27T18:01:18.622Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    },
+    {
+      "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:publish:final",
+      "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "executionGeneration": 1,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-27T18:01:29.443Z",
+      "consumedAt": "2026-09-27T18:01:29.638Z",
+      "dispatchedAt": "2026-09-27T18:01:29.793Z",
+      "observedAt": "2026-09-27T18:02:00.192Z",
+      "browserTaskRunId": "c5055247-e42e-4fdf-98fb-3faf13f298c4"
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 CSDN 编辑页",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "editor.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "https://mp.csdn.net/mp_blog/creation/editor",
+          "observedAt": "2026-09-27T17:45:31.402Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Agent run-6a5afa5e-ed18-41ed-a48c-2949a7fd4746 · BrowserTask c5055247-e42e-4fdf-98fb-3faf13f298c4 · Tab tab-2-1790518126377 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-27T17:45:33.823Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.title.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · initial-draft:title",
+          "observedAt": "2026-09-27T17:46:08.087Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.body.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "浏览器动作 frameExecute 已返回；平台结果另行核验 · initial-draft:body",
+          "observedAt": "2026-09-27T17:46:20.624Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.save.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "running",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:46:28.722Z · save-draft/initial-draft:save；结果另行核验",
+          "observedAt": "2026-09-27T17:46:28.722Z",
+          "generation": 1
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+          "observedAt": "2026-09-27T19:19:55.461Z",
+          "generation": 2
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Tab tab-2-1790518126377 · 账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+          "observedAt": "2026-09-27T19:19:56.788Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T17:45:33.823Z",
+      "finishedAt": "2026-09-27T17:46:51.870Z",
+      "evidence": [
+        "URL 已变为 https://mp.csdn.net/mp_blog/creation/editor/166742682，inspect 返回 draftId=166742682，saveState=saved，保存证据：CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验账号与页面",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 csdn:weixin_36388257 · draftId 166742682 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 保存 saved",
+          "observedAt": "2026-09-27T17:46:37.314Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T17:47:13.356Z",
+      "finishedAt": "2026-09-27T17:47:31.534Z",
+      "evidence": [
+        "inspect 回读：URL /editor/166742682，页面账号 csdn:weixin_36388257，pageKind=editor，editor.recognized=true，draftId=166742682，标题与冻结标题一致，saveState=saved",
+        "inspect（2026-09-27T17:46:58Z）回读：URL /editor/166742682，页面账号 csdn:weixin_36388257 与 draft.platformAccountId 一致，pageKind=editor、editor.recognized=true，draftId=166742682，标题与冻结标题一致，saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "上传并核验正文图片",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-27T17:47:59.542Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-27T17:49:55.738Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-27T17:51:39.602Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:48:06.680Z · upload-asset/local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:50:04.728Z · upload-asset/local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:51:46.248Z · upload-asset/local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-太空舱提示效果图.png",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/aed004f935554651b87d438ff8141a9e.png · 2026-09-27T17:49:37.145Z",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-紧凑模式面板本地渲染.png",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/f797347086844214b22d7bf4aa236f2a.png · 2026-09-27T17:51:27.304Z",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-陪伴页面本地渲染.png",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/3696d205bc67463a97996ac110165477.png · 2026-09-27T17:53:13.572Z",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T17:47:40.803Z",
+      "finishedAt": "2026-09-27T17:53:38.142Z",
+      "evidence": [
+        "开始上传正文图片：共 3 张冻结素材（01-太空舱提示效果图.png、02-紧凑模式面板本地渲染.png、03-陪伴页面本地渲染.png），均为 pending",
+        "inspect（2026-09-27T17:53:00Z）回读：matchedAssets 匹配全部 3 张冻结图片的平台地址，编辑器正文 images 三张图片均 loaded=true，imageEnumerationComplete=true；三张图上传副作用均已 verified",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并核验正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 期望 1 处，实际对应 1 处；第 1 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-27T17:55:01.390Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 期望 1 处，实际对应 1 处；第 2 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-27T17:55:01.390Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 期望 1 处，实际对应 1 处；第 3 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-27T17:55:01.390Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "账号 csdn:weixin_36388257 · draftId 166742682 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 正文 821 字符 · saved · CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+          "observedAt": "2026-09-27T17:55:01.686Z",
+          "generation": 1
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "正文 body.cke_editable[contenteditable=\"true\"] · iframe iframe.cke_wysiwyg_frame · 821 字符",
+          "observedAt": "2026-09-27T17:55:08.071Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:54:00.195Z · save-draft/autosave:fill-body:b02230e5-a285-4358-be48-1cf2ff37fce0；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T17:53:45.130Z",
+      "finishedAt": "2026-09-27T17:55:30.020Z",
+      "evidence": [
+        "开始填写正文：编辑器正文当前为 10 字符建稿占位（bodyMatchesFrozen=false），需用冻结原 Markdown 替换占位并写入 3 张已核验图片",
+        "inspect（2026-09-27T17:55:07Z）回读：bodyMatchesFrozen=true，正文 821 字符与冻结原稿一致；三张已核验图片按原文位置写入，替代文字分别为「太空舱提示设计效果图（示例数据，非实机截图）」「紧凑模式面板生产布局本地渲染（测试样本）」「陪伴页面生产布局本地渲染（测试值）」且全部 loaded=true；saveState=saved，服务端回读一致",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写平台字段",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.cover.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "本任务未配置此可选字段，不执行修改",
+          "observedAt": "2026-09-27T17:45:45.624Z",
+          "generation": 1
+        },
+        {
+          "id": "field.cover.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "未配置，不需要写入",
+          "observedAt": "2026-09-27T17:45:45.624Z",
+          "generation": 1
+        },
+        {
+          "id": "field.cover.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "未配置，不声明当前平台字段已核验",
+          "observedAt": "2026-09-27T17:45:45.624Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-27T17:46:13.933Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-27T17:46:13.933Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-27T17:46:13.933Z",
+          "generation": 1
+        },
+        {
+          "id": "field.summary.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。；实际 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。",
+          "observedAt": "2026-09-27T17:55:44.613Z",
+          "generation": 1
+        },
+        {
+          "id": "field.summary.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。；实际 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。",
+          "observedAt": "2026-09-27T17:56:49.501Z",
+          "generation": 1
+        },
+        {
+          "id": "field.tags.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 人工智能,智能眼镜,软件测试；实际 人工智能,智能眼镜,软件测试",
+          "observedAt": "2026-09-27T17:59:22.093Z",
+          "generation": 1
+        },
+        {
+          "id": "field.tags.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 人工智能,智能眼镜,软件测试；实际 人工智能,智能眼镜,软件测试",
+          "observedAt": "2026-09-27T17:59:26.666Z",
+          "generation": 1
+        },
+        {
+          "id": "field.category.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 人工智能；实际 人工智能",
+          "observedAt": "2026-09-27T18:00:08.387Z",
+          "generation": 1
+        },
+        {
+          "id": "field.category.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 人工智能；实际 人工智能",
+          "observedAt": "2026-09-27T18:00:15.383Z",
+          "generation": 1
+        },
+        {
+          "id": "field.summary.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:55:44.148Z · save-draft/autosave:fill-fields:summary:ad7208ee-0c21-418f-8f22-eadb2d34fc8c；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "field.category.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:00:07.765Z · save-draft/autosave:fill-fields:category:14135987-9fcb-4b68-9c56-1b73326f430e；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "field.tags.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T17:59:21.645Z · save-draft/autosave:fill-fields:tags:0f2c20d8-6a8a-441f-8435-cddbf3e31aec；结果另行核验",
+          "observedAt": "2026-09-27T19:19:58.745Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T17:55:40.063Z",
+      "finishedAt": "2026-09-27T18:00:41.632Z",
+      "evidence": [
+        "开始填写平台字段：标题已匹配；摘要为空、分类为空、标签已有「人工智能」但缺「智能眼镜」「软件测试」；封面未配置跳过",
+        "inspect（2026-09-27T18:00:15Z）回读：fieldValues 标题、摘要「第196天研发记录：核对交付包仍含旧代码的问题…真实边界。」、标签「人工智能,智能眼镜,软件测试」、分类「人工智能」全部与冻结字段一致；封面未配置已跳过；saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "保存并复核草稿",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "可信适配器回读 · csdn:weixin_36388257 · draftId 166742682 · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · saved · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+          "observedAt": "2026-09-27T18:01:18.622Z",
+          "generation": 1
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:00:57.248Z · save-draft/manual-save:save-draft；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:00:52.000Z",
+      "finishedAt": "2026-09-27T18:01:18.622Z",
+      "evidence": [
+        "开始保存草稿：正文与全部字段已填写核验，点击保存按钮后回读 saveState",
+        "已点击 selectors.save 并回读：inspect（2026-09-27T18:01:04Z）saveState=saved，保存证据「CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿」；draftId=166742682，正文 821 字符、全部字段与冻结一致",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "执行常规单篇发布",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "publish.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:01:29.793Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-27T18:01:29.793Z",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:01:24.280Z",
+      "evidence": [
+        "开始执行已授权的常规单篇发布：草稿 166742682 已保存且全部字段与冻结一致，点击 selectors.publish 派发发布动作"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验文章结果",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "已派发但没有可信结果 · final",
+          "reason": "只核验，不重复派发；恢复时先找回原稿",
+          "observedAt": "2026-09-27T19:19:54.743Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    }
+  ]
+}

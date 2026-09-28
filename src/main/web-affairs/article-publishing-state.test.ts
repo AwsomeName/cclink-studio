@@ -2757,6 +2757,92 @@ describe('article publishing persistent state', () => {
     )
   })
 
+  it.each(['dispatched', 'verifying', 'result-unknown'] as const)(
+    'resumes CSDN review directly into read-only Runtime despite historical autosave uncertainty: %s',
+    async (publicationStatus) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const store = new WebAffairStore(join(directory, 'affairs.json'))
+      const snapshot = await store.load()
+      const affair = snapshot.affairs.find((a) => a.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      const attempt = affair.attempts[0]
+      publishing.publication = { status: publicationStatus }
+      publishing.draft = {
+        platformDraftId: '164148817',
+        platformAccountId: 'csdn:test-user',
+        url: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+        normalizedTitle: 'Article',
+      }
+      publishing.execution.currentStepId = 'verify-publication'
+      // Preserve an unresolved historical autosave. Result verification must not
+      // grant a draft write permit or rewrite this evidence to get past binding.
+      publishing.sideEffects = ['save-draft', 'publish'].map((kind) => ({
+        key: `review-${kind}`,
+        affairId: affair.id,
+        attemptId: attempt.id,
+        executionGeneration: attempt.executionGeneration,
+        kind: kind as 'save-draft' | 'publish',
+        targetId: kind === 'publish' ? 'final' : 'autosave:fill-fields:title',
+        status: 'result-unknown' as const,
+        reservedAt: new Date().toISOString(),
+        dispatchedAt: new Date().toISOString(),
+        browserTaskRunId: attempt.browserTaskRunId,
+      }))
+      const service = created.service
+      Reflect.set(service, 'snapshot', snapshot)
+      const handedOff = await service.handoffAttempt(
+        {
+          workspaceRef: { kind: 'local', path: directory },
+          affairId: affair.id,
+          attemptId: attempt.id,
+          reason: '平台审核中，等待公开结果',
+        },
+        WORKSPACE_ID,
+      )
+      if (!handedOff.success) throw new Error(handedOff.error.message)
+      const resumed = await service.resumeArticlePublishingAfterHandoff(
+        affair.id,
+        attempt.id,
+        WORKSPACE_ID,
+      )
+      if (!resumed.success) throw new Error(resumed.error.message)
+      const next = resumed.data.attempts[0]
+      expect(resumed.data.articlePublishing?.draft).toEqual(publishing.draft)
+      expect(resumed.data.articlePublishing?.executionProtocol.current).toBeUndefined()
+      const started = await service.markArticlePublishingAttemptStarted(
+        affair.id,
+        next.id,
+        WORKSPACE_ID,
+      )
+      expect(started.success && started.data.articlePublishing?.execution.currentStepId).toBe(
+        'verify-publication',
+      )
+      const bound = await service.bindArticlePublishingRuntime(
+        affair.id,
+        next.id,
+        next.executionGeneration,
+        next.launchOperationId,
+        runtimeBindingsFor(next, {
+          tabId: 'review-tab',
+          browserTaskRunId: randomUUID(),
+          browserViewRuntimeGeneration: 2,
+          webContentsId: 2,
+          playwrightConnectionGeneration: 2,
+          playwrightPageBindingGeneration: 2,
+        }),
+        WORKSPACE_ID,
+      )
+      expect(bound.success, JSON.stringify(bound.success ? {} : bound.error)).toBe(true)
+      if (bound.success) {
+        expect(bound.data.articlePublishing?.publication.status).toBe(publicationStatus)
+        expect(bound.data.articlePublishing?.sideEffects).toEqual(publishing.sideEffects)
+        expect(bound.data.articlePublishing?.draft?.recovery?.writePermit).toBeUndefined()
+      }
+      await service.flush()
+    },
+  )
+
   it('returns a waiting-human article task to the same Attempt for fresh observation', async () => {
     const created = await createStartedTask(directory, sourcePath, imagePath)
     const handedOff = await created.service.handoffAttempt(

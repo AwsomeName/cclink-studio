@@ -1,0 +1,74 @@
+{
+  "affairId": "6f0d6536-111d-4afc-9cf3-a4df72f4439f",
+  "adapterId": "csdn",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "9eb0a6ae-b048-4e58-85f4-25161bd06e81",
+    "currentGeneration": 4,
+    "currentLaunchOperationId": "9b4cc3d2-ced7-4f27-aa23-7ef773dbd002"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://blog.csdn.net/weixin_36388257/article/details/165493415",
+    "observedAt": "2026-09-27T16:58:09.466Z"
+  },
+  "publishDispatches": [
+    {
+      "key": "6f0d6536-111d-4afc-9cf3-a4df72f4439f:9eb0a6ae-b048-4e58-85f4-25161bd06e81:g1:publish:final",
+      "status": "verified",
+      "executionGeneration": 1,
+      "dispatchedAt": "2026-09-15T17:20:31.416Z"
+    }
+  ],
+  "assets": [
+    {
+      "id": "local:AIR/2026-09-11/素材/01-随行助手概念效果图.png",
+      "status": "uploaded",
+      "uploadAttempts": 1
+    },
+    {
+      "id": "local:AIR/2026-09-11/素材/02-小眸表情设计板.png",
+      "status": "uploaded",
+      "uploadAttempts": 1
+    },
+    {
+      "id": "local:AIR/2026-09-11/素材/03-小眸新图标.png",
+      "status": "uploaded",
+      "uploadAttempts": 1
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "status": "completed"
+    },
+    {
+      "stepId": "verify-account",
+      "status": "completed"
+    },
+    {
+      "stepId": "upload-assets",
+      "status": "completed"
+    },
+    {
+      "stepId": "fill-body",
+      "status": "completed"
+    },
+    {
+      "stepId": "fill-fields",
+      "status": "completed"
+    },
+    {
+      "stepId": "save-draft",
+      "status": "completed"
+    },
+    {
+      "stepId": "publish",
+      "status": "completed"
+    },
+    {
+      "stepId": "verify-publication",
+      "status": "completed"
+    }
+  ]
+}

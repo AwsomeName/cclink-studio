@@ -93,6 +93,58 @@ export interface WeiboSubmissionTarget {
   imageIds: string[]
 }
 
+/** A feed link is only a candidate. The caller must read the public page and
+ * verify the frozen body, author, visibility and every image before recording it. */
+export async function findWeiboPublicationCandidate(
+  page: Page,
+  expected: Pick<WeiboSubmissionTarget, 'uid' | 'imageIds'>,
+) {
+  const url = new URL(page.url())
+  if (
+    url.origin !== 'https://weibo.com' ||
+    url.username ||
+    url.password ||
+    !['/', `/u/${expected.uid}`].includes(url.pathname) ||
+    !/^\d{5,20}$/u.test(expected.uid) ||
+    !expected.imageIds.length ||
+    expected.imageIds.some((id) => !/^[a-zA-Z0-9]+$/u.test(id))
+  )
+    return null
+  const cards = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('article.woo-panel-main'))
+      .slice(0, 40)
+      .map((article) => ({
+        links: Array.from(article.querySelectorAll<HTMLAnchorElement>('a[href]')).map(
+          (a) => a.href,
+        ),
+        images: Array.from(article.querySelectorAll<HTMLImageElement>('img')).map((img) => ({
+          src: img.currentSrc || img.src,
+          loaded: img.complete && img.naturalWidth > 0,
+        })),
+      })),
+  )
+  const candidates = cards.flatMap((card) => {
+    const images = card.images.filter((image) => weiboImageIdentity(image.src))
+    if (
+      images.length !== expected.imageIds.length ||
+      images.some(
+        (image, i) => !image.loaded || weiboImageIdentity(image.src) !== expected.imageIds[i],
+      )
+    )
+      return []
+    const links = [
+      ...new Set(
+        card.links.flatMap((link) => {
+          const parsed = parseWeiboPublicationUrl(link)
+          return parsed?.uid === expected.uid ? [parsed.url] : []
+        }),
+      ),
+    ]
+    return links.length === 1 ? links : []
+  })
+  return candidates.length === 1 ? parseWeiboPublicationUrl(candidates[0]) : null
+}
+
 /** Only the armed, exact text+gallery POST may supply this submission receipt.
  * No arbitrary network log, cookies, request headers or response body is persisted. */
 export function observeWeiboSubmission(page: Page, expected: WeiboSubmissionTarget) {

@@ -2177,11 +2177,17 @@ export class ArticlePublishingBrowserPolicy {
         isCurrent,
       )
       if (!recorded.success || !isCurrent()) throw new Error('头条提交前证据已变化，禁止派发')
-      const observer = observeToutiaoSubmission(page, {
-        uid: live.uid!,
-        title: scope.expectedTitle,
-        images: scope.assets.map((a) => a.platformUrl ?? ''),
-      })
+      const observer = observeToutiaoSubmission(
+        page,
+        {
+          uid: live.uid!,
+          title: scope.expectedTitle,
+          images: scope.assets.map((a) => a.platformUrl ?? ''),
+        },
+        () =>
+          !context?.abortSignal?.aborted &&
+          this.browserTaskRuntime?.getTask(task.id)?.status === 'running',
+      )
       return {
         arm: observer.arm,
         dispose: observer.dispose,

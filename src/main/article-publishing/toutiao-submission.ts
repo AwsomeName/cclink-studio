@@ -39,12 +39,15 @@ export function toutiaoResponseShape(value: unknown): Record<string, string | nu
 export function observeToutiaoSubmission(
   page: Page,
   expected: Parameters<typeof readToutiaoPublicationReview>[1],
+  isCurrent: () => boolean = () => true,
 ) {
   let armed = false
   let disposed = false
   const requests = new Set<Request>()
   const observations: string[] = []
   let accepted = false
+  let reviewTimer: ReturnType<typeof setTimeout> | undefined
+  let wakeReview: (() => void) | undefined
   let notifyResponse: () => void = () => undefined
   const responseReady = new Promise<void>((resolve) => {
     notifyResponse = resolve
@@ -102,23 +105,39 @@ export function observeToutiaoSubmission(
             }),
           ])
           await Promise.allSettled([...pending])
-          if (disposed || requests.size !== 1 || !accepted)
+          if (disposed || !isCurrent() || requests.size !== 1 || !accepted)
             throw new Error(
               `头条提交回执不能唯一核验；${observations.join('；') || '未读到提交响应'}；禁止重复发布`,
             )
           // The response code alone is not success. Read the submitted card from
           // the actual account's management page and match all image identities.
           await page.waitForURL(TOUTIAO_PUBLICATION_MANAGEMENT_URL, { timeout: 10_000 })
-          const review = await readToutiaoPublicationReview(page, expected)
-          if (disposed || requests.size !== 1 || !review.current || review.candidates.length !== 1)
-            throw new Error('头条回执返回成功，但管理页尚未唯一对应本篇图文；只核验，不重发')
-          return { status: review.candidates[0].status }
+          // Navigation/title visibility can precede thumbnail loading. Reobserve
+          // the same page within a bounded window; never resend or infer success.
+          const deadline = Date.now() + 10_000
+          while (!disposed && isCurrent() && requests.size === 1) {
+            const review = await readToutiaoPublicationReview(page, expected)
+            if (disposed || !isCurrent() || requests.size !== 1 || !review.current) break
+            if (review.candidates.length === 1) return { status: review.candidates[0].status }
+            if (review.candidates.length > 1 || Date.now() >= deadline) break
+            await new Promise<void>((resolve) => {
+              wakeReview = resolve
+              reviewTimer = setTimeout(resolve, 250)
+            })
+          }
+          throw new Error(
+            '头条回执返回成功，但管理页尚未唯一对应本篇图文或核验已中止；只核验，不重发',
+          )
         } finally {
           if (timer) clearTimeout(timer)
+          if (reviewTimer) clearTimeout(reviewTimer)
+          wakeReview = undefined
         }
       })()),
     dispose: () => {
       disposed = true
+      if (reviewTimer) clearTimeout(reviewTimer)
+      wakeReview?.()
       page.off('request', onRequest)
       page.off('response', onResponse)
     },

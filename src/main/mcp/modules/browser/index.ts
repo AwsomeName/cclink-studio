@@ -1459,6 +1459,12 @@ export class BrowserToolModule implements ToolModule {
     if (!page) {
       throw new Error('可视浏览器页面尚未就绪，请稍后自动重试')
     }
+    if (beforeDispatch && actionType === 'click' && typeof params.selector === 'string') {
+      // Check actionability before recording a dispatch. A fixed footer outside
+      // a narrow viewport must remain a rejected preparation, not an unknown send.
+      // trial may scroll, but never clicks; the current permission is checked again below.
+      await page.locator(params.selector).click({ trial: true, timeout: 5_000 })
+    }
     await beforeDispatch?.()
     onDispatch?.()
     return executePlaywrightAction(

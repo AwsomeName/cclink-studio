@@ -1,0 +1,68 @@
+[
+  {
+    "platform": "csdn",
+    "status": "result-unknown",
+    "url": null,
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "platform": "weibo",
+    "status": "published",
+    "url": "https://weibo.com/5961101548/Rk7f1mHa7",
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "platform": "bilibili",
+    "status": "published",
+    "url": "https://t.bilibili.com/1252820558485127171",
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "platform": "zhihu",
+    "status": "published",
+    "url": "https://zhuanlan.zhihu.com/p/2087731285246612581",
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "platform": "juejin",
+    "status": "published",
+    "url": "https://juejin.cn/post/7689676713795207211",
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  },
+  {
+    "platform": "toutiao",
+    "status": "published",
+    "url": "https://www.toutiao.com/w/1877513281858569/",
+    "publishDispatches": 1,
+    "uploadAttempts": [
+      1,
+      1,
+      1
+    ]
+  }
+]

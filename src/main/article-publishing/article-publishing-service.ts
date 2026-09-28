@@ -14,7 +14,11 @@ import {
 } from './bilibili-composer-recovery'
 import { prepareArticleBody, prepareArticleUnresolvedBody } from './article-body'
 import { findGitRelocatedArticleSource } from './git-relocated-article-source'
-import { parseWeiboPublicationUrl } from './weibo-publication'
+import {
+  findWeiboPublicationCandidate,
+  parseWeiboPublicationUrl,
+  weiboImageIdentity,
+} from './weibo-publication'
 import {
   canRetryConfirmedMissingWeiboComposer,
   isEmptyWeiboComposer,
@@ -285,7 +289,9 @@ export class ArticlePublishingService {
           ? publishingPlatform(publishing.adapterId).managementUrl
           : (persistedDraftAnchor?.url ?? freshEditorUrl),
         8_000,
-        input.preferredBrowserTabId,
+        // Result recovery navigates and re-verifies a public work; it does not
+        // depend on the old editor Tab, which may no longer exist after restart.
+        publicationRecoveryRequired ? undefined : input.preferredBrowserTabId,
       )
       if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
       if (
@@ -305,8 +311,8 @@ export class ArticlePublishingService {
       const visibleUrl = browserManager.getCurrentURL(tabId)
       let recoveredDraft: CsdnDraftRecoveryResult | null = null
       let recoveredPublicationUrl: string | null = null
-      const assertToutiaoRecoveryActive = () => {
-        if (publishing.adapterId !== 'toutiao') return
+      const assertRecoveryActive = () => {
+        if (!['toutiao', 'weibo'].includes(publishing.adapterId)) return
         const snapshot = this.webAffairService.getProjectSnapshot(input.workspaceId)
         const current = snapshot.success
           ? snapshot.data.affairs.find((a) => a.id === input.affair.id)?.articlePublishing
@@ -320,10 +326,10 @@ export class ArticlePublishingService {
             current.execution.status,
           )
         )
-          throw new Error('头条原稿恢复已取消或执行代次变化，停止继续打开页面')
+          throw new Error('发布恢复已取消或执行代次变化，停止继续打开页面')
       }
       const navigateForRecovery = async (url: string) => {
-        assertToutiaoRecoveryActive()
+        assertRecoveryActive()
         await browserManager.navigate(tabId, url)
         await playwrightBridge.ensureConnected('article_publishing_draft_recovery')
         await browserManager.ensurePlaywrightPage(tabId)
@@ -361,10 +367,10 @@ export class ArticlePublishingService {
           title: publishing.fields.title,
           images: publishing.assets.map((asset) => asset.platformUrl ?? ''),
         })
-        assertToutiaoRecoveryActive()
+        assertRecoveryActive()
         if (!review.current || review.candidates.length !== 1)
           throw new Error(
-            `头条结果只读核验尚未唯一对应原账号、原标题和逐张图片；${review.diagnostics.join('；')}`,
+            `头条结果只读核验尚未唯一对应原账号、原标题和逐张图片；页面有效=${review.current}；候选=${review.candidates.length}；${review.diagnostics.join('；')}`,
           )
         const actual = review.candidates[0]
         if (actual.status === '已发布' && !actual.urls.length) {
@@ -378,7 +384,7 @@ export class ArticlePublishingService {
               },
               () => {
                 try {
-                  assertToutiaoRecoveryActive()
+                  assertRecoveryActive()
                   return true
                 } catch {
                   return false
@@ -416,7 +422,7 @@ export class ArticlePublishingService {
           },
           () => {
             try {
-              assertToutiaoRecoveryActive()
+              assertRecoveryActive()
               return true
             } catch {
               return false
@@ -433,7 +439,7 @@ export class ArticlePublishingService {
           8_000,
           tabId,
         )
-        assertToutiaoRecoveryActive()
+        assertRecoveryActive()
         if (visibleResultTab !== tabId || !browserManager.isViewVisible(tabId))
           throw new Error('头条公开结果已找到，但原任务 Tab 尚未可见；保留只读核验')
         recoveredPublicationUrl = actual.urls[0]
@@ -447,12 +453,27 @@ export class ArticlePublishingService {
         // the original account Tab. Treat that URL only as a candidate: main
         // must prove the frozen body and every uploaded media identity first.
         if (publishing.adapterId === 'weibo' && !publishing.publication.url) {
-          const candidate = parseWeiboPublicationUrl(visibleUrl)
-          if (!candidate || candidate.uid !== publishing.composer?.platformAccountId)
-            throw new Error('请在原账号网页打开本篇微博公开详情，再核验发布结果；不会再次发送')
+          let candidate = parseWeiboPublicationUrl(visibleUrl)
           await playwrightBridge.ensureConnected('weibo_publication_recovery')
           await browserManager.ensurePlaywrightPage(tabId)
-          const page = playwrightBridge.getPageById(tabId)
+          let page = playwrightBridge.getPageById(tabId)
+          if (!candidate && page && !page.isClosed()) {
+            const imageIds = publishing.assets.map((asset) =>
+              weiboImageIdentity(asset.platformUrl ?? ''),
+            )
+            if (imageIds.every((id): id is string => id !== null)) {
+              candidate = await findWeiboPublicationCandidate(page, {
+                uid: publishing.composer?.platformAccountId ?? '',
+                imageIds,
+              })
+              assertRecoveryActive()
+              if (candidate) page = await navigateForRecovery(candidate.url)
+            }
+          }
+          if (!candidate || candidate.uid !== publishing.composer?.platformAccountId)
+            throw new Error(
+              '原账号页面未找到唯一对应本篇逐图的微博；请打开本篇公开详情再核验，不会再次发送',
+            )
           if (
             !page ||
             page.isClosed() ||
@@ -670,7 +691,7 @@ export class ArticlePublishingService {
             : this.draftRecoveryCoordinator
         ).recoverExactDraft({
           observe: recordPlan,
-          assertActive: assertToutiaoRecoveryActive,
+          assertActive: assertRecoveryActive,
           expectedDraftId: recovery.expectedDraftId,
           expectedPlatformAccountId,
           expectedTitle: recovery.expectedTitle,
@@ -681,7 +702,7 @@ export class ArticlePublishingService {
           throw new Error('草稿恢复结果没有返回原平台草稿身份')
         }
         if (publishing.adapterId === 'toutiao') {
-          assertToutiaoRecoveryActive()
+          assertRecoveryActive()
           const restoredTab = await browserManager.waitForAccountView(
             input.workspacePath,
             attempt.profileId,
@@ -690,7 +711,7 @@ export class ArticlePublishingService {
             8_000,
             tabId,
           )
-          assertToutiaoRecoveryActive()
+          assertRecoveryActive()
           if (restoredTab !== tabId || !browserManager.isViewVisible(tabId))
             throw new Error('头条原稿已找回，但原任务 Tab 尚未重新可见；停止开放 Agent 工具')
         }

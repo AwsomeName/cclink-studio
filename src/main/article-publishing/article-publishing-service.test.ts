@@ -29,6 +29,14 @@ describe('ArticlePublishingService', () => {
           }),
         )
         expect(harness.draftRecoveryCoordinator.recoverExactDraft).not.toHaveBeenCalled()
+        expect(harness.browserManager.waitForAccountView).toHaveBeenCalledWith(
+          '/workspace',
+          'profile-a',
+          '22222222-2222-4222-8222-222222222222',
+          expect.any(String),
+          8_000,
+          undefined,
+        )
         expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
         expect(harness.browserTaskRuntime.releaseAccountRecoveryLease).toHaveBeenCalledWith(
           'recovery-lease-a',

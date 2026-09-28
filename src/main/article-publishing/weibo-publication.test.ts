@@ -3,6 +3,7 @@ import type { Page, Request, Response } from 'playwright-core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   observeWeiboSubmission,
+  findWeiboPublicationCandidate,
   parseWeiboPublicationUrl,
   weiboImageIdentity,
 } from './weibo-publication'
@@ -33,6 +34,52 @@ function fixture() {
   return { events, observer, request, response }
 }
 afterEach(() => vi.useRealTimers())
+describe('Weibo read-only feed candidate recovery', () => {
+  it.each([
+    'exact',
+    'wrong-account',
+    'wrong-image',
+    'reordered',
+    'unloaded',
+    'duplicate',
+    'ambiguous-link',
+    'wrong-page',
+    'empty-gallery',
+  ] as const)(
+    'only offers a unique matching gallery for subsequent public-page verification: %s',
+    async (mode) => {
+      const link = `https://weibo.com/${mode === 'wrong-account' ? '1234567890' : target.uid}/RhAKon2wi`
+      const images = (
+        mode === 'wrong-image'
+          ? ['other', 'imageB']
+          : mode === 'reordered'
+            ? ['imageB', 'imageA']
+            : target.imageIds
+      ).map((id) => ({
+        src: `https://wx1.sinaimg.cn/bmiddle/${id}.jpg`,
+        loaded: mode !== 'unloaded',
+      }))
+      const card = {
+        links:
+          mode === 'ambiguous-link'
+            ? [link, `https://weibo.com/${target.uid}/RhAKon2wj`]
+            : [link, link],
+        images,
+      }
+      const evaluate = vi.fn(async () => (mode === 'duplicate' ? [card, card] : [card]))
+      const page = {
+        url: () => (mode === 'wrong-page' ? 'https://weibo.com.evil/' : 'https://weibo.com/'),
+        evaluate,
+      }
+      const result = await findWeiboPublicationCandidate(page as never, {
+        uid: target.uid,
+        imageIds: mode === 'empty-gallery' ? [] : target.imageIds,
+      })
+      expect(result?.url ?? null).toBe(mode === 'exact' ? link : null)
+      if (mode === 'wrong-page' || mode === 'empty-gallery') expect(evaluate).not.toHaveBeenCalled()
+    },
+  )
+})
 describe('Weibo bound submission receipt', () => {
   it('accepts only an armed matching request, preserving the platform post ID', async () => {
     const f = fixture()

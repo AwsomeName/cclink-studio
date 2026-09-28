@@ -450,6 +450,7 @@ describe('BrowserToolModule 可视浏览器同步', () => {
   })
 
   it.each([
+    ['not-actionable', 'click'],
     ['before-persist', 'click'],
     ['after-persist', 'click'],
     ['before-persist', 'frame_execute'],
@@ -477,6 +478,12 @@ describe('BrowserToolModule 可视浏览器同步', () => {
       url: () => 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
       click: vi.fn(),
       frameLocator: vi.fn(),
+      locator: vi.fn(() => ({
+        click: vi.fn(async (options: { trial: boolean; timeout: number }) => {
+          expect(options).toEqual({ trial: true, timeout: 5_000 })
+          if (phase === 'not-actionable') throw new Error('发布按钮位于视口外，尚未点击')
+        }),
+      })),
     }
     const consumeSideEffect = vi.fn().mockResolvedValue(undefined)
     const assertSideEffectDispatchAllowed = vi.fn(async () => {
@@ -547,9 +554,11 @@ describe('BrowserToolModule 可视浏览器同步', () => {
           },
         },
       ),
-    ).rejects.toThrow('授权已被取消')
+    ).rejects.toThrow(phase === 'not-actionable' ? '尚未点击' : '授权已被取消')
     expect(consumeSideEffect).toHaveBeenCalledOnce()
-    expect(assertSideEffectDispatchAllowed).toHaveBeenCalledOnce()
+    expect(assertSideEffectDispatchAllowed).toHaveBeenCalledTimes(
+      phase === 'not-actionable' ? 0 : 1,
+    )
     expect(page.click).not.toHaveBeenCalled()
     expect(page.frameLocator).not.toHaveBeenCalled()
     expect(observeSideEffect).toHaveBeenCalledWith(

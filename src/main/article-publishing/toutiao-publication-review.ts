@@ -119,7 +119,7 @@ export async function readToutiaoPublicationReview(
               }
             })
           diagnostics.push(
-            `${row.tagName}.${row.className}：${statuses[0].innerText.trim()}；图片 ${allSources.join('、')}`,
+            `${row.tagName}.${row.className}：${statuses[0].innerText.trim()}；图片 ${allSources.join('、')}；匹配 ${images.length}/${wanted.length}；逐图 ${images.map((img, i) => `${img.id === wanted[i] ? '同图' : '异图'}/${img.loaded ? '已加载' : '未加载'}`).join('、')}`,
           )
           if (
             !wanted.length ||

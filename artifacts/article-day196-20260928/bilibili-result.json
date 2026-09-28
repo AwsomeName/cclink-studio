@@ -1,0 +1,700 @@
+{
+  "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+  "title": "做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+  "adapterId": "bilibili",
+  "publication": {
+    "status": "published",
+    "url": "https://t.bilibili.com/1252820558485127171",
+    "observedAt": "2026-09-27T18:24:35.244Z"
+  },
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "9b663cd3-1491-4d2c-a2e0-043f5cb9f4bb"
+  },
+  "assets": [
+    {
+      "id": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "displayPath": "素材/01-太空舱提示效果图.png",
+      "mediaType": "image/png",
+      "size": 1703676,
+      "modifiedAt": 1789735320791.8857,
+      "occurrences": [
+        {
+          "start": 846,
+          "end": 864,
+          "alt": "太空舱提示设计效果图（示例数据，非实机截图）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/7cc49e224dd687207c1a053f2c4b9aff3546384070347419.png",
+      "verifiedAt": "2026-09-27T18:18:26.544Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T18:18:05.819Z",
+          "finishedAt": "2026-09-27T18:18:26.544Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发文件选择（01-太空舱提示效果图.png），uploadVerified=false，等待平台接收上传",
+            "平台已生成 URL https://i0.hdslb.com/bfs/new_dyn/7cc49e224dd687207c1a053f2c4b9aff3546384070347419.png，开始页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+      "mediaType": "image/png",
+      "size": 33903,
+      "modifiedAt": 1789735320792.1543,
+      "occurrences": [
+        {
+          "start": 891,
+          "end": 911,
+          "alt": "紧凑模式面板生产布局本地渲染（测试样本）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/04a1f468895cacd9725a27f90cb6b8cf3546384070347419.png",
+      "verifiedAt": "2026-09-27T18:18:54.529Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T18:18:30.324Z",
+          "finishedAt": "2026-09-27T18:18:54.529Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发文件选择（02-紧凑模式面板本地渲染.png），uploadVerified=false，等待平台接收上传",
+            "平台已生成 URL https://i0.hdslb.com/bfs/new_dyn/04a1f468895cacd9725a27f90cb6b8cf3546384070347419.png，开始页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "kind": "local",
+      "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "displayPath": "素材/03-陪伴页面本地渲染.png",
+      "mediaType": "image/png",
+      "size": 309681,
+      "modifiedAt": 1789735320793.082,
+      "occurrences": [
+        {
+          "start": 935,
+          "end": 953,
+          "alt": "陪伴页面生产布局本地渲染（测试值）"
+        }
+      ],
+      "status": "uploaded",
+      "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/b23dd5974f583bdc43aea3684c5e74083546384070347419.png",
+      "verifiedAt": "2026-09-27T18:19:20.240Z",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-27T18:18:58.003Z",
+          "finishedAt": "2026-09-27T18:19:20.240Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://t.bilibili.com/",
+            "browser_upload_file 已派发文件选择（03-陪伴页面本地渲染.png），uploadVerified=false，等待平台接收上传",
+            "平台已生成 URL https://i0.hdslb.com/bfs/new_dyn/b23dd5974f583bdc43aea3684c5e74083546384070347419.png，开始页面回读核验",
+            "csdn@1 页面回读 · https://t.bilibili.com/"
+          ]
+        }
+      ]
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:upload-asset:local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:18:07.916Z",
+      "consumedAt": "2026-09-27T18:18:08.225Z",
+      "dispatchedAt": "2026-09-27T18:18:08.375Z",
+      "observedAt": "2026-09-27T18:18:26.544Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997"
+    },
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:upload-asset:local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:18:35.739Z",
+      "consumedAt": "2026-09-27T18:18:36.137Z",
+      "dispatchedAt": "2026-09-27T18:18:36.291Z",
+      "observedAt": "2026-09-27T18:18:54.529Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997"
+    },
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:upload-asset:local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:19:03.314Z",
+      "consumedAt": "2026-09-27T18:19:03.729Z",
+      "dispatchedAt": "2026-09-27T18:19:03.975Z",
+      "observedAt": "2026-09-27T18:19:20.240Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997"
+    },
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:save-draft:autosave:fill-body:8aa9e596-a26a-4221-9c30-821b18187236",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:8aa9e596-a26a-4221-9c30-821b18187236",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:21:37.473Z",
+      "consumedAt": "2026-09-27T18:21:37.773Z",
+      "dispatchedAt": "2026-09-27T18:21:37.927Z",
+      "observedAt": "2026-09-27T18:22:00.885Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997"
+    },
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:save-draft:autosave:fill-fields:title:652c2b11-7096-4083-ac44-94db9bc2159c",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-fields:title:652c2b11-7096-4083-ac44-94db9bc2159c",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:22:13.430Z",
+      "consumedAt": "2026-09-27T18:22:13.640Z",
+      "dispatchedAt": "2026-09-27T18:22:13.877Z",
+      "observedAt": "2026-09-27T18:23:23.019Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997"
+    },
+    {
+      "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:publish:final",
+      "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+      "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+      "executionGeneration": 1,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "verified",
+      "reservedAt": "2026-09-27T18:23:35.531Z",
+      "consumedAt": "2026-09-27T18:23:36.347Z",
+      "dispatchedAt": "2026-09-27T18:23:36.539Z",
+      "observedAt": "2026-09-27T18:24:35.244Z",
+      "browserTaskRunId": "160eb73a-6b7c-4346-9ecf-af974199a997",
+      "bilibiliSubmission": {
+        "confirmationAttempted": false,
+        "requestObserved": true,
+        "observationEnded": true,
+        "requestMatch": "matched",
+        "responseStatus": 200,
+        "platformCode": 0,
+        "postId": "1252820558485127171",
+        "observedAt": "2026-09-27T18:23:38.531Z"
+      }
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 B站图文动态发布器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-27T18:17:02.073Z",
+          "generation": 1
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-4-1790520247806 · 账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-27T18:17:03.651Z",
+          "generation": 1
+        },
+        {
+          "id": "editor.open",
+          "nextAction": "检查账号和编辑区域",
+          "status": "completed",
+          "evidence": "https://t.bilibili.com/",
+          "observedAt": "2026-09-27T18:17:04.126Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-9b663cd3-1491-4d2c-a2e0-043f5cb9f4bb · BrowserTask 160eb73a-6b7c-4346-9ecf-af974199a997 · Tab tab-4-1790520247806 · View g2 · WebContents 3 · Page g2",
+          "observedAt": "2026-09-27T18:17:05.488Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:17:05.488Z",
+      "finishedAt": "2026-09-27T18:17:36.941Z",
+      "evidence": [
+        "inspect 2026-09-27T18:17:19.330Z：https://t.bilibili.com/ 识别为 editor，platformAccountId=3546384070347419 与 targetUID 一致，bodyTextLength=0、images=0",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验 B站 UID 与当前空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 3546384070347419 · draftId 尚无 · 标题 做AI眼镜第196天，我以为交付了，用户 · 保存 unknown",
+          "observedAt": "2026-09-27T18:24:12.126Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:17:44.841Z",
+      "finishedAt": "2026-09-27T18:17:56.506Z",
+      "evidence": [
+        "基于 inspect 2026-09-27T18:17:33.917Z 开始核验：页面 platformAccountId=3546384070347419，待与 targetUID=3546384070347419 比对并确认空白现场",
+        "inspect 2026-09-27T18:17:47.323Z：platformAccountId=3546384070347419 与 targetUID 完全一致；现场空白（bodyTextLength=0、initialDraftBodyEmpty=true、images=0、title=\"\"、publishedLinks 空）",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张选择、上传并核验动态图片",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-27T18:18:22.504Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:18:08.375Z · upload-asset/local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T18:18:26.544Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-太空舱提示效果图.png",
+          "observedAt": "2026-09-27T18:18:26.544Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/7cc49e224dd687207c1a053f2c4b9aff3546384070347419.png · 2026-09-27T18:18:26.544Z",
+          "observedAt": "2026-09-27T18:18:26.544Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-27T18:18:49.474Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:18:36.291Z · upload-asset/local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T18:18:54.529Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-紧凑模式面板本地渲染.png",
+          "observedAt": "2026-09-27T18:18:54.529Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/04a1f468895cacd9725a27f90cb6b8cf3546384070347419.png · 2026-09-27T18:18:54.529Z",
+          "observedAt": "2026-09-27T18:18:54.529Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · div.bili-pics-uploader__add",
+          "observedAt": "2026-09-27T18:19:16.436Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:19:03.975Z · upload-asset/local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-27T18:19:20.240Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-陪伴页面本地渲染.png",
+          "observedAt": "2026-09-27T18:19:20.240Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/b23dd5974f583bdc43aea3684c5e74083546384070347419.png · 2026-09-27T18:19:20.240Z",
+          "observedAt": "2026-09-27T18:19:20.240Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:18:02.482Z",
+      "finishedAt": "2026-09-27T18:19:34.739Z",
+      "evidence": [
+        "基于 inspect 2026-09-27T18:17:53.284Z 开始逐张上传：当前 images=0，fileInput=div.bili-dyn-publishing__tools__item.pic，按正文顺序上传 01/02/03 共 3 张冻结图片",
+        "inspect 2026-09-27T18:19:16.315Z：matchedAssets 命中全部 3 张冻结图片（01/02/03），页面 images=3 且逐张 loaded=true，imageEnumerationComplete=true",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写正文并完整回读",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.placement",
+          "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：未匹配",
+            "reason": "正文图片顺序、位置或加载结果未核验通过",
+            "observedAt": "2026-09-27T18:23:57.064Z",
+            "generation": 1
+          },
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:19:28.528Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.placement",
+          "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：未匹配",
+            "reason": "正文图片顺序、位置或加载结果未核验通过",
+            "observedAt": "2026-09-27T18:23:57.064Z",
+            "generation": 1
+          },
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:19:28.528Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.placement",
+          "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：未匹配",
+            "reason": "正文图片顺序、位置或加载结果未核验通过",
+            "observedAt": "2026-09-27T18:23:57.064Z",
+            "generation": 1
+          },
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:19:28.528Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与当前正文回读",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:21:37.927Z · save-draft/autosave:fill-body:8aa9e596-a26a-4221-9c30-821b18187236；结果另行核验",
+          "observedAt": "2026-09-27T18:22:00.885Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "正文检查点已由可信页面回读完成；原写入已核验 · 2026-09-27T18:22:00.885Z · autosave:fill-body:8aa9e596-a26a-4221-9c30-821b18187236",
+          "observedAt": "2026-09-27T18:23:57.064Z",
+          "generation": 1
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 div[placeholder=\"有什么想和大家分享的？\"] · iframe 主文档 · 0 字符",
+          "observedAt": "2026-09-27T18:23:57.193Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:21:18.209Z",
+      "finishedAt": "2026-09-27T18:22:00.885Z",
+      "evidence": [
+        "inspect 2026-09-27T18:19:28.152Z：body.locate 已定位 div[placeholder=\"有什么想和大家分享的？\"]，当前 0 字符；已读取冻结原稿 /Users/apple/Desktop/研发日记/AIR/2026-09-17/小红书软文.md，开始注入冻结正文（main 期望 778 字符）",
+        "browser_fill 已写入 div[placeholder=\"有什么想和大家分享的？\"]；inspect 2026-09-27T18:21:45.049Z 回读 bodyTextLength=787，bodyMatchesFrozen=true，图片仍为 3 张且 loaded=true",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写独立标题并核验发布设置",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "bilibili.visibility.verify",
+          "nextAction": "不可读时打开当前签发的设置入口；私密或矛盾时停止，不能自动切换",
+          "status": "completed",
+          "evidence": "当前原生可见范围：public",
+          "observedAt": "2026-09-27T18:22:36.491Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:22:13.877Z · save-draft/autosave:fill-fields:title:652c2b11-7096-4083-ac44-94db9bc2159c；结果另行核验",
+          "observedAt": "2026-09-27T18:22:55.686Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "当前平台字段不是受支持的唯一可读控件；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 不支持读取此字段",
+            "reason": "当前平台字段不是受支持的唯一可读控件",
+            "observedAt": "2026-09-27T18:24:23.515Z",
+            "generation": 1
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 ",
+          "observedAt": "2026-09-27T18:23:57.193Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "缺少字段回读证据；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 不可读",
+          "reason": "缺少字段回读证据",
+          "observedAt": "2026-09-27T18:24:12.126Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:22:08.408Z",
+      "finishedAt": "2026-09-27T18:22:55.686Z",
+      "evidence": [
+        "inspect 2026-09-27T18:21:53.685Z：title selector=input[placeholder=\"好的标题更容易获得支持，选填20字\"]，当前为空；将填写冻结平台标题值（前20字符）\"做AI眼镜第196天，我以为交付了，用户\"，随后核验发布设置公开范围",
+        "inspect 2026-09-27T18:22:36.054Z：标题回读=\"做AI眼镜第196天，我以为交付了，用户\"与冻结平台值一致（20字符）；依次点击 openPublishSettings 与「可见范围」入口（仅展开，未改动选项）后 bilibiliVisibility=public；正文 bodyMatchesFrozen=true、3 图 loaded=true",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "复核当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "核对本任务提交授权",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 3546384070347419 · draftId  · 做AI眼镜第196天，我以为交付了，用户 · unknown · https://t.bilibili.com/",
+          "observedAt": "2026-09-27T18:23:23.019Z",
+          "generation": 1
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "重新读取当前图文现场",
+          "status": "skipped",
+          "evidence": "当前动态流程没有平台保存动作，不声明草稿已保存",
+          "observedAt": "2026-09-27T18:23:23.019Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:23:00.475Z",
+      "finishedAt": "2026-09-27T18:23:23.019Z",
+      "evidence": [
+        "基于 inspect 2026-09-27T18:22:50.572Z 开始复核：同 UID 3546384070347419、正文 787 字符 bodyMatchesFrozen=true、3 图逐张命中且 loaded=true、标题为冻结平台值、可见范围 public；B站无持久草稿，本步只做现场复核，不声明平台已保存",
+        "inspect 2026-09-27T18:23:04.482Z：同 UID 3546384070347419 复核通过——正文 787 字符 bodyMatchesFrozen=true，3 张冻结图逐张命中且 loaded=true，标题=冻结平台值，bilibiliVisibility=public，publish selector 可用；无持久草稿，不声明平台已保存",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "单次发布 B站动态",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "bilibili.agreement.inspect",
+          "nextAction": "首次规范分支复核同稿后确认；已有提交请求时禁止再发送",
+          "status": "completed",
+          "evidence": "已观察到直接创建请求，无需首次规范确认。",
+          "observedAt": "2026-09-27T18:23:37.749Z",
+          "generation": 1
+        },
+        {
+          "id": "bilibili.agreement.confirm",
+          "nextAction": "读取同稿提交回执；取消、页面改代或结果未知时不得再次确认",
+          "status": "skipped",
+          "evidence": "本次未调用首次确认；已有创建请求，禁止补点。",
+          "observedAt": "2026-09-27T18:23:37.888Z",
+          "generation": 1
+        },
+        {
+          "id": "bilibili.submission.receipt",
+          "nextAction": "尚未核验；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "verifying",
+            "evidence": "已观察到创建请求，尚未取得与本稿对应的成功回执。",
+            "observedAt": "2026-09-27T18:23:38.023Z",
+            "generation": 1
+          },
+          "status": "completed",
+          "evidence": "原生提交回执返回同稿动态 ID 1252820558485127171；公开内容尚待核验",
+          "observedAt": "2026-09-27T18:23:38.023Z",
+          "generation": 1
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "识别首次规范确认分支，或读取直接提交回执",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-27T18:23:36.539Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-27T18:23:38.354Z",
+          "generation": 1
+        },
+        {
+          "id": "bilibili.submission.observation",
+          "nextAction": "只在原 Runtime 与原观察器仍有效时继续；历史记录不授予重发权限",
+          "status": "completed",
+          "evidence": "截至 2026-09-27T18:23:38.531Z：确认调用尚未尝试；创建请求已观察到；监听已结束。请求稿件匹配：正文与逐图对应。响应状态 200。平台结果码 0。",
+          "reason": "这是原操作的观察记录，不是发布成功或可重发证明；续接必须检查仍有效的原 Runtime 与观察器。",
+          "observedAt": "2026-09-27T18:23:38.531Z",
+          "generation": 1
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-27T18:23:36.539Z",
+          "observedAt": "2026-09-27T18:23:57.193Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:23:31.866Z",
+      "finishedAt": "2026-09-27T18:23:38.165Z",
+      "evidence": [
+        "inspect 2026-09-27T18:23:18.622Z：selectors.publish=main > section:nth-child(1) :text-is(\"发布\") 已签发，submissionUnavailableReason 为空，composer.allowPublish=true；正文/3图/标题/公开范围均已核验，开始单次发布（不重复发送）",
+        "B站原生提交回执已确认平台接受 · 作品 1252820558485127171 · 账号 3546384070347419"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验动态 ID、作者、全文与逐图结果",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:24:11.998Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:24:11.998Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-27T18:24:11.998Z",
+          "generation": 1
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "完成事务；未知只查询管理页",
+          "status": "completed",
+          "evidence": "公开页已核验 · 3546384070347419 · 做AI眼镜第196天，我以为交付了，用户 · https://t.bilibili.com/1252820558485127171",
+          "observedAt": "2026-09-27T18:24:28.643Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-27T18:23:52.954Z",
+      "finishedAt": "2026-09-27T18:24:28.643Z",
+      "outputRefs": {
+        "publicationUrl": "https://t.bilibili.com/1252820558485127171"
+      },
+      "evidence": [
+        "基于 main 回执开始核验：动态 ID 1252820558485127171，URL https://t.bilibili.com/1252820558485127171，响应 200、平台码 0、请求稿件匹配；开始核验作者、全文与逐图结果",
+        "inspect 2026-09-27T18:24:11.797Z（published-article 页）：动态 ID 1252820558485127171，作者 platformAccountId=3546384070347419 与 targetUID 一致，标题=\"做AI眼镜第196天，我以为交付了，用户\"，全文 bodyMatchesFrozen=true（791字符），3 张冻结图按序命中同一平台 URL 且 loaded=true，URL https://t.bilibili.com/1252820558485127171 可复核",
+        "csdn@1 页面回读 · https://t.bilibili.com/1252820558485127171"
+      ]
+    }
+  ]
+}

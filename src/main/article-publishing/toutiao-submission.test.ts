@@ -42,6 +42,64 @@ describe('Toutiao bounded submit diagnostics', () => {
 })
 
 describe('Toutiao submission receipt plus management evidence', () => {
+  it.each(['ready-later', 'cancelled', 'disposed', 'ambiguous', 'page-changed'] as const)(
+    'reobserves a loading management card without a second submission: %s',
+    async (mode) => {
+      vi.useFakeTimers()
+      try {
+        let current = true
+        const page = Object.assign(new EventEmitter(), { waitForURL: vi.fn(async () => undefined) })
+        const card = { status: '审核中', images: [], urls: [], region: 'card', titleSelector: 'p' }
+        const read = vi.mocked(readToutiaoPublicationReview).mockReset()
+        read.mockResolvedValue({ current: true, candidates: [card], diagnostics: [] })
+        read.mockResolvedValueOnce({
+          current: mode !== 'page-changed',
+          candidates: mode === 'ambiguous' ? [card, card] : [],
+          diagnostics: [],
+        })
+        const observer = observeToutiaoSubmission(
+          page as never,
+          { uid: '12345', title: 'Article', images: ['image-a'] },
+          () => current,
+        )
+        const request = {
+          method: () => 'POST',
+          url: () => 'https://mp.toutiao.com/mp/agw/article/wtt',
+          resourceType: () => 'fetch',
+          postData: () => '{}',
+        }
+        observer.arm()
+        page.emit('request', request)
+        page.emit('response', {
+          request: () => request,
+          url: request.url,
+          status: () => 200,
+          text: async () => '{"code":0}',
+        })
+        const result = observer.finish().then(
+          (value) => ({ value }),
+          (error) => ({ error }),
+        )
+        expect(observer.finish()).toBe(observer.finish())
+        await vi.advanceTimersByTimeAsync(0)
+        expect(read).toHaveBeenCalledTimes(1)
+        if (mode === 'cancelled') current = false
+        if (mode === 'disposed') observer.dispose()
+        await vi.advanceTimersByTimeAsync(250)
+        expect(await result).toMatchObject(
+          mode === 'ready-later' ? { value: { status: '审核中' } } : { error: expect.any(Error) },
+        )
+        expect(read).toHaveBeenCalledTimes(mode === 'ready-later' ? 2 : 1)
+        observer.dispose()
+        expect(page.listenerCount('request')).toBe(0)
+        expect(page.listenerCount('response')).toBe(0)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
+
   it.each([
     'accepted',
     'rejected',

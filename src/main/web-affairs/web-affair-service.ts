@@ -4616,7 +4616,7 @@ export class WebAffairService {
       return this.transitionError('只有待人工处理的文章发布 Attempt 可以交还 Agent')
     }
     const resultVerificationOnly =
-      publishing.adapterId === 'toutiao' &&
+      ['csdn', 'toutiao'].includes(publishing.adapterId) &&
       publishing.publication.status !== 'not-started' &&
       publishing.sideEffects.some(
         (effect) =>
@@ -4979,7 +4979,7 @@ export class WebAffairService {
     const publishing = found.affair.articlePublishing
     const currentStep =
       publishing.execution.status === 'preparing' &&
-      publishing.publication.status === 'result-unknown' &&
+      publishing.publication.status !== 'not-started' &&
       publishing.execution.currentStepId === 'verify-publication'
         ? publishing.checkpoints.find((checkpoint) => checkpoint.stepId === 'verify-publication')
         : publishing.checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
