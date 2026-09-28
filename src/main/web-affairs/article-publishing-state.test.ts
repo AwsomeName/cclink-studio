@@ -1,4 +1,8 @@
 import {
+  eligibleCsdnRetryEffect,
+  hasCsdnRetryAuthorization,
+} from '../../shared/article-publishing/csdn-retry'
+import {
   eligibleBilibiliRetryEffect,
   hasBilibiliRetryAuthorization,
 } from '../../shared/article-publishing/bilibili-retry'
@@ -34,6 +38,202 @@ describe('article publishing persistent state', () => {
 
   afterEach(async () => {
     await rm(directory, { recursive: true, force: true })
+  })
+
+  it.each(['published', 'waiting-human', 'result-unknown'] as const)(
+    'projects completed CSDN plan without erasing the old unknown effect: %s',
+    async (status) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      const internal = Reflect.get(created.service, 'snapshot') as WebAffairSnapshot
+      const state = internal.affairs.find((a) => a.id === created.affairId)!.articlePublishing!
+      state.execution.status = status
+      state.publication.status = status === 'published' ? 'published' : 'result-unknown'
+      state.sideEffects = [
+        {
+          key: 'historical-unknown',
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          executionGeneration: 1,
+          kind: 'publish',
+          targetId: 'final',
+          status: 'result-unknown',
+          reservedAt: '2026-09-27T00:00:00Z',
+          dispatchedAt: '2026-09-27T00:00:01Z',
+        },
+      ]
+      const checkpoint = state.checkpoints.find((c) => c.stepId === 'verify-publication')!
+      checkpoint.status = 'completed'
+      checkpoint.details = [
+        {
+          id: 'publication.verify',
+          status: 'completed',
+          evidence: 'trusted public body and gallery',
+          observedAt: '2026-09-28T00:00:00Z',
+          generation: 2,
+          recheck: {
+            status: 'unknown',
+            evidence: 'old dispatch',
+            observedAt: '2026-09-28T00:00:01Z',
+            generation: 2,
+          },
+        },
+      ]
+      const view = created.service.getProjectSnapshot(WORKSPACE_ID)
+      if (!view.success) throw new Error('missing view')
+      const projected = view.data.affairs.find((a) => a.id === created.affairId)!.articlePublishing!
+      expect(
+        projected.checkpoints.find((c) => c.stepId === 'verify-publication')!.details![0]
+          .recheck === undefined,
+      ).toBe(status === 'published')
+      expect(checkpoint.details[0].recheck?.status).toBe('unknown')
+      expect(projected.sideEffects).toEqual(state.sideEffects)
+      expect(projected.publication).toEqual(state.publication)
+      expect(projected.execution).toEqual(state.execution)
+    },
+  )
+
+  it.each([
+    'authorized',
+    'ordinary',
+    'stale',
+    'wrong-key',
+    'missing-draft',
+    'unknown-upload',
+    'incomplete',
+    'already-published',
+    'used',
+  ] as const)('keeps CSDN original-draft retry bounded and preserves history: %s', async (mode) => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await created.service.flush()
+    const snapshot: WebAffairSnapshot = JSON.parse(
+      await readFile(join(directory, 'affairs.json'), 'utf8'),
+    )
+    const affair = snapshot.affairs.find((a) => a.id === created.affairId)!
+    const p = affair.articlePublishing!
+    const now = new Date().toISOString()
+    p.draft = {
+      platformDraftId: '123456789',
+      platformAccountId: 'csdn:owner',
+      url: 'https://mp.csdn.net/mp_blog/creation/editor/123456789',
+      normalizedTitle: p.fields.title,
+      lastVerifiedAt: now,
+    }
+    p.execution.status = 'result-unknown'
+    p.publication = { status: 'result-unknown' }
+    affair.attempts[0].status = 'interrupted'
+    p.checkpoints.forEach((step) => {
+      step.status = ['publish', 'verify-publication'].includes(step.stepId)
+        ? 'needs-reconcile'
+        : 'completed'
+    })
+    p.assets.forEach((asset) => {
+      asset.status = 'uploaded'
+      asset.platformUrl = 'https://i-blog.csdnimg.cn/direct/original.png'
+      asset.verifiedAt = now
+    })
+    p.sideEffects = [
+      {
+        key: 'old-final',
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: p.execution.currentGeneration,
+        kind: 'publish',
+        targetId: 'final',
+        status: 'result-unknown',
+        reservedAt: now,
+        dispatchedAt: now,
+      },
+      {
+        key: 'old-save',
+        affairId: affair.id,
+        attemptId: created.attemptId,
+        executionGeneration: p.execution.currentGeneration,
+        kind: 'save-draft',
+        targetId: 'initial-draft:save',
+        status: 'result-unknown',
+        reservedAt: now,
+        dispatchedAt: now,
+      },
+    ]
+    if (mode === 'missing-draft') delete p.draft
+    if (mode === 'unknown-upload') p.assets[0].status = 'result-unknown'
+    if (mode === 'incomplete') p.checkpoints[0].status = 'pending'
+    if (mode === 'already-published')
+      p.publication.url = 'https://blog.csdn.net/owner/article/details/123456789'
+    if (mode === 'used')
+      p.csdnRetry = {
+        attemptId: created.attemptId,
+        executionGeneration: p.execution.currentGeneration,
+        previousEffectKey: 'old-final',
+        draftId: '123456789',
+        authorizedAt: now,
+      }
+    const old = structuredClone(p)
+    Reflect.set(created.service, 'snapshot', snapshot)
+    const result = await created.service.acquireArticlePublishingAttempt(
+      affair.id,
+      WORKSPACE_ID,
+      mode === 'ordinary'
+        ? undefined
+        : {
+            previousEffectKey: mode === 'wrong-key' ? 'different' : 'old-final',
+            observedGeneration: p.execution.currentGeneration + (mode === 'stale' ? 1 : 0),
+            acceptPossibleDuplicate: true,
+          },
+    )
+    expect(result.success, JSON.stringify(result)).toBe(['authorized', 'ordinary'].includes(mode))
+    if (!result.success) return
+    const next = result.data.articlePublishing!
+    expect(next.sideEffects).toEqual(old.sideEffects)
+    expect(next.assets).toEqual(old.assets)
+    expect(next.draft?.platformDraftId).toBe('123456789')
+    expect(next.publication.status).toBe('result-unknown')
+    expect(next.execution.currentStepId).toBe(
+      mode === 'authorized' ? 'open-editor' : 'verify-publication',
+    )
+    expect(hasCsdnRetryAuthorization(next)).toBe(mode === 'authorized')
+    if (mode === 'authorized') {
+      expect(next.draft?.recovery?.status).toBe('locating')
+      expect(next.checkpoints.every((step) => step.status === 'pending')).toBe(true)
+      expect(eligibleCsdnRetryEffect(next)).toBeUndefined()
+      for (const handoff of [false, true]) {
+        const currentSnapshot: WebAffairSnapshot = structuredClone(
+          Reflect.get(created.service, 'snapshot'),
+        )
+        const current = currentSnapshot.affairs.find((a) => a.id === affair.id)!
+        const state = current.articlePublishing!
+        const attempt = current.attempts.find((a) => a.id === created.attemptId)!
+        state.execution.status = handoff ? 'waiting-human' : 'interrupted'
+        state.execution.currentStepId = 'fill-fields'
+        state.execution.lastAgentRunId = undefined
+        state.execution.lastBrowserTaskRunId = undefined
+        state.checkpoints.find((c) => c.stepId === 'fill-fields')!.status = handoff
+          ? 'waiting-human'
+          : 'needs-reconcile'
+        attempt.status = handoff ? 'waiting-human' : 'interrupted'
+        Reflect.set(created.service, 'snapshot', currentSnapshot)
+        const resumed = await created.service.acquireArticlePublishingAttempt(
+          affair.id,
+          WORKSPACE_ID,
+        )
+        expect(resumed.success, JSON.stringify(resumed)).toBe(true)
+        if (!resumed.success) throw new Error('resume failed')
+        expect(hasCsdnRetryAuthorization(resumed.data.articlePublishing!)).toBe(true)
+        expect(resumed.data.articlePublishing!.execution.currentStepId).not.toBe(
+          'verify-publication',
+        )
+        expect(resumed.data.articlePublishing!.sideEffects).toEqual(old.sideEffects)
+      }
+      const changed = structuredClone(next)
+      changed.draft!.platformDraftId = '987654321'
+      expect(hasCsdnRetryAuthorization(changed)).toBe(false)
+      next.sideEffects.push({
+        ...old.sideEffects[0],
+        key: 'new-final',
+        executionGeneration: next.execution.currentGeneration,
+      })
+      expect(hasCsdnRetryAuthorization(next)).toBe(false)
+    }
   })
 
   it('persists bounded tag reduction in the same task and rejects stale or cross-workspace requests', async () => {
@@ -420,6 +620,8 @@ describe('article publishing persistent state', () => {
 
   it.each([
     'accepted',
+    'active-run',
+    'active-stale-effect',
     'stale',
     'wrong-account',
     'wrong-image',
@@ -464,6 +666,16 @@ describe('article publishing persistent state', () => {
         },
       ]
       if (mode === 'duplicate-send') p.sideEffects.push({ ...p.sideEffects[0], key: 'second' })
+      if (mode.startsWith('active-')) {
+        p.execution.status = 'running'
+        p.execution.currentStepId = 'publish'
+        p.publication.status = 'dispatched'
+        attempt.browserTaskRunId = '55555555-5555-4555-8555-555555555555'
+        p.sideEffects[0].browserTaskRunId = '55555555-5555-4555-8555-555555555555'
+        p.sideEffects[0].status = 'dispatched'
+        if (mode === 'active-run')
+          p.sideEffects[0].executionGeneration = attempt.executionGeneration
+      }
       Reflect.set(created.service, 'snapshot', snapshot)
       const result = await created.service.recordWeiboPublicationLocation(
         {
@@ -485,16 +697,20 @@ describe('article publishing persistent state', () => {
         () => mode !== 'changed-page',
       )
       expect(result.success, JSON.stringify(result.success ? null : result.error)).toBe(
-        mode === 'accepted',
+        mode === 'accepted' || mode === 'active-run',
       )
       if (result.success) {
-        expect(result.data.articlePublishing?.publication.status).toBe('result-unknown')
-        expect(result.data.articlePublishing?.execution.currentStepId).toBe('verify-publication')
+        expect(result.data.articlePublishing?.publication.status).toBe(
+          mode === 'active-run' ? 'dispatched' : 'result-unknown',
+        )
+        expect(result.data.articlePublishing?.execution.currentStepId).toBe(
+          mode === 'active-run' ? 'publish' : 'verify-publication',
+        )
         expect(result.data.articlePublishing?.sideEffects).toHaveLength(1)
         expect(result.data.articlePublishing?.sideEffects[0]).toMatchObject({
           key: 'weibo-original-send',
           status: 'verified',
-          executionGeneration: attempt.executionGeneration - 1,
+          executionGeneration: attempt.executionGeneration - (mode === 'active-run' ? 0 : 1),
         })
       }
       await created.service.flush()

@@ -1,0 +1,441 @@
+[
+  {
+    "platform": "csdn",
+    "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+    "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+    "generation": 6,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://blog.csdn.net/weixin_36388257/article/details/166742682",
+      "observedAt": "2026-09-28T01:56:53.653Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "result-unknown",
+        "dispatchedAt": "2026-09-27T18:01:29.793Z",
+        "observedAt": "2026-09-27T18:02:00.192Z"
+      },
+      {
+        "key": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g5:publish:final",
+        "executionGeneration": 5,
+        "status": "verified",
+        "dispatchedAt": "2026-09-28T01:52:57.080Z",
+        "observedAt": "2026-09-28T01:56:44.759Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "platform": "weibo",
+    "affairId": "cabf49ce-4d20-4c14-9ac9-e6288c6b9a7a",
+    "attemptId": "ddf969f2-d67c-4b4b-b984-a40cb290eddf",
+    "generation": 2,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://weibo.com/5961101548/Rk7f1mHa7",
+      "observedAt": "2026-09-27T18:15:05.254Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "cabf49ce-4d20-4c14-9ac9-e6288c6b9a7a:ddf969f2-d67c-4b4b-b984-a40cb290eddf:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "verified",
+        "dispatchedAt": "2026-09-27T18:11:10.739Z",
+        "observedAt": "2026-09-27T18:14:55.140Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "platform": "bilibili",
+    "affairId": "d3ff8d13-9203-4e4b-97b2-61933a42d221",
+    "attemptId": "33a885a0-8a81-4757-9b9e-3706b52f4ef0",
+    "generation": 1,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://t.bilibili.com/1252820558485127171",
+      "observedAt": "2026-09-27T18:24:35.244Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "d3ff8d13-9203-4e4b-97b2-61933a42d221:33a885a0-8a81-4757-9b9e-3706b52f4ef0:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "verified",
+        "dispatchedAt": "2026-09-27T18:23:36.539Z",
+        "observedAt": "2026-09-27T18:24:35.244Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "platform": "zhihu",
+    "affairId": "7eea523c-9516-441e-9592-1d854b3c08e0",
+    "attemptId": "ac60fd9d-1fa9-4abb-9bb7-3a053fb75aa9",
+    "generation": 1,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://zhuanlan.zhihu.com/p/2087731285246612581",
+      "observedAt": "2026-09-27T18:40:44.456Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "7eea523c-9516-441e-9592-1d854b3c08e0:ac60fd9d-1fa9-4abb-9bb7-3a053fb75aa9:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "verified",
+        "dispatchedAt": "2026-09-27T18:39:38.160Z",
+        "observedAt": "2026-09-27T18:40:44.456Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "platform": "juejin",
+    "affairId": "8d4265c5-f7a8-4ee3-a021-1801a7912fc4",
+    "attemptId": "bf58eeda-f6f4-4ab0-877d-4eafdaa4fc86",
+    "generation": 1,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://juejin.cn/post/7689676713795207211",
+      "observedAt": "2026-09-27T19:01:07.315Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "8d4265c5-f7a8-4ee3-a021-1801a7912fc4:bf58eeda-f6f4-4ab0-877d-4eafdaa4fc86:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "verified",
+        "dispatchedAt": "2026-09-27T18:59:14.781Z",
+        "observedAt": "2026-09-27T19:01:07.315Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  },
+  {
+    "platform": "toutiao",
+    "affairId": "91bb6bb5-c7f7-4f57-83a7-ff671aa2a928",
+    "attemptId": "c23e9e39-52ab-4b07-a952-5d188df4f36c",
+    "generation": 4,
+    "executionStatus": "published",
+    "publication": {
+      "status": "published",
+      "url": "https://www.toutiao.com/w/1877513281858569/",
+      "observedAt": "2026-09-27T19:36:48.702Z"
+    },
+    "assets": [
+      {
+        "displayPath": "素材/01-太空舱提示效果图.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/02-紧凑模式面板本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      },
+      {
+        "displayPath": "素材/03-陪伴页面本地渲染.png",
+        "status": "uploaded",
+        "uploadCount": 1
+      }
+    ],
+    "publishEffects": [
+      {
+        "key": "91bb6bb5-c7f7-4f57-83a7-ff671aa2a928:c23e9e39-52ab-4b07-a952-5d188df4f36c:g1:publish:final",
+        "executionGeneration": 1,
+        "status": "verified",
+        "dispatchedAt": "2026-09-27T19:17:31.981Z",
+        "observedAt": "2026-09-27T19:36:39.437Z"
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-account",
+        "status": "completed"
+      },
+      {
+        "stepId": "upload-assets",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-body",
+        "status": "completed"
+      },
+      {
+        "stepId": "fill-fields",
+        "status": "completed"
+      },
+      {
+        "stepId": "save-draft",
+        "status": "completed"
+      },
+      {
+        "stepId": "publish",
+        "status": "completed"
+      },
+      {
+        "stepId": "verify-publication",
+        "status": "completed"
+      }
+    ]
+  }
+]

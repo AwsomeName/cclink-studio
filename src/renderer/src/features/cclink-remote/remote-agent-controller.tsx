@@ -798,5 +798,16 @@ export function toUnifiedRemoteMessage(
     timestamp: message.timestamp,
     rawText: message.content,
     content: [{ type: 'text', text: message.content }],
+    ...(message.type === 'user' && message.images?.length
+      ? {
+          resources: message.images.map((sourceUrl, index) => ({
+            id: `${message.id}:image:${index + 1}`,
+            kind: 'image' as const,
+            label: `图片 ${index + 1}`,
+            detail: sourceUrl,
+            ref: { type: 'image' as const, sourceUrl },
+          })),
+        }
+      : {}),
   }
 }

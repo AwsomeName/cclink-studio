@@ -273,6 +273,13 @@ export interface ArticlePublishingComposer {
 }
 
 export interface ArticlePublishingState {
+  csdnRetry?: {
+    attemptId: string
+    executionGeneration: number
+    previousEffectKey: string
+    draftId: string
+    authorizedAt: string
+  }
   bilibiliRetry?: {
     attemptId: string
     executionGeneration: number
@@ -361,6 +368,11 @@ export interface CreateArticlePublishingTaskInput extends InspectArticlePublishi
 }
 
 export interface StartArticlePublishingTaskInput {
+  csdnRetry?: {
+    previousEffectKey: string
+    observedGeneration: number
+    acceptPossibleDuplicate: true
+  }
   bilibiliRetry?: {
     previousEffectKey: string
     observedGeneration: number

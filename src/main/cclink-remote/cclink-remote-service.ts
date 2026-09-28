@@ -29,6 +29,7 @@ import {
   CCLINK_MIN_PROTOCOL_VERSION,
   CCLINK_PROTOCOL_VERSION,
   createCclinkEnvelope,
+  normalizeCclinkRemoteImageUrls,
 } from '../../shared/cclink'
 import type {
   CclinkImageUploadProgress,
@@ -534,6 +535,7 @@ export class CclinkRemoteService implements RemoteProvider {
         id: `remote-user-${requestId}`,
         content: normalized || `图片消息（${imageUrls.length} 张）`,
         timestamp: nowSeconds(),
+        ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
       }
       this.appendMessage(sessionId, userMessage)
       this.setSessionStatus(sessionId, 'active')
@@ -1706,12 +1708,15 @@ export class CclinkRemoteService implements RemoteProvider {
           session_id: string
           request_id?: string
           content: string
+          images?: unknown
         }
+        const images = normalizeCclinkRemoteImageUrls(event.images)
         const remoteMessage: CclinkRemoteMessage = {
           type: 'user',
           id: `remote-user-${event.request_id || randomUUID()}`,
-          content: event.content,
+          content: event.content || (images.length > 0 ? `图片消息（${images.length} 张）` : ''),
           timestamp: nowSeconds(),
+          ...(images.length > 0 ? { images } : {}),
         }
         this.appendMessage(event.session_id, remoteMessage)
         this.setSessionStatus(event.session_id, 'active')

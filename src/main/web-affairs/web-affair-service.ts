@@ -1,3 +1,7 @@
+import {
+  eligibleCsdnRetryEffect,
+  hasCsdnRetryAuthorization,
+} from '../../shared/article-publishing/csdn-retry'
 import { reduceUnsubmittedTags } from '../../shared/article-publishing/reduce-unsubmitted-tags'
 import type { ReduceArticlePublishingTagsInput } from '../../shared/article-publishing/article-publishing-types'
 import { canResumeUnsubmittedToutiaoImage } from '../article-publishing/toutiao-unsubmitted-upload'
@@ -21,6 +25,7 @@ import { jikeImageIdentity, parseJikePublicationUrl } from '../article-publishin
 import {
   foldArticlePublishingPlanResults,
   setArticlePublishingPlanResult,
+  settleCompletedArticlePublishingPlan,
 } from './article-publishing-plan-results'
 import type { ArticlePublishingDetailResult } from '../../shared/article-publishing/article-publishing-types'
 import { randomUUID } from 'node:crypto'
@@ -296,7 +301,14 @@ export class WebAffairService {
 
   getSnapshot(): WebAffairOperationResult<WebAffairSnapshot> {
     if (!this.snapshot) return this.unavailable()
-    return { success: true, data: structuredClone(this.snapshot) }
+    const data = structuredClone(this.snapshot)
+    // Project already-verified terminal facts for older stored plans without
+    // rewriting the store or granting any action permission.
+    for (const affair of data.affairs) {
+      if (affair.articlePublishing)
+        affair.articlePublishing = settleCompletedArticlePublishingPlan(affair.articlePublishing)
+    }
+    return { success: true, data }
   }
 
   getProjectSnapshot(workspaceId: string): WebAffairOperationResult<WebAffairProjectSnapshot> {
@@ -602,12 +614,13 @@ export class WebAffairService {
         retry &&
         (retry.acceptPossibleDuplicate !== true ||
           retry.observedGeneration !== publishing.execution.currentGeneration ||
-          eligibleBilibiliRetryEffect(publishing)?.key !== retry.previousEffectKey ||
+          (publishing.adapterId === 'csdn'
+            ? eligibleCsdnRetryEffect(publishing)
+            : eligibleBilibiliRetryEffect(publishing)
+          )?.key !== retry.previousEffectKey ||
           currentAttempt?.status !== 'interrupted')
       )
-        return this.transitionError(
-          '本稿没有可绑定的首次确认前中断证据，或重试授权已使用；只能核验',
-        )
+        return this.transitionError('本稿没有可绑定的原稿续发证据，或重试授权已使用；只能核验')
       let prepared: WebAffairOperationResult<WebAffair>
       if (currentAttempt?.status === 'interrupted') {
         prepared = await this.resumeArticlePublishingAttemptNow(
@@ -1214,7 +1227,9 @@ export class WebAffairService {
           ...publishing,
           publication: { ...publishing.publication, url: input.url, observedAt: now },
           checkpoints: publishing.checkpoints.map((checkpoint) =>
-            checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+            publishing.execution.currentStepId !== 'publish' &&
+            checkpoint.stepId === 'publish' &&
+            checkpoint.status !== 'completed'
               ? {
                   ...checkpoint,
                   status: 'completed' as const,
@@ -1273,9 +1288,17 @@ export class WebAffairService {
         found.attempt.launchOperationId !== input.launchOperationId ||
         publishing.execution.currentAttemptId !== input.attemptId ||
         publishing.execution.currentGeneration !== input.executionGeneration ||
-        publishing.execution.currentStepId !== 'verify-publication' ||
+        !(
+          (publishing.execution.currentStepId === 'verify-publication' &&
+            publishing.publication.status === 'result-unknown') ||
+          (publishing.execution.currentStepId === 'publish' &&
+            publishing.execution.status === 'running' &&
+            publishing.publication.status === 'dispatched' &&
+            !!found.attempt.browserTaskRunId &&
+            effects[0]?.executionGeneration === input.executionGeneration &&
+            effects[0]?.browserTaskRunId === found.attempt.browserTaskRunId)
+        ) ||
         !['preparing', 'running-ai'].includes(found.attempt.status) ||
-        publishing.publication.status !== 'result-unknown' ||
         effects.length !== 1 ||
         !['dispatched', 'result-unknown', 'verified'].includes(effects[0].status) ||
         !ids.length ||
@@ -1297,7 +1320,9 @@ export class WebAffairService {
           ...publishing,
           publication: { ...publishing.publication, url: anchor.url, observedAt: now },
           checkpoints: publishing.checkpoints.map((checkpoint) =>
-            checkpoint.stepId === 'publish' && checkpoint.status !== 'completed'
+            publishing.execution.currentStepId !== 'publish' &&
+            checkpoint.stepId === 'publish' &&
+            checkpoint.status !== 'completed'
               ? {
                   ...checkpoint,
                   status: 'completed' as const,
@@ -4615,7 +4640,9 @@ export class WebAffairService {
     ) {
       return this.transitionError('只有待人工处理的文章发布 Attempt 可以交还 Agent')
     }
+    const carryUnusedCsdnRetry = hasCsdnRetryAuthorization(publishing)
     const resultVerificationOnly =
+      !carryUnusedCsdnRetry &&
       ['csdn', 'toutiao'].includes(publishing.adapterId) &&
       publishing.publication.status !== 'not-started' &&
       publishing.sideEffects.some(
@@ -4694,6 +4721,9 @@ export class WebAffairService {
       ),
       articlePublishing: {
         ...publishing,
+        ...(carryUnusedCsdnRetry
+          ? { csdnRetry: { ...publishing.csdnRetry!, executionGeneration } }
+          : {}),
         ...(carryUnusedRetry
           ? { bilibiliRetry: { ...publishing.bilibiliRetry!, executionGeneration } }
           : {}),
@@ -4749,6 +4779,9 @@ export class WebAffairService {
     const launchOperationId = randomUUID()
     const publishing = found.affair.articlePublishing
     const carryUnusedRetry = canCarryUnusedBilibiliRetry(publishing)
+    const carryUnusedCsdnRetry = hasCsdnRetryAuthorization(publishing)
+    const csdnRetry = Boolean(retryEffectKey && publishing.adapterId === 'csdn')
+    const rebuildRetry = Boolean(retryEffectKey && !csdnRetry)
     const receiptBoundBilibiliPublish =
       publishing.adapterId === 'bilibili' &&
       publishing.publication.status === 'result-unknown' &&
@@ -4763,6 +4796,7 @@ export class WebAffairService {
     const resultVerificationOnly =
       !retryEffectKey &&
       !carryUnusedRetry &&
+      !carryUnusedCsdnRetry &&
       publishing.execution.status === 'result-unknown' &&
       (publishing.publication.status === 'result-unknown' ||
         receiptBoundBilibiliPublish ||
@@ -4796,7 +4830,9 @@ export class WebAffairService {
               error: undefined,
               evidence: [
                 ...checkpoint.evidence,
-                '用户另行授权本稿重建；上代证据不能证明新现场完成',
+                csdnRetry
+                  ? '用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件'
+                  : '用户另行授权本稿重建；上代证据不能证明新现场完成',
               ].slice(-40),
             }
           : (resultVerificationOnly && checkpoint.stepId === 'verify-publication') ||
@@ -4892,33 +4928,47 @@ export class WebAffairService {
       attempts,
       articlePublishing: {
         ...publishing,
+        ...(carryUnusedCsdnRetry
+          ? { csdnRetry: { ...publishing.csdnRetry!, executionGeneration } }
+          : {}),
         ...(carryUnusedRetry
           ? { bilibiliRetry: { ...publishing.bilibiliRetry!, executionGeneration } }
           : {}),
-        ...(retryEffectKey
+        ...(rebuildRetry
           ? {
               bilibiliRetry: {
                 attemptId,
                 executionGeneration,
-                previousEffectKey: retryEffectKey,
+                previousEffectKey: retryEffectKey!,
+                authorizedAt: now,
+              },
+            }
+          : {}),
+        ...(csdnRetry
+          ? {
+              csdnRetry: {
+                attemptId,
+                executionGeneration,
+                previousEffectKey: retryEffectKey!,
+                draftId: publishing.draft!.platformDraftId!,
                 authorizedAt: now,
               },
             }
           : {}),
         executionProtocol:
-          retryEffectKey || carryUnusedRetry
+          rebuildRetry || carryUnusedRetry
             ? { ...recoveryProtocol, current: undefined }
             : resultVerificationOnly
               ? publishing.executionProtocol
               : { ...recoveryProtocol, current: recoveryOperation },
         draft:
-          retryEffectKey || carryUnusedRetry
+          rebuildRetry || carryUnusedRetry
             ? undefined
             : resultVerificationOnly
               ? publishing.draft
               : this.beginArticlePublishingRecovery(publishing, executionGeneration, now),
         assets: publishing.assets.map((asset) =>
-          retryEffectKey
+          rebuildRetry
             ? {
                 ...asset,
                 status: 'pending' as const,
@@ -4955,7 +5005,7 @@ export class WebAffairService {
         this.event(
           'attempt-returned',
           retryEffectKey
-            ? `用户明确接受可能重复，授权原任务重建并提交一次；旧未知动作 ${retryEffectKey} 保留`
+            ? `用户明确接受可能重复，授权原任务${csdnRetry ? '核验原草稿后续发' : '重建并提交'}一次；旧未知动作 ${retryEffectKey} 保留`
             : resultVerificationOnly
               ? '文章发布结果未知；将创建新的只读核验 Runtime，禁止重放发布动作'
               : '文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask',
@@ -7705,6 +7755,19 @@ export class WebAffairService {
         return this.transitionError('当前页面没有有效的草稿恢复写入许可')
       }
     }
+    if (
+      hasCsdnRetryAuthorization(publishing) &&
+      kind !== 'publish' &&
+      !(
+        kind === 'save-draft' &&
+        ((publishing.execution.currentStepId === 'fill-fields' &&
+          targetId.startsWith('autosave:fill-fields:category:')) ||
+          (publishing.execution.currentStepId === 'save-draft' &&
+            targetId === 'manual-save:save-draft'))
+      )
+    ) {
+      return this.transitionError('CSDN原稿续发仅授权恢复冻结分类及保存，不得重传图片或重写正文')
+    }
     const unresolvedHistoricalEffect = publishing.sideEffects.find(
       (effect) =>
         effect.attemptId === attemptId &&
@@ -7743,7 +7806,8 @@ export class WebAffairService {
       }
       if (
         publishing.publication.status !== 'not-started' &&
-        !hasBilibiliRetryAuthorization(publishing)
+        !hasBilibiliRetryAuthorization(publishing) &&
+        !hasCsdnRetryAuthorization(publishing)
       ) {
         return this.transitionError('发布动作已经派发或结果未知，只允许核验')
       }

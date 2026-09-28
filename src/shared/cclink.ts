@@ -1,6 +1,7 @@
 import type { RemoteError } from './remote-error'
 import type { CclinkRuntimeMessage } from './cclink-runtime'
 export type * from './cclink-runtime'
+export { normalizeCclinkRemoteImageUrls } from './cclink-runtime'
 
 export interface CclinkIdentity {
   accountUserId: string

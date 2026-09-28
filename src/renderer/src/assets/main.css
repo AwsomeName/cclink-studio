@@ -8732,6 +8732,26 @@ body.is-resizing-panels .main-area > div {
   margin-top: 6px;
 }
 
+.message-image-list {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.message-image-preview {
+  display: block;
+  width: auto;
+  max-width: min(320px, 100%);
+  height: auto;
+  max-height: 240px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-primary) 72%, transparent);
+  object-fit: contain;
+}
+
 .message-resource-chip {
   max-width: 100%;
   overflow: hidden;

@@ -157,4 +157,31 @@ describe('ConversationMessageRenderer', () => {
       }),
     ).toBe('answer\n\ntool output')
   })
+
+  it('does not render non-HTTPS image resources as image sources', () => {
+    const rendered = renderToStaticMarkup(
+      createElement(ConversationMessageRenderer, {
+        message: {
+          id: 'unsafe-image',
+          role: 'user',
+          rawText: '图片',
+          timestamp: 1,
+          content: [{ type: 'text', text: '图片' }],
+          resources: [
+            {
+              id: 'unsafe-image-resource',
+              kind: 'image',
+              label: '不安全图片',
+              ref: { type: 'image', sourceUrl: 'javascript:alert(1)' },
+            },
+          ],
+        },
+        conversationId: 'test',
+        workspaceKey: null,
+      }),
+    )
+
+    expect(rendered).not.toContain('<img')
+    expect(rendered).not.toContain('src="javascript:')
+  })
 })

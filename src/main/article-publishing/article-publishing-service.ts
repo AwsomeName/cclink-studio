@@ -1,3 +1,4 @@
+import { hasCsdnRetryAuthorization } from '../../shared/article-publishing/csdn-retry'
 import { BILIBILI_BODY, bilibiliPublishingTitle } from './bilibili-publishing-adapter'
 import { toutiaoRecoveryPage } from '../../shared/article-publishing/toutiao-recovery-page'
 import {
@@ -266,6 +267,7 @@ export class ArticlePublishingService {
       const publicationRecoveryRequired = Boolean(
         input.resumed &&
         !hasBilibiliRetryAuthorization(publishing) &&
+        !hasCsdnRetryAuthorization(publishing) &&
         (publishing.publication.status === 'result-unknown' ||
           // A submitted CSDN article leaves the draft list while review is pending.
           // Resuming must inspect its publication, never try to recover a draft.
@@ -312,7 +314,7 @@ export class ArticlePublishingService {
       let recoveredDraft: CsdnDraftRecoveryResult | null = null
       let recoveredPublicationUrl: string | null = null
       const assertRecoveryActive = () => {
-        if (!['toutiao', 'weibo'].includes(publishing.adapterId)) return
+        if (!['toutiao', 'weibo', 'csdn'].includes(publishing.adapterId)) return
         const snapshot = this.webAffairService.getProjectSnapshot(input.workspaceId)
         const current = snapshot.success
           ? snapshot.data.affairs.find((a) => a.id === input.affair.id)?.articlePublishing
@@ -2244,6 +2246,11 @@ export class ArticlePublishingService {
       return invalid('正文图片已变化，不能恢复旧 Attempt；请重新创建发布任务')
     }
 
+    if (
+      (parsed.data.csdnRetry && (publishing.adapterId !== 'csdn' || parsed.data.bilibiliRetry)) ||
+      (parsed.data.bilibiliRetry && publishing.adapterId !== 'bilibili')
+    )
+      return invalid('续发授权与本任务平台不一致')
     const currentAttempt = publishing.execution.currentAttemptId
       ? affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId)
       : undefined
@@ -2286,7 +2293,7 @@ export class ArticlePublishingService {
     const result = await this.webAffairService.acquireArticlePublishingAttempt(
       affair.id,
       workspaceId,
-      parsed.data.bilibiliRetry,
+      parsed.data.csdnRetry ?? parsed.data.bilibiliRetry,
     )
     if (!result.success) return result
     const attemptId = result.data.articlePublishing?.execution.currentAttemptId
@@ -2294,7 +2301,11 @@ export class ArticlePublishingService {
       ? result.data.attempts.find((item) => item.id === attemptId)
       : undefined
     if (!attempt) return invalid('发布 Attempt 创建失败')
-    const prompt = buildAgentPrompt(result.data, attempt.id)
+    const prompt =
+      buildAgentPrompt(result.data, attempt.id) +
+      (hasCsdnRetryAuthorization(result.data.articlePublishing!)
+        ? '\n本次用户另行接受可能重复，授权同一 CSDN 原草稿续发一次。旧提交保持未知，不可声称失败。准备步骤重新核验，禁止重写正文或重传图片；仅分类为空时可用最新 categoryEditor 恢复冻结分类并保存回读，其他冻结内容不匹配则停止。当前代次到 publish 时才按 main 最新 selector 提交一次，失败不得自动再发。'
+        : '')
     try {
       return await this.launchRuntime({
         affair: result.data,
@@ -2993,7 +3004,7 @@ function isPathWithin(rootPath: string, targetPath: string): boolean {
   )
 }
 
-function buildAgentPrompt(
+export function buildAgentPrompt(
   affair: import('../../shared/web-affairs/web-affair-types').WebAffair,
   attemptId: string,
 ): string {
@@ -3114,8 +3125,9 @@ function buildAgentPrompt(
       (checkpoint) => checkpoint.stepId === publishing.execution.currentStepId,
     ) ?? publishing.checkpoints.find((checkpoint) => checkpoint.status !== 'completed')
   const resultVerificationOnly =
-    publishing.publication.status === 'result-unknown' ||
-    publishing.execution.currentStepId === 'verify-publication'
+    !hasCsdnRetryAuthorization(publishing) &&
+    (publishing.publication.status === 'result-unknown' ||
+      publishing.execution.currentStepId === 'verify-publication')
   return [
     `执行一条已由用户在 Studio 明确启动的 CSDN 单篇文章发布事务。`,
     `affairId=${affair.id}`,

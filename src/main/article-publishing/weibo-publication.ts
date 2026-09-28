@@ -93,6 +93,10 @@ export interface WeiboSubmissionTarget {
   imageIds: string[]
 }
 
+/** Missing receipt permits read-only lookup, never another submission. Other
+ * failures (including multiple requests) must not enter that fallback. */
+export class WeiboReceiptTimeoutError extends Error {}
+
 /** A feed link is only a candidate. The caller must read the public page and
  * verify the frozen body, author, visibility and every image before recording it. */
 export async function findWeiboPublicationCandidate(
@@ -216,7 +220,7 @@ export function observeWeiboSubmission(page: Page, expected: WeiboSubmissionTarg
     )
   }
   const timeout = setTimeout(
-    () => reject(new Error('微博提交回执超时，结果未知，禁止再次发送')),
+    () => reject(new WeiboReceiptTimeoutError('微博提交回执超时，结果未知，禁止再次发送')),
     30_000,
   )
   timeout.unref?.()

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { chmod, copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CclinkRemoteMessage, CclinkRemoteSession } from '../../shared/cclink'
+import { normalizeCclinkRemoteImageUrls } from '../../shared/cclink'
 
 export interface CclinkRuntimeState {
   version: 1
@@ -181,11 +182,14 @@ function sanitizeMessage(value: unknown): CclinkRemoteMessage | null {
       message['type'] === 'system') &&
     typeof message['content'] === 'string'
   ) {
+    const images =
+      message['type'] === 'user' ? normalizeCclinkRemoteImageUrls(message['images']) : []
     return {
       type: message['type'],
       id: message['id'],
       content: message['content'],
       timestamp: message['timestamp'],
+      ...(message['type'] === 'user' && images.length > 0 ? { images } : {}),
     }
   }
   if (message['type'] === 'agentTool' && message['tool'] && typeof message['tool'] === 'object') {

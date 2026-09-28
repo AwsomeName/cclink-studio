@@ -4,6 +4,28 @@ import type {
 } from '../../shared/article-publishing/article-publishing-types'
 import { articlePublishingDetailDefinitions } from '../../shared/article-publishing/article-publishing-plan'
 
+/** Terminal public verification settles obsolete editor/old-dispatch rechecks,
+ * not the historical effects themselves. Also used for older stored views. */
+export function settleCompletedArticlePublishingPlan(state: ArticlePublishingState) {
+  if (
+    !['zhihu', 'csdn'].includes(state.adapterId) ||
+    state.execution.status !== 'published' ||
+    state.publication.status !== 'published'
+  )
+    return state
+  return {
+    ...state,
+    checkpoints: state.checkpoints.map((checkpoint) => ({
+      ...checkpoint,
+      details: checkpoint.details?.map((detail) =>
+        checkpoint.status === 'completed' && detail.status === 'completed' && detail.recheck
+          ? { ...detail, recheck: undefined, nextAction: '此步骤已完成，无需再次操作。' }
+          : detail,
+      ),
+    })),
+  }
+}
+
 /** Fold current facts into existing checkpoints. This is not an operation history or authority. */
 export function foldArticlePublishingPlanResults(
   state: ArticlePublishingState,
@@ -248,19 +270,7 @@ export function foldArticlePublishingPlanResults(
   }
   // Once the actual public article has passed final verification, editor-only
   // rechecks from earlier interrupted generations no longer describe a live blocker.
-  if (state.adapterId === 'zhihu' && state.publication.status === 'published') {
-    next = {
-      ...next,
-      checkpoints: next.checkpoints.map((checkpoint) => ({
-        ...checkpoint,
-        details: checkpoint.details?.map((detail) =>
-          checkpoint.status === 'completed' && detail.status === 'completed' && detail.recheck
-            ? { ...detail, recheck: undefined }
-            : detail,
-        ),
-      })),
-    }
-  }
+  next = settleCompletedArticlePublishingPlan(next)
   const definitions = articlePublishingDetailDefinitions(next)
   return {
     ...next,

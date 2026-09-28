@@ -1,0 +1,300 @@
+{
+  "source": "/Users/apple/Desktop/研发日记/AIR/2026-09-17/小红书软文.md",
+  "affairId": "f891fa0c-fe50-4852-8fd6-40efb0ec199f",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+    "currentGeneration": 6,
+    "currentLaunchOperationId": "aaa77ce1-032d-4413-a621-bd4056ab9a49"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://blog.csdn.net/weixin_36388257/article/details/166742682",
+    "observedAt": "2026-09-28T01:56:53.653Z"
+  },
+  "retry": {
+    "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+    "executionGeneration": 5,
+    "previousEffectKey": "f891fa0c-fe50-4852-8fd6-40efb0ec199f:d8212f08-e357-43eb-8301-960dda9ea1e1:g1:publish:final",
+    "draftId": "166742682",
+    "authorizedAt": "2026-09-28T01:30:39.763Z"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "status": "completed",
+      "evidence": [
+        "URL 已变为 https://mp.csdn.net/mp_blog/creation/editor/166742682，inspect 返回 draftId=166742682，saveState=saved，保存证据：CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "verify-account",
+      "status": "completed",
+      "evidence": [
+        "inspect 回读：URL /editor/166742682，页面账号 csdn:weixin_36388257，pageKind=editor，editor.recognized=true，draftId=166742682，标题与冻结标题一致，saveState=saved",
+        "inspect（2026-09-27T17:46:58Z）回读：URL /editor/166742682，页面账号 csdn:weixin_36388257 与 draft.platformAccountId 一致，pageKind=editor、editor.recognized=true，draftId=166742682，标题与冻结标题一致，saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "upload-assets",
+      "status": "completed",
+      "evidence": [
+        "开始上传正文图片：共 3 张冻结素材（01-太空舱提示效果图.png、02-紧凑模式面板本地渲染.png、03-陪伴页面本地渲染.png），均为 pending",
+        "inspect（2026-09-27T17:53:00Z）回读：matchedAssets 匹配全部 3 张冻结图片的平台地址，编辑器正文 images 三张图片均 loaded=true，imageEnumerationComplete=true；三张图上传副作用均已 verified",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "开始复核 upload-assets：三张冻结图片均已 uploaded+verified，本次只读核验页面既有结果，不重传。inspect（2026-09-28T01:33:18Z）matchedAssets 三图平台地址齐全且全部 loaded=true",
+        "复核既有上传结果：inspect（2026-09-28T01:33:18Z）回读 matchedAssets 三张冻结图片平台地址齐全（01→aed004f9…、02→f7973470…、03→3696d205…），编辑器正文 images 三张全部 loaded=true、imageEnumerationComplete=true；三张图冻结状态均为 uploaded+verified（副作用 verified），页面与冻结记录一致，未重传任何图片",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "fill-body",
+      "status": "completed",
+      "evidence": [
+        "开始填写正文：编辑器正文当前为 10 字符建稿占位（bodyMatchesFrozen=false），需用冻结原 Markdown 替换占位并写入 3 张已核验图片",
+        "inspect（2026-09-27T17:55:07Z）回读：bodyMatchesFrozen=true，正文 821 字符与冻结原稿一致；三张已核验图片按原文位置写入，替代文字分别为「太空舱提示设计效果图（示例数据，非实机截图）」「紧凑模式面板生产布局本地渲染（测试样本）」「陪伴页面生产布局本地渲染（测试值）」且全部 loaded=true；saveState=saved，服务端回读一致",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "开始复核 fill-body：既有正文已由冻结原稿写入（body.dispatch 副作用 verified），本次只读核验正文与保存状态，不重写。inspect（2026-09-28T01:34:16Z）bodyMatchesFrozen=true、bodyTextLength=821、saveState=saved",
+        "正文只读核验：inspect（2026-09-28T01:34:16Z）bodyMatchesFrozen=true，正文 821 字符与冻结原稿一致；三张已核验图片按原文位置在正文中（逐图位置核验已由 Studio 记录为 completed），全部 loaded=true；saveState=saved，服务端保存证据「CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿」；未重写正文",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "fill-fields",
+      "status": "completed",
+      "evidence": [
+        "开始填写平台字段：标题已匹配；摘要为空、分类为空、标签已有「人工智能」但缺「智能眼镜」「软件测试」；封面未配置跳过",
+        "inspect（2026-09-27T18:00:15Z）回读：fieldValues 标题、摘要「第196天研发记录：核对交付包仍含旧代码的问题…真实边界。」、标签「人工智能,智能眼镜,软件测试」、分类「人工智能」全部与冻结字段一致；封面未配置已跳过；saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "开始复核 fill-fields：inspect（2026-09-28T01:34:48Z）fieldValues 标题、摘要、标签均与冻结一致；fieldValues.category 读到空值，与冻结「人工智能」不一致（昨日 18:00:15Z 同一 inspect 曾读回「人工智能」且副作用已 verified），先只读核对分类区域真实状态，禁止重写字段；若确认不匹配则停止转人工",
+        "inspect（2026-09-28T01:31:09Z/01:32:54Z/01:33:18Z/01:34:16Z/01:36:18Z 五次一致）回读：标题、摘要、标签均与冻结一致；fieldValues.category 恒为空，与冻结分类「人工智能」不匹配；browser_extract(.column-name-selection) 仅见「新建分类专栏」，无已选分类；按协议尝试点击 categoryEditor.openSelector 打开面板核对被主进程拦截（错误：CSDN续发不得修改已保存原稿；只有最终发布检查点允许使用当前发布控件）。本代次无法读取面板内选择状态也无法补填；昨日 18:00:15Z 曾读回「人工智能」且保存副作用 verified，但今日重开草稿后页面读数为空。按「任一冻结内容不匹配则停止」停止 fill-fields，不派发 publish",
+        "本轮按用户指令只读核验既有发布结果，未做任何填写/上传/保存/发布点击。核验结论：平台不存在本文的已发布文章——(1) 账号公开博客 blog.csdn.net/weixin_36388257 文章列表 8 篇，无「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」；(2) 管理页 mp.csdn.net/mp_blog/manage/article 计数 全部(10)/已发布(8)/审核中或未通过(2)/回收站(0)/草稿箱(4)，两篇「审核未通过」为 2026-09-08、2026-08-26 旧文，与本文无关；(3) csdn@1 inspect（2026-09-28T01:48:27Z）在管理页返回 publishedLinks 共 10 条，无任何一条匹配冻结标题。旧发布副作用 publish:final（2026-09-27T18:01:29 派发）保持 result-unknown，未产生任何状态的文章，按指令不声称失败、不重发，无现有文章 URL 可回写。草稿 166742682 完好：saveState=saved、服务端状态为草稿、正文 821 字符与冻结一致、三张已核验图片全部 loaded；标题/摘要/标签与冻结一致，fieldValues.category 仍为空（与冻结「人工智能」不一致，既有 FROZEN_FIELD_MISMATCH 卡点未变）。本轮只读，无法补分类或发布；是否在授权写入的新代次恢复分类并重新发布，需用户决定。页面已恢复停留在锁定草稿 https://mp.csdn.net/mp_blog/creation/editor/166742682。",
+        "inspect（2026-09-28T01:51:28Z）回读 fieldValues：标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」、摘要、标签「人工智能,智能眼镜,软件测试」、分类「人工智能」全部与冻结字段一致；分类经 categoryEditor 恢复：点击 openSelector 打开面板→fill inputSelector「人工智能」（pendingValue 确认）→Tab 失焦提交→fieldValues.category=人工智能；面板已关闭；正文 bodyMatchesFrozen=true（821 字符）、三张已核验图片全部 loaded=true；saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "save-draft",
+      "status": "completed",
+      "evidence": [
+        "开始保存草稿：正文与全部字段已填写核验，点击保存按钮后回读 saveState",
+        "已点击 selectors.save 并回读：inspect（2026-09-27T18:01:04Z）saveState=saved，保存证据「CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿」；draftId=166742682，正文 821 字符、全部字段与冻结一致",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "本代次分类恢复后的保存回读：inspect（2026-09-28T01:52:12Z）saveState=saved，保存证据「CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿」；fieldValues 四项全部与冻结一致（分类=人工智能）；正文 bodyMatchesFrozen=true（821 字符）、三张已核验图片 loaded=true；g5:save-draft:autosave:fill-fields:category 副作用已由主进程核验 verified（2026-09-28T01:51:43Z）",
+        "inspect（2026-09-28T01:52:12Z）回读：saveState=saved，保存证据「CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿」；draftId=166742682；本代次分类恢复的 g5:save-draft:autosave:fill-fields:category 副作用主进程核验 verified（2026-09-28T01:51:43Z）；正文 821 字符 bodyMatchesFrozen=true、三图 loaded=true、四字段与冻结一致",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166742682"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "publish",
+      "status": "completed",
+      "evidence": [
+        "开始执行已授权的常规单篇发布：草稿 166742682 已保存且全部字段与冻结一致，点击 selectors.publish 派发发布动作",
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "发布前置全部通过：inspect（2026-09-28T01:52:42Z）锁定草稿 166742682、saveState=saved、fieldValues 四项与冻结一致、正文 bodyMatchesFrozen=true（821 字符）、三张已核验图片 loaded=true、无 publicationBlocker；本代次已获用户一次性续发授权（csdnRetry authorizedAt 2026-09-28T01:30:39Z），即将按 main 最新 selectors.publish 提交一次",
+        "已按 main 最新 selectors.publish 单次点击发布按钮；inspect（2026-09-28T01:53:08Z）回读：页面已跳转 https://mp.csdn.net/mp_blog/creation/success/166742682（发布成功页），publishedLinks 返回唯一文章链接 https://blog.csdn.net/weixin_36388257/article/details/166742682?sharetype=blogdetail&sharerId=166742682&sharerefer=PC&sharesource=weixin_36388257，与当前账号 weixin_36388257 和原 draftId 166742682 匹配；即将打开该链接做发布后只读核验",
+        "csdn@1 页面回读 · https://blog.csdn.net/weixin_36388257/article/details/166742682?sharetype=blogdetail&sharerId=166742682&sharerefer=PC&sharesource=weixin_36388257"
+      ],
+      "publicImages": []
+    },
+    {
+      "stepId": "verify-publication",
+      "status": "completed",
+      "evidence": [
+        "用户另行授权原草稿续发；必须重新核验全部字段、正文和原图，不重写稿件",
+        "开始发布后只读核验：已用 browser_navigate 打开 inspect.publishedLinks 中匹配当前账号和原稿 ID 的唯一文章链接 https://blog.csdn.net/weixin_36388257/article/details/166742682?sharetype=blogdetail&sharerId=166742682&sharerefer=PC&sharesource=weixin_36388257；csdn@1 inspect（2026-09-28T01:53:41Z）回读：pageKind=published-article，publishedArticleId=166742682，platformAccountId=csdn:weixin_36388257（与账号一致），标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与冻结标题一致，URL 与文章 ID 一致；publicationBlocker=「审核中」为平台状态栏真实阻塞，审核中不得回报成功",
+        "只读核验证据：已打开唯一匹配链接 https://blog.csdn.net/weixin_36388257/article/details/166742682?sharetype=blogdetail&sharerId=166742682&sharerefer=PC&sharesource=weixin_36388257；csdn@1 inspect（2026-09-28T01:53:41Z）回读：pageKind=published-article，publishedArticleId=166742682，platformAccountId=csdn:weixin_36388257（与账号一致），标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与冻结标题一致，URL 与文章 ID 一致；publicationBlocker=「审核中」为平台状态栏真实阻塞。发布副作用已派发一次且文章已创建，保留已派发记录，不重发、不擅自改文或申诉，转人工等待平台审核结果",
+        "已用 browser_navigate 重新打开锁定的公开文章链接 https://blog.csdn.net/weixin_36388257/article/details/166742682，csdn@1 inspect（observedAt 2026-09-28T01:56:30.906Z）确认：pageKind=published-article，publishedArticleId=166742682，platformAccountId=csdn:weixin_36388257 与事务账号一致，标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与冻结标题一致，URL 与主进程锁定 publicationUrl 完全匹配，无 publicationBlocker。",
+        "csdn@1 页面回读 · https://blog.csdn.net/weixin_36388257/article/details/166742682"
+      ],
+      "publicImages": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 期望 1 处，实际对应 1 处；第 1 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T01:56:10.208Z",
+          "generation": 6
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 期望 1 处，实际对应 1 处；第 2 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T01:56:10.208Z",
+          "generation": 6
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 期望 1 处，实际对应 1 处；第 3 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T01:56:10.208Z",
+          "generation": 6
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "a84937a0-48f8-45d2-9f1a-d64fb5b5d310",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 填写平台字段 → verifying",
+      "occurredAt": "2026-09-28T01:51:34.416Z"
+    },
+    {
+      "id": "6307bba0-cbad-4fe9-98d9-35046faf5c8b",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 填写平台字段 → completed",
+      "occurredAt": "2026-09-28T01:51:43.669Z"
+    },
+    {
+      "id": "6d194774-7ebc-411a-9e26-41b015224a95",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 保存并复核草稿 → running",
+      "occurredAt": "2026-09-28T01:52:24.938Z"
+    },
+    {
+      "id": "a176fbdc-c397-4e5b-b5f6-5def3fa19f67",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 保存并复核草稿 → verifying",
+      "occurredAt": "2026-09-28T01:52:29.668Z"
+    },
+    {
+      "id": "5170b0b6-c232-4498-8d07-5d10630db300",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 保存并复核草稿 → completed",
+      "occurredAt": "2026-09-28T01:52:37.967Z"
+    },
+    {
+      "id": "5562b1d4-3c12-4c6a-bde3-734ff0ead482",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 执行常规单篇发布 → running",
+      "occurredAt": "2026-09-28T01:52:50.110Z"
+    },
+    {
+      "id": "77638416-c42f-4552-92e7-d49f01b3e556",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "已预写网页副作用授权：publish/final",
+      "occurredAt": "2026-09-28T01:52:56.570Z"
+    },
+    {
+      "id": "69931aa9-fc43-4c6f-b84f-abeb82d65f33",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "已消费网页副作用授权：publish/final",
+      "occurredAt": "2026-09-28T01:52:56.857Z"
+    },
+    {
+      "id": "d0f76ea6-c0c5-4d33-b7aa-cf96f97d4744",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "即将派发网页副作用：publish/final",
+      "occurredAt": "2026-09-28T01:52:57.080Z"
+    },
+    {
+      "id": "976a24cf-2e2b-496b-aa81-1565ee660295",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 执行常规单篇发布 → verifying",
+      "occurredAt": "2026-09-28T01:53:21.986Z"
+    },
+    {
+      "id": "b82ac657-92f1-4636-b957-f7fe7490439c",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 执行常规单篇发布 → completed",
+      "occurredAt": "2026-09-28T01:54:00.234Z"
+    },
+    {
+      "id": "a42e336e-0750-4577-9f2b-c281d9f12b7f",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 核验文章结果 → running",
+      "occurredAt": "2026-09-28T01:54:18.404Z"
+    },
+    {
+      "id": "971bd9ed-8865-484d-9180-12febc0eca69",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 核验文章结果 → waiting-human",
+      "occurredAt": "2026-09-28T01:54:25.644Z"
+    },
+    {
+      "id": "51324a2b-7f50-445e-b5e9-13bf4910aabf",
+      "type": "attempt-returned",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "用户已处理文章发布人工卡点；恢复同一 Attempt 并要求新 Agent 重新观察",
+      "occurredAt": "2026-09-28T01:55:49.269Z"
+    },
+    {
+      "id": "8d71a8b5-54aa-4169-9c49-305a0d9eb924",
+      "type": "attempt-started",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-28T01:55:54.091Z"
+    },
+    {
+      "id": "bc228f6b-8a51-464c-92d9-b0b0b40489be",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 核验文章结果 → verifying",
+      "occurredAt": "2026-09-28T01:56:37.599Z"
+    },
+    {
+      "id": "a0b717bb-c0ff-4c4e-8de4-cc1aa29e6eaa",
+      "type": "node-status-changed",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "文章发布步骤 核验文章结果 → completed",
+      "occurredAt": "2026-09-28T01:56:44.759Z"
+    },
+    {
+      "id": "9f87b113-3378-4bb6-b97b-b45398aedea3",
+      "type": "attempt-finished",
+      "nodeId": "139567de-b21a-42d8-9963-1dc9937a2814",
+      "attemptId": "d8212f08-e357-43eb-8301-960dda9ea1e1",
+      "summary": "发布文章到 CSDN：succeeded，verify-publication 只读核验完成：CSDN 文章《做AI眼镜第196天，我以为交付了，用户手里还是旧代码》已公开发布于 https://blog.csdn.net/weixin_36388257/article/details/166742682。browser_navigate 重新打开该链接后 csdn@1 inspect 确认 pageKind=published-article、publishedArticleId=166742682、账号 csdn:weixin_36388257 与事务账号一致、标题与冻结标题逐字一致、URL 与主进程锁定 publicationUrl 一致、无审核阻塞。本次未填写、上传、保存或再次点击发布。",
+      "occurredAt": "2026-09-28T01:56:53.653Z"
+    }
+  ]
+}

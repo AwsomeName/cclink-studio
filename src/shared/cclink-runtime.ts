@@ -14,7 +14,14 @@ export interface CclinkRemoteSession {
 }
 
 export type CclinkRemoteMessage =
-  | { type: 'user'; id: string; content: string; timestamp: number }
+  | {
+      type: 'user'
+      id: string
+      content: string
+      timestamp: number
+      /** Uploaded HTTPS image URLs retained with the user message for bubble rendering. */
+      images?: string[]
+    }
   | { type: 'agentText'; id: string; content: string; timestamp: number }
   | {
       type: 'agentTool'
@@ -49,6 +56,23 @@ export type CclinkRemoteMessage =
       answered?: boolean
     }
   | { type: 'system'; id: string; content: string; timestamp: number; remoteError?: RemoteError }
+
+export function normalizeCclinkRemoteImageUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  const urls: string[] = []
+  for (const candidate of value) {
+    if (typeof candidate !== 'string' || candidate.length > 8_192) continue
+    try {
+      const parsed = new URL(candidate)
+      if (parsed.protocol !== 'https:' || parsed.username || parsed.password) continue
+      if (!urls.includes(candidate)) urls.push(candidate)
+      if (urls.length >= 5) break
+    } catch {
+      // Ignore malformed or non-HTTPS image references from transport or persisted state.
+    }
+  }
+  return urls
+}
 
 export interface CclinkRuntimeEnvelope<T extends string = string> {
   cc_type: T

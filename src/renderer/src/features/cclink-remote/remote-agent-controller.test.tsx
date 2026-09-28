@@ -153,6 +153,26 @@ describe('RemoteAgentController', () => {
     expect(`${userHtml}${assistantHtml}`).not.toContain('remote-agent-message')
   })
 
+  it('renders uploaded images inside the remote user message bubble', () => {
+    const html = renderToStaticMarkup(
+      <ConversationMessageRenderer
+        message={toUnifiedRemoteMessage({
+          type: 'user',
+          id: 'user-with-image',
+          content: '看看这张图',
+          timestamp: 1,
+          images: ['https://cos.example/screenshot.png?signature=abc'],
+        })}
+        conversationId="session-1"
+        workspaceKey="remote"
+      />,
+    )
+
+    expect(html).toContain('class="message-image-preview"')
+    expect(html).toContain('src="https://cos.example/screenshot.png?signature=abc"')
+    expect(html).toContain('alt="图片 1"')
+  })
+
   it('renders remote tool output with the local collapsible tool treatment', () => {
     const html = renderToStaticMarkup(
       <ConversationMessageRenderer

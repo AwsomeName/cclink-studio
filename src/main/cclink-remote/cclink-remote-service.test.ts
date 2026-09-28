@@ -328,6 +328,7 @@ describe('CclinkRemoteService runtime protocol', () => {
     expect(service.listMessages('session-1').at(-1)).toMatchObject({
       type: 'user',
       content: '图片消息（1 张）',
+      images: ['https://cos.example/image-1.png'],
     })
     expect(progress).toEqual([
       { phase: 'preparing', percent: 0 },
@@ -336,6 +337,32 @@ describe('CclinkRemoteService runtime protocol', () => {
       { phase: 'completed', percent: 100 },
     ])
     service.getRequestRouter().detach()
+  })
+
+  it('retains only bounded HTTPS image URLs from mirrored user_text messages', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+
+    await handle({
+      ...createCclinkEnvelope('user_text', { request_id: 'mirrored-image-message' }),
+      agent_id: 'agent-1',
+      session_id: 'session-1',
+      workspace_id: 'workspace-1',
+      workspace_path: '/srv/project',
+      project_mode: 'remote_workspace',
+      content: '',
+      images: [
+        'https://cos.example/screenshot.png?signature=abc',
+        'http://cos.example/insecure.png',
+        'https://user:secret@cos.example/credential.png',
+      ],
+    })
+
+    expect(service.listMessages('session-1').at(-1)).toMatchObject({
+      type: 'user',
+      content: '图片消息（1 张）',
+      images: ['https://cos.example/screenshot.png?signature=abc'],
+    })
   })
 
   it('aborts the active image request and never sends user_text after cancellation', async () => {

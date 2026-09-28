@@ -1,10 +1,53 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ArticlePublishingService } from './article-publishing-service'
+import { ArticlePublishingService, buildAgentPrompt } from './article-publishing-service'
 import { ArticlePublishingBrowserPolicy } from './article-publishing-browser-policy'
 
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
 describe('ArticlePublishingService', () => {
+  it.each([false, true])(
+    'does not give conflicting read-only instructions for authorized CSDN retry: %s',
+    (authorized) => {
+      const state = {
+        adapterId: 'csdn',
+        assets: [],
+        accountId: 'account',
+        source: { markdownPath: '/article.md' },
+        fields: { title: 'Article' },
+        checkpoints: [],
+        sideEffects: [
+          {
+            key: 'old',
+            kind: 'publish',
+            status: 'result-unknown',
+            executionGeneration: 1,
+            dispatchedAt: '2026-09-27T00:00:00Z',
+          },
+        ],
+        execution: {
+          currentAttemptId: 'attempt',
+          currentGeneration: 2,
+          currentStepId: 'fill-fields',
+        },
+        publication: { status: 'result-unknown' },
+        draft: { platformDraftId: '123' },
+        csdnRetry: authorized
+          ? {
+              attemptId: 'attempt',
+              executionGeneration: 2,
+              previousEffectKey: 'old',
+              draftId: '123',
+            }
+          : undefined,
+      }
+      const prompt = buildAgentPrompt(
+        { id: 'affair', articlePublishing: state } as never,
+        'attempt',
+      )
+      expect(prompt.includes('本次只允许读取页面并核验既有发布结果')).toBe(!authorized)
+    },
+  )
+
   it.each(['dispatched', 'verifying', 'result-unknown'] as const)(
     'recovers a submitted CSDN article through publication readback, never the draft list: %s',
     async (publicationStatus) => {

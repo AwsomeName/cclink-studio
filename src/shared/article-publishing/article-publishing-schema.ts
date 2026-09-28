@@ -374,6 +374,16 @@ export const articlePublishingStateSchema = z
     assets: z.array(articlePublishingAssetSchema).max(200),
     checkpoints: z.array(checkpointSchema).min(1).max(40),
     sideEffects: z.array(sideEffectSchema).max(500),
+    csdnRetry: z
+      .object({
+        attemptId: uuidSchema,
+        executionGeneration: z.number().int().positive(),
+        previousEffectKey: z.string().min(1).max(500),
+        draftId: z.string().regex(/^\d+$/u),
+        authorizedAt: timestampSchema,
+      })
+      .strict()
+      .optional(),
     bilibiliRetry: z
       .object({
         attemptId: uuidSchema,
@@ -531,6 +541,14 @@ export const startArticlePublishingTaskInputSchema = z
   .object({
     workspaceRef: workspaceRefSchema,
     affairId: uuidSchema,
+    csdnRetry: z
+      .object({
+        previousEffectKey: z.string().min(1).max(500),
+        observedGeneration: z.number().int().positive(),
+        acceptPossibleDuplicate: z.literal(true),
+      })
+      .strict()
+      .optional(),
     bilibiliRetry: z
       .object({
         previousEffectKey: z.string().min(1).max(500),

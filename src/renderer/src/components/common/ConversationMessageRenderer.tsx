@@ -32,6 +32,13 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
 }): React.ReactElement {
   const units = buildContentRenderUnits(message.content)
   const copyText = getMessageCopyText(message)
+  const imageResources = (message.resources ?? []).flatMap((resource) => {
+    const sourceUrl = renderableMessageImageUrl(resource)
+    return sourceUrl ? [{ resource, sourceUrl }] : []
+  })
+  const chipResources = (message.resources ?? []).filter(
+    (resource) => !renderableMessageImageUrl(resource),
+  )
 
   const handleCopyMessage = async (): Promise<void> => {
     try {
@@ -89,9 +96,26 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
           onOpenFilePath={onOpenFilePath}
         />
       ))}
-      {message.resources && message.resources.length > 0 && (
+      {imageResources.length > 0 && (
+        <div className="message-image-list" aria-label="消息图片">
+          {imageResources.map(({ resource, sourceUrl }) => (
+            <img
+              key={resource.id}
+              className="message-image-preview"
+              src={sourceUrl}
+              alt={resource.label}
+              title={resource.label}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              referrerPolicy="no-referrer"
+            />
+          ))}
+        </div>
+      )}
+      {chipResources.length > 0 && (
         <div className="message-resource-list">
-          {message.resources.map((resource) => (
+          {chipResources.map((resource) => (
             <button
               key={resource.id}
               type="button"
@@ -108,6 +132,19 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
     </div>
   )
 })
+
+function renderableMessageImageUrl(
+  resource: NonNullable<AgentMessage['resources']>[number],
+): string | null {
+  if (resource.kind !== 'image' || typeof resource.ref.sourceUrl !== 'string') return null
+  try {
+    const parsed = new URL(resource.ref.sourceUrl)
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return null
+    return resource.ref.sourceUrl
+  } catch {
+    return null
+  }
+}
 
 export function getMessageCopyText(message: AgentMessage): string {
   if (message.rawText.trim()) return message.rawText

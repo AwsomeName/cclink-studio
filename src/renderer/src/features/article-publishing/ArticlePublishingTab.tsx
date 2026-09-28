@@ -1,3 +1,4 @@
+import { eligibleCsdnRetryEffect } from '../../../../shared/article-publishing/csdn-retry'
 import { canReduceUnsubmittedTags } from '@shared/article-publishing/reduce-unsubmitted-tags'
 import { toutiaoRecoveryPage } from '@shared/article-publishing/toutiao-recovery-page'
 import {
@@ -326,6 +327,15 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     const result = await window.cclinkStudio.articlePublishing.startTask({
       workspaceRef,
       affairId: taskId,
+      ...(retry && eligibleCsdnRetryEffect(publishing)
+        ? {
+            csdnRetry: {
+              previousEffectKey: eligibleCsdnRetryEffect(publishing)!.key,
+              observedGeneration: publishing.execution.currentGeneration,
+              acceptPossibleDuplicate: true as const,
+            },
+          }
+        : {}),
       ...(retry && eligibleBilibiliRetryEffect(publishing)
         ? {
             bilibiliRetry: {
@@ -1443,6 +1453,17 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
           })}
         </div>
       </section>
+      {eligibleCsdnRetryEffect(publishing) ? (
+        <section className="article-publishing-retry-review">
+          <p>
+            此前提交结果未知。接受可能重复后，Studio
+            只恢复同账号原草稿，重新核验全文、图片和字段，再提交一次；不新建、不重传，保留旧提交记录。
+          </p>
+          <button type="button" disabled={busy} onClick={() => void startTask(true)}>
+            接受可能重复，核验原草稿后续发一次
+          </button>
+        </section>
+      ) : null}
       {eligibleBilibiliRetryEffect(publishing) ? (
         <section className="article-publishing-retry-review">
           {publishing.bilibiliRetry ? (

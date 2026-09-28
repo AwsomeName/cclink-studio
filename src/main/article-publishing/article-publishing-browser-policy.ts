@@ -1,3 +1,4 @@
+import { hasCsdnRetryAuthorization } from '../../shared/article-publishing/csdn-retry'
 import { hasBilibiliRetryAuthorization } from '../../shared/article-publishing/bilibili-retry'
 import {
   parseBilibiliPublicationUrl,
@@ -16,11 +17,17 @@ import {
   parseJikePublicationUrl,
 } from './jike-publication'
 import { observeToutiaoSubmission } from './toutiao-submission'
+import {
+  readToutiaoPublicationReview,
+  openToutiaoPublicationResult,
+} from './toutiao-publication-review'
 import { readToutiaoPage, TOUTIAO_DISABLE_MUSIC_SELECTOR } from './toutiao-publishing-adapter'
 import {
   observeWeiboSubmission,
   parseWeiboPublicationUrl,
   weiboImageIdentity,
+  findWeiboPublicationCandidate,
+  WeiboReceiptTimeoutError,
 } from './weibo-publication'
 import { observeXiaohongshuSubmission } from './xiaohongshu-submission'
 import { readXiaohongshuEditor } from './xiaohongshu-publishing-adapter'
@@ -100,6 +107,7 @@ interface ArticlePublishingExecutionScope {
   allowPublish?: boolean
   publicationUrl?: string
   bilibiliRetryAuthorized?: boolean
+  csdnRetryAuthorized?: boolean
   jikeGalleryResetAllowed?: boolean
   publicationStatus: 'not-started' | 'dispatched' | 'verifying' | 'published' | 'result-unknown'
   localAssetsReady: boolean
@@ -1158,6 +1166,27 @@ export class ArticlePublishingBrowserPolicy {
       }
       return { kind: 'allow' }
     }
+    const retryInspection = this.attestations.get(this.attestationKey(context))?.inspection
+    const categoryRepair =
+      scope.currentStepId === 'fill-fields' &&
+      !!scope.expectedFields.category &&
+      retryInspection?.fieldValues?.category === '' &&
+      !!retryInspection?.categoryEditor &&
+      [
+        retryInspection.categoryEditor.openSelector,
+        retryInspection.categoryEditor.inputSelector,
+      ].some((selector) => selector && selector === params.selector)
+    const retrySave =
+      scope.currentStepId === 'save-draft' &&
+      actionType === 'click' &&
+      !!retryInspection?.selectors.save &&
+      params.selector === retryInspection.selectors.save
+    if (scope.csdnRetryAuthorized && actionType !== 'click' && !categoryRepair) {
+      return {
+        kind: 'runtime-error',
+        reason: 'CSDN续发只允许核验原草稿和单次提交，禁止重写正文或图片；仅允许按冻结值恢复分类',
+      }
+    }
     if (!this.isRecognizedPageForStep(pageUrl, scope.currentStepId)) {
       return this.stopDecision(
         scope,
@@ -1191,6 +1220,19 @@ export class ArticlePublishingBrowserPolicy {
         '当前文章发布检查点只允许读取和核验页面',
         pageUrl,
       )
+    }
+    if (
+      scope.csdnRetryAuthorized &&
+      !categoryRepair &&
+      !retrySave &&
+      (scope.currentStepId !== 'publish' ||
+        !dismissSelectors?.publish ||
+        params.selector !== dismissSelectors.publish)
+    ) {
+      return {
+        kind: 'runtime-error',
+        reason: 'CSDN续发只允许恢复冻结分类、保存核验及最终单次发布',
+      }
     }
     if (actionType === 'handleDialog') {
       return params.action === 'accept'
@@ -1579,7 +1621,11 @@ export class ArticlePublishingBrowserPolicy {
         pageUrl,
       )
     }
-    if (scope.publicationStatus !== 'not-started' && !scope.bilibiliRetryAuthorized) {
+    if (
+      scope.publicationStatus !== 'not-started' &&
+      !scope.bilibiliRetryAuthorized &&
+      !scope.csdnRetryAuthorized
+    ) {
       return this.stopDecision(
         scope,
         actionType,
@@ -2125,6 +2171,122 @@ export class ArticlePublishingBrowserPolicy {
     }
   }
 
+  /** Stay inside the existing long Run. Only follow an attested result link;
+   * no draft writes, submission, replacement task or background retry loop. */
+  private async recoverSubmittedPublication(
+    task: BrowserTaskRun,
+    scope: ArticlePublishingExecutionScope,
+    page: NonNullable<ReturnType<PlaywrightBridge['getPage']>>,
+    context?: ToolExecutionContext,
+  ) {
+    const manager = this.browserManager
+    const bridge = this.playwrightBridge
+    if (!manager || !bridge) throw new Error('只读结果恢复缺少浏览器 Runtime')
+    const active = () => {
+      const current = this.browserTaskRuntime?.getTask(task.id)
+      const snapshot = this.webAffairService.getProjectSnapshot(scope.workspaceId)
+      const publishing = snapshot.success
+        ? snapshot.data.affairs.find((a) => a.id === scope.affairId)?.articlePublishing
+        : undefined
+      return (
+        !context?.abortSignal?.aborted &&
+        current?.status === 'running' &&
+        current.tabId === task.tabId &&
+        current.correlation?.agentRunId === context?.agentRunId &&
+        manager.getViewProfileId(task.tabId) === task.correlation?.profileId &&
+        manager.isViewVisible(task.tabId) &&
+        publishing?.execution.status === 'running' &&
+        publishing.execution.currentAttemptId === scope.attemptId &&
+        publishing.execution.currentGeneration === scope.executionGeneration &&
+        publishing.execution.currentLaunchOperationId === scope.launchOperationId &&
+        publishing.execution.currentStepId === 'publish'
+      )
+    }
+    const assertActive = () => {
+      if (!active()) throw new Error('只读结果核验已取消或 Runtime 改代，停止继续操作')
+    }
+    assertActive()
+    let url: string | undefined
+    if (scope.adapterId === 'weibo') {
+      const ids = scope.assets.map((a) => weiboImageIdentity(a.platformUrl ?? ''))
+      if (ids.some((id) => !id)) throw new Error('微博原上传图片标识不完整')
+      const candidate = await findWeiboPublicationCandidate(page, {
+        uid: scope.expectedPlatformAccountId ?? '',
+        imageIds: ids as string[],
+      })
+      url = candidate?.url
+    } else if (scope.adapterId === 'toutiao') {
+      const expected = {
+        uid: scope.expectedPlatformAccountId ?? '',
+        title: scope.expectedTitle,
+        images: scope.assets.map((a) => a.platformUrl ?? ''),
+      }
+      const review = await readToutiaoPublicationReview(page, expected)
+      assertActive()
+      if (!review.current || review.candidates.length !== 1)
+        throw new Error('头条管理页尚未唯一对应本次提交，只核验，不重发')
+      const candidate = review.candidates[0]
+      if (candidate.status !== '已发布')
+        throw new Error(`头条管理页状态 ${candidate.status}；等待平台结果，不重发`)
+      if (candidate.urls.length > 1) throw new Error('头条公开结果有多个候选，停止认领')
+      url =
+        candidate.urls[0] ??
+        (await openToutiaoPublicationResult(page, expected, active, () =>
+          manager.getAccountChildPageUrls(task.tabId),
+        ))
+      if (parseToutiaoPublicationUrl(url)?.id !== scope.expectedPlatformDraftId)
+        throw new Error('头条结果 ID 与原稿不同，停止认领')
+    }
+    assertActive()
+    if (!url) throw new Error('原账号页面未找到唯一对应原图的公开作品；保持未知，不重发')
+    await manager.navigate(task.tabId, url)
+    assertActive()
+    await manager.ensurePlaywrightPage(task.tabId)
+    await this.awaitRuntimeConvergence?.(scope.attemptId)
+    assertActive()
+    const resultPage = bridge.getPageById(task.tabId)
+    if (!resultPage || resultPage.isClosed()) throw new Error('公开结果页面不可用')
+    const identity = manager.getViewRuntimeIdentity(task.tabId)
+    const isCurrent = () => {
+      const now = manager.getViewRuntimeIdentity(task.tabId)
+      return (
+        active() &&
+        !!identity &&
+        bridge.getPageById(task.tabId) === resultPage &&
+        !resultPage.isClosed() &&
+        resultPage.url() === url &&
+        now?.webContentsId === identity.webContentsId &&
+        now?.browserViewRuntimeGeneration === identity.browserViewRuntimeGeneration &&
+        now?.documentGeneration === identity.documentGeneration
+      )
+    }
+    const observed = await this.adapter.probe(resultPage)
+    if (
+      !isCurrent() ||
+      observed.pageKind !== 'published-article' ||
+      observed.platformAccountId !== scope.expectedPlatformAccountId ||
+      observed.publicationBlocker ||
+      !(await this.verifyFrozenBody(scope, resultPage, isCurrent))
+    )
+      throw new Error('公开页账号、范围、冻结全文或逐图未通过，保持未知，不重发')
+    const input = {
+      workspaceId: scope.workspaceId,
+      affairId: scope.affairId,
+      attemptId: scope.attemptId,
+      executionGeneration: scope.executionGeneration,
+      launchOperationId: scope.launchOperationId,
+      uid: scope.expectedPlatformAccountId!,
+      url,
+      imageUrls: observed.editor.images.map((i) => i.src),
+    }
+    const recorded =
+      scope.adapterId === 'weibo'
+        ? await this.webAffairService.recordWeiboPublicationLocation(input, isCurrent)
+        : await this.webAffairService.recordToutiaoPublicationLocation(input, isCurrent)
+    if (!recorded.success) throw new Error(recorded.error.message)
+    // The Agent still inspects and completes verify-publication through WebAffair.
+  }
+
   async preparePublicationSubmit(
     task: BrowserTaskRun,
     sideEffectKey: string,
@@ -2188,29 +2350,33 @@ export class ArticlePublishingBrowserPolicy {
           !context?.abortSignal?.aborted &&
           this.browserTaskRuntime?.getTask(task.id)?.status === 'running',
       )
+      let completion: Promise<void> | undefined
       return {
         arm: observer.arm,
         dispose: observer.dispose,
-        finish: async () => {
-          const result = await observer.finish()
-          const recorded = await this.webAffairService.recordArticlePublishingPlanResults(
-            {
-              ...scope,
-              results: [
-                {
-                  id: 'publication.verify',
-                  status: 'waiting',
-                  evidence: `平台提交返回成功，同账号、标题和逐张原图的管理页状态：${result.status}`,
-                  reason: '提交已接收；下一步只核验公开正文与配图，禁止再次提交',
-                },
-              ],
-            },
-            () =>
-              !context?.abortSignal?.aborted &&
-              this.browserTaskRuntime?.getTask(task.id)?.status === 'running',
-          )
-          if (!recorded.success) throw new Error(recorded.error.message)
-        },
+        finish: (continueAfterSubmit = true) =>
+          (completion ??= (async () => {
+            const result = await observer.finish()
+            const recorded = await this.webAffairService.recordArticlePublishingPlanResults(
+              {
+                ...scope,
+                results: [
+                  {
+                    id: 'publication.verify',
+                    status: 'waiting',
+                    evidence: `平台提交返回成功，同账号、标题和逐张原图的管理页状态：${result.status}`,
+                    reason: '提交已接收；下一步只核验公开正文与配图，禁止再次提交',
+                  },
+                ],
+              },
+              () =>
+                !context?.abortSignal?.aborted &&
+                this.browserTaskRuntime?.getTask(task.id)?.status === 'running',
+            )
+            if (!recorded.success) throw new Error(recorded.error.message)
+            if (continueAfterSubmit)
+              await this.recoverSubmittedPublication(task, scope, page, context)
+          })()),
       }
     }
     if (scope?.adapterId === 'bilibili' && page && scope.currentStepId === 'publish') {
@@ -2365,25 +2531,34 @@ export class ArticlePublishingBrowserPolicy {
         text: live.text,
         imageIds: imageIds as string[],
       })
+      let completion: Promise<void> | undefined
       return {
         arm: observer.arm,
         dispose: observer.dispose,
-        finish: async () => {
-          const receipt = await observer.finish()
-          const saved = await this.webAffairService.recordWeiboSubmissionReceipt(
-            {
-              affairId: scope.affairId,
-              attemptId: scope.attemptId,
-              executionGeneration: scope.executionGeneration,
-              browserTaskRunId: task.id,
-              sideEffectKey,
-              uid: receipt.uid,
-              postId: receipt.id,
-            },
-            scope.workspaceId,
-          )
-          if (!saved.success) throw new Error(saved.error.message)
-        },
+        finish: (continueAfterSubmit = true) =>
+          (completion ??= (async () => {
+            let receipt: Awaited<ReturnType<typeof observer.finish>>
+            try {
+              receipt = await observer.finish()
+            } catch (error) {
+              if (!(error instanceof WeiboReceiptTimeoutError) || !continueAfterSubmit) throw error
+              await this.recoverSubmittedPublication(task, scope, page, context)
+              return
+            }
+            const saved = await this.webAffairService.recordWeiboSubmissionReceipt(
+              {
+                affairId: scope.affairId,
+                attemptId: scope.attemptId,
+                executionGeneration: scope.executionGeneration,
+                browserTaskRunId: task.id,
+                sideEffectKey,
+                uid: receipt.uid,
+                postId: receipt.id,
+              },
+              scope.workspaceId,
+            )
+            if (!saved.success) throw new Error(saved.error.message)
+          })()),
       }
     }
     if (scope?.adapterId === 'jike' && page && scope.currentStepId === 'publish') {
@@ -3040,6 +3215,7 @@ export class ArticlePublishingBrowserPolicy {
       allowPublish: publishing.composer?.allowPublish,
       publicationStatus: publishing.publication.status,
       bilibiliRetryAuthorized: hasBilibiliRetryAuthorization(publishing),
+      csdnRetryAuthorized: hasCsdnRetryAuthorization(publishing),
       jikeGalleryResetAllowed:
         publishing.adapterId === 'jike' &&
         publishing.publication.status === 'not-started' &&

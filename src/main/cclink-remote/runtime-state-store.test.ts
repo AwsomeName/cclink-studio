@@ -33,7 +33,20 @@ describe('CclinkRuntimeStateStore', () => {
         },
       ],
       messages: {
-        'session-1': [{ type: 'user', id: 'message-1', content: '你好', timestamp: 2 }],
+        'session-1': [
+          {
+            type: 'user',
+            id: 'message-1',
+            content: '你好',
+            timestamp: 2,
+            images: [
+              'https://cos.example/screenshot.png?signature=abc',
+              'http://cos.example/insecure.png',
+              'https://user:secret@cos.example/credential.png',
+              'javascript:alert(1)',
+            ],
+          },
+        ],
       },
     })
 
@@ -43,7 +56,15 @@ describe('CclinkRuntimeStateStore', () => {
     expect(raw).not.toMatch(/authToken|refreshToken|imUserSig|accessToken/u)
     expect(await store.load()).toMatchObject({
       sessions: [{ id: 'session-1', status: 'archived' }],
-      messages: { 'session-1': [{ id: 'message-1', content: '你好' }] },
+      messages: {
+        'session-1': [
+          {
+            id: 'message-1',
+            content: '你好',
+            images: ['https://cos.example/screenshot.png?signature=abc'],
+          },
+        ],
+      },
     })
   })
 
