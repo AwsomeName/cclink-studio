@@ -1,0 +1,583 @@
+{
+  "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+  "observedAt": "2026-09-28T13:32:32.821Z",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "b166f7b0-1744-4b49-a0cb-5f278dc75182",
+    "currentStepId": "publish"
+  },
+  "publication": {
+    "status": "result-unknown",
+    "observedAt": "2026-09-28T13:32:32.821Z"
+  },
+  "draft": {
+    "platformDraftId": "1877573776361484",
+    "platformAccountId": "3777529577766638",
+    "url": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+    "normalizedTitle": "做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+    "lastVerifiedAt": "2026-09-28T13:31:34.636Z",
+    "recovery": {
+      "operationId": "81623741-fd7d-4d68-bb26-13f97edf63d1",
+      "executionGeneration": 1,
+      "status": "verified",
+      "expectedDraftId": "1877573776361484",
+      "expectedTitle": "做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+      "startedAt": "2026-09-28T13:22:43.074Z",
+      "verifiedAt": "2026-09-28T13:22:55.042Z",
+      "platformAccountId": "3777529577766638"
+    }
+  },
+  "assets": [
+    {
+      "id": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadAttemptCount": 1
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadAttemptCount": 1
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadAttemptCount": 1
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "cd10f346-a04d-407d-9698-8ec21aa1d0ff:64142bad-4d43-4444-af8f-d24e95234110:g1:upload-asset:local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+      "attemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T13:25:06.639Z",
+      "consumedAt": "2026-09-28T13:25:07.205Z",
+      "dispatchedAt": "2026-09-28T13:25:07.389Z",
+      "observedAt": "2026-09-28T13:25:50.887Z",
+      "browserTaskRunId": "bb46bd39-7a37-4237-870f-fce90e7d6f71"
+    },
+    {
+      "key": "cd10f346-a04d-407d-9698-8ec21aa1d0ff:64142bad-4d43-4444-af8f-d24e95234110:g1:upload-asset:local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+      "attemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T13:26:31.100Z",
+      "consumedAt": "2026-09-28T13:26:31.623Z",
+      "dispatchedAt": "2026-09-28T13:26:31.822Z",
+      "observedAt": "2026-09-28T13:27:07.369Z",
+      "browserTaskRunId": "bb46bd39-7a37-4237-870f-fce90e7d6f71"
+    },
+    {
+      "key": "cd10f346-a04d-407d-9698-8ec21aa1d0ff:64142bad-4d43-4444-af8f-d24e95234110:g1:upload-asset:local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+      "attemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T13:27:36.848Z",
+      "consumedAt": "2026-09-28T13:27:37.337Z",
+      "dispatchedAt": "2026-09-28T13:27:37.533Z",
+      "observedAt": "2026-09-28T13:28:11.368Z",
+      "browserTaskRunId": "bb46bd39-7a37-4237-870f-fce90e7d6f71"
+    },
+    {
+      "key": "cd10f346-a04d-407d-9698-8ec21aa1d0ff:64142bad-4d43-4444-af8f-d24e95234110:g1:save-draft:autosave:fill-body:d1e45881-345d-4f92-b6ea-aaa0445a92a0",
+      "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+      "attemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:d1e45881-345d-4f92-b6ea-aaa0445a92a0",
+      "status": "verified",
+      "reservedAt": "2026-09-28T13:29:10.072Z",
+      "consumedAt": "2026-09-28T13:29:10.436Z",
+      "dispatchedAt": "2026-09-28T13:29:10.614Z",
+      "observedAt": "2026-09-28T13:31:34.636Z",
+      "browserTaskRunId": "bb46bd39-7a37-4237-870f-fce90e7d6f71"
+    },
+    {
+      "key": "cd10f346-a04d-407d-9698-8ec21aa1d0ff:64142bad-4d43-4444-af8f-d24e95234110:g1:publish:final",
+      "affairId": "cd10f346-a04d-407d-9698-8ec21aa1d0ff",
+      "attemptId": "64142bad-4d43-4444-af8f-d24e95234110",
+      "executionGeneration": 1,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-28T13:32:26.649Z",
+      "consumedAt": "2026-09-28T13:32:27.870Z",
+      "dispatchedAt": "2026-09-28T13:32:28.145Z",
+      "observedAt": "2026-09-28T13:32:32.821Z",
+      "browserTaskRunId": "bb46bd39-7a37-4237-870f-fce90e7d6f71"
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "从头条草稿箱找回原微头条",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "account.resolve",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+          "observedAt": "2026-09-28T13:22:43.722Z",
+          "generation": 1
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Tab tab-11-1790524178128 · 账号 1345b278-f2bf-4d40-ac5f-437d8a0b3c14 · Profile web-draft-e422d4a2-e9ab-44e7-aa6f-ff475f3bf731",
+          "observedAt": "2026-09-28T13:22:44.990Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.management",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "https://mp.toutiao.com/profile_v4/manage/draft",
+          "observedAt": "2026-09-28T13:22:46.561Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.locate",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "实际子页原 draftId 1877573776361484 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:22:49.542Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:22:52.357Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.verify.account",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 3777529577766638；实际 3777529577766638 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:22:52.533Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.verify.id",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 1877573776361484；实际 1877573776361484 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:22:52.725Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.verify.title",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:22:52.910Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.verify.saved",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 saved；实际 saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 null；逐图 一致（页面 0 / 原稿 0）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft",
+          "observedAt": "2026-09-28T13:22:53.092Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.account",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "原稿编辑页账号 3777529577766638，ID、标题与保存状态均已核验",
+          "observedAt": "2026-09-28T13:22:53.827Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Agent run-b166f7b0-1744-4b49-a0cb-5f278dc75182 · BrowserTask bb46bd39-7a37-4237-870f-fce90e7d6f71 · Tab tab-11-1790524178128 · View g6 · WebContents 7 · Page g12",
+          "observedAt": "2026-09-28T13:22:55.042Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:22:55.042Z",
+      "finishedAt": "2026-09-28T13:23:10.226Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验头条账号与原稿",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 3777529577766638 · draftId 1877573776361484 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 保存 saved",
+          "observedAt": "2026-09-28T13:23:10.377Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "startedAt": "2026-09-28T13:23:43.101Z",
+      "finishedAt": "2026-09-28T13:23:43.101Z",
+      "evidence": [
+        "main adapter 已在当前精确 Page 完成首次只读核验：editor"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐图上传、确认插入并核验",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T13:25:07.389Z · upload-asset/local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T13:25:50.887Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+          "observedAt": "2026-09-28T13:24:49.309Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/3958f70e4b134725a15f9fee19d20134 · 2026-09-28T13:25:50.887Z",
+          "observedAt": "2026-09-28T13:25:50.887Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T13:26:31.822Z · upload-asset/local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T13:27:07.369Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+          "observedAt": "2026-09-28T13:26:19.663Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/db53f07b42744cab983aff3c8d56b03a · 2026-09-28T13:27:07.369Z",
+          "observedAt": "2026-09-28T13:27:07.369Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T13:27:37.533Z · upload-asset/local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T13:28:11.368Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.open",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · .byte-drawer button.upload-btn input[type=\"file\"][accept=\"image/*\"]",
+          "observedAt": "2026-09-28T13:27:22.208Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://p3-sign.toutiaoimg.com/tos-cn-i-ezhpy3drpa/3b81708eae174879a0e454ed5ec26367 · 2026-09-28T13:28:11.368Z",
+          "observedAt": "2026-09-28T13:28:11.368Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-太空舱提示效果图.png",
+          "observedAt": "2026-09-28T13:32:19.564Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-紧凑模式面板本地渲染.png",
+          "observedAt": "2026-09-28T13:32:19.564Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-陪伴页面本地渲染.png",
+          "observedAt": "2026-09-28T13:32:19.564Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:24:08.557Z",
+      "finishedAt": "2026-09-28T13:28:35.884Z",
+      "evidence": [
+        "开始逐图上传：当前页面图集 0 张，冻结图片 3 张（素材/01-太空舱提示效果图.png、素材/02-紧凑模式面板本地渲染.png、素材/03-陪伴页面本地渲染.png）均未关联，matchedAssets 为空。页面 URL 仍为原稿 draft_id=1877573776361484。",
+        "三张冻结图片均已完成 uploaded 核验：matchedAssets 关联齐全（01→3958f70e…、02→db53f07b…、03→3b81708e…），页面图集 3 张且全部 loaded=true，平台原稿回读逐图一致（页面 3 / 原稿 3），saveState=saved；三个 upload-asset sideEffects 状态均为 verified。即将重新 inspect 做最终核验。",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并回读微头条正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T13:28:28.069Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T13:28:28.069Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.placement",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T13:28:28.069Z",
+          "generation": 1
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "正文 div.ProseMirror[contenteditable=\"true\"] · iframe 主文档 · 822 字符",
+          "observedAt": "2026-09-28T13:29:18.551Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前冻结全文、逐图顺序和加载一致；平台原稿回读：已回读平台原稿；返回码 0；原稿ID 一致；全文 一致；图集字段 array；逐图 一致（页面 3 / 原稿 3）；当前文档 未变化。页面实际草稿接口路径：/mp/agw/draft/get_ugc_draft、/mp/agw/draft/save_ugc_draft",
+          "observedAt": "2026-09-28T13:29:18.551Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T13:29:10.614Z · save-draft/autosave:fill-body:d1e45881-345d-4f92-b6ea-aaa0445a92a0；结果另行核验",
+          "observedAt": "2026-09-28T13:29:41.222Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:28:48.097Z",
+      "finishedAt": "2026-09-28T13:29:41.222Z",
+      "evidence": [
+        "开始填写正文：body.locate 已完成（div.ProseMirror[contenteditable=\"true\"]），三张图片 placement 均通过（顺序、平台地址、加载），bodyMatchesFrozen=false（期望 805 字符，实际 27 字符），需要 browser_fill 写入冻结全文；draftId=1877573776361484 未变。",
+        "browser_fill 已通过签发 body selector（div.ProseMirror[contenteditable=\"true\"]）写入冻结全文并触发保存；重新 inspect（2026-09-28T13:29:18.105Z）核验：bodyMatchesFrozen=true，bodyTextLength=822，平台原稿回读全文一致、逐图一致（页面 3 / 原稿 3），saveState=saved，图片保持独立图集且 matchedAssets 齐全。即将再次 inspect 后完成。",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "核验首发、配乐与作品声明",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "toutiao.declaration.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "取材网络：未选；引用站内：未选；个人观点，仅供参考：未选；引用AI：未选；虚构演绎，故事经历：未选；投资观点，仅供参考：未选；健康医疗分享，仅供参考：未选",
+          "observedAt": "2026-09-28T13:22:53.645Z",
+          "generation": 1
+        },
+        {
+          "id": "toutiao.exclusive.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "头条首发：未勾选；当前页面回读",
+          "observedAt": "2026-09-28T13:23:10.377Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T13:23:10.377Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T13:23:10.377Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-28T13:23:10.377Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:29:52.035Z",
+      "finishedAt": "2026-09-28T13:30:24.765Z",
+      "evidence": [
+        "开始核验平台字段：冻结标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与页面一致（field.title.inspect/verify 已通过）；头条首发未勾选（符合已在其他平台发布的约束，不得声明头条首发）；七项作品声明均未选（不代用户选择）；配乐状态留待 publish 检查点按最新 inspect 处理。",
+        "inspect（2026-09-28T13:29:58.418Z）核验：标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与冻结字段一致；头条首发 checked=false（未声明头条首发）；取材网络/引用站内/个人观点/引用AI/虚构演绎/投资观点/健康医疗分享七项声明均 checked=false（未代用户选择）；saveState=saved。即将再次 inspect 后完成。",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "保存并重新核验原微头条",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 3777529577766638 · draftId 1877573776361484 · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · saved · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484",
+          "observedAt": "2026-09-28T13:31:34.636Z",
+          "generation": 1
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "skipped",
+          "evidence": "已有同稿自动保存的可信回读，无需再次点击保存",
+          "observedAt": "2026-09-28T13:31:34.636Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:30:33.883Z",
+      "finishedAt": "2026-09-28T13:31:34.636Z",
+      "evidence": [
+        "开始保存核验：最近 inspect（2026-09-28T13:30:16.503Z）显示 saveState=saved、bodyMatchesFrozen=true、平台原稿回读全文一致且逐图一致（页面 3 / 原稿 3），草稿已由平台 save_ugc_draft 持久化；满足“saveState=saved 且正文图集一致时不重复保存”的条件，先核验再决定是否需要点击保存。",
+        "inspect（2026-09-28T13:30:49.949Z）核验：saveState=saved，平台原稿回读返回码 0、原稿ID 一致、全文一致、逐图一致（页面 3 / 原稿 3）、当前文档未变化；autosave save-draft sideEffect（autosave:fill-body:d1e45881…）状态 verified。满足不重复保存条件。即将再次 inspect 后完成。",
+        "csdn@1 页面回读 · https://mp.toutiao.com/profile_v4/weitoutiao/publish?draft_id=1877573776361484"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "提交这篇微头条一次",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "toutiao.music.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "Agent 对 Studio 签发的已勾选配乐标签点击已返回；是否关闭由下一次原生复选框回读判断",
+          "observedAt": "2026-09-28T13:32:11.327Z",
+          "generation": 1
+        },
+        {
+          "id": "toutiao.music.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "开启配乐：未勾选；当前页面回读",
+          "observedAt": "2026-09-28T13:32:19.564Z",
+          "generation": 1
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-28T13:32:28.145Z",
+          "observedAt": "2026-09-28T13:32:28.145Z",
+          "generation": 1
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "派发闸门已通过 · 2026-09-28T13:32:28.145Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-28T13:32:32.821Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T13:31:47.627Z",
+      "evidence": [
+        "进入 publish 检查点：草稿已保存核验（save-draft completed），开启配乐当前 checked=true，inspect 已签发 selectors.disableMusic（label:has-text(\"开启后可在小视频场景分发，获得更多曝光\")），提交前必须关闭配乐并回读 checked=false；当前 selectors 未签发 publish（原因：配乐仍已勾选）。"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验微头条平台结果",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "使用任务恢复入口，先从管理页复核原稿和未知动作；不得直接重放。",
+          "status": "unknown",
+          "evidence": "已派发但没有可信结果 · final",
+          "reason": "头条管理页状态 审核中；等待平台结果，不重发",
+          "observedAt": "2026-09-28T13:32:32.821Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    }
+  ]
+}

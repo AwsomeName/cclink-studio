@@ -1,0 +1,70 @@
+{
+  "affairId": "ed6a2833-4f55-4552-9714-27fc3af257c9",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "3207cc51-c35f-497d-82f3-a4675c2d5ea9",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "0ef933da-6161-4204-83ca-960e00d718ad"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://zhuanlan.zhihu.com/p/2087948631768822267",
+    "observedAt": "2026-09-28T09:21:18.149Z"
+  },
+  "assetUploadCounts": [
+    {
+      "id": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:09:33.025Z",
+          "finishedAt": "2026-09-28T09:10:24.638Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit",
+            "inspect@09:09:59 · 当前页仍为锁定草稿 /p/2087948631768822267/edit · 文件选择已派发至 fileInput · 编辑器图片数 0→1 · 新增图片 https://pic1.zhimg.com/80/v2-6a9ed1f2b5d37247e6cdaec41f021b52_1440w.png loaded=true · saveState=saved（GET 回读 1 张图片一致）",
+            "inspect@09:09:59 matchedAssets 命中 local:AIR/2026-09-17/素材/01-太空舱提示效果图.png → https://pic1.zhimg.com/80/v2-6a9ed1f2b5d37247e6cdaec41f021b52_1440w.png · 编辑器该图 loaded=true · 知乎原稿 GET 回读与编辑器一致（1 张图片）",
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:10:30.626Z",
+          "finishedAt": "2026-09-28T09:11:31.801Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit",
+            "inspect@09:10:54 · 当前页仍为锁定草稿 /p/2087948631768822267/edit · 文件选择已派发至 fileInput · 编辑器图片数 1→2 · 新增图片 https://picx.zhimg.com/80/v2-d2152f60e4ce096b2842084a001b504d_1440w.png loaded=true · saveState=saved（GET 回读 2 张图片一致）",
+            "inspect@09:10:54 matchedAssets 命中 local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png → https://picx.zhimg.com/80/v2-d2152f60e4ce096b2842084a001b504d_1440w.png · 编辑器该图 loaded=true · 知乎原稿 GET 回读与编辑器一致（2 张图片）",
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:11:38.601Z",
+          "finishedAt": "2026-09-28T09:12:25.904Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit",
+            "inspect@09:11:54 · 当前页仍为锁定草稿 /p/2087948631768822267/edit · 文件选择已派发至 fileInput · 编辑器图片数 2→3 · 新增图片 https://picx.zhimg.com/80/v2-fd3fe4c7bb759ab6de99a9e0e562ba03_1440w.png loaded=true · saveState=saved（GET 回读 3 张图片一致）",
+            "inspect@09:11:54 matchedAssets 命中 local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png → https://picx.zhimg.com/80/v2-fd3fe4c7bb759ab6de99a9e0e562ba03_1440w.png · 编辑器该图 loaded=true · 知乎原稿 GET 回读与编辑器一致（3 张图片）",
+            "csdn@1 页面回读 · https://zhuanlan.zhihu.com/p/2087948631768822267/edit"
+          ]
+        }
+      ]
+    }
+  ]
+}

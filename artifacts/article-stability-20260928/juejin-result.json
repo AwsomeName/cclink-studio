@@ -1,0 +1,70 @@
+{
+  "affairId": "e3bf375a-6f51-4a04-ba36-4dffba48bef8",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "2385a901-39f3-44d7-8369-e52c48f36e94",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "b7a165e6-c2b4-4f2e-8f8d-59559e79cc48"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://juejin.cn/post/7690388362722017322",
+    "observedAt": "2026-09-28T09:46:12.602Z"
+  },
+  "assetUploadCounts": [
+    {
+      "id": "local:AIR/2026-09-17/素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:37:24.897Z",
+          "finishedAt": "2026-09-28T09:38:08.989Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020",
+            "browser_upload_file 已向 .CodeMirror 派发粘贴上传 01-太空舱提示效果图.png（dispatched=paste），等待平台处理与图片地址生成",
+            "粘贴上传已派发，主进程记录平台地址候选 e35b6302f456421dab850470d0c5c19a~tplv-73owjymdk6…awebp；开始回读页面核验 matchedAssets",
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:38:18.051Z",
+          "finishedAt": "2026-09-28T09:38:58.229Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020",
+            "browser_upload_file 已向 .CodeMirror 派发粘贴上传 02-紧凑模式面板本地渲染.png（dispatched=paste），等待平台处理与图片地址生成",
+            "粘贴上传已派发，主进程记录平台地址候选 78f0b6c025404958958fae83655af7e9~tplv-73owjymdk6…awebp；开始回读页面核验 matchedAssets",
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadAttempts": [
+        {
+          "number": 1,
+          "status": "succeeded",
+          "startedAt": "2026-09-28T09:39:05.002Z",
+          "finishedAt": "2026-09-28T09:39:39.822Z",
+          "evidence": [
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020",
+            "browser_upload_file 已向 .CodeMirror 派发粘贴上传 03-陪伴页面本地渲染.png（dispatched=paste），等待平台处理与图片地址生成",
+            "粘贴上传已派发，主进程记录平台地址候选 ac40cd935d5640d4ae7b8e3104ec657b~tplv-73owjymdk6…awebp；开始回读页面核验 matchedAssets",
+            "csdn@1 页面回读 · https://juejin.cn/editor/drafts/7690393223731626020"
+          ]
+        }
+      ]
+    }
+  ]
+}
