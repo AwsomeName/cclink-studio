@@ -216,7 +216,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
   const runtimeBinding = useMemo(() => getArticlePublishingRuntimeBinding(affair), [affair])
 
   const ensurePublishingConversation = useCallback(
-    async (targetAffair: WebAffair, conversationId: string, activate: boolean): Promise<string> => {
+    async (
+      targetAffair: WebAffair,
+      conversationId: string,
+      activate: boolean,
+      revealPanel = true,
+    ): Promise<string> => {
       if (!workspaceRef) return conversationId
       const agent = useAgentStore.getState()
       const existing = agent.conversations[conversationId]
@@ -232,7 +237,9 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       )
       if (activate) {
         agent.switchConversation(conversationId)
-        useUIStore.getState().setAgentPanelMode('right', 'user')
+        useUIStore
+          .getState()
+          .setAgentPanelMode(revealPanel ? 'right' : 'hidden', revealPanel ? 'user' : 'system')
       }
       return conversationId
     },
@@ -316,7 +323,11 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
     if (!taskId || !publishing) return
     const nextConversationId = `article-publishing-${taskId}`
     const agent = useAgentStore.getState()
-    await ensurePublishingConversation(targetAffair, nextConversationId, true)
+    // CSDN's editor overlays intercept controls in the narrow pane left by the Agent
+    // panel. Start with the browser visible at full workbench width; the explicit
+    // "打开 Agent" action still reveals the conversation when requested.
+    const revealPanel = publishing.adapterId !== 'csdn'
+    await ensurePublishingConversation(targetAffair, nextConversationId, true, revealPanel)
     agent.addUserMessage(
       publishing.execution.status === 'interrupted'
         ? `从已核验的中断位置继续发布：${targetAffair.title}`
@@ -351,7 +362,12 @@ export function ArticlePublishingTab({ tab }: { tab: Tab }): React.ReactElement 
       await reload().catch(() => undefined)
       throw new Error(result.error.message)
     }
-    await ensurePublishingConversation(result.data.affair, result.data.conversationId, true)
+    await ensurePublishingConversation(
+      result.data.affair,
+      result.data.conversationId,
+      true,
+      revealPanel,
+    )
     agent.addMountedResource(
       {
         id: `browser-${result.data.browserTabId}`,

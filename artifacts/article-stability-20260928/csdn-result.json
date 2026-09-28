@@ -1,0 +1,79 @@
+{
+  "affairId": "184e82e5-894c-40ca-8ee0-18aa380d1ff0",
+  "sourceCommit": "0777b5f5",
+  "uiVersion": "0.1.99",
+  "observedFrom": "local WebAffair read-only snapshot",
+  "updatedAt": "2026-09-28T03:14:03.522Z",
+  "execution": {
+    "status": "checking-runtime",
+    "currentAttemptId": "988d20b9-b64c-4862-90d0-d193eede6f96",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "e52a8d38-d614-4542-ad5b-474c5dec7ee9",
+    "currentStepId": "fill-fields",
+    "runtimeCheck": {
+      "reasonCode": "RUNTIME_OWNER_LOST",
+      "reason": "Agent、BrowserTask、Tab 或 CDP 的当前绑定已失效，正在核验",
+      "suspectedAt": "2026-09-28T03:14:03.522Z",
+      "lastOwnerAt": "2026-09-28T03:13:59.738Z",
+      "lastProgressAt": "2026-09-28T03:13:43.914Z",
+      "probeDeadline": "2026-09-28T03:15:03.522Z",
+      "ownerResponsive": false,
+      "probeAttempts": 1
+    }
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "status": "completed"
+    },
+    {
+      "stepId": "verify-account",
+      "status": "completed"
+    },
+    {
+      "stepId": "upload-assets",
+      "status": "completed"
+    },
+    {
+      "stepId": "fill-body",
+      "status": "completed"
+    },
+    {
+      "stepId": "fill-fields",
+      "status": "needs-reconcile"
+    },
+    {
+      "stepId": "save-draft",
+      "status": "pending"
+    },
+    {
+      "stepId": "publish",
+      "status": "pending"
+    },
+    {
+      "stepId": "verify-publication",
+      "status": "pending"
+    }
+  ],
+  "assets": [
+    {
+      "path": "素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    }
+  ],
+  "publishEffects": []
+}

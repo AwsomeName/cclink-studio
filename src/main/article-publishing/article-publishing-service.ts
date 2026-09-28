@@ -656,7 +656,12 @@ export class ArticlePublishingService {
             /^https:\/\/juejin\.cn\/post\/\d+\/?$/u.test(visibleUrl)) ||
           (publishing.adapterId === 'zhihu' &&
             /^https:\/\/zhuanlan\.zhihu\.com\/p\/(\d+)\/?$/u.exec(visibleUrl)?.[1] ===
-              publishing.draft?.platformDraftId)
+              publishing.draft?.platformDraftId) ||
+          (publishing.adapterId === 'csdn' &&
+            /^https:\/\/blog\.csdn\.net\/([^/]+)\/article\/details\/(\d+)\/?$/u.exec(
+              visibleUrl,
+            )?.slice(1).join(':') ===
+              `${expectedPlatformAccountId.slice('csdn:'.length)}:${publishing.draft?.platformDraftId}`)
             ? { visiblePublicationUrl: visibleUrl }
             : {}),
           ...(publishing.adapterId === 'xiaohongshu' && publishing.publication.url

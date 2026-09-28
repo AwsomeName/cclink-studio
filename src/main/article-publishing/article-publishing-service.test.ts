@@ -5,6 +5,33 @@ import { ArticlePublishingBrowserPolicy } from './article-publishing-browser-pol
 const WORKSPACE_REF = { kind: 'local' as const, path: '/workspace' }
 
 describe('ArticlePublishingService', () => {
+  it.each([
+    ['https://blog.csdn.net/test-user/article/details/164148817', true],
+    ['https://blog.csdn.net/test-user/article/details/999999', false],
+    ['https://blog.csdn.net/other-user/article/details/164148817', false],
+    ['https://blog.csdn.net.evil.test/test-user/article/details/164148817', false],
+  ])('uses only the exact visible CSDN result for recovery: %s', async (visibleUrl, exact) => {
+    const harness = createResumeHarness({
+      draftUrl: 'https://mp.csdn.net/mp_blog/creation/editor/164148817',
+      visibleUrl: String(visibleUrl),
+      publicationStatus: 'result-unknown',
+    })
+    try {
+      await harness.service.startTask(
+        { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+        '11111111-1111-4111-8111-111111111111',
+      )
+      const input = harness.draftRecoveryCoordinator.recoverExactPublication.mock.calls[0]?.[0]
+      expect(input).toBeDefined()
+      expect(input).toHaveProperty('expectedPlatformAccountId', 'csdn:test-user')
+      if (exact) expect(input).toHaveProperty('visiblePublicationUrl', visibleUrl)
+      else expect(input).not.toHaveProperty('visiblePublicationUrl')
+      expect(harness.agentBridge.sendMessage).not.toHaveBeenCalled()
+    } finally {
+      harness.service.dispose()
+    }
+  })
+
   it.each([false, true])(
     'does not give conflicting read-only instructions for authorized CSDN retry: %s',
     (authorized) => {
@@ -1579,7 +1606,7 @@ function createResumeHarness(options: {
     isConnected: vi.fn(() => true),
   }
   const draftRecoveryCoordinator = {
-    recoverExactPublication: vi.fn(async () => {
+    recoverExactPublication: vi.fn(async (_input: unknown) => {
       throw new Error('公开结果暂不可核验')
     }),
     recoverExactDraft: vi.fn(async (input) => {

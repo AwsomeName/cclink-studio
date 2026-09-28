@@ -1,0 +1,653 @@
+{
+  "affairId": "184e82e5-894c-40ca-8ee0-18aa380d1ff0",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "988d20b9-b64c-4862-90d0-d193eede6f96",
+    "currentGeneration": 4,
+    "currentLaunchOperationId": "399c2ae7-5f6e-49b4-bf4a-1da14373ed18"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://blog.csdn.net/weixin_36388257/article/details/166782672",
+    "observedAt": "2026-09-28T04:26:32.039Z"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 CSDN 编辑页",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "editor.open",
+          "nextAction": "等待当前任务的下一步。",
+          "status": "completed",
+          "evidence": "https://mp.csdn.net/mp_blog/creation/editor",
+          "observedAt": "2026-09-28T02:58:05.125Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.title.dispatch",
+          "nextAction": "等待当前任务的下一步。",
+          "status": "completed",
+          "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · initial-draft:title",
+          "observedAt": "2026-09-28T02:58:44.421Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.body.dispatch",
+          "nextAction": "等待当前任务的下一步。",
+          "status": "completed",
+          "evidence": "浏览器动作 frameExecute 已返回；平台结果另行核验 · initial-draft:body",
+          "observedAt": "2026-09-28T02:58:53.262Z",
+          "generation": 1
+        },
+        {
+          "id": "initial.save.dispatch",
+          "nextAction": "等待本次真实动作或回读结果；可以终止任务，不能并发重复派发。",
+          "status": "running",
+          "evidence": "派发闸门已通过 · 2026-09-28T02:59:06.912Z · save-draft/initial-draft:save；结果另行核验",
+          "observedAt": "2026-09-28T02:59:06.912Z",
+          "generation": 1
+        },
+        {
+          "id": "recovery.management",
+          "nextAction": "核验管理页账号",
+          "status": "completed",
+          "evidence": "管理页可识别；草稿箱入口 草稿箱(4)",
+          "observedAt": "2026-09-28T04:14:18.205Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.account",
+          "nextAction": "按原 draftId 定位，找不到即停止",
+          "status": "completed",
+          "evidence": "期望 csdn:weixin_36388257；实际 csdn:weixin_36388257",
+          "observedAt": "2026-09-28T04:14:18.366Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.locate",
+          "nextAction": "打开候选草稿",
+          "status": "completed",
+          "evidence": "draftId 166782672；匹配 1 项",
+          "observedAt": "2026-09-28T04:14:19.444Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.open",
+          "nextAction": "复核账号、ID、标题、保存状态",
+          "status": "completed",
+          "evidence": "https://mp.csdn.net/mp_blog/creation/editor/166782672",
+          "observedAt": "2026-09-28T04:14:21.418Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.verify.account",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 csdn:weixin_36388257；实际 csdn:weixin_36388257 · https://mp.csdn.net/mp_blog/creation/editor/166782672",
+          "observedAt": "2026-09-28T04:14:21.561Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.verify.id",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 166782672；实际 166782672 · https://mp.csdn.net/mp_blog/creation/editor/166782672",
+          "observedAt": "2026-09-28T04:14:21.763Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.verify.title",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · https://mp.csdn.net/mp_blog/creation/editor/166782672",
+          "observedAt": "2026-09-28T04:14:21.931Z",
+          "generation": 2
+        },
+        {
+          "id": "recovery.verify.saved",
+          "nextAction": "四项全部通过后准备 Runtime",
+          "status": "completed",
+          "evidence": "期望 saved；实际 saved · https://mp.csdn.net/mp_blog/creation/editor/166782672；CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+          "observedAt": "2026-09-28T04:14:22.099Z",
+          "generation": 2
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+          "observedAt": "2026-09-28T04:25:09.165Z",
+          "generation": 4
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-2-1790518126377 · 账号 ff3592e8-517a-443d-a674-58105f7bc06b · Profile web-draft-b3896210-978e-4fe6-a9c0-813927210b5e",
+          "observedAt": "2026-09-28T04:25:10.291Z",
+          "generation": 4
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-399c2ae7-5f6e-49b4-bf4a-1da14373ed18 · BrowserTask b86fa52c-4356-45e1-a05e-730c4fd9779d · Tab tab-2-1790518126377 · View g1 · WebContents 2 · Page g1",
+          "observedAt": "2026-09-28T04:25:11.977Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T02:58:05.557Z",
+      "finishedAt": "2026-09-28T02:59:31.739Z",
+      "outputRefs": {
+        "draftId": "166782672",
+        "draftUrl": "https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      },
+      "evidence": [
+        "inspect@02:59:15 确认 URL=https://mp.csdn.net/mp_blog/creation/editor/166782672，draftId=166782672，saveState=saved，saveEvidence=CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿；标题与正文占位均已读回",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验账号与页面",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 csdn:weixin_36388257 · draftId 尚无 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 保存 unknown",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T02:59:49.890Z",
+      "finishedAt": "2026-09-28T02:59:58.450Z",
+      "evidence": [
+        "开始核验账号与页面；inspect@02:59:37 已取得 platformAccountId=csdn:weixin_36388257、draftId=166782672、saveState=saved",
+        "inspect@02:59:37 确认 platformAccountId=csdn:weixin_36388257（与冻结 draft 记录一致），draftId=166782672，标题=做AI眼镜第196天，我以为交付了，用户手里还是旧代码，saveState=saved，页面 kind=editor 且编辑器已识别",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "上传并核验正文图片",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-28T03:00:20.036Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-28T03:02:15.077Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · .up_img_model_box #pane-upimg input[type=\"file\"]",
+          "observedAt": "2026-09-28T03:03:53.998Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T03:00:25.959Z · upload-asset/local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T03:02:18.326Z · upload-asset/local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T03:03:59.382Z · upload-asset/local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-太空舱提示效果图.png",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/ebc7bd863d11482685c7ab8f355edeb2.png · 2026-09-28T03:02:00.495Z",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-紧凑模式面板本地渲染.png",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/93363bc47c2d49b7b624fdf399d345f0.png · 2026-09-28T03:03:43.644Z",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-陪伴页面本地渲染.png",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://i-blog.csdnimg.cn/direct/135958b3c852420ca4a59dd58d002f60.png · 2026-09-28T03:05:27.210Z",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T03:00:05.871Z",
+      "finishedAt": "2026-09-28T03:06:06.031Z",
+      "outputRefs": {
+        "asset1Url": "https://i-blog.csdnimg.cn/direct/ebc7bd863d11482685c7ab8f355edeb2.png",
+        "asset2Url": "https://i-blog.csdnimg.cn/direct/93363bc47c2d49b7b624fdf399d345f0.png",
+        "asset3Url": "https://i-blog.csdnimg.cn/direct/135958b3c852420ca4a59dd58d002f60.png"
+      },
+      "evidence": [
+        "开始上传并核验 3 张正文图片（素材/01-太空舱提示效果图.png、02-紧凑模式面板本地渲染.png、03-陪伴页面本地渲染.png）；draftId=166782672，编辑器页面就绪",
+        "3 张正文图片全部通过后置核验（inspect@03:05:07 编辑器 images=3 且全部 loaded=true）：01-太空舱提示效果图.png→ebc7bd863d11482685c7ab8f355edeb2.png、02-紧凑模式面板本地渲染.png→93363bc47c2d49b7b624fdf399d345f0.png、03-陪伴页面本地渲染.png→135958b3c852420ca4a59dd58d002f60.png；matchedAssets 与主进程核验一致，逐图 uploading→waiting-platform→verifying→uploaded 完整",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并核验正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "账号 csdn:weixin_36388257 · draftId 166782672 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 正文 821 字符 · saved · CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿",
+          "observedAt": "2026-09-28T03:07:39.952Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 期望 1 处，实际对应 1 处；第 1 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:14:48.019Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 期望 1 处，实际对应 1 处；第 2 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:14:48.019Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.placement",
+          "nextAction": "全部图片通过后核验正文保存；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 期望 1 处，实际对应 1 处；第 3 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:14:48.019Z",
+          "generation": 2
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 body.cke_editable[contenteditable=\"true\"] · iframe iframe.cke_wysiwyg_frame · 821 字符",
+          "observedAt": "2026-09-28T04:14:48.418Z",
+          "generation": 2
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与平台保存",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T03:06:37.553Z · save-draft/autosave:fill-body:f49a4482-18d6-4927-80f9-9b1efd465fab；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T03:06:17.673Z",
+      "finishedAt": "2026-09-28T03:08:03.450Z",
+      "evidence": [
+        "开始填写正文：draftId=166782672 正文当前为建稿占位（19 字符含图片），将用冻结 Markdown 全文替换；3 张图片地址已核验待按原文位置写入",
+        "inspect@03:07:44 页面读回：bodyMatchesFrozen=true（正文 821 字符与冻结原稿一致，占位已替换为完整原文）；3 张图片按原文位置、顺序嵌入且 loaded=true，alt 与冻结替代文字逐一一致（太空舱提示设计效果图（示例数据，非实机截图）/紧凑模式面板生产布局本地渲染（测试样本）/陪伴页面生产布局本地渲染（测试值））；图片地址与 matchedAssets 核验地址一致；saveState=saved",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写平台字段",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.summary.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "completed",
+          "evidence": "浏览器动作 fill 已返回；平台结果另行核验 · autosave:fill-fields:summary:0a32a8aa-ca88-4a4f-ad73-f14fabf66394",
+          "observedAt": "2026-09-28T03:09:20.692Z",
+          "generation": 1
+        },
+        {
+          "id": "field.tags.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "completed",
+          "evidence": "浏览器动作 press 已返回；平台结果另行核验 · autosave:fill-fields:tags:8fa8933b-3c76-4a4b-bbf3-303adcf26646",
+          "observedAt": "2026-09-28T03:11:53.978Z",
+          "generation": 1
+        },
+        {
+          "id": "field.summary.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。；实际 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。",
+          "observedAt": "2026-09-28T04:14:48.418Z",
+          "generation": 2
+        },
+        {
+          "id": "field.summary.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "completed",
+          "evidence": "期望 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。；实际 第196天研发记录：核对交付包仍含旧代码的问题，更新模式入口与陪伴页面，记录已安装、待部署和待用户验收的真实边界。",
+          "observedAt": "2026-09-28T04:14:48.418Z",
+          "generation": 2
+        },
+        {
+          "id": "field.tags.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 人工智能,智能眼镜,软件测试；实际 人工智能,智能眼镜,软件测试",
+          "observedAt": "2026-09-28T04:14:48.418Z",
+          "generation": 2
+        },
+        {
+          "id": "field.tags.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "completed",
+          "evidence": "期望 人工智能,智能眼镜,软件测试；实际 人工智能,智能眼镜,软件测试",
+          "observedAt": "2026-09-28T04:14:48.418Z",
+          "generation": 2
+        },
+        {
+          "id": "field.category.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "completed",
+          "evidence": "期望 人工智能；实际 人工智能",
+          "observedAt": "2026-09-28T04:16:10.709Z",
+          "generation": 2
+        },
+        {
+          "id": "field.category.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 人工智能；实际 人工智能",
+          "observedAt": "2026-09-28T04:16:18.244Z",
+          "generation": 2
+        },
+        {
+          "id": "field.category.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T04:16:10.135Z · save-draft/autosave:fill-fields:category:c574b329-da36-44a6-a73b-e14d59fc23a5；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "field.title.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        },
+        {
+          "id": "field.cover.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "skipped",
+          "evidence": "本任务未配置此可选字段，不执行修改",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        },
+        {
+          "id": "field.cover.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "未配置，不需要写入",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        },
+        {
+          "id": "field.cover.verify",
+          "nextAction": "下一字段；不匹配则停止字段完成回报",
+          "status": "skipped",
+          "evidence": "未配置，不声明当前平台字段已核验",
+          "observedAt": "2026-09-28T04:25:36.904Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-28T04:14:22.548Z",
+      "finishedAt": "2026-09-28T04:17:05.040Z",
+      "evidence": [
+        "开始填写平台字段：待填 summary（第196天研发记录…）、tags（人工智能/智能眼镜/软件测试）、category（人工智能）；title 已与冻结一致",
+        "inspect@04:16:17 fieldValues 全部与冻结一致：title=做AI眼镜第196天，我以为交付了，用户手里还是旧代码；summary=第196天研发记录：核对交付包仍含旧代码的问题…；tags=人工智能,智能眼镜,软件测试；category=人工智能（Tab 失焦提交后读回）。draftId=166782672，bodyMatchesFrozen=true，saveState=saved，3 图 loaded=true",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "保存并复核草稿",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "发布前复核，保存不代表发布",
+          "status": "completed",
+          "evidence": "可信适配器回读 · csdn:weixin_36388257 · draftId 166782672 · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · saved · https://mp.csdn.net/mp_blog/creation/editor/166782672",
+          "observedAt": "2026-09-28T04:18:36.194Z",
+          "generation": 2
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "核验同稿保存结果",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T04:17:57.419Z · save-draft/manual-save:save-draft；结果另行核验",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T04:18:18.386Z",
+      "finishedAt": "2026-09-28T04:18:36.194Z",
+      "evidence": [
+        "save-draft 开始：inspect@04:17:34 起始状态 saveState=saved；已点击签发的 selectors.save 一次；inspect@04:18:04 回读 saveState=saved，服务端草稿与编辑器一致",
+        "inspect@04:18:04 手动保存后回读：saveState=saved，saveEvidence=CSDN 服务端原 draftId 的标题、正文与当前编辑器一致，状态为草稿；draftId=166782672；四字段与冻结一致；bodyMatchesFrozen=true；3 图 loaded=true",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/editor/166782672"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "执行常规单篇发布",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-28T04:19:15.067Z",
+          "observedAt": "2026-09-28T04:25:08.617Z",
+          "generation": 4
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "只核验结果，不再次发布",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T04:19:15.067Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-28T04:26:23.820Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T04:19:07.860Z",
+      "finishedAt": "2026-09-28T04:19:42.784Z",
+      "evidence": [
+        "publish 开始：inspect@04:18:58 draftId=166782672，四字段与冻结一致，bodyMatchesFrozen=true，saveState=saved，3 图 loaded=true，无 publicationBlocker；准备点击签发的 selectors.publish（button:nth-of-type(3)）执行已授权单篇常规发布",
+        "发布按钮点击后页面跳转至成功页 https://mp.csdn.net/mp_blog/creation/success/166782672；inspect@04:19:21 publishedLinks 返回唯一文章链接 https://blog.csdn.net/weixin_36388257/article/details/166782672?sharetype=blogdetail&sharerId=166782672&sharerefer=PC&sharesource=weixin_36388257（查看文章），账号 weixin_36388257 与原稿 ID 166782672 均匹配；无 publicationBlocker",
+        "csdn@1 页面回读 · https://mp.csdn.net/mp_blog/creation/success/166782672"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验文章结果",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 期望 1 处，实际对应 1 处；第 1 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:25:36.764Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 期望 1 处，实际对应 1 处；第 2 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:25:36.764Z",
+          "generation": 4
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 期望 1 处，实际对应 1 处；第 3 张，前文 805 字符，位置/地址/替代文字/加载一致",
+          "observedAt": "2026-09-28T04:25:36.764Z",
+          "generation": 4
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "完成事务；未知只查询管理页",
+          "status": "completed",
+          "evidence": "公开页已核验 · csdn:weixin_36388257 · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · https://blog.csdn.net/weixin_36388257/article/details/166782672",
+          "observedAt": "2026-09-28T04:26:23.820Z",
+          "generation": 4
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 2,
+      "startedAt": "2026-09-28T04:25:11.977Z",
+      "finishedAt": "2026-09-28T04:26:23.820Z",
+      "outputRefs": {
+        "publicationUrl": "https://blog.csdn.net/weixin_36388257/article/details/166782672"
+      },
+      "evidence": [
+        "verify-publication 开始：发布成功页 /creation/success/166782672 出现后，已用 browser_navigate 打开 publishedLinks 中匹配账号与原稿 ID 的唯一文章链接，进入只读核验",
+        "inspect@04:20:03 已打开发布结果链接 https://blog.csdn.net/weixin_36388257/article/details/166782672?sharetype=blogdetail&sharerId=166782672&sharerefer=PC&sharesource=weixin_36388257：pageKind=published-article，publishedArticleId=166782672 与原稿一致，标题=做AI眼镜第196天，我以为交付了，用户手里还是旧代码 与冻结一致，platformAccountId=csdn:weixin_36388257 与账号一致；但平台状态栏 publicationBlocker=审核中，文章尚未公开可见。发布记录保留（成功页 /creation/success/166782672），不重发、不改文、不申诉，转人工等待审核完成",
+        "已用 browser_navigate 重新打开锁定 URL https://blog.csdn.net/weixin_36388257/article/details/166782672，csdn@1 适配器于 2026-09-28T04:25:59.771Z 重新读取：pageKind=published-article，publishedArticleId=166782672，platformAccountId=csdn:weixin_36388257，标题「做AI眼镜第196天，我以为交付了，用户手里还是旧代码」与冻结标题一致，bodyMatchesFrozen=true，无 publicationBlocker。正在核对账号、标题、URL 三项证据一致性。",
+        "csdn@1 页面回读 · https://blog.csdn.net/weixin_36388257/article/details/166782672"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "path": "素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    }
+  ],
+  "publishEffects": [
+    {
+      "key": "184e82e5-894c-40ca-8ee0-18aa380d1ff0:988d20b9-b64c-4862-90d0-d193eede6f96:g2:publish:final",
+      "affairId": "184e82e5-894c-40ca-8ee0-18aa380d1ff0",
+      "attemptId": "988d20b9-b64c-4862-90d0-d193eede6f96",
+      "executionGeneration": 2,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "verified",
+      "reservedAt": "2026-09-28T04:19:14.532Z",
+      "consumedAt": "2026-09-28T04:19:14.849Z",
+      "dispatchedAt": "2026-09-28T04:19:15.067Z",
+      "observedAt": "2026-09-28T04:26:23.820Z",
+      "browserTaskRunId": "d31ccb01-8c33-4d9f-ad83-567c7fd6a632"
+    }
+  ]
+}
