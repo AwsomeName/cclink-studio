@@ -1,0 +1,471 @@
+{
+  "affairId": "51d1c86c-1c2b-46a1-8cc0-d87e83742e42",
+  "execution": {
+    "status": "published",
+    "currentAttemptId": "c1bf9d62-1691-4b82-8fd0-66a8fd616a3a",
+    "currentGeneration": 2,
+    "currentLaunchOperationId": "6d51e66b-588a-4544-a80c-e87f0cb8e848"
+  },
+  "publication": {
+    "status": "published",
+    "url": "https://weibo.com/5961101548/RkbFEsKBy",
+    "observedAt": "2026-09-28T05:40:19.707Z"
+  },
+  "assets": [
+    {
+      "path": "素材/01-太空舱提示效果图.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/02-紧凑模式面板本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    },
+    {
+      "path": "素材/03-陪伴页面本地渲染.png",
+      "status": "uploaded",
+      "uploadCount": 1
+    }
+  ],
+  "publishEffects": [
+    {
+      "key": "51d1c86c-1c2b-46a1-8cc0-d87e83742e42:c1bf9d62-1691-4b82-8fd0-66a8fd616a3a:g1:publish:final",
+      "affairId": "51d1c86c-1c2b-46a1-8cc0-d87e83742e42",
+      "attemptId": "c1bf9d62-1691-4b82-8fd0-66a8fd616a3a",
+      "executionGeneration": 1,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "verified",
+      "reservedAt": "2026-09-28T05:27:45.612Z",
+      "consumedAt": "2026-09-28T05:27:46.121Z",
+      "dispatchedAt": "2026-09-28T05:27:46.352Z",
+      "observedAt": "2026-09-28T05:40:14.548Z",
+      "browserTaskRunId": "a47e2007-5aea-437b-a0f8-d901d7a8cb2d"
+    }
+  ],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开微博临时编辑器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "editor.open",
+          "nextAction": "检查账号和编辑区域",
+          "status": "completed",
+          "evidence": "https://weibo.com/",
+          "observedAt": "2026-09-28T05:22:49.670Z",
+          "generation": 1
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 9823a570-a412-4fba-bbc1-09df836991c6 · Profile web-draft-6838024d-b93e-4870-a12d-437b73d3beaa",
+          "observedAt": "2026-09-28T05:39:27.953Z",
+          "generation": 2
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-2-1790511484489 · 账号 9823a570-a412-4fba-bbc1-09df836991c6 · Profile web-draft-6838024d-b93e-4870-a12d-437b73d3beaa",
+          "observedAt": "2026-09-28T05:39:28.698Z",
+          "generation": 2
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-6d51e66b-588a-4544-a80c-e87f0cb8e848 · BrowserTask 47ecd485-40b1-4a12-a1ac-3d58a3874619 · Tab tab-2-1790511484489 · View g2 · WebContents 3 · Page g3",
+          "observedAt": "2026-09-28T05:39:29.501Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:22:50.294Z",
+      "finishedAt": "2026-09-28T05:23:35.760Z",
+      "evidence": [
+        "2026-09-28T05:23:14.890Z inspect：url=https://weibo.com/，pageKind=editor，editor.recognized=true，platformAccountId=5961101548 与 targetUID 一致，bodySelector 已签发，initialDraftBodyEmpty=true，imageEnumerationComplete=true，images=[]",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验目标 UID 与空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 published-article · 账号 5961101548 · draftId 尚无 · 标题 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · 保存 unknown",
+          "observedAt": "2026-09-28T05:39:56.221Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:23:45.393Z",
+      "finishedAt": "2026-09-28T05:24:00.147Z",
+      "evidence": [
+        "2026-09-28T05:23:42.000Z inspect：platformAccountId=5961101548 与 targetUID 一致；url=https://weibo.com/，pageKind=editor；现场空白（bodyTextLength=0，title=空，images=[]，imageEnumerationComplete=true）",
+        "2026-09-28T05:23:47.762Z inspect：platformAccountId=5961101548 与 targetUID=5961101548 完全一致；pageKind=editor；空白现场确认（bodyTextLength=0，initialDraftBodyEmpty=true，title 空，images=[]，imageEnumerationComplete=true）",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张上传并回读图集",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T05:24:09.334Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T05:25:04.511Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.open",
+          "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T05:25:28.479Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T05:24:20.937Z · upload-asset/local:AIR/2026-09-17/素材/01-太空舱提示效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T05:24:54.448Z · upload-asset/local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.dispatch",
+          "nextAction": "回读对应图片，不把工具返回当上传成功",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T05:25:17.278Z · upload-asset/local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-太空舱提示效果图.png",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx1.sinaimg.cn/bmiddle/006vqaPaly1ihjbgbpsbtj31260vtb29.jpg · 2026-09-28T05:24:43.998Z",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-紧凑模式面板本地渲染.png",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx2.sinaimg.cn/bmiddle/006vqaPaly1ihjbgw3hupj30iw09smz8.jpg · 2026-09-28T05:25:09.142Z",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.inspect",
+          "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-陪伴页面本地渲染.png",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.verify",
+          "nextAction": "下一张图；未知时显示图片供用户判断",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx2.sinaimg.cn/bmiddle/006vqaPaly1ihjbhan9w3j30m80b4dms.jpg · 2026-09-28T05:25:32.325Z",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:24:12.143Z",
+      "finishedAt": "2026-09-28T05:25:43.522Z",
+      "evidence": [
+        "2026-09-28T05:24:09.318Z inspect：selectors.fileInput 已签发（input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]），当前图集 images=[] 为空，待上传 3 张冻结图片（01/02/03）",
+        "2026-09-28T05:25:28.463Z inspect：editor.images 共 3 张全部 loaded=true，imageEnumerationComplete=true；matchedAssets 完整匹配 01→wx1…tb29.jpg、02→wx2…smz8.jpg、03→wx2…4dms.jpg，与三张冻结图片的平台地址一一对应，无多余或缺失图片",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并回读微博正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.placement",
+          "nextAction": "全部图片通过后核验正文现场；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:25:39.806Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.placement",
+          "nextAction": "全部图片通过后核验正文现场；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:25:39.806Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.placement",
+          "nextAction": "全部图片通过后核验正文现场；不一致时显示具体图片卡点",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:25:39.806Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "检查平台字段；未知时先对账不重填",
+          "status": "completed",
+          "evidence": "当前图文正文 816 字符；正文及逐图一致；无平台保存保证",
+          "observedAt": "2026-09-28T05:26:20.739Z",
+          "generation": 1
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 textarea[placeholder=\"有什么新鲜事想分享给大家？\"] · iframe 主文档 · 816 字符",
+          "observedAt": "2026-09-28T05:26:25.329Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "等待正文回读与当前正文回读",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T05:26:20.018Z · save-draft/autosave:fill-body:fadc23f0-2c3d-4251-810b-1772fe3917c7；结果另行核验",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:26:12.436Z",
+      "finishedAt": "2026-09-28T05:26:37.834Z",
+      "evidence": [
+        "2026-09-28T05:25:50.926Z inspect：selectors.body=textarea[placeholder=\"有什么新鲜事想分享给大家？\"] 已签发，正文当前 0 字符；已读取冻结原稿 /Users/apple/Desktop/研发日记/AIR/2026-09-17/小红书软文.md，将按原稿注入正文（保留首行标题，图片以独立图集呈现，不改写内容）",
+        "2026-09-28T05:26:25.027Z inspect：browser_fill 后 bodyTextLength=816，bodyMatchesFrozen=true，title.value=做AI眼镜第196天，我以为交付了，用户手里还是旧代码（首行标题保留），三张图片仍完整在图集（matchedAssets 全匹配）",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "核验首行标题与现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "当前平台字段不是受支持的唯一可读控件；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 不支持读取此字段",
+            "reason": "当前平台字段不是受支持的唯一可读控件",
+            "observedAt": "2026-09-28T05:40:09.516Z",
+            "generation": 2
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T05:26:25.329Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "缺少字段回读证据；先处理此卡点并重新检查。",
+          "recheck": {
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 不可读",
+            "reason": "缺少字段回读证据",
+            "observedAt": "2026-09-28T05:40:09.516Z",
+            "generation": 2
+          },
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第196天，我以为交付了，用户手里还是旧代码；实际 做AI眼镜第196天，我以为交付了，用户手里还是旧代码",
+          "observedAt": "2026-09-28T05:26:25.329Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "回读同一字段",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-28T05:26:25.329Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:26:46.237Z",
+      "finishedAt": "2026-09-28T05:27:03.954Z",
+      "evidence": [
+        "2026-09-28T05:26:41.720Z inspect：fieldValues.title=做AI眼镜第196天，我以为交付了，用户手里还是旧代码，与冻结首行标题一致；bodyMatchesFrozen=true，图集完整",
+        "2026-09-28T05:26:52.540Z inspect：fieldValues.title 与冻结首行标题逐字一致（做AI眼镜第196天，我以为交付了，用户手里还是旧代码），bodyMatchesFrozen=true，图集 3 张完整",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "检查当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "核对本任务提交授权",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 5961101548 · draftId  · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · unknown · https://weibo.com/",
+          "observedAt": "2026-09-28T05:27:29.906Z",
+          "generation": 1
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "重新读取当前图文现场",
+          "status": "skipped",
+          "evidence": "当前动态流程没有平台保存动作，不声明草稿已保存",
+          "observedAt": "2026-09-28T05:27:29.906Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:27:13.201Z",
+      "finishedAt": "2026-09-28T05:27:29.906Z",
+      "evidence": [
+        "2026-09-28T05:27:08.607Z inspect：save-draft 为提交前复核（不点击保存）；当前现场 bodyMatchesFrozen=true、bodyTextLength=816、fieldValues.title 与冻结标题一致、三张图片均在图集且 matchedAssets 全匹配 loaded=true；selectors.publish 已签发待发布",
+        "2026-09-28T05:27:16.253Z inspect：提交前复核通过——bodyMatchesFrozen=true（816 字符）、fieldValues.title 与冻结标题一致、三张图片 matchedAssets 全匹配且 loaded=true、imageEnumerationComplete=true；未点击任何保存控件，复核完成",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "提交微博并读取回执",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "publish.preflight",
+          "nextAction": "只派发一次；人工专属卡点暂停",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-28T05:27:46.352Z",
+          "observedAt": "2026-09-28T05:39:27.428Z",
+          "generation": 2
+        },
+        {
+          "id": "publish.dispatch",
+          "nextAction": "只核验结果，不再次发布",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T05:27:46.352Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-28T05:39:29.198Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:27:41.838Z",
+      "finishedAt": "2026-09-28T05:39:29.198Z",
+      "evidence": [
+        "2026-09-28T05:27:36.947Z inspect：发布前置全部通过——bodyMatchesFrozen=true（816 字符）、fieldValues.title 一致、三张图片 matchedAssets 全匹配 loaded=true、imageEnumerationComplete=true、composer.allowPublish=true；selectors.publish=button.woo-button-main.woo-button-flat.woo-button-primary.woo-button-m.woo-button-round._btn_2z30i_68 已签发，将仅点击一次",
+        "main 已从原账号页面核验冻结全文及全部上传图片；只读恢复 · https://weibo.com/5961101548/RkbFEsKBy"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验平台实际发布结果",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/01-太空舱提示效果图.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/01-太空舱提示效果图.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:39:55.971Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/02-紧凑模式面板本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/02-紧凑模式面板本地渲染.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:39:55.971Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-17/素材/03-陪伴页面本地渲染.png.published",
+          "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+          "status": "completed",
+          "evidence": "素材/03-陪伴页面本地渲染.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T05:39:55.971Z",
+          "generation": 2
+        },
+        {
+          "id": "publication.verify",
+          "nextAction": "完成事务；未知只查询管理页",
+          "status": "completed",
+          "evidence": "公开页已核验 · 5961101548 · 做AI眼镜第196天，我以为交付了，用户手里还是旧代码 · https://weibo.com/5961101548/RkbFEsKBy",
+          "observedAt": "2026-09-28T05:40:14.548Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T05:39:29.501Z",
+      "finishedAt": "2026-09-28T05:40:14.548Z",
+      "outputRefs": {
+        "publicationUrl": "https://weibo.com/5961101548/RkbFEsKBy"
+      },
+      "evidence": [
+        "2026-09-28T05:39:55.913Z inspect 公开页：url=https://weibo.com/5961101548/RkbFEsKBy，pageKind=published-article，platformAccountId=5961101548 与 targetUID 一致，publishedArticleId=RkbFEsKBy，title=做AI眼镜第196天，我以为交付了，用户手里还是旧代码，bodyTextLength=816 且 bodyMatchesFrozen=true，imageEnumerationComplete=true，3 张图片全部 loaded=true 且 src 与三张冻结图片上传平台地址一一对应（wx1…tb29 / wx2…smz8 / wx2…4dms）；publishedLinks 返回本次作品地址",
+        "csdn@1 页面回读 · https://weibo.com/5961101548/RkbFEsKBy"
+      ]
+    }
+  ]
+}
