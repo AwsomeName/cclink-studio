@@ -103,7 +103,7 @@ export function PromotionalVideoSidebar({
       }
       setError(null)
       openProject({ id: result.project.id, title: result.project.title })
-      showToast(`已创建 ${result.project.scenes.length} 个场景的分镜草稿`, 'success')
+      showToast('视频工程已创建，从口播稿开始；后三步暂为页面骨架', 'success')
     } finally {
       setCreating(false)
     }
@@ -117,7 +117,7 @@ export function PromotionalVideoSidebar({
         onClick={() => setExpanded((value) => !value)}
       >
         {expanded ? <IconChevronDown size={10} /> : <IconChevronRight size={10} />}
-        宣发视频
+        视频创作
       </button>
 
       {expanded && (
@@ -192,7 +192,9 @@ export function PromotionalVideoSidebar({
                     <span className="project-panel-row-title">{project.title}</span>
                     <span className="project-panel-row-meta">
                       {project.aspectRatio} · {project.targetDurationSeconds}s ·{' '}
-                      {project.sceneCount} 个场景
+                      {project.narrationSegmentCount === undefined
+                        ? `${project.sceneCount} 个旧版场景`
+                        : `${project.narrationSegmentCount} 段口播`}
                     </span>
                   </span>
                 </button>

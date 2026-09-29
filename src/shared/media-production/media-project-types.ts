@@ -1,4 +1,5 @@
 import type { LocalWorkspaceRef } from '../workspace-ref'
+import type { GenerateNarrationInput, NarrationScript } from './narration-script'
 
 export type MediaAspectRatio = '16:9' | '9:16' | '1:1'
 
@@ -64,10 +65,12 @@ export interface MediaProject {
     brand: MediaProjectBrand
   }
   scenes: MediaProjectScene[]
+  narration?: NarrationScript
   assets?: MediaProjectAsset[]
   renderSettings?: {
     logoAssetId: string | null
     musicAssetId: string | null
+    narrationAssetId?: string | null
     musicVolume: number
     transition: 'cut' | 'fade'
   }
@@ -82,6 +85,7 @@ export interface MediaProjectSummary {
   aspectRatio: MediaAspectRatio
   targetDurationSeconds: number
   sceneCount: number
+  narrationSegmentCount?: number
   revision: number
   updatedAt: number
 }
@@ -210,7 +214,7 @@ export type MediaProjectListResult =
   | { success: false; projects: []; error: MediaProjectFailure }
 
 export type MediaProjectOperationResult =
-  | { success: true; project: MediaProject }
+  | { success: true; project: MediaProject; warnings?: string[] }
   | { success: false; error: MediaProjectFailure }
 
 export type MediaStoryboardProposalResult =
@@ -243,6 +247,7 @@ export type MediaSearchResult =
     }
 
 export interface MediaProjectsApiContract {
+  generateNarration: (input: GenerateNarrationInput) => Promise<MediaProjectOperationResult>
   list: (workspacePath: string) => Promise<MediaProjectListResult>
   get: (workspacePath: string, projectId: string) => Promise<MediaProjectOperationResult>
   create: (input: CreateMediaProjectInput) => Promise<MediaProjectOperationResult>

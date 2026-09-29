@@ -237,6 +237,7 @@ const mediaProjectsApi: MediaProjectsApiContract = {
   create: (input) => invokeIpcContract(mediaProjectsIpc.create, input),
   save: (input) => invokeIpcContract(mediaProjectsIpc.save, input),
   proposeStoryboard: (input) => invokeIpcContract(mediaProjectsIpc.proposeStoryboard, input),
+  generateNarration: (input) => invokeIpcContract(mediaProjectsIpc.generateNarration, input),
   importAsset: (input) => invokeIpcContract(mediaProjectsIpc.importAsset, input),
   getImageProviders: () => invokeIpcContract(mediaProjectsIpc.getImageProviders),
   generateSceneImage: (input) => invokeIpcContract(mediaProjectsIpc.generateSceneImage, input),

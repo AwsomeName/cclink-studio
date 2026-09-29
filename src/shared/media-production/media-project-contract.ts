@@ -1,4 +1,5 @@
 import { bindIpcParser, defineIpcCall, ipcArgs } from '../ipc/contract'
+import { generateNarrationInputSchema, type GenerateNarrationInput } from './narration-script'
 import {
   parseCreateMediaProjectInput,
   parseImportMediaProjectAssetInput,
@@ -28,6 +29,9 @@ import type {
 } from './media-project-types'
 
 export const mediaProjectsIpc = {
+  generateNarration: defineIpcCall<[GenerateNarrationInput], MediaProjectOperationResult>(
+    'mediaProjects:generateNarration',
+  ),
   list: defineIpcCall<[string], MediaProjectListResult>('mediaProjects:list'),
   get: defineIpcCall<[string, string], MediaProjectOperationResult>('mediaProjects:get'),
   create: defineIpcCall<[CreateMediaProjectInput], MediaProjectOperationResult>(
@@ -124,6 +128,14 @@ const invalidSearch = async (error: unknown): Promise<MediaSearchResult> => ({
 })
 
 export const mediaProjectsIpcContracts = {
+  generateNarration: bindIpcParser(
+    mediaProjectsIpc.generateNarration,
+    (args) => {
+      requireArgs(args, 1, mediaProjectsIpc.generateNarration.channel)
+      return ipcArgs(generateNarrationInputSchema.parse(args[0]))
+    },
+    invalidOperation,
+  ),
   list: bindIpcParser(
     mediaProjectsIpc.list,
     (args) => {

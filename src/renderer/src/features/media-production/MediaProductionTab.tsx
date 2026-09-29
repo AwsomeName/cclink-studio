@@ -22,7 +22,14 @@ import { useCommandStore } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useToastStore } from '../../components/common/Toast'
 import { registerMediaProjectDraft } from './media-project-draft-registry'
+import {
+  MEDIA_WORKFLOW_STAGES,
+  MediaAudioPanel,
+  MediaScriptPanel,
+  type MediaWorkflowStage,
+} from './MediaWorkflowPanels'
 import './media-production.css'
+import { VideoCreationWorkspace } from './VideoCreationWorkspace'
 
 interface AssetPreview {
   url: string
@@ -38,6 +45,33 @@ const PLATFORM_LABELS: Record<MediaProjectPlatform, string> = {
 }
 
 export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
+  const [legacy, setLegacy] = useState(false)
+  if (!legacy)
+    return (
+      <VideoCreationWorkspace
+        key={`${tab.id}:${tab.mediaProject?.projectId}`}
+        tab={tab}
+        onLegacy={() => setLegacy(true)}
+      />
+    )
+  return (
+    <div className="media-legacy-container">
+      <div className="media-legacy-banner">
+        旧版工作台 · 与新版口播独立，修改分镜不会同步新版口播
+        <button
+          disabled={tab.dirty}
+          title={tab.dirty ? '先保存旧版修改再返回' : undefined}
+          onClick={() => setLegacy(false)}
+        >
+          返回口播创作
+        </button>
+      </div>
+      <LegacyMediaProductionTab tab={tab} />
+    </div>
+  )
+}
+
+function LegacyMediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
   const projectId = tab.mediaProject?.projectId
   const workspacePath = tab.workspaceRef?.kind === 'local' ? tab.workspaceRef.path : null
   const [project, setProject] = useState<MediaProject | null>(null)
@@ -65,6 +99,8 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
   const [renderTasks, setRenderTasks] = useState<MediaRenderTask[]>([])
   const [exporting, setExporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [stage, setStage] = useState<MediaWorkflowStage>('script')
+  const [materialSource, setMaterialSource] = useState<'local' | 'search' | 'generate'>('local')
   const updateTabDirty = useTabStore((state) => state.updateTabDirty)
   const updateTabTitle = useTabStore((state) => state.updateTabTitle)
   const executeCommand = useCommandStore((state) => state.executeCommand)
@@ -113,9 +149,26 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
     void window.cclinkStudio.mediaVideo.getProviders().then((result) => {
       if (result.success) setVideoProviders(result.providers)
     })
-    void window.cclinkStudio.mediaRender.getRuntimeStatus().then((result) => {
-      if (result.success) setRenderRuntime(result.runtime)
-    })
+    void window.cclinkStudio.mediaRender
+      .getRuntimeStatus()
+      .then((result) => {
+        if (result.success) setRenderRuntime(result.runtime)
+        else
+          setRenderRuntime({
+            available: false,
+            version: null,
+            source: 'unavailable',
+            reason: result.error.message,
+          })
+      })
+      .catch(() =>
+        setRenderRuntime({
+          available: false,
+          version: null,
+          source: 'unavailable',
+          reason: '无法检查本地导出环境，请重新打开工程',
+        }),
+      )
   }, [])
 
   useEffect(() => {
@@ -177,6 +230,7 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
   const mutate = useCallback(
     (recipe: (current: MediaProject) => MediaProject): void => {
       setDraft((current) => (current ? recipe(current) : current))
+      setRenderPreview(null)
       updateTabDirty(tab.id, true)
     },
     [tab.id, updateTabDirty],
@@ -331,10 +385,15 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
     showToast('素材已复制到工程并绑定当前场景', 'success')
   }
 
-  const importSupportingAsset = async (target: 'logo' | 'music'): Promise<void> => {
+  const importSupportingAsset = async (target: 'logo' | 'music' | 'narration'): Promise<void> => {
     if (!workspacePath || !projectId) return
     const selected = await window.cclinkStudio.dialog.showOpenDialog({
-      title: target === 'logo' ? '导入品牌 Logo' : '导入背景音乐',
+      title:
+        target === 'logo'
+          ? '导入品牌 Logo'
+          : target === 'narration'
+            ? '导入旁白音频'
+            : '导入背景音乐',
       filters:
         target === 'logo'
           ? [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'webp'] }]
@@ -358,10 +417,19 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
         ...defaultRenderSettings(current),
         ...(target === 'logo'
           ? { logoAssetId: result.asset.id }
-          : { musicAssetId: result.asset.id }),
+          : target === 'narration'
+            ? { narrationAssetId: result.asset.id }
+            : { musicAssetId: result.asset.id }),
       },
     }))
-    showToast(target === 'logo' ? 'Logo 已加入成片设置' : '背景音乐已加入成片设置', 'success')
+    showToast(
+      target === 'logo'
+        ? 'Logo 已加入成片设置'
+        : target === 'narration'
+          ? '旁白已加入成片设置'
+          : '背景音乐已加入成片设置',
+      'success',
+    )
   }
 
   const generateSceneImage = async (): Promise<void> => {
@@ -605,6 +673,7 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
           kind: 'video',
           url: `data:${result.mimeType};base64,${result.content}`,
         })
+        setStage('export')
         return
       }
       showToast(
@@ -627,13 +696,27 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
   }
 
   const totalDuration = draft.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)
-  const missingMaterialCount = draft.scenes.filter((scene) => !scene.assetId).length
+  const missingMaterialCount = missingVisualAssets(draft).length
+  const activeStageIndex = MEDIA_WORKFLOW_STAGES.findIndex((item) => item.id === stage)
+  const latestRender = renderTasks.find((task) => task.status === 'succeeded')
+  const videoProvider = videoProviders.find((provider) => provider.id === 'volcengine-jimeng-video')
+  const visualCounts = draft.scenes.reduce(
+    (counts, scene) => {
+      const asset = draft.assets?.find((item) => item.id === scene.assetId)
+      if (asset?.kind === 'image') counts.images++
+      if (asset?.kind === 'video') counts.videos++
+      return counts
+    },
+    { images: 0, videos: 0 },
+  )
 
   return (
-    <div className="media-production-workbench">
+    <div className={`media-production-workbench media-workflow-${stage}`}>
       <header className="media-production-header">
         <div>
-          <div className="media-production-eyebrow">宣发视频 · 分镜草稿</div>
+          <div className="media-production-eyebrow">
+            宣发视频工作台 · {draft.brief.aspectRatio} · {PLATFORM_LABELS[draft.brief.platform]}
+          </div>
           <input
             className="media-production-title-input"
             value={draft.title}
@@ -676,13 +759,23 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
         </div>
       </header>
 
-      <div className="media-production-stage-bar" aria-label="制作阶段">
-        <span className="done">简报</span>
-        <span className="active">分镜</span>
-        <span>素材</span>
-        <span>成片</span>
-        <span>导出</span>
-      </div>
+      <nav className="media-production-stage-bar" aria-label="制作阶段">
+        {MEDIA_WORKFLOW_STAGES.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={stage === item.id ? 'active' : ''}
+            aria-current={stage === item.id ? 'step' : undefined}
+            onClick={() => setStage(item.id)}
+          >
+            <b>{String(index + 1).padStart(2, '0')}</b>
+            <span>
+              {item.label}
+              <small>{item.description}</small>
+            </span>
+          </button>
+        ))}
+      </nav>
 
       {storyboardProposal && (
         <section className="media-storyboard-proposal" aria-label="智能分镜提案">
@@ -712,420 +805,568 @@ export function MediaProductionTab({ tab }: { tab: Tab }): React.ReactElement {
 
       {error && <div className="media-production-inline-error">{error}</div>}
 
-      <div className="media-production-layout">
-        <aside className="media-scene-list" aria-label="场景列表">
-          {draft.scenes.map((scene, index) => (
-            <button
-              type="button"
-              key={scene.id}
-              className={scene.id === selectedScene?.id ? 'active' : ''}
-              onClick={() => {
-                setRenderPreview(null)
-                setSelectedSceneId(scene.id)
-              }}
+      {stage === 'script' && (
+        <MediaScriptPanel
+          draft={draft}
+          mutate={mutate}
+          selectScene={(id) => {
+            setSelectedSceneId(id)
+            setStage('scenes')
+            setRenderPreview(null)
+          }}
+        />
+      )}
+      {stage === 'audio' && (
+        <MediaAudioPanel draft={draft} mutate={mutate} importAudio={importSupportingAsset} />
+      )}
+
+      {(stage === 'scenes' || stage === 'export') && (
+        <div className="media-production-layout">
+          {stage === 'scenes' && (
+            <aside className="media-scene-list" aria-label="场景列表">
+              {draft.scenes.map((scene, index) => (
+                <button
+                  type="button"
+                  key={scene.id}
+                  className={scene.id === selectedScene?.id ? 'active' : ''}
+                  onClick={() => {
+                    setRenderPreview(null)
+                    setSelectedSceneId(scene.id)
+                  }}
+                >
+                  <span className="media-scene-number">{String(index + 1).padStart(2, '0')}</span>
+                  <span className="media-scene-copy">
+                    <strong>{scene.subtitle || '未命名场景'}</strong>
+                    <small>
+                      {scene.durationSeconds}s ·{' '}
+                      {draft.assets?.find((asset) => asset.id === scene.assetId)?.kind === 'video'
+                        ? '视频镜头'
+                        : scene.assetId
+                          ? '图片动效'
+                          : '待选素材'}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </aside>
+          )}
+
+          <main className="media-preview-panel">
+            {stage === 'export' && (
+              <div className="media-export-checks">
+                <div className="media-section-heading">
+                  <div>
+                    <h2>检查整片，再导出</h2>
+                    <p>
+                      {totalDuration.toFixed(1)} 秒 · {visualCounts.videos} 段视频 ·{' '}
+                      {visualCounts.images} 张图片
+                    </p>
+                  </div>
+                </div>
+                <p className={missingMaterialCount ? 'media-attention' : ''}>
+                  {missingMaterialCount
+                    ? `还有 ${missingMaterialCount} 个镜头没有素材`
+                    : '全部镜头已选择素材'}{' '}
+                  <button type="button" onClick={() => setStage('scenes')}>
+                    检查镜头
+                  </button>
+                </p>
+                <p>
+                  {draft.renderSettings?.narrationAssetId ? '已添加旁白音频' : '未添加旁白音频'} ·{' '}
+                  {draft.renderSettings?.musicAssetId ? '已添加背景音乐' : '未添加背景音乐'}{' '}
+                  <button type="button" onClick={() => setStage('audio')}>
+                    调整声音
+                  </button>
+                </p>
+                <p>
+                  {renderRuntime === null
+                    ? '正在检查本地导出环境…'
+                    : renderRuntime.available
+                      ? '本地导出环境可用'
+                      : renderRuntime.reason}
+                </p>
+                {visualCounts.videos === 0 && visualCounts.images > 0 && (
+                  <p>
+                    目前全部画面来自图片，成片将使用图片缩放动效。可返回分镜导入录屏或生成动态镜头。
+                  </p>
+                )}
+                {latestRender && (
+                  <button type="button" onClick={() => void previewRenderTask(latestRender)}>
+                    播放最近成片
+                    {tab.dirty || latestRender.projectRevision !== project?.revision
+                      ? '（修改前版本）'
+                      : ''}
+                  </button>
+                )}
+              </div>
+            )}
+            <div
+              className={`media-preview-frame ratio-${draft.brief.aspectRatio.replace(':', '-')}`}
+              style={
+                { '--media-brand-color': draft.brief.brand.primaryColor } as React.CSSProperties
+              }
             >
-              <span className="media-scene-number">{String(index + 1).padStart(2, '0')}</span>
-              <span className="media-scene-copy">
-                <strong>{scene.subtitle || '未命名场景'}</strong>
-                <small>
-                  {scene.durationSeconds}s · {scene.assetId ? '素材已选择' : '尚未选择素材'}
-                </small>
-              </span>
-            </button>
-          ))}
-        </aside>
-
-        <main className="media-preview-panel">
-          <div
-            className={`media-preview-frame ratio-${draft.brief.aspectRatio.replace(':', '-')}`}
-            style={{ '--media-brand-color': draft.brief.brand.primaryColor } as React.CSSProperties}
-          >
-            <div className="media-preview-orb" />
-            {(renderPreview ?? assetPreview)?.kind === 'image' && (
-              <img
-                className="media-preview-asset"
-                src={(renderPreview ?? assetPreview)!.url}
-                alt={selectedAsset?.fileName}
-              />
-            )}
-            {(renderPreview ?? assetPreview)?.kind === 'video' && (
-              <video
-                className="media-preview-asset"
-                src={(renderPreview ?? assetPreview)!.url}
-                controls
-                muted={!renderPreview}
-              />
-            )}
-            {!renderPreview && !assetPreview && (
-              <div className="media-preview-placeholder">
-                {selectedAsset ? selectedAsset.fileName : '素材待添加'}
-              </div>
-            )}
-            {!renderPreview && (
-              <div className="media-preview-subtitle">{selectedScene?.subtitle}</div>
-            )}
-          </div>
-          <div className="media-preview-caption">
-            {renderPreview
-              ? '整片预览 · 已包含字幕、Logo 与音乐'
-              : `场景 ${selectedScene ? selectedScene.order + 1 : 0} · 素材预览`}
-          </div>
-          <div className="media-brief-grid">
-            <label>
-              平台
-              <select
-                value={draft.brief.platform}
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    brief: {
-                      ...current.brief,
-                      platform: event.target.value as MediaProjectPlatform,
-                    },
-                  }))
-                }
-              >
-                {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              画幅
-              <select
-                value={draft.brief.aspectRatio}
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    brief: {
-                      ...current.brief,
-                      aspectRatio: event.target.value as MediaAspectRatio,
-                    },
-                  }))
-                }
-              >
-                <option value="9:16">9:16</option>
-                <option value="16:9">16:9</option>
-                <option value="1:1">1:1</option>
-              </select>
-            </label>
-            <label>
-              品牌色
-              <input
-                type="color"
-                value={draft.brief.brand.primaryColor}
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    brief: {
-                      ...current.brief,
-                      brand: { ...current.brief.brand, primaryColor: event.target.value },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label>
-              结尾 CTA
-              <input
-                value={draft.brief.brand.callToAction}
-                placeholder="例如：立即体验"
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    brief: {
-                      ...current.brief,
-                      brand: { ...current.brief.brand, callToAction: event.target.value },
-                    },
-                  }))
-                }
-              />
-            </label>
-            <label>
-              场景转场
-              <select
-                value={defaultRenderSettings(draft).transition}
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    renderSettings: {
-                      ...defaultRenderSettings(current),
-                      transition: event.target.value as 'cut' | 'fade',
-                    },
-                  }))
-                }
-              >
-                <option value="cut">直接切换</option>
-                <option value="fade">淡入淡出</option>
-              </select>
-            </label>
-            <label>
-              品牌 Logo
-              <span className="media-supporting-asset-row">
-                <select
-                  value={defaultRenderSettings(draft).logoAssetId ?? ''}
-                  onChange={(event) =>
-                    mutate((current) => ({
-                      ...current,
-                      renderSettings: {
-                        ...defaultRenderSettings(current),
-                        logoAssetId: event.target.value || null,
-                      },
-                    }))
-                  }
-                >
-                  <option value="">不添加</option>
-                  {(draft.assets ?? [])
-                    .filter((asset) => asset.kind === 'image')
-                    .map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.fileName}
-                      </option>
-                    ))}
-                </select>
-                <button type="button" onClick={() => void importSupportingAsset('logo')}>
-                  导入
-                </button>
-              </span>
-            </label>
-            <label>
-              背景音乐 · {Math.round(defaultRenderSettings(draft).musicVolume * 100)}%
-              <span className="media-supporting-asset-row">
-                <select
-                  value={defaultRenderSettings(draft).musicAssetId ?? ''}
-                  onChange={(event) =>
-                    mutate((current) => ({
-                      ...current,
-                      renderSettings: {
-                        ...defaultRenderSettings(current),
-                        musicAssetId: event.target.value || null,
-                      },
-                    }))
-                  }
-                >
-                  <option value="">不添加</option>
-                  {(draft.assets ?? [])
-                    .filter((asset) => asset.kind === 'audio')
-                    .map((asset) => (
-                      <option key={asset.id} value={asset.id}>
-                        {asset.fileName}
-                      </option>
-                    ))}
-                </select>
-                <button type="button" onClick={() => void importSupportingAsset('music')}>
-                  导入
-                </button>
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={defaultRenderSettings(draft).musicVolume}
-                disabled={!defaultRenderSettings(draft).musicAssetId}
-                onChange={(event) =>
-                  mutate((current) => ({
-                    ...current,
-                    renderSettings: {
-                      ...defaultRenderSettings(current),
-                      musicVolume: Number(event.target.value),
-                    },
-                  }))
-                }
-              />
-            </label>
-          </div>
-        </main>
-
-        {selectedScene && (
-          <aside className="media-scene-inspector" aria-label="场景检查器">
-            <div className="media-inspector-heading">
-              <strong>场景 {selectedScene.order + 1}</strong>
-              <span>
-                <button type="button" onClick={() => moveScene(-1)} aria-label="场景上移">
-                  ↑
-                </button>
-                <button type="button" onClick={() => moveScene(1)} aria-label="场景下移">
-                  ↓
-                </button>
-              </span>
-            </div>
-            <label>
-              时长（秒）
-              <input
-                type="number"
-                min={1}
-                max={60}
-                step={0.5}
-                value={selectedScene.durationSeconds}
-                onChange={(event) => updateScene({ durationSeconds: Number(event.target.value) })}
-              />
-            </label>
-            <label>
-              旁白文案
-              <textarea
-                value={selectedScene.narration}
-                onChange={(event) => updateScene({ narration: event.target.value })}
-              />
-            </label>
-            <label>
-              屏幕字幕
-              <textarea
-                value={selectedScene.subtitle}
-                onChange={(event) => updateScene({ subtitle: event.target.value })}
-              />
-            </label>
-            <label>
-              画面说明
-              <textarea
-                value={selectedScene.visualDescription}
-                onChange={(event) => updateScene({ visualDescription: event.target.value })}
-              />
-            </label>
-            <label>
-              素材搜索词
-              <input
-                value={selectedScene.searchTerms.join('，')}
-                onChange={(event) =>
-                  updateScene({
-                    searchTerms: event.target.value
-                      .split(/[，,]/)
-                      .map((value) => value.trim())
-                      .filter(Boolean),
-                  })
-                }
-              />
-            </label>
-            <label>
-              AI 生成提示词
-              <textarea
-                value={selectedScene.generationPrompt}
-                onChange={(event) => updateScene({ generationPrompt: event.target.value })}
-              />
-            </label>
-            <div className="media-material-status">
-              <strong>素材</strong>
-              <select
-                aria-label="已导入素材"
-                value={selectedScene.assetId ?? ''}
-                onChange={(event) =>
-                  updateScene({
-                    assetId: event.target.value || null,
-                    materialKind: event.target.value ? 'workspace' : 'unassigned',
-                  })
-                }
-              >
-                <option value="">尚未选择</option>
-                {(draft.assets ?? [])
-                  .filter((asset) => asset.kind !== 'audio')
-                  .map((asset) => (
-                    <option key={asset.id} value={asset.id}>
-                      {asset.fileName}
-                    </option>
-                  ))}
-              </select>
-              <button type="button" onClick={() => void importAsset()}>
-                导入本地图片或视频
-              </button>
-              <div className="media-generate-row">
-                <select
-                  aria-label="图片生成 Provider"
-                  value={imageProviderId}
-                  onChange={(event) => setImageProviderId(event.target.value as 'meshy' | 'jimeng')}
-                >
-                  {imageProviders.map((provider) => (
-                    <option key={provider.id} value={provider.id} disabled={!provider.configured}>
-                      {provider.id === 'jimeng' ? '即梦' : 'Meshy'}
-                      {provider.configured ? '' : '（未配置）'}
-                    </option>
-                  ))}
-                  {imageProviders.length === 0 && (
-                    <option value="jimeng">未配置图片 Provider</option>
-                  )}
-                </select>
-                <button
-                  type="button"
-                  disabled={generatingImage || !selectedScene.generationPrompt.trim()}
-                  onClick={() => void generateSceneImage()}
-                >
-                  {generatingImage ? '生成中…' : '生成图片'}
-                </button>
-              </div>
-              <div className="media-search-row">
-                <input
-                  aria-label="搜索素材关键词"
-                  value={assetSearchQuery}
-                  onChange={(event) => setAssetSearchQuery(event.target.value)}
+              <div className="media-preview-orb" />
+              {(renderPreview ?? assetPreview)?.kind === 'image' && (
+                <img
+                  className="media-preview-asset"
+                  src={(renderPreview ?? assetPreview)!.url}
+                  alt={selectedAsset?.fileName}
                 />
-                <select
-                  aria-label="搜索素材类型"
-                  value={assetSearchKind}
-                  onChange={(event) => setAssetSearchKind(event.target.value as 'image' | 'video')}
-                >
-                  <option value="image">图片</option>
-                  <option value="video">视频</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={searchingAssets}
-                  onClick={() => void searchAssets()}
-                >
-                  {searchingAssets ? '搜索中…' : '搜索素材'}
-                </button>
-              </div>
-              {assetSearchResults.length > 0 && (
-                <div className="media-search-results" aria-label="Pexels 搜索结果">
-                  {assetSearchResults.map((candidate) => (
-                    <div key={candidate.id} className="media-search-candidate">
-                      <img src={candidate.thumbnailUrl} alt={`由 ${candidate.author} 提供`} />
-                      <span>
-                        <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">
-                          {candidate.author} · Pexels
-                        </a>
-                        <button
-                          type="button"
-                          disabled={addingCandidateId !== null}
-                          onClick={() => void addSearchCandidate(candidate)}
-                        >
-                          {addingCandidateId === candidate.id ? '添加中…' : '添加'}
-                        </button>
-                      </span>
-                    </div>
-                  ))}
+              )}
+              {(renderPreview ?? assetPreview)?.kind === 'video' && (
+                <video
+                  className="media-preview-asset"
+                  src={(renderPreview ?? assetPreview)!.url}
+                  controls
+                  muted={!renderPreview}
+                />
+              )}
+              {!renderPreview && !assetPreview && (
+                <div className="media-preview-placeholder">
+                  {selectedAsset ? selectedAsset.fileName : '素材待添加'}
                 </div>
               )}
-              <div className="media-generate-row">
-                <select
-                  aria-label="视频生成时长"
-                  value={videoDuration}
-                  onChange={(event) => setVideoDuration(Number(event.target.value) as 5 | 10)}
-                >
-                  <option value={5}>5 秒</option>
-                  <option value={10}>10 秒</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={submittingVideo || !selectedScene.generationPrompt.trim()}
-                  onClick={() => void createVideoTask()}
-                >
-                  {submittingVideo ? '提交中…' : '生成视频'}
-                </button>
-              </div>
-              <span>
-                {selectedAsset
-                  ? `${selectedAsset.kind === 'image' ? '图片' : '视频'} · ${(
-                      selectedAsset.sizeBytes /
-                      1024 /
-                      1024
-                    ).toFixed(1)} MB · 已复制到工程`
-                  : '当前场景仍有素材缺口'}
-              </span>
+              {!renderPreview && (
+                <div className="media-preview-subtitle">{selectedScene?.subtitle}</div>
+              )}
             </div>
-          </aside>
+            <div className="media-preview-caption">
+              {renderPreview
+                ? '已导出文件预览 · 修改后需重新导出'
+                : `场景 ${selectedScene ? selectedScene.order + 1 : 0} · 静态排版参考，最终动效与声音请导出后播放`}
+            </div>
+            {stage === 'export' && (
+              <div className="media-brief-grid">
+                <label>
+                  平台
+                  <select
+                    value={draft.brief.platform}
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        brief: {
+                          ...current.brief,
+                          platform: event.target.value as MediaProjectPlatform,
+                        },
+                      }))
+                    }
+                  >
+                    {Object.entries(PLATFORM_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  画幅
+                  <select
+                    value={draft.brief.aspectRatio}
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        brief: {
+                          ...current.brief,
+                          aspectRatio: event.target.value as MediaAspectRatio,
+                        },
+                      }))
+                    }
+                  >
+                    <option value="9:16">9:16</option>
+                    <option value="16:9">16:9</option>
+                    <option value="1:1">1:1</option>
+                  </select>
+                </label>
+                <label>
+                  品牌色
+                  <input
+                    type="color"
+                    value={draft.brief.brand.primaryColor}
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        brief: {
+                          ...current.brief,
+                          brand: { ...current.brief.brand, primaryColor: event.target.value },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  结尾 CTA
+                  <input
+                    value={draft.brief.brand.callToAction}
+                    placeholder="例如：立即体验"
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        brief: {
+                          ...current.brief,
+                          brand: { ...current.brief.brand, callToAction: event.target.value },
+                        },
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  场景转场
+                  <select
+                    value={defaultRenderSettings(draft).transition}
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        renderSettings: {
+                          ...defaultRenderSettings(current),
+                          transition: event.target.value as 'cut' | 'fade',
+                        },
+                      }))
+                    }
+                  >
+                    <option value="cut">直接切换</option>
+                    <option value="fade">淡入淡出</option>
+                  </select>
+                </label>
+                <label>
+                  品牌 Logo
+                  <span className="media-supporting-asset-row">
+                    <select
+                      aria-label="品牌 Logo"
+                      value={defaultRenderSettings(draft).logoAssetId ?? ''}
+                      onChange={(event) =>
+                        mutate((current) => ({
+                          ...current,
+                          renderSettings: {
+                            ...defaultRenderSettings(current),
+                            logoAssetId: event.target.value || null,
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">不添加</option>
+                      {(draft.assets ?? [])
+                        .filter((asset) => asset.kind === 'image')
+                        .map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.fileName}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" onClick={() => void importSupportingAsset('logo')}>
+                      导入
+                    </button>
+                  </span>
+                </label>
+                <label>
+                  背景音乐 · {Math.round(defaultRenderSettings(draft).musicVolume * 100)}%
+                  <span className="media-supporting-asset-row">
+                    <select
+                      aria-label="背景音乐"
+                      value={defaultRenderSettings(draft).musicAssetId ?? ''}
+                      onChange={(event) =>
+                        mutate((current) => ({
+                          ...current,
+                          renderSettings: {
+                            ...defaultRenderSettings(current),
+                            musicAssetId: event.target.value || null,
+                          },
+                        }))
+                      }
+                    >
+                      <option value="">不添加</option>
+                      {(draft.assets ?? [])
+                        .filter((asset) => asset.kind === 'audio')
+                        .map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.fileName}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" onClick={() => void importSupportingAsset('music')}>
+                      导入
+                    </button>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={defaultRenderSettings(draft).musicVolume}
+                    disabled={!defaultRenderSettings(draft).musicAssetId}
+                    onChange={(event) =>
+                      mutate((current) => ({
+                        ...current,
+                        renderSettings: {
+                          ...defaultRenderSettings(current),
+                          musicVolume: Number(event.target.value),
+                        },
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            )}
+          </main>
+
+          {stage === 'scenes' && selectedScene && (
+            <aside className="media-scene-inspector" aria-label="场景检查器">
+              <div className="media-inspector-heading">
+                <strong>场景 {selectedScene.order + 1}</strong>
+                <span>
+                  <button type="button" onClick={() => moveScene(-1)} aria-label="场景上移">
+                    ↑
+                  </button>
+                  <button type="button" onClick={() => moveScene(1)} aria-label="场景下移">
+                    ↓
+                  </button>
+                </span>
+              </div>
+              <label>
+                时长（秒）
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  step={0.5}
+                  value={selectedScene.durationSeconds}
+                  onChange={(event) => updateScene({ durationSeconds: Number(event.target.value) })}
+                />
+              </label>
+              <label>
+                旁白文案
+                <textarea
+                  value={selectedScene.narration}
+                  onChange={(event) => updateScene({ narration: event.target.value })}
+                />
+              </label>
+              <label>
+                屏幕字幕
+                <textarea
+                  value={selectedScene.subtitle}
+                  onChange={(event) => updateScene({ subtitle: event.target.value })}
+                />
+              </label>
+              <label>
+                画面说明
+                <textarea
+                  value={selectedScene.visualDescription}
+                  onChange={(event) => updateScene({ visualDescription: event.target.value })}
+                />
+              </label>
+              <label>
+                素材搜索词
+                <input
+                  value={selectedScene.searchTerms.join('，')}
+                  onChange={(event) =>
+                    updateScene({
+                      searchTerms: event.target.value
+                        .split(/[，,]/)
+                        .map((value) => value.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                AI 生成提示词
+                <textarea
+                  value={selectedScene.generationPrompt}
+                  onChange={(event) => updateScene({ generationPrompt: event.target.value })}
+                />
+              </label>
+              <div className="media-material-status">
+                <strong>这个镜头用什么画面？</strong>
+                <div className="media-source-tabs" role="group" aria-label="素材来源">
+                  {(
+                    [
+                      { id: 'local', label: '录屏 / 本地' },
+                      { id: 'search', label: '搜索素材' },
+                      { id: 'generate', label: 'AI 生成' },
+                    ] as const
+                  ).map((source) => (
+                    <button
+                      key={source.id}
+                      type="button"
+                      aria-pressed={materialSource === source.id}
+                      onClick={() => setMaterialSource(source.id)}
+                    >
+                      {source.label}
+                    </button>
+                  ))}
+                </div>
+                {materialSource === 'local' && (
+                  <>
+                    <select
+                      aria-label="已导入素材"
+                      value={selectedScene.assetId ?? ''}
+                      onChange={(event) =>
+                        updateScene({
+                          assetId: event.target.value || null,
+                          materialKind: event.target.value ? 'workspace' : 'unassigned',
+                        })
+                      }
+                    >
+                      <option value="">尚未选择</option>
+                      {(draft.assets ?? [])
+                        .filter((asset) => asset.kind !== 'audio')
+                        .map((asset) => (
+                          <option key={asset.id} value={asset.id}>
+                            {asset.fileName}
+                          </option>
+                        ))}
+                    </select>
+                    <button type="button" onClick={() => void importAsset()}>
+                      导入本地图片或视频
+                    </button>
+                    <small>可导入产品录屏、实拍视频或截图；仅替换当前镜头。</small>
+                  </>
+                )}
+                {materialSource === 'generate' && (
+                  <>
+                    <p>
+                      {videoProvider?.configured
+                        ? '即梦视频已配置 · 文生视频'
+                        : videoProvider?.reason || '即梦视频尚未配置，请在设置中配置凭证'}
+                    </p>
+                    <p>当前支持图片生成与文生视频。参考图生视频尚未接入。</p>
+                    <div className="media-generate-row">
+                      <select
+                        aria-label="图片生成 Provider"
+                        value={imageProviderId}
+                        onChange={(event) =>
+                          setImageProviderId(event.target.value as 'meshy' | 'jimeng')
+                        }
+                      >
+                        {imageProviders.map((provider) => (
+                          <option
+                            key={provider.id}
+                            value={provider.id}
+                            disabled={!provider.configured}
+                          >
+                            {provider.id === 'jimeng' ? '即梦' : 'Meshy'}
+                            {provider.configured ? '' : '（未配置）'}
+                          </option>
+                        ))}
+                        {imageProviders.length === 0 && (
+                          <option value="jimeng">未配置图片 Provider</option>
+                        )}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={generatingImage || !selectedScene.generationPrompt.trim()}
+                        onClick={() => void generateSceneImage()}
+                      >
+                        {generatingImage ? '生成中…' : '生成图片'}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {materialSource === 'search' && (
+                  <>
+                    <div className="media-search-row">
+                      <input
+                        aria-label="搜索素材关键词"
+                        value={assetSearchQuery}
+                        onChange={(event) => setAssetSearchQuery(event.target.value)}
+                      />
+                      <select
+                        aria-label="搜索素材类型"
+                        value={assetSearchKind}
+                        onChange={(event) =>
+                          setAssetSearchKind(event.target.value as 'image' | 'video')
+                        }
+                      >
+                        <option value="image">图片</option>
+                        <option value="video">视频</option>
+                      </select>
+                      <button
+                        type="button"
+                        disabled={searchingAssets}
+                        onClick={() => void searchAssets()}
+                      >
+                        {searchingAssets ? '搜索中…' : '搜索素材'}
+                      </button>
+                    </div>
+                    {assetSearchResults.length > 0 && (
+                      <div className="media-search-results" aria-label="Pexels 搜索结果">
+                        {assetSearchResults.map((candidate) => (
+                          <div key={candidate.id} className="media-search-candidate">
+                            <img src={candidate.thumbnailUrl} alt={`由 ${candidate.author} 提供`} />
+                            <span>
+                              <a href={candidate.sourceUrl} target="_blank" rel="noreferrer">
+                                {candidate.author} · Pexels
+                              </a>
+                              <button
+                                type="button"
+                                disabled={addingCandidateId !== null}
+                                onClick={() => void addSearchCandidate(candidate)}
+                              >
+                                {addingCandidateId === candidate.id ? '添加中…' : '添加'}
+                              </button>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+                {materialSource === 'generate' && (
+                  <div className="media-generate-row">
+                    <select
+                      aria-label="视频生成时长"
+                      value={videoDuration}
+                      onChange={(event) => setVideoDuration(Number(event.target.value) as 5 | 10)}
+                    >
+                      <option value={5}>5 秒</option>
+                      <option value={10}>10 秒</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={submittingVideo || !selectedScene.generationPrompt.trim()}
+                      onClick={() => void createVideoTask()}
+                    >
+                      {submittingVideo ? '提交中…' : '生成视频'}
+                    </button>
+                  </div>
+                )}
+                <span>
+                  {selectedAsset
+                    ? `${selectedAsset.kind === 'image' ? '图片' : '视频'} · ${(
+                        selectedAsset.sizeBytes /
+                        1024 /
+                        1024
+                      ).toFixed(1)} MB · 已复制到工程`
+                    : '当前场景仍有素材缺口'}
+                </span>
+              </div>
+            </aside>
+          )}
+        </div>
+      )}
+      <footer className="media-workflow-footer">
+        <button
+          type="button"
+          disabled={activeStageIndex === 0}
+          onClick={() => setStage(MEDIA_WORKFLOW_STAGES[activeStageIndex - 1].id)}
+        >
+          ← 上一步
+        </button>
+        <span>
+          {draft.scenes.length} 个镜头 · {totalDuration.toFixed(1)} 秒 ·{' '}
+          {missingMaterialCount ? `${missingMaterialCount} 个素材缺口` : '素材已齐'}
+        </span>
+        {activeStageIndex < MEDIA_WORKFLOW_STAGES.length - 1 ? (
+          <button
+            type="button"
+            onClick={() => setStage(MEDIA_WORKFLOW_STAGES[activeStageIndex + 1].id)}
+          >
+            下一步：{MEDIA_WORKFLOW_STAGES[activeStageIndex + 1].label} →
+          </button>
+        ) : (
+          <span>导出后可在下方任务中播放整片</span>
         )}
-      </div>
+      </footer>
       {videoTasks.length > 0 && (
         <section className="media-task-drawer" aria-label="视频生成任务">
           <strong>视频任务</strong>

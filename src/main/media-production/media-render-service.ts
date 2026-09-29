@@ -414,6 +414,19 @@ async function validateProjectForRender(project: MediaProject): Promise<string |
       return `场景 ${scene.order + 1} 的素材文件已丢失`
     }
   }
+  for (const id of [
+    project.renderSettings?.narrationAssetId,
+    project.renderSettings?.musicAssetId,
+  ]) {
+    if (!id) continue
+    const asset = assets.get(id)
+    if (!asset || asset.kind !== 'audio') return '旁白或背景音乐素材无效'
+    try {
+      await access(asset.path, constants.R_OK)
+    } catch {
+      return `音频素材已丢失：${asset.fileName}`
+    }
+  }
   return null
 }
 
@@ -447,17 +460,26 @@ function buildCompositeArgs(
   const music = project.renderSettings?.musicAssetId
     ? assets.get(project.renderSettings.musicAssetId)
     : undefined
+  const narration = project.renderSettings?.narrationAssetId
+    ? assets.get(project.renderSettings.narrationAssetId)
+    : undefined
+  const totalDuration = project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)
   const args = ['-y', '-i', inputPath]
   let nextInput = 1
   let logoInput: number | null = null
   let musicInput: number | null = null
+  let narrationInput: number | null = null
   if (logo) {
     logoInput = nextInput++
     args.push('-loop', '1', '-i', logo.path)
   }
   if (music) {
-    musicInput = nextInput
+    musicInput = nextInput++
     args.push('-stream_loop', '-1', '-i', music.path)
+  }
+  if (narration) {
+    narrationInput = nextInput
+    args.push('-i', narration.path)
   }
   const filters = [
     `[0:v]subtitles='${escapeFilterPath(subtitlePath)}':force_style='FontName=Arial,FontSize=22,Outline=2,Shadow=0,MarginV=48'[captioned]`,
@@ -469,16 +491,31 @@ function buildCompositeArgs(
     videoOutput = 'vout'
   }
   if (musicInput !== null) {
-    const totalDuration = project.scenes.reduce((sum, scene) => sum + scene.durationSeconds, 0)
     const fadeOutStart = Math.max(0, totalDuration - 0.8).toFixed(3)
     filters.push(
-      `[${musicInput}:a]volume=${project.renderSettings?.musicVolume ?? 0.18},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOutStart}:d=0.8[aout]`,
+      `[${musicInput}:a]volume=${project.renderSettings?.musicVolume ?? 0.18},afade=t=in:st=0:d=0.5,afade=t=out:st=${fadeOutStart}:d=0.8,atrim=duration=${totalDuration}[music]`,
     )
   }
+  if (narrationInput !== null) {
+    filters.push(`[${narrationInput}:a]apad,atrim=duration=${totalDuration}[narration]`)
+  }
+  if (musicInput !== null && narrationInput !== null) {
+    filters.push('[music][narration]amix=inputs=2:duration=longest:normalize=0[aout]')
+  }
   args.push('-filter_complex', filters.join(';'), '-map', `[${videoOutput}]`)
-  if (musicInput !== null) args.push('-map', '[aout]', '-shortest')
-  else args.push('-an')
+  const hasAudio = musicInput !== null || narrationInput !== null
+  if (hasAudio) {
+    const audioOutput =
+      musicInput !== null && narrationInput !== null
+        ? 'aout'
+        : narrationInput !== null
+          ? 'narration'
+          : 'music'
+    args.push('-map', `[${audioOutput}]`)
+  } else args.push('-an')
   args.push(
+    '-t',
+    String(totalDuration),
     '-c:v',
     'libx264',
     '-preset',
@@ -487,7 +524,7 @@ function buildCompositeArgs(
     '20',
     '-pix_fmt',
     'yuv420p',
-    ...(musicInput !== null ? ['-c:a', 'aac', '-b:a', '192k'] : []),
+    ...(hasAudio ? ['-c:a', 'aac', '-b:a', '192k'] : []),
     '-movflags',
     '+faststart',
     outputPath,
@@ -518,7 +555,11 @@ function createSources(project: MediaProject): string {
     entry.scenes.push(scene.order + 1)
     used.set(asset.id, entry)
   }
-  for (const id of [project.renderSettings?.logoAssetId, project.renderSettings?.musicAssetId]) {
+  for (const id of [
+    project.renderSettings?.logoAssetId,
+    project.renderSettings?.musicAssetId,
+    project.renderSettings?.narrationAssetId,
+  ]) {
     if (!id) continue
     const asset = assets.get(id)
     if (asset && !used.has(id)) used.set(id, { asset, scenes: [] })
@@ -532,7 +573,9 @@ function createSources(project: MediaProject): string {
   ]
   for (const { asset, scenes } of used.values()) {
     lines.push(`## ${asset.fileName}`, '')
-    lines.push(`- 用途：${scenes.length ? `场景 ${scenes.join('、')}` : 'Logo / 背景音乐'}`)
+    lines.push(
+      `- 用途：${scenes.length ? `场景 ${scenes.join('、')}` : asset.id === project.renderSettings?.narrationAssetId ? '旁白音频' : 'Logo / 背景音乐'}`,
+    )
     lines.push(`- 类型：${asset.kind}`)
     lines.push(`- 来源：${asset.source}`)
     lines.push(`- SHA-256：${asset.sha256}`)

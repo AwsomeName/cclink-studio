@@ -18,6 +18,12 @@ import type {
 } from '../../shared/media-production/media-project-types'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import { MediaAssetService } from './media-asset-service'
+import {
+  initialNarration,
+  narrationInputKey,
+  narrationScriptSchema,
+  type GenerateNarrationInput,
+} from '../../shared/media-production/narration-script'
 
 const MEDIA_PROJECT_DIRECTORY = join('.cclink-studio', 'media-projects')
 const MAX_SOURCE_BYTES = 1_000_000
@@ -38,6 +44,7 @@ export class MediaProjectService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly changeListeners = new Set<(workspacePath: string) => void>()
   private readonly mediaAssetService: MediaAssetService
+  private readonly activeNarrations = new Set<string>()
 
   constructor(
     private readonly workspaceStateService: WorkspaceStateService,
@@ -86,12 +93,29 @@ export class MediaProjectService {
   }
 
   async get(workspacePath: string, projectId: string): Promise<MediaProjectOperationResult> {
-    try {
-      const workspace = await this.resolveWorkspace(workspacePath, false)
-      return { success: true, project: await this.readProject(workspace, projectId) }
-    } catch (error) {
-      return { success: false, error: toFailure(error) }
-    }
+    return this.enqueue(async () => {
+      try {
+        const workspace = await this.resolveWorkspace(workspacePath, false)
+        const project = await this.readProject(workspace, projectId)
+        if (
+          project.narration?.generation?.status === 'running' &&
+          !this.activeNarrations.has(`${workspace}:${projectId}`)
+        ) {
+          project.narration.generation = {
+            ...project.narration.generation,
+            status: 'interrupted',
+            finishedAt: this.now(),
+            error: '上次口播生成已中断。现有正文和候选保留，可手动重新生成。',
+          }
+          project.revision++
+          project.updatedAt = this.now()
+          await this.writeProject(workspace, project)
+        }
+        return { success: true, project }
+      } catch (error) {
+        return { success: false, error: toFailure(error) }
+      }
+    })
   }
 
   async create(input: CreateMediaProjectInput): Promise<MediaProjectOperationResult> {
@@ -131,6 +155,7 @@ export class MediaProjectService {
             brand: { primaryColor: '#5B8CFF', callToAction: '' },
           },
           scenes: createStoryboard(snapshot, title, input.targetDurationSeconds),
+          narration: initialNarration([{ id: randomUUID(), text: '' }]),
           assets: [],
           renderSettings: {
             logoAssetId: null,
@@ -141,9 +166,9 @@ export class MediaProjectService {
           createdAt: timestamp,
           updatedAt: timestamp,
         }
-        await this.writeProject(workspacePath, project)
+        const warnings = await this.writeProject(workspacePath, project)
         this.notifyChanged(workspacePath)
-        return { success: true, project }
+        return { success: true, project, warnings }
       } catch (error) {
         return { success: false, error: toFailure(error) }
       }
@@ -173,16 +198,45 @@ export class MediaProjectService {
             '工程身份或稿件快照不能通过编辑界面修改',
           )
         }
+        const previousNarration =
+          current.narration ??
+          initialNarration(current.scenes.map((s) => ({ id: s.id, text: s.narration })))
+        const incomingNarration = input.project.narration ?? previousNarration
+        if (
+          incomingNarration.appliedProposalId !== previousNarration.appliedProposalId &&
+          incomingNarration.appliedProposalId !== null
+        ) {
+          if (
+            incomingNarration.appliedProposalId !== previousNarration.proposal?.id ||
+            previousNarration.proposal.baseNarrationRevision !== previousNarration.revision
+          ) {
+            throw new MediaProjectServiceError(
+              'MEDIA_PROJECT_REVISION_CONFLICT',
+              'AI 候选已过期，不能直接采用；请重新生成或手工修改',
+            )
+          }
+        }
+        const narrationChanged =
+          narrationInputKey(previousNarration, current.brief) !==
+          narrationInputKey(incomingNarration, input.project.brief)
+        const narration = narrationScriptSchema.parse({
+          ...incomingNarration,
+          revision: previousNarration.revision + (narrationChanged ? 1 : 0),
+          confirmedRevision: narrationChanged ? null : incomingNarration.confirmedRevision,
+          proposal: previousNarration.proposal,
+          generation: previousNarration.generation,
+        })
         const project = parseMediaProject({
           ...input.project,
+          narration,
           revision: current.revision + 1,
           updatedAt: this.now(),
           scenes: input.project.scenes.map((scene, order) => ({ ...scene, order })),
         })
         await this.mediaAssetService.validateProjectAssets(workspacePath, project)
-        await this.writeProject(workspacePath, project)
+        const warnings = await this.writeProject(workspacePath, project)
         this.notifyChanged(workspacePath)
-        return { success: true, project }
+        return { success: true, project, warnings }
       } catch (error) {
         return { success: false, error: toFailure(error) }
       }
@@ -191,6 +245,110 @@ export class MediaProjectService {
 
   async flush(): Promise<void> {
     await this.mutationQueue.catch(() => undefined)
+  }
+
+  async generateNarration(
+    input: GenerateNarrationInput,
+    generate: (project: MediaProject, mode: GenerateNarrationInput['mode']) => Promise<string[]>,
+  ): Promise<MediaProjectOperationResult> {
+    let binding: string | null = null
+    try {
+      const started = await this.enqueue(async () => {
+        const workspace = await this.resolveWorkspace(input.workspacePath, true)
+        const current = await this.readProject(workspace, input.projectId)
+        if (current.revision !== input.expectedRevision)
+          throw new MediaProjectServiceError(
+            'MEDIA_PROJECT_REVISION_CONFLICT',
+            '工程已更新，请重新打开后生成口播',
+          )
+        const key = `${workspace}:${current.id}`
+        if (this.activeNarrations.has(key))
+          throw new MediaProjectServiceError(
+            'MEDIA_PROJECT_INVALID',
+            '此工程正在生成口播，请等待当前任务结束',
+          )
+        const narration =
+          current.narration ??
+          initialNarration(current.scenes.map((s) => ({ id: s.id, text: s.narration })))
+        if (input.mode !== 'generate' && !narration.segments.some((s) => s.text.trim()))
+          throw new MediaProjectServiceError('MEDIA_PROJECT_INVALID', '请先写入口播，再精简或改写')
+        const project: MediaProject = {
+          ...current,
+          revision: current.revision + 1,
+          updatedAt: this.now(),
+          narration: {
+            ...narration,
+            generation: {
+              id: randomUUID(),
+              status: 'running',
+              mode: input.mode,
+              inputRevision: narration.revision,
+              startedAt: this.now(),
+              finishedAt: null,
+              error: null,
+            },
+          },
+        }
+        await this.writeProject(workspace, project)
+        binding = key
+        this.activeNarrations.add(key)
+        this.notifyChanged(workspace)
+        return project
+      })
+      let segments: string[] | null = null
+      try {
+        segments = await generate(started, input.mode)
+      } catch {
+        /* Do not persist raw model errors or prompt content. */
+      }
+      return await this.enqueue(async () => {
+        const workspace = await this.resolveWorkspace(input.workspacePath, true)
+        const current = await this.readProject(workspace, input.projectId)
+        const narration = current.narration!
+        const task = started.narration!.generation!
+        let proposal = narration.proposal
+        if (segments) {
+          try {
+            proposal = narrationScriptSchema.parse({
+              ...narration,
+              proposal: {
+                id: task.id,
+                baseNarrationRevision: started.narration!.revision,
+                segments: segments.map((text) => ({ id: randomUUID(), text })),
+                createdAt: this.now(),
+              },
+            }).proposal
+            if (proposal?.segments.some((s) => !s.text.trim())) segments = null
+          } catch {
+            segments = null
+          }
+        }
+        const project = parseMediaProject({
+          ...current,
+          revision: current.revision + 1,
+          updatedAt: this.now(),
+          narration: {
+            ...narration,
+            proposal: segments ? proposal : narration.proposal,
+            generation: {
+              ...task,
+              status: segments ? 'succeeded' : 'failed',
+              finishedAt: this.now(),
+              error: segments
+                ? null
+                : '未取得有效口播。请检查 Agent 配置与网络后重试，也可继续手写；原稿和现有口播未改变。',
+            },
+          },
+        })
+        const warnings = await this.writeProject(workspace, project)
+        this.notifyChanged(workspace)
+        return { success: true as const, project, warnings }
+      })
+    } catch (error) {
+      return { success: false, error: toFailure(error) }
+    } finally {
+      if (binding) this.activeNarrations.delete(binding)
+    }
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -280,7 +438,7 @@ export class MediaProjectService {
     }
   }
 
-  private async writeProject(workspacePath: string, project: MediaProject): Promise<void> {
+  private async writeProject(workspacePath: string, project: MediaProject): Promise<string[]> {
     const directory = join(projectsDirectory(workspacePath), project.id)
     const filePath = projectFilePath(workspacePath, project.id)
     const tempPath = `${filePath}.${process.pid}.tmp`
@@ -288,6 +446,24 @@ export class MediaProjectService {
       await mkdir(directory, { recursive: true })
       await writeFile(tempPath, `${JSON.stringify(project, null, 2)}\n`, 'utf-8')
       await rename(tempPath, filePath)
+      // Readable projection only; the atomic JSON above is the sole authority.
+      if (project.narration) {
+        try {
+          const scriptDirectory = join(directory, 'script')
+          await mkdir(scriptDirectory, { recursive: true })
+          const markdownPath = join(scriptDirectory, 'narration.md')
+          await writeFile(
+            `${markdownPath}.tmp`,
+            `# ${project.title}\n\n> 口播版本 ${project.narration.revision} · ${project.narration.confirmedRevision === project.narration.revision ? '已确认' : '待确认'}\n> 可读副本；请在 Studio 编辑正文，外部修改不会自动导入。\n\n${project.narration.segments.map((s) => s.text).join('\n\n')}\n`,
+            'utf-8',
+          )
+          await rename(`${markdownPath}.tmp`, markdownPath)
+        } catch {
+          console.warn('[MediaProjectService] 口播可读副本写入失败；工程 JSON 已保存')
+          return ['工程 JSON 已保存，但口播 Markdown 副本写入失败；修复目录权限后再次保存可重建。']
+        }
+      }
+      return []
     } catch (error) {
       console.error('[MediaProjectService] 工程写入失败:', error)
       throw new MediaProjectServiceError(
@@ -319,6 +495,9 @@ function toSummary(project: MediaProject): MediaProjectSummary {
     aspectRatio: project.brief.aspectRatio,
     targetDurationSeconds: project.brief.targetDurationSeconds,
     sceneCount: project.scenes.length,
+    ...(project.narration
+      ? { narrationSegmentCount: project.narration.segments.filter((s) => s.text.trim()).length }
+      : {}),
     revision: project.revision,
     updatedAt: project.updatedAt,
   }

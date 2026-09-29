@@ -13,6 +13,8 @@ import type {
   ProposeMediaStoryboardInput,
 } from './media-project-types'
 
+import { narrationScriptSchema } from './narration-script'
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f-]{27,35}$/i
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i
 const ASPECT_RATIOS = new Set<MediaAspectRatio>(['16:9', '9:16', '1:1'])
@@ -149,6 +151,7 @@ export function parseMediaProject(value: unknown): MediaProject {
       'source',
       'brief',
       'scenes',
+      'narration',
       'assets',
       'renderSettings',
       'createdAt',
@@ -209,6 +212,9 @@ export function parseMediaProject(value: unknown): MediaProject {
       },
     },
     scenes,
+    ...(input.narration === undefined
+      ? {}
+      : { narration: narrationScriptSchema.parse(input.narration) }),
     assets,
     renderSettings,
     createdAt,
@@ -365,11 +371,15 @@ function parseRenderSettings(
   const settings = requireRecord(value, '成片设置无效')
   assertAllowedKeys(
     settings,
-    ['logoAssetId', 'musicAssetId', 'musicVolume', 'transition'],
+    ['logoAssetId', 'musicAssetId', 'narrationAssetId', 'musicVolume', 'transition'],
     '成片设置包含未知字段',
   )
   const logoAssetId = optionalAssetId(settings.logoAssetId, assetIds, 'Logo 素材无效')
   const musicAssetId = optionalAssetId(settings.musicAssetId, assetIds, '背景音乐素材无效')
+  const narrationAssetId = optionalAssetId(settings.narrationAssetId, assetIds, '旁白音频素材无效')
+  if (narrationAssetId && assets.find((asset) => asset.id === narrationAssetId)?.kind !== 'audio') {
+    throw new Error('旁白必须是音频素材')
+  }
   if (logoAssetId && assets.find((asset) => asset.id === logoAssetId)?.kind !== 'image') {
     throw new Error('Logo 必须是图片素材')
   }
@@ -390,6 +400,7 @@ function parseRenderSettings(
   return {
     logoAssetId,
     musicAssetId,
+    narrationAssetId,
     musicVolume: Math.round(settings.musicVolume * 100) / 100,
     transition: settings.transition,
   }

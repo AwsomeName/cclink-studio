@@ -22,6 +22,15 @@ export function registerMediaProjectIpc(
   imageGenerationService?: MediaImageGenerationService,
   searchService?: MediaSearchService,
 ): () => void {
+  registerTrustedIpcContract(
+    mediaProjectsIpc.generateNarration,
+    trustedRendererGuard,
+    (_event, input) =>
+      service.generateNarration(input, async (project, mode) => {
+        if (!proposalService) throw new Error('Agent unavailable')
+        return proposalService.proposeNarration(project, mode)
+      }),
+  )
   registerTrustedIpcContract(mediaProjectsIpc.list, trustedRendererGuard, (_event, workspacePath) =>
     service.list(workspacePath),
   )

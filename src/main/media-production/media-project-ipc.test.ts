@@ -68,6 +68,25 @@ describe('registerMediaProjectIpc', () => {
     expect(service.create).toHaveBeenCalledWith(input)
   })
 
+  it('validates narration input and rejects untrusted or renderer-supplied model data', async () => {
+    const service = createService()
+    registerMediaProjectIpc(service as never, createGuard('trusted') as never)
+    const handler = mockIpcMain.handlers.get('mediaProjects:generateNarration')!
+    const input = {
+      workspacePath: '/Users/example/workspace',
+      projectId: '11111111-1111-4111-8111-111111111111',
+      expectedRevision: 1,
+      mode: 'generate',
+    }
+    expect(() => handler({ sender: 'other' }, input)).toThrow('untrusted')
+    expect(await handler({ sender: 'trusted' }, { ...input, prompt: 'injected' })).toMatchObject({
+      success: false,
+    })
+    expect(service.generateNarration).not.toHaveBeenCalled()
+    await handler({ sender: 'trusted' }, input)
+    expect(service.generateNarration).toHaveBeenCalledWith(input, expect.any(Function))
+  })
+
   it('forwards a validated project to the isolated proposal service', async () => {
     const service = createService()
     const proposalService = { propose: vi.fn(async () => ({ success: true })) }
@@ -128,6 +147,7 @@ function createService() {
     get: vi.fn(async () => ({ success: true })),
     create: vi.fn(async () => ({ success: true })),
     save: vi.fn(async () => ({ success: true })),
+    generateNarration: vi.fn(async () => ({ success: true })),
     importAsset: vi.fn(async () => ({ success: true })),
     onChanged: vi.fn(() => () => undefined),
   }

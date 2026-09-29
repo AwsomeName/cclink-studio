@@ -1,16 +1,114 @@
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
 import type { MediaProject } from '../../shared/media-production/media-project-types'
 import type { MediaProjectService } from './media-project-service'
 import { MediaRenderService } from './media-render-service'
+import { parseMediaProject } from '../../shared/media-production/media-project-schema'
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111'
 const SCENE_ID = '22222222-2222-4222-8222-222222222222'
 const ASSET_ID = '33333333-3333-4333-8333-333333333333'
 
 describe('MediaRenderService', () => {
+  it('round-trips narration references and rejects non-audio narration assets', () => {
+    const project = createProject('/workspace', '/workspace/image.png')
+    project.brief.targetDurationSeconds = 10
+    expect(parseMediaProject(project).renderSettings?.narrationAssetId).toBeNull()
+    project.renderSettings!.narrationAssetId = ASSET_ID
+    expect(() => parseMediaProject(project)).toThrow('旁白必须是音频素材')
+    project.assets![0].kind = 'audio'
+    expect(parseMediaProject(project).renderSettings?.narrationAssetId).toBe(ASSET_ID)
+  })
+
+  it.runIf(Boolean(process.env.CCLINK_MEDIA_FFMPEG_SMOKE))(
+    'renders real narration and music with AAC audio at the scene duration',
+    async () => {
+      const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-render-audio-'))
+      const projectDirectory = join(workspacePath, '.cclink-studio', 'media-projects', PROJECT_ID)
+      await mkdir(projectDirectory, { recursive: true })
+      const ffmpeg = process.env.CCLINK_MEDIA_FFMPEG_SMOKE!
+      const execute = promisify(execFile)
+      const imagePath = join(projectDirectory, 'image.png')
+      const audioPath = join(projectDirectory, 'voice.wav')
+      await execute(ffmpeg, [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=blue:s=320x180',
+        '-frames:v',
+        '1',
+        imagePath,
+      ])
+      await execute(ffmpeg, ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', audioPath])
+      for (const mode of ['narration', 'music', 'both'] as const) {
+        const project = createProject(workspacePath, imagePath)
+        project.scenes[0].durationSeconds = 2
+        const audioId = '55555555-5555-4555-8555-555555555555'
+        project.assets!.push({
+          ...project.assets![0],
+          id: audioId,
+          kind: 'audio',
+          path: audioPath,
+          fileName: 'voice.wav',
+          mimeType: 'audio/wav',
+        })
+        project.renderSettings!.narrationAssetId = mode !== 'music' ? audioId : null
+        project.renderSettings!.musicAssetId = mode !== 'narration' ? audioId : null
+        const service = new MediaRenderService(projectService(project), {
+          now: Date.now,
+          configuredExecutable: ffmpeg,
+          run: async (file, args) => execute(file, args, { maxBuffer: 16 * 1024 * 1024 }),
+        })
+        const outputPath = join(workspacePath, `${mode}.mp4`)
+        const created = await service.createTask({
+          workspacePath,
+          projectId: PROJECT_ID,
+          projectRevision: 1,
+          outputPath,
+        })
+        expect(created.success).toBe(true)
+        let terminal = false
+        for (let attempt = 0; attempt < 200; attempt++) {
+          const tasks = await service.listTasks(workspacePath, PROJECT_ID)
+          const task = tasks.success
+            ? tasks.tasks.find((task) => task.outputPath === outputPath)
+            : null
+          if (task?.status === 'failed') throw new Error(task.errorMessage)
+          if (task?.status === 'succeeded') {
+            terminal = true
+            break
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        }
+        expect(terminal).toBe(true)
+        const probe = await execute(ffmpeg.replace(/ffmpeg$/, 'ffprobe'), [
+          '-v',
+          'error',
+          '-show_entries',
+          'stream=codec_name:format=duration',
+          '-of',
+          'json',
+          outputPath,
+        ])
+        const media = JSON.parse(probe.stdout)
+        expect(
+          media.streams.some((stream: { codec_name: string }) => stream.codec_name === 'aac'),
+        ).toBe(true)
+        expect(Number(media.format.duration)).toBeCloseTo(2, 1)
+        if (mode !== 'music')
+          expect(await readFile(join(workspacePath, `${mode}.sources.md`), 'utf8')).toContain(
+            '旁白音频',
+          )
+      }
+    },
+    90_000,
+  )
+
   it('creates deterministic MP4, SRT and source-list outputs through an external runtime', async () => {
     const workspacePath = await mkdtemp(join(tmpdir(), 'cclink-render-'))
     const projectDirectory = join(workspacePath, '.cclink-studio', 'media-projects', PROJECT_ID)
