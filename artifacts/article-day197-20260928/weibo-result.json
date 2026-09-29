@@ -1,0 +1,464 @@
+{
+  "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+  "execution": {
+    "status": "result-unknown",
+    "currentAttemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+    "currentGeneration": 2,
+    "currentLaunchOperationId": "96a083c7-5433-47e8-a721-ac308334abbd",
+    "currentStepId": "verify-publication"
+  },
+  "publication": {
+    "status": "result-unknown",
+    "observedAt": "2026-09-28T15:09:58.884Z"
+  },
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开微博临时编辑器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "editor.open",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "https://weibo.com/5961101548/RkbFEsKBy",
+          "observedAt": "2026-09-28T14:55:30.200Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "Agent run-c467b173-b8ad-4784-ad97-1fb095486faf · BrowserTask 233237d2-08a5-4c73-b43e-61f2b7897d3b · Tab tab-2-1790511484489 · View g2 · WebContents 3 · Page g8",
+          "observedAt": "2026-09-28T14:55:31.710Z",
+          "generation": 1
+        },
+        {
+          "id": "account.resolve",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "账号 9823a570-a412-4fba-bbc1-09df836991c6 · Profile web-draft-6838024d-b93e-4870-a12d-437b73d3beaa",
+          "observedAt": "2026-09-28T15:09:58.523Z",
+          "generation": 2
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "unknown",
+          "evidence": "等待当前工作空间账号的可见 Tab",
+          "reason": "任务result-unknown；没有继续派发权限，恢复后重新核验",
+          "observedAt": "2026-09-28T15:09:58.884Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T14:55:31.710Z",
+      "finishedAt": "2026-09-28T14:57:03.332Z",
+      "evidence": [
+        "inspect 2026-09-28T14:56:00.840Z：pageKind=editor，editor.recognized=true，URL=https://weibo.com/，platformAccountId=5961101548 与 targetUID 一致；bodySelector=textarea[placeholder=\"有什么新鲜事想分享给大家？\"]，bodyTextLength=0，initialDraftBodyEmpty=true，images=[]，imageEnumerationComplete=true；fileInputSelector 已签发。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验目标 UID 与空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 5961101548 · draftId 尚无 · 标题 做AI眼镜第197天，上次换耳朵，这次换大脑 · 保存 unknown",
+          "observedAt": "2026-09-28T15:05:14.008Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T14:57:27.507Z",
+      "finishedAt": "2026-09-28T14:57:55.258Z",
+      "evidence": [
+        "inspect 2026-09-28T14:57:23.104Z：开始核验 verify-account；pageKind=editor，platformAccountId=5961101548，准备比对 targetUID=5961101548 与空白现场。",
+        "inspect 2026-09-28T14:57:34.409Z：platformAccountId=5961101548 与 targetUID=5961101548 完全一致；现场为空白初始状态：bodyTextLength=0、initialDraftBodyEmpty=true、images=[]、imageEnumerationComplete=true，无残留草稿内容。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张上传并回读图集",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.open",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/01-小眸3D模型检查.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T14:58:05.607Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.open",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/02-骑行导航V4效果图.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T15:00:19.753Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.open",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/03-朗读台效果图.png · input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]",
+          "observedAt": "2026-09-28T15:01:13.273Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T14:58:42.126Z · upload-asset/local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T15:00:28.395Z · upload-asset/local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T15:01:34.380Z · upload-asset/local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2；结果另行核验",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.inspect",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/01-小眸3D模型检查.png",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx1.sinaimg.cn/bmiddle/006vqaPaly1ihjs1xcxqxj30zk0p07c9.jpg · 2026-09-28T14:59:40.404Z",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.inspect",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/02-骑行导航V4效果图.png",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx3.sinaimg.cn/bmiddle/006vqaPaly1ihjs3s1kkvj31fy0ndx6p.jpg · 2026-09-28T15:01:05.076Z",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.inspect",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "已有可信图片记录 · 素材/03-朗读台效果图.png",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "页面对应图片已核验 · https://wx1.sinaimg.cn/bmiddle/006vqaPaly1ihjs4x89hhj31fo0nikjl.jpg · 2026-09-28T15:02:14.033Z",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T14:58:11.162Z",
+      "finishedAt": "2026-09-28T15:03:59.610Z",
+      "evidence": [
+        "inspect 2026-09-28T14:58:05.589Z：开始 upload-assets；selectors.fileInput 已签发（input[accept=\"image/*, .jpg, .jpeg, .bmp, .gif, .png, .heif, .heic, video/mp4,video/x-m4v,video/*,.mkv,.flv\"]），当前 images=[]、imageEnumerationComplete=true，待上传 3 张冻结图片。",
+        "inspect 2026-09-28T15:02:23.065Z：图集共 3 张图片且全部 loaded=true，matchedAssets 三张冻结图片逐一匹配（01-小眸3D模型检查.png→wx1...p07c9.jpg、02-骑行导航V4效果图.png→wx3...ndx6p.jpg、03-朗读台效果图.png→wx1...nikjl.jpg），imageEnumerationComplete=true，开始收尾核验。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写并回读微博正文",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.placement",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/01-小眸3D模型检查.png · 图集 第 1 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T15:02:23.300Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.placement",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/02-骑行导航V4效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T15:02:23.300Z",
+          "generation": 1
+        },
+        {
+          "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.placement",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "素材/03-朗读台效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+          "observedAt": "2026-09-28T15:02:23.300Z",
+          "generation": 1
+        },
+        {
+          "id": "body.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "当前图文正文 834 字符；正文及逐图一致；无平台保存保证",
+          "observedAt": "2026-09-28T15:04:50.470Z",
+          "generation": 1
+        },
+        {
+          "id": "body.locate",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "正文 textarea[placeholder=\"有什么新鲜事想分享给大家？\"] · iframe 主文档 · 834 字符",
+          "observedAt": "2026-09-28T15:05:14.008Z",
+          "generation": 1
+        },
+        {
+          "id": "body.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "派发闸门已通过 · 2026-09-28T15:04:49.375Z · save-draft/autosave:fill-body:7021b10a-ac0c-4937-9560-af979640ac0a；结果另行核验",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:04:35.975Z",
+      "finishedAt": "2026-09-28T15:05:44.159Z",
+      "evidence": [
+        "inspect 2026-09-28T15:04:28.085Z：开始 fill-body；selectors.body=textarea[placeholder=\"有什么新鲜事想分享给大家？\"] 已定位，当前 bodyTextLength=0，图集 3 张已就位，准备由主进程注入冻结正文。",
+        "inspect 2026-09-28T15:05:13.784Z：browser_fill 已通过 selectors.body 完成，主进程注入冻结正文，bodyTextLength=834，bodyMatchesFrozen=true，首行标题\"做AI眼镜第197天，上次换耳朵，这次换大脑\"保留在正文首行，图集 3 张独立加载正常，开始回读核验。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "核验首行标题与现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 做AI眼镜第197天，上次换耳朵，这次换大脑",
+          "observedAt": "2026-09-28T15:05:14.008Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 做AI眼镜第197天，上次换耳朵，这次换大脑",
+          "observedAt": "2026-09-28T15:05:14.008Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "skipped",
+          "evidence": "当前字段已经与任务一致，无需再次填写",
+          "observedAt": "2026-09-28T15:05:14.008Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:05:55.890Z",
+      "finishedAt": "2026-09-28T15:06:14.864Z",
+      "evidence": [
+        "inspect 2026-09-28T15:05:50.687Z：开始 fill-fields；回读首行标题 fieldValues.title=\"做AI眼镜第197天，上次换耳朵，这次换大脑\"，与冻结标题一致，准备复核。",
+        "inspect 2026-09-28T15:05:59.793Z：回读首行标题 fieldValues.title=\"做AI眼镜第197天，上次换耳朵，这次换大脑\"，与冻结字段完全一致；正文 834 字符 bodyMatchesFrozen=true，图集 3 张就位，开始复核。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "save-draft",
+      "label": "检查当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "save.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "可信适配器回读 · 5961101548 · draftId  · 做AI眼镜第197天，上次换耳朵，这次换大脑 · unknown · https://weibo.com/",
+          "observedAt": "2026-09-28T15:06:54.995Z",
+          "generation": 1
+        },
+        {
+          "id": "save.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "skipped",
+          "evidence": "当前动态流程没有平台保存动作，不声明草稿已保存",
+          "observedAt": "2026-09-28T15:06:54.995Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:06:27.529Z",
+      "finishedAt": "2026-09-28T15:06:54.995Z",
+      "evidence": [
+        "inspect 2026-09-28T15:06:21.118Z：开始 save-draft 提交前复核（本平台此步骤不代表平台已保存，不点击保存）；当前正文 834 字符 bodyMatchesFrozen=true，首行标题一致，图集 3 张全部 loaded=true 且逐图匹配。",
+        "inspect 2026-09-28T15:06:32.717Z：提交前复核现场：正文 834 字符 bodyMatchesFrozen=true，首行标题与冻结字段一致，图集 3 张全部 loaded=true 且逐图匹配冻结图片；公开可见设置为默认公开；复核通过，开始收尾。",
+        "csdn@1 页面回读 · https://weibo.com/"
+      ]
+    },
+    {
+      "stepId": "publish",
+      "label": "提交微博并读取回执",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "publish.dispatch",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "unknown",
+          "evidence": "派发闸门已通过 · 2026-09-28T15:07:22.294Z · publish/final；结果另行核验",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        },
+        {
+          "id": "publish.preflight",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "completed",
+          "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-28T15:07:22.294Z",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:07:09.029Z",
+      "evidence": [
+        "inspect 2026-09-28T15:07:02.858Z：开始 publish；发布前置条件核验通过：正文 834 字符 bodyMatchesFrozen=true、首行标题与冻结字段一致、图集 3 张逐图匹配且全部 loaded=true、公开设置为默认公开；selectors.publish=button.woo-button-main.woo-button-flat.woo-button-primary.woo-button-m.woo-button-round._btn_2z30i_68 已签发，准备一次性提交。"
+      ]
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验平台实际发布结果",
+      "adapterVersion": 1,
+      "status": "needs-reconcile",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "保留当前编辑现场；有本次提交回执时只核验对应公开页。没有草稿身份时不自动重填、重传或重发。",
+          "status": "unknown",
+          "evidence": "已派发但没有可信结果 · final",
+          "reason": "只核验，不重复派发；恢复时先找回原稿",
+          "observedAt": "2026-09-28T15:09:57.909Z",
+          "generation": 2
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    }
+  ],
+  "sideEffects": [
+    {
+      "key": "14e8b06d-cede-43cb-808b-2c0a8459692a:b4c7f0f4-222e-47e9-b57c-826d2e29e9ee:g1:upload-asset:local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-2",
+      "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+      "attemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T14:58:41.521Z",
+      "consumedAt": "2026-09-28T14:58:41.941Z",
+      "dispatchedAt": "2026-09-28T14:58:42.126Z",
+      "observedAt": "2026-09-28T14:59:40.404Z",
+      "browserTaskRunId": "233237d2-08a5-4c73-b43e-61f2b7897d3b"
+    },
+    {
+      "key": "14e8b06d-cede-43cb-808b-2c0a8459692a:b4c7f0f4-222e-47e9-b57c-826d2e29e9ee:g1:upload-asset:local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+      "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+      "attemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T15:00:27.955Z",
+      "consumedAt": "2026-09-28T15:00:28.211Z",
+      "dispatchedAt": "2026-09-28T15:00:28.395Z",
+      "observedAt": "2026-09-28T15:01:05.076Z",
+      "browserTaskRunId": "233237d2-08a5-4c73-b43e-61f2b7897d3b"
+    },
+    {
+      "key": "14e8b06d-cede-43cb-808b-2c0a8459692a:b4c7f0f4-222e-47e9-b57c-826d2e29e9ee:g1:upload-asset:local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+      "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+      "attemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+      "executionGeneration": 1,
+      "kind": "upload-asset",
+      "targetId": "local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+      "status": "verified",
+      "reservedAt": "2026-09-28T15:01:33.893Z",
+      "consumedAt": "2026-09-28T15:01:34.136Z",
+      "dispatchedAt": "2026-09-28T15:01:34.380Z",
+      "observedAt": "2026-09-28T15:02:14.033Z",
+      "browserTaskRunId": "233237d2-08a5-4c73-b43e-61f2b7897d3b"
+    },
+    {
+      "key": "14e8b06d-cede-43cb-808b-2c0a8459692a:b4c7f0f4-222e-47e9-b57c-826d2e29e9ee:g1:save-draft:autosave:fill-body:7021b10a-ac0c-4937-9560-af979640ac0a",
+      "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+      "attemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+      "executionGeneration": 1,
+      "kind": "save-draft",
+      "targetId": "autosave:fill-body:7021b10a-ac0c-4937-9560-af979640ac0a",
+      "status": "verified",
+      "reservedAt": "2026-09-28T15:04:48.875Z",
+      "consumedAt": "2026-09-28T15:04:49.150Z",
+      "dispatchedAt": "2026-09-28T15:04:49.375Z",
+      "observedAt": "2026-09-28T15:06:54.995Z",
+      "browserTaskRunId": "233237d2-08a5-4c73-b43e-61f2b7897d3b"
+    },
+    {
+      "key": "14e8b06d-cede-43cb-808b-2c0a8459692a:b4c7f0f4-222e-47e9-b57c-826d2e29e9ee:g1:publish:final",
+      "affairId": "14e8b06d-cede-43cb-808b-2c0a8459692a",
+      "attemptId": "b4c7f0f4-222e-47e9-b57c-826d2e29e9ee",
+      "executionGeneration": 1,
+      "kind": "publish",
+      "targetId": "final",
+      "status": "result-unknown",
+      "reservedAt": "2026-09-28T15:07:21.455Z",
+      "consumedAt": "2026-09-28T15:07:22.032Z",
+      "dispatchedAt": "2026-09-28T15:07:22.294Z",
+      "observedAt": "2026-09-28T15:07:53.128Z",
+      "browserTaskRunId": "233237d2-08a5-4c73-b43e-61f2b7897d3b"
+    }
+  ]
+}

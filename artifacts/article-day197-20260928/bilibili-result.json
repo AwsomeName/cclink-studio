@@ -1,0 +1,1561 @@
+{
+  "id": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+  "kind": "article-publishing",
+  "workspaceId": "941ad8a1-aa46-4635-b085-3aaa412fb2c5",
+  "title": "做AI眼镜第197天，上次换耳朵，这次换大脑",
+  "objective": "将 /Users/apple/Desktop/研发日记/AIR/2026-09-18/小红书软文.md 发布到 B站动态",
+  "status": "completed",
+  "principalId": "b48e7aea-c5cb-4b18-ad88-970ad7cb91c1",
+  "websiteIds": [
+    "8867e037-301f-4655-b18c-9e30caad24f2"
+  ],
+  "accountIds": [
+    "7c1ef8bb-7770-4c53-ad02-e4943f745fea"
+  ],
+  "materials": [
+    {
+      "id": "a0ee2685-8d9e-429e-a1ae-4d86508682d7",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/小红书软文.md",
+      "name": "小红书软文.md",
+      "state": "available",
+      "size": 2476,
+      "modifiedAt": "2026-09-20T13:38:53.360Z",
+      "checkedAt": "2026-09-28T15:14:04.343Z",
+      "addedAt": "2026-09-28T15:13:38.638Z"
+    },
+    {
+      "id": "df4b2b9c-a469-4b28-9f1b-0ba8e636b2ff",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/01-小眸3D模型检查.png",
+      "name": "01-小眸3D模型检查.png",
+      "state": "available",
+      "size": 260569,
+      "modifiedAt": "2026-09-20T13:38:53.362Z",
+      "checkedAt": "2026-09-28T15:14:04.344Z",
+      "addedAt": "2026-09-28T15:13:38.638Z"
+    },
+    {
+      "id": "a39a2712-c96a-4d62-be80-dff97214dcd6",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/02-骑行导航V4效果图.png",
+      "name": "02-骑行导航V4效果图.png",
+      "state": "available",
+      "size": 2524283,
+      "modifiedAt": "2026-09-20T13:38:53.363Z",
+      "checkedAt": "2026-09-28T15:14:04.344Z",
+      "addedAt": "2026-09-28T15:13:38.638Z"
+    },
+    {
+      "id": "2a25d52f-ae4a-4490-89be-f389705a0596",
+      "path": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/03-朗读台效果图.png",
+      "name": "03-朗读台效果图.png",
+      "state": "available",
+      "size": 2071894,
+      "modifiedAt": "2026-09-20T13:38:53.365Z",
+      "checkedAt": "2026-09-28T15:14:04.344Z",
+      "addedAt": "2026-09-28T15:13:38.638Z"
+    }
+  ],
+  "flow": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+        "type": "web-task",
+        "title": "发布文章到 B站动态",
+        "description": "按冻结文章、账号和平台字段执行；特殊卡点转人工。",
+        "status": "completed",
+        "executor": "ai",
+        "accountIds": [
+          "7c1ef8bb-7770-4c53-ad02-e4943f745fea"
+        ],
+        "materialIds": [
+          "a0ee2685-8d9e-429e-a1ae-4d86508682d7",
+          "df4b2b9c-a469-4b28-9f1b-0ba8e636b2ff",
+          "a39a2712-c96a-4d62-be80-dff97214dcd6",
+          "2a25d52f-ae4a-4490-89be-f389705a0596"
+        ],
+        "successCriteria": [
+          "全部正文图片已经后置核验",
+          "发布结果 URL 可复核"
+        ],
+        "availableTransitions": [],
+        "lastResultNote": "B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+        "createdAt": "2026-09-28T15:13:38.638Z",
+        "updatedAt": "2026-09-28T16:21:06.250Z"
+      }
+    ],
+    "edges": []
+  },
+  "attempts": [
+    {
+      "id": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "number": 1,
+      "status": "succeeded",
+      "executionGeneration": 4,
+      "launchOperationId": "06affc2c-232e-4268-a869-ad9be776c7ee",
+      "runtimeBindings": [
+        {
+          "id": "0ad58367-19e5-4d5a-9664-a95ee24839ac",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 1,
+          "launchOperationId": "1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:14:09.155Z",
+          "lastObservedAt": "2026-09-28T15:23:08.615Z",
+          "endedAt": "2026-09-28T15:23:08.615Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-a6cc2d71-1152-4f89-8688-187399c21a7c",
+          "agentRunId": "run-1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+          "agentRuntimeEpoch": 1790569464382,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "0e224d01-e013-4c26-84fc-325940f088d3",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 1,
+          "launchOperationId": "1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:14:09.155Z",
+          "lastObservedAt": "2026-09-28T15:23:08.615Z",
+          "endedAt": "2026-09-28T15:23:08.615Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "browser-tab",
+          "tabId": "tab-4-1790520247806",
+          "browserViewRuntimeGeneration": 3,
+          "webContentsId": 4
+        },
+        {
+          "id": "56252c77-db8d-4d96-aac9-10d67867b6b8",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 1,
+          "launchOperationId": "1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:14:09.155Z",
+          "lastObservedAt": "2026-09-28T15:23:08.615Z",
+          "endedAt": "2026-09-28T15:23:08.615Z",
+          "terminalReason": "Claude Agent SDK 错误: Claude Code process exited with code 143",
+          "kind": "browser-task",
+          "browserTaskRunId": "28f56a3d-6b36-488e-81d0-d069548ac4b3",
+          "tabId": "tab-4-1790520247806",
+          "browserViewRuntimeGeneration": 3,
+          "webContentsId": 4,
+          "playwrightConnectionGeneration": 3,
+          "playwrightPageBindingGeneration": 9
+        },
+        {
+          "id": "e1c0c351-e091-4e7f-8444-d2232a8c27c4",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 2,
+          "launchOperationId": "c2e4f534-a142-4a3e-a5c2-46caba81e26f",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:24:17.447Z",
+          "lastObservedAt": "2026-09-28T15:30:36.165Z",
+          "endedAt": "2026-09-28T15:30:36.165Z",
+          "terminalReason": "主进程已确认当前运行绑定失主，任务已安全中断",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-a6cc2d71-1152-4f89-8688-187399c21a7c",
+          "agentRunId": "run-c2e4f534-a142-4a3e-a5c2-46caba81e26f",
+          "agentRuntimeEpoch": 1790609004264,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "24935ed8-b606-4ca1-a21f-9dc8e7cc911e",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 2,
+          "launchOperationId": "c2e4f534-a142-4a3e-a5c2-46caba81e26f",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:24:17.447Z",
+          "lastObservedAt": "2026-09-28T15:30:36.165Z",
+          "endedAt": "2026-09-28T15:30:36.165Z",
+          "terminalReason": "主进程已确认当前运行绑定失主，任务已安全中断",
+          "kind": "browser-tab",
+          "tabId": "tab-4-1790520247806",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "a73d079f-b807-4448-ba14-d9c434c6cb61",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 2,
+          "launchOperationId": "c2e4f534-a142-4a3e-a5c2-46caba81e26f",
+          "status": "terminal",
+          "boundAt": "2026-09-28T15:24:17.447Z",
+          "lastObservedAt": "2026-09-28T15:30:36.165Z",
+          "endedAt": "2026-09-28T15:30:36.165Z",
+          "terminalReason": "主进程已确认当前运行绑定失主，任务已安全中断",
+          "kind": "browser-task",
+          "browserTaskRunId": "99bdcf18-f576-4887-94da-3e1ed42c7037",
+          "tabId": "tab-4-1790520247806",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        },
+        {
+          "id": "df984f84-01fe-4893-bcd6-9707efc3ede2",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 4,
+          "launchOperationId": "06affc2c-232e-4268-a869-ad9be776c7ee",
+          "status": "terminal",
+          "boundAt": "2026-09-28T16:03:17.098Z",
+          "lastObservedAt": "2026-09-28T16:21:06.250Z",
+          "endedAt": "2026-09-28T16:21:06.250Z",
+          "terminalReason": "B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+          "kind": "agent-run",
+          "conversationId": "article-publishing-a6cc2d71-1152-4f89-8688-187399c21a7c",
+          "agentRunId": "run-06affc2c-232e-4268-a869-ad9be776c7ee",
+          "agentRuntimeEpoch": 1790611245120,
+          "agentRuntimeBindingKey": "claude-code"
+        },
+        {
+          "id": "67bc192d-239d-41d7-8401-70ccd50b878a",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 4,
+          "launchOperationId": "06affc2c-232e-4268-a869-ad9be776c7ee",
+          "status": "terminal",
+          "boundAt": "2026-09-28T16:03:17.098Z",
+          "lastObservedAt": "2026-09-28T16:21:06.250Z",
+          "endedAt": "2026-09-28T16:21:06.250Z",
+          "terminalReason": "B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+          "kind": "browser-tab",
+          "tabId": "tab-2-1790611300984",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2
+        },
+        {
+          "id": "53df8750-0427-4fea-9e5d-cca059f9bc4e",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "executionGeneration": 4,
+          "launchOperationId": "06affc2c-232e-4268-a869-ad9be776c7ee",
+          "status": "terminal",
+          "boundAt": "2026-09-28T16:03:17.098Z",
+          "lastObservedAt": "2026-09-28T16:21:06.250Z",
+          "endedAt": "2026-09-28T16:21:06.250Z",
+          "terminalReason": "B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+          "kind": "browser-task",
+          "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b",
+          "tabId": "tab-2-1790611300984",
+          "browserViewRuntimeGeneration": 1,
+          "webContentsId": 2,
+          "playwrightConnectionGeneration": 1,
+          "playwrightPageBindingGeneration": 1
+        }
+      ],
+      "processedRuntimeEventIds": [
+        "60e8f034-8eba-404b-a5d6-2542508a4936:g1:1b7dbdd8-b917-448a-9e20-f24b8d29de9c:agent:article-publishing-a6cc2d71-1152-4f89-8688-187399c21a7c:run-1b7dbdd8-b917-448a-9e20-f24b8d29de9c:error",
+        "60e8f034-8eba-404b-a5d6-2542508a4936:g2:c2e4f534-a142-4a3e-a5c2-46caba81e26f:watchdog:suspected:RUNTIME_OWNER_LOST:29843489",
+        "60e8f034-8eba-404b-a5d6-2542508a4936:g2:c2e4f534-a142-4a3e-a5c2-46caba81e26f:watchdog:resolved:RUNTIME_ORPHAN_CONFIRMED:29843490",
+        "60e8f034-8eba-404b-a5d6-2542508a4936:g3:f33f0900-a35c-4bb0-bfa1-bd128cacdd7c:launch-timeout"
+      ],
+      "profileId": "web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+      "accountId": "7c1ef8bb-7770-4c53-ad02-e4943f745fea",
+      "entryUrl": "https://passport.bilibili.com/register",
+      "tabId": "tab-2-1790611300984",
+      "conversationId": "article-publishing-a6cc2d71-1152-4f89-8688-187399c21a7c",
+      "agentRunId": "run-06affc2c-232e-4268-a869-ad9be776c7ee",
+      "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b",
+      "sideEffectKey": "a6cc2d71-1152-4f89-8688-187399c21a7c:edf4f3b1-0026-4138-9a25-648d3dc94ca6:flow-1",
+      "evidence": [
+        {
+          "id": "cb2d8910-590d-49fc-922e-a94427df4020",
+          "kind": "page-result",
+          "source": "browser",
+          "summary": "B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+          "observedAt": "2026-09-28T16:21:06.250Z",
+          "url": "https://t.bilibili.com/1253159371244830725",
+          "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+          "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b",
+          "agentRunId": "run-06affc2c-232e-4268-a869-ad9be776c7ee"
+        }
+      ],
+      "startedAt": "2026-09-28T15:14:04.344Z",
+      "endedAt": "2026-09-28T16:21:06.250Z"
+    }
+  ],
+  "waitPlans": [],
+  "flowProposals": [],
+  "articlePublishing": {
+    "adapterId": "bilibili",
+    "composer": {
+      "platformAccountId": "3546384070347419",
+      "allowPublish": true
+    },
+    "adapterVersion": 1,
+    "source": {
+      "markdownPath": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/小红书软文.md",
+      "modifiedAt": 1789911533360.098,
+      "size": 2476
+    },
+    "accountId": "7c1ef8bb-7770-4c53-ad02-e4943f745fea",
+    "websiteId": "8867e037-301f-4655-b18c-9e30caad24f2",
+    "fields": {
+      "title": "做AI眼镜第197天，上次换耳朵，这次换大脑",
+      "summary": "",
+      "tags": [],
+      "category": ""
+    },
+    "assets": [
+      {
+        "id": "local:AIR/2026-09-18/素材/01-小眸3D模型检查.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/01-小眸3D模型检查.png",
+        "displayPath": "素材/01-小眸3D模型检查.png",
+        "mediaType": "image/png",
+        "size": 260569,
+        "modifiedAt": 1789911533361.5947,
+        "occurrences": [
+          {
+            "start": 865,
+            "end": 883,
+            "alt": "小眸3D模型本地查看器截图（非App实机画面）"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/5b21727a2961b26f05ceff4c938a390d3546384070347419.png",
+        "verifiedAt": "2026-09-28T16:06:09.901Z",
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "uploading",
+            "startedAt": "2026-09-28T15:23:05.223Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://t.bilibili.com/"
+            ]
+          },
+          {
+            "number": 2,
+            "status": "succeeded",
+            "startedAt": "2026-09-28T16:04:58.633Z",
+            "finishedAt": "2026-09-28T16:06:09.901Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://t.bilibili.com/",
+              "browser_upload_file 经 inspect（2026-09-28T16:05:13Z）后执行：dispatched=file-selection，files=[01-小眸3D模型检查.png]，uploadVerified=false；等待平台处理图片上传。",
+              "平台已返回图片地址 https://i0.hdslb.com/bfs/new_dyn/5b21727a2961b26f05ceff4c938a390d3546384070347419.png；开始回读页面核验该图是否唯一新增并加载完成。",
+              "csdn@1 页面回读 · https://t.bilibili.com/"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/02-骑行导航V4效果图.png",
+        "displayPath": "素材/02-骑行导航V4效果图.png",
+        "mediaType": "image/png",
+        "size": 2524283,
+        "modifiedAt": 1789911533363.2678,
+        "occurrences": [
+          {
+            "start": 912,
+            "end": 931,
+            "alt": "骑行导航V4设计效果图（示例数据，未装真机）"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/01f06ce3bc103ea3f12a0ef2dc2ca73c3546384070347419.png",
+        "verifiedAt": "2026-09-28T16:07:32.715Z",
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "succeeded",
+            "startedAt": "2026-09-28T16:06:46.383Z",
+            "finishedAt": "2026-09-28T16:07:32.715Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://t.bilibili.com/",
+              "browser_upload_file 经 inspect（2026-09-28T16:06:50Z）后执行：dispatched=file-selection，files=[02-骑行导航V4效果图.png]，uploadVerified=false；等待平台处理图片上传。",
+              "平台已返回图片地址 https://i0.hdslb.com/bfs/new_dyn/01f06ce3bc103ea3f12a0ef2dc2ca73c3546384070347419.png；开始回读页面核验该图是否唯一新增并加载完成。",
+              "csdn@1 页面回读 · https://t.bilibili.com/"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "local:AIR/2026-09-18/素材/03-朗读台效果图.png",
+        "kind": "local",
+        "sourcePath": "/Users/apple/Desktop/研发日记/AIR/2026-09-18/素材/03-朗读台效果图.png",
+        "displayPath": "素材/03-朗读台效果图.png",
+        "mediaType": "image/png",
+        "size": 2071894,
+        "modifiedAt": 1789911533364.6409,
+        "occurrences": [
+          {
+            "start": 952,
+            "end": 968,
+            "alt": "朗读台设计效果图（示例数据）"
+          }
+        ],
+        "status": "uploaded",
+        "platformUrl": "https://i0.hdslb.com/bfs/new_dyn/96921c3fd5f01ced6d524006b353ab023546384070347419.png",
+        "verifiedAt": "2026-09-28T16:08:44.259Z",
+        "uploadAttempts": [
+          {
+            "number": 1,
+            "status": "succeeded",
+            "startedAt": "2026-09-28T16:07:39.583Z",
+            "finishedAt": "2026-09-28T16:08:44.259Z",
+            "evidence": [
+              "csdn@1 页面回读 · https://t.bilibili.com/",
+              "browser_upload_file 经 inspect（2026-09-28T16:07:47Z）后执行：dispatched=file-selection，files=[03-朗读台效果图.png]，uploadVerified=false；等待平台处理图片上传。",
+              "平台已返回图片地址 https://i0.hdslb.com/bfs/new_dyn/96921c3fd5f01ced6d524006b353ab023546384070347419.png；开始回读页面核验该图是否唯一新增并加载完成。",
+              "csdn@1 页面回读 · https://t.bilibili.com/"
+            ]
+          }
+        ]
+      }
+    ],
+    "checkpoints": [
+      {
+        "stepId": "open-editor",
+        "label": "打开 B站图文动态发布器",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "account.resolve",
+            "nextAction": "取得可见账号 Tab",
+            "status": "completed",
+            "evidence": "账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+            "observedAt": "2026-09-28T16:03:15.500Z",
+            "generation": 4
+          },
+          {
+            "id": "tab.acquire",
+            "nextAction": "按新建或恢复分支打开页面",
+            "status": "completed",
+            "evidence": "Tab tab-2-1790611300984 · 账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+            "observedAt": "2026-09-28T16:03:16.164Z",
+            "generation": 4
+          },
+          {
+            "id": "editor.open",
+            "nextAction": "检查账号和编辑区域",
+            "status": "completed",
+            "evidence": "https://t.bilibili.com/",
+            "observedAt": "2026-09-28T16:03:16.796Z",
+            "generation": 4
+          },
+          {
+            "id": "runtime.ready",
+            "nextAction": "首次只读检查；改代则重新绑定核验",
+            "status": "completed",
+            "evidence": "Agent run-06affc2c-232e-4268-a869-ad9be776c7ee · BrowserTask adebae74-e30f-4f21-9afc-36bf9952726b · Tab tab-2-1790611300984 · View g1 · WebContents 2 · Page g1",
+            "observedAt": "2026-09-28T16:03:17.098Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T15:14:09.155Z",
+        "finishedAt": "2026-09-28T15:21:32.014Z",
+        "evidence": [
+          "重新 inspect（2026-09-28T15:14:23Z）：pageKind=editor，editor.recognized=true，URL=https://t.bilibili.com/；body selector、title selector、fileInput selector 均已返回；正文 bodyTextLength=0、initialDraftBodyEmpty=true、title=\"\"、images=[]。检查点 4 个 detail（account.resolve / tab.acquire / editor.open / runtime.ready）均 completed。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "verify-account",
+        "label": "核验 B站 UID 与当前空白现场",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "page.inspect",
+            "nextAction": "定位正文与平台字段",
+            "status": "completed",
+            "evidence": "页面 published-article · 账号 3546384070347419 · draftId 尚无 · 标题 做AI眼镜第197天，上次换耳朵，这次换 · 保存 unknown",
+            "observedAt": "2026-09-28T16:19:36.620Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T15:22:20.213Z",
+        "finishedAt": "2026-09-28T15:22:42.087Z",
+        "evidence": [
+          "开始核验 B站 UID 与空白现场。inspect（2026-09-28T15:21:26Z）：pageKind=editor，URL=https://t.bilibili.com/。",
+          "inspect（2026-09-28T15:21:26Z）核验中：platformAccountId=3546384070347419，与 targetUID=3546384070347419 一致；编辑器空白现场（bodyTextLength=0、initialDraftBodyEmpty=true、title=\"\"、images=[]、imageEnumerationComplete=true），detail page.inspect 已 completed（页面 editor · 账号 3546384070347419 · draftId 尚无）。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "upload-assets",
+        "label": "逐张选择、上传并核验动态图片",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.open",
+            "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+            "status": "completed",
+            "evidence": "素材/01-小眸3D模型检查.png · div.bili-pics-uploader__add",
+            "observedAt": "2026-09-28T16:05:56.574Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.dispatch",
+            "nextAction": "回读对应图片，不把工具返回当上传成功",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:05:22.485Z · upload-asset/local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3；结果另行核验",
+            "observedAt": "2026-09-28T16:06:09.901Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.inspect",
+            "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/01-小眸3D模型检查.png",
+            "observedAt": "2026-09-28T16:06:09.901Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.verify",
+            "nextAction": "下一张图；未知时显示图片供用户判断",
+            "status": "completed",
+            "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/5b21727a2961b26f05ceff4c938a390d3546384070347419.png · 2026-09-28T16:06:09.901Z",
+            "observedAt": "2026-09-28T16:06:09.901Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.open",
+            "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+            "status": "completed",
+            "evidence": "素材/02-骑行导航V4效果图.png · div.bili-pics-uploader__add",
+            "observedAt": "2026-09-28T16:06:50.352Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.dispatch",
+            "nextAction": "回读对应图片，不把工具返回当上传成功",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:06:57.341Z · upload-asset/local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2；结果另行核验",
+            "observedAt": "2026-09-28T16:07:32.715Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.inspect",
+            "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/02-骑行导航V4效果图.png",
+            "observedAt": "2026-09-28T16:07:32.715Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.verify",
+            "nextAction": "下一张图；未知时显示图片供用户判断",
+            "status": "completed",
+            "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/01f06ce3bc103ea3f12a0ef2dc2ca73c3546384070347419.png · 2026-09-28T16:07:32.715Z",
+            "observedAt": "2026-09-28T16:07:32.715Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.open",
+            "nextAction": "只选择该冻结文件；不使用封面或反馈上传入口",
+            "status": "completed",
+            "evidence": "素材/03-朗读台效果图.png · div.bili-pics-uploader__add",
+            "observedAt": "2026-09-28T16:07:47.188Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.dispatch",
+            "nextAction": "回读对应图片，不把工具返回当上传成功",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:07:51.751Z · upload-asset/local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2；结果另行核验",
+            "observedAt": "2026-09-28T16:08:44.259Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.inspect",
+            "nextAction": "已完成跳过；未知由用户确认存在/缺失",
+            "status": "completed",
+            "evidence": "已有可信图片记录 · 素材/03-朗读台效果图.png",
+            "observedAt": "2026-09-28T16:08:44.259Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.verify",
+            "nextAction": "下一张图；未知时显示图片供用户判断",
+            "status": "completed",
+            "evidence": "页面对应图片已核验 · https://i0.hdslb.com/bfs/new_dyn/96921c3fd5f01ced6d524006b353ab023546384070347419.png · 2026-09-28T16:08:44.259Z",
+            "observedAt": "2026-09-28T16:08:44.259Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "skip-if-verified",
+        "attemptCount": 3,
+        "startedAt": "2026-09-28T16:03:17.098Z",
+        "finishedAt": "2026-09-28T16:09:17.946Z",
+        "evidence": [
+          "开始逐张上传 3 张动态图片。inspect（2026-09-28T15:22:34Z）：fileInput=div.bili-dyn-publishing__tools__item.pic，当前 images=[]、imageEnumerationComplete=true，3 张素材均 available。按 Markdown 出现顺序上传：01-小眸3D模型检查.png → 02-骑行导航V4效果图.png → 03-朗读台效果图.png。",
+          "3 张冻结图片均已逐张完成 uploading→waiting-platform→verifying→uploaded 流程：01-小眸3D模型检查.png（verifiedAt 16:06:09）、02-骑行导航V4效果图.png（verifiedAt 16:07:32）、03-朗读台效果图.png（verifiedAt 16:08:44），各附平台 URL 与页面核验证据，sideEffects 均为 verified。inspect（2026-09-28T16:08:31Z）：images=3 张全部 loaded=true、顺序正确、matchedAssets 全部匹配。正在做检查点收尾复核。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "fill-body",
+        "label": "填写正文并完整回读",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.placement",
+            "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+            "recheck": {
+              "status": "waiting",
+              "evidence": "素材/01-小眸3D模型检查.png · 图集 第 1 张：未匹配",
+              "reason": "正文图片顺序、位置或加载结果未核验通过",
+              "observedAt": "2026-09-28T16:18:41.697Z",
+              "generation": 4
+            },
+            "status": "completed",
+            "evidence": "素材/01-小眸3D模型检查.png · 图集 第 1 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:09:04.635Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.placement",
+            "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+            "recheck": {
+              "status": "waiting",
+              "evidence": "素材/02-骑行导航V4效果图.png · 图集 第 2 张：未匹配",
+              "reason": "正文图片顺序、位置或加载结果未核验通过",
+              "observedAt": "2026-09-28T16:18:41.697Z",
+              "generation": 4
+            },
+            "status": "completed",
+            "evidence": "素材/02-骑行导航V4效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:09:04.635Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.placement",
+            "nextAction": "正文图片顺序、位置或加载结果未核验通过；先处理此卡点并重新检查。",
+            "recheck": {
+              "status": "waiting",
+              "evidence": "素材/03-朗读台效果图.png · 图集 第 3 张：未匹配",
+              "reason": "正文图片顺序、位置或加载结果未核验通过",
+              "observedAt": "2026-09-28T16:18:41.697Z",
+              "generation": 4
+            },
+            "status": "completed",
+            "evidence": "素材/03-朗读台效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:09:04.635Z",
+            "generation": 4
+          },
+          {
+            "id": "body.dispatch",
+            "nextAction": "等待正文回读与当前正文回读",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:14:38.594Z · save-draft/autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9；结果另行核验",
+            "observedAt": "2026-09-28T16:15:08.804Z",
+            "generation": 4
+          },
+          {
+            "id": "body.verify",
+            "nextAction": "检查平台字段；未知时先对账不重填",
+            "status": "completed",
+            "evidence": "正文检查点已由可信页面回读完成；原写入已核验 · 2026-09-28T16:15:08.804Z · autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+            "observedAt": "2026-09-28T16:18:41.697Z",
+            "generation": 4
+          },
+          {
+            "id": "body.locate",
+            "nextAction": "只允许向已定位的正文区域写入",
+            "status": "completed",
+            "evidence": "正文 div[placeholder=\"有什么想和大家分享的？\"] · iframe 主文档 · 0 字符",
+            "observedAt": "2026-09-28T16:18:41.980Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T16:14:09.690Z",
+        "finishedAt": "2026-09-28T16:15:08.804Z",
+        "evidence": [
+          "inspect（2026-09-28T16:09:04Z）：fill-body 前置就绪——body.locate 已完成（div[placeholder=\"有什么想和大家分享的？\"]），3 张图 placement 均通过（图集第 1/2/3 张顺序、平台地址、加载通过），bodyTextLength=0、期望 779 字符。已从冻结原稿 /Users/apple/Desktop/研发日记/AIR/2026-09-18/小红书软文.md 读取正文（主段落+话题标签，不含标题、不写 Markdown 图片语法），准备写入正文区域。",
+          "browser_fill 已对 div[placeholder=\"有什么想和大家分享的？\"] 写入冻结正文（主段落+话题标签行，不含标题、不含 Markdown 图片语法）；开始回读正文与冻结原稿比对。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "fill-fields",
+        "label": "填写独立标题并核验发布设置",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "bilibili.visibility.verify",
+            "nextAction": "不可读时打开当前签发的设置入口；私密或矛盾时停止，不能自动切换",
+            "status": "completed",
+            "evidence": "当前原生可见范围：public",
+            "observedAt": "2026-09-28T16:16:39.464Z",
+            "generation": 4
+          },
+          {
+            "id": "field.title.dispatch",
+            "nextAction": "回读同一字段",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:15:48.319Z · save-draft/autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1；结果另行核验",
+            "observedAt": "2026-09-28T16:16:48.702Z",
+            "generation": 4
+          },
+          {
+            "id": "field.title.inspect",
+            "nextAction": "当前平台字段不是受支持的唯一可读控件；先处理此卡点并重新检查。",
+            "recheck": {
+              "status": "waiting",
+              "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 不支持读取此字段",
+              "reason": "当前平台字段不是受支持的唯一可读控件",
+              "observedAt": "2026-09-28T16:20:52.811Z",
+              "generation": 4
+            },
+            "status": "completed",
+            "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 ",
+            "observedAt": "2026-09-28T16:18:41.980Z",
+            "generation": 4
+          },
+          {
+            "id": "field.title.verify",
+            "nextAction": "缺少字段回读证据；先处理此卡点并重新检查。",
+            "status": "waiting",
+            "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 不可读",
+            "reason": "缺少字段回读证据",
+            "observedAt": "2026-09-28T16:19:36.620Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T16:15:34.434Z",
+        "finishedAt": "2026-09-28T16:16:48.702Z",
+        "evidence": [
+          "inspect（2026-09-28T16:14:57Z）：fill-body 已完成（bodyMatchesFrozen=true、810 字符），fill-fields 前置就绪——标题 selector=input[placeholder=\"好的标题更容易获得支持，选填20字\"]，当前 value=\"\"。按 main 冻结的 B站平台标题值（前 20 个 Unicode 字符）「做AI眼镜第197天，上次换耳朵，这次换」填写，随后核验发布设置中的公开范围。",
+          "browser_fill 已对 input[placeholder=\"好的标题更容易获得支持，选填20字\"] 填入 B站冻结平台标题值「做AI眼镜第197天，上次换耳朵，这次换」（前 20 个 Unicode 字符）；开始回读标题并核验发布设置公开范围。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "save-draft",
+        "label": "复核当前图文（不代表平台已保存）",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "save.verify",
+            "nextAction": "核对本任务提交授权",
+            "status": "completed",
+            "evidence": "可信适配器回读 · 3546384070347419 · draftId  · 做AI眼镜第197天，上次换耳朵，这次换 · unknown · https://t.bilibili.com/",
+            "observedAt": "2026-09-28T16:17:45.341Z",
+            "generation": 4
+          },
+          {
+            "id": "save.dispatch",
+            "nextAction": "重新读取当前图文现场",
+            "status": "skipped",
+            "evidence": "当前动态流程没有平台保存动作，不声明草稿已保存",
+            "observedAt": "2026-09-28T16:17:45.341Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T16:17:13.948Z",
+        "finishedAt": "2026-09-28T16:17:45.341Z",
+        "evidence": [
+          "save-draft 开始复核：B站动态无持久草稿机制，本步只做同 UID、当前正文与逐图复核，不伪造保存或草稿ID。基于 inspect（2026-09-28T16:16:38Z）：platformAccountId=3546384070347419（与 targetUID 一致）、bodyMatchesFrozen=true（810 字符）、matchedAssets 3/3、bilibiliVisibility=public、标题=冻结平台值。即将做最终回读复核。",
+          "开始 save-draft 最终复核：重新回读同 UID（3546384070347419）、当前正文（bodyMatchesFrozen）与逐图（3 张 matchedAssets），不声明平台保存。",
+          "csdn@1 页面回读 · https://t.bilibili.com/"
+        ]
+      },
+      {
+        "stepId": "publish",
+        "label": "单次发布 B站动态",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "bilibili.agreement.inspect",
+            "nextAction": "首次规范分支复核同稿后确认；已有提交请求时禁止再发送",
+            "status": "completed",
+            "evidence": "已观察到直接创建请求，无需首次规范确认。",
+            "observedAt": "2026-09-28T16:18:24.151Z",
+            "generation": 4
+          },
+          {
+            "id": "bilibili.agreement.confirm",
+            "nextAction": "读取同稿提交回执；取消、页面改代或结果未知时不得再次确认",
+            "status": "skipped",
+            "evidence": "本次未调用首次确认；已有创建请求，禁止补点。",
+            "observedAt": "2026-09-28T16:18:24.351Z",
+            "generation": 4
+          },
+          {
+            "id": "bilibili.submission.receipt",
+            "nextAction": "尚未核验；先处理此卡点并重新检查。",
+            "recheck": {
+              "status": "verifying",
+              "evidence": "已观察到创建请求，尚未取得与本稿对应的成功回执。",
+              "observedAt": "2026-09-28T16:18:24.575Z",
+              "generation": 4
+            },
+            "status": "completed",
+            "evidence": "原生提交回执返回同稿动态 ID 1253159371244830725；公开内容尚待核验",
+            "observedAt": "2026-09-28T16:18:24.575Z",
+            "generation": 4
+          },
+          {
+            "id": "publish.dispatch",
+            "nextAction": "识别首次规范确认分支，或读取直接提交回执",
+            "status": "completed",
+            "evidence": "派发闸门已通过 · 2026-09-28T16:18:22.346Z · publish/final；结果另行核验",
+            "observedAt": "2026-09-28T16:18:25.008Z",
+            "generation": 4
+          },
+          {
+            "id": "bilibili.submission.observation",
+            "nextAction": "只在原 Runtime 与原观察器仍有效时继续；历史记录不授予重发权限",
+            "status": "completed",
+            "evidence": "截至 2026-09-28T16:18:25.229Z：确认调用尚未尝试；创建请求已观察到；监听已结束。请求稿件匹配：正文与逐图对应。响应状态 200。平台结果码 0。",
+            "reason": "这是原操作的观察记录，不是发布成功或可重发证明；续接必须检查仍有效的原 Runtime 与观察器。",
+            "observedAt": "2026-09-28T16:18:25.229Z",
+            "generation": 4
+          },
+          {
+            "id": "publish.preflight",
+            "nextAction": "只派发一次；人工专属卡点暂停",
+            "status": "completed",
+            "evidence": "当前发布控件与一次性授权通过主进程闸门 · 2026-09-28T16:18:22.346Z",
+            "observedAt": "2026-09-28T16:18:41.980Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T16:18:10.098Z",
+        "finishedAt": "2026-09-28T16:18:24.767Z",
+        "evidence": [
+          "publish 前置已满足：inspect（2026-09-28T16:17:31Z）返回 selectors.publish=main > section:nth-child(1) :text-is(\"发布\")，submissionUnavailableReason 为空（发布适配已通过）；composer.allowPublish=true。发布现场就绪：UID=3546384070347419、标题=冻结平台值、bodyMatchesFrozen=true、3/3 图已核验、bilibiliVisibility=public。准备执行单次授权发布。",
+          "B站原生提交回执已确认平台接受 · 作品 1253159371244830725 · 账号 3546384070347419"
+        ]
+      },
+      {
+        "stepId": "verify-publication",
+        "label": "核验动态 ID、作者、全文与逐图结果",
+        "adapterVersion": 1,
+        "status": "completed",
+        "details": [
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/01-小眸3D模型检查.png.published",
+            "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+            "status": "completed",
+            "evidence": "素材/01-小眸3D模型检查.png · 图集 第 1 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:19:36.466Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png.published",
+            "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+            "status": "completed",
+            "evidence": "素材/02-骑行导航V4效果图.png · 图集 第 2 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:19:36.466Z",
+            "generation": 4
+          },
+          {
+            "id": "asset.local:AIR/2026-09-18/素材/03-朗读台效果图.png.published",
+            "nextAction": "全部图片与文章结果通过才完成；结果未知只核验，不重发",
+            "status": "completed",
+            "evidence": "素材/03-朗读台效果图.png · 图集 第 3 张：顺序、平台地址和加载通过",
+            "observedAt": "2026-09-28T16:19:36.466Z",
+            "generation": 4
+          },
+          {
+            "id": "publication.verify",
+            "nextAction": "完成事务；未知只查询管理页",
+            "status": "completed",
+            "evidence": "公开页已核验 · 3546384070347419 · 做AI眼镜第197天，上次换耳朵，这次换 · https://t.bilibili.com/1253159371244830725",
+            "observedAt": "2026-09-28T16:20:31.825Z",
+            "generation": 4
+          }
+        ],
+        "resumePolicy": "reconcile-then-run",
+        "attemptCount": 1,
+        "startedAt": "2026-09-28T16:19:16.395Z",
+        "finishedAt": "2026-09-28T16:20:31.825Z",
+        "outputRefs": {
+          "publicationUrl": "https://t.bilibili.com/1253159371244830725"
+        },
+        "evidence": [
+          "发布已派发并回读到公开结果：inspect（2026-09-28T16:18:41Z）publishedLinks=[{url: https://t.bilibili.com/1253159371244830725, title: 做AI眼镜第197天，上次换耳朵，这次换}]，编辑器已清空（bodyTextLength=0、images=[]、title=\"\"）。开始核验发布结果：动态 ID、作者 UID、全文与逐图。",
+          "已导航到平台返回的发布 URL 并回读公开页面（2026-09-28T16:19:36Z）：pageKind=published-article，publishedArticleId=1253159371244830725（与平台提交回执 postId 一致），platformAccountId=3546384070347419（作者=目标 UID），标题=「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（全文一致，814 字符），3 张图 src 与上传平台 URL 逐一相同（5b21727a…/01f06ce3…/96921c3f…）且全部 loaded=true、顺序正确，publishedLinks=[https://t.bilibili.com/1253159371244830725]。",
+          "csdn@1 页面回读 · https://t.bilibili.com/1253159371244830725"
+        ]
+      }
+    ],
+    "sideEffects": [
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:upload-asset:local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:05:21.892Z",
+        "consumedAt": "2026-09-28T16:05:22.158Z",
+        "dispatchedAt": "2026-09-28T16:05:22.485Z",
+        "observedAt": "2026-09-28T16:06:09.901Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b"
+      },
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:upload-asset:local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:06:56.709Z",
+        "consumedAt": "2026-09-28T16:06:57.056Z",
+        "dispatchedAt": "2026-09-28T16:06:57.341Z",
+        "observedAt": "2026-09-28T16:07:32.715Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b"
+      },
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:upload-asset:local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "upload-asset",
+        "targetId": "local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:07:50.993Z",
+        "consumedAt": "2026-09-28T16:07:51.483Z",
+        "dispatchedAt": "2026-09-28T16:07:51.751Z",
+        "observedAt": "2026-09-28T16:08:44.259Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b"
+      },
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:save-draft:autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "save-draft",
+        "targetId": "autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:14:37.864Z",
+        "consumedAt": "2026-09-28T16:14:38.237Z",
+        "dispatchedAt": "2026-09-28T16:14:38.594Z",
+        "observedAt": "2026-09-28T16:15:08.804Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b"
+      },
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:save-draft:autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "save-draft",
+        "targetId": "autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:15:47.801Z",
+        "consumedAt": "2026-09-28T16:15:48.143Z",
+        "dispatchedAt": "2026-09-28T16:15:48.319Z",
+        "observedAt": "2026-09-28T16:17:45.341Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b"
+      },
+      {
+        "key": "a6cc2d71-1152-4f89-8688-187399c21a7c:60e8f034-8eba-404b-a5d6-2542508a4936:g4:publish:final",
+        "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+        "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+        "executionGeneration": 4,
+        "kind": "publish",
+        "targetId": "final",
+        "status": "verified",
+        "reservedAt": "2026-09-28T16:18:20.920Z",
+        "consumedAt": "2026-09-28T16:18:22.086Z",
+        "dispatchedAt": "2026-09-28T16:18:22.346Z",
+        "observedAt": "2026-09-28T16:21:06.250Z",
+        "browserTaskRunId": "adebae74-e30f-4f21-9afc-36bf9952726b",
+        "bilibiliSubmission": {
+          "confirmationAttempted": false,
+          "requestObserved": true,
+          "observationEnded": true,
+          "requestMatch": "matched",
+          "responseStatus": 200,
+          "platformCode": 0,
+          "postId": "1253159371244830725",
+          "observedAt": "2026-09-28T16:18:25.229Z"
+        }
+      }
+    ],
+    "executionProtocol": {
+      "version": 1,
+      "recentTransitions": [
+        {
+          "id": "30d260f1-c314-46de-a50b-a1a04f590c2a",
+          "operationRunId": "54ff36ca-e263-4e8c-be76-ba1e696c4f94",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-28T15:24:15.290Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "afac5da4-ec97-4abb-8cb8-e6089eab4651",
+          "operationRunId": "cc4cfa73-9399-4d1a-bd28-58218f9a220f",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-28T16:01:39.905Z",
+          "summary": "开始从中断处恢复原草稿"
+        },
+        {
+          "id": "260e3a3e-b266-4f66-bfc9-75b99d365248",
+          "operationRunId": "cc4cfa73-9399-4d1a-bd28-58218f9a220f",
+          "kind": "operation-interrupted",
+          "occurredAt": "2026-09-28T16:01:49.012Z",
+          "summary": "账号浏览器 Tab 创建超时"
+        },
+        {
+          "id": "b499850f-7dca-46e3-ba33-deb8770807ee",
+          "operationRunId": "08ee3933-1643-4dcf-8d5f-a8b748f4ab66",
+          "kind": "recovery-started",
+          "occurredAt": "2026-09-28T16:03:14.933Z",
+          "summary": "开始从中断处恢复原草稿"
+        }
+      ]
+    },
+    "execution": {
+      "status": "published",
+      "currentAttemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "currentGeneration": 4,
+      "currentLaunchOperationId": "06affc2c-232e-4268-a869-ad9be776c7ee"
+    },
+    "publication": {
+      "status": "published",
+      "url": "https://t.bilibili.com/1253159371244830725",
+      "observedAt": "2026-09-28T16:21:06.250Z"
+    }
+  },
+  "events": [
+    {
+      "id": "28736c58-ea08-4fb6-a4fb-138631c54b0a",
+      "type": "created",
+      "summary": "B站动态 文章发布事务已创建",
+      "occurredAt": "2026-09-28T15:13:38.638Z"
+    },
+    {
+      "id": "114db6e7-ebf1-4d12-b0a5-e8db6ed55cb0",
+      "type": "attempt-started",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "发布文章到 B站动态：已创建第 1 次办理",
+      "occurredAt": "2026-09-28T15:14:04.344Z"
+    },
+    {
+      "id": "065dc253-34c8-4a87-9398-08444fe14bdf",
+      "type": "attempt-started",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-28T15:14:09.155Z"
+    },
+    {
+      "id": "5122fbce-02b5-4b08-9163-89470e2ee604",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 打开 B站图文动态发布器 → verifying",
+      "occurredAt": "2026-09-28T15:20:19.192Z"
+    },
+    {
+      "id": "f168add7-7e96-4056-bc00-ebdd8039db7f",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 打开 B站图文动态发布器 → completed",
+      "occurredAt": "2026-09-28T15:21:32.014Z"
+    },
+    {
+      "id": "360a91cc-ea51-4683-8557-e754f0627ea0",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验 B站 UID 与当前空白现场 → running",
+      "occurredAt": "2026-09-28T15:22:20.213Z"
+    },
+    {
+      "id": "5b088546-f357-4fa0-b7af-fe4093d40100",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验 B站 UID 与当前空白现场 → verifying",
+      "occurredAt": "2026-09-28T15:22:27.483Z"
+    },
+    {
+      "id": "8325b94d-e8b9-4cbd-89ec-6eb4e6eeae38",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验 B站 UID 与当前空白现场 → completed",
+      "occurredAt": "2026-09-28T15:22:42.087Z"
+    },
+    {
+      "id": "80657656-89eb-426f-bde3-d9204c9c93a1",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 逐张选择、上传并核验动态图片 → running",
+      "occurredAt": "2026-09-28T15:23:04.415Z"
+    },
+    {
+      "id": "059d39c8-b706-4a6b-9d5f-1ebf036432be",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/01-小眸3D模型检查.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-28T15:23:05.223Z"
+    },
+    {
+      "id": "da4652b6-2384-4653-afb7-51dfd2967c51",
+      "type": "attempt-finished",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "AGENT_FAILED：Claude Agent SDK 错误: Claude Code process exited with code 143",
+      "occurredAt": "2026-09-28T15:23:08.615Z"
+    },
+    {
+      "id": "ac3e0872-49fe-4fe9-8dc6-2f6db310faed",
+      "type": "attempt-returned",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-28T15:24:15.290Z"
+    },
+    {
+      "id": "305bc8f8-df90-4750-98f8-ffe6788e6f7f",
+      "type": "attempt-started",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-28T15:24:17.448Z"
+    },
+    {
+      "id": "087154c8-0f12-43b3-a6a8-1e8d7ffc6ddf",
+      "type": "attempt-finished",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "RUNTIME_OWNER_LOST：Agent、BrowserTask、Tab 或 CDP 的当前绑定已失效，正在核验",
+      "occurredAt": "2026-09-28T15:29:36.034Z"
+    },
+    {
+      "id": "92436bc4-589f-4f0a-8d8e-888069155eef",
+      "type": "attempt-finished",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "RUNTIME_ORPHAN_CONFIRMED：主进程已确认当前运行绑定失主，任务已安全中断",
+      "occurredAt": "2026-09-28T15:30:36.165Z"
+    },
+    {
+      "id": "19e12605-acd8-4ab2-a37d-abb831a12589",
+      "type": "attempt-returned",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-28T16:01:39.905Z"
+    },
+    {
+      "id": "251f0ebf-eb46-4f62-929f-015918a10c9e",
+      "type": "attempt-finished",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "MAIN_LAUNCH_FAILED：账号浏览器 Tab 创建超时",
+      "occurredAt": "2026-09-28T16:01:49.012Z"
+    },
+    {
+      "id": "469c345d-06e1-4d65-a69b-fd0c151ca567",
+      "type": "attempt-returned",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布从原 Attempt 的未完成检查点恢复；将创建新的 Agent Run 和 BrowserTask",
+      "occurredAt": "2026-09-28T16:03:14.933Z"
+    },
+    {
+      "id": "f62d10f6-0ee5-47a7-96af-972281c910fc",
+      "type": "attempt-started",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "main 已绑定完整 Agent/Browser Runtime 身份",
+      "occurredAt": "2026-09-28T16:03:17.098Z"
+    },
+    {
+      "id": "667801d4-36bb-417b-a791-fa5d2a67098f",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/01-小眸3D模型检查.png → uploading（第 2/3 次）",
+      "occurredAt": "2026-09-28T16:04:58.633Z"
+    },
+    {
+      "id": "61b13816-e3ac-4767-a453-96b940482bd9",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3",
+      "occurredAt": "2026-09-28T16:05:21.892Z"
+    },
+    {
+      "id": "2693353f-4715-426a-acdd-eacc98a6bd79",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3",
+      "occurredAt": "2026-09-28T16:05:22.158Z"
+    },
+    {
+      "id": "6e341fc7-b8b4-4ae6-b5b9-daba4d9a5610",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-18/素材/01-小眸3D模型检查.png:attempt-3",
+      "occurredAt": "2026-09-28T16:05:22.485Z"
+    },
+    {
+      "id": "87390763-e79c-4f6c-81fd-b41e5dc4b952",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/01-小眸3D模型检查.png → waiting-platform（第 2/3 次）",
+      "occurredAt": "2026-09-28T16:05:35.443Z"
+    },
+    {
+      "id": "3943e79a-d673-4e69-bb2e-4289d74a4cab",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/01-小眸3D模型检查.png → verifying（第 2/3 次）",
+      "occurredAt": "2026-09-28T16:05:48.405Z"
+    },
+    {
+      "id": "9ad28263-700b-4b88-b162-4cdcc74b9d9f",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/01-小眸3D模型检查.png → uploaded（第 2/3 次）",
+      "occurredAt": "2026-09-28T16:06:09.901Z"
+    },
+    {
+      "id": "0a0363eb-2bad-4f70-b868-551b7677d9c7",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/02-骑行导航V4效果图.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:06:46.383Z"
+    },
+    {
+      "id": "b96a2aa6-cb50-45e2-9944-39d2e2f5da55",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:06:56.709Z"
+    },
+    {
+      "id": "b83d7d83-c2b7-412c-a988-70723ad6dc6c",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:06:57.056Z"
+    },
+    {
+      "id": "67de3738-3236-43b7-8629-18649feef1bb",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-18/素材/02-骑行导航V4效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:06:57.341Z"
+    },
+    {
+      "id": "f89e23ca-d557-42dd-b528-616264dd0560",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/02-骑行导航V4效果图.png → waiting-platform（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:07:10.189Z"
+    },
+    {
+      "id": "7f5cbb00-a366-403e-88c5-251006608893",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/02-骑行导航V4效果图.png → verifying（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:07:18.270Z"
+    },
+    {
+      "id": "6b95b8e4-074e-4609-b912-49a64dea1636",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/02-骑行导航V4效果图.png → uploaded（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:07:32.715Z"
+    },
+    {
+      "id": "72d78005-38b8-4c94-974b-2cc5e08b77a5",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/03-朗读台效果图.png → uploading（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:07:39.583Z"
+    },
+    {
+      "id": "8b9bd5ed-ae75-474c-8d7c-e271ada6168e",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:07:50.993Z"
+    },
+    {
+      "id": "b2f7ace3-2f54-48fd-9d3f-9ae594f1eb14",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：upload-asset/local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:07:51.483Z"
+    },
+    {
+      "id": "5dfb34b9-0de1-4938-908b-302c0215ca0f",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：upload-asset/local:AIR/2026-09-18/素材/03-朗读台效果图.png:attempt-2",
+      "occurredAt": "2026-09-28T16:07:51.751Z"
+    },
+    {
+      "id": "f5111329-c1b2-49c6-944b-54d1188462c7",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/03-朗读台效果图.png → waiting-platform（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:08:00.455Z"
+    },
+    {
+      "id": "2a9c85d5-0a66-42db-adb6-1d294a9ca4ec",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/03-朗读台效果图.png → verifying（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:08:09.478Z"
+    },
+    {
+      "id": "c6e61e68-3d43-4c10-92e1-ee5d8994d281",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "正文图片 素材/03-朗读台效果图.png → uploaded（第 1/3 次）",
+      "occurredAt": "2026-09-28T16:08:44.259Z"
+    },
+    {
+      "id": "8089f6ee-61e4-4331-a578-2d1e187cb870",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 逐张选择、上传并核验动态图片 → verifying",
+      "occurredAt": "2026-09-28T16:08:56.580Z"
+    },
+    {
+      "id": "8f589167-6f73-40c7-95f6-90c402683430",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 逐张选择、上传并核验动态图片 → completed",
+      "occurredAt": "2026-09-28T16:09:17.946Z"
+    },
+    {
+      "id": "0f55097b-f4d6-43d1-b943-46f0d0125152",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写正文并完整回读 → running",
+      "occurredAt": "2026-09-28T16:14:09.690Z"
+    },
+    {
+      "id": "0ffe88e7-850b-4e30-9280-ced3a5bc2609",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：save-draft/autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+      "occurredAt": "2026-09-28T16:14:37.864Z"
+    },
+    {
+      "id": "5211031f-1737-4c75-88ee-504213b8b905",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：save-draft/autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+      "occurredAt": "2026-09-28T16:14:38.237Z"
+    },
+    {
+      "id": "8ed64dfc-3dfc-492e-8f14-e8d313825505",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：save-draft/autosave:fill-body:b7171422-ae4a-4506-bad0-c1a386fa97c9",
+      "occurredAt": "2026-09-28T16:14:38.594Z"
+    },
+    {
+      "id": "070cfab1-3b2d-4dd0-8278-54755fad9ec5",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写正文并完整回读 → verifying",
+      "occurredAt": "2026-09-28T16:14:46.306Z"
+    },
+    {
+      "id": "5aea5f41-eacf-4a98-a404-98d0911a9d3c",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写正文并完整回读 → completed",
+      "occurredAt": "2026-09-28T16:15:08.804Z"
+    },
+    {
+      "id": "53e5558f-041e-4946-84ee-f088c5de6a43",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写独立标题并核验发布设置 → running",
+      "occurredAt": "2026-09-28T16:15:34.434Z"
+    },
+    {
+      "id": "79ce0e0e-62d7-44d6-a2db-17537e1496b0",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：save-draft/autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1",
+      "occurredAt": "2026-09-28T16:15:47.801Z"
+    },
+    {
+      "id": "3da11b7f-bfe5-4914-964c-dea227f809ce",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：save-draft/autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1",
+      "occurredAt": "2026-09-28T16:15:48.143Z"
+    },
+    {
+      "id": "e0a89657-a08a-49ed-9b22-016c756ca5ca",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：save-draft/autosave:fill-fields:title:b5b9ae70-f070-46ef-9500-d13f08b221d1",
+      "occurredAt": "2026-09-28T16:15:48.319Z"
+    },
+    {
+      "id": "6a0c5743-c054-4c2a-8d47-599c94bf27bc",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写独立标题并核验发布设置 → verifying",
+      "occurredAt": "2026-09-28T16:15:56.275Z"
+    },
+    {
+      "id": "73d9eb03-23ea-437c-aa16-f9f1642f9ebe",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 填写独立标题并核验发布设置 → completed",
+      "occurredAt": "2026-09-28T16:16:48.702Z"
+    },
+    {
+      "id": "3d9267ad-86fd-4f6b-ad29-109d81490946",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 复核当前图文（不代表平台已保存） → running",
+      "occurredAt": "2026-09-28T16:17:13.948Z"
+    },
+    {
+      "id": "8794216d-04f1-4117-9c8d-8d1412e145fc",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 复核当前图文（不代表平台已保存） → verifying",
+      "occurredAt": "2026-09-28T16:17:27.418Z"
+    },
+    {
+      "id": "370226f3-ab4b-4b04-9e3a-5d5794d28697",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 复核当前图文（不代表平台已保存） → completed",
+      "occurredAt": "2026-09-28T16:17:45.341Z"
+    },
+    {
+      "id": "2eac6749-416d-40fa-9d78-d0856ecff2ad",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 单次发布 B站动态 → running",
+      "occurredAt": "2026-09-28T16:18:10.098Z"
+    },
+    {
+      "id": "ff8680fc-1f96-49b0-bca7-e2b08808872f",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已预写网页副作用授权：publish/final",
+      "occurredAt": "2026-09-28T16:18:20.920Z"
+    },
+    {
+      "id": "54efc5ec-2957-4c45-8b75-2c27cce7d409",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "已消费网页副作用授权：publish/final",
+      "occurredAt": "2026-09-28T16:18:22.086Z"
+    },
+    {
+      "id": "3ae6204b-bcbc-49b1-857e-866086f309d8",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "即将派发网页副作用：publish/final",
+      "occurredAt": "2026-09-28T16:18:22.346Z"
+    },
+    {
+      "id": "5f848309-dcc5-48d0-a596-6d8ee50ff638",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验动态 ID、作者、全文与逐图结果 → running",
+      "occurredAt": "2026-09-28T16:19:16.395Z"
+    },
+    {
+      "id": "0ae27258-5aa5-4467-99e1-82ed5fb25e36",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验动态 ID、作者、全文与逐图结果 → verifying",
+      "occurredAt": "2026-09-28T16:20:06.502Z"
+    },
+    {
+      "id": "23cd3439-d08c-4179-8e43-5f11e83f6c5d",
+      "type": "node-status-changed",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "文章发布步骤 核验动态 ID、作者、全文与逐图结果 → completed",
+      "occurredAt": "2026-09-28T16:20:31.825Z"
+    },
+    {
+      "id": "eea252ff-7e15-4a34-a81e-ffc6b8b20ea4",
+      "type": "attempt-finished",
+      "nodeId": "edf4f3b1-0026-4138-9a25-648d3dc94ca6",
+      "attemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+      "summary": "发布文章到 B站动态：succeeded，B站图文动态单篇授权发布完成（最新 inspect 2026-09-28T16:20:52Z）：pageKind=published-article，动态 ID 1253159371244830725，作者 UID 3546384070347419，标题「做AI眼镜第197天，上次换耳朵，这次换」，bodyMatchesFrozen=true（公开页全文与冻结原稿一致，814 字符），3 张图（5b21727a…/01f06ce3…/96921c3f…）与上传平台 URL 逐一相同且全部加载、顺序正确。3 张冻结图片均已逐张上传核验（matchedAssets 3/3），可见范围 public，单次点击发布未重复发送，平台回执 HTTP 200、platformCode=0、postId 匹配。发布结果 URL 可复核。",
+      "occurredAt": "2026-09-28T16:21:06.250Z"
+    }
+  ],
+  "workspaceRef": {
+    "kind": "local",
+    "path": "/Users/apple/Desktop/研发日记"
+  },
+  "createdAt": "2026-09-28T15:13:38.638Z",
+  "updatedAt": "2026-09-28T16:21:06.250Z"
+}

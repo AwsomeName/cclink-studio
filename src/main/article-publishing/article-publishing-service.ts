@@ -293,7 +293,14 @@ export class ArticlePublishingService {
         8_000,
         // Result recovery navigates and re-verifies a public work; it does not
         // depend on the old editor Tab, which may no longer exist after restart.
-        publicationRecoveryRequired ? undefined : input.preferredBrowserTabId,
+        // A persisted Tab id can outlive its native View after app restart.
+        // Only pin a live original View; otherwise let the renderer select a
+        // same-account Tab, then run the normal account/draft reconciliation.
+        !publicationRecoveryRequired &&
+          input.preferredBrowserTabId &&
+          browserManager.getViewRuntimeIdentity(input.preferredBrowserTabId)
+          ? input.preferredBrowserTabId
+          : undefined,
       )
       if (!tabId) throw new Error('账号浏览器 Tab 创建超时')
       if (

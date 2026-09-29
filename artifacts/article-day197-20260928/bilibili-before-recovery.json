@@ -1,0 +1,196 @@
+{
+  "affairId": "a6cc2d71-1152-4f89-8688-187399c21a7c",
+  "execution": {
+    "status": "running",
+    "currentAttemptId": "60e8f034-8eba-404b-a5d6-2542508a4936",
+    "currentGeneration": 1,
+    "currentLaunchOperationId": "1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+    "currentStepId": "upload-assets",
+    "lastAgentRunId": "run-1b7dbdd8-b917-448a-9e20-f24b8d29de9c",
+    "lastBrowserTaskRunId": "28f56a3d-6b36-488e-81d0-d069548ac4b3"
+  },
+  "publication": {
+    "status": "not-started"
+  },
+  "sideEffects": [],
+  "checkpoints": [
+    {
+      "stepId": "open-editor",
+      "label": "打开 B站图文动态发布器",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "account.resolve",
+          "nextAction": "取得可见账号 Tab",
+          "status": "completed",
+          "evidence": "账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-28T15:14:04.987Z",
+          "generation": 1
+        },
+        {
+          "id": "tab.acquire",
+          "nextAction": "按新建或恢复分支打开页面",
+          "status": "completed",
+          "evidence": "Tab tab-4-1790520247806 · 账号 7c1ef8bb-7770-4c53-ad02-e4943f745fea · Profile web-draft-67f01554-70b0-4739-ad9f-178437a7b1a3",
+          "observedAt": "2026-09-28T15:14:07.518Z",
+          "generation": 1
+        },
+        {
+          "id": "editor.open",
+          "nextAction": "检查账号和编辑区域",
+          "status": "completed",
+          "evidence": "https://t.bilibili.com/",
+          "observedAt": "2026-09-28T15:14:08.128Z",
+          "generation": 1
+        },
+        {
+          "id": "runtime.ready",
+          "nextAction": "首次只读检查；改代则重新绑定核验",
+          "status": "completed",
+          "evidence": "Agent run-1b7dbdd8-b917-448a-9e20-f24b8d29de9c · BrowserTask 28f56a3d-6b36-488e-81d0-d069548ac4b3 · Tab tab-4-1790520247806 · View g3 · WebContents 4 · Page g9",
+          "observedAt": "2026-09-28T15:14:09.155Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:14:09.155Z",
+      "finishedAt": "2026-09-28T15:21:32.014Z",
+      "evidence": [
+        "重新 inspect（2026-09-28T15:14:23Z）：pageKind=editor，editor.recognized=true，URL=https://t.bilibili.com/；body selector、title selector、fileInput selector 均已返回；正文 bodyTextLength=0、initialDraftBodyEmpty=true、title=\"\"、images=[]。检查点 4 个 detail（account.resolve / tab.acquire / editor.open / runtime.ready）均 completed。",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "verify-account",
+      "label": "核验 B站 UID 与当前空白现场",
+      "adapterVersion": 1,
+      "status": "completed",
+      "details": [
+        {
+          "id": "page.inspect",
+          "nextAction": "定位正文与平台字段",
+          "status": "completed",
+          "evidence": "页面 editor · 账号 3546384070347419 · draftId 尚无 · 标题  · 保存 unknown",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 1,
+      "startedAt": "2026-09-28T15:22:20.213Z",
+      "finishedAt": "2026-09-28T15:22:42.087Z",
+      "evidence": [
+        "开始核验 B站 UID 与空白现场。inspect（2026-09-28T15:21:26Z）：pageKind=editor，URL=https://t.bilibili.com/。",
+        "inspect（2026-09-28T15:21:26Z）核验中：platformAccountId=3546384070347419，与 targetUID=3546384070347419 一致；编辑器空白现场（bodyTextLength=0、initialDraftBodyEmpty=true、title=\"\"、images=[]、imageEnumerationComplete=true），detail page.inspect 已 completed（页面 editor · 账号 3546384070347419 · draftId 尚无）。",
+        "csdn@1 页面回读 · https://t.bilibili.com/"
+      ]
+    },
+    {
+      "stepId": "upload-assets",
+      "label": "逐张选择、上传并核验动态图片",
+      "adapterVersion": 1,
+      "status": "pending",
+      "resumePolicy": "skip-if-verified",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "fill-body",
+      "label": "填写正文并完整回读",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "body.locate",
+          "nextAction": "只允许向已定位的正文区域写入",
+          "status": "completed",
+          "evidence": "正文 div[placeholder=\"有什么想和大家分享的？\"] · iframe 主文档 · 0 字符",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "fill-fields",
+      "label": "填写独立标题并核验发布设置",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "field.title.inspect",
+          "nextAction": "与冻结字段比较",
+          "status": "completed",
+          "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 ",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        },
+        {
+          "id": "field.title.verify",
+          "nextAction": "字段值尚不一致；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "期望 做AI眼镜第197天，上次换耳朵，这次换大脑；实际 ",
+          "reason": "字段值尚不一致",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "save-draft",
+      "label": "复核当前图文（不代表平台已保存）",
+      "adapterVersion": 1,
+      "status": "pending",
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "publish",
+      "label": "单次发布 B站动态",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publish.preflight",
+          "nextAction": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "reason": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    },
+    {
+      "stepId": "verify-publication",
+      "label": "核验动态 ID、作者、全文与逐图结果",
+      "adapterVersion": 1,
+      "status": "pending",
+      "details": [
+        {
+          "id": "publication.verify",
+          "nextAction": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮；先处理此卡点并重新检查。",
+          "status": "waiting",
+          "evidence": "尚未派发公开发布；等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "reason": "等待核验公开范围、正文、图片和唯一可用的即时发布按钮",
+          "observedAt": "2026-09-28T15:14:23.795Z",
+          "generation": 1
+        }
+      ],
+      "resumePolicy": "reconcile-then-run",
+      "attemptCount": 0,
+      "evidence": []
+    }
+  ]
+}

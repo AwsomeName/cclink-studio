@@ -413,6 +413,38 @@ describe('ArticlePublishingService', () => {
     service.dispose()
   })
 
+  it('reconciles the exact draft in a same-account Tab when the persisted View no longer exists', async () => {
+    const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
+    const harness = createResumeHarness({ draftUrl, visibleUrl: 'https://mp.csdn.net/' })
+    harness.browserManager.getViewRuntimeIdentity.mockReturnValueOnce(null as never)
+    try {
+      const result = await harness.service.startTask(
+        { workspaceRef: WORKSPACE_REF, affairId: harness.affairId },
+        '11111111-1111-4111-8111-111111111111',
+      )
+      expect(result.success).toBe(true)
+      expect(harness.browserManager.getViewRuntimeIdentity).toHaveBeenCalledWith(
+        'original-editor-tab',
+      )
+      expect(harness.browserManager.waitForAccountView).toHaveBeenCalledWith(
+        '/workspace',
+        'profile-a',
+        '22222222-2222-4222-8222-222222222222',
+        'https://mp.csdn.net/mp_blog/manage/article',
+        8_000,
+        undefined,
+      )
+      expect(harness.draftRecoveryCoordinator.recoverExactDraft).toHaveBeenCalledOnce()
+      expect(harness.webAffairService.verifyArticlePublishingRecovery).toHaveBeenCalledWith(
+        expect.objectContaining({ draftId: '164148817', tabId: 'tab-a' }),
+        '11111111-1111-4111-8111-111111111111',
+        { issueWritePermit: false },
+      )
+    } finally {
+      harness.service.dispose()
+    }
+  })
+
   it('recovers the exact persisted draft from the account draft list before starting the Agent', async () => {
     const draftUrl = 'https://mp.csdn.net/mp_blog/creation/editor/164148817'
     const harness = createResumeHarness({ draftUrl, visibleUrl: 'https://mp.csdn.net/' })

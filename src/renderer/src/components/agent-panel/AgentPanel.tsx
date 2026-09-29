@@ -150,6 +150,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const [skillQuery, setSkillQuery] = useState<string | null>(null)
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0)
   const [persistedPublishingBinding, setPersistedPublishingBinding] = useState<{
+    tabId: string
     affairId: string
     attemptId: string
     executionGeneration: number
@@ -263,6 +264,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
       setPersistedPublishingBinding(
         affair && attempt
           ? {
+              tabId: activeBrowserTabId,
               affairId: affair.id,
               attemptId: attempt.id,
               executionGeneration: attempt.executionGeneration,
@@ -285,8 +287,12 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     const publishingConversationId = activePublishingAffairId
       ? `article-publishing-${activePublishingAffairId}`
       : null
+    // Clearing state in the lookup effect only takes effect on the next render.
+    // Do not focus the previous Tab's conversation while this Tab's lookup is pending.
+    const currentPublishingBinding =
+      persistedPublishingBinding?.tabId === activeBrowserTabId ? persistedPublishingBinding : null
     const conversationId =
-      taskConversationId ?? persistedPublishingBinding?.conversationId ?? publishingConversationId
+      taskConversationId ?? currentPublishingBinding?.conversationId ?? publishingConversationId
     if (!conversationId) {
       focusedTabConversationRef.current = null
       // No binding is not a request to select the global conversation. During Tab startup the
@@ -296,8 +302,8 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     }
     const bindingKey = activeTabConversationTask
       ? `browser:${activeTabConversationTask.tabId}:${activeTabConversationTask.id}:${conversationId}`
-      : persistedPublishingBinding
-        ? `persisted-browser:${activeBrowserTabId}:${persistedPublishingBinding.affairId}:${persistedPublishingBinding.attemptId}:g${persistedPublishingBinding.executionGeneration}:${conversationId}`
+      : currentPublishingBinding
+        ? `persisted-browser:${activeBrowserTabId}:${currentPublishingBinding.affairId}:${currentPublishingBinding.attemptId}:g${currentPublishingBinding.executionGeneration}:${conversationId}`
         : `article-publishing:${activePublishingAffairId}:${conversationId}`
     if (focusedTabConversationRef.current === bindingKey) return
     const conversation = conversations[conversationId]
