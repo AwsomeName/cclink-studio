@@ -86,7 +86,7 @@ jobs:
 
           ci_runs="$(gh api \
             -H 'Accept: application/vnd.github+json' \
-            "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$DEFAULT_BRANCH&event=push&status=success&per_page=50")"
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=$DEFAULT_BRANCH&event=push&status=completed&per_page=50")"
           successful_runs="$(printf '%s' "$ci_runs" | jq \
             --arg sha "$source_sha" \
             '[.workflow_runs[] | select(.head_sha == $sha and .head_branch == "main" and .event == "push" and .status == "completed" and .conclusion == "success")] | length')"
