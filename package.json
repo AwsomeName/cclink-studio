@@ -26,7 +26,7 @@
     "studio:stop": "bash scripts/studio.sh stop",
     "studio:smoke": "bash scripts/studio.sh smoke",
     "dev": "ELECTRON_RUN_AS_NODE= bash scripts/dev.sh",
-    "build": "pnpm typecheck && electron-vite build",
+    "build": "pnpm typecheck && electron-vite build && node scripts/build-update-helper.mjs",
     "preview": "electron-vite preview",
     "postinstall": "node scripts/ensure-electron-runtime.mjs && electron-builder install-app-deps",
     "package:local": "bash scripts/package.sh",

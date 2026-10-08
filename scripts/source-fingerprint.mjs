@@ -12,6 +12,7 @@ const exactBuildInputs = new Set([
   'package.json',
   'pnpm-lock.yaml',
   'scripts/managed-runtime-packaged-smoke.mjs',
+  'scripts/build-update-helper.mjs',
   'scripts/package.sh',
   'scripts/source-fingerprint.mjs',
   'tsconfig.json',

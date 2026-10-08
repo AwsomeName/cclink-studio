@@ -50,6 +50,8 @@ describe('update store background download', () => {
       hydrated: true,
       manualInstallerBusy: false,
       manualInstallerError: null,
+      installBusy: false,
+      installPreparation: null,
     })
   })
 
@@ -71,5 +73,35 @@ describe('update store background download', () => {
     finishDownload({ ok: true, snapshot: downloadingSnapshot })
     await pending
     expect(useUpdateStore.getState().snapshot).toEqual(downloadingSnapshot)
+  })
+
+  it('requires the main-process token and clears it on cancellation', async () => {
+    const ready: UpdateSnapshot = { ...availableSnapshot, phase: 'readyToInstall' }
+    const prepareInstall = vi.fn(async () => ({
+      ok: true,
+      confirmationToken: 'one-time',
+      impacts: [],
+      snapshot: ready,
+    }))
+    const installAndRestart = vi.fn(async () => ({
+      ok: true,
+      snapshot: { ...ready, phase: 'installing' as const },
+    }))
+    const defer = vi.fn(async () => ({ ok: true, snapshot: ready }))
+    vi.stubGlobal('window', {
+      cclinkStudio: { update: { prepareInstall, installAndRestart, defer } },
+    })
+    await useUpdateStore.getState().confirmInstall()
+    expect(installAndRestart).not.toHaveBeenCalled()
+    await useUpdateStore.getState().prepareInstall()
+    useUpdateStore.getState().closePanel()
+    expect(defer).toHaveBeenCalledOnce()
+    expect(useUpdateStore.getState().installPreparation).toBeNull()
+    useUpdateStore.getState().openPanel()
+    await useUpdateStore.getState().prepareInstall()
+    await useUpdateStore.getState().confirmInstall()
+    expect(installAndRestart).toHaveBeenCalledWith({ confirmationToken: 'one-time' })
+    useUpdateStore.getState().closePanel()
+    expect(useUpdateStore.getState().panelOpen).toBe(true)
   })
 })

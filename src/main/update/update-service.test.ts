@@ -8,7 +8,7 @@ import type {
   UpdateProviderCheckInput,
   UpdateProviderCheckResult,
 } from './update-provider'
-import { UpdateService } from './update-service'
+import { UpdateService, type UpdateServiceOptions } from './update-service'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
 
 const temporaryDirectories: string[] = []
@@ -90,6 +90,8 @@ async function createService(
   manualInstaller: {
     dmgInspector?: VerifiedDmgInspector
     openPath?: (path: string) => Promise<string>
+    installer?: UpdateServiceOptions['installer']
+    installLifecycle?: UpdateServiceOptions['installLifecycle']
   } = {},
 ): Promise<{ service: UpdateService; cacheRoot: string }> {
   const cacheRoot = await fs.mkdtemp(join(tmpdir(), 'cclink-update-service-'))
@@ -107,6 +109,204 @@ async function createService(
   await service.start()
   return { service, cacheRoot }
 }
+
+describe('transactional automatic installation', () => {
+  it('preserves the DMG and receipts until the new workbench and helper both acknowledge startup', async () => {
+    const data = Buffer.from('boot recovery fixture')
+    const result = availableRelease(data)
+    const { service, cacheRoot } = await createService(result, async () => downloadResponse(data))
+    await service.check()
+    await service.startDownload()
+    await service.stop()
+    const releaseDirectory = await onlyReleaseDirectory(cacheRoot)
+    const receiptRoot = join(cacheRoot, 'installations', 'fixture')
+    await fs.mkdir(receiptRoot, { recursive: true, mode: 0o700 })
+    await fs.writeFile(join(receiptRoot, 'transaction.json'), 'fixture', { mode: 0o600 })
+    const acknowledgeStartup = vi.fn(async () => {})
+    const next = new UpdateService({
+      currentVersion: '1.2.3',
+      architecture: 'arm64',
+      systemVersion: '15.0',
+      cacheRoot,
+      provider: new FixtureProvider(result),
+      automaticChecks: false,
+      pendingInstallStartup: true,
+      installer: { stage: vi.fn(), acknowledgeStartup },
+      installLifecycle: { inspect: async () => [], flush: async () => {}, quit: vi.fn() },
+    })
+    await next.start()
+    expect((await fs.stat(releaseDirectory)).isDirectory()).toBe(true)
+    expect((await next.check()).ok).toBe(false)
+    await next.acknowledgeStartup(['--cclink-update=fixture'])
+    expect(acknowledgeStartup).toHaveBeenCalledOnce()
+    await expect(fs.stat(releaseDirectory)).rejects.toThrow()
+    expect(await fs.readFile(join(receiptRoot, 'transaction.json'), 'utf8')).toBe('fixture')
+    await next.stop()
+  })
+  async function fixture() {
+    const data = Buffer.from('signed dmg fixture')
+    const staged = {
+      arm: vi.fn(async () => {}),
+      commit: vi.fn(async () => {}),
+      cancel: vi.fn(async () => {}),
+    }
+    const installer = { stage: vi.fn(async () => staged) }
+    const lifecycle = {
+      inspect: vi.fn(async (): Promise<import('../../shared/update').UpdateInstallImpact[]> => []),
+      flush: vi.fn(async () => {}),
+      quit: vi.fn(),
+      acquire: vi.fn(() => vi.fn()),
+    }
+    const { service, cacheRoot } = await createService(
+      availableRelease(data),
+      async () => downloadResponse(data),
+      { installer, installLifecycle: lifecycle },
+    )
+    await service.check()
+    await service.startDownload()
+    return { service, staged, installer, lifecycle, cacheRoot }
+  }
+
+  it('only quits after explicit confirmation, cache verification, staging, flush and helper commit', async () => {
+    const { service, staged, installer, lifecycle } = await fixture()
+    const prepared = await service.prepareInstall()
+    expect(prepared.ok).toBe(true)
+    expect(installer.stage).not.toHaveBeenCalled()
+    expect(lifecycle.flush).not.toHaveBeenCalled()
+    const result = await service.installAndRestart({
+      confirmationToken: prepared.confirmationToken!,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.snapshot.phase).toBe('installing')
+    expect(installer.stage).toHaveBeenCalledOnce()
+    expect(lifecycle.flush).toHaveBeenCalledOnce()
+    expect(staged.arm).toHaveBeenCalledOnce()
+    expect(staged.commit).toHaveBeenCalledOnce()
+    expect(lifecycle.quit).toHaveBeenCalledOnce()
+    expect(lifecycle.flush.mock.invocationCallOrder[0]).toBeLessThan(
+      staged.commit.mock.invocationCallOrder[0],
+    )
+    expect(staged.commit.mock.invocationCallOrder[0]).toBeLessThan(
+      lifecycle.quit.mock.invocationCallOrder[0],
+    )
+    expect(
+      (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
+    ).toBe(false)
+    expect((await service.setTrack('beta')).ok).toBe(false)
+    await service.stop()
+  })
+
+  it('blocks dirty documents without saving or starting the helper', async () => {
+    const { service, installer, lifecycle } = await fixture()
+    lifecycle.inspect.mockResolvedValue([
+      { kind: 'editor', severity: 'blocked', label: 'note.md', detail: '未保存' },
+    ])
+    const prepared = await service.prepareInstall()
+    expect(prepared.ok).toBe(false)
+    expect(prepared.confirmationToken).toBeNull()
+    expect(prepared.impacts[0].kind).toBe('editor')
+    expect(installer.stage).not.toHaveBeenCalled()
+    expect(lifecycle.flush).not.toHaveBeenCalled()
+    await service.stop()
+  })
+
+  it('invalidates a changed cached DMG before installing and offers a fresh check instead of a stale retry', async () => {
+    const { service, installer, lifecycle, cacheRoot } = await fixture()
+    const prepared = await service.prepareInstall()
+    const directory = await onlyReleaseDirectory(cacheRoot)
+    await fs.writeFile(join(directory, 'studio-arm64.dmg'), 'changed after download')
+    const result = await service.installAndRestart({
+      confirmationToken: prepared.confirmationToken!,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.snapshot.phase).toBe('failed')
+    expect(result.snapshot.error?.code).toBe('download_corrupt')
+    expect(result.snapshot.availableRelease).toBeNull()
+    expect(installer.stage).not.toHaveBeenCalled()
+    expect(lifecycle.quit).not.toHaveBeenCalled()
+    expect((await service.check()).ok).toBe(true)
+    await service.stop()
+  })
+
+  it('rejects a changed work scene after staging and preserves the downloaded installer', async () => {
+    const { service, staged, lifecycle } = await fixture()
+    const prepared = await service.prepareInstall()
+    lifecycle.inspect
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([{ kind: 'agent', severity: 'blocked', label: 'Agent', detail: '运行中' }])
+    expect(
+      (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
+    ).toBe(false)
+    expect(service.getSnapshot().phase).toBe('readyToInstall')
+    expect(service.getSnapshot().error?.code).toBe('install_blocked')
+    expect(staged.cancel).toHaveBeenCalledOnce()
+    expect(staged.commit).not.toHaveBeenCalled()
+    expect(lifecycle.quit).not.toHaveBeenCalled()
+    await service.stop()
+  })
+
+  it.each(['flush', 'arm'] as const)(
+    'does not exit on %s failure and allows a fresh retry',
+    async (step) => {
+      const { service, staged, lifecycle } = await fixture()
+      const prepared = await service.prepareInstall()
+      if (step === 'flush') lifecycle.flush.mockRejectedValueOnce(new Error('disk failure'))
+      else staged.arm.mockRejectedValueOnce(new Error('helper failure'))
+      expect(
+        (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
+      ).toBe(false)
+      expect(service.getSnapshot().phase).toBe('readyToInstall')
+      expect(staged.cancel).toHaveBeenCalledOnce()
+      expect(lifecycle.quit).not.toHaveBeenCalled()
+      expect((await service.prepareInstall()).ok).toBe(true)
+      await service.stop()
+    },
+  )
+
+  it('rejects expired or unissued tokens', async () => {
+    const { service, installer } = await fixture()
+    expect((await service.installAndRestart({ confirmationToken: 'forged' })).ok).toBe(false)
+    const prepared = await service.prepareInstall()
+    const now = Date.now()
+    const time = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000)
+    try {
+      expect(
+        (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
+      ).toBe(false)
+    } finally {
+      time.mockRestore()
+    }
+    expect(installer.stage).not.toHaveBeenCalled()
+    await service.stop()
+  })
+
+  it('revokes confirmation on later/cancel without deleting the download or flushing user work', async () => {
+    const { service, installer, lifecycle } = await fixture()
+    const prepared = await service.prepareInstall()
+    expect(service.defer().ok).toBe(true)
+    expect(
+      (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
+    ).toBe(false)
+    expect(service.getSnapshot().phase).toBe('readyToInstall')
+    expect(installer.stage).not.toHaveBeenCalled()
+    expect(lifecycle.flush).not.toHaveBeenCalled()
+    expect((await service.prepareInstall()).ok).toBe(true)
+    await service.stop()
+  })
+
+  it('keeps the existing manual path when no native installer is configured', async () => {
+    const data = Buffer.from('manual dmg')
+    const { service } = await createService(availableRelease(data), async () =>
+      downloadResponse(data),
+    )
+    await service.check()
+    await service.startDownload()
+    expect(service.getSnapshot().canInstallAutomatically).toBe(false)
+    expect((await service.prepareInstall()).ok).toBe(false)
+    expect(service.getSnapshot().phase).toBe('readyToInstall')
+    await service.stop()
+  })
+})
 
 function serviceForCache(
   result: UpdateProviderCheckResult,

@@ -226,6 +226,12 @@ jobs:
           app_signature="$(codesign --display --verbose=4 "$app_path" 2>&1)"
           grep -F -- "Authority=$CSC_NAME" <<<"$app_signature"
           grep -F -- "TeamIdentifier=$expected_team_id" <<<"$app_signature"
+          install_helper="$app_path/Contents/Resources/update-helper/cclink-update-helper"
+          test -x "$install_helper"
+          codesign --verify --strict --verbose=2 \
+            -R "=anchor apple generic and certificate leaf[subject.OU] = \"$expected_team_id\"" \
+            "$install_helper"
+          test "$(lipo -archs "$install_helper")" = arm64
           for dmg in dist/*.dmg; do
             codesign --verify --verbose=2 "$dmg"
             xcrun stapler validate "$dmg"

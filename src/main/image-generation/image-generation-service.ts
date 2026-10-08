@@ -9,6 +9,10 @@ import type {
 } from './types'
 
 export class ImageGenerationService {
+  private activeRequests = 0
+  hasActiveWork(): boolean {
+    return this.activeRequests > 0
+  }
   private readonly providers: Map<ImageGenerationProviderId, ImageGenerationProvider>
 
   constructor(getMeshyApiKey: () => string, getJimengCredentials: () => JimengCredentials) {
@@ -28,7 +32,12 @@ export class ImageGenerationService {
     const providerId = request.provider ?? this.getDefaultProviderId()
     const provider = this.providers.get(providerId)
     if (!provider) throw new Error(`未安装图片生成服务商: ${providerId}`)
-    return provider.generate(request)
+    this.activeRequests += 1
+    try {
+      return await provider.generate(request)
+    } finally {
+      this.activeRequests -= 1
+    }
   }
 
   getDefaultProviderId(): ImageGenerationProviderId {

@@ -34,6 +34,9 @@ const DEFAULT_DEPENDENCIES: VideoGenerationDependencies = {
 }
 
 export class VideoGenerationService {
+  hasActiveWork(): boolean {
+    return this.activePolls.size > 0
+  }
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly activePolls = new Map<string, Promise<void>>()
 

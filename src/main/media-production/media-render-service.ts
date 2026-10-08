@@ -53,6 +53,9 @@ interface ResolvedRuntime {
 }
 
 export class MediaRenderService {
+  hasActiveWork(): boolean {
+    return this.activeTasks.size > 0
+  }
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly activeTasks = new Map<string, Promise<void>>()
   private runtimePromise: Promise<ResolvedRuntime> | null = null

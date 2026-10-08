@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { IconClose, IconCloud, IconRefresh } from '../common/Icons'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
@@ -16,9 +17,24 @@ export function UpdatePanel(): React.ReactElement | null {
   const openManualInstaller = useUpdateStore((state) => state.openManualInstaller)
   const manualInstallerBusy = useUpdateStore((state) => state.manualInstallerBusy)
   const manualInstallerError = useUpdateStore((state) => state.manualInstallerError)
+  const preparation = useUpdateStore((state) => state.installPreparation)
+  const installBusy = useUpdateStore((state) => state.installBusy)
+  const prepareInstall = useUpdateStore((state) => state.prepareInstall)
+  const confirmInstall = useUpdateStore((state) => state.confirmInstall)
+  const installing = snapshot.phase === 'installing'
+
+  useEffect(() => {
+    if (!installing) return
+    const freeze = (event: KeyboardEvent): void => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    window.addEventListener('keydown', freeze, true)
+    return () => window.removeEventListener('keydown', freeze, true)
+  }, [installing])
 
   useFloatingSurfaceRegistration(open)
-  useEscapeDismiss(open, close)
+  useEscapeDismiss(open && !installing && !installBusy, close)
 
   if (!open) return null
 
@@ -45,7 +61,13 @@ export function UpdatePanel(): React.ReactElement | null {
               {snapshot.track === 'beta' ? '测试通道' : '稳定通道'}
             </p>
           </div>
-          <button type="button" className="icon-button" title="关闭" onClick={close}>
+          <button
+            type="button"
+            className="icon-button"
+            title="关闭"
+            disabled={installing || installBusy}
+            onClick={close}
+          >
             <IconClose size={16} />
           </button>
         </header>
@@ -136,13 +158,42 @@ export function UpdatePanel(): React.ReactElement | null {
           {snapshot.phase === 'readyToInstall' && (
             <UpdateMessage
               title="更新已下载并通过校验"
-              detail="打开前会再次核对完整性、Apple 公证、发布者、版本和 arm64 架构。macOS 打开后，将 CCLink Studio 开源版拖入“应用程序”完成替换。"
+              detail={
+                snapshot.canInstallAutomatically
+                  ? '安装前会再次检查 Apple 公证、发布者、版本与架构，并检查工作现场。确认后 Studio 自动退出、替换并重新打开。'
+                  : '打开前会再次核对完整性、Apple 公证、发布者、版本和 arm64 架构。macOS 打开后，将 CCLink Studio 开源版拖入“应用程序”完成替换。'
+              }
             />
           )}
 
-          {manualInstallerError && (
+          {preparation && snapshot.phase === 'readyToInstall' && (
+            <div role="status">
+              <strong>
+                {preparation.ok ? '准备就绪，是否安装并重启？' : '请先处理以下事项，再重试安装'}
+              </strong>
+              <p>
+                {preparation.ok
+                  ? '将保存工作台状态并正常退出。若新版启动失败，会恢复旧版。'
+                  : '当前版本不会退出。'}
+              </p>
+              {preparation.impacts.map((impact, index) => (
+                <p key={index}>
+                  {impact.label}：{impact.detail}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {installing && (
+            <UpdateMessage
+              title="正在准备安装并重启"
+              detail="正在保存工作台并安全检查安装包。请等待 Studio 自动重新打开，不要移动应用。"
+            />
+          )}
+
+          {(manualInstallerError || (snapshot.phase === 'readyToInstall' && snapshot.error)) && (
             <div className="update-error" role="alert">
-              <strong>{manualInstallerError}</strong>
+              <strong>{manualInstallerError ?? snapshot.error?.userMessage}</strong>
               <span>当前版本不会被替换；可以直接重试。</span>
             </div>
           )}
@@ -210,17 +261,27 @@ export function UpdatePanel(): React.ReactElement | null {
           )}
           {snapshot.phase === 'readyToInstall' && (
             <>
-              <button type="button" disabled={manualInstallerBusy} onClick={close}>
+              <button type="button" disabled={manualInstallerBusy || installBusy} onClick={close}>
                 稍后安装
               </button>
               <button
                 type="button"
-                className="primary"
-                disabled={manualInstallerBusy}
+                className={snapshot.canInstallAutomatically ? undefined : 'primary'}
+                disabled={manualInstallerBusy || installBusy}
                 onClick={() => void openManualInstaller()}
               >
                 {manualInstallerBusy ? '正在安全检查…' : '打开安装包'}
               </button>
+              {snapshot.canInstallAutomatically && (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={manualInstallerBusy || installBusy}
+                  onClick={() => void (preparation?.ok ? confirmInstall() : prepareInstall())}
+                >
+                  {installBusy ? '正在检查…' : preparation?.ok ? '确认安装并重启' : '安装并重启'}
+                </button>
+              )}
             </>
           )}
           {!busy && (snapshot.phase === 'idle' || snapshot.phase === 'disabled') && (

@@ -17,6 +17,10 @@ export type RendererWorkspaceFlushOutcome = 'flushed' | 'failed' | 'timeout' | '
 /** 协调 renderer 队列与主进程退出生命周期，避免窗口销毁时丢掉最新快照。 */
 export class RendererWorkspaceStateFlushCoordinator {
   private readonly pending = new Map<string, (outcome: RendererWorkspaceFlushOutcome) => void>()
+  private readonly installReadiness = new Map<
+    string,
+    (value: WorkspaceStateFlushAcknowledgement | null) => void
+  >()
   private closeAllowed = false
   private closeFlushPromise: Promise<RendererWorkspaceFlushOutcome> | null = null
 
@@ -31,6 +35,7 @@ export class RendererWorkspaceStateFlushCoordinator {
       (_event, value: WorkspaceStateFlushAcknowledgement) => {
         const acknowledgement = parseWorkspaceStateFlushAcknowledgement(value)
         if (!acknowledgement) return
+        this.installReadiness.get(acknowledgement.requestId)?.(acknowledgement)
         this.pending.get(acknowledgement.requestId)?.(
           acknowledgement.success ? 'flushed' : 'failed',
         )
@@ -60,7 +65,25 @@ export class RendererWorkspaceStateFlushCoordinator {
     })
   }
 
+  /** Reuse the trusted flush handshake, but inspect without saving until installation is confirmed. */
+  requestInstallReadiness(): Promise<WorkspaceStateFlushAcknowledgement | null> {
+    if (this.mainWindow.isDestroyed() || this.mainWindow.webContents.isDestroyed())
+      return Promise.resolve(null)
+    const requestId = `update-inspect:${randomUUID()}`
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => finish(null), this.timeoutMs)
+      const finish = (value: WorkspaceStateFlushAcknowledgement | null): void => {
+        clearTimeout(timeout)
+        this.installReadiness.delete(requestId)
+        resolve(value)
+      }
+      this.installReadiness.set(requestId, finish)
+      this.mainWindow.webContents.send(workspaceStateIpcEvents.flushRequest, requestId)
+    })
+  }
+
   dispose(): void {
+    for (const finish of this.installReadiness.values()) finish(null)
     this.mainWindow.removeListener('close', this.handleWindowClose)
     for (const finish of this.pending.values()) finish('unavailable')
     this.pending.clear()

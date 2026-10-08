@@ -20,6 +20,23 @@ vi.mock('../ipc/trusted-renderer-guard', () => ({
 import { RendererWorkspaceStateFlushCoordinator } from './renderer-workspace-state-flush'
 
 describe('RendererWorkspaceStateFlushCoordinator', () => {
+  it('uses an inspection request and returns actual installation blockers without a persistence flush', async () => {
+    const window = createWindow()
+    const coordinator = new RendererWorkspaceStateFlushCoordinator(
+      window.value as never,
+      {} as never,
+      100,
+    )
+    const pending = coordinator.requestInstallReadiness()
+    const requestId = window.lastRequestId()
+    expect(requestId).toMatch(/^update-inspect:/)
+    const updateInstallImpacts = [
+      { kind: 'editor' as const, severity: 'blocked' as const, label: 'draft', detail: '未保存' },
+    ]
+    ipcRegistration.listener?.({}, { requestId, success: true, updateInstallImpacts })
+    await expect(pending).resolves.toMatchObject({ success: true, updateInstallImpacts })
+    expect(window.close).not.toHaveBeenCalled()
+  })
   it('waits for a successful renderer acknowledgement before closing the window', async () => {
     const window = createWindow()
     new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 100)

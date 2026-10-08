@@ -66,6 +66,10 @@ function createFixture(options: FixtureOptions = {}) {
     if (executable === '/usr/bin/lipo') {
       return { stdout: `${architecture}\n`, stderr: '' }
     }
+    if (executable === '/usr/bin/ditto') {
+      await fs.cp(args[0], args[1], { recursive: true })
+      return { stdout: '', stderr: '' }
+    }
     return { stdout: '', stderr: '' }
   })
 
@@ -78,6 +82,21 @@ function createFixture(options: FixtureOptions = {}) {
 }
 
 describe('MacDmgVerifier', () => {
+  it('copies the verified mounted app and verifies the copied signature, version and architecture before detaching', async () => {
+    const fixture = createFixture()
+    const stage = await fs.mkdtemp('/private/tmp/cclink-verifier-stage-')
+    cleanupPaths.push(stage)
+    const destination = `${stage}/candidate.app`
+    expect(await fixture.verifier.stage(fixture.input, destination)).toBe('TEAM123456')
+    expect(fixture.calls).toContainEqual({
+      executable: '/usr/bin/codesign',
+      args: ['--verify', '--deep', '--strict', '--verbose=2', destination],
+    })
+    expect(fixture.calls.findIndex((call) => call.executable === '/usr/bin/ditto')).toBeLessThan(
+      fixture.calls.findIndex((call) => call.args[0] === 'detach'),
+    )
+    expect((await fs.stat(`${destination}/Contents/MacOS/CCLink Studio`)).isFile()).toBe(true)
+  })
   it('accepts one notarized arm64 app from the same Developer ID team', async () => {
     const fixture = createFixture()
 

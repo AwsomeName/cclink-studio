@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { UpdateCommandResult, UpdateSnapshot } from '@shared/update'
+import type { UpdateCommandResult, UpdateSnapshot, UpdateInstallPreparation } from '@shared/update'
 
 const initialSnapshot: UpdateSnapshot = {
   schemaVersion: 1,
@@ -20,6 +20,10 @@ interface UpdateState {
   hydrated: boolean
   manualInstallerBusy: boolean
   manualInstallerError: string | null
+  installPreparation: UpdateInstallPreparation | null
+  installBusy: boolean
+  prepareInstall: () => Promise<void>
+  confirmInstall: () => Promise<void>
   setSnapshot: (snapshot: UpdateSnapshot) => void
   openPanel: () => void
   closePanel: () => void
@@ -33,7 +37,7 @@ interface UpdateState {
   openManualInstaller: () => Promise<boolean>
 }
 
-export const useUpdateStore = create<UpdateState>((set) => {
+export const useUpdateStore = create<UpdateState>((set, get) => {
   const apply = (result: UpdateCommandResult): UpdateCommandResult => {
     set({ snapshot: result.snapshot })
     return result
@@ -44,9 +48,54 @@ export const useUpdateStore = create<UpdateState>((set) => {
     hydrated: false,
     manualInstallerBusy: false,
     manualInstallerError: null,
-    setSnapshot: (snapshot) => set({ snapshot, hydrated: true }),
+    installPreparation: null,
+    installBusy: false,
+    setSnapshot: (snapshot) =>
+      set({
+        snapshot,
+        hydrated: true,
+        ...(snapshot.phase === 'installing' ? { panelOpen: true } : {}),
+      }),
     openPanel: () => set({ panelOpen: true, manualInstallerError: null }),
-    closePanel: () => set({ panelOpen: false, manualInstallerError: null }),
+    closePanel: () => {
+      if (!get().installBusy && get().snapshot.phase !== 'installing') {
+        const hadConfirmation = Boolean(get().installPreparation?.confirmationToken)
+        set({ panelOpen: false, manualInstallerError: null, installPreparation: null })
+        if (hadConfirmation) void window.cclinkStudio.update.defer().catch(() => undefined)
+      }
+    },
+    prepareInstall: async () => {
+      if (get().installBusy) return
+      set({ installBusy: true, installPreparation: null, manualInstallerError: null })
+      try {
+        const preparation = await window.cclinkStudio.update.prepareInstall()
+        set({ snapshot: preparation.snapshot, installPreparation: preparation })
+      } catch {
+        set({ manualInstallerError: '无法确认安装条件，请稍后重试' })
+      } finally {
+        set({ installBusy: false })
+      }
+    },
+    confirmInstall: async () => {
+      const token = get().installPreparation?.confirmationToken
+      if (!token || get().installBusy) return
+      set({ installBusy: true, installPreparation: null, manualInstallerError: null })
+      try {
+        const result = await window.cclinkStudio.update.installAndRestart({
+          confirmationToken: token,
+        })
+        set({
+          snapshot: result.snapshot,
+          manualInstallerError: result.ok
+            ? null
+            : (result.snapshot.error?.userMessage ?? '安装确认已过期或条件已变化，请重新确认'),
+        })
+      } catch {
+        set({ manualInstallerError: '安装请求失败，请稍后重试' })
+      } finally {
+        set({ installBusy: false })
+      }
+    },
     hydrate: async () => {
       const snapshot = await window.cclinkStudio.update.getSnapshot()
       set({ snapshot, hydrated: true })

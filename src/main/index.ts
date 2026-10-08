@@ -83,6 +83,7 @@ function startMainApplication(): void {
 
   void app.whenReady().then(async () => {
     await bootstrapRuntime(runtime, windowOptions)
+    await runtime.updateService?.acknowledgeStartup(process.argv)
 
     app.on('activate', async () => {
       if (BrowserWindow.getAllWindows().length === 0) {

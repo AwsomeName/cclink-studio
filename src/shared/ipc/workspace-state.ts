@@ -1,5 +1,6 @@
 import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
 import { defineIpcCall } from './contract'
+import { installImpactSchema, type UpdateInstallImpact } from '../update/update-contract'
 
 /** 工作台状态分区名称。先允许扩展字符串，便于逐步迁移各 renderer store。 */
 export type WorkspaceStateSection =
@@ -51,6 +52,7 @@ export const workspaceStateIpcEvents = {
 export interface WorkspaceStateFlushAcknowledgement {
   requestId: string
   success: boolean
+  updateInstallImpacts?: UpdateInstallImpact[]
 }
 
 export function parseWorkspaceStateFlushRequest(value: unknown): string | null {
@@ -69,7 +71,15 @@ export function parseWorkspaceStateFlushAcknowledgement(
   const acknowledgement = value as Partial<WorkspaceStateFlushAcknowledgement>
   const requestId = parseWorkspaceStateFlushRequest(acknowledgement.requestId)
   if (!requestId || typeof acknowledgement.success !== 'boolean') return null
-  return value as WorkspaceStateFlushAcknowledgement
+  if (acknowledgement.updateInstallImpacts !== undefined) {
+    const parsed = installImpactSchema
+      .array()
+      .max(128)
+      .safeParse(acknowledgement.updateInstallImpacts)
+    if (!parsed.success) return null
+    return { requestId, success: acknowledgement.success, updateInstallImpacts: parsed.data }
+  }
+  return { requestId, success: acknowledgement.success }
 }
 
 export interface WorkspaceStateDiagnostics {

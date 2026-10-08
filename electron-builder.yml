@@ -19,6 +19,8 @@ asarUnpack:
   # occt-import-js：OpenCascade wasm 运行时需要随 STEP/STP 转换后端一起可读
   - node_modules/occt-import-js/dist/**
 extraResources:
+  - from: out/update-helper/cclink-update-helper
+    to: update-helper/cclink-update-helper
   - from: resources/scrcpy-server.jar
     to: scrcpy-server.jar
     filter:
@@ -37,4 +39,6 @@ mac:
   # Local builds use ad-hoc signing. The OSS Release workflow overrides this identity
   # with its protected Developer ID.
   identity: '-'
-# 开源壳不内置生产更新源；商业版更新源与发布配置由 cclink-dev 构建层注入。
+  binaries:
+    - Contents/Resources/update-helper/cclink-update-helper
+# 不使用 electron-builder 的更新 Provider；公开版本检查由 UpdateService 统一拥有。

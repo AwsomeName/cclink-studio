@@ -30,6 +30,10 @@ const { useEscapeDismiss, useFloatingSurfaceRegistration, updateState } = vi.hoi
     openManualInstaller: vi.fn(),
     manualInstallerBusy: false,
     manualInstallerError: null,
+    installPreparation: null as import('@shared/update').UpdateInstallPreparation | null,
+    installBusy: false,
+    prepareInstall: vi.fn(),
+    confirmInstall: vi.fn(),
   },
 }))
 
@@ -54,6 +58,8 @@ describe('UpdatePanel native browser occlusion', () => {
     useEscapeDismiss.mockClear()
     useFloatingSurfaceRegistration.mockClear()
     updateState.panelOpen = false
+    updateState.installPreparation = null
+    vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
     updateState.snapshot = {
       schemaVersion: 1,
       phase: 'idle',
@@ -109,6 +115,40 @@ describe('UpdatePanel native browser occlusion', () => {
     expect(markup).toContain('未能刷新最新版本')
     expect(markup).toContain('已保留 v0.1.38')
     expect(markup).toContain('后台下载')
+  })
+
+  it('offers automatic installation only when the main process exposes that capability', () => {
+    updateState.panelOpen = true
+    updateState.snapshot = {
+      ...availableSnapshot(),
+      phase: 'readyToInstall',
+      canInstallAutomatically: true,
+    }
+    expect(renderToStaticMarkup(React.createElement(UpdatePanel))).toContain('安装并重启')
+    updateState.snapshot.canInstallAutomatically = false
+    const manual = renderToStaticMarkup(React.createElement(UpdatePanel))
+    expect(manual).not.toContain('安装并重启')
+    expect(manual).toContain('打开安装包')
+  })
+
+  it('shows real preparation blockers and prevents dismissal during installation', () => {
+    updateState.panelOpen = true
+    updateState.snapshot = {
+      ...availableSnapshot(),
+      phase: 'readyToInstall',
+      canInstallAutomatically: true,
+    }
+    updateState.installPreparation = {
+      ok: false,
+      confirmationToken: null,
+      snapshot: updateState.snapshot,
+      impacts: [{ kind: 'editor', severity: 'blocked', label: 'note.md', detail: '未保存' }],
+    }
+    expect(renderToStaticMarkup(React.createElement(UpdatePanel))).toContain('note.md')
+    updateState.snapshot.phase = 'installing'
+    const installing = renderToStaticMarkup(React.createElement(UpdatePanel))
+    expect(installing).toContain('正在准备安装并重启')
+    expect(useEscapeDismiss).toHaveBeenLastCalledWith(false, updateState.closePanel)
   })
 })
 

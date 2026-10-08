@@ -109,6 +109,7 @@ export const updateSnapshotSchema = z
     lastCheckedAt: z.string().datetime({ offset: true }).nullable(),
     ignoredVersion: z.string().min(1).max(128).nullable(),
     error: updateErrorSchema.nullable(),
+    canInstallAutomatically: z.boolean().optional(),
   })
   .strict()
   .superRefine((snapshot, context) => {
@@ -170,11 +171,16 @@ export const updateSnapshotSchema = z
         message: '失败阶段必须包含结构化错误',
       })
     }
-    if (snapshot.phase !== 'failed' && snapshot.phase !== 'available' && snapshot.error) {
+    if (
+      snapshot.phase !== 'failed' &&
+      snapshot.phase !== 'available' &&
+      snapshot.phase !== 'readyToInstall' &&
+      snapshot.error
+    ) {
       context.addIssue({
         code: 'custom',
         path: ['error'],
-        message: '只有失败阶段或保留候选的刷新失败可以包含结构化错误',
+        message: '只有失败阶段或保留候选的刷新/安装失败可以包含结构化错误',
       })
     }
   })
@@ -210,7 +216,7 @@ export const updateManualInstallerResultSchema = z
     }
   })
 
-const installImpactSchema = z
+export const installImpactSchema = z
   .object({
     kind: z.enum(['editor', 'agent', 'terminal', 'browser', 'long_task']),
     severity: z.enum(['attention', 'blocked']),

@@ -1,4 +1,4 @@
-import { app, shell } from 'electron'
+import { app, shell, type Event } from 'electron'
 import { join, resolve } from 'node:path'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
@@ -45,6 +45,8 @@ import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
+import { MacUpdateInstaller } from '../update/mac-update-installer'
+import { createUpdateInstallLifecycle } from '../update/update-install-lifecycle'
 import { applyWindowZoomLevel } from './window-runtime'
 import { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 import { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
@@ -545,6 +547,17 @@ export async function bootstrapMainProcessServices(
           currentAppBundlePath: resolve(app.getPath('exe'), '..', '..', '..'),
         })
       : undefined
+  const installerCandidate = dmgInspector
+    ? new MacUpdateInstaller({
+        currentAppBundlePath: resolve(app.getPath('exe'), '..', '..', '..'),
+        currentVersion: app.getVersion(),
+        cacheRoot: join(app.getPath('userData'), 'updates'),
+        helperPath: join(process.resourcesPath, 'update-helper', 'cclink-update-helper'),
+        verifier: dmgInspector,
+      })
+    : undefined
+  const installer =
+    installerCandidate && (await installerCandidate.isAvailable()) ? installerCandidate : undefined
   runtime.updateService = new UpdateService({
     currentVersion:
       !app.isPackaged && process.env['CCLINK_STUDIO_UPDATE_CURRENT_VERSION']
@@ -565,13 +578,28 @@ export async function bootstrapMainProcessServices(
     automaticChecks: app.isPackaged,
     dmgInspector,
     openPath: dmgInspector ? (path) => shell.openPath(path) : undefined,
+    installer,
+    installLifecycle: installer ? createUpdateInstallLifecycle(runtime) : undefined,
+    pendingInstallStartup: process.argv.some((value) =>
+      /^--cclink-update=[0-9a-f-]{36}$/.test(value),
+    ),
   })
   await runtime.updateService.start()
-  runtime.updateSnapshotUnsubscribe = registerUpdaterIpc(
+  const unsubscribeUpdaterIpc = registerUpdaterIpc(
     runtime.updateService,
     runtime.mainWindow,
     runtime.trustedRendererGuard,
   )
+  const inputGuard = (event: Event): void => {
+    if (runtime.updateService?.getSnapshot().phase === 'installing') event.preventDefault()
+  }
+  const updateWebContents = runtime.mainWindow.webContents
+  updateWebContents.on('before-input-event', inputGuard)
+  runtime.updateSnapshotUnsubscribe = () => {
+    unsubscribeUpdaterIpc()
+    if (!updateWebContents.isDestroyed())
+      updateWebContents.removeListener('before-input-event', inputGuard)
+  }
   console.log(`[CCLink Studio] 更新服务已初始化 (provider=${provider.id})`)
 
   await bootstrapOptionalMainServices(runtime)

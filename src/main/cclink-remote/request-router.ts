@@ -41,6 +41,9 @@ export class CclinkRequestError extends Error {
 }
 
 export class CclinkRequestRouter {
+  hasPendingRequests(): boolean {
+    return this.pending.size > 0
+  }
   private readonly pending = new Map<string, PendingRequest>()
   private readonly protocolListeners = new Set<(event: CclinkTransportEvent) => void>()
   private transport: CclinkTransport | null = null

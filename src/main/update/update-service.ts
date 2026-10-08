@@ -20,6 +20,11 @@ import { UpdateProviderRequestError } from './github-release-provider'
 import { UpdateCache, type RestoredVerifiedUpdate } from './update-cache'
 import { compareStableVersions } from './version'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
+import type {
+  UpdateInstaller,
+  UpdateInstallLifecycle,
+  StagedUpdateInstallation,
+} from './update-installer'
 
 const FIRST_CHECK_DELAY_MS = 60_000
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
@@ -49,6 +54,9 @@ export interface UpdateServiceOptions {
   checkIntervalMs?: number
   dmgInspector?: VerifiedDmgInspector
   openPath?: (path: string) => Promise<string>
+  installer?: UpdateInstaller
+  installLifecycle?: UpdateInstallLifecycle
+  pendingInstallStartup?: boolean
 }
 
 class UpdateOperationError extends Error {
@@ -80,8 +88,16 @@ export class UpdateService {
   private intervalTimer: NodeJS.Timeout | null = null
   private manualInstallerPromise: Promise<UpdateManualInstallerResult> | null = null
   private stopped = false
+  private installConfirmation: {
+    token: string
+    operationId: string | null
+    expiresAt: number
+  } | null = null
+  private installInProgress = false
+  private pendingInstallStartup: boolean
 
   constructor(private readonly options: UpdateServiceOptions) {
+    this.pendingInstallStartup = options.pendingInstallStartup ?? false
     this.fetchImpl = options.fetch ?? globalThis.fetch
     this.automaticChecks = options.automaticChecks ?? true
     this.firstCheckDelayMs = options.firstCheckDelayMs ?? FIRST_CHECK_DELAY_MS
@@ -104,6 +120,7 @@ export class UpdateService {
       lastCheckedAt: null,
       ignoredVersion: null,
       error: null,
+      canInstallAutomatically: Boolean(options.installer && options.installLifecycle),
     })
   }
 
@@ -111,16 +128,21 @@ export class UpdateService {
     this.stopped = false
     try {
       await this.updateCache.start()
-      if (this.snapshot.phase !== 'disabled') {
+      if (this.snapshot.phase !== 'disabled' && !this.pendingInstallStartup) {
         this.verifiedUpdate = await this.updateCache.restore()
         if (this.verifiedUpdate) {
+          const previousFailure = await this.options.installer
+            ?.previousFailure?.()
+            .catch(() => null)
           this.setSnapshot({
             ...this.snapshot,
             phase: 'readyToInstall',
             operationId: randomUUID(),
             availableRelease: this.verifiedUpdate.releaseSummary,
             progress: null,
-            error: null,
+            error: previousFailure
+              ? { code: 'install_failed', userMessage: previousFailure, retryable: true }
+              : null,
           })
         }
       }
@@ -138,6 +160,7 @@ export class UpdateService {
 
   async stop(): Promise<void> {
     this.stopped = true
+    this.installConfirmation = null
     if (this.firstCheckTimer) clearTimeout(this.firstCheckTimer)
     if (this.intervalTimer) clearInterval(this.intervalTimer)
     this.firstCheckTimer = null
@@ -153,12 +176,40 @@ export class UpdateService {
     return structuredClone(this.snapshot)
   }
 
+  async acknowledgeStartup(argv: string[]): Promise<void> {
+    if (
+      !argv.some((value) => value.startsWith('--cclink-update=')) ||
+      !this.options.installer?.acknowledgeStartup ||
+      !this.options.installLifecycle
+    )
+      return
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline && !this.stopped) {
+      try {
+        await this.options.installLifecycle.flush()
+        await this.options.installer.acknowledgeStartup(argv)
+        this.pendingInstallStartup = false
+        // Only now may the caught-up download be removed. A failed boot must leave it for rollback.
+        await this.updateCache.restore()
+        return
+      } catch {
+        if (Date.now() >= deadline) {
+          console.error('[UpdateService] 更新启动回执未完成，已保留安装证据和旧版备份')
+          return
+        }
+        await new Promise((done) => setTimeout(done, 500))
+      }
+    }
+  }
+
   subscribe(listener: SnapshotListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
 
   async setTrack(track: UpdateTrack): Promise<UpdateCommandResult> {
+    if (this.installInProgress) return this.result(false)
+    this.installConfirmation = null
     if (track === this.snapshot.track) return this.result(true)
 
     this.checkController?.abort()
@@ -188,6 +239,8 @@ export class UpdateService {
   }
 
   check(manual = true): Promise<UpdateCommandResult> {
+    if (this.pendingInstallStartup) return Promise.resolve(this.result(false))
+    if (this.installInProgress) return Promise.resolve(this.result(false))
     if (this.checkPromise) return this.checkPromise
     if (this.snapshot.phase === 'readyToInstall') {
       return Promise.resolve(this.result(true))
@@ -263,6 +316,10 @@ export class UpdateService {
   }
 
   defer(): UpdateCommandResult {
+    if (this.snapshot.phase === 'readyToInstall' && !this.installInProgress) {
+      this.installConfirmation = null
+      return this.result(true)
+    }
     if (this.snapshot.phase !== 'available') return this.result(false)
     this.setSnapshot({
       ...this.snapshot,
@@ -292,6 +349,13 @@ export class UpdateService {
   }
 
   openManualInstaller(): Promise<UpdateManualInstallerResult> {
+    if (this.installInProgress)
+      return Promise.resolve(
+        this.manualInstallerResult(
+          false,
+          new UpdateOperationError('install_blocked', '正在准备自动安装，请等待', false),
+        ),
+      )
     if (this.manualInstallerPromise) return this.manualInstallerPromise
     this.manualInstallerPromise = this.performOpenManualInstaller().finally(() => {
       this.manualInstallerPromise = null
@@ -299,25 +363,156 @@ export class UpdateService {
     return this.manualInstallerPromise
   }
 
-  prepareInstall(): UpdateInstallPreparation {
-    return {
-      ok: false,
-      confirmationToken: null,
-      impacts: [],
-      snapshot: this.getSnapshot(),
+  async prepareInstall(): Promise<UpdateInstallPreparation> {
+    this.installConfirmation = null
+    const operationId = this.snapshot.operationId
+    if (
+      this.snapshot.phase !== 'readyToInstall' ||
+      !this.options.installer ||
+      !this.options.installLifecycle ||
+      this.installInProgress ||
+      this.manualInstallerPromise
+    ) {
+      return {
+        ok: false,
+        confirmationToken: null,
+        impacts: [
+          {
+            kind: 'long_task',
+            severity: 'blocked',
+            label: '自动安装不可用',
+            detail: '请使用正式签名版本，或打开安装包手工安装。',
+          },
+        ],
+        snapshot: this.getSnapshot(),
+      }
     }
+    let impacts: UpdateInstallPreparation['impacts']
+    try {
+      impacts = await this.options.installLifecycle.inspect()
+    } catch {
+      impacts = [
+        {
+          kind: 'long_task',
+          severity: 'blocked',
+          label: '无法确认工作现场',
+          detail: '工作台未响应；当前版本不会退出，请稍后重试。',
+        },
+      ]
+    }
+    const ok =
+      !impacts.some((impact) => impact.severity === 'blocked') &&
+      this.snapshot.phase === 'readyToInstall' &&
+      this.snapshot.operationId === operationId &&
+      !this.installInProgress
+    const token = ok ? randomUUID() : null
+    if (token) this.installConfirmation = { token, operationId, expiresAt: Date.now() + 60_000 }
+    return { ok, confirmationToken: token, impacts, snapshot: this.getSnapshot() }
   }
 
-  installAndRestart(_input: UpdateInstallAndRestartInput): UpdateCommandResult {
-    this.fail(
-      this.snapshot.operationId ?? randomUUID(),
-      new UpdateOperationError(
-        'install_blocked',
-        '自动安装尚未通过安全验收，请使用可信 DMG 手工安装',
-        false,
-      ),
+  async installAndRestart(input: UpdateInstallAndRestartInput): Promise<UpdateCommandResult> {
+    const confirmation = this.installConfirmation
+    this.installConfirmation = null
+    if (
+      !confirmation ||
+      confirmation.token !== input.confirmationToken ||
+      confirmation.expiresAt < Date.now() ||
+      confirmation.operationId !== this.snapshot.operationId ||
+      this.installInProgress ||
+      this.manualInstallerPromise ||
+      this.stopped ||
+      this.snapshot.phase !== 'readyToInstall' ||
+      !this.verifiedUpdate ||
+      !this.options.installer ||
+      !this.options.installLifecycle
     )
-    return this.result(false)
+      return this.result(false)
+    this.installInProgress = true
+    this.setSnapshot({ ...this.snapshot, phase: 'installing', error: null })
+    let staged: StagedUpdateInstallation | null = null
+    let releaseWorkGuard: (() => void) | undefined
+    try {
+      const lifecycle = this.options.installLifecycle
+      const assertReady = async (): Promise<void> => {
+        if (
+          this.stopped ||
+          (await lifecycle.inspect()).some((impact) => impact.severity === 'blocked')
+        )
+          throw new UpdateOperationError(
+            'install_blocked',
+            '工作现场已变化，请保存文档、结束任务后重新确认',
+            true,
+          )
+      }
+      await assertReady()
+      try {
+        this.verifiedUpdate = await this.updateCache.revalidate(this.verifiedUpdate)
+      } catch {
+        this.verifiedUpdate = null
+        throw new UpdateOperationError(
+          'download_corrupt',
+          '更新安装包完整性复验失败，请重新检查并下载',
+          true,
+        )
+      }
+      staged = await this.options.installer.stage({
+        dmgPath: this.verifiedUpdate.filePath,
+        expectedVersion: this.verifiedUpdate.record.manifest.version,
+      })
+      releaseWorkGuard = lifecycle.acquire?.()
+      staged.observeFailure?.(() => {
+        if (this.stopped || this.snapshot.phase !== 'installing') return
+        releaseWorkGuard?.()
+        releaseWorkGuard = undefined
+        this.installInProgress = false
+        this.setSnapshot({
+          ...this.snapshot,
+          phase: 'readyToInstall',
+          error: {
+            code: 'install_failed',
+            userMessage: '安装进程已停止，当前版本仍未退出。请稍后重试或打开安装包。',
+            retryable: true,
+          },
+        })
+      })
+      await assertReady()
+      await lifecycle.flush()
+      await staged.arm()
+      await assertReady()
+      await staged.commit()
+      lifecycle.quit()
+      return this.result(true)
+    } catch (error) {
+      await staged?.cancel().catch(() => undefined)
+      releaseWorkGuard?.()
+      const code =
+        error instanceof UpdateAssetVerificationError || error instanceof UpdateOperationError
+          ? error.code
+          : 'install_failed'
+      const message =
+        error instanceof UpdateAssetVerificationError || error instanceof UpdateOperationError
+          ? error.message
+          : '自动安装准备失败（可能没有替换权限）；当前版本未退出，可重试或打开安装包'
+      const invalidAsset = [
+        'download_corrupt',
+        'publisher_mismatch',
+        'release_invalid',
+        'unsupported_arch',
+      ].includes(code)
+      if (invalidAsset && this.verifiedUpdate) {
+        await this.updateCache.invalidate(this.verifiedUpdate).catch(() => undefined)
+        this.verifiedUpdate = null
+      }
+      if (invalidAsset) this.resolvedRelease = null
+      this.setSnapshot({
+        ...this.snapshot,
+        phase: invalidAsset ? 'failed' : 'readyToInstall',
+        availableRelease: invalidAsset ? null : this.snapshot.availableRelease,
+        error: { code, userMessage: message, retryable: true },
+      })
+      this.installInProgress = false
+      return this.result(false)
+    }
   }
 
   private async performOpenManualInstaller(): Promise<UpdateManualInstallerResult> {

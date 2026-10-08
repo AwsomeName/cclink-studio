@@ -119,6 +119,8 @@ export class UpdateCache {
     const candidates: Array<RestoredVerifiedUpdate & { directory: string }> = []
 
     for (const entry of entries) {
+      // Installation receipts are not download caches; the new process must acknowledge them.
+      if (entry.name === 'installations') continue
       if (!entry.isDirectory()) continue
       const directory = join(this.options.cacheRoot, entry.name)
       try {

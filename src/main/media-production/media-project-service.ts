@@ -41,6 +41,9 @@ class MediaProjectServiceError extends Error {
 }
 
 export class MediaProjectService {
+  hasActiveWork(): boolean {
+    return this.activeNarrations.size > 0
+  }
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private readonly changeListeners = new Set<(workspacePath: string) => void>()
   private readonly mediaAssetService: MediaAssetService

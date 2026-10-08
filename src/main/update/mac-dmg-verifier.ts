@@ -58,6 +58,14 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
   }
 
   async verify(input: MacDmgVerificationInput): Promise<void> {
+    await this.inspect(input)
+  }
+
+  async stage(input: MacDmgVerificationInput, destination: string): Promise<string> {
+    return this.inspect(input, destination)
+  }
+
+  private async inspect(input: MacDmgVerificationInput, destination?: string): Promise<string> {
     const currentIdentity = await this.readTrustedCurrentIdentity()
     await this.verifyDiskImageSignature(input.dmgPath, currentIdentity.teamIdentifier)
 
@@ -70,6 +78,14 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         input.expectedVersion,
         currentIdentity.teamIdentifier,
       )
+      if (destination) {
+        await this.runCommand('/usr/bin/ditto', [candidateApp, destination])
+        await this.verifyCandidateApp(
+          destination,
+          input.expectedVersion,
+          currentIdentity.teamIdentifier,
+        )
+      }
     } catch (error) {
       verificationError = error
     }
@@ -85,6 +101,7 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
       }
     }
     if (verificationError) throw verificationError
+    return currentIdentity.teamIdentifier
   }
 
   private async readTrustedCurrentIdentity(): Promise<CodeSignatureIdentity> {

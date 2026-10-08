@@ -108,6 +108,15 @@ const MAX_REMOTE_FILE_READ_ATTEMPTS = 4096
 const AUTO_APPROVED_REMOTE_AGENT_TOOLS = new Set(['WebSearch'])
 
 export class CclinkRemoteService implements RemoteProvider {
+  hasActiveWork(): boolean {
+    return (
+      this.activeAgentRequests.size > 0 ||
+      this.requestRouter.hasPendingRequests() ||
+      this.submittingAgentSessions.size > 0 ||
+      this.imageUploads.size > 0 ||
+      this.openWorkspaceOperations.size > 0
+    )
+  }
   readonly transport = 'cclink' as const
   private readonly requestRouter = new CclinkRequestRouter()
   private timTransport: TimTransport | null = null

@@ -119,6 +119,7 @@ export class ScheduledTaskService {
   private schedulerTimer: ReturnType<typeof setTimeout> | null = null
   private timerDueAt: number | null = null
   private currentRunId: string | null = null
+  private updatePaused = false
   private runtimeState: ScheduledTaskRuntimeStatus['state'] = 'stopped'
   private runtimeStartedAt: number | null = null
   private lastRuntimeError: ScheduledTaskFailure | undefined
@@ -530,6 +531,18 @@ export class ScheduledTaskService {
     }
   }
 
+  /** Pause new dispatch without cancelling user work. In-flight enqueue is caught by updater reinspection. */
+  pauseForUpdate(): (() => void) | null {
+    if (this.updatePaused || this.currentRunId || this.runQueue.length) return null
+    this.updatePaused = true
+    this.clearSchedulerTimer()
+    return () => {
+      this.updatePaused = false
+      this.armScheduler()
+      void this.processQueue()
+    }
+  }
+
   async getWorkspaceRuntimeStatus(
     workspacePath: string,
   ): Promise<ScheduledTaskWorkspaceRuntimeStatusResult> {
@@ -640,6 +653,7 @@ export class ScheduledTaskService {
   }
 
   private armScheduler(): void {
+    if (this.updatePaused) return
     this.clearSchedulerTimer()
     if (this.runtimeState !== 'ready') return
     const nextRunAt = Object.values(this.activationFile.activations)
@@ -669,6 +683,7 @@ export class ScheduledTaskService {
   }
 
   private async handleDueOccurrences(): Promise<void> {
+    if (this.updatePaused) return
     await this.enqueue(async () => {
       if (this.runtimeState !== 'ready') return
       const timestamp = this.now()
@@ -780,6 +795,7 @@ export class ScheduledTaskService {
   }
 
   private async processQueue(): Promise<void> {
+    if (this.updatePaused) return
     if (
       this.currentRunId ||
       this.runtimeState !== 'ready' ||

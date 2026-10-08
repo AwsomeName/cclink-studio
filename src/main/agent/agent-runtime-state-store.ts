@@ -162,6 +162,10 @@ export class AgentRuntimeStateStore {
     return record ? structuredClone(record) : null
   }
 
+  hasActiveRuns(): boolean {
+    return [...this.runs.values()].some((record) => !isTerminal(record.status))
+  }
+
   rememberSession(record: TrustedAgentSessionRecord): Promise<void> {
     this.assertLoaded()
     this.sessions.set(record.conversationId, structuredClone(record))
