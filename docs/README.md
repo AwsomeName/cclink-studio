@@ -16,6 +16,9 @@
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。
+- `docs/features/neural-circuit-lab.md`：神经电路实验室产品设计提案，包含完整线虫目标、九页功能、首轮验收与后续芯片/FPGA 边界，尚未实现。
+- `docs/architecture/neural-circuit-lab.md`：研究目录、输入快照、仿真运行状态所有权和 Studio 模块接入提案，尚未实现。
+- `docs/design/neural-circuit-lab/pages.html`：可离线查看的九页效果示意，所有网络、模型与输出均为示意数据。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
 - `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。
@@ -27,6 +30,8 @@
 - `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理、已暂停的
   双版本更新/能力插件边界，以及尚未关闭的 RuntimeComponentManager 启动降级缺口。
 - `docs/features/npm-updatable-capability-inventory.md`：当前 npm 只用于固定 Runtime 下载的事实清单、暂停项与必须走完整 App 更新的边界。
+- `docs/features/eyewear-step-ai-editing.md`：眼镜 STEP 外壳 AI 加宽/加长的最小闭环；复用 Claude Code、现有查看器与 FreeCAD，新增受限修改工具、结果回显和基本核验。
+- `docs/features/robotics-remote-simulation-workbench.md`：通过 frp 连接远程 Ubuntu Robot Runner，在 Studio 启动仿真、推理和训练并查看画面、日志与运行证据的低优先级讨论稿，尚未实现。
 - `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`：已暂停的参考计划；只有重启门禁成立并提交新 ADR 后才可恢复。
 - `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
