@@ -11,7 +11,7 @@ describe('getAgentPanelWidthBounds', () => {
   it('preserves workbench room when the sidebar is visible', () => {
     expect(
       getAgentPanelWidthBounds({ viewportWidth: 1200, sidebarVisible: true, sidebarWidth: 250 }),
-    ).toEqual({ min: 220, max: 574 })
+    ).toEqual({ min: 220, max: 546 })
   })
 
   it('never returns a maximum below the usable Agent minimum', () => {

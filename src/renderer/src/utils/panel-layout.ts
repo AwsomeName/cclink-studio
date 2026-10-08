@@ -1,7 +1,8 @@
 export const MIN_AGENT_PANEL_WIDTH = 220
 export const MAX_AGENT_PANEL_WIDTH = 960
 
-const ACTIVITY_BAR_WIDTH = 48
+// Keep aligned with --activitybar-width; the real UI smoke checks both widths.
+export const ACTIVITY_BAR_WIDTH = 76
 const RESIZE_HANDLE_WIDTH = 4
 const MIN_WORKBENCH_WIDTH = 320
 

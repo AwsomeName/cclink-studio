@@ -24,6 +24,14 @@ const pdfOnly = process.argv.includes('--pdf-only')
 const settingsOnly = process.argv.includes('--settings-only')
 const securityWorkspaceOnly = process.argv.includes('--security-workspace-only')
 const relocationRecoveryOnly = process.argv.includes('--relocation-recovery-only')
+const activityBarOnly = process.argv.includes('--activity-bar-only')
+const activityBarCheck =
+  'activity bar labels remain usable in short windows and preserve browser bounds'
+const activityBarChecks = new Set([
+  'main renderer enforces its CSP source boundary',
+  'first screen has no login wall',
+  activityBarCheck,
+])
 const uiReadyTimeoutMs = 30_000
 const globalWebResourcesCheck = 'global web resources reuse one account and matrix across projects'
 const webAffairPersistenceCheck = 'web affair persists a five-node workflow and node progress'
@@ -164,6 +172,7 @@ async function findRendererPage(browser) {
 }
 
 async function runCheck(name, fn, options = {}) {
+  if (activityBarOnly && !activityBarChecks.has(name)) return
   if (agentPanelOnly && !agentPanelChecks.has(name)) return
   if (webAffairsOnly && !webAffairsChecks.has(name)) return
   if (globalWebResourcesOnly && !globalWebResourcesChecks.has(name)) return
@@ -362,6 +371,151 @@ async function main() {
     )
     assert(!text.includes('登录 CCLink'), 'login copy should not block the shell')
     return 'main window ready'
+  })
+
+  await runCheck(activityBarCheck, async () => {
+    const evidenceDir = join(runDir, 'activity-bar-evidence')
+    await mkdir(evidenceDir, { recursive: true })
+    const bar = page.locator('.activity-bar')
+    assert((await bar.locator('button').count()) === 13, 'navigation entries changed')
+    assert(
+      JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
+        JSON.stringify(['工作', '资源', '流程']),
+      'visible group headings missing',
+    )
+    const labels = [
+      '文件',
+      '会话',
+      '浏览器',
+      '终端',
+      '角色',
+      '账号',
+      '数据',
+      '远程',
+      '发布',
+      '事务',
+      '定时',
+      '生产',
+      '设置',
+    ]
+    assert(
+      JSON.stringify(await bar.locator('.activity-bar-label').allTextContents()) ===
+        JSON.stringify(labels),
+      'short labels missing or reordered',
+    )
+    const width = await page.evaluate(async () => {
+      const { ACTIVITY_BAR_WIDTH } = await import('/src/utils/panel-layout.ts')
+      return {
+        actual: document.querySelector('.activity-bar').getBoundingClientRect().width,
+        reserved: ACTIVITY_BAR_WIDTH,
+      }
+    })
+    assert(width.actual === width.reserved, `panel width mismatch: ${JSON.stringify(width)}`)
+    assert(
+      await bar.locator('.activity-bar-label').evaluateAll((labels) =>
+        labels.every((label) => {
+          const text = label.getBoundingClientRect()
+          const button = label.parentElement.getBoundingClientRect()
+          const icon = label.previousElementSibling.getBoundingClientRect()
+          return (
+            text.width <= button.width &&
+            text.bottom <= button.bottom &&
+            text.top >= icon.bottom &&
+            Number.parseFloat(getComputedStyle(label).fontSize) >= 11
+          )
+        }),
+      ),
+      'labels overlap icons or are clipped',
+    )
+    await ensureActivityPanel(page, 'article-publishing', '文章发布')
+    await bar.screenshot({ path: join(evidenceDir, 'navigation-dark.png') })
+    await page.evaluate(async () => {
+      const { useThemeStore } = await import('/src/stores/theme-store.ts')
+      useThemeStore.getState().setTheme('light')
+    })
+    await bar.screenshot({ path: join(evidenceDir, 'navigation-light.png') })
+    await page.evaluate(async () => {
+      const { useThemeStore } = await import('/src/stores/theme-store.ts')
+      useThemeStore.getState().setTheme('dark')
+    })
+    await page.setViewportSize({ width: 900, height: 560 })
+    try {
+      assert(
+        await page
+          .locator('.activity-bar-main')
+          .evaluate((el) => el.scrollHeight > el.clientHeight),
+        'short window did not offer navigation scrolling',
+      )
+      await page.locator('.activity-bar-main').hover()
+      await page.mouse.wheel(0, 1500)
+      await page.waitForFunction(() => document.querySelector('.activity-bar-main').scrollTop > 0)
+      await bar.getByRole('button', { name: '生产', exact: true }).click()
+      await waitForAsyncFunction(page, async () => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        return (
+          useUIStore.getState().activePanel === 'production' && useUIStore.getState().sidebarVisible
+        )
+      })
+      assert(
+        await bar.getByRole('button', { name: '生产', pressed: true }).isVisible(),
+        'selection missing',
+      )
+      await page.screenshot({ path: join(evidenceDir, 'short-window.png') })
+      const files = bar.getByRole('button', { name: '文件', exact: true })
+      await files.click()
+      await files.focus()
+      await files.press('Shift+F10')
+      await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
+      await page.keyboard.press('Escape')
+      await files.click({ button: 'right' })
+      await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
+      await page.keyboard.press('Escape')
+      const settings = bar.getByRole('button', { name: '设置', exact: true })
+      const settingsBox = await settings.boundingBox()
+      assert(
+        settingsBox && settingsBox.y + settingsBox.height <= 560,
+        'settings clipped below short viewport',
+      )
+      await settings.click()
+      await page.locator('.settings-page').waitFor({ state: 'visible' })
+      await ensureActivityPanel(page, 'browser', '浏览器')
+      const tabId = await page.evaluate(async (fixtureOrigin) => {
+        const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
+          import('/src/features/web-resources/open-default-browser-tab.ts'),
+          import('/src/stores/workspace-store.ts'),
+        ])
+        return (
+          await openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef, {
+            title: 'Navigation layout fixture',
+            initialUrl: `${fixtureOrigin}/navigation-layout`,
+          })
+        ).tabId
+      }, webFixtureOrigin)
+      await waitForAsyncFunction(
+        page,
+        async (tabId) => {
+          const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
+          const barRight = document.querySelector('.activity-bar').getBoundingClientRect().right
+          return (
+            runtime.visibleUrl?.endsWith('/navigation-layout') &&
+            runtime.layout &&
+            runtime.layout.rendererBounds.x >= barRight &&
+            !runtime.layout.overlapsProtectedTop &&
+            runtime.layout.nativeBounds.y >= runtime.layout.nativeProtectedTop &&
+            (await window.cclinkStudio.browser.getActiveViewId()) === tabId
+          )
+        },
+        tabId,
+        { timeout: 10_000 },
+      )
+      await page.evaluate(async (tabId) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        useTabStore.getState().closeTab(tabId)
+      }, tabId)
+    } finally {
+      await page.setViewportSize({ width: 1440, height: 920 })
+    }
+    return `13 labeled entries; selection, scrolling, settings, keyboard/right-click menus, light/dark, real native browser layout; evidence: ${evidenceDir}`
   })
 
   await runCheck('workspace file and search boundaries survive a real project switch', async () => {

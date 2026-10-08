@@ -30,6 +30,7 @@ interface ActivityBarItem {
   id: ActivityPanel
   Icon: React.ComponentType<{ size?: number }>
   label: string
+  shortLabel?: string
 }
 
 const MAIN_ICON_GROUPS: Array<{
@@ -47,7 +48,7 @@ const MAIN_ICON_GROUPS: Array<{
       { id: 'files', Icon: ActivityFilesIcon, label: '文件' },
       { id: 'sessions', Icon: ActivitySessionsIcon, label: '会话' },
       { id: 'browser', Icon: ActivityBrowserIcon, label: '浏览器' },
-      { id: 'terminal', Icon: ActivityTerminalIcon, label: 'Terminal' },
+      { id: 'terminal', Icon: ActivityTerminalIcon, label: 'Terminal', shortLabel: '终端' },
     ],
   },
   {
@@ -55,18 +56,28 @@ const MAIN_ICON_GROUPS: Array<{
     label: '资源',
     items: [
       { id: 'agent-roles', Icon: ActivityRolesIcon, label: '角色' },
-      { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号' },
-      { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源' },
-      { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程' },
+      { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号', shortLabel: '账号' },
+      { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源', shortLabel: '数据' },
+      { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程', shortLabel: '远程' },
     ],
   },
   {
     id: 'flows',
     label: '流程',
     items: [
-      { id: 'article-publishing', Icon: ActivityArticlePublishingIcon, label: '文章发布' },
+      {
+        id: 'article-publishing',
+        Icon: ActivityArticlePublishingIcon,
+        label: '文章发布',
+        shortLabel: '发布',
+      },
       { id: 'affairs', Icon: ActivityAffairsIcon, label: '事务' },
-      { id: 'scheduled-tasks', Icon: ActivityScheduledTasksIcon, label: '定时任务' },
+      {
+        id: 'scheduled-tasks',
+        Icon: ActivityScheduledTasksIcon,
+        label: '定时任务',
+        shortLabel: '定时',
+      },
       { id: 'production', Icon: ActivityProductionIcon, label: '生产' },
     ],
   },
@@ -107,7 +118,10 @@ export function ActivityBar(): React.ReactElement {
       <div className="activity-bar-main">
         {MAIN_ICON_GROUPS.map((group) => (
           <div key={group.id} className="activity-bar-group" role="group" aria-label={group.label}>
-            {group.items.map(({ id, Icon, label }) => (
+            <div className="activity-bar-group-label" aria-hidden="true">
+              {group.label}
+            </div>
+            {group.items.map(({ id, Icon, label, shortLabel }) => (
               <button
                 type="button"
                 key={id}
@@ -133,9 +147,13 @@ export function ActivityBar(): React.ReactElement {
                   )
                 }}
                 aria-label={label}
+                aria-pressed={activePanel === id}
                 title={label}
               >
-                <Icon size={24} />
+                <Icon size={22} />
+                <span className="activity-bar-label" aria-hidden="true">
+                  {shortLabel ?? label}
+                </span>
                 {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
                   <span
                     className="activity-bar-badge"
@@ -176,7 +194,10 @@ export function ActivityBar(): React.ReactElement {
           aria-label="设置"
           title="设置"
         >
-          <ActivitySettingsIcon size={24} />
+          <ActivitySettingsIcon size={22} />
+          <span className="activity-bar-label" aria-hidden="true">
+            设置
+          </span>
         </button>
       </div>
     </div>

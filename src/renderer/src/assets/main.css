@@ -27,7 +27,7 @@
   --border-subtle: #2b2b2b;
 
   /* ====== 尺寸变量 ====== */
-  --activitybar-width: 48px;
+  --activitybar-width: 76px;
   --sidebar-width: 250px;
   --agent-panel-width: 350px;
   --statusbar-height: 22px;
@@ -1269,6 +1269,7 @@ input:focus {
 .activity-bar {
   width: var(--activitybar-width);
   min-width: var(--activitybar-width);
+  flex-shrink: 0;
   background: var(--bg-activitybar);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -1291,36 +1292,50 @@ input:focus {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
 }
 
 .activity-bar-main::-webkit-scrollbar {
-  display: none;
+  width: 3px;
+}
+
+.activity-bar-main::-webkit-scrollbar-thumb {
+  background: var(--border-color);
 }
 
 .activity-bar-group {
   width: 100%;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
 
-.activity-bar-group + .activity-bar-group::before {
-  width: 24px;
-  margin: 4px 0;
-  border-top: 1px solid color-mix(in srgb, var(--text-secondary) 24%, transparent);
-  content: '';
+.activity-bar-group + .activity-bar-group {
+  margin-top: 6px;
+}
+
+.activity-bar-group-label {
+  padding: 3px 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 16px;
 }
 
 .activity-bar-bottom {
+  flex-shrink: 0;
+  padding-top: 4px;
   padding-bottom: 8px;
 }
 
 .activity-bar-icon {
-  width: 48px;
+  width: calc(100% - 8px);
   height: 48px;
+  flex-shrink: 0;
   display: flex;
+  flex-direction: column;
+  gap: 3px;
   align-items: center;
   justify-content: center;
   cursor: pointer;
@@ -1336,10 +1351,22 @@ input:focus {
   font: inherit;
 }
 
+.activity-bar-label {
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.activity-bar-icon:hover .activity-bar-label,
+.activity-bar-icon.active .activity-bar-label {
+  color: inherit;
+}
+
 .activity-bar-badge {
   position: absolute;
   right: 4px;
-  bottom: 4px;
+  top: 2px;
   min-width: 15px;
   height: 15px;
   box-sizing: border-box;

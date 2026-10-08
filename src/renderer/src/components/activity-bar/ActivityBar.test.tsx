@@ -31,4 +31,29 @@ describe('ActivityBar', () => {
     expect(positions).toEqual([...positions].sort((left, right) => left - right))
     expect(markup.indexOf('title="设置"')).toBeGreaterThan(positions.at(-1) ?? -1)
   })
+
+  it('shows short labels and group headings without requiring hover', () => {
+    const markup = renderToStaticMarkup(createElement(ActivityBar))
+    for (const label of [
+      '文件',
+      '会话',
+      '浏览器',
+      '终端',
+      '角色',
+      '账号',
+      '数据',
+      '远程',
+      '发布',
+      '事务',
+      '定时',
+      '生产',
+      '设置',
+    ]) {
+      expect(markup).toContain(`class="activity-bar-label" aria-hidden="true">${label}</span>`)
+    }
+    for (const group of ['工作', '资源', '流程']) {
+      expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
+    }
+    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(12)
+  })
 })
