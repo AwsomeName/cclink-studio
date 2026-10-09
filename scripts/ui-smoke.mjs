@@ -377,7 +377,7 @@ async function main() {
     const evidenceDir = join(runDir, 'activity-bar-evidence')
     await mkdir(evidenceDir, { recursive: true })
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 13, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 14, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '资源', '流程']),
@@ -391,6 +391,7 @@ async function main() {
       '角色',
       '账号',
       '数据',
+      '账目',
       '远程',
       '发布',
       '事务',
