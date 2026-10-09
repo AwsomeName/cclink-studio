@@ -10,6 +10,7 @@ import type {
 } from './update-provider'
 import { UpdateService, type UpdateServiceOptions } from './update-service'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
+import { UpdateInstallFlushError } from './update-installer'
 
 const temporaryDirectories: string[] = []
 
@@ -167,7 +168,7 @@ describe('transactional automatic installation', () => {
     return { service, staged, installer, lifecycle, cacheRoot }
   }
 
-  it('only quits after explicit confirmation, cache verification, staging, flush and helper commit', async () => {
+  it('flushes before and after staging, then arms, commits and quits in order', async () => {
     const { service, staged, installer, lifecycle } = await fixture()
     const prepared = await service.prepareInstall()
     expect(prepared.ok).toBe(true)
@@ -179,12 +180,18 @@ describe('transactional automatic installation', () => {
     expect(result.ok).toBe(true)
     expect(result.snapshot.phase).toBe('installing')
     expect(installer.stage).toHaveBeenCalledOnce()
-    expect(lifecycle.flush).toHaveBeenCalledOnce()
+    expect(lifecycle.flush).toHaveBeenCalledTimes(2)
     expect(staged.arm).toHaveBeenCalledOnce()
     expect(staged.commit).toHaveBeenCalledOnce()
     expect(lifecycle.quit).toHaveBeenCalledOnce()
     expect(lifecycle.flush.mock.invocationCallOrder[0]).toBeLessThan(
-      staged.commit.mock.invocationCallOrder[0],
+      installer.stage.mock.invocationCallOrder[0],
+    )
+    expect(installer.stage.mock.invocationCallOrder[0]).toBeLessThan(
+      lifecycle.flush.mock.invocationCallOrder[1],
+    )
+    expect(lifecycle.flush.mock.invocationCallOrder[1]).toBeLessThan(
+      staged.arm.mock.invocationCallOrder[0],
     )
     expect(staged.commit.mock.invocationCallOrder[0]).toBeLessThan(
       lifecycle.quit.mock.invocationCallOrder[0],
@@ -233,6 +240,7 @@ describe('transactional automatic installation', () => {
     const prepared = await service.prepareInstall()
     lifecycle.inspect
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValue([{ kind: 'agent', severity: 'blocked', label: 'Agent', detail: '运行中' }])
     expect(
       (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
@@ -245,23 +253,60 @@ describe('transactional automatic installation', () => {
     await service.stop()
   })
 
-  it.each(['flush', 'arm'] as const)(
+  it.each(['preflight-flush', 'final-flush', 'arm'] as const)(
     'does not exit on %s failure and allows a fresh retry',
     async (step) => {
-      const { service, staged, lifecycle } = await fixture()
+      const { service, staged, installer, lifecycle } = await fixture()
       const prepared = await service.prepareInstall()
-      if (step === 'flush') lifecycle.flush.mockRejectedValueOnce(new Error('disk failure'))
-      else staged.arm.mockRejectedValueOnce(new Error('helper failure'))
+      if (step === 'preflight-flush') {
+        lifecycle.flush.mockRejectedValueOnce(new UpdateInstallFlushError('workspace_flush_failed'))
+      } else if (step === 'final-flush') {
+        lifecycle.flush
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new UpdateInstallFlushError('workspace_flush_failed'))
+      } else staged.arm.mockRejectedValueOnce(new Error('helper failure'))
       expect(
         (await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })).ok,
       ).toBe(false)
       expect(service.getSnapshot().phase).toBe('readyToInstall')
-      expect(staged.cancel).toHaveBeenCalledOnce()
+      if (step !== 'arm') {
+        expect(service.getSnapshot().error).toMatchObject({
+          code: 'install_blocked',
+          userMessage: expect.stringContaining('工作现场保存失败'),
+        })
+      }
+      if (step === 'preflight-flush') {
+        expect(installer.stage).not.toHaveBeenCalled()
+        expect(staged.cancel).not.toHaveBeenCalled()
+      } else {
+        expect(staged.cancel).toHaveBeenCalledOnce()
+      }
       expect(lifecycle.quit).not.toHaveBeenCalled()
       expect((await service.prepareInstall()).ok).toBe(true)
       await service.stop()
     },
   )
+
+  it('shows the bounded conversation persistence reason without guessing about permissions', async () => {
+    const { service, installer, lifecycle } = await fixture()
+    const prepared = await service.prepareInstall()
+    lifecycle.flush.mockRejectedValueOnce(
+      new UpdateInstallFlushError('agent_conversations_too_large'),
+    )
+
+    const result = await service.installAndRestart({
+      confirmationToken: prepared.confirmationToken!,
+    })
+
+    expect(result.ok).toBe(false)
+    expect(installer.stage).not.toHaveBeenCalled()
+    expect(result.snapshot.error).toMatchObject({
+      code: 'install_blocked',
+      userMessage: expect.stringContaining('Agent 会话历史无法保存'),
+    })
+    expect(result.snapshot.error?.userMessage).not.toContain('替换权限')
+    await service.stop()
+  })
 
   it('rejects expired or unissued tokens', async () => {
     const { service, installer } = await fixture()

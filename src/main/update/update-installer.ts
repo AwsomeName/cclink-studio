@@ -21,3 +21,14 @@ export interface UpdateInstallLifecycle {
   flush(): Promise<void>
   quit(): void
 }
+
+export type UpdateInstallFlushFailureCode =
+  | 'agent_conversations_too_large'
+  | 'workspace_flush_failed'
+
+export class UpdateInstallFlushError extends Error {
+  constructor(readonly code: UpdateInstallFlushFailureCode) {
+    super(code)
+    this.name = 'UpdateInstallFlushError'
+  }
+}

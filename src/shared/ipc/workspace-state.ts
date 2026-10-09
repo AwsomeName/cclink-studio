@@ -33,7 +33,12 @@ export interface WorkspaceStateSetSectionResult {
   success: boolean
   snapshot?: WorkspaceStateSnapshot
   error?: string
+  errorCode?: WorkspaceStatePersistenceFailureCode
 }
+
+export type WorkspaceStatePersistenceFailureCode =
+  | 'agent_conversations_too_large'
+  | 'workspace_flush_failed'
 
 export type WorkspaceConversationHistoryMutation =
   | { type: 'clear-messages'; conversationId: string }
@@ -52,6 +57,7 @@ export const workspaceStateIpcEvents = {
 export interface WorkspaceStateFlushAcknowledgement {
   requestId: string
   success: boolean
+  failureCode?: WorkspaceStatePersistenceFailureCode
   updateInstallImpacts?: UpdateInstallImpact[]
 }
 
@@ -71,15 +77,32 @@ export function parseWorkspaceStateFlushAcknowledgement(
   const acknowledgement = value as Partial<WorkspaceStateFlushAcknowledgement>
   const requestId = parseWorkspaceStateFlushRequest(acknowledgement.requestId)
   if (!requestId || typeof acknowledgement.success !== 'boolean') return null
+  if (
+    acknowledgement.failureCode !== undefined &&
+    !['agent_conversations_too_large', 'workspace_flush_failed'].includes(
+      acknowledgement.failureCode,
+    )
+  )
+    return null
+  if (acknowledgement.success && acknowledgement.failureCode !== undefined) return null
   if (acknowledgement.updateInstallImpacts !== undefined) {
     const parsed = installImpactSchema
       .array()
       .max(128)
       .safeParse(acknowledgement.updateInstallImpacts)
     if (!parsed.success) return null
-    return { requestId, success: acknowledgement.success, updateInstallImpacts: parsed.data }
+    return {
+      requestId,
+      success: acknowledgement.success,
+      ...(acknowledgement.failureCode ? { failureCode: acknowledgement.failureCode } : {}),
+      updateInstallImpacts: parsed.data,
+    }
   }
-  return { requestId, success: acknowledgement.success }
+  return {
+    requestId,
+    success: acknowledgement.success,
+    ...(acknowledgement.failureCode ? { failureCode: acknowledgement.failureCode } : {}),
+  }
 }
 
 export interface WorkspaceStateDiagnostics {

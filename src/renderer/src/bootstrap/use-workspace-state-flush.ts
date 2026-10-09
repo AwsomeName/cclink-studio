@@ -2,8 +2,12 @@ import { useEffect } from 'react'
 import { flushAgentConversationWorkspaceState, useAgentStore } from '../stores/agent-store'
 import { useTabStore } from '../stores/tab-store'
 import type { UpdateInstallImpact } from '@shared/update'
+import type { WorkspaceStatePersistenceFailureCode } from '@shared/ipc/workspace-state'
 import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
-import { flushPendingWorkspaceStateWrites } from '../utils/workspace-state'
+import {
+  flushPendingWorkspaceStateWrites,
+  WorkspaceStatePersistenceError,
+} from '../utils/workspace-state'
 import { flushRemoteFileDrafts } from '../utils/remote-file-draft-registry'
 import { flushPendingWorkbenchTabWrites } from '../utils/workbench-tab-model'
 import { flushPendingWorkbenchBrowserWrites } from '../utils/workbench-browser-state'
@@ -54,6 +58,7 @@ export function useWorkspaceStateFlush(): void {
       }
       void (async () => {
         let success = false
+        let failureCode: WorkspaceStatePersistenceFailureCode | undefined
         try {
           await flushAgentConversationWorkspaceState()
           await flushPendingWorkbenchTabWrites()
@@ -63,12 +68,18 @@ export function useWorkspaceStateFlush(): void {
           success = true
           recordRendererDiagnosticLog('info', ['[ConversationPersistence] shutdown-flush-complete'])
         } catch (error) {
+          failureCode =
+            error instanceof WorkspaceStatePersistenceError ? error.code : 'workspace_flush_failed'
           recordRendererDiagnosticLog('error', [
             '[ConversationPersistence] shutdown-flush-failed',
             error,
           ])
         } finally {
-          window.cclinkStudio.workspaceState.acknowledgeFlush({ requestId, success })
+          window.cclinkStudio.workspaceState.acknowledgeFlush({
+            requestId,
+            success,
+            ...(failureCode ? { failureCode } : {}),
+          })
         }
       })()
     })

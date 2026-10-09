@@ -23,6 +23,7 @@ import { wechatIpc, type WechatConvertResult } from './wechat'
 import {
   workspaceStateIpc,
   type ActiveLocalWorkspaceResult,
+  type WorkspaceStatePersistenceFailureCode,
   type WorkspaceStateSetSectionResult,
 } from './workspace-state'
 
@@ -173,6 +174,16 @@ function formatWorkspaceStateWriteError(section: unknown, error: unknown): strin
   return `保存 ${sectionLabel} 失败：${error instanceof Error ? error.message : String(error)}`
 }
 
+class WorkspaceStateWriteContractError extends Error {
+  constructor(
+    message: string,
+    readonly errorCode: WorkspaceStatePersistenceFailureCode,
+  ) {
+    super(message)
+    this.name = 'WorkspaceStateWriteContractError'
+  }
+}
+
 export const workspaceStateIpcContracts = {
   resolveLocalWorkspace: bindIpcParser(workspaceStateIpc.resolveLocalWorkspace, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
@@ -207,12 +218,25 @@ export const workspaceStateIpcContracts = {
           workspaceStateSetSectionOptionsSchema.parse(args[4]),
         )
       } catch (error) {
-        throw new Error(formatWorkspaceStateWriteError(args[1], error))
+        const oversizedConversationSnapshot =
+          args[1] === 'agentConversations' &&
+          error instanceof ZodError &&
+          error.issues.some((issue) => issue.message.includes('超过大小限制'))
+        throw new WorkspaceStateWriteContractError(
+          formatWorkspaceStateWriteError(args[1], error),
+          oversizedConversationSnapshot
+            ? 'agent_conversations_too_large'
+            : 'workspace_flush_failed',
+        )
       }
     },
     async (error): Promise<WorkspaceStateSetSectionResult> => ({
       success: false,
       error: error instanceof Error ? error.message : String(error),
+      errorCode:
+        error instanceof WorkspaceStateWriteContractError
+          ? error.errorCode
+          : 'workspace_flush_failed',
     }),
   ),
   clear: bindIpcParser(

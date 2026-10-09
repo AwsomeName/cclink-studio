@@ -65,6 +65,27 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
     await expect(pending).resolves.toBe('failed')
   })
 
+  it('preserves the bounded oversized-conversation failure classification', async () => {
+    const window = createWindow()
+    const coordinator = new RendererWorkspaceStateFlushCoordinator(
+      window.value as never,
+      {} as never,
+      100,
+    )
+
+    const pending = coordinator.requestFlush()
+    ipcRegistration.listener?.(
+      {},
+      {
+        requestId: window.lastRequestId(),
+        success: false,
+        failureCode: 'agent_conversations_too_large',
+      },
+    )
+
+    await expect(pending).resolves.toBe('agent_conversations_too_large')
+  })
+
   it('times out instead of blocking application shutdown forever', async () => {
     const window = createWindow()
     const coordinator = new RendererWorkspaceStateFlushCoordinator(

@@ -71,13 +71,22 @@ export function summarizeWorkspaceConversationSnapshot(
 
     for (const rawMessage of conversation.messages) {
       if (!rawMessage || typeof rawMessage !== 'object') continue
-      const message = rawMessage as { role?: unknown; rawText?: unknown; isStreaming?: unknown }
+      const message = rawMessage as {
+        role?: unknown
+        rawText?: unknown
+        content?: unknown
+        isStreaming?: unknown
+      }
       summary.messageCount += 1
       if (message.role === 'user') summary.userMessageCount += 1
       if (message.role === 'assistant') summary.assistantMessageCount += 1
       if (message.role === 'system') summary.systemMessageCount += 1
       if (message.isStreaming === true) summary.streamingMessageCount += 1
-      if (typeof message.rawText === 'string') summary.textCharacterCount += message.rawText.length
+      const rawText =
+        typeof message.rawText === 'string'
+          ? message.rawText
+          : deriveAgentMessageRawText(message.content)
+      if (rawText !== null) summary.textCharacterCount += rawText.length
     }
   }
 
@@ -91,3 +100,4 @@ function safeSerializedLength(value: unknown): number {
     return -1
   }
 }
+import { deriveAgentMessageRawText } from './agent-conversation-persistence'

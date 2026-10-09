@@ -1273,7 +1273,9 @@ describe('useAgentStore', () => {
         null,
       )
       const payload = setSection.mock.calls[0][2]
-      expect(payload.conversations['agent-default'].messages.at(-1)?.rawText).toBe('继续处理这件事')
+      const persistedMessage = payload.conversations['agent-default'].messages.at(-1)
+      expect(persistedMessage).not.toHaveProperty('rawText')
+      expect(persistedMessage?.content).toEqual([{ type: 'text', text: '继续处理这件事' }])
     })
 
     it('归档操作会等待归档快照确认写入', async () => {

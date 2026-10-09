@@ -6,6 +6,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => electron.windows },
 }))
 import { createUpdateInstallLifecycle, inspectMainUpdateImpacts } from './update-install-lifecycle'
+import { UpdateInstallFlushError } from './update-installer'
 import { createRuntimeState } from '../runtime/app-runtime'
 
 describe('update installation work protection', () => {
@@ -25,8 +26,21 @@ describe('update installation work protection', () => {
     const runtime = createRuntimeState(false)
     const lifecycle = createUpdateInstallLifecycle(runtime)
     await expect(lifecycle.inspect()).rejects.toThrow('Renderer readiness')
-    await expect(lifecycle.flush()).rejects.toThrow('Workspace flush')
+    await expect(lifecycle.flush()).rejects.toEqual(
+      new UpdateInstallFlushError('workspace_flush_failed'),
+    )
     expect(electron.quit).not.toHaveBeenCalled()
+  })
+
+  it('preserves the oversized conversation classification from the trusted renderer', async () => {
+    const runtime = createRuntimeState(false)
+    runtime.rendererWorkspaceStateFlush = {
+      requestFlush: async () => 'agent_conversations_too_large',
+    } as never
+
+    await expect(createUpdateInstallLifecycle(runtime).flush()).rejects.toEqual(
+      new UpdateInstallFlushError('agent_conversations_too_large'),
+    )
   })
 
   it('reuses the existing Agent configuration guard and resumes scheduler on abort', () => {

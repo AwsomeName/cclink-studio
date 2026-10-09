@@ -101,6 +101,7 @@ export function registerWorkspaceStateIpc(
         return {
           success: false,
           error: `保存 ${section} 失败：${error instanceof Error ? error.message : String(error)}`,
+          errorCode: 'workspace_flush_failed' as const,
         }
       }
     },

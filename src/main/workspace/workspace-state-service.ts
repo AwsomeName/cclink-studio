@@ -27,6 +27,10 @@ import type {
   WorkspaceStateSetSectionOptions,
 } from '../../shared/ipc/workspace-state'
 import { summarizeWorkspaceConversationSnapshot } from '../../shared/workspace-conversation-diagnostics'
+import {
+  AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION,
+  deriveAgentMessageRawText,
+} from '../../shared/agent-conversation-persistence'
 import { getUserDataPathDiagnostics } from '../runtime/user-data-path'
 import {
   createWorkspaceRecoveryRef,
@@ -82,6 +86,7 @@ const PROJECT_STATE_DIR = 'state'
 const INDEX_TOUCH_INTERVAL_MS = 5_000
 
 interface ConversationSnapshotShape {
+  schemaVersion?: unknown
   conversations?: Record<string, unknown>
   conversationOrder?: unknown
   activeConversationId?: unknown
@@ -141,6 +146,7 @@ function protectConversationHistory(
     const mergedMessages = mergeConversationMessages(
       currentConversation.messages,
       nextConversation.messages,
+      next.schemaVersion === AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION,
     )
     if (!mergedMessages.protected) continue
     conversations[conversationId] = {
@@ -183,6 +189,7 @@ function protectConversationHistory(
 function mergeConversationMessages(
   currentValue: unknown,
   nextValue: unknown,
+  normalizeRedundantRawText: boolean,
 ): { messages: unknown; protected: boolean } {
   if (!Array.isArray(currentValue) || !Array.isArray(nextValue)) {
     return Array.isArray(currentValue) && !Array.isArray(nextValue)
@@ -204,7 +211,11 @@ function mergeConversationMessages(
     seen.add(id)
     const currentMessage = currentById.get(id)
     if (!currentMessage) return message
-    if (messagePayloadSize(currentMessage) <= messagePayloadSize(message)) return message
+    if (
+      messagePayloadSize(currentMessage, normalizeRedundantRawText) <=
+      messagePayloadSize(message, normalizeRedundantRawText)
+    )
+      return message
     protectedHistory = true
     return currentMessage
   })
@@ -234,11 +245,15 @@ function messageId(value: unknown): string | null {
   return typeof id === 'string' && id ? id : null
 }
 
-function messagePayloadSize(value: unknown): number {
+function messagePayloadSize(value: unknown, normalizeRedundantRawText: boolean): number {
   if (!value || typeof value !== 'object') return 0
   const message = value as MessageShape
+  const derivedRawText = normalizeRedundantRawText
+    ? deriveAgentMessageRawText(message.content)
+    : null
   return JSON.stringify({
-    rawText: message.rawText,
+    rawText:
+      normalizeRedundantRawText && derivedRawText === message.rawText ? undefined : message.rawText,
     content: message.content,
     resources: message.resources,
   }).length

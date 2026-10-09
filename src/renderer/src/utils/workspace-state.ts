@@ -1,4 +1,5 @@
 import type {
+  WorkspaceStatePersistenceFailureCode,
   WorkspaceStateSection,
   WorkspaceStateSetSectionOptions,
 } from '@shared/ipc/workspace-state'
@@ -28,6 +29,16 @@ interface SectionWriteQueue {
 }
 
 const sectionWriteQueues = new Map<string, SectionWriteQueue>()
+
+export class WorkspaceStatePersistenceError extends Error {
+  constructor(
+    readonly code: WorkspaceStatePersistenceFailureCode,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'WorkspaceStatePersistenceError'
+  }
+}
 
 function normalizeWorkspaceStateValue(value: unknown): unknown {
   const serialized = JSON.stringify(value)
@@ -165,7 +176,10 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
               request.ownerKey,
             )
         if (!result.success) {
-          throw new Error(result.error || `保存 ${request.section} 失败`)
+          throw new WorkspaceStatePersistenceError(
+            result.errorCode ?? 'workspace_flush_failed',
+            result.error || `保存 ${request.section} 失败`,
+          )
         }
         for (const waiter of request.waiters) waiter.resolve()
       } catch (error) {

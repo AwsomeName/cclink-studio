@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import type { UpdateInstallImpact } from '../../shared/update'
 import type { CclinkStudioRuntimeState } from '../runtime/app-runtime'
-import type { UpdateInstallLifecycle } from './update-installer'
+import { UpdateInstallFlushError, type UpdateInstallLifecycle } from './update-installer'
 
 export function createUpdateInstallLifecycle(
   runtime: CclinkStudioRuntimeState,
@@ -27,18 +27,28 @@ export function createUpdateInstallLifecycle(
       }
     },
     flush: async () => {
-      if ((await runtime.rendererWorkspaceStateFlush?.requestFlush()) !== 'flushed')
-        throw new Error('Workspace flush failed')
-      // Installation is fail-closed; normal shutdown's best-effort wrappers are deliberately not used here.
-      await runtime.workspaceStateService?.flush()
-      await runtime.agentRuntimeStateStore?.flush()
-      await runtime.scheduledTaskService?.flush()
-      await runtime.mediaProjectService?.flush()
-      await runtime.mediaAssetService?.flush()
-      await runtime.videoGenerationService?.flush()
-      await runtime.mediaRenderService?.flush()
-      await runtime.webAffairService?.flush()
-      await runtime.webResourceService?.flush()
+      const rendererOutcome = await runtime.rendererWorkspaceStateFlush?.requestFlush()
+      if (rendererOutcome !== 'flushed') {
+        throw new UpdateInstallFlushError(
+          rendererOutcome === 'agent_conversations_too_large'
+            ? 'agent_conversations_too_large'
+            : 'workspace_flush_failed',
+        )
+      }
+      try {
+        // Installation is fail-closed; normal shutdown's best-effort wrappers are deliberately not used here.
+        await runtime.workspaceStateService?.flush()
+        await runtime.agentRuntimeStateStore?.flush()
+        await runtime.scheduledTaskService?.flush()
+        await runtime.mediaProjectService?.flush()
+        await runtime.mediaAssetService?.flush()
+        await runtime.videoGenerationService?.flush()
+        await runtime.mediaRenderService?.flush()
+        await runtime.webAffairService?.flush()
+        await runtime.webResourceService?.flush()
+      } catch {
+        throw new UpdateInstallFlushError('workspace_flush_failed')
+      }
     },
     quit: () => app.quit(),
   }

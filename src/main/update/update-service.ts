@@ -20,10 +20,11 @@ import { UpdateProviderRequestError } from './github-release-provider'
 import { UpdateCache, type RestoredVerifiedUpdate } from './update-cache'
 import { compareStableVersions } from './version'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
-import type {
-  UpdateInstaller,
-  UpdateInstallLifecycle,
-  StagedUpdateInstallation,
+import {
+  UpdateInstallFlushError,
+  type UpdateInstaller,
+  type UpdateInstallLifecycle,
+  type StagedUpdateInstallation,
 } from './update-installer'
 
 const FIRST_CHECK_DELAY_MS = 60_000
@@ -455,11 +456,13 @@ export class UpdateService {
           true,
         )
       }
+      releaseWorkGuard = lifecycle.acquire?.()
+      await assertReady()
+      await flushInstallWorkspace(lifecycle)
       staged = await this.options.installer.stage({
         dmgPath: this.verifiedUpdate.filePath,
         expectedVersion: this.verifiedUpdate.record.manifest.version,
       })
-      releaseWorkGuard = lifecycle.acquire?.()
       staged.observeFailure?.(() => {
         if (this.stopped || this.snapshot.phase !== 'installing') return
         releaseWorkGuard?.()
@@ -476,7 +479,7 @@ export class UpdateService {
         })
       })
       await assertReady()
-      await lifecycle.flush()
+      await flushInstallWorkspace(lifecycle)
       await staged.arm()
       await assertReady()
       await staged.commit()
@@ -840,6 +843,28 @@ export class UpdateService {
         : null,
       snapshot: this.getSnapshot(),
     })
+  }
+}
+
+async function flushInstallWorkspace(lifecycle: UpdateInstallLifecycle): Promise<void> {
+  try {
+    await lifecycle.flush()
+  } catch (error) {
+    if (
+      error instanceof UpdateInstallFlushError &&
+      error.code === 'agent_conversations_too_large'
+    ) {
+      throw new UpdateOperationError(
+        'install_blocked',
+        'Agent 会话历史无法保存，工作现场未保存；当前版本没有退出。请稍后重试或打开安装包。',
+        true,
+      )
+    }
+    throw new UpdateOperationError(
+      'install_blocked',
+      '工作现场保存失败，当前版本没有退出。请重试或打开安装包。',
+      true,
+    )
   }
 }
 

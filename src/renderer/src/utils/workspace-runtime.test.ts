@@ -458,17 +458,26 @@ describe('workspace-runtime', () => {
           (call) =>
             call[0] === '/workspace/a' &&
             call[1] === 'agentConversations' &&
-            call[2].conversations[projectAConversationId].messages.at(-1)?.rawText ===
-              '切换项目后完成的结果',
+            call[2].conversations[projectAConversationId].messages
+              .at(-1)
+              ?.content.some(
+                (block: { type?: string; text?: string }) =>
+                  block.type === 'text' && block.text === '切换项目后完成的结果',
+              ),
         ),
       ).toBe(true)
     })
     const projectAWrite = setSection.mock.calls
       .filter((call) => call[0] === '/workspace/a' && call[1] === 'agentConversations')
       .at(-1)
-    expect(projectAWrite?.[2].conversations[projectAConversationId].messages.at(-1).rawText).toBe(
-      '切换项目后完成的结果',
-    )
+    expect(
+      projectAWrite?.[2].conversations[projectAConversationId].messages
+        .at(-1)
+        .content.some(
+          (block: { type?: string; text?: string }) =>
+            block.type === 'text' && block.text === '切换项目后完成的结果',
+        ),
+    ).toBe(true)
 
     hydrateRuntimeSections(projectASnapshot)
     const restored = useAgentStore.getState().conversations[projectAConversationId]

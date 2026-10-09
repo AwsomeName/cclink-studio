@@ -1,5 +1,9 @@
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { workspaceRefKey } from '@shared/workspace-ref'
+import {
+  AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION,
+  deriveAgentMessageRawText,
+} from '@shared/agent-conversation-persistence'
 import type { AgentMessage, AgentMountedSkill } from '../../types'
 import {
   DEFAULT_AGENT_ROLE_REF,
@@ -20,6 +24,18 @@ export interface AgentConversationCollection {
   conversations: Record<string, AgentConversationState>
   conversationOrder: string[]
   activeConversationId: string
+}
+
+type PersistedAgentMessage = Omit<AgentMessage, 'rawText'> & { rawText?: string }
+type PersistedAgentConversationState = Omit<AgentConversationState, 'messages'> & {
+  messages: PersistedAgentMessage[]
+}
+
+export interface AgentConversationWorkspaceSnapshot {
+  schemaVersion: typeof AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION
+  conversations: Record<string, PersistedAgentConversationState>
+  conversationOrder: string[]
+  activeConversationId: string | null
 }
 
 const GLOBAL_WORKSPACE_ACTIVE_SLOT = '__global__'
@@ -46,7 +62,8 @@ export function normalizeConversationSnapshot(
 ): AgentConversationCollection | null {
   if (!value || typeof value !== 'object') return null
   const parsed = value as {
-    conversations?: Record<string, AgentConversationState>
+    schemaVersion?: unknown
+    conversations?: Record<string, PersistedAgentConversationState>
     conversationOrder?: string[]
     activeConversationId?: string
   }
@@ -137,10 +154,15 @@ export function normalizeConversationSnapshot(
         : null,
       input: '',
       messages: Array.isArray(conversation.messages)
-        ? conversation.messages.map((message) => ({
-            ...message,
-            isStreaming: awaitingRuntimeReconciliation && message.isStreaming === true,
-          }))
+        ? conversation.messages.map((message) => {
+            const derivedRawText = deriveAgentMessageRawText(message.content)
+            return {
+              ...message,
+              rawText:
+                typeof message.rawText === 'string' ? message.rawText : (derivedRawText ?? ''),
+              isStreaming: awaitingRuntimeReconciliation && message.isStreaming === true,
+            }
+          })
         : createAgentConversationState(id).messages,
     }
     if (workspaceRef) {
@@ -263,7 +285,7 @@ function normalizeAgentConversationConfiguration(
   })
 }
 
-function hasTerminalSdkSessionFailure(messages: AgentMessage[] | undefined): boolean {
+function hasTerminalSdkSessionFailure(messages: PersistedAgentMessage[] | undefined): boolean {
   if (!Array.isArray(messages)) return false
   let latestAssistantAt = -1
   let latestPoisonedSessionAt = -1
@@ -276,7 +298,7 @@ function hasTerminalSdkSessionFailure(messages: AgentMessage[] | undefined): boo
     if (
       message.role === 'system' &&
       /reached maximum budget|invalid_request_error|api error:\s*400[\s\S]*invalid request/i.test(
-        message.rawText,
+        message.rawText ?? deriveAgentMessageRawText(message.content) ?? '',
       )
     ) {
       latestPoisonedSessionAt = Math.max(latestPoisonedSessionAt, message.timestamp)
@@ -343,7 +365,13 @@ export function mergeWorkspaceConversationSnapshot(
   return { conversations, conversationOrder, activeConversationId }
 }
 
-export function isInitialSeedConversation(conversation: AgentConversationState): boolean {
+export function isInitialSeedConversation(
+  conversation:
+    | AgentConversationState
+    | (Omit<AgentConversationState, 'messages'> & {
+        messages: Array<Pick<AgentMessage, 'id' | 'role'>>
+      }),
+): boolean {
   const onlyMessage = conversation.messages.length === 1 ? conversation.messages[0] : null
   return (
     conversation.id === DEFAULT_CONVERSATION_ID &&
@@ -363,12 +391,8 @@ export function isInitialSeedConversation(conversation: AgentConversationState):
 export function buildAgentConversationWorkspaceSnapshot(
   state: AgentConversationCollection,
   workspaceKey: string | null,
-): {
-  conversations: Record<string, AgentConversationState>
-  conversationOrder: string[]
-  activeConversationId: string | null
-} {
-  const conversations: Record<string, AgentConversationState> = {}
+): AgentConversationWorkspaceSnapshot {
+  const conversations: Record<string, PersistedAgentConversationState> = {}
   const ids = state.conversationOrder.filter((id) => {
     const conversation = state.conversations[id]
     return conversation && conversationWorkspaceKey(conversation) === workspaceKey
@@ -384,7 +408,15 @@ export function buildAgentConversationWorkspaceSnapshot(
       streamingMessageId: null,
       input: '',
       pendingImages: [],
-      messages: conversation.messages.map((message) => ({ ...message, isStreaming: false })),
+      messages: conversation.messages.map((message) => {
+        const { rawText, ...persistedMessage } = message
+        const derivedRawText = deriveAgentMessageRawText(message.content)
+        return {
+          ...persistedMessage,
+          ...(derivedRawText === rawText ? {} : { rawText }),
+          isStreaming: false,
+        }
+      }),
     }
   }
 
@@ -410,5 +442,10 @@ export function buildAgentConversationWorkspaceSnapshot(
         conversationOrder[0] ??
         null))
 
-  return { conversations, conversationOrder, activeConversationId }
+  return {
+    schemaVersion: AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION,
+    conversations,
+    conversationOrder,
+    activeConversationId,
+  }
 }

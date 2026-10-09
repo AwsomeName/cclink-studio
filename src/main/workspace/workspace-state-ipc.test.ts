@@ -45,6 +45,19 @@ describe('registerWorkspaceStateIpc', () => {
     ).resolves.toEqual({
       success: false,
       error: '保存 layout 失败：工作空间状态 JSON 超过大小限制',
+      errorCode: 'workspace_flush_failed',
+    })
+    await expect(
+      setSection(
+        { sender: 'trusted' },
+        '/tmp/project',
+        'agentConversations',
+        { content: 'x'.repeat(32 * 1024 * 1024 + 1) },
+        null,
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      errorCode: 'agent_conversations_too_large',
     })
     expect(service.setSection).not.toHaveBeenCalled()
   })
@@ -107,6 +120,7 @@ describe('registerWorkspaceStateIpc', () => {
     ).resolves.toEqual({
       success: false,
       error: '保存 tabs 失败：tabs 已由主进程 Workbench model 单独拥有，renderer 不得直接写入',
+      errorCode: 'workspace_flush_failed',
     })
     expect(service.setSection).not.toHaveBeenCalled()
   })

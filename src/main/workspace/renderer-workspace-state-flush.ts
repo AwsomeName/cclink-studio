@@ -12,7 +12,12 @@ import {
 
 const RENDERER_FLUSH_TIMEOUT_MS = 5_000
 
-export type RendererWorkspaceFlushOutcome = 'flushed' | 'failed' | 'timeout' | 'unavailable'
+export type RendererWorkspaceFlushOutcome =
+  | 'flushed'
+  | 'agent_conversations_too_large'
+  | 'failed'
+  | 'timeout'
+  | 'unavailable'
 
 /** 协调 renderer 队列与主进程退出生命周期，避免窗口销毁时丢掉最新快照。 */
 export class RendererWorkspaceStateFlushCoordinator {
@@ -37,7 +42,11 @@ export class RendererWorkspaceStateFlushCoordinator {
         if (!acknowledgement) return
         this.installReadiness.get(acknowledgement.requestId)?.(acknowledgement)
         this.pending.get(acknowledgement.requestId)?.(
-          acknowledgement.success ? 'flushed' : 'failed',
+          acknowledgement.success
+            ? 'flushed'
+            : acknowledgement.failureCode === 'agent_conversations_too_large'
+              ? 'agent_conversations_too_large'
+              : 'failed',
         )
       },
     )

@@ -742,6 +742,60 @@ describe('WorkspaceStateService', () => {
     expect(document).not.toContain('private-session')
   })
 
+  it('accepts a v2 snapshot that only removes derivable rawText without restoring the redundancy', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const ownerKey = 'local:projection-owner'
+    const content = [
+      { type: 'thinking', thinking: '先分析' },
+      { type: 'text', text: '再回答' },
+    ]
+    const initial = {
+      activeConversationId: 'conversation',
+      conversationOrder: ['conversation'],
+      conversations: {
+        conversation: {
+          id: 'conversation',
+          createdAt: 1,
+          messages: [
+            {
+              id: 'assistant-1',
+              role: 'assistant',
+              content,
+              rawText: '先分析再回答',
+              timestamp: 1,
+            },
+          ],
+        },
+      },
+    }
+    const projected = {
+      ...initial,
+      schemaVersion: 2,
+      conversations: {
+        conversation: {
+          ...initial.conversations.conversation,
+          messages: [
+            {
+              id: 'assistant-1',
+              role: 'assistant',
+              content,
+              timestamp: 1,
+            },
+          ],
+        },
+      },
+    }
+
+    await service.setSection(workspaceA, 'agentConversations', initial, ownerKey)
+    await service.setSection(workspaceA, 'agentConversations', projected, ownerKey)
+
+    const restored = (await service.getSnapshot(workspaceA, ownerKey)).sections
+      .agentConversations as typeof projected
+    expect(restored.schemaVersion).toBe(2)
+    expect(restored.conversations.conversation.messages[0]).not.toHaveProperty('rawText')
+  })
+
   it('allows only the explicitly targeted conversation history to be cleared or deleted', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()
