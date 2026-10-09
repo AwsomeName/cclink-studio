@@ -42,6 +42,8 @@ function errorText(error: unknown): string {
 export function CompanyAccountsWorkbench(): React.ReactElement {
   const workspaceGeneration = useWorkspaceStore((state) => state.generation)
   const openTab = useTabStore((state) => state.openTab)
+  const activeTabId = useTabStore((state) => state.activeTabId)
+  const closeTab = useTabStore((state) => state.closeTab)
   const [month, setMonth] = useState(currentMonth)
   const [snapshot, setSnapshot] = useState<CompanyAccountsSnapshot | null>(null)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
@@ -358,6 +360,10 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
     void load(nextMonth)
   }
 
+  const closeAccounts = (): void => {
+    if (activeTabId) closeTab(activeTabId)
+  }
+
   if (!snapshot) {
     return (
       <div className="company-accounts-loading">
@@ -384,6 +390,15 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
     return (
       <div className="company-accounts-empty">
         <div className="company-accounts-empty-card">
+          <button
+            type="button"
+            className="company-accounts-empty-close"
+            aria-label="关闭公司账目"
+            title="关闭"
+            onClick={closeAccounts}
+          >
+            ×
+          </button>
           <span className="company-accounts-empty-icon">账</span>
           <h1>公司账目</h1>
           <p>请先打开一个普通本地工作空间。账目会保存在该工作空间中。</p>
@@ -396,6 +411,15 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
     return (
       <div className="company-accounts-empty">
         <div className="company-accounts-empty-card">
+          <button
+            type="button"
+            className="company-accounts-empty-close"
+            aria-label="关闭公司账目"
+            title="关闭"
+            onClick={closeAccounts}
+          >
+            ×
+          </button>
           <span className="company-accounts-empty-icon">账</span>
           <h1>公司账目</h1>
           <p>无需配置公司、账户或会计期间。启用后直接导入真实流水。</p>
