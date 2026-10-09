@@ -19,7 +19,7 @@ function createModule(
   const file = {
     withAccess: vi.fn((_context, operation: () => unknown) => operation()),
     assertReadableFile: vi.fn(async (path: string) => path),
-    assertWritableTarget: vi.fn(async (path: string) => path),
+    assertNewWritableTarget: vi.fn(async (path: string) => path),
     ...overrides.file,
   }
   return {
@@ -108,8 +108,21 @@ describe('CadToolModule', () => {
       module.execute('cad_plan_modification', planParams, localContext),
     ).resolves.toEqual({ kind: 'cad-modification-plan' })
     expect(file.assertReadableFile).toHaveBeenCalledWith(planParams.inputPath)
-    expect(file.assertWritableTarget).toHaveBeenCalledWith(planParams.outputPath)
-    expect(plan).toHaveBeenCalledWith(planParams)
+    expect(file.assertNewWritableTarget).toHaveBeenCalledWith(planParams.outputPath)
+    expect(plan).toHaveBeenCalledWith(planParams, { signal: undefined })
+  })
+
+  it('passes the Agent run abort signal to FreeCAD planning', async () => {
+    const plan = vi.fn().mockResolvedValue({ kind: 'cad-modification-plan' })
+    const { module } = createModule({ modification: { plan } })
+    const controller = new AbortController()
+
+    await module.execute('cad_plan_modification', planParams, {
+      ...localContext,
+      abortSignal: controller.signal,
+    })
+
+    expect(plan).toHaveBeenCalledWith(planParams, { signal: controller.signal })
   })
 
   it('always requires one confirmation for cad_modify_step and disallows allow-always', () => {

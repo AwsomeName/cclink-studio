@@ -233,7 +233,9 @@ export class CadToolModule implements ToolModule {
           })
         }
         case 'cad_plan_modification':
-          return this.cadModificationService.plan(await this.readPlanParams(params))
+          return this.cadModificationService.plan(await this.readPlanParams(params), {
+            signal: context?.abortSignal,
+          })
         case 'cad_modify_step': {
           if (context?.confirmationGranted !== true) {
             throw new Error('CONFIRMATION_REQUIRED: cad_modify_step 必须取得本次参数快照确认')
@@ -256,7 +258,7 @@ export class CadToolModule implements ToolModule {
 
   private async readPlanParams(params: Record<string, unknown>) {
     const inputPath = await this.fileService.assertReadableFile(stringParam(params, 'inputPath'))
-    const outputPath = await this.fileService.assertWritableTarget(
+    const outputPath = await this.fileService.assertNewWritableTarget(
       stringParam(params, 'outputPath'),
     )
     return {

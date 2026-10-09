@@ -31,7 +31,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
   'data-sources': '数据源',
   terminal: 'Terminal',
   operations: '网站与账号',
-  production: '生产',
+  'video-creation': '视频创作',
+  production: '硬件生产',
   'scheduled-tasks': '定时任务',
   settings: '设置',
 }

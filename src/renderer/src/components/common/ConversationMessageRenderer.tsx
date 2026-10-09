@@ -487,11 +487,16 @@ function ToolExecutionRow({
 interface CadModificationResultView {
   outputPath: string
   axis: 'x' | 'y' | 'z'
+  direction: 'positive' | 'negative'
   distanceMm: number
   solidCount: number
   volume: number
   size: { x: number; y: number; z: number }
   status: 'passed' | 'passed-with-baseline-warning'
+  fixedRegionDifferenceMm3?: number
+  fixedRegionToleranceMm3?: number
+  bopErrorCount?: number
+  bopParserComplete?: boolean
   warning?: string
   summary: string
 }
@@ -509,11 +514,14 @@ export function parseCadModificationResult(content: string): CadModificationResu
   const bounds = output?.bounds as Record<string, unknown> | undefined
   const size = bounds?.size as Record<string, unknown> | undefined
   const validation = result.validation as Record<string, unknown> | undefined
+  const fixedRegion = validation?.fixedRegion as Record<string, unknown> | undefined
+  const bop = output?.bop as Record<string, unknown> | undefined
   if (
     result.kind !== 'cad-modification-result' ||
     result.success !== true ||
     typeof result.outputPath !== 'string' ||
     !['x', 'y', 'z'].includes(String(result.axis)) ||
+    !['positive', 'negative'].includes(String(result.direction)) ||
     typeof result.distanceMm !== 'number' ||
     !Number.isFinite(result.distanceMm) ||
     typeof output?.solidCount !== 'number' ||
@@ -526,18 +534,28 @@ export function parseCadModificationResult(content: string): CadModificationResu
     return null
   }
   const axis = result.axis as 'x' | 'y' | 'z'
+  const direction = result.direction as 'positive' | 'negative'
   const status = validation!.status as 'passed' | 'passed-with-baseline-warning'
   const normalizedSize = { x: size.x, y: size.y, z: size.z }
   return {
     outputPath: result.outputPath,
     axis,
+    direction,
     distanceMm: result.distanceMm,
     solidCount: output.solidCount,
     volume: output.volume,
     size: normalizedSize,
     status,
+    ...(typeof fixedRegion?.symmetricDifferenceVolume === 'number'
+      ? { fixedRegionDifferenceMm3: fixedRegion.symmetricDifferenceVolume }
+      : {}),
+    ...(typeof validation?.fixedRegionToleranceMm3 === 'number'
+      ? { fixedRegionToleranceMm3: validation.fixedRegionToleranceMm3 }
+      : {}),
+    ...(typeof bop?.errorCount === 'number' ? { bopErrorCount: bop.errorCount } : {}),
+    ...(typeof bop?.parserComplete === 'boolean' ? { bopParserComplete: bop.parserComplete } : {}),
     ...(typeof validation?.warning === 'string' ? { warning: validation.warning } : {}),
-    summary: `STEP 已生成 · ${axis.toUpperCase()} +${result.distanceMm} mm · ${normalizedSize.x.toFixed(2)} × ${normalizedSize.y.toFixed(2)} × ${normalizedSize.z.toFixed(2)} mm`,
+    summary: `STEP 已生成 · ${axis.toUpperCase()} ${direction === 'positive' ? '+' : '-'}${result.distanceMm} mm · ${normalizedSize.x.toFixed(2)} × ${normalizedSize.y.toFixed(2)} × ${normalizedSize.z.toFixed(2)} mm`,
   }
 }
 
@@ -559,7 +577,8 @@ function CadModificationResultDetails({
         <div>
           <dt>修改</dt>
           <dd>
-            {result.axis.toUpperCase()} 轴增加 {result.distanceMm} mm
+            {result.axis.toUpperCase()} 轴{result.direction === 'positive' ? '正向' : '负向'}增加{' '}
+            {result.distanceMm} mm
           </dd>
         </div>
         <div>
@@ -574,6 +593,24 @@ function CadModificationResultDetails({
             {result.solidCount} / {result.volume.toFixed(2)} mm³
           </dd>
         </div>
+        {result.fixedRegionDifferenceMm3 !== undefined &&
+        result.fixedRegionToleranceMm3 !== undefined ? (
+          <div>
+            <dt>固定区域几何差</dt>
+            <dd>
+              {result.fixedRegionDifferenceMm3.toExponential(3)} / 门限{' '}
+              {result.fixedRegionToleranceMm3.toExponential(3)} mm³
+            </dd>
+          </div>
+        ) : null}
+        {result.bopErrorCount !== undefined ? (
+          <div>
+            <dt>BOP 检查</dt>
+            <dd>
+              {result.bopParserComplete ? '完整解析' : '解析失败'} / {result.bopErrorCount} 条
+            </dd>
+          </div>
+        ) : null}
       </dl>
       {result.warning ? <p>{result.warning}</p> : null}
       <small>该结果不代表结构可制造，打样前仍需专业 CAD 复核。</small>

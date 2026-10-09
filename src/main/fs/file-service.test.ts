@@ -1369,6 +1369,59 @@ describe('FileService', () => {
   )
 })
 
+describe('FileService authorized CAD file handoff', () => {
+  it('copies an authorized source into app-private storage and detects later replacement', async () => {
+    const service = createFileService()
+    const sourcePath = join(tempDir, 'source.step')
+    await writeFile(sourcePath, 'first-step')
+
+    const snapshot = await service.createAuthorizedFileSnapshot(sourcePath)
+    try {
+      expect(snapshot.snapshotPath.startsWith(tempDir)).toBe(false)
+      await expect(readFile(snapshot.snapshotPath, 'utf-8')).resolves.toBe('first-step')
+      await rename(sourcePath, join(tempDir, 'old-source.step'))
+      await writeFile(sourcePath, 'second-step')
+      await expect(snapshot.verifyUnchanged()).rejects.toThrow('SOURCE_CHANGED')
+    } finally {
+      await snapshot.cleanup()
+    }
+  })
+
+  it('revalidates a swapped output parent and writes no STEP bytes outside the workspace', async () => {
+    const workspace = join(tempDir, 'project')
+    const outputDirectory = join(workspace, 'outputs')
+    const displacedDirectory = join(workspace, 'outputs-old')
+    const outside = join(tempDir, 'outside')
+    const sourcePath = join(tempDir, 'generated.step')
+    const outputPath = join(outputDirectory, 'result.step')
+    await Promise.all([mkdir(outputDirectory, { recursive: true }), mkdir(outside)])
+    await writeFile(sourcePath, 'generated-step-bytes')
+    const service = new FileService({ getActiveWorkspace: () => workspace })
+    await service.assertNewWritableTarget(outputPath)
+
+    await rename(outputDirectory, displacedDirectory)
+    await symlink(outside, outputDirectory)
+
+    await expect(service.publishAuthorizedFile(sourcePath, outputPath)).rejects.toThrow(
+      'OUTSIDE_WORKSPACE',
+    )
+    await expect(readFile(join(outside, 'result.step'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('publishes exclusively and never overwrites an existing output', async () => {
+    const service = createFileService()
+    const sourcePath = join(tempDir, 'generated.step')
+    const outputPath = join(tempDir, 'existing.step')
+    await writeFile(sourcePath, 'generated-step-bytes')
+    await writeFile(outputPath, 'existing-step-bytes')
+
+    await expect(service.publishAuthorizedFile(sourcePath, outputPath)).rejects.toMatchObject({
+      code: 'EEXIST',
+    })
+    await expect(readFile(outputPath, 'utf-8')).resolves.toBe('existing-step-bytes')
+  })
+})
+
 function createStoredZip(entries: Array<{ name: string; content: Buffer }>): Buffer {
   const locals: Buffer[] = []
   const centrals: Buffer[] = []

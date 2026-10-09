@@ -16,6 +16,7 @@ import {
   ActivitySessionsIcon,
   ActivitySettingsIcon,
   ActivityTerminalIcon,
+  ActivityVideoCreationIcon,
   ActivityWebAccountsIcon,
 } from './activity-bar-icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -85,7 +86,18 @@ const MAIN_ICON_GROUPS: Array<{
         label: '定时任务',
         shortLabel: '定时',
       },
-      { id: 'production', Icon: ActivityProductionIcon, label: '生产' },
+      {
+        id: 'video-creation',
+        Icon: ActivityVideoCreationIcon,
+        label: '视频创作',
+        shortLabel: '视频',
+      },
+      {
+        id: 'production',
+        Icon: ActivityProductionIcon,
+        label: '硬件生产',
+        shortLabel: '硬件',
+      },
     ],
   },
 ]

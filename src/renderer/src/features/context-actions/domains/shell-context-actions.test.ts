@@ -22,6 +22,20 @@ describe('shell context commands', () => {
     })
   })
 
+  it.each([
+    ['video-creation', 'video-creation'],
+    ['production', 'production'],
+  ] as const)('opens the separated %s activity', async (activityId, activePanel) => {
+    const command = createShellContextCommands().find((item) => item.id === 'activity.open')!
+
+    await command.action({
+      source: 'context-menu',
+      target: { kind: 'activity', activityId },
+    })
+
+    expect(useUIStore.getState()).toMatchObject({ activePanel, sidebarVisible: true })
+  })
+
   it('resets and hides only the layout region named by the target', async () => {
     useUIStore.setState({ sidebarWidth: 420, agentPanelWidth: 520, sidebarVisible: true })
     const commands = createShellContextCommands()

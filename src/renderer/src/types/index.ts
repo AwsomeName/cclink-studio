@@ -18,6 +18,7 @@ export type ActivityPanel =
   | 'files'
   | 'data-sources'
   | 'company-accounts'
+  | 'video-creation'
   | 'production'
   | 'terminal'
   | 'operations'

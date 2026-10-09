@@ -47,16 +47,35 @@ def bounds(shape):
 def bop_status(shape):
     try:
         shape.check(True)
-        return {'ok': True, 'errorCount': 0, 'errorTypes': []}
+        return {
+            'ok': True,
+            'errorCount': 0,
+            'errorTypes': [],
+            'parserComplete': True,
+            'unparsedLineCount': 0,
+        }
     except Exception as exc:
-        lines = str(exc).splitlines()[1:]
-        error_types = sorted(set(
-            match.group(1)
-            for line in lines
-            for match in [re.search(r'BOPAlgo[_ ]([A-Za-z0-9_]+)', line)]
-            if match
-        ))
-        return {'ok': False, 'errorCount': len(lines), 'errorTypes': error_types}
+        lines = [line.strip() for line in str(exc).splitlines() if line.strip()]
+        header_ok = bool(lines) and lines[0] == 'BOP check found the following errors:'
+        details = lines[1:] if header_ok else lines
+        matches = [re.fullmatch(r'Error in [A-Za-z0-9_ ]+: BOPAlgo_([A-Za-z0-9_]+)', line) for line in details]
+        unparsed_count = sum(1 for match in matches if match is None)
+        error_types = sorted(set(match.group(1) for match in matches if match is not None))
+        parser_complete = (
+            type(exc).__name__ == 'ValueError'
+            and header_ok
+            and len(details) > 0
+            and unparsed_count == 0
+            and len(error_types) > 0
+        )
+        return {
+            'ok': False,
+            'errorCount': len(details),
+            'errorTypes': error_types,
+            'parserComplete': parser_complete,
+            'exceptionType': type(exc).__name__,
+            'unparsedLineCount': unparsed_count,
+        }
 
 
 def shape_evidence(shapes):
@@ -154,6 +173,47 @@ def split_source(source, axis, plane, signed_distance):
     return low, high, fixed, moving, faces
 
 
+def fixed_region_evidence(source_fixed, output, source_box, axis, plane, signed_distance):
+    margin = max(source_box.XLength, source_box.YLength, source_box.ZLength) + abs(signed_distance) + 10.0
+    if signed_distance > 0:
+        region = make_region(
+            source_box,
+            axis,
+            axis_min(source_box, axis) - margin,
+            plane,
+            margin,
+        )
+    else:
+        region = make_region(
+            source_box,
+            axis,
+            plane,
+            axis_max(source_box, axis) + margin,
+            margin,
+        )
+    output_fixed = output.common(region).removeSplitter()
+    common = source_fixed.common(output_fixed).removeSplitter()
+    source_volume = source_fixed.Volume
+    output_volume = output_fixed.Volume
+    common_volume = common.Volume
+    source_only = max(0.0, source_volume - common_volume)
+    output_only = max(0.0, output_volume - common_volume)
+    return {
+        'sourceVolume': source_volume,
+        'outputVolume': output_volume,
+        'commonVolume': common_volume,
+        'sourceOnlyVolume': source_only,
+        'outputOnlyVolume': output_only,
+        'symmetricDifferenceVolume': source_only + output_only,
+        'sourceSolidCount': len(source_fixed.Solids),
+        'outputSolidCount': len(output_fixed.Solids),
+        'sourceClosed': bool(source_fixed.isClosed()),
+        'outputClosed': bool(output_fixed.isClosed()),
+        'sourceValid': bool(source_fixed.isValid()),
+        'outputValid': bool(output_fixed.isValid()),
+    }
+
+
 def validate_request(request):
     if request.get('operation') != 'section-insert':
         raise RuntimeError('unsupported operation')
@@ -179,6 +239,8 @@ def run(request):
     axis, plane, signed_distance = validate_request(request)
     input_path = request['inputPath']
     source_doc, source, source_evidence = load_step(input_path, 'CCLinkCadSource')
+    output_doc = None
+    validation_doc = None
     try:
         if source_evidence['solidCount'] != 1 or not source_evidence['closed'] or not source_evidence['valid'] or not source_evidence['basicCheckOk']:
             raise RuntimeError('source STEP is not one closed valid solid')
@@ -217,20 +279,33 @@ def run(request):
         output_doc.recompute()
         Import.export([feature], output_path)
         App.closeDocument(output_doc.Name)
+        output_doc = None
+        validation_doc, output, output_evidence = load_step(request['outputPath'], 'CCLinkCadValidation')
+        fixed_region = fixed_region_evidence(
+            fixed,
+            output,
+            source.BoundBox,
+            axis,
+            plane,
+            signed_distance,
+        )
+        output_evidence['fileSize'] = os.path.getsize(request['outputPath'])
+        return {
+            'success': True,
+            'mode': 'modify',
+            'sourceHashAfter': file_hash(input_path),
+            'source': source_evidence,
+            'split': split,
+            'expectedBounds': predicted,
+            'fixedRegion': fixed_region,
+            'output': output_evidence,
+        }
     finally:
+        if validation_doc is not None:
+            App.closeDocument(validation_doc.Name)
+        if output_doc is not None:
+            App.closeDocument(output_doc.Name)
         App.closeDocument(source_doc.Name)
-    validation_doc, output, output_evidence = load_step(request['outputPath'], 'CCLinkCadValidation')
-    App.closeDocument(validation_doc.Name)
-    output_evidence['fileSize'] = os.path.getsize(request['outputPath'])
-    return {
-        'success': True,
-        'mode': 'modify',
-        'sourceHashAfter': file_hash(input_path),
-        'source': source_evidence,
-        'split': split,
-        'expectedBounds': predicted,
-        'output': output_evidence,
-    }
 
 
 args = sys.argv[sys.argv.index('--pass') + 1:]

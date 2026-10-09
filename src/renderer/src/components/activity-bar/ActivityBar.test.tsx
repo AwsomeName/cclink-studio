@@ -24,7 +24,8 @@ describe('ActivityBar', () => {
       '文章发布',
       '事务',
       '定时任务',
-      '生产',
+      '视频创作',
+      '硬件生产',
     ]
     const positions = labels.map((label) => markup.indexOf(`title="${label}"`))
 
@@ -48,7 +49,8 @@ describe('ActivityBar', () => {
       '发布',
       '事务',
       '定时',
-      '生产',
+      '视频',
+      '硬件',
       '设置',
     ]) {
       expect(markup).toContain(`class="activity-bar-label" aria-hidden="true">${label}</span>`)
@@ -56,6 +58,6 @@ describe('ActivityBar', () => {
     for (const group of ['工作', '资源', '流程']) {
       expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
     }
-    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(13)
+    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(14)
   })
 })

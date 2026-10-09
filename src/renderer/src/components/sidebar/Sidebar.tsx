@@ -96,8 +96,10 @@ function getSidebarTitle(
       return '数据源'
     case 'company-accounts':
       return '公司账目'
+    case 'video-creation':
+      return '视频创作'
     case 'production':
-      return '生产'
+      return '硬件生产'
     case 'terminal':
       return 'Terminal'
     case 'operations':
@@ -353,6 +355,10 @@ function ProjectSidebarContent({
 
       {activePanel === 'files' && (
         <FilesSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
+      )}
+
+      {activePanel === 'video-creation' && (
+        <VideoCreationSidebarView workspaceRef={activeWorkspaceRef} workspacePath={workspacePath} />
       )}
 
       {activePanel === 'production' && (
@@ -829,20 +835,36 @@ function ProductionSidebarView({
 }): React.ReactElement {
   if (workspaceRef.kind === 'local' && workspacePath) {
     return (
-      <>
-        <PromotionalVideoSidebar workspacePath={workspacePath} workspaceRef={workspaceRef} />
-        <HardwareProductionSection
-          workspacePath={workspacePath}
-          workspaceRef={workspaceRef}
-          alwaysVisible
-        />
-      </>
+      <HardwareProductionSection
+        workspacePath={workspacePath}
+        workspaceRef={workspaceRef}
+        alwaysVisible
+        defaultExpanded
+      />
     )
   }
 
   return (
     <div className="project-panel-empty project-files-empty">
-      未归档不启用生产检测。请选择或打开一个本地项目。
+      硬件生产检查需要本地项目文件。请先打开包含 Gerber、BOM 或结构文件的本地工作空间。
+    </div>
+  )
+}
+
+function VideoCreationSidebarView({
+  workspaceRef,
+  workspacePath,
+}: {
+  workspaceRef: WorkspaceRef
+  workspacePath: string | null
+}): React.ReactElement {
+  if (workspaceRef.kind === 'local' && workspacePath) {
+    return <PromotionalVideoSidebar workspacePath={workspacePath} workspaceRef={workspaceRef} />
+  }
+
+  return (
+    <div className="project-panel-empty project-files-empty">
+      视频工程需要保存在本地工作空间。请先打开本地工作空间。
     </div>
   )
 }

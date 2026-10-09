@@ -2,6 +2,7 @@ import {
   cp,
   lstat,
   mkdir,
+  mkdtemp,
   open,
   readdir,
   readFile,
@@ -16,6 +17,7 @@ import {
 import { constants as fsConstants, createWriteStream, watch } from 'fs'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { join, resolve, extname, dirname, parse, sep, basename, relative, isAbsolute } from 'path'
+import { tmpdir } from 'os'
 import { pipeline } from 'stream/promises'
 import { shell } from 'electron'
 import { createHash, randomUUID } from 'crypto'
@@ -94,6 +96,15 @@ export interface FileServiceOptions {
   now?: () => number
   relocationJournalPath?: string
   linkedDirectoryGrantsPath?: string
+}
+
+export interface AuthorizedFileSnapshot {
+  originalPath: string
+  snapshotPath: string
+  hash: string
+  size: number
+  verifyUnchanged: () => Promise<void>
+  cleanup: () => Promise<void>
 }
 
 interface PickerCapability {
@@ -453,7 +464,24 @@ export class FileService {
         throw new Error('OUTSIDE_WORKSPACE: 文件路径在打开后发生变化')
       }
       await this.validatePath(safe, 'read')
-      return { path: safe, buffer: await handle.readFile(), fileStat: opened }
+      const buffer = await handle.readFile()
+      const [openedAfterRead, pathAfterRead] = await Promise.all([handle.stat(), stat(safe)])
+      if (
+        openedAfterRead.dev !== opened.dev ||
+        openedAfterRead.ino !== opened.ino ||
+        openedAfterRead.size !== opened.size ||
+        openedAfterRead.mtimeMs !== opened.mtimeMs ||
+        openedAfterRead.ctimeMs !== opened.ctimeMs ||
+        pathAfterRead.dev !== opened.dev ||
+        pathAfterRead.ino !== opened.ino ||
+        pathAfterRead.size !== opened.size ||
+        pathAfterRead.mtimeMs !== opened.mtimeMs ||
+        pathAfterRead.ctimeMs !== opened.ctimeMs
+      ) {
+        throw new Error('SOURCE_CHANGED: 文件在读取期间发生变化')
+      }
+      await this.validatePath(safe, 'read')
+      return { path: safe, buffer, fileStat: openedAfterRead }
     } finally {
       await handle.close()
     }
@@ -479,9 +507,75 @@ export class FileService {
     return this.validatePath(filePath, 'write')
   }
 
+  async assertNewWritableTarget(filePath: string): Promise<string> {
+    const safe = await this.validatePath(filePath, 'write')
+    try {
+      await lstat(safe)
+      throw new Error('EEXIST: 输出文件已存在，请选择新的文件名')
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    const parent = dirname(await this.authorizedWriteTarget(safe))
+    if (!(await stat(parent)).isDirectory()) throw new Error('ENOTDIR: 输出父路径不是目录')
+    await this.validatePath(safe, 'write')
+    return safe
+  }
+
+  async createAuthorizedFileSnapshot(filePath: string): Promise<AuthorizedFileSnapshot> {
+    const { path, buffer } = await this.readAuthorizedFile(filePath)
+    const directory = await mkdtemp(join(tmpdir(), 'cclink-authorized-file-'))
+    const extension = extname(path).toLowerCase()
+    const snapshotPath = join(directory, `source${extension || '.bin'}`)
+    const hash = createHash('sha256').update(buffer).digest('hex')
+    try {
+      await writeFile(snapshotPath, buffer, { flag: 'wx', mode: 0o600 })
+    } catch (error) {
+      await rm(directory, { recursive: true, force: true }).catch(() => undefined)
+      throw error
+    }
+    return {
+      originalPath: path,
+      snapshotPath,
+      hash,
+      size: buffer.byteLength,
+      verifyUnchanged: async () => {
+        const current = await this.readAuthorizedFile(path)
+        const currentHash = createHash('sha256').update(current.buffer).digest('hex')
+        if (currentHash !== hash) throw new Error('SOURCE_CHANGED: 源文件内容已变化')
+      },
+      cleanup: async () => {
+        await rm(directory, { recursive: true, force: true })
+      },
+    }
+  }
+
+  async publishAuthorizedFile(sourcePath: string, targetPath: string): Promise<string> {
+    const sourceHandle = await open(sourcePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+    let buffer: Buffer
+    try {
+      const before = await sourceHandle.stat()
+      if (!before.isFile()) throw new Error('EINVAL: 发布源不是普通文件')
+      buffer = await sourceHandle.readFile()
+      const after = await sourceHandle.stat()
+      if (
+        after.dev !== before.dev ||
+        after.ino !== before.ino ||
+        after.size !== before.size ||
+        after.mtimeMs !== before.mtimeMs ||
+        after.ctimeMs !== before.ctimeMs
+      ) {
+        throw new Error('SOURCE_CHANGED: 发布源在读取期间发生变化')
+      }
+    } finally {
+      await sourceHandle.close()
+    }
+    if (buffer.byteLength === 0) throw new Error('EINVAL: 不允许发布空文件')
+    return this.writeAuthorizedFile(targetPath, buffer, { exclusive: true })
+  }
+
   private async writeAuthorizedFile(
     filePath: string,
-    content: string,
+    content: string | Buffer,
     options: { exclusive?: boolean } = {},
   ): Promise<string> {
     const safe = await this.validatePath(filePath, 'write')
@@ -496,17 +590,50 @@ export class FileService {
       fsConstants.O_NOFOLLOW |
       (options.exclusive ? fsConstants.O_EXCL : fsConstants.O_TRUNC)
     const handle = await open(diskPath, flags, 0o600)
+    const opened = await handle.stat()
+    let published = false
     try {
       const parentAfter = await realpath(dirname(diskPath))
       if (parentAfter !== parentBefore) {
         throw new Error('OUTSIDE_WORKSPACE: 目标父目录在打开过程中发生变化')
       }
+      const targetAfter = await lstat(diskPath)
+      if (
+        targetAfter.isSymbolicLink() ||
+        targetAfter.dev !== opened.dev ||
+        targetAfter.ino !== opened.ino
+      ) {
+        throw new Error('OUTSIDE_WORKSPACE: 目标文件在打开过程中发生变化')
+      }
       await this.validatePath(safe, 'write')
-      await handle.writeFile(content, 'utf8')
+      if (typeof content === 'string') await handle.writeFile(content, 'utf8')
+      else await handle.writeFile(content)
       await handle.sync()
+      const [parentFinal, targetFinal] = await Promise.all([
+        realpath(dirname(diskPath)),
+        lstat(diskPath),
+      ])
+      if (
+        parentFinal !== parentBefore ||
+        targetFinal.isSymbolicLink() ||
+        targetFinal.dev !== opened.dev ||
+        targetFinal.ino !== opened.ino
+      ) {
+        throw new Error('OUTSIDE_WORKSPACE: 写入期间目标路径发生变化')
+      }
+      await this.validatePath(safe, 'write')
+      published = true
       return safe
     } finally {
       await handle.close()
+      if (!published) {
+        try {
+          const current = await lstat(diskPath)
+          if (current.dev === opened.dev && current.ino === opened.ino) await unlink(diskPath)
+        } catch {
+          // 只清理由本次独占创建且身份未变化的文件。
+        }
+      }
     }
   }
 

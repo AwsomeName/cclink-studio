@@ -1,9 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { access, link, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, extname, join } from 'node:path'
+import { extname, join } from 'node:path'
+import type { FileService } from '../fs/file-service'
 import type { AppSettings } from '../settings/types'
 import { detectFreeCad } from './freecad-detector'
 import { FREECAD_SECTION_INSERT_SCRIPT } from './freecad-section-insert-script'
@@ -15,12 +15,15 @@ import {
   type CadModificationPlanResult,
   type CadModificationResult,
   type CadModificationSnapshot,
+  type CadFixedRegionEvidence,
   type CadShapeEvidence,
 } from './cad-modification-types'
 
 const DEFAULT_TIMEOUT_MS = 180_000
 const DIMENSION_TOLERANCE_MM = 0.05
 const FIXED_SIDE_TOLERANCE_MM = 0.01
+const FIXED_REGION_ABSOLUTE_TOLERANCE_MM3 = 0.002
+const FIXED_REGION_RELATIVE_TOLERANCE = 2e-7
 const MAX_BASELINE_BOP_WARNING_GROWTH = 64
 const ACCEPTED_BASELINE_BOP_ERRORS = new Set(['InvalidCurveOnSurface'])
 
@@ -40,6 +43,7 @@ interface FreeCadModifyPayload {
   source: CadShapeEvidence
   split: CadModificationPlanResult['split']
   expectedBounds: CadBounds
+  fixedRegion: CadFixedRegionEvidence
   output: CadShapeEvidence & { fileSize: number }
 }
 
@@ -81,25 +85,6 @@ function expectedSizeFromSnapshot(snapshot: CadModificationSnapshot): {
     x: snapshot.expectedSizeX,
     y: snapshot.expectedSizeY,
     z: snapshot.expectedSizeZ,
-  }
-}
-
-async function fileHash(filePath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const hash = createHash('sha256')
-    const stream = createReadStream(filePath)
-    stream.on('data', (chunk) => hash.update(chunk))
-    stream.once('error', reject)
-    stream.once('end', () => resolve(hash.digest('hex')))
-  })
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await access(filePath)
-    return true
-  } catch {
-    return false
   }
 }
 
@@ -148,6 +133,74 @@ function validateShape(label: string, evidence: CadShapeEvidence): void {
   if (!Number.isFinite(evidence.volume) || evidence.volume <= 0) {
     throw new Error(`${label}体积无效`)
   }
+  validateBopEvidence(label, evidence)
+}
+
+function validateBopEvidence(label: string, evidence: CadShapeEvidence): void {
+  const bop = evidence.bop
+  if (!bop.parserComplete) throw new Error(`${label}BOP 检查结果无法完整解析`)
+  if (!Number.isInteger(bop.errorCount) || bop.errorCount < 0) {
+    throw new Error(`${label}BOP 错误数量无效`)
+  }
+  if (!Number.isInteger(bop.unparsedLineCount) || bop.unparsedLineCount !== 0) {
+    throw new Error(`${label}BOP 检查包含未解析明细`)
+  }
+  if (bop.ok) {
+    if (bop.errorCount !== 0 || bop.errorTypes.length !== 0 || bop.exceptionType) {
+      throw new Error(`${label}BOP 成功结果自相矛盾`)
+    }
+    return
+  }
+  if (bop.exceptionType !== 'ValueError' || bop.errorCount === 0 || bop.errorTypes.length === 0) {
+    throw new Error(`${label}BOP 异常缺少可验证的错误明细`)
+  }
+}
+
+function validateFixedRegion(evidence: CadFixedRegionEvidence): number {
+  for (const [key, value] of Object.entries(evidence)) {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
+      throw new Error(`固定区域几何证据 ${key} 无效`)
+    }
+  }
+  if (
+    evidence.sourceSolidCount !== 1 ||
+    evidence.outputSolidCount !== 1 ||
+    !evidence.sourceClosed ||
+    !evidence.outputClosed ||
+    !evidence.sourceValid ||
+    !evidence.outputValid
+  ) {
+    throw new Error('固定区域未保持为单一、封闭且有效的实体')
+  }
+  if (evidence.sourceVolume <= 0 || evidence.outputVolume <= 0 || evidence.commonVolume <= 0) {
+    throw new Error('固定区域体积证据无效')
+  }
+  const tolerance = Math.max(
+    FIXED_REGION_ABSOLUTE_TOLERANCE_MM3,
+    evidence.sourceVolume * FIXED_REGION_RELATIVE_TOLERANCE,
+  )
+  if (
+    evidence.sourceOnlyVolume < 0 ||
+    evidence.outputOnlyVolume < 0 ||
+    evidence.symmetricDifferenceVolume < 0 ||
+    evidence.symmetricDifferenceVolume > tolerance
+  ) {
+    throw new Error(
+      `固定区域几何差异 ${evidence.symmetricDifferenceVolume.toExponential(3)} mm³ 超过门限`,
+    )
+  }
+  const recomputed = evidence.sourceOnlyVolume + evidence.outputOnlyVolume
+  const expectedSourceOnly = Math.max(0, evidence.sourceVolume - evidence.commonVolume)
+  const expectedOutputOnly = Math.max(0, evidence.outputVolume - evidence.commonVolume)
+  if (
+    evidence.commonVolume > Math.min(evidence.sourceVolume, evidence.outputVolume) + tolerance ||
+    Math.abs(expectedSourceOnly - evidence.sourceOnlyVolume) > tolerance * 1e-3 ||
+    Math.abs(expectedOutputOnly - evidence.outputOnlyVolume) > tolerance * 1e-3 ||
+    Math.abs(recomputed - evidence.symmetricDifferenceVolume) > tolerance * 1e-3
+  ) {
+    throw new Error('固定区域几何证据自相矛盾')
+  }
+  return tolerance
 }
 
 function validateBopPolicy(
@@ -183,6 +236,7 @@ export class CadModificationService {
 
   constructor(
     private readonly getSettings: () => AppSettings,
+    private readonly fileService: FileService,
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
@@ -190,31 +244,46 @@ export class CadModificationService {
     return detectFreeCad(this.getSettings().freecadPath)
   }
 
-  async plan(request: CadModificationPlanRequest): Promise<CadModificationPlanResult> {
+  async plan(
+    request: CadModificationPlanRequest,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<CadModificationPlanResult> {
     this.assertActive()
     validatePlanRequest(request)
-    if (await pathExists(request.outputPath)) throw new Error('输出文件已存在，请选择新的文件名')
-    const backend = await this.requireBackend()
-    const result = await this.runFreeCad<FreeCadPlanPayload>(backend.path!, {
-      ...request,
-      mode: 'plan',
-    })
-    validateShape('源模型', result.source)
-    const expected = result.expectedBounds.size
-    return {
-      kind: 'cad-modification-plan',
-      success: true,
-      backend: { path: backend.path!, ...(backend.version ? { version: backend.version } : {}) },
-      snapshot: {
-        ...request,
-        sourceHash: result.sourceHash,
-        expectedSizeX: expected.x,
-        expectedSizeY: expected.y,
-        expectedSizeZ: expected.z,
-      },
-      source: result.source,
-      split: result.split,
-      warning: '该方案只验证一种截面插入修改；确认参数后才会生成新 STEP。基础核验不等于可制造。',
+    if (options.signal?.aborted) throw new Error('CAD 修改已取消')
+    await this.fileService.assertNewWritableTarget(request.outputPath)
+    const sourceSnapshot = await this.fileService.createAuthorizedFileSnapshot(request.inputPath)
+    try {
+      const backend = await this.requireBackend()
+      if (options.signal?.aborted) throw new Error('CAD 修改已取消')
+      const result = await this.runFreeCad<FreeCadPlanPayload>(
+        backend.path!,
+        { ...request, inputPath: sourceSnapshot.snapshotPath, mode: 'plan' },
+        options.signal,
+      )
+      if (result.sourceHash !== sourceSnapshot.hash) {
+        throw new Error('FreeCAD 分析的源快照与已授权文件不一致')
+      }
+      await sourceSnapshot.verifyUnchanged()
+      validateShape('源模型', result.source)
+      const expected = result.expectedBounds.size
+      return {
+        kind: 'cad-modification-plan',
+        success: true,
+        backend: { path: backend.path!, ...(backend.version ? { version: backend.version } : {}) },
+        snapshot: {
+          ...request,
+          sourceHash: sourceSnapshot.hash,
+          expectedSizeX: expected.x,
+          expectedSizeY: expected.y,
+          expectedSizeZ: expected.z,
+        },
+        source: result.source,
+        split: result.split,
+        warning: '该方案只验证一种截面插入修改；确认参数后才会生成新 STEP。基础核验不等于可制造。',
+      }
+    } finally {
+      await sourceSnapshot.cleanup().catch(() => undefined)
     }
   }
 
@@ -225,22 +294,36 @@ export class CadModificationService {
     this.assertActive()
     validateSnapshot(snapshot)
     if (options.signal?.aborted) throw new Error('CAD 修改已取消')
-    if (await pathExists(snapshot.outputPath)) throw new Error('输出文件已存在，拒绝覆盖')
-    const beforeHash = await fileHash(snapshot.inputPath)
-    if (beforeHash !== snapshot.sourceHash) throw new Error('源 STEP 已变化，请重新分析并确认参数')
+    await this.fileService.assertNewWritableTarget(snapshot.outputPath)
     const backend = await this.requireBackend()
+    const sourceSnapshot = await this.fileService.createAuthorizedFileSnapshot(snapshot.inputPath)
+    if (sourceSnapshot.hash !== snapshot.sourceHash) {
+      await sourceSnapshot.cleanup().catch(() => undefined)
+      throw new Error('源 STEP 已变化，请重新分析并确认参数')
+    }
+    let outputDirectory: string
+    try {
+      outputDirectory = await mkdtemp(join(tmpdir(), 'cclink-cad-output-'))
+    } catch (error) {
+      await sourceSnapshot.cleanup().catch(() => undefined)
+      throw error
+    }
     const tempOutputPath = join(
-      dirname(snapshot.outputPath),
-      `.cclink-cad-${randomUUID()}${extname(snapshot.outputPath).toLowerCase()}`,
+      outputDirectory,
+      `output${extname(snapshot.outputPath).toLowerCase()}`,
     )
     try {
       const result = await this.runFreeCad<FreeCadModifyPayload>(
         backend.path!,
-        { ...snapshot, outputPath: tempOutputPath, mode: 'modify' },
+        {
+          ...snapshot,
+          inputPath: sourceSnapshot.snapshotPath,
+          outputPath: tempOutputPath,
+          mode: 'modify',
+        },
         options.signal,
       )
-      const afterHash = await fileHash(snapshot.inputPath)
-      if (afterHash !== snapshot.sourceHash || result.sourceHashAfter !== snapshot.sourceHash) {
+      if (result.sourceHashAfter !== snapshot.sourceHash) {
         throw new Error('源 STEP 在执行期间发生变化，结果未发布')
       }
       validateShape('源模型', result.source)
@@ -277,10 +360,12 @@ export class CadModificationService {
       if (nonTargetDimensionErrorMm > DIMENSION_TOLERANCE_MM) {
         throw new Error(`非目标方向尺寸误差 ${nonTargetDimensionErrorMm.toFixed(4)} mm 超过门限`)
       }
+      const fixedRegionToleranceMm3 = validateFixedRegion(result.fixedRegion)
       const bop = validateBopPolicy(result.source, result.output)
 
-      await link(tempOutputPath, snapshot.outputPath)
-      await unlink(tempOutputPath)
+      await sourceSnapshot.verifyUnchanged()
+      if (options.signal?.aborted) throw new Error('CAD 修改已取消')
+      await this.fileService.publishAuthorizedFile(tempOutputPath, snapshot.outputPath)
       return {
         kind: 'cad-modification-result',
         success: true,
@@ -300,11 +385,16 @@ export class CadModificationService {
           sourceHashUnchanged: true,
           targetDimensionErrorMm,
           fixedSideErrorMm,
+          fixedRegion: result.fixedRegion,
+          fixedRegionToleranceMm3,
           nonTargetDimensionErrorMm,
         },
       }
     } finally {
-      await rm(tempOutputPath, { force: true }).catch(() => undefined)
+      await Promise.all([
+        sourceSnapshot.cleanup().catch(() => undefined),
+        rm(outputDirectory, { recursive: true, force: true }).catch(() => undefined),
+      ])
     }
   }
 
@@ -331,6 +421,7 @@ export class CadModificationService {
     request: Record<string, unknown>,
     signal?: AbortSignal,
   ): Promise<T> {
+    if (signal?.aborted) throw new Error('CAD 修改已取消')
     const id = randomUUID()
     const requestPath = join(tmpdir(), `cclink-cad-request-${id}.json`)
     const resultPath = join(tmpdir(), `cclink-cad-result-${id}.json`)
@@ -364,6 +455,10 @@ export class CadModificationService {
         child.stderr.resume()
         child.once('error', (error) => finish(() => reject(error)))
         child.once('close', (code) => finish(() => resolve(code ?? -1)))
+        if (signal?.aborted) {
+          abort()
+          return
+        }
         // FreeCADCmd -c starts an interactive Python console. Submit the fixed adapter as one
         // statement so compound blocks are compiled together instead of line-by-line at prompts.
         child.stdin.end(`exec(${JSON.stringify(FREECAD_SECTION_INSERT_SCRIPT)})\n`)

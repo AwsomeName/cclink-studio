@@ -263,7 +263,7 @@ try {
   await page.locator('.vc-content').evaluate((el) => el.scrollTo({ top: 0 }))
   await page.evaluate(async () => {
     const { useUIStore } = await import('/src/stores/ui-store.ts')
-    useUIStore.getState().showPanel('production')
+    useUIStore.getState().showPanel('video-creation')
   })
   await page.screenshot({ path: join(runDir, 'video-creation-01-script.png') })
   for (const [index, label] of ['分镜与素材', '声音与节奏', '预览与导出'].entries()) {

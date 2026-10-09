@@ -191,6 +191,17 @@ export function ActivityProductionIcon(props: ActivityIconProps): ReactElement {
   )
 }
 
+export function ActivityVideoCreationIcon(props: ActivityIconProps): ReactElement {
+  return ActivityIcon(
+    props,
+    <>
+      <rect height="14" rx="2" width="18" x="3" y="6" />
+      <path d="M3 10h18M7 3l2 3m4-3 2 3m4-3 2 3" />
+      <path d="m10 13 4 2.5-4 2.5v-5Z" />
+    </>,
+  )
+}
+
 export function ActivitySettingsIcon(props: ActivityIconProps): ReactElement {
   return ActivityIcon(
     props,

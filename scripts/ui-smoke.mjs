@@ -375,9 +375,76 @@ async function main() {
 
   await runCheck(activityBarCheck, async () => {
     const evidenceDir = join(runDir, 'activity-bar-evidence')
+    const separationWorkspace = join(workspaceFixtureRoot, 'navigation-separation')
+    const sourcePath = join(separationWorkspace, 'existing-video-script.md')
+    const legacyVideoProject = {
+      // Historical schema from 490501cf, before assets, renderSettings and narration existed.
+      schemaVersion: 1,
+      id: '11111111-1111-4111-8111-111111111111',
+      workspaceRef: { kind: 'local', path: separationWorkspace },
+      revision: 1,
+      title: '初版格式宣发视频工程',
+      source: {
+        path: sourcePath,
+        snapshot: '# 既有宣发稿\n\n这是初版格式保存的视频工程。\n',
+      },
+      brief: {
+        platform: 'douyin',
+        aspectRatio: '9:16',
+        targetDurationSeconds: 30,
+        brand: { primaryColor: '#5B8CFF', callToAction: '' },
+      },
+      scenes: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          order: 0,
+          durationSeconds: 30,
+          narration: '这是初版格式保存的视频工程。',
+          subtitle: '这是初版格式保存的视频工程',
+          visualDescription: 'CCLink Studio 视频工作台界面',
+          searchTerms: ['CCLink Studio', '视频工作台'],
+          generationPrompt: 'A clean desktop video creation workspace',
+          materialKind: 'unassigned',
+        },
+      ],
+      createdAt: 1_786_500_000_000,
+      updatedAt: 1_786_500_000_000,
+    }
     await mkdir(evidenceDir, { recursive: true })
+    await mkdir(join(separationWorkspace, '.cclink-studio/media-projects', legacyVideoProject.id), {
+      recursive: true,
+    })
+    await writeFile(sourcePath, legacyVideoProject.source.snapshot, 'utf8')
+    await writeFile(
+      join(
+        separationWorkspace,
+        '.cclink-studio/media-projects',
+        legacyVideoProject.id,
+        'project.json',
+      ),
+      JSON.stringify(legacyVideoProject, null, 2),
+      'utf8',
+    )
+    assert(
+      !('assets' in legacyVideoProject) &&
+        !('renderSettings' in legacyVideoProject) &&
+        !('narration' in legacyVideoProject),
+      'historical video fixture accidentally uses the current project shape',
+    )
+    await writeFile(join(separationWorkspace, 'gerber-navigation.zip'), 'fixture', 'utf8')
+    await writeFile(
+      join(separationWorkspace, 'bom-navigation.csv'),
+      'Designator,Value\nR1,10k\n',
+      'utf8',
+    )
+    const workspaceOpened = await page.evaluate(async (path) => {
+      const { openWorkspaceRef } =
+        await import('/src/features/workspace-open/workspace-open-controller.ts')
+      return openWorkspaceRef({ kind: 'local', path })
+    }, separationWorkspace)
+    assert(workspaceOpened, 'navigation separation fixture workspace did not open')
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 14, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 15, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '资源', '流程']),
@@ -396,7 +463,8 @@ async function main() {
       '发布',
       '事务',
       '定时',
-      '生产',
+      '视频',
+      '硬件',
       '设置',
     ]
     assert(
@@ -439,6 +507,72 @@ async function main() {
       const { useThemeStore } = await import('/src/stores/theme-store.ts')
       useThemeStore.getState().setTheme('dark')
     })
+    await ensureActivityPanel(page, 'video-creation', '视频创作')
+    assert(
+      (await page.locator('.promotional-video-sidebar').count()) === 1 &&
+        (await page.locator('.hardware-production-section').count()) === 0,
+      'video activity still mixes hardware content',
+    )
+    const existingVideoButton = page.locator('.promotional-video-project-list button', {
+      hasText: legacyVideoProject.title,
+    })
+    await existingVideoButton.waitFor({ state: 'visible', timeout: 10_000 })
+    await existingVideoButton.click()
+    await page.locator('.video-creation-workspace').waitFor({ state: 'visible', timeout: 10_000 })
+    const activeVideoTab = await page.evaluate(async () => {
+      const { useTabStore } = await import('/src/stores/tab-store.ts')
+      return useTabStore.getState().getActiveTab()
+    })
+    assert(
+      activeVideoTab?.type === 'media-production' &&
+        activeVideoTab.mediaProject?.projectId === legacyVideoProject.id,
+      'historical video project did not open from the separated activity',
+    )
+    await ensureActivityPanel(page, 'production', '硬件生产')
+    assert(
+      (await page.locator('.hardware-production-section').count()) === 1 &&
+        (await page.locator('.promotional-video-sidebar').count()) === 0,
+      'hardware activity still mixes video content',
+    )
+    await page.waitForFunction(
+      async (workspacePath) => {
+        const { useHardwareStore } = await import('/src/stores/hardware-store.ts')
+        const state = useHardwareStore.getState()
+        return (
+          !state.loading &&
+          state.summary?.workspacePath === workspacePath &&
+          state.summary.counts['gerber-package'] === 1 &&
+          state.summary.counts.bom === 1
+        )
+      },
+      separationWorkspace,
+      { timeout: 10_000 },
+    )
+    const hardwareSection = page.locator('.hardware-production-section')
+    await hardwareSection.getByRole('button', { name: '检查', exact: true }).click()
+    await page.waitForFunction(
+      async () => {
+        const { useHardwareStore } = await import('/src/stores/hardware-store.ts')
+        const state = useHardwareStore.getState()
+        return !state.inspecting && Boolean(state.report) && !state.error
+      },
+      undefined,
+      { timeout: 10_000 },
+    )
+    await hardwareSection.getByRole('button', { name: '报告', exact: true }).click()
+    const reportPath = await waitForAsyncFunction(
+      page,
+      async () => {
+        const { useHardwareStore } = await import('/src/stores/hardware-store.ts')
+        const state = useHardwareStore.getState()
+        return !state.savingReport && state.lastReportFilePath
+      },
+      undefined,
+      { timeout: 10_000 },
+    ).then((handle) => handle.jsonValue())
+    assert(reportPath, 'hardware report path missing after write')
+    const reportText = await readFile(reportPath, 'utf8')
+    assert(reportText.includes('硬件生产包检查报告'), 'hardware report content missing')
     await page.setViewportSize({ width: 900, height: 560 })
     try {
       assert(
@@ -450,7 +584,7 @@ async function main() {
       await page.locator('.activity-bar-main').hover()
       await page.mouse.wheel(0, 1500)
       await page.waitForFunction(() => document.querySelector('.activity-bar-main').scrollTop > 0)
-      await bar.getByRole('button', { name: '生产', exact: true }).click()
+      await ensureActivityPanel(page, 'production', '硬件生产')
       await waitForAsyncFunction(page, async () => {
         const { useUIStore } = await import('/src/stores/ui-store.ts')
         return (
@@ -458,18 +592,26 @@ async function main() {
         )
       })
       assert(
-        await bar.getByRole('button', { name: '生产', pressed: true }).isVisible(),
+        await bar.getByRole('button', { name: '硬件生产', pressed: true }).isVisible(),
         'selection missing',
       )
       await page.screenshot({ path: join(evidenceDir, 'short-window.png') })
-      const files = bar.getByRole('button', { name: '文件', exact: true })
-      await files.click()
-      await files.focus()
-      await files.press('Shift+F10')
+      const video = bar.getByRole('button', { name: '视频创作', exact: true })
+      await video.focus()
+      await video.press('Shift+F10')
       await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
+      assert(
+        (await page.locator('.unified-context-menu').innerText()).includes('打开视频创作'),
+        'video keyboard context menu has the wrong activity label',
+      )
       await page.keyboard.press('Escape')
-      await files.click({ button: 'right' })
+      const hardware = bar.getByRole('button', { name: '硬件生产', exact: true })
+      await hardware.click({ button: 'right' })
       await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
+      assert(
+        (await page.locator('.unified-context-menu').innerText()).includes('打开硬件生产'),
+        'hardware pointer context menu has the wrong activity label',
+      )
       await page.keyboard.press('Escape')
       const settings = bar.getByRole('button', { name: '设置', exact: true })
       const settingsBox = await settings.boundingBox()
@@ -496,13 +638,25 @@ async function main() {
         page,
         async (tabId) => {
           const runtime = await window.cclinkStudio.browser.getRuntimeDiagnostics(tabId)
-          const barRight = document.querySelector('.activity-bar').getBoundingClientRect().right
+          const content = document.querySelector('.workbench-content').getBoundingClientRect()
+          const tabBar = document.querySelector('.tab-bar').getBoundingClientRect()
+          const expectedY = Math.max(Math.round(content.top), Math.ceil(tabBar.bottom))
+          const expected = {
+            x: Math.round(content.left),
+            y: expectedY,
+            width: Math.round(content.width),
+            height: Math.max(0, Math.round(content.bottom) - expectedY),
+          }
+          const sameBounds = (left, right) =>
+            ['x', 'y', 'width', 'height'].every((key) => Math.abs(left[key] - right[key]) <= 1)
           return (
             runtime.visibleUrl?.endsWith('/navigation-layout') &&
             runtime.layout &&
-            runtime.layout.rendererBounds.x >= barRight &&
+            sameBounds(runtime.layout.rendererBounds, expected) &&
+            sameBounds(runtime.layout.nativeBounds, expected) &&
+            Math.abs(runtime.layout.protectedTop - expectedY) <= 1 &&
+            Math.abs(runtime.layout.nativeProtectedTop - expectedY) <= 1 &&
             !runtime.layout.overlapsProtectedTop &&
-            runtime.layout.nativeBounds.y >= runtime.layout.nativeProtectedTop &&
             (await window.cclinkStudio.browser.getActiveViewId()) === tabId
           )
         },
@@ -516,7 +670,7 @@ async function main() {
     } finally {
       await page.setViewportSize({ width: 1440, height: 920 })
     }
-    return `13 labeled entries; selection, scrolling, settings, keyboard/right-click menus, light/dark, real native browser layout; evidence: ${evidenceDir}`
+    return `14 separated activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
   })
 
   await runCheck('workspace file and search boundaries survive a real project switch', async () => {

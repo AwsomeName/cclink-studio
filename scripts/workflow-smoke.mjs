@@ -1652,7 +1652,7 @@ async function main() {
     }
 
     await ensureSidebarVisible(page)
-    await clickByTitle(page, '生产')
+    await clickByTitle(page, '硬件生产')
     const production = page.locator('[data-context-target="production"]').first()
     await production.waitFor({ timeout: 15_000 })
     await verifyMouseAndKeyboardMenu(production, 'production.scan', 'production.copy-status')

@@ -192,14 +192,18 @@ describe('ConversationMessageRenderer', () => {
       success: true,
       outputPath: '/workspace/model-x-plus-3.step',
       axis: 'x',
+      direction: 'positive',
       distanceMm: 3,
       output: {
         solidCount: 1,
         volume: 11200.35,
         bounds: { size: { x: 151.1735, y: 42.9023, z: 50.5921 } },
+        bop: { errorCount: 204, parserComplete: true },
       },
       validation: {
         status: 'passed-with-baseline-warning',
+        fixedRegion: { symmetricDifferenceVolume: 0.0013 },
+        fixedRegionToleranceMm3: 0.002,
         warning: '源模型已有 BOP 基线警告，需要专业 CAD 复核。',
       },
     })
@@ -208,5 +212,24 @@ describe('ConversationMessageRenderer', () => {
       'STEP 已生成 · X +3 mm · 151.17 × 42.90 × 50.59 mm',
     )
     expect(parseCadModificationResult('not-json')).toBeNull()
+  })
+
+  it('shows the actual sign for a negative-axis STEP modification', () => {
+    const content = JSON.stringify({
+      kind: 'cad-modification-result',
+      success: true,
+      outputPath: '/workspace/model-x-minus-10.step',
+      axis: 'x',
+      direction: 'negative',
+      distanceMm: 10,
+      output: {
+        solidCount: 1,
+        volume: 12000,
+        bounds: { size: { x: 158.1735, y: 42.9023, z: 50.5921 } },
+      },
+      validation: { status: 'passed' },
+    })
+
+    expect(parseCadModificationResult(content)?.summary).toContain('X -10 mm')
   })
 })

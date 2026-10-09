@@ -1832,32 +1832,25 @@ html&gt;body{padding:0}&lt;/style&gt;
 &lt;script&gt;
 (() =&gt; {
   const root = document.getElementById(&#x27;studio-navigation-options&#x27;);
-  const icon = (body) =&gt; `&lt;span class=&quot;sn-icon&quot; aria-hidden=&quot;true&quot;&gt;&lt;svg viewBox=&quot;0 0 24 24&quot;&gt;${body}&lt;/svg&gt;&lt;/span&gt;`;
+  const icon = (name) =&gt; `&lt;span class=&quot;sn-icon&quot; aria-hidden=&quot;true&quot;&gt;&lt;i data-lucide=&quot;${name}&quot;&gt;&lt;/i&gt;&lt;/span&gt;`;
   const shapes = {
-    files:&#x27;&lt;path d=&quot;M3 7h6l2-3h4l2 3h4v13H3z&quot;/&gt;&#x27;,
-    sessions:&#x27;&lt;path d=&quot;M3 4h18v13H9l-5 4v-4H3z&quot;/&gt;&lt;path d=&quot;M7 9h10M7 13h7&quot;/&gt;&#x27;,
-    browser:&#x27;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;9&quot;/&gt;&lt;path d=&quot;M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18&quot;/&gt;&#x27;,
-    terminal:&#x27;&lt;rect x=&quot;3&quot; y=&quot;4&quot; width=&quot;18&quot; height=&quot;16&quot; rx=&quot;2&quot;/&gt;&lt;path d=&quot;m7 9 3 3-3 3M13 15h4&quot;/&gt;&#x27;,
-    roles:&#x27;&lt;circle cx=&quot;12&quot; cy=&quot;7&quot; r=&quot;4&quot;/&gt;&lt;path d=&quot;M4 21v-3a8 8 0 0 1 16 0v3&quot;/&gt;&#x27;,
-    accounts:&#x27;&lt;rect x=&quot;3&quot; y=&quot;4&quot; width=&quot;18&quot; height=&quot;16&quot; rx=&quot;2&quot;/&gt;&lt;circle cx=&quot;12&quot; cy=&quot;10&quot; r=&quot;3&quot;/&gt;&lt;path d=&quot;M7 18c0-5 10-5 10 0&quot;/&gt;&#x27;,
-    data:&#x27;&lt;ellipse cx=&quot;12&quot; cy=&quot;5&quot; rx=&quot;8&quot; ry=&quot;3&quot;/&gt;&lt;path d=&quot;M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0&quot;/&gt;&#x27;,
-    remote:&#x27;&lt;path d=&quot;M7 18H6a4 4 0 1 1 1-8 6 6 0 0 1 12-1 5 5 0 0 1-1 9h-1M12 21V11m-4 4 4-4 4 4&quot;/&gt;&#x27;,
-    article:&#x27;&lt;path d=&quot;M5 3h10l4 4v14H5zM14 3v5h5M8 12h8M8 16h8&quot;/&gt;&#x27;,
-    affairs:&#x27;&lt;circle cx=&quot;5&quot; cy=&quot;5&quot; r=&quot;2&quot;/&gt;&lt;circle cx=&quot;5&quot; cy=&quot;19&quot; r=&quot;2&quot;/&gt;&lt;circle cx=&quot;19&quot; cy=&quot;12&quot; r=&quot;2&quot;/&gt;&lt;path d=&quot;M7 5h4v7h6M7 19h4v-7&quot;/&gt;&#x27;,
-    schedule:&#x27;&lt;rect x=&quot;3&quot; y=&quot;5&quot; width=&quot;18&quot; height=&quot;16&quot; rx=&quot;2&quot;/&gt;&lt;path d=&quot;M7 2v6M17 2v6M3 10h18M12 13v4h3&quot;/&gt;&#x27;,
-    production:&#x27;&lt;rect x=&quot;3&quot; y=&quot;5&quot; width=&quot;18&quot; height=&quot;15&quot; rx=&quot;2&quot;/&gt;&lt;path d=&quot;M3 10h18m-13-5-2 5m8-5-2 5m-1 3v5l4-2.5z&quot;/&gt;&#x27;,
-    settings:&#x27;&lt;circle cx=&quot;12&quot; cy=&quot;12&quot; r=&quot;4&quot;/&gt;&lt;path d=&quot;M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2&quot;/&gt;&#x27;
+    files:&#x27;folder&#x27;, sessions:&#x27;messages-square&#x27;, browser:&#x27;globe&#x27;, terminal:&#x27;square-terminal&#x27;,
+    roles:&#x27;users&#x27;, accounts:&#x27;contact&#x27;, data:&#x27;database&#x27;, ledger:&#x27;receipt-text&#x27;, remote:&#x27;cloud-upload&#x27;,
+    article:&#x27;file-check&#x27;, affairs:&#x27;git-branch&#x27;, schedule:&#x27;calendar-clock&#x27;, video:&#x27;clapperboard&#x27;,
+    production:&#x27;cpu&#x27;, settings:&#x27;settings&#x27;
   };
   const groups = [
     [&#x27;工作&#x27;, [[&#x27;files&#x27;,&#x27;文件&#x27;,&#x27;文件&#x27;],[&#x27;sessions&#x27;,&#x27;AI 会话&#x27;,&#x27;会话&#x27;],[&#x27;browser&#x27;,&#x27;浏览器&#x27;,&#x27;浏览器&#x27;],[&#x27;terminal&#x27;,&#x27;终端&#x27;,&#x27;终端&#x27;]]],
-    [&#x27;资源&#x27;, [[&#x27;roles&#x27;,&#x27;角色&#x27;,&#x27;角色&#x27;],[&#x27;accounts&#x27;,&#x27;网站与账号&#x27;,&#x27;账号&#x27;],[&#x27;data&#x27;,&#x27;数据源&#x27;,&#x27;数据&#x27;],[&#x27;remote&#x27;,&#x27;CCLink 远程&#x27;,&#x27;远程&#x27;]]],
-    [&#x27;流程&#x27;, [[&#x27;article&#x27;,&#x27;文章发布&#x27;,&#x27;发布&#x27;],[&#x27;affairs&#x27;,&#x27;事务&#x27;,&#x27;事务&#x27;],[&#x27;schedule&#x27;,&#x27;定时任务&#x27;,&#x27;定时&#x27;],[&#x27;production&#x27;,&#x27;生产&#x27;,&#x27;生产&#x27;]]]
+    [&#x27;资源&#x27;, [[&#x27;roles&#x27;,&#x27;角色&#x27;,&#x27;角色&#x27;],[&#x27;accounts&#x27;,&#x27;网站与账号&#x27;,&#x27;账号&#x27;],[&#x27;data&#x27;,&#x27;数据源&#x27;,&#x27;数据&#x27;],[&#x27;ledger&#x27;,&#x27;公司账目&#x27;,&#x27;账目&#x27;],[&#x27;remote&#x27;,&#x27;CCLink 远程&#x27;,&#x27;远程&#x27;]]],
+    [&#x27;流程&#x27;, [[&#x27;article&#x27;,&#x27;文章发布&#x27;,&#x27;发布&#x27;],[&#x27;affairs&#x27;,&#x27;事务&#x27;,&#x27;事务&#x27;],[&#x27;schedule&#x27;,&#x27;定时任务&#x27;,&#x27;定时&#x27;],[&#x27;video&#x27;,&#x27;视频创作&#x27;,&#x27;视频&#x27;],[&#x27;production&#x27;,&#x27;硬件生产&#x27;,&#x27;硬件&#x27;]]]
   ];
   const rows = {
     article:[[&#x27;AIR眼镜体验记录&#x27;,&#x27;CSDN · 待发布&#x27;],[&#x27;AIR眼镜使用心得&#x27;,&#x27;知乎 · 已保存草稿&#x27;],[&#x27;做 AI 眼镜的一些思考&#x27;,&#x27;微博 · 待检查&#x27;]],
-    production:[[&#x27;视频创作&#x27;,&#x27;从稿件生成口播&#x27;],[&#x27;硬件生产&#x27;,&#x27;设备与生产记录&#x27;]],
+    video:[[&#x27;现有视频工程&#x27;,&#x27;从稿件生成口播与分镜&#x27;],[&#x27;新建视频工程&#x27;,&#x27;选择 Markdown 稿件&#x27;]],
+    production:[[&#x27;硬件生产检查&#x27;,&#x27;Gerber · BOM · 坐标&#x27;],[&#x27;生产检查报告&#x27;,&#x27;本地生成与打开&#x27;]],
     sessions:[[&#x27;当前工作空间会话&#x27;,&#x27;继续与 Agent 协作&#x27;]],
     accounts:[[&#x27;网站与账号&#x27;,&#x27;管理已有登录环境&#x27;]],
+    ledger:[[&#x27;公司账目&#x27;,&#x27;核对、汇总与导出&#x27;]],
     files:[[&#x27;丙午流光&#x27;,&#x27;自我介绍.md&#x27;],[&#x27;研发日记&#x27;,&#x27;工作空间文件&#x27;]],
     affairs:[[&#x27;网页事务&#x27;,&#x27;查看执行进度与结果&#x27;]],
     schedule:[[&#x27;定时任务&#x27;,&#x27;查看任务与运行记录&#x27;]]
@@ -1880,12 +1873,13 @@ html&gt;body{padding:0}&lt;/style&gt;
       section.querySelector(&#x27;h3&#x27;).textContent=label;
       const list=section.querySelector(&#x27;.sn-list&#x27;);list.replaceChildren();
       (rows[id]||[[label,&#x27;工作空间入口&#x27;]]).forEach(([title,detail])=&gt;{const row=document.createElement(&#x27;div&#x27;);row.className=&#x27;sn-row&#x27;;const strong=document.createElement(&#x27;strong&#x27;);strong.textContent=title;const small=document.createElement(&#x27;small&#x27;);small.textContent=detail;row.append(strong,small);list.appendChild(row);});
-      section.querySelector(&#x27;.sn-selection&#x27;).textContent=id===&#x27;production&#x27;?&#x27;视频创作位于「生产」内。&#x27;:&#x27;&#x27;;
+      section.querySelector(&#x27;.sn-selection&#x27;).textContent=&#x27;&#x27;;
     }
     select(&#x27;article&#x27;,&#x27;文章发布&#x27;);
     if(globalThis.Tweak &amp;&amp; !compact){const state={width:146};const tweak=new Tweak({container:nav,onChange:()=&gt;windowEl.style.setProperty(&#x27;--sn-width&#x27;,state.width+&#x27;px&#x27;)});tweak.addSlider(state,&#x27;width&#x27;,{label:&#x27;导航宽度&#x27;,min:132,max:176,step:2,unit:&#x27;px&#x27;});}
   }
   root.querySelectorAll(&#x27;:scope &gt; section&#x27;).forEach(renderVariant);
+  lucide.createIcons({ attrs: { width: 18, height: 18 } });
 })();
 &lt;/script&gt;
 

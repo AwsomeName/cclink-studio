@@ -71,6 +71,13 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().sidebarVisible).toBe(true)
     })
 
+    it('视频创作是独立可见 Activity 面板', () => {
+      const { setActivePanel } = useUIStore.getState()
+      setActivePanel('video-creation')
+      expect(useUIStore.getState().activePanel).toBe('video-creation')
+      expect(useUIStore.getState().sidebarVisible).toBe(true)
+    })
+
     it('侧栏折叠时点击不同面板 → 展开侧栏', () => {
       const { setActivePanel } = useUIStore.getState()
       setActivePanel('files') // 折叠
@@ -287,6 +294,14 @@ describe('useUIStore', () => {
     })
 
     it('从工作台快照恢复生产 Activity', () => {
+      useUIStore.getState().hydrateFromWorkspaceState({ activePanel: 'production' })
+      expect(useUIStore.getState().activePanel).toBe('production')
+    })
+
+    it('分别恢复视频创作与旧硬件生产 Activity', () => {
+      useUIStore.getState().hydrateFromWorkspaceState({ activePanel: 'video-creation' })
+      expect(useUIStore.getState().activePanel).toBe('video-creation')
+
       useUIStore.getState().hydrateFromWorkspaceState({ activePanel: 'production' })
       expect(useUIStore.getState().activePanel).toBe('production')
     })

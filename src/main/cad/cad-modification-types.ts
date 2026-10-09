@@ -20,6 +20,24 @@ export interface CadBopCheckResult {
   ok: boolean
   errorCount: number
   errorTypes: string[]
+  parserComplete: boolean
+  exceptionType?: string
+  unparsedLineCount: number
+}
+
+export interface CadFixedRegionEvidence {
+  sourceVolume: number
+  outputVolume: number
+  commonVolume: number
+  sourceOnlyVolume: number
+  outputOnlyVolume: number
+  symmetricDifferenceVolume: number
+  sourceSolidCount: number
+  outputSolidCount: number
+  sourceClosed: boolean
+  outputClosed: boolean
+  sourceValid: boolean
+  outputValid: boolean
 }
 
 export interface CadShapeEvidence {
@@ -83,6 +101,8 @@ export interface CadModificationResult {
     sourceHashUnchanged: boolean
     targetDimensionErrorMm: number
     fixedSideErrorMm: number
+    fixedRegion: CadFixedRegionEvidence
+    fixedRegionToleranceMm3: number
     nonTargetDimensionErrorMm: number
     bopPolicy: 'clean' | 'source-baseline-warning'
     warning?: string

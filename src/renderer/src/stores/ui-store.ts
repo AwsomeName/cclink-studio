@@ -67,6 +67,7 @@ const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
   'browser',
   'files',
   'data-sources',
+  'video-creation',
   'production',
   'terminal',
   'operations',

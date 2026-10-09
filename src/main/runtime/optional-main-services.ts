@@ -60,8 +60,9 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
         }
       },
     )
-    runtime.cadModificationService = new CadModificationService(() =>
-      runtime.settingsService!.getAll(),
+    runtime.cadModificationService = new CadModificationService(
+      () => runtime.settingsService!.getAll(),
+      runtime.fileService,
     )
     console.log('[CCLink Studio] CAD 转换 IPC 已注册')
   },

@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { CadModificationService } from './cad-modification-service'
+import { FileService } from '../fs/file-service'
 
 let tempDir = ''
 let executable = ''
@@ -34,7 +35,14 @@ const source = {
     max: { x: 10, y: 20, z: 30 },
     size: { x: 10, y: 20, z: 30 },
   },
-  bop: { ok: false, errorCount: 10, errorTypes: ['InvalidCurveOnSurface'] },
+  bop: {
+    ok: false,
+    errorCount: 10,
+    errorTypes: ['InvalidCurveOnSurface'],
+    parserComplete: true,
+    exceptionType: 'ValueError',
+    unparsedLineCount: 0,
+  },
 }
 const expectedBounds = {
   min: { x: 0, y: 0, z: 0 },
@@ -42,6 +50,7 @@ const expectedBounds = {
   size: { x: 13, y: 20, z: 30 },
 }
 const split = { lowSolidCount: 1, highSolidCount: 1, interfaceFaceCount: 1, interfaceArea: 12 }
+const fakeMode = process.env.CCLINK_CAD_FAKE_MODE
 let result
 if (request.mode === 'plan') {
   result = { success: true, mode: 'plan', sourceHash, source, split, expectedBounds }
@@ -59,15 +68,48 @@ if (request.mode === 'plan') {
       faceCount: 110,
       volume: 130,
       bounds: expectedBounds,
-      bop: { ok: false, errorCount: 12, errorTypes: ['InvalidCurveOnSurface'] },
+      bop: fakeMode === 'unknown-bop'
+        ? {
+            ok: false,
+            errorCount: 1,
+            errorTypes: [],
+            parserComplete: false,
+            exceptionType: 'RuntimeError',
+            unparsedLineCount: 1,
+          }
+        : {
+            ok: false,
+            errorCount: 12,
+            errorTypes: ['InvalidCurveOnSurface'],
+            parserComplete: true,
+            exceptionType: 'ValueError',
+            unparsedLineCount: 0,
+          },
       fileSize: fs.statSync(request.outputPath).size,
+    },
+    fixedRegion: {
+      sourceVolume: 40,
+      outputVolume: 40,
+      commonVolume: 40,
+      sourceOnlyVolume: 0,
+      outputOnlyVolume: 0,
+      symmetricDifferenceVolume: fakeMode === 'fixed-region-change' ? 1 : 0,
+      sourceSolidCount: 1,
+      outputSolidCount: 1,
+      sourceClosed: true,
+      outputClosed: true,
+      sourceValid: true,
+      outputValid: true,
     },
   }
 }
-fs.writeFileSync(resultPath, JSON.stringify(result))
+const writeResult = () => fs.writeFileSync(resultPath, JSON.stringify(result))
+if (fakeMode === 'slow-plan' && request.mode === 'plan') setTimeout(writeResult, 5000)
+else writeResult()
 `
 
 beforeEach(async () => {
+  delete process.env.CCLINK_CAD_FAKE_MODE
   tempDir = await mkdtemp(join(tmpdir(), 'cclink-cad-modification-'))
   executable = join(tempDir, 'freecadcmd')
   inputPath = join(tempDir, 'source.step')
@@ -78,11 +120,16 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  delete process.env.CCLINK_CAD_FAKE_MODE
   if (tempDir) await rm(tempDir, { recursive: true, force: true })
 })
 
 function createService(): CadModificationService {
-  return new CadModificationService(() => ({ freecadPath: executable }) as any, 10_000)
+  return new CadModificationService(
+    () => ({ freecadPath: executable }) as any,
+    new FileService({ getActiveWorkspace: () => tempDir }),
+    10_000,
+  )
 }
 
 describe('CadModificationService', () => {
@@ -158,42 +205,163 @@ describe('CadModificationService', () => {
     ).rejects.toThrow('输出文件已存在')
     service.destroy()
   })
+
+  it('rejects fixed-region geometry changes even when the endpoint dimensions still match', async () => {
+    const service = createService()
+    const plan = await service.plan({
+      inputPath,
+      outputPath,
+      operation: 'section-insert',
+      axis: 'x',
+      direction: 'positive',
+      distanceMm: 3,
+      splitPlane: 5,
+      fixedSide: 'min',
+    })
+    process.env.CCLINK_CAD_FAKE_MODE = 'fixed-region-change'
+
+    await expect(service.modify(plan.snapshot)).rejects.toThrow('固定区域几何差异')
+    await expect(readdir(tempDir)).resolves.not.toContain('output.step')
+    service.destroy()
+  })
+
+  it('fails closed when a BOP exception cannot be completely parsed', async () => {
+    const service = createService()
+    const plan = await service.plan({
+      inputPath,
+      outputPath,
+      operation: 'section-insert',
+      axis: 'x',
+      direction: 'positive',
+      distanceMm: 3,
+      splitPlane: 5,
+      fixedSide: 'min',
+    })
+    process.env.CCLINK_CAD_FAKE_MODE = 'unknown-bop'
+
+    await expect(service.modify(plan.snapshot)).rejects.toThrow('BOP 检查结果无法完整解析')
+    await expect(readdir(tempDir)).resolves.not.toContain('output.step')
+    service.destroy()
+  })
+
+  it('kills an in-flight FreeCAD planning process when the Agent run is cancelled', async () => {
+    process.env.CCLINK_CAD_FAKE_MODE = 'slow-plan'
+    const service = createService()
+    const controller = new AbortController()
+    const planning = service.plan(
+      {
+        inputPath,
+        outputPath,
+        operation: 'section-insert',
+        axis: 'x',
+        direction: 'positive',
+        distanceMm: 3,
+        splitPlane: 5,
+        fixedSide: 'min',
+      },
+      { signal: controller.signal },
+    )
+    setTimeout(() => controller.abort(), 800)
+
+    await expect(planning).rejects.toThrow('CAD 修改已取消')
+    await expect(readdir(tempDir)).resolves.not.toContain('output.step')
+    service.destroy()
+  })
 })
 
 const realStepPath = process.env.CCLINK_CAD_REAL_STEP
 const realFreeCadPath = process.env.CCLINK_CAD_REAL_FREECAD
 
 describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService real E0', () => {
-  it('adds 3 mm on X to the real eyewear STEP and keeps one closed solid', async () => {
-    const realOutputDir = await mkdtemp(join(tmpdir(), 'cclink-cad-real-e0-'))
-    const realOutputPath = join(realOutputDir, 'eyewear-x-plus-3mm.step')
-    const service = new CadModificationService(
-      () => ({ freecadPath: realFreeCadPath }) as any,
-      180_000,
-    )
-    try {
-      const plan = await service.plan({
-        inputPath: realStepPath!,
-        outputPath: realOutputPath,
-        operation: 'section-insert',
-        axis: 'x',
-        direction: 'positive',
-        distanceMm: 3,
-        splitPlane: 3.7637202218503205,
-        fixedSide: 'min',
-      })
-      const result = await service.modify(plan.snapshot)
+  const matrix = [
+    {
+      axis: 'x',
+      direction: 'positive',
+      fixedSide: 'min',
+      distanceMm: 0.1,
+      splitPlane: 3.7637202218503205,
+    },
+    {
+      axis: 'x',
+      direction: 'negative',
+      fixedSide: 'max',
+      distanceMm: 10,
+      splitPlane: 3.7637202218503205,
+    },
+    {
+      axis: 'y',
+      direction: 'positive',
+      fixedSide: 'min',
+      distanceMm: 0.5,
+      splitPlane: -11.251129445148461,
+    },
+    {
+      axis: 'y',
+      direction: 'negative',
+      fixedSide: 'max',
+      distanceMm: 3,
+      splitPlane: -11.251129445148461,
+    },
+    {
+      axis: 'z',
+      direction: 'positive',
+      fixedSide: 'min',
+      distanceMm: 10,
+      splitPlane: 14.955289631225183,
+    },
+    {
+      axis: 'z',
+      direction: 'negative',
+      fixedSide: 'max',
+      distanceMm: 0.1,
+      splitPlane: 20.014504569762714,
+    },
+  ] as const
 
-      expect(result.output.solidCount).toBe(1)
-      expect(result.output.closed).toBe(true)
-      expect(result.output.valid).toBe(true)
-      expect(result.output.basicCheckOk).toBe(true)
-      expect(result.output.volume).toBeGreaterThan(result.source.volume)
-      expect(result.output.bounds.size.x - result.source.bounds.size.x).toBeCloseTo(3, 6)
-      expect(result.validation.status).toBe('passed-with-baseline-warning')
-    } finally {
-      service.destroy()
-      await rm(realOutputDir, { recursive: true, force: true })
-    }
-  }, 180_000)
+  it.each(matrix)(
+    'modifies the real eyewear STEP: $axis $direction $distanceMm mm',
+    async ({ axis, direction, fixedSide, distanceMm, splitPlane }) => {
+      const realOutputDir = await mkdtemp(join(tmpdir(), 'cclink-cad-real-e0-'))
+      const realOutputPath = join(
+        realOutputDir,
+        `eyewear-${axis}-${direction}-${distanceMm}mm.step`,
+      )
+      const service = new CadModificationService(
+        () => ({ freecadPath: realFreeCadPath }) as any,
+        new FileService({ getActiveWorkspace: () => '/' }),
+        180_000,
+      )
+      try {
+        const plan = await service.plan({
+          inputPath: realStepPath!,
+          outputPath: realOutputPath,
+          operation: 'section-insert',
+          axis,
+          direction,
+          distanceMm,
+          splitPlane,
+          fixedSide,
+        })
+        const result = await service.modify(plan.snapshot)
+
+        expect(result.output.solidCount).toBe(1)
+        expect(result.output.closed).toBe(true)
+        expect(result.output.valid).toBe(true)
+        expect(result.output.basicCheckOk).toBe(true)
+        expect(result.output.volume).toBeGreaterThan(result.source.volume)
+        expect(result.output.bounds.size[axis] - result.source.bounds.size[axis]).toBeCloseTo(
+          distanceMm,
+          6,
+        )
+        expect(result.validation.fixedRegion.symmetricDifferenceVolume).toBeLessThanOrEqual(
+          result.validation.fixedRegionToleranceMm3,
+        )
+        expect(result.validation.status).toBe('passed-with-baseline-warning')
+      } finally {
+        service.destroy()
+        await rm(realOutputDir, { recursive: true, force: true })
+      }
+    },
+    180_000,
+  )
 })

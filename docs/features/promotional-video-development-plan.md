@@ -52,7 +52,7 @@
 当前证据：
 
 - `MediaProjectService`、shared contract、可信 IPC 和 preload 已接入；
-- `media-production` Tab 与生产侧栏已接入；
+- `media-production` Tab 与独立“视频”侧栏已接入；
 - 定向测试、全量 `pnpm verify`、通用 UI smoke 和专项 Electron UI smoke 已通过；
 - 确定性分镜只是无 Agent 时的保底，不冒充 AI 分镜。
 
