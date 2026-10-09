@@ -150,6 +150,104 @@ describe('CadConversionService', () => {
     expect(result.metadata?.bounds?.size.x).toBeGreaterThan(0)
   })
 
+  it('reads a converted preview through a one-time workspace-bound reference', async () => {
+    const service = new CadConversionService(() => settings)
+    const workspaceRoot = join(tempDir, 'workspace')
+    const sourcePath = join(workspaceRoot, 'part.step')
+    const sourceContent = 'ISO-10303-21;'
+    const sourceHash = createHash('sha256').update(sourceContent).digest('hex')
+    const previewPath = join(tempDir, 'cad-cache', sourceHash, 'preview.stl')
+    await mkdir(join(tempDir, 'cad-cache', sourceHash), { recursive: true })
+    await mkdir(workspaceRoot, { recursive: true })
+    await writeFile(sourcePath, sourceContent, 'utf-8')
+    await writeFile(previewPath, 'solid preview\nendsolid preview\n', 'utf-8')
+
+    const granted = service.createPreviewGrant(
+      {
+        success: true,
+        previewPath,
+        format: 'stl',
+        sourceHash,
+        diagnostics: [],
+        metadata: {
+          inputPath: sourcePath,
+          previewPath,
+          previewFormat: 'stl',
+          sourceHash,
+          unit: 'mm',
+          unitConfidence: 'cad-backend',
+          generatedAt: new Date().toISOString(),
+          generator: 'test',
+          diagnostics: [],
+        },
+      },
+      {
+        rendererId: 7,
+        workspaceRoot,
+        requestedSourcePath: sourcePath,
+        canonicalSourcePath: sourcePath,
+      },
+    )
+
+    expect(granted.previewRef).toBeTruthy()
+    expect(granted.previewPath).toBeUndefined()
+    expect(granted.metadata?.previewPath).toBeUndefined()
+
+    const preview = await service.readPreview(granted.previewRef!, {
+      rendererId: 7,
+      workspaceRoot,
+      authorizeSource: async () => sourcePath,
+    })
+
+    expect(Buffer.from(preview.content, 'base64').toString('utf-8')).toContain('solid preview')
+    await expect(
+      service.readPreview(granted.previewRef!, {
+        rendererId: 7,
+        workspaceRoot,
+        authorizeSource: async () => sourcePath,
+      }),
+    ).rejects.toThrow('预览引用不存在或已过期')
+  })
+
+  it('rejects preview references from another renderer or changed source', async () => {
+    const service = new CadConversionService(() => settings)
+    const workspaceRoot = join(tempDir, 'workspace')
+    const sourcePath = join(workspaceRoot, 'part.step')
+    const sourceHash = createHash('sha256').update('original').digest('hex')
+    const previewPath = join(tempDir, 'cad-cache', sourceHash, 'preview.stl')
+    await mkdir(join(tempDir, 'cad-cache', sourceHash), { recursive: true })
+    await mkdir(workspaceRoot, { recursive: true })
+    await writeFile(sourcePath, 'original', 'utf-8')
+    await writeFile(previewPath, 'solid preview\nendsolid preview\n', 'utf-8')
+
+    const granted = service.createPreviewGrant(
+      { success: true, previewPath, format: 'stl', sourceHash, diagnostics: [] },
+      {
+        rendererId: 7,
+        workspaceRoot,
+        requestedSourcePath: sourcePath,
+        canonicalSourcePath: sourcePath,
+      },
+    )
+
+    await expect(
+      service.readPreview(granted.previewRef!, {
+        rendererId: 8,
+        workspaceRoot,
+        authorizeSource: async () => sourcePath,
+      }),
+    ).rejects.toThrow('不属于当前窗口')
+
+    await writeFile(sourcePath, 'changed', 'utf-8')
+    await expect(
+      service.readPreview(granted.previewRef!, {
+        rendererId: 7,
+        workspaceRoot,
+        authorizeSource: async () => sourcePath,
+      }),
+    ).rejects.toThrow('源文件内容已变化')
+  })
+
   it('uses the managed OCCT wasm when the Runtime component is installed', async () => {
     settings = { ...settings, cadBackend: 'occt-experimental' }
     const managedWasmPath = join(tempDir, 'runtime-components', 'occt-import-js.wasm')

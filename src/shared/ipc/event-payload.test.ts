@@ -93,6 +93,24 @@ describe('preload event payload parsers', () => {
     expect(parseAgentErrorEvent(error)).toBe(error)
     expect(parseAgentRunStatusEvent(run)).toBe(run)
     expect(parseAgentConfirmationRequest(confirmation)).toBe(confirmation)
+    expect(
+      parseAgentConfirmationRequest({
+        ...confirmation,
+        summary: Array.from({ length: 11 }, (_, index) => ({
+          label: `CAD 参数 ${index + 1}`,
+          value: String(index + 1),
+        })),
+      }),
+    ).not.toBeNull()
+    expect(
+      parseAgentConfirmationRequest({
+        ...confirmation,
+        summary: Array.from({ length: 17 }, (_, index) => ({
+          label: `参数 ${index + 1}`,
+          value: String(index + 1),
+        })),
+      }),
+    ).toBeNull()
     expect(parseAgentStreamEvent({ type: 'x', nested: 'x'.repeat(1_000_001) })).toBeNull()
     expect(parseAgentCompleteEvent({ subtype: 'success' })).toBeNull()
     expect(parseAgentErrorEvent({ message: 42 })).toBeNull()

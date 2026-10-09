@@ -19,6 +19,7 @@ describe('ActivityBar', () => {
       '角色',
       '网站与账号',
       '数据源',
+      '公司账目',
       'CCLink 远程',
       '文章发布',
       '事务',
@@ -42,6 +43,7 @@ describe('ActivityBar', () => {
       '角色',
       '账号',
       '数据',
+      '账目',
       '远程',
       '发布',
       '事务',
@@ -54,6 +56,6 @@ describe('ActivityBar', () => {
     for (const group of ['工作', '资源', '流程']) {
       expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
     }
-    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(12)
+    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(13)
   })
 })

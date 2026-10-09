@@ -35,6 +35,7 @@ import { agentApi } from './agent-api'
 import { androidApi } from './android-api'
 import { browserApi, reportWorkbenchBounds } from './browser-api'
 import { dataSourceApi } from './data-source-api'
+import { companyAccountsApi } from './company-accounts-api'
 import { fsApi } from './fs-api'
 import { gitApi } from './git-api'
 import {
@@ -414,6 +415,8 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   android: androidApi,
 
   dataSource: dataSourceApi,
+
+  companyAccounts: companyAccountsApi,
 
   // Terminal 命令确认、执行事件与受限提交
   terminal: terminalApi,

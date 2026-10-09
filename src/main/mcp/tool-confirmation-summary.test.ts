@@ -37,4 +37,36 @@ describe('summarizeToolConfirmation', () => {
       { label: '来源', value: '…/key.pem', monospace: true },
     ])
   })
+
+  it('shows the complete CAD parameter snapshot without applying the generic row limit', () => {
+    const rows = summarizeToolConfirmation(
+      'cad_modify_step',
+      {
+        inputPath: '/workspace/a/model.step',
+        sourceHash: 'a'.repeat(64),
+        operation: 'section-insert',
+        axis: 'x',
+        direction: 'positive',
+        distanceMm: 3,
+        splitPlane: 3.75,
+        fixedSide: 'min',
+        outputPath: '/workspace/a/model-longer.step',
+        expectedSizeX: 151.17,
+        expectedSizeY: 42.9,
+        expectedSizeZ: 50.59,
+      },
+      '/workspace/a',
+    )
+
+    expect(rows).toHaveLength(11)
+    expect(rows).toContainEqual({ label: '源文件', value: './model.step', monospace: true })
+    expect(rows).toContainEqual({ label: '源 SHA-256', value: 'aaaaaaaaaaaa…', monospace: true })
+    expect(rows).toContainEqual({ label: '增加距离', value: '3 mm' })
+    expect(rows).toContainEqual({
+      label: '输出文件',
+      value: './model-longer.step',
+      monospace: true,
+    })
+    expect(rows.at(-1)?.value).toContain('不等于可制造')
+  })
 })

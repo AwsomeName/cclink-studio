@@ -164,7 +164,7 @@ function getModuleAvailability(
         ? { available: true }
         : { available: false, reason: '硬件服务未就绪' }
     case 'cad':
-      return runtime.cadConversionService
+      return runtime.cadConversionService && runtime.cadModificationService
         ? { available: true }
         : { available: false, reason: 'CAD 服务未就绪' }
     case 'meshy':

@@ -110,6 +110,17 @@ export function ActivityDataSourcesIcon(props: ActivityIconProps): ReactElement 
   )
 }
 
+export function ActivityCompanyAccountsIcon(props: ActivityIconProps): ReactElement {
+  return ActivityIcon(
+    props,
+    <>
+      <rect height="16" rx="2" width="19" x="2.5" y="4" />
+      <path d="M2.5 8.5h19M6 6.25h.01M9 6.25h.01" />
+      <path d="M7 12h4M7 16h3M15.5 11.5v5M13.5 13h4" />
+    </>,
+  )
+}
+
 export function ActivityTerminalIcon(props: ActivityIconProps): ReactElement {
   return ActivityIcon(
     props,

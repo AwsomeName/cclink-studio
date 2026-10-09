@@ -52,6 +52,7 @@ import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTa
 import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
+import { CompanyAccountsWorkbench } from '../../features/company-accounts/CompanyAccountsWorkbench'
 import { useToastStore } from '../common/Toast'
 import { BrowserNewTabPage } from './BrowserNewTabPage'
 import { BrowserNavigationStatusPage } from './BrowserNavigationStatusPage'
@@ -213,6 +214,7 @@ export function WorkbenchContent({
             {activeTab.type === 'media-production' && activeTab.mediaProject && (
               <MediaProductionTab tab={activeTab} />
             )}
+            {activeTab.type === 'company-accounts' && <CompanyAccountsWorkbench />}
           </>
         )}
       </ErrorBoundary>

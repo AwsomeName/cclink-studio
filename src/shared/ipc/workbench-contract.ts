@@ -87,6 +87,7 @@ export const cadConvertRequestSchema = z
     force: z.boolean().optional(),
   })
   .strict()
+export const cadPreviewRefSchema = boundedIdentifierSchema(128)
 
 export const hardwareWorkspacePathSchema = absolutePathSchema
 export const hardwarePackagePathSchema = absolutePathSchema
@@ -311,6 +312,9 @@ export const cadIpcContracts = {
   clearCache: bindLegacyNoArgs(cadIpc.clearCache),
   convertModel: bindIpcParser(cadIpc.convertModel, (args) =>
     ipcArgs(cadConvertRequestSchema.parse(args[0])),
+  ),
+  readPreview: bindIpcParser(cadIpc.readPreview, (args) =>
+    ipcArgs(cadPreviewRefSchema.parse(args[0])),
   ),
 } as const
 

@@ -193,7 +193,12 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
   registerToolModule(
     runtime,
     'cad',
-    () => new CadToolModule(requireService(runtime.cadConversionService)),
+    () =>
+      new CadToolModule(
+        requireService(runtime.cadConversionService),
+        requireService(runtime.cadModificationService),
+        requireService(runtime.fileService),
+      ),
   )
   registerToolModule(
     runtime,
@@ -253,11 +258,13 @@ export async function shutdownAutomationRuntime(runtime: CclinkStudioRuntimeStat
   await runShutdownStep('EditorModule', () => runtime.editorModule?.destroy())
   await runShutdownStep('AgentDeviceManager', () => runtime.agentDeviceManager?.destroy())
   await runShutdownStep('McpToolHost', () => runtime.toolHost?.stop())
+  await runShutdownStep('CadModificationService', () => runtime.cadModificationService?.destroy())
   await runShutdownStep('PlaywrightBridge', () => runtime.playwrightBridge?.disconnect())
 
   runtime.editorModule = null
   runtime.agentDeviceManager = null
   runtime.toolHost = null
+  runtime.cadModificationService = null
   runtime.playwrightBridge = null
 }
 

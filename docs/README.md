@@ -30,7 +30,12 @@
 - `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理、已暂停的
   双版本更新/能力插件边界，以及尚未关闭的 RuntimeComponentManager 启动降级缺口。
 - `docs/features/npm-updatable-capability-inventory.md`：当前 npm 只用于固定 Runtime 下载的事实清单、暂停项与必须走完整 App 更新的边界。
-- `docs/features/eyewear-step-ai-editing.md`：眼镜 STEP 外壳 AI 加宽/加长的最小闭环；复用 Claude Code、现有查看器与 FreeCAD，新增受限修改工具、结果回显和基本核验。
+- `docs/features/eyewear-step-ai-editing.md`：眼镜 STEP 外壳 AI 加宽/加长的最小闭环；复用 Claude Code、现有查看器与 FreeCAD，只新增计划与修改两个工具、结果回显和基本核验。
+- `docs/features/eyewear-step-ai-editing-development-plan.md`：收缩后的眼镜 STEP AI 修改 P0、E0、M1 最小开发计划；其余能力全部后移且不排期。
+- `docs/design/eyewear-step-ai-editing/pages.html`：收缩后的 STEP 查看、参数快照确认和新版结果自动打开三页效果示意；示例数据不代表当前实现状态。
+- `docs/features/company-accounts-product-design.md`：公司账目首版产品事实源，定义一个月份的导入、核对、汇总、导出和备份闭环。
+- `docs/features/company-accounts-development-plan.md`：公司账目最小开发计划与真实业务退出条件。
+- `docs/testing/company-accounts-v1-acceptance.md`：公司账目代表性桌面样本、自动门禁和仍待真实资料关闭的业务验收。
 - `docs/features/robotics-remote-simulation-workbench.md`：通过 frp 连接远程 Ubuntu Robot Runner，在 Studio 启动仿真、推理和训练并查看画面、日志与运行证据的低优先级讨论稿，尚未实现。
 - `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`：已暂停的参考计划；只有重启门禁成立并提交新 ADR 后才可恢复。

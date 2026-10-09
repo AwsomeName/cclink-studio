@@ -94,6 +94,8 @@ function getSidebarTitle(
       return '浏览器'
     case 'data-sources':
       return '数据源'
+    case 'company-accounts':
+      return '公司账目'
     case 'production':
       return '生产'
     case 'terminal':
@@ -345,6 +347,8 @@ function ProjectSidebarContent({
 
       {activePanel === 'data-sources' && <DataSourcesPanel />}
 
+      {activePanel === 'company-accounts' && <CompanyAccountsSidebarView />}
+
       {activePanel === 'cclink' && <CclinkPanel />}
 
       {activePanel === 'files' && (
@@ -384,6 +388,31 @@ function ProjectSidebarContent({
       )}
       {activePanel === 'agent-roles' && <AgentRolesSidebar />}
     </>
+  )
+}
+
+function CompanyAccountsSidebarView(): React.ReactElement {
+  const workspacePath = useFsStore((state) => state.workspacePath)
+  const openTab = useTabStore((state) => state.openTab)
+  return (
+    <div className="company-accounts-sidebar">
+      <p>{workspacePath ? '账目保存在当前工作空间。' : '请先打开一个本地工作空间。'}</p>
+      <button
+        type="button"
+        className="sidebar-primary-button"
+        disabled={!workspacePath}
+        onClick={() => openTab({ type: 'company-accounts', title: '公司账目', icon: '账' })}
+      >
+        打开账目工作台
+      </button>
+      <ol>
+        <li>导入一个月份的流水和凭证</li>
+        <li>查看原件并人工确认</li>
+        <li>查看月度与项目实际支出</li>
+        <li>导出给代账并创建备份</li>
+      </ol>
+      <p className="sidebar-hint">凭证不会单独生成收支；智能建议始终需要人工确认。</p>
+    </div>
   )
 }
 

@@ -1,0 +1,551 @@
+.company-accounts-workbench,
+.company-accounts-empty,
+.company-accounts-loading {
+  height: 100%;
+  min-height: 0;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+}
+
+.company-accounts-workbench {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.company-accounts-loading,
+.company-accounts-empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.company-accounts-empty-card {
+  width: min(520px, calc(100% - 48px));
+  padding: 36px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+}
+
+.company-accounts-empty-card h1 {
+  margin: 12px 0 8px;
+  color: var(--text-primary);
+}
+.company-accounts-empty-card p {
+  line-height: 1.6;
+}
+.company-accounts-empty-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  color: #fff;
+  background: #3478f6;
+  font-size: 22px;
+  font-weight: 700;
+}
+.company-accounts-empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.company-accounts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px 12px;
+}
+
+.company-accounts-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+.company-accounts-header p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.company-accounts-header-actions {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+.company-accounts-header-actions label {
+  display: grid;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.company-accounts-workbench input,
+.company-accounts-workbench select {
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  outline: none;
+  background: var(--input-bg, var(--bg-secondary));
+}
+
+.company-accounts-workbench input:focus,
+.company-accounts-workbench select:focus {
+  border-color: var(--accent-color, #3478f6);
+}
+
+.accounts-button {
+  min-height: 32px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+.accounts-button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.accounts-button.primary {
+  color: #fff;
+  border-color: #3478f6;
+  background: #3478f6;
+}
+.accounts-button.danger {
+  color: #d9534f;
+}
+.accounts-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.company-accounts-notice {
+  margin: 0 24px 10px;
+  padding: 8px 11px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.company-accounts-notice.success {
+  color: #247848;
+  background: color-mix(in srgb, #3baa6d 14%, transparent);
+}
+.company-accounts-notice.error {
+  color: #bd3d38;
+  background: color-mix(in srgb, #d9534f 14%, transparent);
+}
+
+.company-accounts-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 0 24px 14px;
+}
+.company-accounts-kpi {
+  display: grid;
+  gap: 7px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+}
+.company-accounts-kpi span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.company-accounts-kpi strong {
+  font-size: 18px;
+}
+.company-accounts-kpi.income strong {
+  color: #2c8b57;
+}
+.company-accounts-kpi.expense strong {
+  color: #c14e49;
+}
+.company-accounts-kpi.pending strong {
+  color: #b97816;
+}
+
+.company-accounts-nav {
+  display: flex;
+  gap: 4px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+.company-accounts-nav button {
+  padding: 9px 12px;
+  color: var(--text-secondary);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+}
+.company-accounts-nav button.active {
+  color: var(--text-primary);
+  border-bottom-color: #3478f6;
+}
+
+.company-accounts-review {
+  display: grid;
+  grid-template-columns: minmax(320px, 42%) 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.company-accounts-list {
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border-color);
+}
+.company-accounts-list-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+.company-accounts-list-empty {
+  padding: 32px 18px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.company-accounts-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  padding: 11px 14px;
+  color: var(--text-primary);
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+}
+.company-accounts-row:hover {
+  background: var(--bg-hover);
+}
+.company-accounts-row.selected {
+  background: color-mix(in srgb, #3478f6 12%, transparent);
+  box-shadow: inset 3px 0 #3478f6;
+}
+.record-direction {
+  padding: 3px 5px;
+  color: #2c8b57;
+  text-align: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, #3baa6d 13%, transparent);
+  font-size: 11px;
+}
+.record-direction.expense {
+  color: #c14e49;
+  background: color-mix(in srgb, #d9534f 13%, transparent);
+}
+.record-main,
+.record-tail {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+.record-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-main small,
+.record-tail small {
+  color: var(--text-secondary);
+}
+.record-tail {
+  text-align: right;
+}
+.record-tail small.pending,
+.record-status.pending {
+  color: #b97816;
+}
+.record-tail small.confirmed,
+.record-status.confirmed {
+  color: #2c8b57;
+}
+
+.company-accounts-detail {
+  min-width: 0;
+  overflow: auto;
+  padding: 18px 20px 28px;
+}
+.company-accounts-detail-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.company-accounts-detail-title h2,
+.accounts-panel h2 {
+  margin: 0 0 5px;
+  font-size: 16px;
+}
+.company-accounts-detail-title p,
+.accounts-panel p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.record-status {
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.company-accounts-suggestion {
+  display: grid;
+  gap: 4px;
+  margin: 14px 0;
+  padding: 10px 12px;
+  color: #9a6513;
+  border: 1px solid color-mix(in srgb, #c58a26 35%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, #c58a26 10%, transparent);
+  font-size: 12px;
+}
+.company-accounts-suggestion button {
+  justify-self: start;
+  padding: 3px 0;
+  color: #3478f6;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.company-accounts-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+.company-accounts-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.company-accounts-field > span {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.company-accounts-new-project {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.company-accounts-new-project input {
+  flex: 1;
+}
+.company-accounts-evidence {
+  display: grid;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+.company-accounts-evidence h3 {
+  margin: 0;
+  font-size: 13px;
+}
+.company-accounts-evidence p {
+  margin: 3px 0 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.company-accounts-document {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+}
+.company-accounts-document label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+.company-accounts-document label span {
+  display: grid;
+  min-width: 0;
+}
+.company-accounts-document strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.company-accounts-document small {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.company-accounts-document button {
+  flex: none;
+  color: #3478f6;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+}
+.company-accounts-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.company-accounts-history {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.company-accounts-history h3 {
+  margin: 0 0 2px;
+  font-size: 12px;
+}
+.company-accounts-history div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.company-accounts-detail-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.company-accounts-report,
+.company-accounts-delivery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  align-content: start;
+  gap: 14px;
+  padding: 20px 24px;
+  overflow: auto;
+}
+.accounts-panel {
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+.accounts-panel.warning {
+  grid-column: 1 / -1;
+  border-color: color-mix(in srgb, #c58a26 35%, var(--border-color));
+}
+.company-accounts-ledger-summary {
+  margin: 14px 0 0;
+}
+.company-accounts-ledger-summary div,
+.company-accounts-project-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.company-accounts-project-block + .company-accounts-project-block {
+  margin-top: 10px;
+}
+.company-accounts-project-categories {
+  padding: 6px 0 4px 14px;
+}
+.company-accounts-project-categories div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.company-accounts-ledger-summary dt {
+  color: var(--text-secondary);
+}
+.company-accounts-ledger-summary dd {
+  margin: 0;
+  font-weight: 650;
+}
+.accounts-footnote {
+  margin-top: 14px !important;
+  font-size: 11px;
+}
+.accounts-muted {
+  color: var(--text-secondary);
+}
+.company-accounts-settings-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  margin: 14px 0;
+}
+.company-accounts-delivery-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.company-accounts-sidebar {
+  padding: 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.company-accounts-sidebar ol {
+  padding-left: 20px;
+}
+.company-accounts-sidebar .sidebar-primary-button {
+  width: 100%;
+  padding: 7px 10px;
+  color: #fff;
+  border: 0;
+  border-radius: 5px;
+  background: #3478f6;
+  cursor: pointer;
+}
+.company-accounts-sidebar .sidebar-primary-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.company-accounts-sidebar .sidebar-hint {
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .company-accounts-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .company-accounts-review {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .company-accounts-list {
+    max-height: 320px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+  .company-accounts-detail {
+    overflow: visible;
+  }
+  .company-accounts-report,
+  .company-accounts-delivery {
+    grid-template-columns: 1fr;
+  }
+}

@@ -13,6 +13,7 @@ import { authIpc } from '../../shared/ipc/auth'
 import { browserDownloadIpc, browserIpc, browserTaskIpc } from '../../shared/ipc/browser'
 import { cadIpc } from '../../shared/ipc/cad'
 import { cclinkIpc } from '../../shared/ipc/cclink'
+import { companyAccountsIpc } from '../../shared/ipc/company-accounts'
 import { credentialsIpc } from '../../shared/ipc/credentials'
 import { dataSourceIpc } from '../../shared/ipc/data-source'
 import { diagnosticsIpc } from '../../shared/ipc/diagnostics'
@@ -245,6 +246,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitions: scheduledTasksIpc,
     handlerFiles: ['src/main/scheduled-task/scheduled-task-ipc.ts'],
     preloadFiles: ['src/preload/index.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'CompanyAccounts',
+    definitionFile: 'src/shared/ipc/company-accounts.ts',
+    definitionName: 'companyAccountsIpc',
+    definitions: companyAccountsIpc,
+    handlerFiles: ['src/main/company-accounts/company-accounts-ipc.ts'],
+    preloadFiles: ['src/preload/company-accounts-api.ts'],
   }),
   ...expandInvokeGroup({
     owner: 'MediaProjects',

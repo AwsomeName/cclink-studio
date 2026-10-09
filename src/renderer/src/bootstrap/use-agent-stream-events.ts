@@ -3,6 +3,7 @@ import { useAgentStore } from '../stores/agent-store'
 import { useSettingsStore } from '../stores/settings-store'
 import type { ContentBlock, PermissionMode, ToolConfirmationRequest } from '../types'
 import type { AgentContextUsageSnapshot, AgentRuntimeRunRecord } from '@shared/agent-protocol'
+import { handleCadModificationStreamEvent } from '../features/cad/cad-modification-auto-open'
 
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
@@ -401,6 +402,7 @@ export function applyAgentRunStatusToStore(
 export function useAgentStreamEvents(): void {
   useEffect(() => {
     const offStream = window.cclinkStudio.agent.onStreamEvent((event) => {
+      handleCadModificationStreamEvent(event)
       applyAgentStreamEventToStore(event)
     })
 

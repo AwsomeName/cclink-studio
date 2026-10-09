@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>眼镜 STEP AI 修改最小页面示意</title>
+    <style>
+      :root { color-scheme: dark; --bg:#181818; --panel:#202020; --panel2:#29292b; --line:#3b3b3e; --text:#eee; --muted:#9d9da3; --blue:#3794ff; --green:#4ec98a; --yellow:#e8ba54; }
+      * { box-sizing:border-box; }
+      html,body { width:100%; height:100%; margin:0; overflow:hidden; background:#111; color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif; }
+      button { font:inherit; }
+      .app { height:100vh; display:grid; grid-template-rows:44px 1fr 24px; background:var(--bg); }
+      .top { display:flex; align-items:center; gap:16px; padding:0 14px; border-bottom:1px solid #303033; background:#29292a; font-size:13px; }
+      .traffic { color:#777; letter-spacing:4px; } .brand { font-weight:650; } .crumb { color:var(--muted); }
+      .tabs { margin-left:auto; display:flex; gap:4px; }
+      .tab { border:0; border-radius:5px; padding:7px 11px; color:#bbb; background:transparent; cursor:pointer; }
+      .tab.active { color:#fff; background:#414144; }
+      .shell { min-height:0; display:grid; grid-template-columns:52px 250px minmax(580px,1fr) 390px; }
+      .activity { border-right:1px solid #303033; background:#202021; display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:8px; }
+      .ico { width:38px; height:38px; display:grid; place-items:center; color:#aaa; border-left:2px solid transparent; }
+      .ico.active { color:#fff; background:#2c2c2e; border-left-color:var(--blue); } .grow { flex:1; }
+      .sidebar { border-right:1px solid #303033; background:#202021; }
+      .side-title { height:42px; display:flex; align-items:center; padding:0 14px; border-bottom:1px solid #303033; font-size:12px; }
+      .project { margin:10px; padding:10px; border:1px solid #3d3d40; border-radius:7px; background:#272729; }
+      .project b { display:block; font-size:13px; } .project span { display:block; margin-top:5px; color:var(--muted); font-size:11px; }
+      .tree { padding:5px 8px; font-size:12px; }
+      .row { height:29px; display:flex; align-items:center; gap:7px; padding:0 8px; border-radius:4px; color:#c8c8cb; }
+      .row.indent { padding-left:26px; } .row.active { background:#16456c; color:#fff; } .tag { margin-left:auto; color:#82c2ff; font-size:10px; }
+      .workbench { min-width:0; display:grid; grid-template-rows:38px 46px 1fr; background:#171718; }
+      .filetabs { display:flex; border-bottom:1px solid #303033; background:#222223; }
+      .filetab { min-width:250px; display:flex; align-items:center; padding:0 14px; border-top:1px solid var(--blue); background:#181819; font-size:12px; }
+      .toolbar { display:flex; align-items:center; gap:7px; padding:0 12px; border-bottom:1px solid #303033; font-size:11px; }
+      .btn { padding:6px 10px; border:1px solid #47474b; border-radius:5px; color:#ddd; background:#303033; }
+      .btn.primary { border-color:#2d84cb; background:#1976bd; color:#fff; } .btn.ghost { background:transparent; }
+      .spacer { flex:1; } .okchip { padding:4px 8px; border:1px solid #3c624d; border-radius:999px; color:#8ce1b4; background:#1c3528; }
+      .canvas { position:relative; min-height:0; overflow:hidden; background:radial-gradient(circle at 50% 42%,#292c30 0,#1d1e20 38%,#171718 75%); }
+      .grid { position:absolute; left:-10%; right:-10%; bottom:-18%; height:55%; transform:perspective(460px) rotateX(58deg); transform-origin:bottom; opacity:.32; background-image:linear-gradient(#505055 1px,transparent 1px),linear-gradient(90deg,#505055 1px,transparent 1px); background-size:34px 34px; }
+      .page { display:none; } .page.active { display:block; }
+      .canvas>.page { position:absolute; inset:0; }
+      .stage { position:absolute; inset:4% 4% 16%; display:grid; place-items:center; }
+      .model { width:min(88%,760px); filter:drop-shadow(0 16px 18px #0009); }
+      .body { fill:#394650; stroke:#a8bac6; stroke-width:2; } .hole { fill:#171718; stroke:#a8bac6; stroke-width:2; }
+      .newbody { fill:#255d48; stroke:#72e2a6; stroke-width:3; } .fixed { fill:none; stroke:#72e2a6; stroke-width:2; stroke-dasharray:6 4; }
+      .plane { fill:#2d85c755; stroke:#62b9ff; stroke-width:2; stroke-dasharray:6 5; }
+      .arrow { stroke:#69baff; stroke-width:3; } .label { fill:#e3f2ff; font-size:16px; font-weight:650; }
+      .note { position:absolute; padding:8px 10px; border:1px solid #476682; border-radius:6px; color:#d9efff; background:#19364fdd; font-size:11px; }
+      .note.n1 { left:4%; top:7%; } .note.n2 { right:4%; top:9%; border-color:#48765b; color:#c4f1d5; background:#193d2add; }
+      .metrics { position:absolute; left:14px; right:14px; bottom:12px; display:grid; grid-template-columns:repeat(4,1fr); border:1px solid #3b3b3e; border-radius:7px; overflow:hidden; background:#212124eb; }
+      .metric { padding:9px 11px; border-right:1px solid #3b3b3e; } .metric:last-child { border:0; }
+      .metric span { display:block; color:var(--muted); font-size:10px; } .metric b { display:block; margin-top:3px; font-size:13px; } .good { color:var(--green); }
+      .agent { min-width:0; display:grid; grid-template-rows:52px 1fr auto; border-left:1px solid #303033; background:#202021; }
+      .agent-head { display:flex; align-items:center; gap:9px; padding:0 14px; border-bottom:1px solid #303033; }
+      .bot { color:var(--blue); font-size:19px; } .agent-head b { font-size:13px; } .agent-head small { display:block; margin-top:2px; color:var(--muted); }
+      .agent .page { padding:14px; overflow:hidden; font-size:12px; }
+      .bubble { margin-bottom:12px; padding:10px 11px; border:1px solid #3e3e42; border-radius:8px; background:#29292b; line-height:1.55; }
+      .bubble.user { margin-left:36px; border-color:#316185; background:#193e5d; }
+      .bubble p { margin:0; }
+      .card { margin:10px 0; padding:11px; border:1px solid #45454a; border-radius:8px; background:#252527; }
+      .card h3 { margin:0 0 8px; font-size:12px; }
+      .kv { display:grid; grid-template-columns:90px 1fr; gap:7px; } .kv span:nth-child(odd) { color:var(--muted); }
+      .warning { color:#ffd48e; } .actions { display:flex; gap:7px; margin-top:10px; }
+      .check { display:flex; gap:8px; margin:7px 0; } .check i { color:var(--green); font-style:normal; }
+      .composer { padding:10px; border-top:1px solid #303033; }
+      .input { min-height:74px; padding:10px; border:1px solid #48484c; border-radius:9px; color:#777; background:#2a2a2d; font-size:12px; }
+      .status { display:flex; align-items:center; gap:18px; padding:0 10px; background:#1677b8; color:#fff; font-size:10px; } .status .right { margin-left:auto; }
+      .watermark { position:fixed; left:315px; top:50px; z-index:10; padding:5px 8px; border:1px solid #49494d; border-radius:5px; color:#aaa; background:#242426e8; font-size:10px; }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <header class="top"><span class="traffic">● ● ●</span><span class="brand">CCLink Studio</span><span class="crumb">生产 / 外壳结构 / 20260716</span><nav class="tabs"><button class="tab" data-page="view">1. STEP 查看</button><button class="tab" data-page="confirm">2. 参数确认</button><button class="tab" data-page="result">3. 新版结果</button></nav></header>
+      <section class="shell">
+        <aside class="activity"><div class="ico active">▱</div><div class="ico">⌕</div><div class="ico">⑂</div><div class="grow"></div><div class="ico">⚙</div></aside>
+        <aside class="sidebar"><div class="side-title">眼镜结构项目</div><div class="project"><b>左镜框简单加宽</b><span>最小闭环 · STEP 输入/输出</span></div><div class="tree"><div class="row">⌄　📁 输入</div><div class="row indent active">◇ 光机左镜框.STEP <span class="tag">源文件</span></div><div class="row">⌄　📁 输出</div><div class="row indent" data-output-row>◇ 等待生成…</div><div class="row">▤ 修改说明.md</div></div></aside>
+        <section class="workbench">
+          <div class="filetabs"><div class="filetab" data-file-tab>◇　光机左镜框精简20260716.STEP　×</div></div>
+          <div class="toolbar"><button class="btn">适合视图</button><button class="btn">测量</button><button class="btn">网格</button><button class="btn">线框</button><span class="spacer"></span><span class="okchip">STEP · 1 个有效实体</span></div>
+          <div class="canvas"><div class="grid"></div>
+            <section class="page" data-content="view"><div class="stage"><svg class="model" viewBox="0 0 820 360"><defs><marker id="arr" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 4L8 0L8 8Z" fill="#69baff"/></marker></defs><path class="body" d="M78 174C88 76 200 38 338 62C422 77 480 117 501 171C517 214 492 278 427 305C353 337 215 326 133 278C91 254 72 218 78 174Z"/><path class="hole" d="M132 176C143 111 222 85 322 97C388 105 436 132 447 173C458 213 421 258 364 274C291 294 199 277 153 243C132 227 125 203 132 176Z"/><path class="body" d="M485 147C548 118 610 113 703 128L738 147L720 176C630 159 563 166 498 194Z"/><circle class="hole" cx="493" cy="171" r="17"/><circle class="hole" cx="543" cy="149" r="8"/><line x1="78" y1="38" x2="738" y2="38" stroke="#69baff" stroke-width="1.5" marker-start="url(#arr)" marker-end="url(#arr)"/><text class="label" x="353" y="27">148.17 mm</text></svg></div><div class="note n1">OCCT 读取 STEP 并生成显示网格</div><div class="note n2">用户无需转换格式</div><div class="metrics"><div class="metric"><span>长度 X</span><b>148.17 mm</b></div><div class="metric"><span>宽度 Y</span><b>41.06 mm</b></div><div class="metric"><span>高度 Z</span><b>50.59 mm</b></div><div class="metric"><span>解析状态</span><b class="good">成功</b></div></div></section>
+            <section class="page" data-content="confirm"><div class="stage"><svg class="model" viewBox="0 0 820 360"><defs><marker id="arr2" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto"><path d="M0 4L8 0L8 8Z" fill="#69baff"/></marker></defs><path class="body" d="M78 174C88 76 200 38 338 62C422 77 480 117 501 171C517 214 492 278 427 305C353 337 215 326 133 278C91 254 72 218 78 174Z"/><path class="hole" d="M132 176C143 111 222 85 322 97C388 105 436 132 447 173C458 213 421 258 364 274C291 294 199 277 153 243C132 227 125 203 132 176Z"/><path class="body" d="M485 147C548 118 610 113 703 128L738 147L720 176C630 159 563 166 498 194Z"/><rect class="plane" x="192" y="45" width="12" height="275"/><line class="arrow" x1="198" y1="335" x2="145" y2="335" marker-end="url(#arr2)"/><text class="label" x="86" y="356">Y− 3.00 mm</text><path class="fixed" d="M205 62C335 52 457 101 501 171C517 214 492 278 427 305C354 337 266 327 205 309"/></svg></div><div class="note n1">蓝色虚线：E0 冻结的切割基准</div><div class="note n2">绿色虚线侧：保持不动</div></section>
+            <section class="page" data-content="result"><div class="stage"><svg class="model" viewBox="0 0 820 360"><path class="newbody" d="M48 174C58 76 194 38 338 62C422 77 480 117 501 171C517 214 492 278 427 305C353 337 207 326 103 278C61 254 42 218 48 174Z"/><path class="hole" d="M102 176C113 111 207 85 322 97C388 105 436 132 447 173C458 213 421 258 364 274C291 294 172 277 123 243C102 227 95 203 102 176Z"/><path class="body" d="M485 147C548 118 610 113 703 128L738 147L720 176C630 159 563 166 498 194Z"/><circle class="hole" cx="493" cy="171" r="17"/><circle class="hole" cx="543" cy="149" r="8"/></svg></div><div class="note n1">已自动打开：左镜框-Y加宽3mm.STEP</div><div class="note n2">文件生成与基础几何核验通过</div><div class="metrics"><div class="metric"><span>目标宽度 Y</span><b>41.06 → 44.06 mm</b></div><div class="metric"><span>实体 / Solid</span><b class="good">1 / 1</b></div><div class="metric"><span>总体积</span><b class="good">有限正数 · 增加</b></div><div class="metric"><span>B-Rep 完整性</span><b class="good">有效 · 闭合</b></div></div></section>
+          </div>
+        </section>
+        <aside class="agent"><div class="agent-head"><span class="bot">▣</span><div><b>Claude Code · CAD 助手</b><small>本地 Agent · 统一工具授权</small></div></div>
+          <div class="page" data-content="view"><div class="bubble"><p>已读取当前 STEP。</p><div class="card"><h3>模型摘要</h3><div class="kv"><span>实体</span><b>1</b><span>单位</span><b>毫米</b><span>整体尺寸</span><b>148.17 × 41.06 × 50.59</b><span>修改后端</span><b>尚未调用</b></div></div><p>可以让我准备 E0 已验证的简单修改。</p></div></div>
+          <div class="page" data-content="confirm"><div class="bubble user">沿 Y 轴负方向加宽 3 mm。</div><div class="bubble"><p>Agent 请求执行操作：</p><div class="card"><h3>本次参数快照</h3><div class="kv"><span>工具</span><b>cad_modify_step</b><span>输入</span><b>光机左镜框.STEP</b><span>操作</span><b>截面插入式加长</b><span>轴 / 方向</span><b>Y / 负向</b><span>距离</span><b>3.00 mm</b><span>切割基准</span><b>Y = 12.50 mm</b><span>固定侧</span><b>Y 正侧</b><span>输出</span><b>左镜框-Y加宽3mm.STEP</b></div></div><p class="warning">基础核验不等于可制造。本次确认只授权以上参数。</p><div class="actions"><button class="btn primary">允许本次</button><button class="btn ghost">拒绝</button></div></div></div>
+          <div class="page" data-content="result"><div class="bubble"><p>修改完成，新 STEP 已自动打开。</p><div class="card"><h3>程序核验</h3><div class="check"><i>✓</i> 原文件哈希未改变</div><div class="check"><i>✓</i> 实体 / Solid：1 / 1</div><div class="check"><i>✓</i> 总体积有限且变化方向正确</div><div class="check"><i>✓</i> B-Rep 有效且实体闭合</div><div class="check"><i>✓</i> Y 尺寸增加 3.00 mm</div></div><div class="actions"><button class="btn primary">打开原版</button><button class="btn ghost">在文件夹中显示输出</button></div></div></div>
+          <div class="composer"><div class="input">输入修改要求，例如：沿 Y 轴负方向加宽 3 mm…</div></div>
+        </aside>
+      </section>
+      <footer class="status"><span>本地：生产</span><span>CAD：OCCT 查看 · FreeCAD 修改</span><span class="right">最小方案效果示意 · 非当前已实现界面</span></footer>
+    </main>
+    <div class="watermark">产品示意：数据和执行结果均为示例</div>
+    <script>
+      const allowed = new Set(['view','confirm','result']);
+      const query = new URLSearchParams(location.search).get('page');
+      function show(page){ const current=allowed.has(page)?page:'view'; document.querySelectorAll('[data-content]').forEach(n=>n.classList.toggle('active',n.dataset.content===current)); document.querySelectorAll('[data-page]').forEach(n=>n.classList.toggle('active',n.dataset.page===current)); document.querySelector('[data-output-row]').textContent=current==='result'?'◇ 左镜框-Y加宽3mm.STEP':'◇ 等待生成…'; document.querySelector('[data-file-tab]').textContent=current==='result'?'◇　左镜框-Y加宽3mm.STEP　×':'◇　光机左镜框精简20260716.STEP　×'; history.replaceState(null,'',`?page=${current}`); }
+      document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.page))); show(query);
+    </script>
+  </body>
+</html>

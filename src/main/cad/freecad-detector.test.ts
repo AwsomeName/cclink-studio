@@ -31,6 +31,21 @@ describe('detectFreeCad', () => {
     })
   })
 
+  it('keeps only the bounded FreeCAD version line when the executable prints environment noise', async () => {
+    const freeCadPath = join(tempDir, 'FreeCADCmd-noisy')
+    await writeFile(
+      freeCadPath,
+      '#!/bin/sh\necho "SECRET_TOKEN=must-not-leak"\necho "FreeCAD 1.2 Revision: test"\n',
+      'utf-8',
+    )
+    await chmod(freeCadPath, 0o755)
+
+    const status = await detectFreeCad(freeCadPath)
+
+    expect(status.version).toBe('FreeCAD 1.2 Revision: test')
+    expect(JSON.stringify(status)).not.toContain('must-not-leak')
+  })
+
   it('rejects a configured path that is missing', async () => {
     const freeCadPath = join(tempDir, 'missing-FreeCADCmd')
 

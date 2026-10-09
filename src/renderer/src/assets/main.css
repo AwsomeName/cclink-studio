@@ -9351,6 +9351,42 @@ body.is-resizing-panels .main-area > div {
   white-space: pre-wrap;
 }
 
+.cad-modification-result {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--success-color, #4caf50) 7%, transparent);
+  border-top: 1px solid var(--border-color);
+}
+
+.cad-modification-result dl {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.cad-modification-result dl > div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.cad-modification-result dt,
+.cad-modification-result dd,
+.cad-modification-result p {
+  margin: 0;
+}
+
+.cad-modification-result dt,
+.cad-modification-result small {
+  color: var(--text-secondary);
+}
+
+.cad-modification-result dd {
+  overflow-wrap: anywhere;
+}
+
 /* 费用显示 */
 .agent-cost {
   padding: 2px 16px;

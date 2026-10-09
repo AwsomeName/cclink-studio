@@ -10,6 +10,8 @@ const execFileAsync = promisify(execFile)
 
 const KNOWN_FREECAD_PATHS = [
   '/Applications/FreeCAD.app/Contents/MacOS/FreeCADCmd',
+  '/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd',
+  '/Applications/FreeCAD.app/Contents/Resources/bin/FreeCADCmd',
   '/Applications/FreeCAD.app/Contents/MacOS/FreeCAD',
   '/opt/homebrew/bin/FreeCADCmd',
   '/opt/homebrew/bin/freecadcmd',
@@ -61,7 +63,11 @@ async function readFreeCadVersion(path: string): Promise<string | undefined> {
   try {
     const { stdout, stderr } = await execFileAsync(path, ['--version'], { timeout: 8000 })
     const text = `${stdout}\n${stderr}`.trim()
-    return text.split('\n').find(Boolean)?.trim()
+    return text
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => /^FreeCAD(?:Cmd)?\s/i.test(line))
+      ?.slice(0, 256)
   } catch {
     return undefined
   }

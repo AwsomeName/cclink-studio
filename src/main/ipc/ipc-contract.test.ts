@@ -374,6 +374,7 @@ describe('IPC invoke contracts', () => {
     expect(
       cadIpcContracts.convertModel.parseArgs([{ inputPath: '/workspace/model.step' }]),
     ).toEqual([{ inputPath: '/workspace/model.step' }])
+    expect(cadIpcContracts.readPreview.parseArgs(['preview-ref'])).toEqual(['preview-ref'])
     expect(() =>
       hardwareIpcContracts.readGerberLayerPreview.parseArgs([
         '/workspace',

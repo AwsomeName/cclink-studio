@@ -291,9 +291,12 @@ export function ContentBlockRenderer({
     }
 
     case 'tool_result': {
+      const cadResult = parseCadModificationResult(block.content)
       const resultLabel = block.is_error ? '工具失败' : '工具完成'
       const resultPreview =
-        previewText(block.content, 92) || (block.is_error ? '执行失败' : '执行成功')
+        cadResult?.summary ||
+        previewText(block.content, 92) ||
+        (block.is_error ? '执行失败' : '执行成功')
       return (
         <details className={`content-tool-result ${block.is_error ? 'error' : 'success'}`}>
           <summary>
@@ -301,7 +304,11 @@ export function ContentBlockRenderer({
             <span>{resultLabel}</span>
             <em>{resultPreview}</em>
           </summary>
-          <div className="tool-result-content">{block.content}</div>
+          {cadResult ? (
+            <CadModificationResultDetails result={cadResult} />
+          ) : (
+            <div className="tool-result-content">{block.content}</div>
+          )}
         </details>
       )
     }
@@ -378,7 +385,7 @@ function ToolExecutionGroup({
         ? productToolLabel(block.name)
         : block.is_error
           ? '工具失败'
-          : '工具完成',
+          : (parseCadModificationResult(block.content)?.summary ?? '工具完成'),
     )
     .join('、')
 
@@ -451,6 +458,7 @@ function ToolExecutionRow({
   }
 
   if (block.type === 'tool_result') {
+    const cadResult = parseCadModificationResult(block.content)
     return (
       <details
         className={`tool-group-row tool-group-row-result ${block.is_error ? 'error' : 'success'}`}
@@ -458,14 +466,119 @@ function ToolExecutionRow({
         <summary>
           {block.is_error ? <IconError size={12} /> : <IconCheck size={12} />}
           <span>{block.is_error ? '工具失败' : '工具完成'}</span>
-          <em>{previewText(block.content, 92) || (block.is_error ? '执行失败' : '执行成功')}</em>
+          <em>
+            {cadResult?.summary ||
+              previewText(block.content, 92) ||
+              (block.is_error ? '执行失败' : '执行成功')}
+          </em>
         </summary>
-        <div className="tool-result-content">{block.content}</div>
+        {cadResult ? (
+          <CadModificationResultDetails result={cadResult} />
+        ) : (
+          <div className="tool-result-content">{block.content}</div>
+        )}
       </details>
     )
   }
 
   return <div className="tool-result-content">未知工具事件</div>
+}
+
+interface CadModificationResultView {
+  outputPath: string
+  axis: 'x' | 'y' | 'z'
+  distanceMm: number
+  solidCount: number
+  volume: number
+  size: { x: number; y: number; z: number }
+  status: 'passed' | 'passed-with-baseline-warning'
+  warning?: string
+  summary: string
+}
+
+export function parseCadModificationResult(content: string): CadModificationResultView | null {
+  let value: unknown
+  try {
+    value = JSON.parse(content)
+  } catch {
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const result = value as Record<string, unknown>
+  const output = result.output as Record<string, unknown> | undefined
+  const bounds = output?.bounds as Record<string, unknown> | undefined
+  const size = bounds?.size as Record<string, unknown> | undefined
+  const validation = result.validation as Record<string, unknown> | undefined
+  if (
+    result.kind !== 'cad-modification-result' ||
+    result.success !== true ||
+    typeof result.outputPath !== 'string' ||
+    !['x', 'y', 'z'].includes(String(result.axis)) ||
+    typeof result.distanceMm !== 'number' ||
+    !Number.isFinite(result.distanceMm) ||
+    typeof output?.solidCount !== 'number' ||
+    typeof output.volume !== 'number' ||
+    typeof size?.x !== 'number' ||
+    typeof size.y !== 'number' ||
+    typeof size.z !== 'number' ||
+    !['passed', 'passed-with-baseline-warning'].includes(String(validation?.status))
+  ) {
+    return null
+  }
+  const axis = result.axis as 'x' | 'y' | 'z'
+  const status = validation!.status as 'passed' | 'passed-with-baseline-warning'
+  const normalizedSize = { x: size.x, y: size.y, z: size.z }
+  return {
+    outputPath: result.outputPath,
+    axis,
+    distanceMm: result.distanceMm,
+    solidCount: output.solidCount,
+    volume: output.volume,
+    size: normalizedSize,
+    status,
+    ...(typeof validation?.warning === 'string' ? { warning: validation.warning } : {}),
+    summary: `STEP 已生成 · ${axis.toUpperCase()} +${result.distanceMm} mm · ${normalizedSize.x.toFixed(2)} × ${normalizedSize.y.toFixed(2)} × ${normalizedSize.z.toFixed(2)} mm`,
+  }
+}
+
+function CadModificationResultDetails({
+  result,
+}: {
+  result: CadModificationResultView
+}): React.ReactElement {
+  return (
+    <div className="cad-modification-result">
+      <strong>
+        {result.status === 'passed' ? '基础几何核验通过' : '基础几何通过，带源模型基线警告'}
+      </strong>
+      <dl>
+        <div>
+          <dt>输出</dt>
+          <dd>{result.outputPath}</dd>
+        </div>
+        <div>
+          <dt>修改</dt>
+          <dd>
+            {result.axis.toUpperCase()} 轴增加 {result.distanceMm} mm
+          </dd>
+        </div>
+        <div>
+          <dt>尺寸</dt>
+          <dd>
+            {result.size.x.toFixed(2)} × {result.size.y.toFixed(2)} × {result.size.z.toFixed(2)} mm
+          </dd>
+        </div>
+        <div>
+          <dt>实体 / 体积</dt>
+          <dd>
+            {result.solidCount} / {result.volume.toFixed(2)} mm³
+          </dd>
+        </div>
+      </dl>
+      {result.warning ? <p>{result.warning}</p> : null}
+      <small>该结果不代表结构可制造，打样前仍需专业 CAD 复核。</small>
+    </div>
+  )
 }
 
 function formatToolInput(input: Record<string, unknown>): string {

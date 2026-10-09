@@ -83,6 +83,7 @@ export interface CadModelMetadata {
 
 export interface CadConvertResult {
   success: boolean
+  previewRef?: string
   previewPath?: string
   format?: CadPreviewFormat
   sourceHash?: string
@@ -90,6 +91,14 @@ export interface CadConvertResult {
   metadata?: CadModelMetadata
   diagnostics: CadDiagnostic[]
   error?: CadConversionError
+}
+
+export interface CadPreviewPayload {
+  previewRef: string
+  format: CadPreviewFormat
+  content: string
+  encoding: 'base64'
+  byteLength: number
 }
 
 export interface CadModelSupport {
@@ -126,6 +135,7 @@ export interface CadApiContract {
   getCacheStatus(): Promise<CadCacheStatus>
   clearCache(): Promise<CadCacheStatus>
   convertModel(request: CadConvertRequest): Promise<CadConvertResult>
+  readPreview(previewRef: string): Promise<CadPreviewPayload>
 }
 
 export const cadIpc = {
@@ -135,4 +145,5 @@ export const cadIpc = {
   getCacheStatus: defineIpcCall<[], CadCacheStatus>('cad:getCacheStatus'),
   clearCache: defineIpcCall<[], CadCacheStatus>('cad:clearCache'),
   convertModel: defineIpcCall<[request: CadConvertRequest], CadConvertResult>('cad:convertModel'),
+  readPreview: defineIpcCall<[previewRef: string], CadPreviewPayload>('cad:readPreview'),
 } as const

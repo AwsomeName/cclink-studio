@@ -52,6 +52,7 @@ export const cadApi: CadApiContract = {
   getCacheStatus: () => invokeIpcContract(cadIpc.getCacheStatus),
   clearCache: () => invokeIpcContract(cadIpc.clearCache),
   convertModel: (request) => invokeIpcContract(cadIpc.convertModel, request),
+  readPreview: (previewRef) => invokeIpcContract(cadIpc.readPreview, previewRef),
 }
 
 export const workspaceStateApi: WorkspaceStateApiContract = {

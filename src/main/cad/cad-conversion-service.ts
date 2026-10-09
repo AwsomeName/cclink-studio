@@ -1,8 +1,8 @@
 import { app } from 'electron'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { access, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { access, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { AppSettings } from '../settings/types'
@@ -23,6 +23,7 @@ import type {
   CadModelBounds,
   CadModelMetadata,
   CadModelSupport,
+  CadPreviewPayload,
   CadPreviewFormat,
 } from '../../shared/ipc/cad'
 
@@ -31,6 +32,32 @@ const DEFAULT_CONVERSION_TIMEOUT_MS = 120_000
 const SUPPORTED_SOURCE_EXTENSIONS = new Set(['.step', '.stp'])
 const NATIVE_MODEL_EXTENSIONS = new Set(['.stl', '.3mf', '.glb', '.gltf', '.fbx'])
 const MESH_SOURCE_EXTENSIONS = new Set(['.stl', '.3mf', '.glb', '.gltf', '.fbx', '.obj'])
+const PREVIEW_GRANT_TTL_MS = 10 * 60 * 1000
+const MAX_PREVIEW_BYTES = 128 * 1024 * 1024
+
+interface CadPreviewGrant {
+  rendererId: number
+  workspaceRoot: string
+  requestedSourcePath: string
+  canonicalSourcePath: string
+  sourceHash: string
+  previewPath: string
+  format: CadPreviewFormat
+  expiresAt: number
+}
+
+export interface CadPreviewGrantContext {
+  rendererId: number
+  workspaceRoot: string
+  requestedSourcePath: string
+  canonicalSourcePath: string
+}
+
+export interface CadPreviewReadContext {
+  rendererId: number
+  workspaceRoot: string
+  authorizeSource: (requestedSourcePath: string) => Promise<string>
+}
 
 function cadError(
   code: CadConversionError['code'],
@@ -57,6 +84,11 @@ async function fileHash(filePath: string): Promise<string> {
 
 function getExtension(filePath: string): string {
   return extname(filePath).toLowerCase()
+}
+
+function isPathWithin(root: string, target: string): boolean {
+  const pathFromRoot = relative(resolve(root), resolve(target))
+  return pathFromRoot === '' || (!pathFromRoot.startsWith(`..${sep}`) && pathFromRoot !== '..')
 }
 
 function normalizeTargetFormat(format?: CadPreviewFormat): CadPreviewFormat {
@@ -115,6 +147,8 @@ App.closeDocument(doc.Name)
 }
 
 export class CadConversionService {
+  private readonly previewGrants = new Map<string, CadPreviewGrant>()
+
   constructor(
     private readonly getSettings: () => AppSettings,
     private readonly resolveManagedOcct: () => Promise<OcctRuntimeResource | null> = async () =>
@@ -207,8 +241,89 @@ export class CadConversionService {
   }
 
   async clearCache(): Promise<CadCacheStatus> {
+    this.previewGrants.clear()
     await rm(this.getCacheRoot(), { recursive: true, force: true })
     return this.getCacheStatus()
+  }
+
+  createPreviewGrant(result: CadConvertResult, context: CadPreviewGrantContext): CadConvertResult {
+    if (!result.success || !result.previewPath || !result.sourceHash || !result.format)
+      return result
+
+    this.removeExpiredPreviewGrants()
+    const previewRef = randomUUID()
+    this.previewGrants.set(previewRef, {
+      rendererId: context.rendererId,
+      workspaceRoot: resolve(context.workspaceRoot),
+      requestedSourcePath: resolve(context.requestedSourcePath),
+      canonicalSourcePath: resolve(context.canonicalSourcePath),
+      sourceHash: result.sourceHash,
+      previewPath: resolve(result.previewPath),
+      format: result.format,
+      expiresAt: Date.now() + PREVIEW_GRANT_TTL_MS,
+    })
+
+    return {
+      ...result,
+      previewRef,
+      previewPath: undefined,
+      metadata: result.metadata ? { ...result.metadata, previewPath: undefined } : undefined,
+    }
+  }
+
+  async readPreview(
+    previewRef: string,
+    context: CadPreviewReadContext,
+  ): Promise<CadPreviewPayload> {
+    this.removeExpiredPreviewGrants()
+    const grant = this.previewGrants.get(previewRef)
+    if (!grant) throw new Error('CAD_PREVIEW_REF_INVALID: 预览引用不存在或已过期')
+    if (grant.rendererId !== context.rendererId) {
+      throw new Error('CAD_PREVIEW_REF_FORBIDDEN: 预览引用不属于当前窗口')
+    }
+    if (resolve(context.workspaceRoot) !== grant.workspaceRoot) {
+      throw new Error('STALE_WORKSPACE: 预览引用不属于当前工作空间')
+    }
+
+    const authorizedSourcePath = resolve(await context.authorizeSource(grant.requestedSourcePath))
+    if (authorizedSourcePath !== grant.canonicalSourcePath) {
+      throw new Error('CAD_PREVIEW_SOURCE_CHANGED: 源文件真实路径已变化')
+    }
+    if ((await fileHash(grant.canonicalSourcePath)) !== grant.sourceHash) {
+      throw new Error('CAD_PREVIEW_SOURCE_CHANGED: 源文件内容已变化')
+    }
+
+    const [cacheRoot, previewPath] = await Promise.all([
+      realpath(this.getCacheRoot()),
+      realpath(grant.previewPath),
+    ])
+    if (!isPathWithin(cacheRoot, previewPath)) {
+      throw new Error('CAD_PREVIEW_PATH_INVALID: 预览文件不属于 CAD 缓存')
+    }
+    const previewStat = await stat(previewPath)
+    if (!previewStat.isFile() || previewStat.size <= 0 || previewStat.size > MAX_PREVIEW_BYTES) {
+      throw new Error('CAD_PREVIEW_SIZE_INVALID: 预览文件为空或超过 128 MB 上限')
+    }
+
+    const content = await readFile(previewPath)
+    this.previewGrants.delete(previewRef)
+    return {
+      previewRef,
+      format: grant.format,
+      content: content.toString('base64'),
+      encoding: 'base64',
+      byteLength: content.byteLength,
+    }
+  }
+
+  releasePreviewGrantsForRenderer(rendererId: number): void {
+    for (const [previewRef, grant] of this.previewGrants) {
+      if (grant.rendererId === rendererId) this.previewGrants.delete(previewRef)
+    }
+  }
+
+  destroy(): void {
+    this.previewGrants.clear()
   }
 
   async inspectModel(inputPath: string): Promise<CadInspectModelResult> {
@@ -457,6 +572,13 @@ export class CadConversionService {
 
   private getMetadataPath(sourceHash: string): string {
     return join(this.getCacheRoot(), sourceHash, 'metadata.json')
+  }
+
+  private removeExpiredPreviewGrants(): void {
+    const now = Date.now()
+    for (const [previewRef, grant] of this.previewGrants) {
+      if (grant.expiresAt <= now) this.previewGrants.delete(previewRef)
+    }
   }
 }
 

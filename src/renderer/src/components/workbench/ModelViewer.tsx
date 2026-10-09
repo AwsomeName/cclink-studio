@@ -289,11 +289,11 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
         setConversionNotice('')
         setModelInfo(null)
 
-        let sourceFilePath = filePath
+        let modelContent: string | null = null
         let extension = getExtension(filePath)
         if (isStepExtension(extension)) {
           const cadApi = window.cclinkStudio.cad
-          if (!cadApi?.convertModel || !cadApi.getModelSupport) {
+          if (!cadApi?.convertModel || !cadApi.getModelSupport || !cadApi.readPreview) {
             throw new Error(
               'CAD 转换能力尚未加载。请重启 CCLink Studio 让主进程和 preload 生效，然后在设置中启用本机 FreeCAD。',
             )
@@ -312,17 +312,27 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
             inputPath: filePath,
             targetFormat: 'stl',
           })
-          if (!converted.success || !converted.previewPath || !converted.format) {
+          if (!converted.success || !converted.previewRef || !converted.format) {
             const detail = converted.error?.detail ? `\n${converted.error.detail}` : ''
             throw new Error(`${converted.error?.message ?? 'STEP/STP 转换失败。'}${detail}`)
           }
-          sourceFilePath = converted.previewPath
-          extension = `.${converted.format}`
+          try {
+            const preview = await cadApi.readPreview(converted.previewRef)
+            modelContent = preview.content
+            extension = `.${preview.format}`
+          } catch (previewError) {
+            throw new Error(
+              `STEP 预览读取失败：${previewError instanceof Error ? previewError.message : String(previewError)}`,
+            )
+          }
           setConversionNotice(converted.cached ? '已使用缓存的 STEP 预览。' : 'STEP 预览转换完成。')
         }
 
-        const result = await window.cclinkStudio.fs.readFile(sourceFilePath)
-        const content = typeof result === 'string' ? result : result.content
+        if (!modelContent) {
+          const result = await window.cclinkStudio.fs.readFile(filePath)
+          modelContent = typeof result === 'string' ? result : result.content
+        }
+        const content = modelContent
         const arrayBuffer = base64ToArrayBuffer(content)
 
         let model: THREE.Object3D
@@ -431,7 +441,7 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
               {modelInfo.triangles.toLocaleString()} tris
               {modelInfo.animations > 0 ? ` · ${modelInfo.animations} animations` : ''}
               {modelInfo.size
-                ? ` · ${modelInfo.size.x.toFixed(2)} × ${modelInfo.size.y.toFixed(2)} × ${modelInfo.size.z.toFixed(2)} mm`
+                ? ` · ${isStepExtension(getExtension(filePath)) ? '预览网格包围盒 ≈ ' : ''}${modelInfo.size.x.toFixed(2)} × ${modelInfo.size.y.toFixed(2)} × ${modelInfo.size.z.toFixed(2)} mm`
                 : ''}
             </span>
           )}

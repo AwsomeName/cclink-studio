@@ -195,6 +195,7 @@ function createAutomationRuntime() {
   runtime.markdownIllustrationService = {} as never
   runtime.hardwareService = {} as never
   runtime.cadConversionService = {} as never
+  runtime.cadModificationService = { destroy: vi.fn() } as never
   runtime.dataSourceService = {} as never
   runtime.adbBridge = {} as never
   runtime.scrcpyBridge = {} as never

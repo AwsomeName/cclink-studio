@@ -20,6 +20,9 @@ export function summarizeToolConfirmation(
   params: Record<string, unknown>,
   workspaceRoot?: string,
 ): ToolConfirmationSummaryRow[] {
+  if (toolName === 'cad_modify_step') {
+    return summarizeCadModification(params, workspaceRoot)
+  }
   const rows: ToolConfirmationSummaryRow[] = []
   for (const [key, value] of Object.entries(params)) {
     if (rows.length >= MAX_ROWS) break
@@ -62,6 +65,50 @@ export function summarizeToolConfirmation(
     })
   }
   return rows.slice(0, MAX_ROWS)
+}
+
+function summarizeCadModification(
+  params: Record<string, unknown>,
+  workspaceRoot?: string,
+): ToolConfirmationSummaryRow[] {
+  const safeEnum = (key: string, allowed: readonly string[]): string => {
+    const value = params[key]
+    return typeof value === 'string' && allowed.includes(value) ? value : '参数无效'
+  }
+  const safeNumber = (key: string, suffix = ''): string => {
+    const value = params[key]
+    return typeof value === 'number' && Number.isFinite(value) ? `${value}${suffix}` : '参数无效'
+  }
+  const safePath = (key: string): string =>
+    typeof params[key] === 'string' ? summarizePath(params[key], workspaceRoot) : '参数无效'
+  const sourceHash = params.sourceHash
+  const hashSummary =
+    typeof sourceHash === 'string' && /^[a-f0-9]{64}$/u.test(sourceHash)
+      ? `${sourceHash.slice(0, 12)}…`
+      : '参数无效'
+  const expected = ['expectedSizeX', 'expectedSizeY', 'expectedSizeZ'].map((key) => safeNumber(key))
+  return [
+    { label: '源文件', value: safePath('inputPath'), monospace: true },
+    { label: '源 SHA-256', value: hashSummary, monospace: true },
+    {
+      label: '修改方式',
+      value:
+        safeEnum('operation', ['section-insert']) === 'section-insert'
+          ? '截面插入（section-insert）'
+          : '参数无效',
+    },
+    { label: '方向轴', value: safeEnum('axis', ['x', 'y', 'z']).toUpperCase() },
+    { label: '移动方向', value: safeEnum('direction', ['positive', 'negative']) },
+    { label: '增加距离', value: safeNumber('distanceMm', ' mm') },
+    { label: '截面位置', value: safeNumber('splitPlane', ' mm') },
+    { label: '固定端', value: safeEnum('fixedSide', ['min', 'max']) },
+    { label: '输出文件', value: safePath('outputPath'), monospace: true },
+    { label: '预期尺寸', value: `${expected.join(' × ')} mm` },
+    {
+      label: '核验边界',
+      value: '基础核验不等于可制造；源基线 BOP 警告需专业 CAD 复核',
+    },
+  ]
 }
 
 function summarizePath(value: string, workspaceRoot?: string): string {

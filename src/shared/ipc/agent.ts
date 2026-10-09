@@ -275,6 +275,7 @@ export interface AgentConfirmationsInvalidatedEvent {
 const agentRunStatuses = new Set(['running', 'cancelling', 'succeeded', 'failed', 'cancelled'])
 const agentRiskLevels = new Set(['read', 'write', 'destructive'])
 const agentOperations = new Set(['message', 'compact'])
+const MAX_AGENT_CONFIRMATION_SUMMARY_ROWS = 16
 
 function isAgentEventObject(value: unknown): value is Record<string, unknown> {
   return isBoundedIpcEventPayload(value) && Boolean(value) && typeof value === 'object'
@@ -356,7 +357,7 @@ export function parseAgentConfirmationRequest(value: unknown): ToolConfirmationR
     'reason' in value ||
     !Array.isArray(summary) ||
     summary.length < 1 ||
-    summary.length > 6 ||
+    summary.length > MAX_AGENT_CONFIRMATION_SUMMARY_ROWS ||
     !summary.every(
       (row) =>
         row &&

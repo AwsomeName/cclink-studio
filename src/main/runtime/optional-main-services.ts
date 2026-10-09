@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { CadConversionService } from '../cad/cad-conversion-service'
+import { CadModificationService } from '../cad/cad-modification-service'
 import { registerCadIpc } from '../cad/cad-ipc'
 import { DataSourceService } from '../data-source/data-source-service'
 import { registerDataSourceIpc } from '../data-source/data-source-ipc'
@@ -34,7 +35,12 @@ export type OptionalMainServiceBootstrappers = Record<
 
 const defaultBootstrappers: OptionalMainServiceBootstrappers = {
   cad: (runtime) => {
-    registerCadIpc(() => runtime.cadConversionService, runtime.trustedRendererGuard!)
+    if (!runtime.fileService) throw new Error('文件服务未就绪')
+    registerCadIpc(
+      () => runtime.cadConversionService,
+      runtime.fileService,
+      runtime.trustedRendererGuard!,
+    )
     runtime.cadConversionService = new CadConversionService(
       () => runtime.settingsService!.getAll(),
       async () => {
@@ -53,6 +59,9 @@ const defaultBootstrappers: OptionalMainServiceBootstrappers = {
           release: resource.release,
         }
       },
+    )
+    runtime.cadModificationService = new CadModificationService(() =>
+      runtime.settingsService!.getAll(),
     )
     console.log('[CCLink Studio] CAD 转换 IPC 已注册')
   },
@@ -208,6 +217,8 @@ function resetCapability(
 ): void {
   switch (capability) {
     case 'cad':
+      runtime.cadModificationService?.destroy()
+      runtime.cadModificationService = null
       runtime.cadConversionService = null
       break
     case 'hardware':

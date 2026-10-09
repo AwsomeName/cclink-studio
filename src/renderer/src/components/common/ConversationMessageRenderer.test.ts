@@ -8,6 +8,7 @@ import {
   buildContentRenderUnits,
   getMessageCopyText,
   getToolExecutionSummary,
+  parseCadModificationResult,
 } from './ConversationMessageRenderer'
 
 beforeAll(() => vi.stubGlobal('React', React))
@@ -183,5 +184,29 @@ describe('ConversationMessageRenderer', () => {
 
     expect(rendered).not.toContain('<img')
     expect(rendered).not.toContain('src="javascript:')
+  })
+
+  it('renders a concise evidence summary for a successful STEP modification result', () => {
+    const content = JSON.stringify({
+      kind: 'cad-modification-result',
+      success: true,
+      outputPath: '/workspace/model-x-plus-3.step',
+      axis: 'x',
+      distanceMm: 3,
+      output: {
+        solidCount: 1,
+        volume: 11200.35,
+        bounds: { size: { x: 151.1735, y: 42.9023, z: 50.5921 } },
+      },
+      validation: {
+        status: 'passed-with-baseline-warning',
+        warning: '源模型已有 BOP 基线警告，需要专业 CAD 复核。',
+      },
+    })
+
+    expect(parseCadModificationResult(content)?.summary).toBe(
+      'STEP 已生成 · X +3 mm · 151.17 × 42.90 × 50.59 mm',
+    )
+    expect(parseCadModificationResult('not-json')).toBeNull()
   })
 })

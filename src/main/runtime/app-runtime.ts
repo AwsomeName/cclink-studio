@@ -33,7 +33,9 @@ import type { ArticlePublishingService } from '../article-publishing/article-pub
 import type { ImageResearchService } from '../image-research/image-research-service'
 import type { HardwareService } from '../hardware/hardware-service'
 import type { CadConversionService } from '../cad/cad-conversion-service'
+import type { CadModificationService } from '../cad/cad-modification-service'
 import type { DataSourceService } from '../data-source/data-source-service'
+import type { CompanyAccountsService } from '../company-accounts/company-accounts-service'
 import type { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import type { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
 import type { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
@@ -111,7 +113,9 @@ export interface CclinkStudioRuntimeState {
   imageResearchService: ImageResearchService | null
   hardwareService: HardwareService | null
   cadConversionService: CadConversionService | null
+  cadModificationService: CadModificationService | null
   dataSourceService: DataSourceService | null
+  companyAccountsService: CompanyAccountsService | null
   terminalAuditStore: TerminalAuditStore | null
   terminalConfirmationService: TerminalConfirmationService | null
   terminalSessionRegistry: TerminalSessionRegistry | null
@@ -185,7 +189,9 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     imageResearchService: null,
     hardwareService: null,
     cadConversionService: null,
+    cadModificationService: null,
     dataSourceService: null,
+    companyAccountsService: null,
     terminalAuditStore: null,
     terminalConfirmationService: null,
     terminalSessionRegistry: null,

@@ -40,7 +40,7 @@ describe('high-risk workbench IPC boundaries', () => {
     const guard = createGuard('trusted')
     registerProjectOpsIpc(projectOps as never, guard as never)
     registerGitBackupIpc(gitBackup as never, guard as never)
-    registerCadIpc(cad as never, guard as never)
+    registerCadIpc(cad as never, {} as never, guard as never)
     registerHardwareIpc(hardware as never, guard as never)
 
     const event = { sender: 'trusted' }

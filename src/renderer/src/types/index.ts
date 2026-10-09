@@ -17,6 +17,7 @@ export type ActivityPanel =
   | 'browser'
   | 'files'
   | 'data-sources'
+  | 'company-accounts'
   | 'production'
   | 'terminal'
   | 'operations'
@@ -50,6 +51,7 @@ export type TabType =
   | 'agent-role'
   | 'remote-file'
   | 'media-production'
+  | 'company-accounts'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 

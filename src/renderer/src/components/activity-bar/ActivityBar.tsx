@@ -6,6 +6,7 @@ import {
   ActivityArticlePublishingIcon,
   ActivityBrowserIcon,
   ActivityDataSourcesIcon,
+  ActivityCompanyAccountsIcon,
   ActivityFilesIcon,
   ActivityProductionIcon,
   ActivityProjectsIcon,
@@ -58,6 +59,12 @@ const MAIN_ICON_GROUPS: Array<{
       { id: 'agent-roles', Icon: ActivityRolesIcon, label: '角色' },
       { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号', shortLabel: '账号' },
       { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源', shortLabel: '数据' },
+      {
+        id: 'company-accounts',
+        Icon: ActivityCompanyAccountsIcon,
+        label: '公司账目',
+        shortLabel: '账目',
+      },
       { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程', shortLabel: '远程' },
     ],
   },
@@ -106,6 +113,9 @@ export function ActivityBar(): React.ReactElement {
   const handleClick = (id: ActivityPanel): void => {
     setActivePanel(id)
     if (id === 'browser') setAgentPanelMode('right', 'user')
+    if (id === 'company-accounts') {
+      openTab({ type: 'company-accounts', title: '公司账目', icon: '账' })
+    }
   }
 
   const handleOpenSettings = (): void => {

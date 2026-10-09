@@ -72,6 +72,8 @@ import { registerMediaRenderIpc } from '../media-production/media-render-ipc'
 import { WorkbenchTabModel } from '../workbench/workbench-tab-model'
 import { registerWorkbenchTabModelIpc } from '../workbench/workbench-tab-model-ipc'
 import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
+import { CompanyAccountsService } from '../company-accounts/company-accounts-service'
+import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.agentRuntimeStateStore ??= new AgentRuntimeStateStore(
@@ -237,6 +239,25 @@ export async function bootstrapMainProcessServices(
     runtime.trustedRendererGuard,
   )
   console.log('[CCLink Studio] 工作台状态 IPC 已注册')
+
+  try {
+    runtime.companyAccountsService = new CompanyAccountsService(
+      () => runtime.workspaceStateService?.getActiveLocalWorkspace().workspacePath ?? null,
+      async ({ prompt, workspacePath }) => {
+        if (!runtime.agentBridge) throw new Error('本地 Agent 尚未就绪')
+        return runtime.agentBridge.requestInternalText({
+          purpose: 'company-accounts-classification',
+          prompt,
+          workspacePath,
+        })
+      },
+    )
+    registerCompanyAccountsIpc(() => runtime.companyAccountsService, runtime.trustedRendererGuard)
+    console.log('[CCLink Studio] 公司账目 IPC 已注册')
+  } catch (error) {
+    runtime.companyAccountsService = null
+    console.error('[CCLink Studio] 公司账目能力初始化失败，其他本地能力继续启动:', error)
+  }
 
   registerScheduledTaskIpc(
     runtime.scheduledTaskService!,
@@ -657,8 +678,11 @@ export async function shutdownMainProcessServices(
   runtime.permissionManager = null
   runtime.mcpClientMgr = null
   runtime.cadConversionService = null
+  runtime.cadModificationService?.destroy()
+  runtime.cadModificationService = null
   runtime.hardwareService = null
   runtime.dataSourceService = null
+  runtime.companyAccountsService = null
   runtime.meshyService = null
   runtime.imageGenerationService = null
   runtime.markdownIllustrationService = null

@@ -368,6 +368,15 @@ export const useTabStore = create<TabState>((set, get) => ({
 
       // forceNew 跳过允许多开的 Tab 去重
       if (!forceNew) {
+        if (type === 'company-accounts') {
+          const existing = state.tabs.find(
+            (tab) =>
+              tab.type === 'company-accounts' &&
+              workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
+                workspaceRefKey(resolvedWorkspaceRef),
+          )
+          if (existing) return { activeTabId: existing.id }
+        }
         if (type === 'browser' && webResourceRef) {
           const existing = state.tabs.find(
             (tab) =>
