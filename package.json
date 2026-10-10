@@ -55,6 +55,7 @@
     "smoke:managed-runtime-packaged": "node scripts/managed-runtime-packaged-smoke.mjs",
     "verify": "pnpm verify:oss-boundary && pnpm verify:package-boundary && pnpm verify:credential-boundary && pnpm verify:claude-scheduling-boundary && pnpm verify:context-actions && pnpm verify:release && pnpm format:check && pnpm lint && pnpm test && pnpm build",
     "smoke:local": "node scripts/local-smoke.mjs",
+    "smoke:cad-real": "node scripts/cad-real-smoke.mjs",
     "smoke:ui": "node scripts/ui-smoke.mjs",
     "smoke:pdf-preview": "node scripts/ui-smoke.mjs --pdf-only",
     "smoke:media-production": "node scripts/media-production-smoke.mjs",

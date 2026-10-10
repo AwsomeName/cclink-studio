@@ -1,6 +1,6 @@
 # 眼镜 STEP AI 修改：开发与验收记录
 
-> 状态：P0、E0、M1 最小闭环已完成；路径、固定区域、BOP、规划取消已加固，真实 FreeCAD 扩展矩阵通过。最后更新：2026-10-09。
+> 状态：P0、E0、M1 最小闭环已完成；固定区域算法于 2026-10-10 修正，核心用例与真实 FreeCAD 扩展矩阵已重跑通过。最后更新：2026-10-10。
 > 产品事实源：[眼镜 STEP AI 简单修改](./eyewear-step-ai-editing.md)
 > 真实样本：`/Users/apple/Desktop/生产/外壳结构/20260716/光机左镜框精简20260716.STEP`
 
@@ -104,7 +104,9 @@
 
 连续三次执行得到相同实体数量、体积、包围盒、固定端和警告类型。原文件 SHA-256 保持为 `28eef649442705b570b2b5148a37663b99dc799fd1d5a65ce7cf2d1981680f67`。
 
-加固后又完成六项真实 FreeCAD 组合：X 正向 0.1 mm、X 负向 10 mm、Y 正向 0.5 mm、Y 负向 3 mm、Z 正向 10 mm、Z 负向 0.1 mm。六项都通过单实体、闭合、尺寸、固定区域体积对称差和 BOP 基线门禁。该矩阵覆盖三轴、两个方向、距离上下限和中间值，不代表穷举连续距离区间或任意截面。
+2026-10-10 复核时，旧固定区域交集体积算法在六项组合中只有 2 项通过、4 项因证据自相矛盾失败，核心 X 正方向 3 mm 也失败。旧算法及此前“六项全部通过”的结论已经撤销。
+
+修正后，受保护固定区域避开切割面最多 `0.05 mm`，直接计算 `源 - 输出` 与 `输出 - 源` 两个差集，不再从交集体积反推差异。核心 X 正方向 3 mm 与六项矩阵在同一轮真实 FreeCAD 测试中全部通过。六项为 X 正向 0.1 mm、X 负向 10 mm、Y 正向 0.5 mm、Y 负向 3 mm、Z 正向 10 mm、Z 负向 0.1 mm。该矩阵覆盖三轴、两个方向、距离上下限和中间值，不代表穷举连续距离区间或任意截面。
 
 ### BOP 判定
 
@@ -138,12 +140,12 @@ Agent 只能提交数据参数。FreeCAD 运行 Studio 内置的固定 Python �
 - 执行前重新比较源哈希并拒绝覆盖已有输出；执行结束、发布前再次校验源文件；
 - 将请求和结果写入权限为 `0600` 的临时 JSON；
 - FreeCAD 只在应用私有临时目录写 STEP；
-- 重新导入后验证对象数、solid 数、闭合、valid、基础 B-Rep、体积、BOP、尺寸、固定端和固定区域体积对称差；
+- 重新导入后验证对象数、solid 数、闭合、valid、基础 B-Rep、体积、BOP、尺寸、固定端和受保护固定区域的直接双向几何差；
 - FileService 独占创建目标，发布前后校验父目录和目标 inode，不覆盖已有文件；
 - 规划、修改、超时和 destroy 都能终止 FreeCAD 子进程并清理临时文件；
 - 不创建新的用户任务、确认状态、版本记录或 operation 生命周期。
 
-阈值：目标与非目标尺寸误差 `≤ 0.05 mm`，固定端误差 `≤ 0.01 mm`；固定区域体积对称差 `≤ max(0.002 mm³, 固定区域体积 × 0.2 ppm)`。固定区域门限来自真实 Y/Z STEP 重导入与 OCCT 布尔交集的数值噪声，1 mm³ 的模拟固定区变化会被拒绝。
+阈值：目标与非目标尺寸误差 `≤ 0.05 mm`，固定端误差 `≤ 0.01 mm`；受保护固定区域的双向差集体积之和 `≤ max(0.002 mm³, 固定区域体积 × 0.2 ppm)`。切割面附近最多 `0.05 mm` 不参与固定区比较，以隔离重导入后的边界布尔噪声；固定端坐标仍单独验证。1 mm³ 的模拟固定区变化会被拒绝。
 
 ### Agent 工具与确认
 
@@ -194,11 +196,15 @@ riskLevel: write
 - `src/main/cad/freecad-section-insert-script.ts`
 - `src/main/cad/cad-modification-service.ts`
 - `src/main/cad/cad-modification-service.test.ts`
+- `scripts/cad-real-smoke.mjs`
 - `src/renderer/src/features/cad/cad-modification-auto-open.ts`
 - `src/renderer/src/features/cad/cad-modification-auto-open.test.ts`
 
 ### 修改
 
+- `package.json`
+- `src/main/agent-core/backends/local-claude-code-backend.ts`
+- `src/main/agent-core/backends/local-claude-code-backend.test.ts`
 - `src/main/cad/cad-conversion-service.ts`
 - `src/main/cad/cad-conversion-service.test.ts`
 - `src/main/cad/cad-ipc.ts`
@@ -230,6 +236,8 @@ riskLevel: write
 - `src/renderer/src/bootstrap/use-agent-stream-events.ts`
 - `src/renderer/src/assets/main.css`
 
+真实 Electron 复验发现双向差集使 Y 用例超过 Claude Agent SDK 默认 60 秒 MCP 上限。SDK 只支持按 server 配置超时，不能为单个工具设置；普通本地会话的受控内部 MCP 因此设为 5 分钟。CAD 服务仍保持 180 秒 FreeCAD 上限，确认仍保持 60 秒，文章发布保持 120 秒，外部 MCP 仍不暴露。
+
 仓库中同时存在其他任务的未提交改动；本功能没有回退或重写这些改动。
 
 ## 验证结果
@@ -239,9 +247,11 @@ riskLevel: write
 - `pnpm typecheck`：通过；
 - CAD、FileService、MCP、确认摘要、事件解析、结果卡和自动打开的集中测试：通过；
 - 固定区域变化、未知 BOP、换链越界发布和规划取消负向测试：通过；
-- 真实 FreeCAD 六组合服务集成矩阵：通过；
-- 最终 `pnpm verify`：通过；格式、lint、权限边界、发布边界和生产构建均通过；
-- 全量 Vitest：405 个测试文件通过，3,285 个测试通过，9 个跳过；
+- 旧算法复现：真实 FreeCAD 六组合 2 项通过、4 项失败，核心 X 正方向 3 mm 失败；
+- 修正后真实门禁：核心 X 正方向 3 mm 与六组合全部通过，共 13 个测试通过，耗时 345.80 秒；
+- 新增 `pnpm smoke:cad-real` 显式入口；缺少真实 STEP 或 FreeCAD 路径时直接失败，不再静默跳过后宣称真实门禁通过；
+- 修正后的真实 Electron 复验：强制确认、约 80 秒执行、结果返回、自动打开和结果卡全部通过；
+- 最终 `pnpm verify`：通过；405 个测试文件通过，3,285 个测试通过，10 个跳过；格式、lint、权限边界、发布边界、类型检查和生产构建均通过；
 - `git diff --check`：通过。
 
 ### 真人验收
@@ -255,7 +265,9 @@ riskLevel: write
 - 新版预览显示 1 个对象、17,394 个渲染顶点、5,798 个三角形，X 向预览网格包围盒约 `151.17 mm`；
 - 精确 B-Rep X 尺寸为 `151.17349677 mm`。
 
-加固后又在真实 Electron 开发版完成 Y 正方向 `0.5 mm` 复验：规划结果可见，`cad_modify_step` 独立强制确认卡可见；允许后输出自动打开。结果卡显示 B-Rep 尺寸 `148.17 × 43.40 × 50.59 mm`、固定区域几何差 `1.304e-3 / 2.000e-3 mm³`、BOP “完整解析 / 194 条”，以及源模型 186 条基线警告和专业 CAD 复核提示。输出文件为 `光机左镜框精简20260716-Y正向加宽0.5mm-AI-加固验收.STEP`，SHA-256 为 `db31cc8161d567953c1d01e66a46b56bce7ebf8b212f1b5ea36b5cbec5460106`。
+旧算法下曾在真实 Electron 开发版完成 Y 正方向 `0.5 mm` 交互复验，但其中固定区域证据来自已撤销的交集体积算法，已经作废。
+
+2026-10-10 使用修正后的代码重新完成同一用例：确认卡可见；内部 MCP 超时修正后，约 80 秒的 FreeCAD 修改成功返回；新版自动打开；结果卡显示保护带 `0.05 mm`、双向直接差集均为 `0 mm³`、源/输出受保护区域体积差约 `0.0013 mm³` 且低于 `0.002 mm³` 门限、BOP 源 186/输出 194 条且完整解析。输出文件为 `光机左镜框精简20260716-Y正向加宽0.5mm-AI-差集复验.STEP`，大小 `813,902 bytes`，SHA-256 为 `977327e78b21c9783b86ed23f2c49db81e3b1d798ece457c03f609b979b41a2d`；源文件哈希保持不变。
 
 ## 残余风险
 
@@ -263,6 +275,7 @@ riskLevel: write
 2. `section-insert` 对截面可切成两侧各一个 solid 的单实体模型有效，不承诺任意眼镜 STEP。
 3. 预览网格包围盒和 B-Rep 包围盒可能不同；界面已经标明预览值，核验以结果卡的 B-Rep 数据为准。
 4. 当前依赖用户机器已安装可调用的 FreeCADCmd；没有提供受管安装或随 App 打包。
+5. 直接双向布尔差比旧交集体积算法更可靠，但在当前样本上单项真实修改约需 18–73 秒；这是首版可见等待成本。
 
 ## 后续候选，不进入本轮
 

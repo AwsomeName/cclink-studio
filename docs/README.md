@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-09-07。
+> 当前事实源。最后更新：2026-10-10。
 
 ## 先读这些
 
@@ -16,9 +16,13 @@
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。
-- `docs/features/neural-circuit-lab.md`：神经电路实验室产品设计提案，包含完整线虫目标、九页功能、首轮验收与后续芯片/FPGA 边界，尚未实现。
-- `docs/architecture/neural-circuit-lab.md`：研究目录、输入快照、仿真运行状态所有权和 Studio 模块接入提案，尚未实现。
-- `docs/design/neural-circuit-lab/pages.html`：可离线查看的九页效果示意，所有网络、模型与输出均为示意数据。
+- `docs/features/ai-chip-workbench.md`：独立 AI 芯片产品域的当前设计事实源；定义首版忆阻器模拟闭环、对象模型、核心页面、HTS 导入、AI 边界与阶段路线，尚未实现。
+- `docs/architecture/ai-chip-workbench.md`：芯片工程目录、状态所有者、固定 EDA 适配器、运行证据、IPC、生命周期与失败降级架构，尚未实现。
+- `docs/design/ai-chip-workbench/pages.html`：聚焦规格、设计、真实运行、波形比较和实现阶段门的六页效果示意；全部项目、工具状态和波形均为示意。
+- `docs/features/bionic-brain.md`：仿生大脑产品事实源；定义两个核心页面、线虫模型浏览/刺激/真实仿真/回放/比较/复现闭环、三层验收与 Hardware Target Specification，尚未实现。
+- `docs/architecture/bionic-brain.md`：仿生大脑项目目录、对象关系、唯一状态 owner、运行快照、引擎边界和失败降级提案，尚未实现。
+- `docs/design/bionic-brain/pages.html`：聚焦模型工作台和实验记录的效果示意；网络、参数、波形与终态均为示意。
+- `docs/features/neural-circuit-lab.md`、`docs/architecture/neural-circuit-lab.md`：已取代的混合神经/芯片方案，仅保留迁移说明。
 - `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
 - `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
 - `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。

@@ -173,35 +173,46 @@ def split_source(source, axis, plane, signed_distance):
     return low, high, fixed, moving, faces
 
 
-def fixed_region_evidence(source_fixed, output, source_box, axis, plane, signed_distance):
+def fixed_region_evidence(source, output, source_box, axis, plane, signed_distance):
     margin = max(source_box.XLength, source_box.YLength, source_box.ZLength) + abs(signed_distance) + 10.0
     if signed_distance > 0:
+        fixed_span = plane - axis_min(source_box, axis)
+        guard_band = min(0.05, fixed_span * 0.1)
+        protected_end = plane - guard_band
+        if guard_band <= 0 or protected_end <= axis_min(source_box, axis):
+            raise RuntimeError('fixed region is too small for protected geometry validation')
         region = make_region(
             source_box,
             axis,
             axis_min(source_box, axis) - margin,
-            plane,
+            protected_end,
             margin,
         )
     else:
+        fixed_span = axis_max(source_box, axis) - plane
+        guard_band = min(0.05, fixed_span * 0.1)
+        protected_start = plane + guard_band
+        if guard_band <= 0 or protected_start >= axis_max(source_box, axis):
+            raise RuntimeError('fixed region is too small for protected geometry validation')
         region = make_region(
             source_box,
             axis,
-            plane,
+            protected_start,
             axis_max(source_box, axis) + margin,
             margin,
         )
+    source_fixed = source.common(region).removeSplitter()
     output_fixed = output.common(region).removeSplitter()
-    common = source_fixed.common(output_fixed).removeSplitter()
+    source_only_shape = source_fixed.cut(output_fixed).removeSplitter()
+    output_only_shape = output_fixed.cut(source_fixed).removeSplitter()
     source_volume = source_fixed.Volume
     output_volume = output_fixed.Volume
-    common_volume = common.Volume
-    source_only = max(0.0, source_volume - common_volume)
-    output_only = max(0.0, output_volume - common_volume)
+    source_only = source_only_shape.Volume
+    output_only = output_only_shape.Volume
     return {
+        'guardBandMm': guard_band,
         'sourceVolume': source_volume,
         'outputVolume': output_volume,
-        'commonVolume': common_volume,
         'sourceOnlyVolume': source_only,
         'outputOnlyVolume': output_only,
         'symmetricDifferenceVolume': source_only + output_only,
@@ -282,7 +293,7 @@ def run(request):
         output_doc = None
         validation_doc, output, output_evidence = load_step(request['outputPath'], 'CCLinkCadValidation')
         fixed_region = fixed_region_evidence(
-            fixed,
+            source,
             output,
             source.BoundBox,
             axis,

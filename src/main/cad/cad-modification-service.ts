@@ -172,7 +172,7 @@ function validateFixedRegion(evidence: CadFixedRegionEvidence): number {
   ) {
     throw new Error('固定区域未保持为单一、封闭且有效的实体')
   }
-  if (evidence.sourceVolume <= 0 || evidence.outputVolume <= 0 || evidence.commonVolume <= 0) {
+  if (evidence.guardBandMm <= 0 || evidence.sourceVolume <= 0 || evidence.outputVolume <= 0) {
     throw new Error('固定区域体积证据无效')
   }
   const tolerance = Math.max(
@@ -190,13 +190,10 @@ function validateFixedRegion(evidence: CadFixedRegionEvidence): number {
     )
   }
   const recomputed = evidence.sourceOnlyVolume + evidence.outputOnlyVolume
-  const expectedSourceOnly = Math.max(0, evidence.sourceVolume - evidence.commonVolume)
-  const expectedOutputOnly = Math.max(0, evidence.outputVolume - evidence.commonVolume)
   if (
-    evidence.commonVolume > Math.min(evidence.sourceVolume, evidence.outputVolume) + tolerance ||
-    Math.abs(expectedSourceOnly - evidence.sourceOnlyVolume) > tolerance * 1e-3 ||
-    Math.abs(expectedOutputOnly - evidence.outputOnlyVolume) > tolerance * 1e-3 ||
-    Math.abs(recomputed - evidence.symmetricDifferenceVolume) > tolerance * 1e-3
+    Math.abs(recomputed - evidence.symmetricDifferenceVolume) > tolerance * 1e-3 ||
+    Math.abs(evidence.sourceVolume - evidence.outputVolume) >
+      evidence.symmetricDifferenceVolume + tolerance
   ) {
     throw new Error('固定区域几何证据自相矛盾')
   }

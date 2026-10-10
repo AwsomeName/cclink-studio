@@ -26,9 +26,9 @@ export interface CadBopCheckResult {
 }
 
 export interface CadFixedRegionEvidence {
+  guardBandMm: number
   sourceVolume: number
   outputVolume: number
-  commonVolume: number
   sourceOnlyVolume: number
   outputOnlyVolume: number
   symmetricDifferenceVolume: number

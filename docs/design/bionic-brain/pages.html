@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>神经电路实验室旧示意已取代</title>
+<title>CCLink Studio 仿生大脑页面示意</title>
 <style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
 </head>
 <body>
-<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="神经电路实验室旧示意已取代" data-srcdoc="&lt;!doctype html&gt;
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="CCLink Studio 仿生大脑页面示意" data-srcdoc="&lt;!doctype html&gt;
 &lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
 &lt;head&gt;
 &lt;meta charset=&quot;utf-8&quot;&gt;
 &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
 &lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
 &lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
-&lt;title&gt;神经电路实验室旧示意已取代&lt;/title&gt;
+&lt;title&gt;CCLink Studio 仿生大脑页面示意&lt;/title&gt;
 &lt;style&gt;:root {
   color-scheme: light dark;
   background-color: var(
@@ -1780,19 +1780,522 @@ html&gt;body{padding:0}&lt;/style&gt;
   syncTheme();
 })();
 &lt;/script&gt;
-&lt;div id=&quot;neural-circuit-lab-superseded&quot;&gt;
+&lt;div id=&quot;bionic-brain-mockup&quot;&gt;
   &lt;style&gt;
-    #neural-circuit-lab-superseded { color-scheme: light dark; color: light-dark(#1f2937, #e5e7eb); font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif; padding: 28px; }
-    #neural-circuit-lab-superseded section { background: light-dark(#ffffff, #1f242c); border: 1px solid light-dark(#d5dbe3, #3b4350); border-radius: 10px; margin: 0 auto; max-width: 720px; padding: 24px; }
-    #neural-circuit-lab-superseded h1 { font-size: 20px; font-weight: 500; margin: 0 0 12px; }
-    #neural-circuit-lab-superseded p { line-height: 1.6; margin: 8px 0; }
-    #neural-circuit-lab-superseded a { color: light-dark(#1769e0, #6ca6ff); }
+    #bionic-brain-mockup {
+      color-scheme: light dark;
+      --bb-bg: light-dark(#f3f5f8, #111419);
+      --bb-title: light-dark(#e9edf2, #191d24);
+      --bb-bar: light-dark(#f8f9fb, #171b21);
+      --bb-panel: light-dark(#ffffff, #1d222a);
+      --bb-panel-2: light-dark(#f6f8fa, #232932);
+      --bb-line: light-dark(#d5dbe3, #343b46);
+      --bb-line-strong: light-dark(#aab4c0, #566170);
+      --bb-text: light-dark(#1d2630, #e7edf4);
+      --bb-muted: light-dark(#66727f, #9ca8b6);
+      --bb-accent: light-dark(#1769e0, #6ca6ff);
+      --bb-accent-soft: light-dark(#e5efff, #18345d);
+      --bb-green: light-dark(#147a4b, #55d68d);
+      --bb-green-soft: light-dark(#e3f5eb, #173d2b);
+      --bb-amber: light-dark(#9a5b00, #ffc766);
+      --bb-amber-soft: light-dark(#fff1d9, #4a3519);
+      --bb-red: light-dark(#b42318, #ff8178);
+      --bb-red-soft: light-dark(#ffebe8, #48201e);
+      --bb-shadow: light-dark(0 18px 48px rgba(22, 34, 48, .16), 0 18px 48px rgba(0, 0, 0, .36));
+      color: var(--bb-text);
+      font-family: -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+      width: 100%;
+    }
+    #bionic-brain-mockup * { box-sizing: border-box; }
+    #bionic-brain-mockup button,
+    #bionic-brain-mockup input,
+    #bionic-brain-mockup select { font: inherit; }
+    #bionic-brain-mockup .bb-window {
+      background: var(--bb-bg);
+      border: 1px solid var(--bb-line-strong);
+      border-radius: 12px;
+      box-shadow: var(--bb-shadow);
+      overflow: hidden;
+      min-width: 0;
+    }
+    #bionic-brain-mockup .bb-titlebar {
+      align-items: center;
+      background: var(--bb-title);
+      border-bottom: 1px solid var(--bb-line);
+      display: grid;
+      grid-template-columns: 126px minmax(0, 1fr) 190px;
+      min-height: 38px;
+      padding: 0 12px;
+    }
+    #bionic-brain-mockup .bb-brand { font-weight: 500; }
+    #bionic-brain-mockup .bb-path { color: var(--bb-muted); overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    #bionic-brain-mockup .bb-local { color: var(--bb-green); text-align: right; }
+    #bionic-brain-mockup .bb-body {
+      display: grid;
+      grid-template-columns: 44px 188px minmax(0, 1fr) 210px;
+      min-height: 650px;
+    }
+    #bionic-brain-mockup .bb-activity {
+      align-items: center;
+      background: var(--bb-title);
+      border-right: 1px solid var(--bb-line);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 5px;
+    }
+    #bionic-brain-mockup .bb-icon {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 5px;
+      color: var(--bb-muted);
+      display: flex;
+      height: 34px;
+      justify-content: center;
+      padding: 0;
+      width: 34px;
+    }
+    #bionic-brain-mockup .bb-icon[aria-pressed=&quot;true&quot;] { background: var(--bb-accent-soft); color: var(--bb-accent); }
+    #bionic-brain-mockup .bb-sidebar,
+    #bionic-brain-mockup .bb-agent { background: var(--bb-panel-2); min-width: 0; }
+    #bionic-brain-mockup .bb-sidebar { border-right: 1px solid var(--bb-line); }
+    #bionic-brain-mockup .bb-agent { border-left: 1px solid var(--bb-line); }
+    #bionic-brain-mockup .bb-side-head,
+    #bionic-brain-mockup .bb-agent-head {
+      align-items: center;
+      border-bottom: 1px solid var(--bb-line);
+      display: flex;
+      font-size: 12px;
+      font-weight: 500;
+      height: 38px;
+      justify-content: space-between;
+      letter-spacing: .04em;
+      padding: 0 10px;
+      text-transform: uppercase;
+    }
+    #bionic-brain-mockup .bb-tree { padding: 9px 7px; }
+    #bionic-brain-mockup .bb-tree-section { color: var(--bb-muted); font-size: 11px; letter-spacing: .04em; margin: 9px 6px 5px; text-transform: uppercase; }
+    #bionic-brain-mockup .bb-tree button {
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+      color: var(--bb-text);
+      display: block;
+      overflow: hidden;
+      padding: 7px 8px;
+      text-align: left;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      width: 100%;
+    }
+    #bionic-brain-mockup .bb-tree button[aria-current=&quot;true&quot;] { background: var(--bb-accent-soft); color: var(--bb-accent); }
+    #bionic-brain-mockup .bb-count { color: var(--bb-muted); float: right; }
+    #bionic-brain-mockup .bb-workbench { background: var(--bb-panel); min-width: 0; }
+    #bionic-brain-mockup .bb-tabs {
+      align-items: stretch;
+      background: var(--bb-title);
+      border-bottom: 1px solid var(--bb-line);
+      display: flex;
+      height: 38px;
+    }
+    #bionic-brain-mockup .bb-tab {
+      background: transparent;
+      border: 0;
+      border-right: 1px solid var(--bb-line);
+      color: var(--bb-muted);
+      padding: 0 14px;
+    }
+    #bionic-brain-mockup .bb-tab[aria-selected=&quot;true&quot;] { background: var(--bb-panel); color: var(--bb-text); box-shadow: inset 0 2px var(--bb-accent); }
+    #bionic-brain-mockup .bb-view { display: none; }
+    #bionic-brain-mockup .bb-view.is-active { display: block; }
+    #bionic-brain-mockup .bb-toolbar {
+      align-items: center;
+      border-bottom: 1px solid var(--bb-line);
+      display: flex;
+      gap: 8px;
+      min-height: 48px;
+      padding: 7px 10px;
+    }
+    #bionic-brain-mockup .bb-toolbar-title { flex: 1 1 auto; min-width: 0; }
+    #bionic-brain-mockup .bb-toolbar-title strong { display: block; font-size: 14px; font-weight: 500; }
+    #bionic-brain-mockup .bb-toolbar-title span { color: var(--bb-muted); display: block; font-size: 11px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #bionic-brain-mockup .bb-btn {
+      background: var(--bb-panel-2);
+      border: 1px solid var(--bb-line-strong);
+      border-radius: 5px;
+      color: var(--bb-text);
+      min-height: 30px;
+      padding: 4px 10px;
+      white-space: nowrap;
+    }
+    #bionic-brain-mockup .bb-btn-primary { background: var(--bb-accent); border-color: var(--bb-accent); color: light-dark(#ffffff, #0d1724); }
+    #bionic-brain-mockup .bb-segment { display: flex; }
+    #bionic-brain-mockup .bb-segment .bb-btn { border-radius: 0; margin-left: -1px; }
+    #bionic-brain-mockup .bb-segment .bb-btn:first-child { border-radius: 5px 0 0 5px; margin-left: 0; }
+    #bionic-brain-mockup .bb-segment .bb-btn:last-child { border-radius: 0 5px 5px 0; }
+    #bionic-brain-mockup .bb-segment .bb-btn[aria-pressed=&quot;true&quot;] { background: var(--bb-accent-soft); border-color: var(--bb-accent); color: var(--bb-accent); position: relative; }
+    #bionic-brain-mockup .bb-grid { display: grid; grid-template-columns: minmax(0, 1fr) 242px; min-width: 0; }
+    #bionic-brain-mockup .bb-canvas { min-width: 0; padding: 12px; }
+    #bionic-brain-mockup .bb-canvas-head { align-items: center; display: flex; justify-content: space-between; margin-bottom: 8px; }
+    #bionic-brain-mockup .bb-canvas-head strong { font-size: 13px; font-weight: 500; }
+    #bionic-brain-mockup .bb-meta { color: var(--bb-muted); font-size: 11px; }
+    #bionic-brain-mockup .bb-network {
+      background: var(--bb-bg);
+      border: 1px solid var(--bb-line);
+      border-radius: 6px;
+      display: block;
+      height: auto;
+      width: 100%;
+    }
+    #bionic-brain-mockup .bb-network .edge { fill: none; stroke: var(--bb-line-strong); stroke-width: 1.5; }
+    #bionic-brain-mockup .bb-network .gap { fill: none; stroke: var(--bb-accent); stroke-dasharray: 4 4; stroke-width: 1.5; }
+    #bionic-brain-mockup .bb-network .node { fill: var(--bb-panel); stroke: var(--bb-line-strong); stroke-width: 2; }
+    #bionic-brain-mockup .bb-network .selected { fill: var(--bb-accent-soft); stroke: var(--bb-accent); stroke-width: 3; }
+    #bionic-brain-mockup .bb-network .active-a { fill: var(--bb-amber-soft); stroke: var(--bb-amber); }
+    #bionic-brain-mockup .bb-network .active-b { fill: var(--bb-green-soft); stroke: var(--bb-green); }
+    #bionic-brain-mockup .bb-network text { fill: var(--bb-text); font-size: 11px; }
+    #bionic-brain-mockup .bb-network .hint { fill: var(--bb-muted); font-size: 10px; }
+    #bionic-brain-mockup .bb-inspector { border-left: 1px solid var(--bb-line); min-width: 0; padding: 12px; }
+    #bionic-brain-mockup .bb-inspector h3 { font-size: 13px; font-weight: 500; margin: 0 0 10px; }
+    #bionic-brain-mockup .bb-field { margin-bottom: 9px; }
+    #bionic-brain-mockup .bb-field label { color: var(--bb-muted); display: block; font-size: 11px; margin-bottom: 4px; }
+    #bionic-brain-mockup .bb-field input,
+    #bionic-brain-mockup .bb-field select {
+      background: var(--bb-panel-2);
+      border: 1px solid var(--bb-line);
+      border-radius: 4px;
+      color: var(--bb-text);
+      min-height: 30px;
+      padding: 4px 7px;
+      width: 100%;
+    }
+    #bionic-brain-mockup .bb-inline { display: grid; gap: 7px; grid-template-columns: 1fr 1fr; }
+    #bionic-brain-mockup .bb-checks { border-top: 1px solid var(--bb-line); display: grid; gap: 7px; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 12px; }
+    #bionic-brain-mockup .bb-check { align-items: center; background: var(--bb-panel-2); border-radius: 5px; display: flex; gap: 8px; min-width: 0; padding: 8px; }
+    #bionic-brain-mockup .bb-check i { align-items: center; background: var(--bb-green-soft); border-radius: 50%; color: var(--bb-green); display: flex; flex: 0 0 auto; font-size: 11px; font-style: normal; height: 19px; justify-content: center; width: 19px; }
+    #bionic-brain-mockup .bb-check.warn i { background: var(--bb-amber-soft); color: var(--bb-amber); }
+    #bionic-brain-mockup .bb-check span { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #bionic-brain-mockup .bb-timeline { border-top: 1px solid var(--bb-line); padding: 10px 12px 12px; }
+    #bionic-brain-mockup .bb-timeline-head { align-items: center; display: flex; gap: 10px; margin-bottom: 7px; }
+    #bionic-brain-mockup .bb-timeline-head strong { font-size: 12px; font-weight: 500; }
+    #bionic-brain-mockup .bb-timeline-head span { color: var(--bb-muted); font-size: 11px; }
+    #bionic-brain-mockup .bb-timeline input { accent-color: var(--bb-accent); flex: 1 1 auto; min-width: 100px; }
+    #bionic-brain-mockup .bb-trace { background: var(--bb-bg); border: 1px solid var(--bb-line); border-radius: 6px; display: block; height: auto; width: 100%; }
+    #bionic-brain-mockup .bb-trace .axis { fill: none; stroke: var(--bb-line-strong); }
+    #bionic-brain-mockup .bb-trace .trace-a { fill: none; stroke: var(--bb-accent); stroke-width: 2; }
+    #bionic-brain-mockup .bb-trace .trace-b { fill: none; stroke: var(--bb-green); stroke-width: 2; }
+    #bionic-brain-mockup .bb-trace .cursor { stroke: var(--bb-amber); stroke-width: 1.5; }
+    #bionic-brain-mockup .bb-trace text { fill: var(--bb-muted); font-size: 9px; }
+    #bionic-brain-mockup .bb-status {
+      align-items: center;
+      background: var(--bb-green-soft);
+      border: 1px solid color-mix(in srgb, var(--bb-green) 35%, transparent);
+      border-radius: 5px;
+      color: var(--bb-green);
+      display: flex;
+      font-size: 11px;
+      gap: 7px;
+      margin-bottom: 10px;
+      padding: 7px 8px;
+    }
+    #bionic-brain-mockup .bb-note { background: var(--bb-amber-soft); border-radius: 5px; color: var(--bb-amber); font-size: 11px; line-height: 1.45; padding: 7px 8px; }
+    #bionic-brain-mockup .bb-records { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-width: 0; }
+    #bionic-brain-mockup .bb-run-list { border-right: 1px solid var(--bb-line); min-width: 0; padding: 10px; }
+    #bionic-brain-mockup .bb-run {
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      color: var(--bb-text);
+      display: block;
+      margin-bottom: 6px;
+      padding: 8px;
+      text-align: left;
+      width: 100%;
+    }
+    #bionic-brain-mockup .bb-run[aria-pressed=&quot;true&quot;] { background: var(--bb-accent-soft); border-color: var(--bb-accent); }
+    #bionic-brain-mockup .bb-run strong { display: block; font-size: 12px; font-weight: 500; }
+    #bionic-brain-mockup .bb-run span { color: var(--bb-muted); display: block; font-size: 10px; margin-top: 3px; }
+    #bionic-brain-mockup .bb-run .failed { color: var(--bb-red); }
+    #bionic-brain-mockup .bb-detail { min-width: 0; padding: 12px; }
+    #bionic-brain-mockup .bb-summary { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 10px; }
+    #bionic-brain-mockup .bb-summary &gt; div { background: var(--bb-panel-2); border-radius: 5px; min-width: 0; padding: 8px; }
+    #bionic-brain-mockup .bb-summary span { color: var(--bb-muted); display: block; font-size: 10px; }
+    #bionic-brain-mockup .bb-summary strong { display: block; font-size: 12px; font-weight: 500; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #bionic-brain-mockup .bb-evidence { border-top: 1px solid var(--bb-line); margin-top: 10px; padding-top: 10px; }
+    #bionic-brain-mockup .bb-evidence-row { display: grid; font-size: 11px; gap: 8px; grid-template-columns: 108px minmax(0, 1fr); padding: 4px 0; }
+    #bionic-brain-mockup .bb-evidence-row span:first-child { color: var(--bb-muted); }
+    #bionic-brain-mockup .bb-evidence-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #bionic-brain-mockup .bb-agent-body { padding: 12px 10px; }
+    #bionic-brain-mockup .bb-agent-msg { background: var(--bb-panel); border: 1px solid var(--bb-line); border-radius: 6px; font-size: 11px; line-height: 1.45; margin-bottom: 9px; padding: 8px; }
+    #bionic-brain-mockup .bb-agent-msg strong { display: block; font-weight: 500; margin-bottom: 4px; }
+    #bionic-brain-mockup .bb-agent-action { color: var(--bb-muted); font-size: 10px; line-height: 1.4; }
+    #bionic-brain-mockup .bb-footer {
+      align-items: center;
+      background: var(--bb-accent);
+      color: light-dark(#ffffff, #0e1825);
+      display: flex;
+      font-size: 10px;
+      gap: 14px;
+      min-height: 22px;
+      padding: 0 9px;
+    }
+    #bionic-brain-mockup .bb-footer span:last-child { margin-left: auto; }
+    @media (max-width: 900px) {
+      #bionic-brain-mockup .bb-body { grid-template-columns: 40px 170px minmax(0, 1fr); }
+      #bionic-brain-mockup .bb-agent { display: none; }
+    }
+    @media (max-width: 680px) {
+      #bionic-brain-mockup .bb-titlebar { grid-template-columns: 1fr auto; }
+      #bionic-brain-mockup .bb-path { display: none; }
+      #bionic-brain-mockup .bb-body { grid-template-columns: 38px minmax(0, 1fr); }
+      #bionic-brain-mockup .bb-sidebar { display: none; }
+      #bionic-brain-mockup .bb-grid,
+      #bionic-brain-mockup .bb-records { grid-template-columns: 1fr; }
+      #bionic-brain-mockup .bb-inspector,
+      #bionic-brain-mockup .bb-run-list { border-left: 0; border-right: 0; border-top: 1px solid var(--bb-line); }
+      #bionic-brain-mockup .bb-checks,
+      #bionic-brain-mockup .bb-summary { grid-template-columns: 1fr; }
+      #bionic-brain-mockup .bb-toolbar { align-items: flex-start; flex-wrap: wrap; }
+      #bionic-brain-mockup .bb-toolbar-title { flex-basis: 100%; }
+    }
   &lt;/style&gt;
-  &lt;section&gt;
-    &lt;h1&gt;该九页神经/芯片混合示意已被取代&lt;/h1&gt;
-    &lt;p&gt;2026-10-10 起，仿生大脑只包含线虫神经模型浏览、回路、刺激、真实仿真、活动回放、比较与复现。忆阻器、芯片、RTL、FPGA、版图和 EDA 不再属于该产品域。&lt;/p&gt;
-    &lt;p&gt;&lt;a href=&quot;../bionic-brain/pages.html&quot;&gt;打开新的仿生大脑页面示意&lt;/a&gt;&lt;/p&gt;
+
+  &lt;section class=&quot;bb-window&quot; aria-label=&quot;CCLink Studio 仿生大脑页面效果示意&quot;&gt;
+    &lt;header class=&quot;bb-titlebar&quot;&gt;
+      &lt;div class=&quot;bb-brand&quot;&gt;CCLink Studio&lt;/div&gt;
+      &lt;div class=&quot;bb-path&quot;&gt;worm-lab / elegans-hermaphrodite / 仿生大脑&lt;/div&gt;
+      &lt;div class=&quot;bb-local&quot;&gt;● 本地 · 免登录&lt;/div&gt;
+    &lt;/header&gt;
+
+    &lt;div class=&quot;bb-body&quot;&gt;
+      &lt;nav class=&quot;bb-activity&quot; aria-label=&quot;Studio 活动栏&quot;&gt;
+        &lt;button class=&quot;bb-icon&quot; type=&quot;button&quot; aria-label=&quot;文件&quot;&gt;&lt;i data-lucide=&quot;files&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+        &lt;button class=&quot;bb-icon&quot; type=&quot;button&quot; aria-label=&quot;仿生大脑&quot; aria-pressed=&quot;true&quot;&gt;&lt;i data-lucide=&quot;brain&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+        &lt;button class=&quot;bb-icon&quot; type=&quot;button&quot; aria-label=&quot;终端&quot;&gt;&lt;i data-lucide=&quot;square-terminal&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+        &lt;button class=&quot;bb-icon&quot; type=&quot;button&quot; aria-label=&quot;诊断&quot;&gt;&lt;i data-lucide=&quot;activity&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;/nav&gt;
+
+      &lt;aside class=&quot;bb-sidebar&quot;&gt;
+        &lt;div class=&quot;bb-side-head&quot;&gt;&lt;span&gt;仿生大脑&lt;/span&gt;&lt;span&gt;···&lt;/span&gt;&lt;/div&gt;
+        &lt;div class=&quot;bb-tree&quot;&gt;
+          &lt;div class=&quot;bb-tree-section&quot;&gt;大脑项目&lt;/div&gt;
+          &lt;button type=&quot;button&quot; aria-current=&quot;true&quot;&gt;elegans-hermaphrodite&lt;/button&gt;
+          &lt;div class=&quot;bb-tree-section&quot;&gt;已保存回路&lt;/div&gt;
+          &lt;button type=&quot;button&quot;&gt;触觉后退回路 &lt;span class=&quot;bb-count&quot;&gt;12&lt;/span&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot;&gt;咽部参考回路 &lt;span class=&quot;bb-count&quot;&gt;20&lt;/span&gt;&lt;/button&gt;
+          &lt;div class=&quot;bb-tree-section&quot;&gt;模型检查&lt;/div&gt;
+          &lt;button type=&quot;button&quot;&gt;结构完整 &lt;span class=&quot;bb-count&quot;&gt;✓&lt;/span&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot;&gt;动力学警告 &lt;span class=&quot;bb-count&quot;&gt;2&lt;/span&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot;&gt;引擎就绪 &lt;span class=&quot;bb-count&quot;&gt;✓&lt;/span&gt;&lt;/button&gt;
+          &lt;div class=&quot;bb-tree-section&quot;&gt;实验&lt;/div&gt;
+          &lt;button type=&quot;button&quot;&gt;touch-pulse-a&lt;/button&gt;
+          &lt;button type=&quot;button&quot;&gt;touch-pulse-b&lt;/button&gt;
+        &lt;/div&gt;
+      &lt;/aside&gt;
+
+      &lt;main class=&quot;bb-workbench&quot;&gt;
+        &lt;div class=&quot;bb-tabs&quot; role=&quot;tablist&quot; aria-label=&quot;核心页面&quot;&gt;
+          &lt;button class=&quot;bb-tab&quot; id=&quot;bb-model-tab&quot; type=&quot;button&quot; role=&quot;tab&quot; aria-selected=&quot;true&quot; data-page=&quot;workbench&quot;&gt;模型工作台&lt;/button&gt;
+          &lt;button class=&quot;bb-tab&quot; id=&quot;bb-records-tab&quot; type=&quot;button&quot; role=&quot;tab&quot; aria-selected=&quot;false&quot; data-page=&quot;records&quot;&gt;实验记录&lt;/button&gt;
+        &lt;/div&gt;
+
+        &lt;section class=&quot;bb-view is-active&quot; id=&quot;bb-setup-view&quot; data-view=&quot;setup&quot; aria-label=&quot;模型工作台结构与实验模式&quot;&gt;
+          &lt;div class=&quot;bb-toolbar&quot;&gt;
+            &lt;div class=&quot;bb-toolbar-title&quot;&gt;
+              &lt;strong&gt;触觉后退回路&lt;/strong&gt;
+              &lt;span&gt;Cook 2019 结构 revision c8d4 · c302/NeuroML 候选模型 · 2 个未决参数警告&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;bb-segment&quot; aria-label=&quot;工作台模式&quot;&gt;
+              &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; aria-pressed=&quot;true&quot; data-mode=&quot;setup&quot;&gt;结构与实验&lt;/button&gt;
+              &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot; data-mode=&quot;playback&quot;&gt;活动回放&lt;/button&gt;
+            &lt;/div&gt;
+            &lt;button class=&quot;bb-btn bb-btn-primary&quot; type=&quot;button&quot; data-run&gt;运行实验&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;bb-grid&quot;&gt;
+            &lt;div class=&quot;bb-canvas&quot;&gt;
+              &lt;div class=&quot;bb-canvas-head&quot;&gt;&lt;strong&gt;局部回路 · 12 个神经元 / 21 条化学 / 3 条电突触&lt;/strong&gt;&lt;span class=&quot;bb-meta&quot;&gt;实线：化学 · 虚线：电&lt;/span&gt;&lt;/div&gt;
+              &lt;svg class=&quot;bb-network&quot; viewBox=&quot;0 0 620 330&quot; role=&quot;img&quot; aria-labelledby=&quot;bb-network-title bb-network-desc&quot;&gt;
+                &lt;title id=&quot;bb-network-title&quot;&gt;触觉后退局部回路结构示意&lt;/title&gt;
+                &lt;desc id=&quot;bb-network-desc&quot;&gt;感觉神经元 ALML 和 ALMR 连接中间神经元 AVD 与 AVA，再连接 VA 与 DA 运动神经元。示意连接不代表真实数据。&lt;/desc&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M95 95 C180 75 210 90 270 125&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M95 235 C180 250 210 215 270 180&quot;/&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M300 125 C355 105 390 115 425 145&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M300 180 C350 205 385 195 425 165&quot;/&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M455 145 C505 110 520 105 560 90&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M455 165 C510 205 525 220 560 238&quot;/&gt;
+                &lt;path class=&quot;gap&quot; d=&quot;M95 95 C115 145 115 185 95 235&quot;/&gt;&lt;path class=&quot;gap&quot; d=&quot;M270 125 C250 145 250 160 270 180&quot;/&gt;
+                &lt;circle class=&quot;node selected&quot; cx=&quot;95&quot; cy=&quot;95&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;95&quot; cy=&quot;235&quot; r=&quot;24&quot;/&gt;
+                &lt;circle class=&quot;node&quot; cx=&quot;280&quot; cy=&quot;125&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;280&quot; cy=&quot;180&quot; r=&quot;24&quot;/&gt;
+                &lt;circle class=&quot;node&quot; cx=&quot;440&quot; cy=&quot;155&quot; r=&quot;28&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;560&quot; cy=&quot;90&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;560&quot; cy=&quot;238&quot; r=&quot;24&quot;/&gt;
+                &lt;text x=&quot;95&quot; y=&quot;99&quot; text-anchor=&quot;middle&quot;&gt;ALML&lt;/text&gt;&lt;text x=&quot;95&quot; y=&quot;239&quot; text-anchor=&quot;middle&quot;&gt;ALMR&lt;/text&gt;
+                &lt;text x=&quot;280&quot; y=&quot;129&quot; text-anchor=&quot;middle&quot;&gt;AVDL&lt;/text&gt;&lt;text x=&quot;280&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot;&gt;AVDR&lt;/text&gt;
+                &lt;text x=&quot;440&quot; y=&quot;159&quot; text-anchor=&quot;middle&quot;&gt;AVA&lt;/text&gt;&lt;text x=&quot;560&quot; y=&quot;94&quot; text-anchor=&quot;middle&quot;&gt;VA&lt;/text&gt;&lt;text x=&quot;560&quot; y=&quot;242&quot; text-anchor=&quot;middle&quot;&gt;DA&lt;/text&gt;
+                &lt;text class=&quot;hint&quot; x=&quot;24&quot; y=&quot;30&quot;&gt;结构选区 · 节点位置仅为布局&lt;/text&gt;
+              &lt;/svg&gt;
+            &lt;/div&gt;
+            &lt;aside class=&quot;bb-inspector&quot;&gt;
+              &lt;h3&gt;刺激配置&lt;/h3&gt;
+              &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-target&quot;&gt;目标神经元&lt;/label&gt;&lt;select id=&quot;bb-target&quot;&gt;&lt;option&gt;ALML&lt;/option&gt;&lt;option&gt;ALMR&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-kind&quot;&gt;刺激类型&lt;/label&gt;&lt;select id=&quot;bb-kind&quot;&gt;&lt;option&gt;Current pulse（模型输入）&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-inline&quot;&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-amp&quot;&gt;幅值&lt;/label&gt;&lt;input id=&quot;bb-amp&quot; value=&quot;0.8 pA&quot; /&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-delay&quot;&gt;延迟&lt;/label&gt;&lt;input id=&quot;bb-delay&quot; value=&quot;100 ms&quot; /&gt;&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;bb-inline&quot;&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-duration&quot;&gt;持续&lt;/label&gt;&lt;input id=&quot;bb-duration&quot; value=&quot;250 ms&quot; /&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-total&quot;&gt;总时长&lt;/label&gt;&lt;input id=&quot;bb-total&quot; value=&quot;1000 ms&quot; /&gt;&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;bb-field&quot;&gt;&lt;label for=&quot;bb-signals&quot;&gt;记录信号&lt;/label&gt;&lt;select id=&quot;bb-signals&quot;&gt;&lt;option&gt;膜电位：ALML / AVD / AVA / VA&lt;/option&gt;&lt;/select&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-note&quot;&gt;这是模型电流输入，不等同于已校准的机械或光遗传刺激。&lt;/div&gt;
+            &lt;/aside&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;bb-checks&quot; aria-label=&quot;运行前检查&quot;&gt;
+            &lt;div class=&quot;bb-check&quot;&gt;&lt;i&gt;✓&lt;/i&gt;&lt;span&gt;结构：指定数据版本完整&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;bb-check warn&quot;&gt;&lt;i&gt;!&lt;/i&gt;&lt;span&gt;动力学：2 个假设参数已记录&lt;/span&gt;&lt;/div&gt;
+            &lt;div class=&quot;bb-check&quot;&gt;&lt;i&gt;✓&lt;/i&gt;&lt;span&gt;引擎：固定适配器就绪&lt;/span&gt;&lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class=&quot;bb-view&quot; id=&quot;bb-playback-view&quot; data-view=&quot;playback&quot; aria-label=&quot;模型工作台活动回放模式&quot;&gt;
+          &lt;div class=&quot;bb-toolbar&quot;&gt;
+            &lt;div class=&quot;bb-toolbar-title&quot;&gt;
+              &lt;strong&gt;Run 01JAZ…7H2 · touch-pulse-a&lt;/strong&gt;
+              &lt;span&gt;真实页面应由 run 输出驱动；此处数值和波形仅为设计示意&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;div class=&quot;bb-segment&quot; aria-label=&quot;工作台模式&quot;&gt;
+              &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot; data-mode=&quot;setup&quot;&gt;结构与实验&lt;/button&gt;
+              &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; aria-pressed=&quot;true&quot; data-mode=&quot;playback&quot;&gt;活动回放&lt;/button&gt;
+            &lt;/div&gt;
+            &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; data-open-records&gt;查看记录&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;bb-grid&quot;&gt;
+            &lt;div class=&quot;bb-canvas&quot;&gt;
+              &lt;div class=&quot;bb-canvas-head&quot;&gt;&lt;strong&gt;活动传播 · membrane potential&lt;/strong&gt;&lt;span class=&quot;bb-meta&quot; id=&quot;bb-time-label&quot;&gt;t = 310 ms&lt;/span&gt;&lt;/div&gt;
+              &lt;svg class=&quot;bb-network&quot; viewBox=&quot;0 0 620 330&quot; role=&quot;img&quot; aria-label=&quot;由当前时间点活动值着色的局部回路示意&quot;&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M95 95 C180 75 210 90 270 125&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M95 235 C180 250 210 215 270 180&quot;/&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M300 125 C355 105 390 115 425 145&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M300 180 C350 205 385 195 425 165&quot;/&gt;
+                &lt;path class=&quot;edge&quot; d=&quot;M455 145 C505 110 520 105 560 90&quot;/&gt;&lt;path class=&quot;edge&quot; d=&quot;M455 165 C510 205 525 220 560 238&quot;/&gt;
+                &lt;path class=&quot;gap&quot; d=&quot;M95 95 C115 145 115 185 95 235&quot;/&gt;&lt;path class=&quot;gap&quot; d=&quot;M270 125 C250 145 250 160 270 180&quot;/&gt;
+                &lt;circle class=&quot;node active-a&quot; cx=&quot;95&quot; cy=&quot;95&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;95&quot; cy=&quot;235&quot; r=&quot;24&quot;/&gt;
+                &lt;circle class=&quot;node active-a&quot; cx=&quot;280&quot; cy=&quot;125&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node active-b&quot; cx=&quot;280&quot; cy=&quot;180&quot; r=&quot;24&quot;/&gt;
+                &lt;circle class=&quot;node active-b&quot; cx=&quot;440&quot; cy=&quot;155&quot; r=&quot;28&quot;/&gt;&lt;circle class=&quot;node active-b&quot; cx=&quot;560&quot; cy=&quot;90&quot; r=&quot;24&quot;/&gt;&lt;circle class=&quot;node&quot; cx=&quot;560&quot; cy=&quot;238&quot; r=&quot;24&quot;/&gt;
+                &lt;text x=&quot;95&quot; y=&quot;99&quot; text-anchor=&quot;middle&quot;&gt;ALML&lt;/text&gt;&lt;text x=&quot;95&quot; y=&quot;239&quot; text-anchor=&quot;middle&quot;&gt;ALMR&lt;/text&gt;
+                &lt;text x=&quot;280&quot; y=&quot;129&quot; text-anchor=&quot;middle&quot;&gt;AVDL&lt;/text&gt;&lt;text x=&quot;280&quot; y=&quot;184&quot; text-anchor=&quot;middle&quot;&gt;AVDR&lt;/text&gt;
+                &lt;text x=&quot;440&quot; y=&quot;159&quot; text-anchor=&quot;middle&quot;&gt;AVA&lt;/text&gt;&lt;text x=&quot;560&quot; y=&quot;94&quot; text-anchor=&quot;middle&quot;&gt;VA&lt;/text&gt;&lt;text x=&quot;560&quot; y=&quot;242&quot; text-anchor=&quot;middle&quot;&gt;DA&lt;/text&gt;
+                &lt;text class=&quot;hint&quot; x=&quot;24&quot; y=&quot;30&quot;&gt;颜色 = 当前采样值 · 非预制动画&lt;/text&gt;
+              &lt;/svg&gt;
+            &lt;/div&gt;
+            &lt;aside class=&quot;bb-inspector&quot;&gt;
+              &lt;h3&gt;当前输出&lt;/h3&gt;
+              &lt;div class=&quot;bb-status&quot;&gt;&lt;span&gt;●&lt;/span&gt;&lt;span&gt;运行成功 · 输出已解析&lt;/span&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-field&quot;&gt;&lt;label&gt;选中信号&lt;/label&gt;&lt;input value=&quot;AVA membrane potential&quot; readonly /&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-inline&quot;&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label&gt;当前值&lt;/label&gt;&lt;input id=&quot;bb-current-value&quot; value=&quot;-41.8 mV&quot; readonly /&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-field&quot;&gt;&lt;label&gt;时间点&lt;/label&gt;&lt;input id=&quot;bb-current-time&quot; value=&quot;310 ms&quot; readonly /&gt;&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;bb-field&quot;&gt;&lt;label&gt;输出类型&lt;/label&gt;&lt;input value=&quot;神经输出 · 非行为&quot; readonly /&gt;&lt;/div&gt;
+              &lt;div class=&quot;bb-note&quot;&gt;功能判据：未定义。运行成功不等于生物功能复现。&lt;/div&gt;
+            &lt;/aside&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;bb-timeline&quot;&gt;
+            &lt;div class=&quot;bb-timeline-head&quot;&gt;&lt;button class=&quot;bb-btn&quot; type=&quot;button&quot; data-play&gt;播放&lt;/button&gt;&lt;input id=&quot;bb-time&quot; type=&quot;range&quot; min=&quot;0&quot; max=&quot;1000&quot; value=&quot;310&quot; aria-label=&quot;活动时间轴&quot;/&gt;&lt;strong id=&quot;bb-time-value&quot;&gt;310 ms&lt;/strong&gt;&lt;span&gt;0—1000 ms&lt;/span&gt;&lt;/div&gt;
+            &lt;svg class=&quot;bb-trace&quot; viewBox=&quot;0 0 740 116&quot; role=&quot;img&quot; aria-label=&quot;ALML 与 AVA 膜电位示意曲线&quot;&gt;
+              &lt;path class=&quot;axis&quot; d=&quot;M40 10V92H720&quot;/&gt;&lt;path class=&quot;trace-a&quot; d=&quot;M40 78 C95 77 115 75 150 70 C175 66 185 30 215 28 C255 27 270 63 310 65 C355 67 390 52 430 55 C490 58 560 66 720 68&quot;/&gt;
+              &lt;path class=&quot;trace-b&quot; d=&quot;M40 84 C170 83 205 80 240 76 C278 72 300 48 340 43 C390 38 420 47 470 54 C545 64 610 71 720 73&quot;/&gt;
+              &lt;line class=&quot;cursor&quot; id=&quot;bb-cursor&quot; x1=&quot;251&quot; y1=&quot;10&quot; x2=&quot;251&quot; y2=&quot;92&quot;/&gt;
+              &lt;text x=&quot;5&quot; y=&quot;28&quot;&gt;ALML&lt;/text&gt;&lt;text x=&quot;8&quot; y=&quot;64&quot;&gt;AVA&lt;/text&gt;&lt;text x=&quot;40&quot; y=&quot;108&quot;&gt;0 ms&lt;/text&gt;&lt;text x=&quot;680&quot; y=&quot;108&quot;&gt;1000 ms&lt;/text&gt;
+            &lt;/svg&gt;
+          &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class=&quot;bb-view&quot; id=&quot;bb-records-view&quot; data-view=&quot;records&quot; aria-label=&quot;实验记录页面&quot;&gt;
+          &lt;div class=&quot;bb-toolbar&quot;&gt;
+            &lt;div class=&quot;bb-toolbar-title&quot;&gt;
+              &lt;strong&gt;实验记录&lt;/strong&gt;
+              &lt;span&gt;不可变 run 证据 · 对比 · 固定输入重跑&lt;/span&gt;
+            &lt;/div&gt;
+            &lt;button class=&quot;bb-btn&quot; type=&quot;button&quot;&gt;导出复现包&lt;/button&gt;
+            &lt;button class=&quot;bb-btn bb-btn-primary&quot; type=&quot;button&quot; data-rerun&gt;按固定输入重跑&lt;/button&gt;
+          &lt;/div&gt;
+          &lt;div class=&quot;bb-records&quot;&gt;
+            &lt;aside class=&quot;bb-run-list&quot; aria-label=&quot;运行记录&quot;&gt;
+              &lt;button class=&quot;bb-run&quot; type=&quot;button&quot; aria-pressed=&quot;true&quot;&gt;&lt;strong&gt;Run 01JAZ…7H2&lt;/strong&gt;&lt;span&gt;成功 · 0.8 pA · 1.0 s&lt;/span&gt;&lt;span&gt;2026-10-10 14:32&lt;/span&gt;&lt;/button&gt;
+              &lt;button class=&quot;bb-run&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot;&gt;&lt;strong&gt;Run 01JAZ…8K4&lt;/strong&gt;&lt;span&gt;成功 · 1.2 pA · 1.0 s&lt;/span&gt;&lt;span&gt;父 run：01JAZ…7H2&lt;/span&gt;&lt;/button&gt;
+              &lt;button class=&quot;bb-run&quot; type=&quot;button&quot; aria-pressed=&quot;false&quot;&gt;&lt;strong&gt;Run 01JAZ…9M1&lt;/strong&gt;&lt;span class=&quot;failed&quot;&gt;失败 · 输出时间轴无效&lt;/span&gt;&lt;span&gt;证据已保留&lt;/span&gt;&lt;/button&gt;
+            &lt;/aside&gt;
+            &lt;div class=&quot;bb-detail&quot;&gt;
+              &lt;div class=&quot;bb-summary&quot;&gt;
+                &lt;div&gt;&lt;span&gt;终态&lt;/span&gt;&lt;strong&gt;成功 · 输出已校验&lt;/strong&gt;&lt;/div&gt;
+                &lt;div&gt;&lt;span&gt;模型&lt;/span&gt;&lt;strong&gt;c302 candidate · rev 12&lt;/strong&gt;&lt;/div&gt;
+                &lt;div&gt;&lt;span&gt;功能判据&lt;/span&gt;&lt;strong&gt;未定义&lt;/strong&gt;&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div class=&quot;bb-canvas-head&quot;&gt;&lt;strong&gt;Run 01JAZ…7H2 与 01JAZ…8K4&lt;/strong&gt;&lt;span class=&quot;bb-meta&quot;&gt;AVA membrane potential · mV&lt;/span&gt;&lt;/div&gt;
+              &lt;svg class=&quot;bb-trace&quot; viewBox=&quot;0 0 740 210&quot; role=&quot;img&quot; aria-label=&quot;两个运行的 AVA 膜电位对比示意&quot;&gt;
+                &lt;path class=&quot;axis&quot; d=&quot;M55 18V172H720&quot;/&gt;&lt;path class=&quot;trace-a&quot; d=&quot;M55 148 C170 147 210 144 250 130 C290 116 305 78 355 72 C405 66 450 90 500 102 C575 120 630 128 720 132&quot;/&gt;
+                &lt;path class=&quot;trace-b&quot; d=&quot;M55 152 C170 151 205 148 245 135 C280 123 300 55 348 42 C400 29 455 72 510 89 C585 111 640 121 720 126&quot;/&gt;
+                &lt;text x=&quot;8&quot; y=&quot;22&quot;&gt;-20&lt;/text&gt;&lt;text x=&quot;8&quot; y=&quot;95&quot;&gt;-45&lt;/text&gt;&lt;text x=&quot;8&quot; y=&quot;170&quot;&gt;-70&lt;/text&gt;&lt;text x=&quot;55&quot; y=&quot;195&quot;&gt;0 ms&lt;/text&gt;&lt;text x=&quot;680&quot; y=&quot;195&quot;&gt;1000 ms&lt;/text&gt;
+                &lt;text x=&quot;570&quot; y=&quot;35&quot;&gt;1.2 pA&lt;/text&gt;&lt;text x=&quot;570&quot; y=&quot;55&quot;&gt;0.8 pA&lt;/text&gt;
+              &lt;/svg&gt;
+              &lt;div class=&quot;bb-evidence&quot;&gt;
+                &lt;div class=&quot;bb-evidence-row&quot;&gt;&lt;span&gt;输入 manifest&lt;/span&gt;&lt;code&gt;sha256: 7c89…4ab1&lt;/code&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-evidence-row&quot;&gt;&lt;span&gt;引擎环境&lt;/span&gt;&lt;code&gt;candidate-engine / fixed-version&lt;/code&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-evidence-row&quot;&gt;&lt;span&gt;记录信号&lt;/span&gt;&lt;code&gt;ALML.v, AVDL.v, AVA.v, VA.v&lt;/code&gt;&lt;/div&gt;
+                &lt;div class=&quot;bb-evidence-row&quot;&gt;&lt;span&gt;警告&lt;/span&gt;&lt;code&gt;2 assumed parameters; no functional criterion&lt;/code&gt;&lt;/div&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/section&gt;
+      &lt;/main&gt;
+
+      &lt;aside class=&quot;bb-agent&quot;&gt;
+        &lt;div class=&quot;bb-agent-head&quot;&gt;&lt;span&gt;Agent&lt;/span&gt;&lt;span&gt;本地&lt;/span&gt;&lt;/div&gt;
+        &lt;div class=&quot;bb-agent-body&quot;&gt;
+          &lt;div class=&quot;bb-agent-msg&quot;&gt;&lt;strong&gt;我能协助的范围&lt;/strong&gt;解释模型来源、指出参数缺口、准备刺激草稿、总结已完成的 run。&lt;/div&gt;
+          &lt;div class=&quot;bb-agent-msg&quot;&gt;&lt;strong&gt;当前提醒&lt;/strong&gt;两个突触参数来自模型假设。建议先把输出称为“神经响应”，不要写成“后退行为已复现”。&lt;/div&gt;
+          &lt;div class=&quot;bb-agent-action&quot;&gt;Agent 不能写运行终态，也不能用描述代替求解器输出。&lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/aside&gt;
+    &lt;/div&gt;
+
+    &lt;footer class=&quot;bb-footer&quot;&gt;&lt;span&gt;仿生大脑&lt;/span&gt;&lt;span&gt;结构 ✓ · 动力学警告 2 · 引擎就绪&lt;/span&gt;&lt;span&gt;示意数据 · 非真实仿真&lt;/span&gt;&lt;/footer&gt;
   &lt;/section&gt;
+
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;bionic-brain-mockup&#x27;);
+      if (!root) return;
+      const views = [...root.querySelectorAll(&#x27;.bb-view&#x27;)];
+      const tabs = [...root.querySelectorAll(&#x27;.bb-tab&#x27;)];
+      const setView = (name) =&gt; {
+        views.forEach((view) =&gt; view.classList.toggle(&#x27;is-active&#x27;, view.dataset.view === name));
+        tabs.forEach((tab) =&gt; tab.setAttribute(&#x27;aria-selected&#x27;, String((name === &#x27;records&#x27; ? &#x27;records&#x27; : &#x27;workbench&#x27;) === tab.dataset.page)));
+      };
+      root.addEventListener(&#x27;click&#x27;, (event) =&gt; {
+        const page = event.target.closest(&#x27;[data-page]&#x27;);
+        if (page) setView(page.dataset.page === &#x27;records&#x27; ? &#x27;records&#x27; : &#x27;setup&#x27;);
+        const mode = event.target.closest(&#x27;[data-mode]&#x27;);
+        if (mode) setView(mode.dataset.mode);
+        if (event.target.closest(&#x27;[data-run]&#x27;)) setView(&#x27;playback&#x27;);
+        if (event.target.closest(&#x27;[data-open-records]&#x27;)) setView(&#x27;records&#x27;);
+        if (event.target.closest(&#x27;[data-rerun]&#x27;)) setView(&#x27;setup&#x27;);
+      });
+      const range = root.querySelector(&#x27;#bb-time&#x27;);
+      const timeValue = root.querySelector(&#x27;#bb-time-value&#x27;);
+      const timeLabel = root.querySelector(&#x27;#bb-time-label&#x27;);
+      const currentTime = root.querySelector(&#x27;#bb-current-time&#x27;);
+      const currentValue = root.querySelector(&#x27;#bb-current-value&#x27;);
+      const cursor = root.querySelector(&#x27;#bb-cursor&#x27;);
+      const updateTime = () =&gt; {
+        const t = Number(range.value);
+        timeValue.textContent = `${t} ms`;
+        timeLabel.textContent = `t = ${t} ms`;
+        currentTime.value = `${t} ms`;
+        currentValue.value = `${(-57 + 18 * Math.exp(-Math.pow((t - 390) / 185, 2))).toFixed(1)} mV`;
+        const x = 40 + (680 * t / 1000);
+        cursor.setAttribute(&#x27;x1&#x27;, String(x));
+        cursor.setAttribute(&#x27;x2&#x27;, String(x));
+      };
+      range.addEventListener(&#x27;input&#x27;, updateTime);
+    })();
+  &lt;/script&gt;
 &lt;/div&gt;
 
 &lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;

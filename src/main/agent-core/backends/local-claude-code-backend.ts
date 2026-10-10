@@ -47,6 +47,8 @@ const VISIBLE_BROWSER_DISALLOWED_TOOLS = [
   'webReader',
 ] as const
 const DISALLOWED_TOOL_NAMES = new Set(['browser_new_tab'])
+const INTERNAL_MCP_TOOL_TIMEOUT_MS = 300_000
+const ARTICLE_PUBLISHING_MCP_TOOL_TIMEOUT_MS = 120_000
 type AgentQueryOperation = 'message' | 'compact'
 
 export interface McpConfigComposer {
@@ -501,11 +503,17 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     // server 放进结果，送入 SDK 的配置也只保留 Studio 自己的受控工具宿主。
     const mcpServers: Record<string, McpServerConfig> = Object.create(null)
     if (internalMcpServer) {
-      // CSDN's guarded mutation includes its 60s autosave and bounded server readback.
-      // HTTP MCP otherwise times out at 60s before main can return the verified result.
+      // The SDK timeout covers both Studio's confirmation wait and the tool execution. Keep the
+      // server bound above the narrower per-capability limits so a verified result can return.
+      // External MCP servers are excluded above and never inherit this bound.
       mcpServers[this.hostContext.mcpServerName] =
-        options?.articlePublishingPolicy && internalMcpServer.type === 'http'
-          ? { ...internalMcpServer, timeout: 120_000 }
+        internalMcpServer.type === 'http'
+          ? {
+              ...internalMcpServer,
+              timeout: options?.articlePublishingPolicy
+                ? ARTICLE_PUBLISHING_MCP_TOOL_TIMEOUT_MS
+                : INTERNAL_MCP_TOOL_TIMEOUT_MS,
+            }
           : internalMcpServer
     }
     const allowedTools = options?.allowedTools

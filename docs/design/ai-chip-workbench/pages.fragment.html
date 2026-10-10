@@ -1,0 +1,364 @@
+<div id="ai-chip-workbench-design">
+  <div class="acw-preview-bar">
+    <label for="acw-page">页面效果示意</label>
+    <select id="acw-page" aria-label="选择 AI 芯片页面">
+      <option>芯片项目总览</option>
+      <option>规格与架构</option>
+      <option>设计工作台</option>
+      <option>实验与运行</option>
+      <option>波形与比较</option>
+      <option>实现与硬件入口</option>
+    </select>
+    <span>概念设计 · 示例数据不是 EDA 结果</span>
+  </div>
+
+  <section class="acw-window" aria-label="CCLink Studio AI 芯片工作台效果示意">
+    <header class="acw-titlebar">
+      <span class="acw-brand">CCLink Studio</span>
+      <span class="acw-workspace">memristor-pulse · 本地工作空间</span>
+      <span class="acw-local"><i data-lucide="hard-drive" aria-hidden="true"></i> 免登录 · 本地</span>
+    </header>
+
+    <div class="acw-shell">
+      <aside class="acw-activity" aria-label="Studio 活动栏">
+        <button type="button" aria-label="文件"><i data-lucide="files" aria-hidden="true"></i></button>
+        <button type="button" class="is-active" aria-label="AI 芯片"><i data-lucide="cpu" aria-hidden="true"></i></button>
+        <button type="button" aria-label="浏览器"><i data-lucide="globe" aria-hidden="true"></i></button>
+        <button type="button" aria-label="终端"><i data-lucide="terminal" aria-hidden="true"></i></button>
+        <button type="button" aria-label="Agent"><i data-lucide="bot" aria-hidden="true"></i></button>
+      </aside>
+
+      <nav class="acw-nav" aria-label="AI 芯片页面" id="acw-nav"></nav>
+
+      <main class="acw-main">
+        <div class="acw-tabbar">
+          <span id="acw-tab-title">芯片项目总览</span>
+          <span>AI 芯片 · 设计预览</span>
+        </div>
+        <div class="acw-screen" id="acw-screen" aria-live="polite"></div>
+      </main>
+
+      <aside class="acw-agent" aria-label="Agent 面板">
+        <div class="acw-agent-head"><i data-lucide="sparkles" aria-hidden="true"></i> 芯片设计助手</div>
+        <div class="acw-agent-body" id="acw-agent-body"></div>
+        <div class="acw-agent-input">询问当前页面… <i data-lucide="arrow-up" aria-hidden="true"></i></div>
+      </aside>
+    </div>
+
+    <footer class="acw-statusbar">
+      <span><i data-lucide="git-branch" aria-hidden="true"></i> main</span>
+      <span>ngspice 45 · 已探测（示意）</span>
+      <span>本页无真实运行</span>
+    </footer>
+  </section>
+</div>
+
+<style>
+#ai-chip-workbench-design{
+  --acw-bg:light-dark(#f3f5f8,#14171c);
+  --acw-surface:light-dark(#ffffff,#1b1f26);
+  --acw-surface-2:light-dark(#e9edf3,#222832);
+  --acw-surface-3:light-dark(#dfe5ee,#2b323e);
+  --acw-text:light-dark(#1c2430,#e7ebf2);
+  --acw-muted:light-dark(#667286,#9aa7ba);
+  --acw-border:light-dark(#d5dce6,#353e4c);
+  --acw-accent:light-dark(#2d63d4,#7aa2ff);
+  --acw-accent-soft:light-dark(#e7efff,#243352);
+  --acw-good:light-dark(#17714d,#67d4a0);
+  --acw-warn:light-dark(#9b651a,#e7b767);
+  --acw-bad:light-dark(#b03a46,#ef8089);
+  color:var(--acw-text);
+  font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  width:100%;
+}
+#ai-chip-workbench-design *{box-sizing:border-box}
+#ai-chip-workbench-design button,#ai-chip-workbench-design select{font:inherit;color:inherit}
+#ai-chip-workbench-design .acw-preview-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;color:var(--acw-text)}
+#ai-chip-workbench-design .acw-preview-bar select{background:var(--acw-surface);border:1px solid var(--acw-border);border-radius:5px;padding:7px 10px}
+#ai-chip-workbench-design .acw-preview-bar span{color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-window{background:var(--acw-bg);border:1px solid var(--acw-border);border-radius:8px;overflow:hidden;min-width:0}
+#ai-chip-workbench-design .acw-titlebar{display:flex;align-items:center;gap:18px;padding:10px 14px;background:var(--acw-surface-2);border-bottom:1px solid var(--acw-border)}
+#ai-chip-workbench-design .acw-brand{font-weight:500}
+#ai-chip-workbench-design .acw-workspace{color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-local{display:flex;align-items:center;gap:6px;margin-left:auto;color:var(--acw-good)}
+#ai-chip-workbench-design .acw-local svg,#ai-chip-workbench-design .acw-statusbar svg{width:14px;height:14px}
+#ai-chip-workbench-design .acw-shell{display:grid;grid-template-columns:42px 172px minmax(0,1fr) 222px;min-height:610px}
+#ai-chip-workbench-design .acw-activity{display:flex;flex-direction:column;align-items:center;gap:9px;padding:11px 0;background:var(--acw-surface-2);border-right:1px solid var(--acw-border)}
+#ai-chip-workbench-design .acw-activity button{display:grid;place-items:center;width:34px;height:34px;border:0;background:transparent;color:var(--acw-muted);border-radius:4px}
+#ai-chip-workbench-design .acw-activity button.is-active{color:var(--acw-accent);background:var(--acw-accent-soft)}
+#ai-chip-workbench-design .acw-activity svg{width:18px;height:18px}
+#ai-chip-workbench-design .acw-nav{background:var(--acw-surface);border-right:1px solid var(--acw-border);padding:12px 8px;min-width:0}
+#ai-chip-workbench-design .acw-nav-title{padding:2px 8px 10px;color:var(--acw-muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+#ai-chip-workbench-design .acw-nav button{display:block;width:100%;text-align:left;border:0;background:transparent;border-radius:4px;padding:8px 9px;margin:2px 0}
+#ai-chip-workbench-design .acw-nav button[aria-current="page"]{background:var(--acw-accent-soft);color:var(--acw-accent)}
+#ai-chip-workbench-design .acw-tree{margin-top:14px;padding:12px 8px;border-top:1px solid var(--acw-border);color:var(--acw-muted);font:12px/1.85 ui-monospace,SFMono-Regular,Menlo,monospace}
+#ai-chip-workbench-design .acw-tree strong{color:var(--acw-text);font-weight:500}
+#ai-chip-workbench-design .acw-main{min-width:0;background:var(--acw-bg)}
+#ai-chip-workbench-design .acw-tabbar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;background:var(--acw-surface);border-bottom:1px solid var(--acw-border)}
+#ai-chip-workbench-design .acw-tabbar span:last-child{color:var(--acw-muted);font-size:12px}
+#ai-chip-workbench-design .acw-screen{padding:16px;min-height:568px;min-width:0}
+#ai-chip-workbench-design .acw-agent{background:var(--acw-surface);border-left:1px solid var(--acw-border);display:flex;flex-direction:column;min-width:0}
+#ai-chip-workbench-design .acw-agent-head{display:flex;align-items:center;gap:7px;padding:12px;border-bottom:1px solid var(--acw-border);font-weight:500}
+#ai-chip-workbench-design .acw-agent-head svg{width:16px;height:16px;color:var(--acw-accent)}
+#ai-chip-workbench-design .acw-agent-body{padding:12px;flex:1;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-agent-msg{background:var(--acw-surface-2);border-radius:6px;padding:10px;margin-bottom:10px}
+#ai-chip-workbench-design .acw-agent-msg strong{display:block;color:var(--acw-text);font-weight:500;margin-bottom:5px}
+#ai-chip-workbench-design .acw-agent-msg .acw-link{display:block;color:var(--acw-accent);margin-top:7px}
+#ai-chip-workbench-design .acw-agent-input{display:flex;justify-content:space-between;align-items:center;margin:10px;padding:9px 10px;border:1px solid var(--acw-border);border-radius:5px;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-agent-input svg{width:15px;height:15px}
+#ai-chip-workbench-design .acw-statusbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:5px 10px;background:var(--acw-accent);color:light-dark(#fff,#101827);font-size:11px}
+#ai-chip-workbench-design .acw-statusbar span{display:flex;align-items:center;gap:5px}
+#ai-chip-workbench-design .acw-page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px}
+#ai-chip-workbench-design h2{font-size:19px;line-height:1.2;font-weight:500;margin:0 0 5px}
+#ai-chip-workbench-design h3{font-size:13px;line-height:1.3;font-weight:500;margin:0 0 10px}
+#ai-chip-workbench-design p{margin:0;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+#ai-chip-workbench-design .acw-button{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--acw-border);background:var(--acw-surface);border-radius:4px;padding:6px 9px;white-space:nowrap}
+#ai-chip-workbench-design .acw-button.primary{background:var(--acw-accent);color:light-dark(#fff,#101827);border-color:transparent}
+#ai-chip-workbench-design .acw-button[aria-disabled="true"]{color:var(--acw-muted);background:var(--acw-surface-2)}
+#ai-chip-workbench-design .acw-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+#ai-chip-workbench-design .acw-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+#ai-chip-workbench-design .acw-panel{background:var(--acw-surface);border:1px solid var(--acw-border);border-radius:5px;padding:12px;min-width:0}
+#ai-chip-workbench-design .acw-panel.wide{grid-column:1/-1}
+#ai-chip-workbench-design .acw-panel.flush{padding:0;overflow:hidden}
+#ai-chip-workbench-design .acw-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--acw-border)}
+#ai-chip-workbench-design .acw-row:last-child{border-bottom:0}
+#ai-chip-workbench-design .acw-row small{display:block;color:var(--acw-muted);margin-top:2px}
+#ai-chip-workbench-design .acw-status{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-dot{width:7px;height:7px;border-radius:50%;background:var(--acw-muted)}
+#ai-chip-workbench-design .acw-dot.good{background:var(--acw-good)}
+#ai-chip-workbench-design .acw-dot.warn{background:var(--acw-warn)}
+#ai-chip-workbench-design .acw-dot.bad{background:var(--acw-bad)}
+#ai-chip-workbench-design .acw-badge{display:inline-block;border-radius:999px;padding:2px 7px;background:var(--acw-surface-2);color:var(--acw-muted);font-size:11px;white-space:nowrap}
+#ai-chip-workbench-design .acw-badge.good{background:light-dark(#e4f4ec,#203a31);color:var(--acw-good)}
+#ai-chip-workbench-design .acw-badge.warn{background:light-dark(#fff3d9,#3c3221);color:var(--acw-warn)}
+#ai-chip-workbench-design .acw-flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+#ai-chip-workbench-design .acw-stage{position:relative;padding:10px;background:var(--acw-surface-2);border-radius:4px;min-height:66px}
+#ai-chip-workbench-design .acw-stage.is-current{background:var(--acw-accent-soft);color:var(--acw-accent)}
+#ai-chip-workbench-design .acw-stage strong{display:block;font-weight:500;margin-bottom:5px}
+#ai-chip-workbench-design .acw-stage small{color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-split{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:11px}
+#ai-chip-workbench-design .acw-split.wide-left{grid-template-columns:minmax(0,1.5fr) minmax(220px,.7fr)}
+#ai-chip-workbench-design .acw-list{display:grid;gap:6px}
+#ai-chip-workbench-design .acw-list-item{padding:9px;background:var(--acw-surface-2);border-radius:4px}
+#ai-chip-workbench-design .acw-list-item.is-selected{background:var(--acw-accent-soft);color:var(--acw-accent)}
+#ai-chip-workbench-design .acw-list-item small{display:block;color:var(--acw-muted);margin-top:3px}
+#ai-chip-workbench-design .acw-field{margin-bottom:10px}
+#ai-chip-workbench-design .acw-field label{display:block;color:var(--acw-muted);font-size:11px;margin-bottom:4px}
+#ai-chip-workbench-design .acw-value{padding:7px 8px;background:var(--acw-bg);border:1px solid var(--acw-border);border-radius:4px;overflow-wrap:anywhere}
+#ai-chip-workbench-design .acw-code{padding:12px;background:var(--acw-bg);font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--acw-text)}
+#ai-chip-workbench-design .acw-code .kw{color:var(--acw-accent)}
+#ai-chip-workbench-design .acw-code .changed{display:block;background:var(--acw-accent-soft);margin:0 -4px;padding:0 4px}
+#ai-chip-workbench-design .acw-toolbar{display:flex;gap:6px;flex-wrap:wrap;padding:9px;border-bottom:1px solid var(--acw-border);background:var(--acw-surface-2)}
+#ai-chip-workbench-design .acw-tool{padding:4px 7px;background:var(--acw-surface);border-radius:3px;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-diagram{display:block;width:100%;height:245px;background:var(--acw-bg)}
+#ai-chip-workbench-design .acw-diagram text{font:12px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:var(--acw-text)}
+#ai-chip-workbench-design .acw-diagram .muted-text{fill:var(--acw-muted)}
+#ai-chip-workbench-design .acw-diagram .wire{fill:none;stroke:var(--acw-muted);stroke-width:1.5}
+#ai-chip-workbench-design .acw-diagram .signal-a{fill:none;stroke:var(--acw-accent);stroke-width:2}
+#ai-chip-workbench-design .acw-diagram .signal-b{fill:none;stroke:var(--acw-good);stroke-width:2;stroke-dasharray:6 4}
+#ai-chip-workbench-design .acw-diagram .node{fill:var(--acw-surface);stroke:var(--acw-accent);stroke-width:1.5}
+#ai-chip-workbench-design .acw-diagram .module{fill:var(--acw-surface-2);stroke:var(--acw-border);stroke-width:1}
+#ai-chip-workbench-design .acw-table{width:100%;border-collapse:collapse}
+#ai-chip-workbench-design .acw-table th,#ai-chip-workbench-design .acw-table td{text-align:left;padding:8px;border-bottom:1px solid var(--acw-border);vertical-align:top;overflow-wrap:anywhere}
+#ai-chip-workbench-design .acw-table th{color:var(--acw-muted);font-weight:400}
+#ai-chip-workbench-design .acw-table tr:last-child td{border-bottom:0}
+#ai-chip-workbench-design .acw-steps{display:grid;gap:6px}
+#ai-chip-workbench-design .acw-step{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:start;padding:7px 0;border-bottom:1px solid var(--acw-border)}
+#ai-chip-workbench-design .acw-step:last-child{border:0}
+#ai-chip-workbench-design .acw-step-index{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--acw-surface-3);font-size:10px}
+#ai-chip-workbench-design .acw-step.is-active .acw-step-index{background:var(--acw-accent);color:light-dark(#fff,#101827)}
+#ai-chip-workbench-design .acw-log{height:118px;overflow:hidden;background:var(--acw-bg);padding:10px;font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-log .error{color:var(--acw-bad)}
+#ai-chip-workbench-design .acw-warning{padding:9px;background:light-dark(#fff5df,#3a3021);color:var(--acw-warn);border-radius:4px}
+#ai-chip-workbench-design .acw-empty{display:grid;place-items:center;text-align:center;min-height:130px;padding:18px;background:var(--acw-bg);border:1px dashed var(--acw-border);border-radius:4px;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-empty svg{width:25px;height:25px;margin-bottom:8px}
+#ai-chip-workbench-design .acw-gate{padding:11px;background:var(--acw-surface-2);border-radius:4px;margin-top:8px}
+#ai-chip-workbench-design .acw-gate strong{display:block;font-weight:500;margin-bottom:4px}
+#ai-chip-workbench-design .acw-gate ul{margin:7px 0 0;padding-left:18px;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-next{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;color:var(--acw-muted)}
+#ai-chip-workbench-design .acw-next button{border:0;background:transparent;color:var(--acw-accent);padding:4px}
+
+@media(max-width:900px){
+  #ai-chip-workbench-design .acw-shell{grid-template-columns:40px 150px minmax(0,1fr)}
+  #ai-chip-workbench-design .acw-agent{display:none}
+  #ai-chip-workbench-design .acw-flow{grid-template-columns:repeat(3,minmax(0,1fr))}
+  #ai-chip-workbench-design .acw-grid.three{grid-template-columns:1fr 1fr}
+}
+@media(max-width:660px){
+  #ai-chip-workbench-design .acw-shell{display:block;min-height:0}
+  #ai-chip-workbench-design .acw-activity,#ai-chip-workbench-design .acw-nav{display:none}
+  #ai-chip-workbench-design .acw-screen{min-height:0;padding:12px}
+  #ai-chip-workbench-design .acw-grid,#ai-chip-workbench-design .acw-grid.three,#ai-chip-workbench-design .acw-split,#ai-chip-workbench-design .acw-split.wide-left{grid-template-columns:1fr}
+  #ai-chip-workbench-design .acw-flow{grid-template-columns:1fr 1fr}
+  #ai-chip-workbench-design .acw-page-head{display:block}
+  #ai-chip-workbench-design .acw-actions{justify-content:flex-start;margin-top:10px}
+  #ai-chip-workbench-design .acw-titlebar{flex-wrap:wrap;gap:6px 12px}
+  #ai-chip-workbench-design .acw-local{margin-left:0}
+  #ai-chip-workbench-design .acw-diagram{height:220px}
+}
+</style>
+
+<script>
+(function(){
+  const root=document.getElementById('ai-chip-workbench-design');
+  const screen=root.querySelector('#acw-screen');
+  const picker=root.querySelector('#acw-page');
+  const agent=root.querySelector('#acw-agent-body');
+  const names=['芯片项目总览','规格与架构','设计工作台','实验与运行','波形与比较','实现与硬件入口'];
+
+  const button=(label,primary=false,disabled=false)=>`<span class="acw-button ${primary?'primary':''}" ${disabled?'aria-disabled="true"':''}>${label}</span>`;
+  const badge=(label,tone='')=>`<span class="acw-badge ${tone}">${label}</span>`;
+  const row=(title,detail,status,tone='')=>`<div class="acw-row"><div>${title}<small>${detail}</small></div><span class="acw-status"><i class="acw-dot ${tone}"></i>${status}</span></div>`;
+  const field=(label,value)=>`<div class="acw-field"><label>${label}</label><div class="acw-value">${value}</div></div>`;
+  const panel=(title,body,classes='')=>`<section class="acw-panel ${classes}"><h3>${title}</h3>${body}</section>`;
+  const head=(title,subtitle,actions='')=>`<div class="acw-page-head"><div><h2>${title}</h2><p>${subtitle}</p></div><div class="acw-actions">${actions}</div></div>`;
+  const table=(heads,rows)=>`<table class="acw-table"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+
+  const architectureSvg=()=>`<svg class="acw-diagram" viewBox="0 0 560 245" role="img" aria-label="芯片系统架构示意"><title>芯片系统架构示意</title>
+    <rect class="module" x="26" y="86" width="105" height="58" rx="5"/><text x="78" y="110" text-anchor="middle">模拟输入</text><text class="muted-text" x="78" y="130" text-anchor="middle">pulse_in</text>
+    <rect class="node" x="176" y="52" width="145" height="126" rx="5"/><text x="248" y="82" text-anchor="middle">忆阻器计算核心</text><text class="muted-text" x="248" y="105" text-anchor="middle">M1 · 行为模型</text><text class="muted-text" x="248" y="128" text-anchor="middle">状态量 w</text><text class="muted-text" x="248" y="151" text-anchor="middle">模拟域</text>
+    <rect class="module" x="366" y="86" width="142" height="58" rx="5"/><text x="437" y="110" text-anchor="middle">感测与读出</text><text class="muted-text" x="437" y="130" text-anchor="middle">response_out</text>
+    <path class="signal-a" d="M131 115H176"/><path class="signal-a" d="M321 115H366"/>
+    <text class="muted-text" x="26" y="26">HTS-001 → REQ-001 → ARCH-003（待用户确认）</text>
+    <text class="muted-text" x="26" y="222">当前仅为逻辑架构，不是可制造版图</text>
+  </svg>`;
+
+  const circuitSvg=()=>`<svg class="acw-diagram" viewBox="0 0 560 245" role="img" aria-label="忆阻器脉冲响应电路拓扑"><title>忆阻器脉冲响应电路拓扑</title>
+    <path class="wire" d="M70 115H155M225 115H318M388 115H475V202H70V148M70 82V35H475V82"/>
+    <circle class="node" cx="70" cy="115" r="28"/><text x="70" y="111" text-anchor="middle">V1</text><text class="muted-text" x="70" y="129" text-anchor="middle">PULSE</text>
+    <rect class="node" x="155" y="94" width="70" height="42" rx="4"/><text x="190" y="112" text-anchor="middle">M1</text><text class="muted-text" x="190" y="128" text-anchor="middle">MEM-A</text>
+    <rect class="module" x="318" y="94" width="70" height="42" rx="4"/><text x="353" y="120" text-anchor="middle">R1 1k</text>
+    <path class="wire" d="M458 83H492M458 147H492M475 83V102M475 128V147"/><text x="475" y="120" text-anchor="middle">C1</text>
+    <circle cx="270" cy="115" r="5" fill="var(--acw-accent)"/><text class="muted-text" x="270" y="91" text-anchor="middle">V(out)</text>
+    <text class="muted-text" x="20" y="23">模板化拓扑 · 参数可编辑 · 生成网表可检查</text>
+  </svg>`;
+
+  const waveformSvg=()=>`<svg class="acw-diagram" viewBox="0 0 650 245" role="img" aria-label="两次运行的示意波形对比"><title>两次运行的示意波形对比</title>
+    <path class="wire" d="M58 24V205H625"/><path class="wire" opacity=".25" d="M58 70H625M58 115H625M58 160H625"/>
+    <path class="signal-a" d="M58 182L118 181L142 62L167 50L205 91L250 168L285 181L330 180L354 64L380 52L419 95L464 170L505 181L550 180L575 68L605 58L625 82"/>
+    <path class="signal-b" d="M58 187L118 186L145 78L171 66L210 110L252 176L286 187L330 186L358 80L384 68L423 113L468 178L506 187L550 186L580 84L610 72L625 94"/>
+    <text x="74" y="20">Run A · Ron=1.0 kΩ</text><text x="270" y="20">Run B · Ron=1.2 kΩ</text>
+    <text class="muted-text" x="18" y="28">V</text><text class="muted-text" x="52" y="225">0</text><text class="muted-text" x="315" y="225">50</text><text class="muted-text" x="585" y="225">100 ms</text>
+    <path class="wire" d="M68 232H94"/><text class="muted-text" x="101" y="236">时间</text>
+  </svg>`;
+
+  const pageOverview=()=>head('memristor-pulse','小型忆阻器脉冲响应电路 · 本地芯片项目',button('导入 HTS')+button('继续设计',true))+`
+    <div class="acw-flow">
+      <div class="acw-stage"><strong>1 需求</strong><small>4 项已确认</small></div>
+      <div class="acw-stage is-current"><strong>2 架构</strong><small>1 项待审查</small></div>
+      <div class="acw-stage"><strong>3 设计</strong><small>模板已创建</small></div>
+      <div class="acw-stage"><strong>4 验证</strong><small>尚无真实运行</small></div>
+      <div class="acw-stage"><strong>5 实现</strong><small>入口未解锁</small></div>
+    </div>
+    <div class="acw-grid" style="margin-top:11px">
+      ${panel('下一步',row('审查架构建议','ARCH-003 基于需求 revision 4','待用户确认','warn')+row('准备首次瞬态实验','需要确认 Testbench 和工具环境','未开始'))}
+      ${panel('工具环境',row('ngspice','/opt/homebrew/bin/ngspice · v45','已探测','good')+row('Xyce','首版不启用','未配置')+row('RTL / FPGA / PDK','仅保留架构入口','未接入'))}
+      ${panel('最近运行',`<div class="acw-empty"><div><i data-lucide="activity" aria-hidden="true"></i><br>还没有真实工具运行<br><small>先确认架构和 Testbench，再开始首次仿真。</small></div></div>`)}
+      ${panel('证据缺口',row('REQ-001 脉冲响应','已有参考向量，尚无 ToolRun','未验证','warn')+row('模型 MEM-A','来源已填，golden case 待运行','待验证','warn')+row('可制造性','无 PDK / DRC / LVS 证据','不可声明','bad'))}
+    </div>`;
+
+  const pageArchitecture=()=>head('规格与架构','HTS 导入形成候选，只有用户确认后才成为架构基线。',button('导入 HTS')+button('生成架构建议')+button('确认 revision 3',true))+`
+    <div class="acw-split wide-left">
+      <div class="acw-grid">
+        ${panel('系统架构',architectureSvg(),'wide')}
+        ${panel('需求',`<div class="acw-list"><div class="acw-list-item is-selected">REQ-001 · 脉冲响应<small>来自 HTS-FUNC-001 · 有参考向量</small></div><div class="acw-list-item">REQ-002 · 输入范围<small>0–0.5 V · 单位已确认</small></div><div class="acw-list-item">REQ-003 · 输出误差<small>NRMSE ≤ 0.05 · 待验证</small></div></div>`)}
+        ${panel('追踪关系',table(['需求','模块','验证'],[['REQ-001','mem-core','VC-001'],['REQ-002','input','VC-001'],['REQ-003','readout','VC-002']]))}
+      </div>
+      ${panel('AI Proposal · ARCH-003',field('基于','需求 revision 4 · HTS revision 3')+field('建议','把刺激输入、忆阻器核心、读出分为三个模块')+field('假设','MEM-A 可在 0–0.5 V 范围内使用')+`<div class="acw-warning">模型适用范围仍需 golden case 证明，不能随架构确认自动通过。</div><div class="acw-actions" style="margin-top:10px">${button('拒绝')}${button('查看差异')}${button('采用并编辑',true)}</div>`) }
+    </div>`;
+
+  const pageDesign=()=>head('设计工作台','pulse-response.schematic.json · revision 7 · 有未运行改动',button('结构检查')+button('保存')+button('创建 Testbench',true))+`
+    <div class="acw-split wide-left">
+      <div class="acw-panel flush">
+        <div class="acw-toolbar"><span class="acw-tool">拓扑预览</span><span class="acw-tool">生成网表</span><span class="acw-tool">问题 1</span><span class="acw-tool">只读证据</span></div>
+        ${circuitSvg()}
+        <div class="acw-code"><span class="kw">* generated by cclink ngspice adapter</span>
+V1 in 0 PULSE(0 0.5 0 10u 10u 2m 20m)
+XM1 in out memristor_a PARAMS: RON=1k ROFF=100k
+R1 out 0 1k
+C1 out 0 10n
+<span class="changed">.tran 10u 100m</span></div>
+      </div>
+      <div>
+        ${panel('M1 · 忆阻器',field('模型','MEM-A · revision 2')+field('低阻状态','1.0 kΩ')+field('高阻状态','100 kΩ')+field('初始状态','w = 0.20')+button('查看来源与适用范围'))}
+        <div style="height:10px"></div>
+        ${panel('设计问题',row('模型 golden case','尚未运行真实求解器','阻止验证','warn')+row('电气拓扑','无悬空节点','通过','good'))}
+      </div>
+    </div>`;
+
+  const pageRun=()=>head('实验与运行','pulse-response.experiment.yaml · 首次真实运行前检查',button('保存实验')+button('开始运行',true))+`
+    <div class="acw-grid">
+      ${panel('Testbench',field('分析','Transient · 0–100 ms')+field('刺激','0–0.5 V · 2 ms / 20 ms')+field('观测','V(in), V(out), I(M1), w(M1)')+field('用例','VC-001 · 脉冲响应'))}
+      ${panel('运行前检查',row('输入快照','设计 r7 · 模型 r2 · Testbench r3','可冻结','good')+row('工具','ngspice 45 · adapter 0.1','示意 ready','good')+row('输出目录','runs/run-20261010-001','可写','good')+row('验证容差','NRMSE ≤ 0.05','已定义','good'))}
+      ${panel('真实执行步骤',`<div class="acw-steps"><div class="acw-step"><span class="acw-step-index">1</span><span>冻结输入与计算哈希</span>${badge('已完成','good')}</div><div class="acw-step"><span class="acw-step-index">2</span><span>生成受控 SPICE 网表</span>${badge('已完成','good')}</div><div class="acw-step is-active"><span class="acw-step-index">3</span><span>启动 ngspice 外部进程</span>${badge('运行中','warn')}</div><div class="acw-step"><span class="acw-step-index">4</span><span>校验并解析 raw 输出</span>${badge('等待')}</div><div class="acw-step"><span class="acw-step-index">5</span><span>计算验证用例</span>${badge('等待')}</div></div><div class="acw-actions" style="margin-top:9px">${button('取消运行')}</div>`)}
+      ${panel('工具日志',`<div class="acw-log">[tool] ngspice 45
+[adapter] input manifest sha256: 4c2…e91
+[run] transient analysis started
+[run] 4,000 / 10,000 points
+[notice] 当前为页面示意，不是真实进程输出</div>`)}
+    </div>`;
+
+  const pageWaveform=()=>head('波形与比较','Run A 与 Run B · 相同 Testbench · 参数 Ron 不同',button('选择运行')+button('保存比较报告',true))+`
+    <div class="acw-grid">
+      ${panel('V(out) · 两次运行叠加',waveformSvg(),'wide')}
+      ${panel('比较度量',table(['度量','Run A','Run B','差异'],[['峰值','0.48 V','0.43 V','−10.4%'],['稳定时间','8.1 ms','9.6 ms','+1.5 ms'],['NRMSE vs REF','0.032','0.061',badge('B 失败','warn')]]))}
+      ${panel('验证结果',row('VC-001 · Run A','全部必需断言有真实数据','Passed','good')+row('VC-001 · Run B','NRMSE 超过 0.05','Failed','bad')+row('可制造性','未运行 PPA / DRC / LVS / STA','无结论'))}
+      ${panel('证据',field('Run A','run-20261010-001 · design r7')+field('Run B','run-20261010-002 · design r8')+field('共同环境','ngspice 45 · adapter 0.1 · parser 0.1')+field('原始输出','2 个 rawfile + SHA-256'),'wide')}
+    </div>`;
+
+  const pageImplementation=()=>head('实现与硬件入口','验证结果可以进入后续路径，但首版不执行这些流程。',button('创建实现草案',false,true))+`
+    <div class="acw-grid">
+      ${panel('数字 RTL 与综合',badge('架构入口')+`<div class="acw-gate"><strong>进入条件</strong><ul><li>数字模块与接口已确认</li><li>RTL Testbench 回归通过</li><li>固定综合与 STA 适配器</li></ul></div>${button('尚未接入',false,true)}`)}
+      ${panel('芯片物理设计',badge('无制造结论','warn')+`<div class="acw-gate"><strong>进入条件</strong><ul><li>明确工艺与 PDK 授权</li><li>布局／提取／DRC／LVS 工具</li><li>corner 与 signoff 标准</li></ul></div>${button('尚未接入',false,true)}`)}
+      ${panel('FPGA',badge('无板卡连接')+`<div class="acw-gate"><strong>进入条件</strong><ul><li>选定 part／board 与约束</li><li>真实工具链和 bitstream</li><li>下载确认与采样协议</li></ul></div>${button('尚未接入',false,true)}`)}
+      ${panel('真实忆阻器阵列',badge('需要安全评审','warn')+`<div class="acw-gate"><strong>进入条件</strong><ul><li>独立 HardwareConnection owner</li><li>电压、电流、量程与限流</li><li>设备身份、校准与人工确认</li></ul></div>${button('尚未接入',false,true)}`)}
+      ${panel('当前可证明的结论',`<div class="acw-warning">只有 Run A 的指定瞬态用例通过。没有 PPA、STA、DRC、LVS、版图后仿真、FPGA 或硬件测量证据。</div>`,'wide')}
+    </div>`;
+
+  const pages=[pageOverview,pageArchitecture,pageDesign,pageRun,pageWaveform,pageImplementation];
+  const agentMessages=[
+    `<div class="acw-agent-msg"><strong>下一步建议</strong>先审查 ARCH-003 的模型适用范围，再创建首次实验。<span class="acw-link">引用：REQ r4 · ARCH-003</span></div>`,
+    `<div class="acw-agent-msg"><strong>架构建议</strong>三个模块足以完成首版闭环；不要加入 RTL 控制器。<span class="acw-link">查看 Proposal 差异</span></div>`,
+    `<div class="acw-agent-msg"><strong>设计诊断</strong>拓扑检查通过，但 MEM-A 的 golden case 尚未运行。生成网表不代表仿真通过。</div>`,
+    `<div class="acw-agent-msg"><strong>运行边界</strong>状态由 ToolRunService 和真实进程返回。我可以解释日志，但不能把当前示意标成成功。</div>`,
+    `<div class="acw-agent-msg"><strong>比较假设</strong>Run B 峰值下降与 Ron 增大一致；还需用额外参数点验证是否为单调关系。<span class="acw-link">引用：Run A / Run B</span></div>`,
+    `<div class="acw-agent-msg"><strong>阶段门</strong>现有证据不足以声明芯片可制造。需要具体 PDK、DRC、LVS、STA 或硬件结果。</div>`
+  ];
+
+  let current=0;
+  root.querySelector('#acw-nav').innerHTML='<div class="acw-nav-title">AI 芯片</div>'+names.map((name,index)=>`<button type="button" class="cursor-interaction" data-page="${index}">${name}</button>`).join('')+'<div class="acw-tree"><strong>memristor-pulse</strong><br>▾ requirements<br>▾ architecture<br>▾ models<br>▾ schematics<br>▾ testbenches<br>▾ runs<br>　README.md</div>';
+
+  function render(index){
+    current=Math.max(0,Math.min(names.length-1,index));
+    picker.selectedIndex=current;
+    root.querySelector('#acw-tab-title').textContent=names[current];
+    root.querySelectorAll('[data-page]').forEach(button=>button.setAttribute('aria-current',Number(button.dataset.page)===current?'page':'false'));
+    screen.innerHTML=pages[current]()+`<div class="acw-next"><button type="button" class="cursor-interaction" data-move="-1" ${current===0?'disabled':''}>← 上一页</button><span>${current+1} / ${names.length}</span><button type="button" class="cursor-interaction" data-move="1" ${current===names.length-1?'disabled':''}>下一页 →</button></div>`;
+    agent.innerHTML=agentMessages[current];
+    if(typeof lucide!=='undefined')lucide.createIcons({attrs:{width:16,height:16}});
+  }
+
+  function save(){
+    if(window.openai&&window.openai.setWidgetState){
+      window.openai.setWidgetState({modelContent:{page:names[current]},privateContent:{pageIndex:current}}).catch(()=>{});
+    }
+  }
+
+  picker.addEventListener('change',()=>{render(picker.selectedIndex);save();});
+  root.addEventListener('click',event=>{
+    const target=event.target.closest('[data-page],[data-move]');
+    if(!target)return;
+    if(target.disabled)return;
+    render(target.hasAttribute('data-page')?Number(target.dataset.page):current+Number(target.dataset.move));
+    save();
+  });
+
+  const initial=window.openai&&window.openai.widgetState;
+  render(initial&&initial.privateContent&&Number.isInteger(initial.privateContent.pageIndex)?initial.privateContent.pageIndex:0);
+  window.addEventListener('openai:set_globals',event=>{
+    const state=event.detail&&event.detail.globals&&event.detail.globals.widgetState;
+    if(state&&state.privateContent&&Number.isInteger(state.privateContent.pageIndex))render(state.privateContent.pageIndex);
+  });
+})();
+</script>

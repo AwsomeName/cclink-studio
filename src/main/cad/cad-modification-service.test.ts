@@ -88,9 +88,9 @@ if (request.mode === 'plan') {
       fileSize: fs.statSync(request.outputPath).size,
     },
     fixedRegion: {
+      guardBandMm: 0.05,
       sourceVolume: 40,
       outputVolume: 40,
-      commonVolume: 40,
       sourceOnlyVolume: 0,
       outputOnlyVolume: 0,
       symmetricDifferenceVolume: fakeMode === 'fixed-region-change' ? 1 : 0,
@@ -273,8 +273,17 @@ const realStepPath = process.env.CCLINK_CAD_REAL_STEP
 const realFreeCadPath = process.env.CCLINK_CAD_REAL_FREECAD
 
 describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService real E0', () => {
+  const coreCase = {
+    caseName: 'core-x-positive-3mm',
+    axis: 'x',
+    direction: 'positive',
+    fixedSide: 'min',
+    distanceMm: 3,
+    splitPlane: 3.7637202218503205,
+  } as const
   const matrix = [
     {
+      caseName: 'matrix-x-positive-minimum',
       axis: 'x',
       direction: 'positive',
       fixedSide: 'min',
@@ -282,6 +291,7 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
       splitPlane: 3.7637202218503205,
     },
     {
+      caseName: 'matrix-x-negative-maximum',
       axis: 'x',
       direction: 'negative',
       fixedSide: 'max',
@@ -289,6 +299,7 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
       splitPlane: 3.7637202218503205,
     },
     {
+      caseName: 'matrix-y-positive-intermediate',
       axis: 'y',
       direction: 'positive',
       fixedSide: 'min',
@@ -296,6 +307,7 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
       splitPlane: -11.251129445148461,
     },
     {
+      caseName: 'matrix-y-negative-intermediate',
       axis: 'y',
       direction: 'negative',
       fixedSide: 'max',
@@ -303,6 +315,7 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
       splitPlane: -11.251129445148461,
     },
     {
+      caseName: 'matrix-z-positive-maximum',
       axis: 'z',
       direction: 'positive',
       fixedSide: 'min',
@@ -310,6 +323,7 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
       splitPlane: 14.955289631225183,
     },
     {
+      caseName: 'matrix-z-negative-minimum',
       axis: 'z',
       direction: 'negative',
       fixedSide: 'max',
@@ -318,8 +332,8 @@ describe.runIf(Boolean(realStepPath && realFreeCadPath))('CadModificationService
     },
   ] as const
 
-  it.each(matrix)(
-    'modifies the real eyewear STEP: $axis $direction $distanceMm mm',
+  it.each([coreCase, ...matrix])(
+    'modifies the real eyewear STEP: $caseName ($axis $direction $distanceMm mm)',
     async ({ axis, direction, fixedSide, distanceMm, splitPlane }) => {
       const realOutputDir = await mkdtemp(join(tmpdir(), 'cclink-cad-real-e0-'))
       const realOutputPath = join(
