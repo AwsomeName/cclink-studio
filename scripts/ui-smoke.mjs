@@ -444,13 +444,14 @@ async function main() {
     }, separationWorkspace)
     assert(workspaceOpened, 'navigation separation fixture workspace did not open')
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 15, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 16, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '资源', '流程']),
       'visible group headings missing',
     )
     const labels = [
+      '公司',
       '文件',
       '会话',
       '浏览器',
