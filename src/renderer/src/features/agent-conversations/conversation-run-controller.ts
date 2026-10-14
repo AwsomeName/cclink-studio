@@ -131,6 +131,7 @@ export function createConversationRunController({
       const runId = store.beginRun(conversationId)
 
       try {
+        const payload = buildAgentSendPayload(text, getStore().conversations[conversationId], runId)
         if (images.length > 0) {
           const saved = await agentApi.saveMessageImages(conversationId, images).catch(() => ({
             success: false as const,
@@ -139,11 +140,7 @@ export function createConversationRunController({
           if (saved.success) store.setMessageImageAssets(conversationId, saved.assets)
           else store.addSystemMessage(saved.error, conversationId)
         }
-        const current = getStore().conversations[conversationId]
-        const result = await agentApi.sendMessage(
-          conversationId,
-          buildAgentSendPayload(text, current, runId),
-        )
+        const result = await agentApi.sendMessage(conversationId, payload)
         if (!result.success) {
           const error = result.error ?? 'Agent 拒绝接收消息'
           store.cancelStreaming(conversationId, 'error', runId)

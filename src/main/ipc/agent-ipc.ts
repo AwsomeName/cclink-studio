@@ -268,18 +268,21 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
 
   handle(agentIpc.saveMessageImages, async (_event, conversationId, images) => {
     try {
-      if (!messageImages) return { success: false, error: '图片附件存储不可用' }
-      return { success: true, assets: await messageImages.save(conversationId, images) }
+      if (!messageImages) return { success: false as const, error: '图片附件存储不可用' }
+      return { success: true as const, assets: await messageImages.save(conversationId, images) }
     } catch {
-      return { success: false, error: '图片附件保存失败，当前会话仍可预览，重启后可能无法恢复' }
+      return {
+        success: false as const,
+        error: '图片附件保存失败，当前会话仍可预览，重启后可能无法恢复',
+      }
     }
   })
   handle(agentIpc.readMessageImage, async (_event, conversationId, assetId) => {
     try {
-      if (!messageImages) return { success: false, error: '图片附件存储不可用' }
-      return { success: true, dataUrl: await messageImages.read(conversationId, assetId) }
+      if (!messageImages) return { success: false as const, error: '图片附件存储不可用' }
+      return { success: true as const, dataUrl: await messageImages.read(conversationId, assetId) }
     } catch {
-      return { success: false, error: '图片附件不可用或已损坏' }
+      return { success: false as const, error: '图片附件不可用或已损坏' }
     }
   })
 
