@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useUIStore } from './ui-store'
+import { normalizeWorkspaceLayout, UI_DEFAULTS, useUIStore } from './ui-store'
 
 beforeEach(() => {
   // 重置到默认状态
@@ -241,6 +241,52 @@ describe('useUIStore', () => {
   })
 
   describe('hydrateFromWorkspaceState', () => {
+    it.each([undefined, null, [], 'invalid'])('缺失或非法整体布局完整恢复默认值：%s', (value) => {
+      useUIStore.setState({
+        sidebarVisible: false,
+        sidebarWidth: 450,
+        agentPanelMode: 'hidden',
+        agentPanelModeSource: 'user',
+      })
+      useUIStore.getState().hydrateFromWorkspaceState(value)
+      expect(useUIStore.getState()).toMatchObject(UI_DEFAULTS)
+    })
+
+    it.each([NaN, Infinity, -Infinity, '320', 0, 501])('非法目标宽度逐字段回退：%s', (width) => {
+      expect(
+        normalizeWorkspaceLayout({
+          sidebarWidth: width,
+          agentPanelWidth: 600,
+          sidebarVisible: false,
+        }),
+      ).toMatchObject({ sidebarWidth: 250, agentPanelWidth: 600, sidebarVisible: false })
+    })
+
+    it('非法 mode/source 回默认，合法 mode 决定兼容可见性', () => {
+      expect(
+        normalizeWorkspaceLayout({
+          agentPanelMode: 'invalid',
+          agentPanelModeSource: 'invalid',
+          agentPanelVisible: false,
+        }),
+      ).toMatchObject({
+        agentPanelMode: 'center',
+        agentPanelModeSource: 'system',
+        agentPanelVisible: true,
+      })
+      expect(
+        normalizeWorkspaceLayout({
+          agentPanelMode: 'hidden',
+          agentPanelVisible: true,
+          agentPanelModeSource: 'user',
+        }),
+      ).toMatchObject({
+        agentPanelMode: 'hidden',
+        agentPanelVisible: false,
+        agentPanelModeSource: 'user',
+      })
+    })
+
     it('从工作台快照恢复布局状态，并把旧 Activity 入口迁移到文件', () => {
       useUIStore.getState().hydrateFromWorkspaceState({
         activePanel: 'android',
@@ -256,7 +302,7 @@ describe('useUIStore', () => {
       const state = useUIStore.getState()
       expect(state.activePanel).toBe('files')
       expect(state.sidebarVisible).toBe(false)
-      expect(state.agentPanelVisible).toBe(false)
+      expect(state.agentPanelVisible).toBe(true)
       expect(state.sidebarWidth).toBe(320)
       expect(state.agentPanelWidth).toBe(420)
       expect(state.agentPanelMode).toBe('right')

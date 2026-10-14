@@ -17,6 +17,14 @@ vi.mock('./core-services', () => ({
   shutdownMainProcessServices: () => lifecycle.step('stop:main'),
 }))
 
+vi.mock('../company-workspace/company-workspace-runtime', () => ({
+  createCompanyWorkspaceRuntime: () => ({
+    name: 'company-workspace',
+    start: () => lifecycle.step('start:company'),
+    stop: () => lifecycle.step('stop:company'),
+  }),
+}))
+
 vi.mock('./window-runtime', () => ({
   createWindowRuntime: () => lifecycle.step('start:window'),
   destroyWindowRuntime: () => lifecycle.step('stop:window'),
@@ -57,20 +65,24 @@ describe('runtime lifecycle registry', () => {
       'start:state',
       'start:window',
       'start:main',
+      'start:company',
       'start:automation',
       'start:agent',
       'stop:agent',
       'stop:automation',
+      'stop:company',
       'stop:main',
       'stop:window',
       'stop:state',
       'start:state',
       'start:window',
       'start:main',
+      'start:company',
       'start:automation',
       'start:agent',
       'stop:agent',
       'stop:automation',
+      'stop:company',
       'stop:main',
       'stop:window',
       'stop:state',
@@ -91,8 +103,10 @@ describe('runtime lifecycle registry', () => {
       'start:state',
       'start:window',
       'start:main',
+      'start:company',
       'start:automation',
       'stop:automation',
+      'stop:company',
       'stop:main',
       'stop:window',
       'stop:state',

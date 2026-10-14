@@ -29,7 +29,7 @@ Terminal 是当前工作空间里的高风险 Tab 类型，不是全局黑箱，
 - 脱离工作空间的全局 shell。
 - 没有权限确认的 Agent 执行通道。
 - 没有审计的后台任务系统。
-- OSS 默认网络 root shell。
+- 脱离 CCLink 远程工作空间和统一权限审计的通用网络 root shell。
 
 ## 共享模型
 
@@ -78,7 +78,8 @@ runtime
 - `workspaceRef` 必填。
 - `cwd` 默认使用当前工作空间路径。
 - 没有工作空间时，Terminal 可归属未归档/global workspace，但必须明确 cwd。
-- OSS 默认不创建 `network` runtime。
+- Studio 不创建通用 `network` runtime；远程执行只使用绑定 `RemoteWorkspaceRef` 的
+  `cclink` adapter。
 
 ## 权限策略
 
@@ -136,7 +137,8 @@ permissionPolicy
 - `src/preload/index.ts`
 - `src/renderer/src/bootstrap/use-terminal-events.ts`
 - `src/renderer/src/stores/terminal-store.ts`
-- `src/renderer/src/components/agent-panel/TerminalConfirmationCards.tsx`
+- `src/renderer/src/components/agent-panel/terminal-confirmation-view-model.ts`
+- `src/renderer/src/components/agent-panel/AgentPanel.tsx`
 
 ## 关闭策略
 
@@ -343,7 +345,9 @@ Terminal 使用统一 execution error；CCLink adapter 额外保留脱敏、结�
 
 ## 拷问
 
-第一问：本地 Terminal 已经能跑，为什么还要强调 OSS 不做网络执行？因为网络执行需要账号、transport、Agent runtime、token、entitlement、端侧审计和错误归因；这些都不在开源壳默认边界里。
+第一问：本地 Terminal 已经能跑，为什么远程执行还必须走 CCLink adapter？因为远程执行需要
+绑定账号、设备、`RemoteWorkspaceRef`、transport、Agent runtime、token、审计和错误归因；
+通用网络 shell 会绕过这些边界。
 
 第二问：最危险的失败路径是什么？Agent 或用户命令绕过权限确认，或者关闭 Tab 后进程仍在跑但 UI 以为结束了。
 

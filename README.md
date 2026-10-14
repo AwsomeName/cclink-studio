@@ -12,20 +12,20 @@ CCLink 云服务和远程 Agent runtime 仍由各自既有部署与 NPM 发布�
 
 ## 能力边界
 
-| 能力                                   | 开源壳状态   | 说明                                                                   |
-| -------------------------------------- | ------------ | ---------------------------------------------------------------------- |
-| 内嵌浏览器 + Playwright 自动化         | 保留         | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                 |
-| Markdown 编辑器                        | 保留         | Tiptap/ProseMirror，本地文件读写。                                     |
-| 本地 Agent 面板                        | 保留         | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                     |
-| 本地文件和工作空间                     | 保留         | 本地目录浏览、文件读写、workspace state 恢复。                         |
-| 统一上下文操作                         | 保留         | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。 |
-| Terminal                               | 保留         | 本地 shell 和审计；网络执行链路已从开源壳默认路径移除。                |
-| 数据源只读查询                         | 保留         | 本地配置用户自有数据源，不内置官方云。                                 |
-| Android 真机连接                       | 保留本地能力 | 通过用户自有 USB 或 Wi-Fi ADB 真机运行。                               |
-| CCLink Account / Device / Message 网络 | 可选内置域   | 只在用户打开远程入口后登录、连接；失败不影响本地能力。                 |
-| 远程项目选择、文件树和只读文件         | 第一阶段内置 | 通过类型化 preload 和受信 IPC 接入，不复制 Workspace/Tab 状态。        |
-| 订阅、配额和付费安全边界               | 云服务负责   | 客户端只能显示提示；当前付费门禁尚未经服务端闭环验证。                 |
-| 支付 UI、WebDAV、官方发布              | 不迁移       | 云端部署、远程 Agent NPM、签名和公证仍独立。                           |
+| 能力                                   | Studio 状态  | 说明                                                                        |
+| -------------------------------------- | ------------ | --------------------------------------------------------------------------- |
+| 内嵌浏览器 + Playwright 自动化         | 保留         | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                      |
+| Markdown 编辑器                        | 保留         | Tiptap/ProseMirror，本地文件读写。                                          |
+| 本地 Agent 面板                        | 保留         | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                          |
+| 本地文件和工作空间                     | 保留         | 本地目录浏览、文件读写、workspace state 恢复。                              |
+| 统一上下文操作                         | 保留         | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。      |
+| Terminal                               | 本地与远程   | 本地 shell 免登录；远程 PTY 只通过绑定工作空间的 CCLink adapter 接入。      |
+| 数据源只读查询                         | 保留         | 本地配置用户自有数据源，不内置官方云。                                      |
+| Android 真机连接                       | 保留本地能力 | 通过用户自有 USB 或 Wi-Fi ADB 真机运行。                                    |
+| CCLink Account / Device / Message 网络 | 可选内置域   | 只在用户打开远程入口后登录、连接；失败不影响本地能力。                      |
+| 远程工作空间、文件和 Agent 会话        | 可选内置域   | 支持文件读写与远程 Agent；复用统一 Workspace、Tab 和 Terminal 生命周期。    |
+| 订阅、配额和付费安全边界               | 云服务负责   | 客户端只能显示提示；当前付费门禁尚未经服务端闭环验证。                      |
+| 桌面支付、WebDAV、托管设备服务         | 不迁移       | 云端部署与远程 Agent NPM 独立；签名、公证只在受保护的 Release runner 执行。 |
 
 ## 快速开始
 
@@ -53,7 +53,7 @@ pnpm studio:stop
 pnpm package:local
 ```
 
-开源壳本地打包只生成 `dist/` 下的 Apple Silicon arm64 验收产物，产品名固定为
+Studio 本地打包只生成 `dist/` 下的 Apple Silicon arm64 验收产物，产品名固定为
 `CCLink Studio 开源版`。本地包使用 ad-hoc 签封，不包含 Developer ID
 签名、公证、上传或生产 API 注入，也不会修改版本号。打包前后的目标校验见
 [`docs/ops/package-target-check.md`](docs/ops/package-target-check.md)。
@@ -86,7 +86,7 @@ Android 能力只面向用户自有 USB 或 Wi-Fi ADB 真机。CCLink Studio 不
 
 ### Agent
 
-CCLink Studio 不提供模型服务。开源壳可以连接用户本机或用户自有的 Agent 后端；
+CCLink Studio 不提供模型服务。Studio 可以连接用户本机或用户自有的 Agent 后端；
 当前默认 Runtime 来源是 `system`，优先使用用户本机安装的 Claude Code：
 
 ```bash
@@ -94,7 +94,7 @@ npm install -g @anthropic-ai/claude-code
 claude login
 ```
 
-在 `设置 > Agent` 中可以选择 `system`、`custom` 或 `bundled` Runtime，并配置
+在 `设置 > Agent` 中可以选择 `system`、`custom` 或 `managed` Runtime，并配置
 模型提供商、API 地址和 API Key。API Key 由主进程 `CredentialService` 保存到
 Electron `userData/credentials/credentials.json`，不会写入工作空间、普通设置或
 诊断日志。
@@ -114,15 +114,15 @@ cclink-studio/
 │   ├── preload/           # contextBridge 白名单 API
 │   ├── renderer/          # React 工作台 UI
 │   └── shared/            # 跨进程共享 contract
-├── electron-builder.yml   # 开源本地打包配置，不包含官方发布源
+├── electron-builder.yml   # Studio 本地打包配置，不包含生产发布凭证
 └── package.json
 ```
 
-## 官方实现位置
+## 相关实现位置
 
 当前不存在额外拆分出的云端或 Agent 独立项目。
 
-- `cclink-dev`：闭源官方构建工作区，负责发布集成、签名、公证、生产 API 注入、多仓库集成脚本。
+- `cclink-dev`：迁移期只读参考与云端/发布运维工作区，不拥有第二套桌面源码或发布入口。
 - `/Users/apple/Desktop/chat-cc/deploy`：CCLink 云函数和账号体系。
 - `/Users/apple/Desktop/chat-cc/Agent`：CCLink Agent runtime。
 

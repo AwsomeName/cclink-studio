@@ -1,0 +1,21 @@
+{
+  "errors": [],
+  "overflow": [],
+  "checkedAt": "2026-10-14",
+  "kind": "design-prototype-only",
+  "checks": [
+    "稿件补资料与验收",
+    "未知提交禁止重发并只读核验",
+    "人工财务确认与正确汇总",
+    "两种布局导航",
+    "亮暗主题与 1024/736/320 内容宽度"
+  ],
+  "keyboardFocus": true,
+  "stepDetails": true,
+  "footerVisibleAtWidths": [
+    1024,
+    736,
+    320
+  ],
+  "scope": "Design prototype only; no live finance, Agent or platform validation"
+}

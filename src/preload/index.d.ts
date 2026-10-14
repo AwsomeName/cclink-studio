@@ -1,3 +1,4 @@
+import type { CompanyWorkspaceApiContract } from '../shared/company-workspace/company-workspace-contract'
 import type { AgentApiContract } from '../shared/ipc/agent'
 import type { AndroidApiContract } from '../shared/ipc/android'
 import type { BrowserApiContract, BrowserWorkbenchBounds } from '../shared/ipc/browser'
@@ -56,6 +57,7 @@ export interface CCLinkStudioAPI {
   dataSource: DataSourceApiContract
 
   companyAccounts: CompanyAccountsApiContract
+  companyWorkspace: CompanyWorkspaceApiContract
 
   diagnostics: DiagnosticsApiContract
 

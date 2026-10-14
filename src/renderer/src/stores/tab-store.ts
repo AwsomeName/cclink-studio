@@ -212,6 +212,8 @@ interface OpenTabOptions {
   agentRole?: Tab['agentRole']
   /** 宣发视频工程详情 */
   mediaProject?: Tab['mediaProject']
+  companyWorkspace?: Tab['companyWorkspace']
+  companyAccounts?: Tab['companyAccounts']
   /** 强制新建，跳过所有去重 */
   forceNew?: boolean
   /** 显式指定 Tab 归属；缺省使用当前工作空间。 */
@@ -323,6 +325,8 @@ export const useTabStore = create<TabState>((set, get) => ({
     articlePublishing,
     agentRole,
     mediaProject,
+    companyWorkspace,
+    companyAccounts,
     forceNew,
     workspaceRef,
   }) => {
@@ -368,14 +372,26 @@ export const useTabStore = create<TabState>((set, get) => ({
 
       // forceNew 跳过允许多开的 Tab 去重
       if (!forceNew) {
-        if (type === 'company-accounts') {
+        if (type === 'company-accounts' || type === 'company-workspace') {
           const existing = state.tabs.find(
             (tab) =>
-              tab.type === 'company-accounts' &&
+              tab.type === type &&
               workspaceRefKey(tab.workspaceRef ?? workspaceRefFromKey(null)) ===
                 workspaceRefKey(resolvedWorkspaceRef),
           )
-          if (existing) return { activeTabId: existing.id }
+          if (existing)
+            return {
+              tabs: state.tabs.map((tab) =>
+                tab.id === existing.id
+                  ? {
+                      ...tab,
+                      companyWorkspace: companyWorkspace ?? tab.companyWorkspace,
+                      companyAccounts: companyAccounts ?? tab.companyAccounts,
+                    }
+                  : tab,
+              ),
+              activeTabId: existing.id,
+            }
         }
         if (type === 'browser' && webResourceRef) {
           const existing = state.tabs.find(
@@ -556,6 +572,8 @@ export const useTabStore = create<TabState>((set, get) => ({
         articlePublishing,
         agentRole,
         mediaProject,
+        companyWorkspace,
+        companyAccounts,
       }
       return {
         tabs: [...state.tabs, newTab],

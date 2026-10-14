@@ -19,6 +19,10 @@ export interface WorkspaceBootstrapDeps {
   beginRestore: () => void
   endRestore: () => void
   hydrateLayout: (value: unknown) => void
+  createLayoutRestore?: () => {
+    hydrate: (sections: Record<string, unknown>) => void
+    complete: () => Promise<void>
+  }
   hydrateBrowserTabs: (value: unknown) => void
   hydrateTabs: (value: unknown) => void
   hydrateEditorDrafts: (value: unknown) => void
@@ -61,6 +65,7 @@ export async function restoreWorkspaceState(
     deps.setWorkspacePath(null)
   }
 
+  const layoutRestore = deps.createLayoutRestore?.()
   let snapshot: WorkspaceStateSnapshot
   try {
     snapshot = await deps.getWorkspaceState(workspacePath)
@@ -109,7 +114,8 @@ export async function restoreWorkspaceState(
       workspaceRef,
     )
     deps.beginRestore()
-    deps.hydrateLayout(sections.layout)
+    if (layoutRestore) layoutRestore.hydrate(sections)
+    else deps.hydrateLayout(sections.layout)
     deps.hydrateBrowserTabs(
       scopeWorkspaceBrowserSnapshot(sections.browserTabs ?? { tabs: {} }, scopedTabsSnapshot),
     )
@@ -143,6 +149,14 @@ export async function restoreWorkspaceState(
     canPersistRuntime = false
   } finally {
     deps.endRestore()
+  }
+
+  if (canPersistRuntime && layoutRestore) {
+    await layoutRestore
+      .complete()
+      .catch((error: unknown) =>
+        deps.warn('[WorkspaceBootstrap] 布局兼容迁移失败，保留旧值:', error),
+      )
   }
 
   if (workspacePath) {

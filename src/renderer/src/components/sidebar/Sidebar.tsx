@@ -1,3 +1,4 @@
+import { CompanySidebar } from '../../features/company-workspace/CompanySidebar'
 import {
   useUIStore,
   useTabStore,
@@ -94,6 +95,8 @@ function getSidebarTitle(
       return '浏览器'
     case 'data-sources':
       return '数据源'
+    case 'company-workspace':
+      return '公司经营'
     case 'company-accounts':
       return '公司账目'
     case 'video-creation':
@@ -278,7 +281,11 @@ export function Sidebar(): React.ReactElement {
       )}
 
       <div className="sidebar-content">
-        <ProjectSidebarContent activePanel={activePanel} />
+        {activePanel === 'company-workspace' ? (
+          <CompanySidebar />
+        ) : (
+          <ProjectSidebarContent activePanel={activePanel} />
+        )}
       </div>
     </div>
   )

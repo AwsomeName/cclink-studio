@@ -12,6 +12,7 @@ describe('ActivityBar', () => {
     expect(markup).toContain('role="group" aria-label="流程"')
 
     const labels = [
+      '公司经营',
       '文件',
       '会话',
       '浏览器',
@@ -58,6 +59,6 @@ describe('ActivityBar', () => {
     for (const group of ['工作', '资源', '流程']) {
       expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
     }
-    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(14)
+    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(15)
   })
 })

@@ -1,3 +1,4 @@
+import { companyWorkspaceIpcEvents } from '../../shared/company-workspace/company-workspace'
 import { mediaProjectsIpcEvents } from '../../shared/media-production/media-project-contract'
 import { scheduledTasksIpcEvents } from '../../shared/scheduled-task/scheduled-task-contract'
 import { webAffairsIpcEvents } from '../../shared/web-affairs/web-affair'
@@ -78,6 +79,23 @@ function expandEventGroup(group: EventInventoryGroup): IpcEventFlowInventory[] {
 
 /** 全部生产事件库存；shared 新增或删除事件时，完整性测试要求同步这里的真实 flow。 */
 export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
+  ...expandEventGroup({
+    keys: ['changed'],
+    definitions: companyWorkspaceIpcEvents,
+    owner: 'CompanyWorkspace',
+    definitionFile: 'src/shared/company-workspace/company-workspace.ts',
+    definitionName: 'companyWorkspaceIpcEvents',
+    direction: 'main-to-renderer',
+    producerFiles: ['src/main/company-workspace/company-workspace-runtime.ts'],
+    bridgeFiles: ['src/preload/company-workspace-api.ts'],
+    consumerFiles: ['src/renderer/src/features/company-workspace/CompanyWorkbench.tsx'],
+    disposerFiles: ['src/renderer/src/features/company-workspace/CompanyWorkbench.tsx'],
+    disposerEvidenceTerms: {
+      'src/renderer/src/features/company-workspace/CompanyWorkbench.tsx': ['onChanged'],
+    },
+    payloadBoundary: 'bounded-preload-parser',
+    evidenceTerms: ['onChanged', 'unsubscribe'],
+  }),
   ...expandEventGroup({
     keys: ['snapshotChanged'],
     definitions: updateIpcEvents,

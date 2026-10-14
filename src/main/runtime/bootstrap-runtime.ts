@@ -1,3 +1,4 @@
+import { createCompanyWorkspaceRuntime } from '../company-workspace/company-workspace-runtime'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { ServiceRegistry } from './service-registry'
 import { createWindowRuntime, destroyWindowRuntime } from './window-runtime'
@@ -50,6 +51,7 @@ export function createRuntimeServiceRegistry(
     start: () => bootstrapMainProcessServices(runtime),
     stop: () => shutdownMainProcessServices(runtime),
   })
+  registry.register(createCompanyWorkspaceRuntime(runtime))
   registry.register({
     name: 'automation-runtime',
     start: () => bootstrapAutomationRuntime(runtime),

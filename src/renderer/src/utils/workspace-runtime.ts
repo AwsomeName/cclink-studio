@@ -5,6 +5,7 @@ import { useBrowserStore } from '../stores/browser-store'
 import { useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { useWorkspaceStore } from '../stores/workspace-store'
+import { useUIStore } from '../stores/ui-store'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../stores/workbench-window-store'
 import {
   beginWorkspaceStateRestore,
@@ -32,6 +33,7 @@ function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][num
 export function hydrateRuntimeSections(
   snapshot: WorkspaceStateSnapshot | null,
   workspaceRefOverride?: WorkspaceRef,
+  options: { restoreLayout?: boolean } = {},
 ): void {
   const sections = snapshot?.sections ?? {}
   const workspaceRef =
@@ -51,6 +53,9 @@ export function hydrateRuntimeSections(
   )
   beginWorkspaceStateRestore()
   try {
+    if (options.restoreLayout !== false) {
+      useUIStore.getState().hydrateFromWorkspaceState(sections.layout)
+    }
     const browserTabsSection =
       sections.browserTabs && typeof sections.browserTabs === 'object'
         ? sections.browserTabs

@@ -1,3 +1,5 @@
+export const MIN_SIDEBAR_WIDTH = 160
+export const MAX_SIDEBAR_WIDTH = 500
 export const MIN_AGENT_PANEL_WIDTH = 220
 export const MAX_AGENT_PANEL_WIDTH = 960
 

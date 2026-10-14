@@ -1,6 +1,24 @@
 import { create } from 'zustand'
 import type { ActivityPanel } from '../types'
-import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
+import {
+  getWorkspaceStateOwnerKey,
+  isWorkspaceStateRestoring,
+  persistWorkspaceSectionNow,
+  WorkspaceStatePersistenceError,
+} from '../utils/workspace-state'
+import {
+  captureActiveWorkspaceTarget,
+  isWorkspaceTargetCurrent,
+  type WorkspaceTarget,
+} from './workspace-store'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import {
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+  MIN_AGENT_PANEL_WIDTH,
+  MAX_AGENT_PANEL_WIDTH,
+} from '../utils/panel-layout'
+import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
 
 export type AgentPanelMode = 'center' | 'right' | 'hidden'
 type VisibleAgentPanelMode = Exclude<AgentPanelMode, 'hidden'>
@@ -14,7 +32,7 @@ export type WorkContext =
   | 'settings'
   | 'data-source'
 
-interface UIState {
+export interface WorkspaceLayoutSnapshot {
   /** 当前激活的 Activity Bar 面板 */
   activePanel: ActivityPanel
   /** 侧栏是否展开 */
@@ -31,7 +49,9 @@ interface UIState {
   agentPanelLastVisibleMode: VisibleAgentPanelMode | null
   /** 布局来源：system 可自动切换，user 代表用户手动选择后锁定 */
   agentPanelModeSource: AgentPanelModeSource
+}
 
+interface UIState extends WorkspaceLayoutSnapshot {
   // --- Actions ---
   setActivePanel: (panel: ActivityPanel) => void
   /** 程序化展示面板；与 Activity Bar 的再次点击折叠语义分离。 */
@@ -49,7 +69,7 @@ interface UIState {
 }
 
 /** UI 状态默认值 */
-const UI_DEFAULTS = {
+export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
   activePanel: 'files' as ActivityPanel,
   sidebarVisible: true,
   agentPanelVisible: true,
@@ -62,6 +82,7 @@ const UI_DEFAULTS = {
 
 const UI_STORAGE_KEY = 'cclink-studio-ui-state'
 const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
+  'company-workspace',
   'sessions',
   'agent-roles',
   'browser',
@@ -87,7 +108,7 @@ function normalizeActivityPanel(panel: unknown): ActivityPanel {
 
 function normalizeStoredAgentPanelMode(value: unknown, storedVisible: unknown): AgentPanelMode {
   if (value === 'center' || value === 'right' || value === 'hidden') return value
-  return storedVisible === false ? 'hidden' : UI_DEFAULTS.agentPanelMode
+  return value === undefined && storedVisible === false ? 'hidden' : UI_DEFAULTS.agentPanelMode
 }
 
 function normalizeStoredAgentPanelModeSource(
@@ -95,113 +116,27 @@ function normalizeStoredAgentPanelModeSource(
   storedVisible: unknown,
 ): AgentPanelModeSource {
   if (value === 'user' || value === 'system') return value
-  return storedVisible === false ? 'user' : UI_DEFAULTS.agentPanelModeSource
+  return value === undefined && storedVisible === false ? 'user' : UI_DEFAULTS.agentPanelModeSource
 }
 
 function agentVisibleFromMode(mode: AgentPanelMode): boolean {
   return mode !== 'hidden'
 }
 
-function normalizeLastVisibleAgentPanelMode(
-  value: unknown,
-  mode: AgentPanelMode,
-): VisibleAgentPanelMode | null {
-  if (value === 'center' || value === 'right') return value
-  return mode === 'hidden' ? null : mode
+function normalizeLastVisibleAgentPanelMode(value: unknown): VisibleAgentPanelMode | null {
+  if (value === 'center' || value === 'right' || value === null) return value
+  return UI_DEFAULTS.agentPanelLastVisibleMode
 }
 
-function loadStoredUI(): Partial<
-  Pick<
-    UIState,
-    | 'activePanel'
-    | 'sidebarVisible'
-    | 'agentPanelVisible'
-    | 'sidebarWidth'
-    | 'agentPanelWidth'
-    | 'agentPanelMode'
-    | 'agentPanelLastVisibleMode'
-    | 'agentPanelModeSource'
-  >
-> {
-  try {
-    if (typeof localStorage === 'undefined') return {}
-    const raw = localStorage.getItem(UI_STORAGE_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw) as Partial<UIState>
-    const mode = normalizeStoredAgentPanelMode(parsed.agentPanelMode, parsed.agentPanelVisible)
-    return {
-      activePanel: normalizeActivityPanel(parsed.activePanel),
-      sidebarVisible: parsed.sidebarVisible ?? UI_DEFAULTS.sidebarVisible,
-      agentPanelVisible: parsed.agentPanelVisible ?? agentVisibleFromMode(mode),
-      sidebarWidth:
-        typeof parsed.sidebarWidth === 'number' ? parsed.sidebarWidth : UI_DEFAULTS.sidebarWidth,
-      agentPanelWidth:
-        typeof parsed.agentPanelWidth === 'number'
-          ? parsed.agentPanelWidth
-          : UI_DEFAULTS.agentPanelWidth,
-      agentPanelMode: mode,
-      agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(
-        parsed.agentPanelLastVisibleMode,
-        mode,
-      ),
-      agentPanelModeSource: normalizeStoredAgentPanelModeSource(
-        parsed.agentPanelModeSource,
-        parsed.agentPanelVisible,
-      ),
-    }
-  } catch {
-    return {}
-  }
+function normalizeWidth(value: unknown, min: number, max: number, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+    ? value
+    : fallback
 }
 
-function saveStoredUI(state: UIState): void {
-  try {
-    if (isWorkspaceStateRestoring()) return
-    if (typeof localStorage === 'undefined') return
-    localStorage.setItem(
-      UI_STORAGE_KEY,
-      JSON.stringify({
-        activePanel: state.activePanel,
-        sidebarVisible: state.sidebarVisible,
-        agentPanelVisible: state.agentPanelVisible,
-        sidebarWidth: state.sidebarWidth,
-        agentPanelWidth: state.agentPanelWidth,
-        agentPanelMode: state.agentPanelMode,
-        agentPanelLastVisibleMode: state.agentPanelLastVisibleMode,
-        agentPanelModeSource: state.agentPanelModeSource,
-      }),
-    )
-    persistWorkspaceSection('layout', {
-      activePanel: state.activePanel,
-      sidebarVisible: state.sidebarVisible,
-      agentPanelVisible: state.agentPanelVisible,
-      sidebarWidth: state.sidebarWidth,
-      agentPanelWidth: state.agentPanelWidth,
-      agentPanelMode: state.agentPanelMode,
-      agentPanelLastVisibleMode: state.agentPanelLastVisibleMode,
-      agentPanelModeSource: state.agentPanelModeSource,
-    })
-  } catch {
-    // localStorage 可能不可用，忽略持久化失败。
-  }
-}
-
-function normalizeLayoutState(
-  value: unknown,
-): Partial<
-  Pick<
-    UIState,
-    | 'activePanel'
-    | 'sidebarVisible'
-    | 'agentPanelVisible'
-    | 'sidebarWidth'
-    | 'agentPanelWidth'
-    | 'agentPanelMode'
-    | 'agentPanelLastVisibleMode'
-    | 'agentPanelModeSource'
-  >
-> {
-  if (!value || typeof value !== 'object') return {}
+/** 缺失快照和非法字段都从默认值恢复，绝不继承上一工作空间的布局。 */
+export function normalizeWorkspaceLayout(value: unknown): WorkspaceLayoutSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { ...UI_DEFAULTS }
   const parsed = value as Partial<UIState>
   const mode = normalizeStoredAgentPanelMode(parsed.agentPanelMode, parsed.agentPanelVisible)
   return {
@@ -210,21 +145,21 @@ function normalizeLayoutState(
       typeof parsed.sidebarVisible === 'boolean'
         ? parsed.sidebarVisible
         : UI_DEFAULTS.sidebarVisible,
-    agentPanelVisible:
-      typeof parsed.agentPanelVisible === 'boolean'
-        ? parsed.agentPanelVisible
-        : agentVisibleFromMode(mode),
-    sidebarWidth:
-      typeof parsed.sidebarWidth === 'number' ? parsed.sidebarWidth : UI_DEFAULTS.sidebarWidth,
-    agentPanelWidth:
-      typeof parsed.agentPanelWidth === 'number'
-        ? parsed.agentPanelWidth
-        : UI_DEFAULTS.agentPanelWidth,
-    agentPanelMode: mode,
-    agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(
-      parsed.agentPanelLastVisibleMode,
-      mode,
+    agentPanelVisible: agentVisibleFromMode(mode),
+    sidebarWidth: normalizeWidth(
+      parsed.sidebarWidth,
+      MIN_SIDEBAR_WIDTH,
+      MAX_SIDEBAR_WIDTH,
+      UI_DEFAULTS.sidebarWidth,
     ),
+    agentPanelWidth: normalizeWidth(
+      parsed.agentPanelWidth,
+      MIN_AGENT_PANEL_WIDTH,
+      MAX_AGENT_PANEL_WIDTH,
+      UI_DEFAULTS.agentPanelWidth,
+    ),
+    agentPanelMode: mode,
+    agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(parsed.agentPanelLastVisibleMode),
     agentPanelModeSource: normalizeStoredAgentPanelModeSource(
       parsed.agentPanelModeSource,
       parsed.agentPanelVisible,
@@ -232,9 +167,108 @@ function normalizeLayoutState(
   }
 }
 
+export interface CapturedWorkspaceLayout {
+  readonly target: WorkspaceTarget
+  readonly ownerKey: string | null
+  readonly snapshot: Readonly<WorkspaceLayoutSnapshot>
+}
+
+function captureLayout(state: WorkspaceLayoutSnapshot): CapturedWorkspaceLayout {
+  const target = captureActiveWorkspaceTarget()
+  return Object.freeze({
+    target: Object.freeze({ ...target, ref: Object.freeze({ ...target.ref }) }),
+    ownerKey: getWorkspaceStateOwnerKey(),
+    snapshot: Object.freeze(normalizeWorkspaceLayout(state)),
+  })
+}
+
+/** 唯一生产捕获入口：target 与当前 UI 在同一个同步调用栈形成。 */
+export function captureWorkspaceLayout(): CapturedWorkspaceLayout {
+  return captureLayout(useUIStore.getState())
+}
+
+/** 异步写入只消费捕获对象；不再读取当前工作空间或 UI。 */
+export async function persistCapturedWorkspaceLayout(
+  captured: CapturedWorkspaceLayout,
+): Promise<void> {
+  try {
+    if (isWorkspaceStateRestoring()) throw new Error('布局恢复期间不能写入')
+    if (typeof window === 'undefined' || !window.cclinkStudio?.workspaceState?.setSection) {
+      throw new Error('布局持久化不可用')
+    }
+    await persistWorkspaceSectionNow(
+      'layout',
+      captured.snapshot,
+      workspaceRefKey(captured.target.ref),
+      captured.ownerKey,
+    )
+  } catch (error) {
+    recordRendererDiagnosticLog('warn', [
+      '[WorkspaceLayout] persistence-failed',
+      {
+        workspaceKind: captured.target.ref.kind,
+        generation: captured.target.generation,
+        ownerScoped: captured.ownerKey !== null,
+        code: error instanceof WorkspaceStatePersistenceError ? error.code : 'layout_write_failed',
+      },
+    ])
+    throw error
+  }
+}
+
+/** 在读取启动快照前捕获目标；迁移仅在整个 restore 成功且 guard 结束后完成。 */
+export function createWorkspaceLayoutRestore(): {
+  hydrate: (sections: Record<string, unknown>) => void
+  complete: () => Promise<void>
+} {
+  const target = captureActiveWorkspaceTarget()
+  const ownerKey = getWorkspaceStateOwnerKey()
+  const isCurrent = (): boolean =>
+    isWorkspaceTargetCurrent(target) && ownerKey === getWorkspaceStateOwnerKey()
+  let legacyRaw: string | null = null
+  let migrate: CapturedWorkspaceLayout | null = null
+  let hydrated = false
+  return {
+    hydrate: (sections) => {
+      if (!isCurrent()) return
+      const hasLayout = Object.prototype.hasOwnProperty.call(sections, 'layout')
+      let value = sections.layout
+      try {
+        legacyRaw =
+          typeof localStorage === 'undefined' ? null : localStorage.getItem(UI_STORAGE_KEY)
+        if (!hasLayout && legacyRaw) {
+          const legacy: unknown = JSON.parse(legacyRaw)
+          if (legacy && typeof legacy === 'object' && !Array.isArray(legacy)) {
+            value = legacy
+            migrate = Object.freeze({
+              target,
+              ownerKey,
+              snapshot: Object.freeze(normalizeWorkspaceLayout(legacy)),
+            })
+          }
+        }
+      } catch {
+        // 损坏的旧值不影响默认布局，也不删除兼容输入。
+        legacyRaw = null
+      }
+      useUIStore.getState().hydrateFromWorkspaceState(value)
+      hydrated = hasLayout || migrate !== null
+    },
+    complete: async () => {
+      if (!hydrated || !legacyRaw || !isCurrent()) return
+      if (migrate) await persistCapturedWorkspaceLayout(migrate)
+      try {
+        if (localStorage.getItem(UI_STORAGE_KEY) === legacyRaw)
+          localStorage.removeItem(UI_STORAGE_KEY)
+      } catch {
+        // 删除失败可在下次启动重试；WorkspaceState 永远优先。
+      }
+    },
+  }
+}
+
 export const useUIStore = create<UIState>((set) => ({
   ...UI_DEFAULTS,
-  ...loadStoredUI(),
 
   setActivePanel: (panel) =>
     set((state) => {
@@ -310,15 +344,36 @@ export const useUIStore = create<UIState>((set) => ({
       agentPanelModeSource: 'system',
       agentPanelWidth: UI_DEFAULTS.agentPanelWidth,
     }),
-  setSidebarWidth: (width) => set({ sidebarWidth: width }),
-  setAgentPanelWidth: (width) => set({ agentPanelWidth: width, agentPanelModeSource: 'user' }),
+  setSidebarWidth: (width) =>
+    set({
+      sidebarWidth: normalizeWidth(
+        width,
+        MIN_SIDEBAR_WIDTH,
+        MAX_SIDEBAR_WIDTH,
+        UI_DEFAULTS.sidebarWidth,
+      ),
+    }),
+  setAgentPanelWidth: (width) =>
+    set({
+      agentPanelWidth: normalizeWidth(
+        width,
+        MIN_AGENT_PANEL_WIDTH,
+        MAX_AGENT_PANEL_WIDTH,
+        UI_DEFAULTS.agentPanelWidth,
+      ),
+      agentPanelModeSource: 'user',
+    }),
   hydrateFromWorkspaceState: (value) => {
-    const next = normalizeLayoutState(value)
-    if (Object.keys(next).length === 0) return
-    set(next)
+    set(normalizeWorkspaceLayout(value))
   },
 }))
 
 useUIStore.subscribe((state) => {
-  saveStoredUI(state)
+  if (
+    isWorkspaceStateRestoring() ||
+    typeof window === 'undefined' ||
+    !window.cclinkStudio?.workspaceState?.setSection
+  )
+    return
+  void persistCapturedWorkspaceLayout(captureLayout(state)).catch(() => {})
 })

@@ -1,3 +1,4 @@
+import { createCompanyWorkspaceCommands } from '../features/company-workspace/company-workspace-commands'
 import { useEffect } from 'react'
 import { useCommandStore } from '../stores/command-store'
 import { useUIStore } from '../stores/ui-store'
@@ -39,6 +40,7 @@ export function useRegisterCommands(): void {
       ...createWorkbenchCommands(),
       ...createMarkdownCommands(),
       ...createWorkspaceCommands(),
+      ...createCompanyWorkspaceCommands(),
     ])
   }, [registerCommands, toggleSidebar, toggleAgentPanel, setAgentPanelMode, resetAgentLayout])
 }

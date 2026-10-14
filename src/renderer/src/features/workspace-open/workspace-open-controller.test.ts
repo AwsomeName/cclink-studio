@@ -6,13 +6,20 @@ import { useBrowserStore } from '../../stores/browser-store'
 import { useBrowserTaskStore } from '../../stores/browser-task-store'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useEditorStore } from '../../stores/editor-store'
+import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
 import { useTabStore } from '../../stores/tab-store'
-import { useUIStore } from '../../stores/ui-store'
+import { normalizeWorkspaceLayout, useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { setWorkspaceStateOwnerKey, setWorkspaceStatePath } from '../../utils/workspace-state'
+import {
+  beginWorkspaceStateRestore,
+  endWorkspaceStateRestore,
+  flushPendingWorkspaceStateWrites,
+  setWorkspaceStateOwnerKey,
+  setWorkspaceStatePath,
+} from '../../utils/workspace-state'
 import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
-import { openWorkspaceRef } from './workspace-open-controller'
+import { openWorkspaceRef, pickLocalWorkspace } from './workspace-open-controller'
 
 function snapshot(
   workspaceKey: string,
@@ -56,6 +63,15 @@ beforeEach(() => {
         ),
         setActiveLocalWorkspace: vi.fn(async () => ({ success: true })),
         setSection: vi.fn(async () => ({ success: true })),
+        resolveLocalWorkspace: vi.fn(async (path: string) => ({
+          valid: true,
+          workspacePath: path,
+        })),
+      },
+      fs: { readDir: vi.fn(async () => []), watchDir: vi.fn(async () => vi.fn()) },
+      settings: { set: vi.fn(async () => ({ success: true })) },
+      dialog: {
+        showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: ['/workspace/picked'] })),
       },
       browser: { reconcileViews: vi.fn(async () => undefined) },
       terminal: { listSessions: vi.fn(async () => []) },
@@ -76,6 +92,7 @@ beforeEach(() => {
   useBrowserTaskStore.setState(useBrowserTaskStore.getInitialState(), true)
   useCclinkStore.setState(useCclinkStore.getInitialState(), true)
   useEditorStore.setState(useEditorStore.getInitialState(), true)
+  useFsStore.setState(useFsStore.getInitialState(), true)
   useOpenProjectsStore.setState(useOpenProjectsStore.getInitialState(), true)
   useTabStore.setState(useTabStore.getInitialState(), true)
   useUIStore.setState(useUIStore.getInitialState(), true)
@@ -91,10 +108,112 @@ afterEach(() => {
 })
 
 describe('workspace-open-controller', () => {
+  it('keeps the latest width when the picker reopens the current workspace during a pending layout write', async () => {
+    await flushPendingWorkspaceStateWrites()
+    let savedLayout = normalizeWorkspaceLayout({ sidebarWidth: 200, agentPanelModeSource: 'user' })
+    beginWorkspaceStateRestore()
+    useUIStore.getState().hydrateFromWorkspaceState(savedLayout)
+    endWorkspaceStateRestore()
+    useFsStore.setState({ workspacePath: localRef.path })
+    vi.mocked(window.cclinkStudio.dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: [localRef.path],
+    })
+    vi.mocked(window.cclinkStudio.workspaceState.get).mockImplementation(async () =>
+      snapshot(localRef.path, { layout: structuredClone(savedLayout) }),
+    )
+    let releaseWrite: (() => void) | undefined
+    let firstLayoutWrite = true
+    vi.mocked(window.cclinkStudio.workspaceState.setSection).mockImplementation(
+      async (_key, section, value) => {
+        if (section === 'layout') {
+          if (firstLayoutWrite) {
+            firstLayoutWrite = false
+            await new Promise<void>((resolve) => {
+              releaseWrite = resolve
+            })
+          }
+          savedLayout = normalizeWorkspaceLayout(value)
+        }
+        return { success: true }
+      },
+    )
+    useUIStore.getState().setSidebarWidth(300)
+    await vi.waitFor(() => expect(releaseWrite).toBeTypeOf('function'))
+    try {
+      await expect(pickLocalWorkspace()).resolves.toBe(true)
+      // 磁盘仍是 200；打开完成后释放 300 写入，再执行一次会保存整个布局的真实 UI 操作。
+      expect(savedLayout.sidebarWidth).toBe(200)
+      releaseWrite!()
+      await flushPendingWorkspaceStateWrites()
+      expect(savedLayout.sidebarWidth).toBe(300)
+      useUIStore.getState().hideSidebar()
+      await flushPendingWorkspaceStateWrites()
+      expect(useUIStore.getState()).toMatchObject({ sidebarWidth: 300, sidebarVisible: false })
+      expect(savedLayout).toMatchObject({ sidebarWidth: 300, sidebarVisible: false })
+      expect(useFsStore.getState()).toMatchObject({
+        workspacePath: localRef.path,
+        picking: false,
+        loading: false,
+        switchingPath: null,
+      })
+    } finally {
+      releaseWrite!()
+      await flushPendingWorkspaceStateWrites()
+    }
+  })
+
+  it('preserves the restored layout after the complete local picker flow and persistence drain', async () => {
+    const layout = {
+      activePanel: 'browser',
+      sidebarVisible: false,
+      sidebarWidth: 420,
+      agentPanelWidth: 600,
+      agentPanelMode: 'hidden',
+      agentPanelVisible: false,
+      agentPanelLastVisibleMode: 'right',
+      agentPanelModeSource: 'user',
+    }
+    const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
+    getSnapshot.mockResolvedValueOnce(snapshot('/workspace/picked', { layout }))
+    const setSection = window.cclinkStudio.workspaceState.setSection as ReturnType<typeof vi.fn>
+    await expect(pickLocalWorkspace()).resolves.toBe(true)
+    await flushPendingWorkspaceStateWrites()
+    expect(useFsStore.getState()).toMatchObject({
+      workspacePath: '/workspace/picked',
+      picking: false,
+      loading: false,
+      switchingPath: null,
+    })
+    expect(useUIStore.getState()).toMatchObject(layout)
+    expect(
+      setSection.mock.calls.filter(
+        ([key, section]) => key === '/workspace/picked' && section === 'layout',
+      ),
+    ).toEqual([])
+    // 完整流程之后的真实用户修改才产生目标 layout 写入。
+    useUIStore.getState().setAgentPanelWidth(620)
+    await flushPendingWorkspaceStateWrites()
+    expect(setSection).toHaveBeenCalledWith(
+      '/workspace/picked',
+      'layout',
+      { ...layout, agentPanelWidth: 620 },
+      'local:owner',
+    )
+  })
+
   it('commits a confirmed remote ref without changing the restored tab or current layout', async () => {
     const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
     getSnapshot.mockResolvedValueOnce(
       snapshot('remote:agent-1:workspace-a', {
+        layout: {
+          activePanel: 'browser',
+          sidebarVisible: false,
+          sidebarWidth: 312,
+          agentPanelMode: 'hidden',
+          agentPanelVisible: false,
+          agentPanelModeSource: 'user',
+        },
         tabs: {
           tabs: [
             {

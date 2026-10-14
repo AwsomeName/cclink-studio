@@ -39,17 +39,21 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : '发生未知错误'
 }
 
-export function CompanyAccountsWorkbench(): React.ReactElement {
+export function CompanyAccountsWorkbench({
+  initialMonth,
+  initialProjectId,
+}: { initialMonth?: string; initialProjectId?: string } = {}): React.ReactElement {
   const workspaceGeneration = useWorkspaceStore((state) => state.generation)
   const openTab = useTabStore((state) => state.openTab)
   const activeTabId = useTabStore((state) => state.activeTabId)
   const closeTab = useTabStore((state) => state.closeTab)
-  const [month, setMonth] = useState(currentMonth)
+  const [month, setMonth] = useState(initialMonth ?? currentMonth)
   const [snapshot, setSnapshot] = useState<CompanyAccountsSnapshot | null>(null)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null)
   const [draft, setDraft] = useState<CompanyAccountsUpdateRecordInput | null>(null)
   const [view, setView] = useState<View>('review')
-  const [filter, setFilter] = useState<RecordFilter>('pending')
+  const [projectFilter, setProjectFilter] = useState(initialProjectId)
+  const [filter, setFilter] = useState<RecordFilter>(initialProjectId ? 'all' : 'pending')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
   const [newProjectName, setNewProjectName] = useState('')
@@ -69,7 +73,9 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
   useEffect(() => {
     if (!snapshot) return
     const visibleRecords = snapshot.records.filter(
-      (record) => filter === 'all' || record.status === filter,
+      (record) =>
+        (!projectFilter || record.projectId === projectFilter) &&
+        (filter === 'all' || record.status === filter),
     )
     if (visibleRecords.some((record) => record.id === selectedRecordId)) return
     setSelectedRecordId(visibleRecords[0]?.id ?? null)
@@ -446,7 +452,9 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
   }
 
   const filteredRecords = snapshot.records.filter(
-    (record) => filter === 'all' || record.status === filter,
+    (record) =>
+      (!projectFilter || record.projectId === projectFilter) &&
+      (filter === 'all' || record.status === filter),
   )
   const currency = snapshot.settings.defaultCurrency
 
@@ -511,7 +519,17 @@ export function CompanyAccountsWorkbench(): React.ReactElement {
         <div className="company-accounts-review">
           <section className="company-accounts-list">
             <div className="company-accounts-list-toolbar">
-              <strong>{month} 流水</strong>
+              {projectFilter && (
+                <button type="button" onClick={() => setProjectFilter(undefined)}>
+                  查看全部流水
+                </button>
+              )}
+              <strong>
+                {month} 流水
+                {projectFilter
+                  ? ` · ${snapshot.projects.find((item) => item.id === projectFilter)?.name ?? '关联项目'}`
+                  : ''}
+              </strong>
               <select
                 value={filter}
                 onChange={(event) => setFilter(event.target.value as RecordFilter)}

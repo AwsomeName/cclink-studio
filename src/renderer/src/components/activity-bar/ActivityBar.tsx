@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useUIStore, useTabStore } from '../../stores'
+import { useUIStore, useTabStore, useCommandStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
 import {
   ActivityAffairsIcon,
@@ -47,6 +47,12 @@ const MAIN_ICON_GROUPS: Array<{
       ...(PROJECT_ACTIVITY_ENABLED
         ? [{ id: 'projects' as const, Icon: ActivityProjectsIcon, label: '项目' }]
         : []),
+      {
+        id: 'company-workspace',
+        Icon: ActivityCompanyAccountsIcon,
+        label: '公司经营',
+        shortLabel: '公司',
+      },
       { id: 'files', Icon: ActivityFilesIcon, label: '文件' },
       { id: 'sessions', Icon: ActivitySessionsIcon, label: '会话' },
       { id: 'browser', Icon: ActivityBrowserIcon, label: '浏览器' },
@@ -123,6 +129,10 @@ export function ActivityBar(): React.ReactElement {
   }, [])
 
   const handleClick = (id: ActivityPanel): void => {
+    if (id === 'company-workspace') {
+      void useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' })
+      return
+    }
     setActivePanel(id)
     if (id === 'browser') setAgentPanelMode('right', 'user')
     if (id === 'company-accounts') {

@@ -1,4 +1,4 @@
-# CCLink Studio 开源版发布手册
+# CCLink Studio 发布手册
 
 > 适用范围：`AwsomeName/cclink-studio` 唯一正式桌面 App 的 Apple Silicon Developer ID
 > 直接分发版。不支持 Intel/x64；迁移期 `cclink-dev` 不拥有第二套桌面正式 Release。
@@ -65,7 +65,7 @@ credential helper，不配置成仓库文件或环境变量。
 
 ## 发布前
 
-1. 确认当前目录是开源仓库，不是 `cclink-dev` 商业版工作区。
+1. 确认当前目录是 `cclink-studio` 仓库，不是 `cclink-dev` 迁移期运维工作区。
 2. 确认 `main` 与 `origin/main` 一致，且该源码提交的普通 CI 已触发。
 3. 确认 `package.json` 没有未提交改动；其他本地改动可以保留，但不会进入发布。
 4. 确认目标版本高于当前稳定版本，且本地和远端不存在同名 Tag。
@@ -101,7 +101,7 @@ release vX.Y.Z
 2. 仅更新 `package.json.version`。
 3. 使用 `git commit --only package.json` 创建 `chore: prepare vX.Y.Z` 提交。
 4. 创建 annotated `vX.Y.Z` Tag。
-5. 在独立临时 worktree 中执行 OSS 发布预检。
+5. 在独立临时 worktree 中执行 Studio 发布预检。
 6. 若提供 `--local-artifacts`，在临时 worktree 中额外生成本地 ad-hoc DMG，
    再复制到当前仓库 `dist/`。
 7. 原子推送 `main` 和 Tag。
@@ -207,7 +207,7 @@ pnpm release -- --dispatch-only vX.Y.Z
 - 禁止把 `pnpm package:local` 产物当正式安装包上传。
 - 禁止绕过源码 CI 的 `verify`/smoke，以及正式包的签名、公证、staple、Gatekeeper
   或 Manifest 检查。
-- 禁止让开源工作流调用 `cclink-dev` 或共享商业版 Release 状态。
+- 禁止让 Studio 工作流调用 `cclink-dev` 遗留 overlay 或共享其 Release 状态。
 
 ## 完成标准
 

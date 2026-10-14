@@ -1,0 +1,1560 @@
+<div id="company-workspace-design">
+  <div
+    class="viz-carousel"
+    aria-label="公司工作空间布局方案"
+    data-previous-label="上一方案"
+    data-next-label="下一方案"
+  >
+    <section data-variant="经营导航" aria-label="经营导航方案">
+      <div
+        id="cw-navigation"
+        class="cw-product"
+        data-layout="navigation"
+        aria-label="公司工作空间经营导航"
+      ></div>
+    </section>
+    <section data-variant="经营收件箱" aria-label="经营收件箱方案" hidden>
+      <div
+        id="cw-inbox"
+        class="cw-product"
+        data-layout="inbox"
+        aria-label="公司工作空间经营收件箱"
+      ></div>
+    </section>
+  </div>
+</div>
+<style>
+  #company-workspace-design .cw-product {
+    --cw-bg: light-dark(#ffffff, #1f1f1f);
+    --cw-side: light-dark(#f5f5f5, #252526);
+    --cw-top: light-dark(#eeeeee, #2b2b2b);
+    --cw-text: light-dark(#252525, #dedede);
+    --cw-muted: light-dark(#626262, #a8a8ad);
+    --cw-line: light-dark(#dcdcdc, #3c3c3c);
+    --cw-selected: light-dark(#e5eff7, #18384d);
+    --cw-blue: light-dark(#0967a6, #79b8e8);
+    --cw-good: light-dark(#25734b, #8ac9a5);
+    --cw-warn: light-dark(#855a12, #e7bf77);
+    --cw-space: 16px;
+    font:
+      400 13px/1.6 -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      'PingFang SC',
+      sans-serif;
+    color: var(--cw-text);
+    background: var(--cw-bg);
+    border: 1px solid var(--cw-line);
+    border-radius: 7px;
+    min-height: 840px;
+    overflow-wrap: anywhere;
+  }
+  #company-workspace-design .cw-product * {
+    box-sizing: border-box;
+  }
+  #company-workspace-design .cw-product button,
+  #company-workspace-design .cw-product input,
+  #company-workspace-design .cw-product select,
+  #company-workspace-design .cw-product textarea {
+    font: inherit;
+    color: inherit;
+  }
+  #company-workspace-design .cw-product button {
+    border: 1px solid var(--cw-line);
+    background: var(--cw-side);
+    border-radius: 4px;
+    padding: 5px 10px;
+    text-align: center;
+  }
+  #company-workspace-design .cw-product button:hover:not(:disabled) {
+    background: var(--cw-selected);
+  }
+  #company-workspace-design .cw-product button:disabled {
+    opacity: 0.48;
+  }
+  #company-workspace-design .cw-product .cw-main-action {
+    background: var(--cw-selected);
+    border-color: var(--cw-blue);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-product .cw-link {
+    border: 0;
+    padding: 1px 0;
+    background: transparent;
+    color: var(--cw-blue);
+    text-align: left;
+  }
+  #company-workspace-design .cw-product .cw-link:hover {
+    text-decoration: underline;
+    background: transparent;
+  }
+  #company-workspace-design .cw-product input,
+  #company-workspace-design .cw-product textarea,
+  #company-workspace-design .cw-product select {
+    max-width: 100%;
+    width: 100%;
+    background: var(--cw-bg);
+    border: 1px solid var(--cw-line);
+    border-radius: 3px;
+    padding: 6px 8px;
+  }
+  #company-workspace-design .cw-product textarea {
+    resize: vertical;
+    min-height: 64px;
+  }
+  #company-workspace-design .cw-product h1 {
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.4;
+    margin: 0;
+  }
+  #company-workspace-design .cw-product h2 {
+    font-size: 15px;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+  #company-workspace-design .cw-product h3 {
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 0 5px;
+  }
+  #company-workspace-design .cw-product p {
+    margin: 4px 0 10px;
+  }
+  #company-workspace-design .cw-product strong {
+    font-weight: 500;
+  }
+  #company-workspace-design .cw-muted {
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-small {
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #company-workspace-design .cw-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  #company-workspace-design .cw-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 15px;
+    background: var(--cw-top);
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-brand {
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-workspace {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #company-workspace-design .cw-workspace i {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-body {
+    display: grid;
+    grid-template-columns: 44px 145px minmax(0, 1fr) 215px;
+    min-height: 745px;
+  }
+  #company-workspace-design .cw-rail {
+    background: var(--cw-side);
+    border-right: 1px solid var(--cw-line);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  #company-workspace-design .cw-rail div {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-rail div:first-child {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-sidebar {
+    background: var(--cw-side);
+    padding: 16px 10px;
+    border-right: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-sidebar-title {
+    font-weight: 500;
+    padding: 0 7px;
+    margin-bottom: 14px;
+  }
+  #company-workspace-design .cw-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #company-workspace-design .cw-nav button {
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    padding: 7px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+  }
+  #company-workspace-design .cw-nav button[aria-current='page'] {
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-side-bottom {
+    padding: 18px 7px 0;
+    margin-top: 20px;
+    border-top: 1px solid var(--cw-line);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-main {
+    padding: calc(var(--cw-space) + 3px);
+    min-width: 0;
+  }
+  #company-workspace-design .cw-pagehead {
+    margin-bottom: 17px;
+  }
+  #company-workspace-design .cw-pagehead p {
+    margin-top: 4px;
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-kicker {
+    color: var(--cw-muted);
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  #company-workspace-design .cw-section {
+    margin: 22px 0;
+  }
+  #company-workspace-design .cw-item {
+    border-top: 1px solid var(--cw-line);
+    padding: var(--cw-space) 0;
+  }
+  #company-workspace-design .cw-item:last-child {
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-item p {
+    margin: 3px 0 6px;
+  }
+  #company-workspace-design .cw-status {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--cw-muted);
+    gap: 5px;
+  }
+  #company-workspace-design .cw-status::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  #company-workspace-design .cw-status[data-tone='warning'] {
+    color: var(--cw-warn);
+  }
+  #company-workspace-design .cw-status[data-tone='good'] {
+    color: var(--cw-good);
+  }
+  #company-workspace-design .cw-status[data-tone='active'] {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--cw-line);
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-value {
+    font-size: 20px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  #company-workspace-design .cw-localnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 13px;
+    margin: 14px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-localnav button {
+    padding: 6px 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+  }
+  #company-workspace-design .cw-localnav button[aria-pressed='true'] {
+    border-bottom-color: var(--cw-blue);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-info {
+    background: var(--cw-side);
+    padding: 12px;
+    margin: 12px 0;
+    border-radius: 4px;
+  }
+  #company-workspace-design .cw-evidence {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 6px 0;
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-evidence i {
+    flex-shrink: 0;
+  }
+  #company-workspace-design .cw-agent {
+    border-left: 1px solid var(--cw-line);
+    background: var(--cw-side);
+    padding: 16px 13px;
+    min-width: 0;
+  }
+  #company-workspace-design .cw-agent-head {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+  #company-workspace-design .cw-agent-context {
+    font-size: 12px;
+    color: var(--cw-muted);
+    border-bottom: 1px solid var(--cw-line);
+    padding-bottom: 12px;
+  }
+  #company-workspace-design .cw-agent-message {
+    margin: 18px 0;
+  }
+  #company-workspace-design .cw-agent-source {
+    font-size: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-agent-input {
+    margin-top: 18px;
+  }
+  #company-workspace-design .cw-agent-input label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-footer {
+    padding: 8px 12px;
+    background: var(--cw-top);
+    color: var(--cw-muted);
+    font-size: 11px;
+    border-top: 1px solid var(--cw-line);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  #company-workspace-design .cw-product table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-product td,
+  #company-workspace-design .cw-product th {
+    text-align: left;
+    font-weight: 400;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--cw-line);
+    vertical-align: top;
+  }
+  #company-workspace-design .cw-product td:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  #company-workspace-design .cw-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  #company-workspace-design .cw-form label {
+    display: block;
+  }
+  #company-workspace-design .cw-form span {
+    display: block;
+    color: var(--cw-muted);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  #company-workspace-design .cw-steps {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+  #company-workspace-design .cw-steps li {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-step-number {
+    color: var(--cw-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  #company-workspace-design .cw-step-detail {
+    grid-column: 2 / -1;
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-toast {
+    padding: 8px 10px;
+    margin-bottom: 14px;
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+    border-radius: 3px;
+  }
+  #company-workspace-design .cw-product[data-layout='inbox'] .cw-body {
+    grid-template-columns: 44px minmax(0, 1fr) 245px;
+  }
+  #company-workspace-design .cw-product[data-layout='inbox'] .cw-sidebar {
+    display: none;
+  }
+  #company-workspace-design .cw-topnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 17px;
+    border-bottom: 1px solid var(--cw-line);
+    padding-bottom: 10px;
+  }
+  #company-workspace-design .cw-topnav button {
+    border: 0;
+    background: transparent;
+    padding: 4px 7px;
+  }
+  #company-workspace-design .cw-topnav button[aria-current='page'] {
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-inbox-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 22px;
+  }
+  #company-workspace-design .cw-product[data-agent='hidden'] .cw-agent {
+    display: none;
+  }
+  #company-workspace-design .cw-product[data-agent='hidden'] .cw-body {
+    grid-template-columns: 44px 145px minmax(0, 1fr);
+  }
+  #company-workspace-design .cw-product[data-layout='inbox'][data-agent='hidden'] .cw-body {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  @media (max-width: 850px) {
+    #company-workspace-design .cw-body {
+      grid-template-columns: 38px 130px minmax(0, 1fr);
+    }
+    #company-workspace-design .cw-agent {
+      grid-column: 2 / -1;
+      border-left: 0;
+      border-top: 1px solid var(--cw-line);
+    }
+    #company-workspace-design .cw-agent-sources {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    #company-workspace-design .cw-product[data-layout='inbox'] .cw-body {
+      grid-template-columns: 38px minmax(0, 1fr);
+    }
+    #company-workspace-design .cw-product {
+      min-height: 1200px;
+    }
+    #company-workspace-design .cw-agent-input {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 10px;
+    }
+    #company-workspace-design .cw-agent-input label {
+      flex: 1 1 200px;
+    }
+    #company-workspace-design .cw-agent-input textarea {
+      min-height: 50px;
+    }
+  }
+  @media (max-width: 570px) {
+    #company-workspace-design .cw-rail {
+      display: none;
+    }
+    #company-workspace-design .cw-body,
+    #company-workspace-design .cw-product[data-layout='inbox'] .cw-body,
+    #company-workspace-design .cw-product[data-agent='hidden'] .cw-body,
+    #company-workspace-design .cw-product[data-layout='inbox'][data-agent='hidden'] .cw-body {
+      display: block;
+      min-height: 0;
+    }
+    #company-workspace-design .cw-sidebar {
+      border-right: 0;
+      border-bottom: 1px solid var(--cw-line);
+      padding: 10px;
+    }
+    #company-workspace-design .cw-sidebar-title,
+    #company-workspace-design .cw-side-bottom {
+      display: none;
+    }
+    #company-workspace-design .cw-nav {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    #company-workspace-design .cw-nav button {
+      padding: 5px 7px;
+    }
+    #company-workspace-design .cw-nav button i {
+      display: none;
+    }
+    #company-workspace-design .cw-product {
+      min-height: 1490px;
+    }
+    #company-workspace-design .cw-main {
+      padding: 16px 12px;
+    }
+    #company-workspace-design .cw-facts {
+      gap: 7px;
+    }
+    #company-workspace-design .cw-value {
+      font-size: 17px;
+    }
+    #company-workspace-design .cw-inbox-columns {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+    #company-workspace-design .cw-agent {
+      padding: 14px 12px;
+    }
+  }
+  @media (pointer: coarse) {
+    #company-workspace-design .cw-product button {
+      min-height: 44px;
+    }
+    #company-workspace-design .cw-product input,
+    #company-workspace-design .cw-product textarea,
+    #company-workspace-design .cw-product select {
+      font-size: 16px;
+    }
+  }
+</style>
+<script>
+  ;(function () {
+    const root = document.getElementById('company-workspace-design')
+    const pages = [
+      ['overview', '公司总览', 'layout-dashboard'],
+      ['projects', '业务项目', 'folder-kanban'],
+      ['finance', '财务', 'receipt-text'],
+      ['operations', '运营', 'send'],
+      ['knowledge', '资料与会话', 'files'],
+    ]
+    const defaults = {
+      page: 'overview',
+      projectTab: 'work',
+      financeTab: 'review',
+      knowledgeTab: 'files',
+      taskPhase: 'blocked',
+      linkedTrial: false,
+      draftOpened: false,
+      receiptOpened: false,
+      billConfirmed: false,
+      publishing: 'idle',
+      selectedStep: '',
+      showAgent: true,
+      toast: '',
+      userRequest: '',
+      overlay: '',
+    }
+    const initial = window.openai && window.openai.widgetState
+    const privateInitial = initial && initial.privateContent
+    function compatible(saved) {
+      const next = Object.assign({}, defaults)
+      if (!saved || typeof saved !== 'object') return next
+      ;[
+        'page',
+        'projectTab',
+        'financeTab',
+        'knowledgeTab',
+        'taskPhase',
+        'publishing',
+        'selectedStep',
+        'userRequest',
+      ].forEach(function (k) {
+        if (typeof saved[k] === 'string') next[k] = saved[k]
+      })
+      ;['linkedTrial', 'draftOpened', 'receiptOpened', 'billConfirmed', 'showAgent'].forEach(
+        function (k) {
+          if (typeof saved[k] === 'boolean') next[k] = saved[k]
+        },
+      )
+      if (
+        !['overview', 'projects', 'project', 'task', 'finance', 'operations', 'knowledge'].includes(
+          next.page,
+        )
+      )
+        next.page = 'overview'
+      if (!['blocked', 'ready', 'plan', 'draft', 'accepted'].includes(next.taskPhase))
+        next.taskPhase = 'blocked'
+      if (!['idle', 'plan', 'unknown', 'verified'].includes(next.publishing))
+        next.publishing = 'idle'
+      if (!next.linkedTrial) next.taskPhase = 'blocked'
+      if (next.publishing !== 'idle' && next.taskPhase !== 'accepted') next.publishing = 'idle'
+      return next
+    }
+    const variants = ['cw-navigation', 'cw-inbox'].map(function (id) {
+      return {
+        el: document.getElementById(id),
+        state: compatible(privateInitial && privateInitial[id]),
+        design: { density: '舒适' },
+      }
+    })
+    function esc(value) {
+      return String(value).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      })
+    }
+    function icon(name) {
+      return '<i data-lucide="' + name + '" aria-hidden="true"></i>'
+    }
+    function action(label, cmd, primary, disabled) {
+      return (
+        '<button type="button" data-action="' +
+        cmd +
+        '"' +
+        (primary ? ' class="cw-main-action"' : '') +
+        (disabled ? ' disabled' : '') +
+        '>' +
+        label +
+        '</button>'
+      )
+    }
+    function link(label, cmd) {
+      return (
+        '<button type="button" class="cw-link" data-action="' + cmd + '">' + label + '</button>'
+      )
+    }
+    function status(label, tone) {
+      return '<span class="cw-status" data-tone="' + (tone || '') + '">' + label + '</span>'
+    }
+    function taskStatus(s) {
+      return {
+        blocked: '需要补资料',
+        ready: '待开始',
+        plan: '计划待接受',
+        draft: '待验收',
+        accepted: '已验收',
+      }[s.taskPhase]
+    }
+    function publicationStatus(s) {
+      return {
+        idle: '待发布',
+        plan: '范围待确认',
+        unknown: '提交结果未知',
+        verified: '已发布 · 结果已核验',
+      }[s.publishing]
+    }
+    function heading(kicker, title, subtitle) {
+      return (
+        '<div class="cw-pagehead"><div class="cw-kicker">' +
+        kicker +
+        '</div><h1>' +
+        title +
+        '</h1><p>' +
+        subtitle +
+        '</p></div>'
+      )
+    }
+    function facts(s) {
+      return (
+        '<div class="cw-facts"><div><span class="cw-muted cw-small">9 月已确认收入</span><span class="cw-value">¥3,000.00</span></div><div><span class="cw-muted cw-small">9 月已确认支出</span><span class="cw-value">¥' +
+        (s.billConfirmed ? '1,820.40' : '1,640.40') +
+        '</span></div><div><span class="cw-muted cw-small">净流入</span><span class="cw-value">¥' +
+        (s.billConfirmed ? '1,179.60' : '1,359.60') +
+        '</span></div></div>'
+      )
+    }
+    function needs(s) {
+      let html = ''
+      if (s.taskPhase !== 'accepted')
+        html +=
+          '<article class="cw-item"><div class="cw-row"><strong>产品介绍稿：' +
+          (s.linkedTrial ? '下一步已可推进' : '缺少试戴记录') +
+          '</strong>' +
+          status(taskStatus(s), s.taskPhase === 'draft' ? 'active' : 'warning') +
+          '</div><p class="cw-muted cw-small">AR 眼镜一代 · ' +
+          (s.linkedTrial
+            ? '已关联规格与试戴资料，完成条件是稿件保存并由你验收。'
+            : '试戴体验需要原始材料；当前只关联了产品规格。') +
+          '</p>' +
+          link(s.taskPhase === 'draft' ? '查看产物并验收 →' : '查看卡点与下一步 →', 'task') +
+          '</article>'
+      if (!s.billConfirmed)
+        html +=
+          '<article class="cw-item"><div class="cw-row"><strong>测试服务支出 ¥180.00</strong>' +
+          status('待核对', 'warning') +
+          '</div><p class="cw-muted cw-small">9 月经营账 · 凭证已关联，尚未人工确认；未计入上方汇总。</p>' +
+          link('打开流水与原件 →', 'finance') +
+          '</article>'
+      if (s.publishing === 'unknown')
+        html +=
+          '<article class="cw-item"><div class="cw-row"><strong>产品介绍文章：提交结果未知</strong>' +
+          status('仅允许核验', 'warning') +
+          '</div><p class="cw-muted cw-small">需要检查平台结果；当前不允许重复发布。</p>' +
+          link('检查发布结果 →', 'operations') +
+          '</article>'
+      if (!html)
+        html =
+          '<article class="cw-item">' +
+          status('当前没有需要你处理的事项', 'good') +
+          '<p class="cw-muted cw-small">已有成果与发布回执保留在对应业务中。</p></article>'
+      return html
+    }
+    function projectSummary(s) {
+      return (
+        '<article class="cw-item"><div class="cw-row">' +
+        link('AR 眼镜一代', 'project') +
+        status(
+          s.taskPhase === 'accepted' ? '稿件已验收' : '正在推进',
+          s.taskPhase === 'accepted' ? 'good' : 'active',
+        ) +
+        '</div><p class="cw-muted cw-small">目标：形成可验收的试戴资料与产品介绍稿。</p><div class="cw-row"><span class="cw-small">项目已确认支出 ¥' +
+        (s.billConfirmed ? '1,820.40' : '1,640.40') +
+        '</span><span class="cw-small cw-muted">介绍稿 · ' +
+        taskStatus(s) +
+        '</span></div><div class="cw-actions">' +
+        action('进入业务项目', 'project') +
+        '</div></article>'
+      )
+    }
+    function overview(v) {
+      const s = v.state
+      let body = heading(
+        '公司 / 本周工作',
+        v.el.dataset.layout === 'inbox' ? '今天需要推进什么' : '公司总览',
+        '示例公司 · 个人经营，AI 协助推进',
+      )
+      if (v.el.dataset.layout === 'inbox') {
+        body +=
+          '<div class="cw-inbox-columns"><section><h2>需要我处理</h2>' +
+          needs(s) +
+          '</section><section><h2>业务上下文</h2>' +
+          projectSummary(s) +
+          '<div class="cw-section"><h3>关联运营</h3>' +
+          status(publicationStatus(s), s.publishing === 'verified' ? 'good' : '') +
+          '<p class="cw-muted cw-small">产品介绍稿 → CSDN 示例账号</p>' +
+          link('查看内容和发布结果 →', 'operations') +
+          '</div></section></div><section class="cw-section"><div class="cw-row"><h2>9 月经营账</h2>' +
+          link('核对与导出 →', 'finance') +
+          '</div>' +
+          facts(s) +
+          '</section>'
+      } else {
+        body +=
+          '<section><h2>需要我处理</h2>' +
+          needs(s) +
+          '</section><section class="cw-section"><h2>正在推进</h2>' +
+          projectSummary(s) +
+          '</section><section class="cw-section"><div class="cw-row"><h2>9 月经营账</h2>' +
+          link('查看原始账目 →', 'finance') +
+          '</div>' +
+          facts(s) +
+          '<p class="cw-muted cw-small">按已确认记录汇总 · ' +
+          (s.billConfirmed ? '5' : '4') +
+          ' 条已确认，' +
+          (s.billConfirmed ? '0' : '1') +
+          ' 条待核对 · 月份资料完整性仍需人工检查</p></section>'
+      }
+      return body
+    }
+    function localTabs(items, current, actionPrefix) {
+      return (
+        '<nav class="cw-localnav" aria-label="当前业务视图">' +
+        items
+          .map(function (it) {
+            return (
+              '<button type="button" aria-pressed="' +
+              (current === it[0]) +
+              '" data-action="' +
+              actionPrefix +
+              ':' +
+              it[0] +
+              '">' +
+              it[1] +
+              '</button>'
+            )
+          })
+          .join('') +
+        '</nav>'
+      )
+    }
+    function projects(s) {
+      return (
+        heading('公司 / 业务项目', '业务项目', '围绕目标组织工作、支出、运营内容与资料。') +
+        projectSummary(s) +
+        '<section class="cw-section"><h2>创建下一件业务</h2><label>项目名称<input data-input="projectName" placeholder="例如：10 月客户调研" maxlength="80"></label><div class="cw-actions">' +
+        action('生成项目草案', 'newProject', true) +
+        '</div><p class="cw-muted cw-small">只需名称；目标与交付物可以随后补充。</p></section>'
+      )
+    }
+    function project(s) {
+      let body = heading(
+        '公司 / 业务项目',
+        'AR 眼镜一代',
+        '交付物：试戴记录与产品介绍稿。截止日期尚未设定。',
+      )
+      body += localTabs(
+        [
+          ['work', '工作'],
+          ['spending', '关联支出'],
+          ['content', '运营内容'],
+          ['sources', '资料'],
+        ],
+        s.projectTab,
+        'projectTab',
+      )
+      if (s.projectTab === 'work')
+        body +=
+          '<article class="cw-item"><div class="cw-row"><strong>准备产品介绍稿</strong>' +
+          status(taskStatus(s), s.taskPhase === 'accepted' ? 'good' : 'warning') +
+          '</div><p class="cw-muted cw-small">执行者：AI · 验收者：你 · 完成条件：引用规格与试戴材料，保存稿件并验收。</p>' +
+          link('打开工作详情 →', 'task') +
+          '</article><article class="cw-item"><strong>试戴记录</strong><p class="cw-muted cw-small">' +
+          (s.linkedTrial
+            ? '已关联试戴记录-v2.md；原件可查看。'
+            : '还未关联到本项目，不根据聊天摘要推测体验。') +
+          '</p>' +
+          link('查看资料 →', 'knowledge') +
+          '</article>'
+      if (s.projectTab === 'spending')
+        body +=
+          '<div class="cw-info"><span class="cw-muted cw-small">已绑定账目归属：AR 眼镜一代</span><span class="cw-value">¥' +
+          (s.billConfirmed ? '1,820.40' : '1,640.40') +
+          '</span><span class="cw-small">已确认实际支出</span></div><p class="cw-muted cw-small">这是实际支出，不是完整项目成本。待核对 ¥' +
+          (s.billConfirmed ? '0.00' : '180.00') +
+          ' 单独列示。</p>' +
+          action('打开原始流水与凭证', 'finance')
+      if (s.projectTab === 'content')
+        body +=
+          '<article class="cw-item"><strong>AR 眼镜一代：产品介绍</strong><p class="cw-muted cw-small">稿件：' +
+          taskStatus(s) +
+          ' · 平台结果：' +
+          publicationStatus(s) +
+          '</p>' +
+          link('打开运营内容 →', 'operations') +
+          '</article>'
+      if (s.projectTab === 'sources')
+        body +=
+          sources(s) +
+          '<div class="cw-actions">' +
+          action('管理关联资料与会话', 'knowledge') +
+          '</div>'
+      return body
+    }
+    function sources(s) {
+      return (
+        '<div class="cw-evidence">' +
+        icon('file-text') +
+        '产品规格.md <span class="cw-muted">已关联</span></div><div class="cw-evidence">' +
+        icon('file-text') +
+        '试戴记录-v2.md <span class="cw-muted">' +
+        (s.linkedTrial ? '已关联' : '尚未关联') +
+        '</span></div><div class="cw-evidence">' +
+        icon('messages-square') +
+        '眼镜定位讨论 <span class="cw-muted">用户选定会话</span></div>'
+      )
+    }
+    function task(s) {
+      let body = heading(
+        'AR 眼镜一代 / 工作详情',
+        '准备产品介绍稿',
+        'AI 准备材料与稿件，由你验收具体产物。',
+      )
+      body +=
+        '<div class="cw-row">' +
+        status(taskStatus(s), s.taskPhase === 'accepted' ? 'good' : 'warning') +
+        '<span class="cw-muted cw-small">执行者 AI · 验收者 你</span></div><section class="cw-section"><h2>使用的资料</h2>' +
+        sources(s) +
+        '</section>'
+      if (!s.linkedTrial)
+        body +=
+          '<div class="cw-info"><h3>缺少原始试戴材料</h3><p>稿件的体验部分需要事实来源。可先关联现有记录，再让 AI 准备。</p>' +
+          action('关联试戴记录（演示）', 'attachTrial', true) +
+          '</div>'
+      body +=
+        '<section class="cw-section"><h2>完成条件</h2><p>稿件引用选定规格和试戴记录，存到「运营/产品介绍稿.md」；你打开该版本并验收。</p><p class="cw-muted cw-small">本项工作只准备稿件。平台与账号在后续发布范围中明确选择。</p></section>'
+      if (s.taskPhase === 'ready')
+        body +=
+          '<div class="cw-actions">' + action('让 AI 准备下一步', 'preparePlan', true) + '</div>'
+      if (s.taskPhase === 'plan')
+        body +=
+          '<div class="cw-info"><h3>本次准备计划</h3><p>1. 读取两份已选资料。<br>2. 整理规格与试戴事实，保留出处。<br>3. 保存介绍稿，提交你验收。</p><p class="cw-muted cw-small">输出：运营/产品介绍稿.md · 不对外发送</p>' +
+          action('接受并开始准备（演示）', 'runDraft', true) +
+          '</div>'
+      if (s.taskPhase === 'draft' || s.taskPhase === 'accepted')
+        body +=
+          '<div class="cw-info"><div class="cw-row"><h3>产品介绍稿.md</h3>' +
+          status(
+            s.taskPhase === 'accepted' ? '已验收版本 v1' : '产物 v1 · 待验收',
+            s.taskPhase === 'accepted' ? 'good' : 'active',
+          ) +
+          '</div><p class="cw-muted cw-small">来源：产品规格.md、试戴记录-v2.md</p><div class="cw-actions">' +
+          action('查看稿件', 'openDraft') +
+          (s.taskPhase === 'draft'
+            ? action('验收完成（演示）', 'acceptDraft', true, !s.draftOpened)
+            : action('继续准备发布', 'operations', true)) +
+          '</div>' +
+          (s.taskPhase === 'draft' && !s.draftOpened
+            ? '<p class="cw-muted cw-small">先打开稿件检查，再验收此版本。</p>'
+            : '') +
+          '</div>'
+      return body
+    }
+    function finance(s) {
+      let body = heading('公司 / 财务', '9 月经营账', '人工确认后进入统计，记录可追溯到原件。')
+      body += localTabs(
+        [
+          ['review', '导入与核对'],
+          ['summary', '月度汇总'],
+          ['handoff', '导出与备份'],
+        ],
+        s.financeTab,
+        'financeTab',
+      )
+      if (s.financeTab === 'summary')
+        body +=
+          facts(s) +
+          '<section class="cw-section"><h2>项目实际支出</h2><div class="cw-item cw-row">' +
+          link('AR 眼镜一代 →', 'projectSpending') +
+          '<strong>¥' +
+          (s.billConfirmed ? '1,820.40' : '1,640.40') +
+          '</strong></div><p class="cw-muted cw-small">待核对不计入汇总；资料未齐时，净流入不代表完整月份，也不等于利润。</p></section>'
+      if (s.financeTab === 'review') {
+        body +=
+          '<table aria-label="示例流水"><thead><tr><th>流水与用途</th><th>状态</th><th>金额</th></tr></thead><tbody><tr><td>服务收入</td><td>已确认</td><td>+3,000.00</td></tr><tr><td>器件采购</td><td>已确认</td><td>−1,280.50</td></tr><tr><td>研发打样</td><td>已确认</td><td>−260.00</td></tr><tr><td>研发服务</td><td>已确认</td><td>−99.90</td></tr><tr><td><strong>测试服务</strong></td><td>' +
+          (s.billConfirmed ? '已确认' : '待核对') +
+          '</td><td>−180.00</td></tr></tbody></table>'
+        body +=
+          '<section class="cw-section"><div class="cw-row"><h2>测试服务 · ¥180.00</h2>' +
+          status(
+            s.billConfirmed ? '已人工确认（演示）' : 'AI 建议待核对',
+            s.billConfirmed ? 'good' : 'warning',
+          ) +
+          '</div><div class="cw-form"><label><span>用途</span><input value="测试服务" readonly></label><label><span>所属项目</span><input value="AR 眼镜一代" readonly></label></div><div class="cw-evidence">' +
+          icon('paperclip') +
+          link('测试服务收据.pdf · 查看原件', 'openReceipt') +
+          '</div><p class="cw-muted cw-small">AI 建议：研发服务。确认后，本项目实际支出增加 ¥180.00。</p><div class="cw-actions">' +
+          action(
+            s.billConfirmed ? '已确认此版本' : '人工确认（演示）',
+            'confirmBill',
+            true,
+            s.billConfirmed || !s.receiptOpened,
+          ) +
+          action('查看月度汇总', 'summary') +
+          '</div>' +
+          (!s.receiptOpened && !s.billConfirmed
+            ? '<p class="cw-muted cw-small">先查看原件，再确认此版本。</p>'
+            : '') +
+          '</section>'
+      }
+      if (s.financeTab === 'handoff')
+        body +=
+          '<section class="cw-section"><h2>交给现有代账</h2><p>按 9 月已确认记录准备明细、汇总、修改历史与凭证索引。</p><p class="cw-muted cw-small">待核对 ' +
+          (s.billConfirmed ? '0' : '1') +
+          ' 条未计入。代账可用性需要真实交付确认。</p>' +
+          action('查看导出包内容', 'exportPreview') +
+          '</section><section class="cw-section"><h2>账目备份</h2><p>覆盖数据库、原件与修改历史。</p>' +
+          action('查看备份范围', 'backupPreview') +
+          '</section>'
+      return body
+    }
+    function opsSteps(s) {
+      const done = s.publishing === 'unknown' || s.publishing === 'verified'
+      const steps = [
+        [
+          '准备与资料检查',
+          'Studio',
+          '项目、原稿和图片范围已指定',
+          '用户已验收稿件并接受本次发布范围',
+          '校验原稿和两张图片，固定本次资料范围',
+        ],
+        [
+          '账号与原稿核验',
+          'AI',
+          'CSDN 示例账号 · 草稿 ID demo-001',
+          '资料检查已通过，选定账号可用',
+          '观察真实账号和同一草稿，核对作者与原稿身份',
+        ],
+        [
+          '正文填写与回读',
+          'AI',
+          '正文内容与本次原稿一致',
+          '账号与草稿身份已核验',
+          '写入正文，并回读段落、链接和格式',
+        ],
+        [
+          '图片 1 上传与位置核验',
+          'AI',
+          '图片 1 已加载，位置与原稿一致',
+          '正文已回读，图片 1 来源与目标位置明确',
+          '上传图片 1，核对实际结果及正文位置',
+        ],
+        [
+          '图片 2 上传与位置核验',
+          'AI',
+          '图片 2 已加载，位置与原稿一致',
+          '图片 1 已核验，图片 2 来源与目标位置明确',
+          '上传图片 2，核对实际结果及正文位置',
+        ],
+        [
+          '平台字段',
+          'AI',
+          '标题、摘要与标签按启动快照核对',
+          '正文与全部图片均已核验',
+          '填写本平台需要的字段，并回读结果',
+        ],
+        [
+          '保存草稿',
+          'AI',
+          '同一草稿 ID 的保存结果已回读',
+          '内容和平台字段已完成',
+          '保存后重新读取同一草稿，核验服务端结果',
+        ],
+        [
+          '提交发布',
+          'AI',
+          '一次提交的结果需核验',
+          '草稿保存已核验，授权快照一致且无特殊人工卡点',
+          '仅提交本次单篇文章；结果未知时立即停止写入',
+        ],
+        [
+          '平台结果核验',
+          'AI',
+          '原账号、标题、正文和两张公开图片一致',
+          '同一文章的提交已发出，或已有可识别公开结果',
+          '只读检查原稿与公开结果，保留回执、状态和地址',
+        ],
+      ]
+      return (
+        '<ol class="cw-steps">' +
+        steps
+          .map(function (it, i) {
+            const verified = s.publishing === 'verified'
+            let label = done && i < 7 ? '已核验' : '待执行'
+            if (done && i === 7) label = verified ? '已核验' : '结果未知'
+            if (done && i === 8) label = verified ? '公开结果一致' : '待核验'
+            const detail = String(i) === s.selectedStep
+            const unknown = done && !verified && i >= 7
+            return (
+              '<li><span class="cw-step-number">' +
+              (i + 1) +
+              '</span><span>' +
+              it[0] +
+              '</span>' +
+              status(
+                label,
+                label === '结果未知'
+                  ? 'warning'
+                  : label === '已核验' || label === '公开结果一致'
+                    ? 'good'
+                    : '',
+              ) +
+              '<span class="cw-step-detail">执行者 ' +
+              it[1] +
+              ' · ' +
+              (done ? it[2] : '尚未执行，完成证据未产生') +
+              ' · ' +
+              link(detail ? '收起详情' : '查看本步', 'step:' + i) +
+              '</span>' +
+              (detail
+                ? '<div class="cw-step-detail cw-info"><strong>动作</strong>：' +
+                  it[4] +
+                  '<br><strong>进入条件</strong>：' +
+                  it[3] +
+                  '<br><strong>当前状态</strong>：' +
+                  label +
+                  '<br><strong>完成条件与证据</strong>：' +
+                  (done && !unknown ? it[2] : '尚无完成证据；需按上述动作取得真实回读或回执') +
+                  '<br><strong>等待或失败原因</strong>：' +
+                  (unknown
+                    ? '一次提交后未取得可靠回执，后续公开结果尚待核验'
+                    : done
+                      ? '无，本步已取得示例核验结果'
+                      : '执行尚未开始') +
+                  '<br><strong>允许下一步</strong>：' +
+                  (unknown
+                    ? '只读核验；仍无法识别时由用户处理，禁止重复提交'
+                    : done
+                      ? '查看证据或进入下一个允许执行的步骤'
+                      : '先满足进入条件，再启动对应动作') +
+                  '</div>'
+                : '') +
+              '</li>'
+            )
+          })
+          .join('') +
+        '</ol>'
+      )
+    }
+    function operations(s) {
+      let body = heading(
+        '公司 / 运营',
+        '内容与发布',
+        '同一件业务的稿件、账号、执行步骤和平台结果。',
+      )
+      body +=
+        '<div class="cw-item"><div class="cw-row"><strong>AR 眼镜一代：产品介绍</strong>' +
+        status(
+          publicationStatus(s),
+          s.publishing === 'verified' ? 'good' : s.publishing === 'unknown' ? 'warning' : '',
+        ) +
+        '</div><p class="cw-muted cw-small">业务项目：AR 眼镜一代 · 原稿：运营/产品介绍稿.md</p><p class="cw-small">稿件 ' +
+        taskStatus(s) +
+        ' · 目标平台 CSDN · 示例账号</p></div>'
+      if (s.taskPhase !== 'accepted')
+        body +=
+          '<div class="cw-info"><h3>原稿尚未验收</h3><p>先查看并验收稿件，再开始此次对外发布。</p>' +
+          action('打开稿件工作', 'task', true) +
+          '</div>'
+      if (s.taskPhase === 'accepted' && s.publishing === 'idle')
+        body += '<div class="cw-actions">' + action('查看发布范围', 'publishPlan', true) + '</div>'
+      if (s.publishing === 'plan')
+        body +=
+          '<div class="cw-info"><h3>本次发布范围</h3><p>平台：CSDN<br>账号：示例公司（演示）<br>原稿：产品介绍稿.md · 已验收 v1<br>图片：用户选定的 2 张示例图片<br>目标：单篇文章公开提交并核验结果</p><p class="cw-muted cw-small">出现验证码、法律声明、账号变化或未知后果时交给你处理。</p>' +
+          action('开始执行（演示）', 'startPublish', true) +
+          '</div>'
+      if (s.publishing === 'unknown')
+        body +=
+          '<div class="cw-info"><h3>提交结果未知，已停止写入</h3><p>示例执行在一次提交后未取得可靠回执。保留原账号和草稿，仅允许查询结果。</p>' +
+          action('只读检查结果（演示）', 'verifyPublish', true) +
+          '</div>'
+      if (s.publishing === 'verified')
+        body +=
+          '<div class="cw-info"><div class="cw-row"><h3>公开结果核验通过</h3>' +
+          status('示例回执', 'good') +
+          '</div><p class="cw-small">原账号、标题、正文和 2 张图片一致。</p><p class="cw-muted cw-small">核验时间：2026-10-14 10:30（演示）</p>' +
+          action('查看结果证据', 'publicEvidence') +
+          '</div>'
+      body +=
+        '<section class="cw-section"><h2>发布执行计划</h2>' +
+        opsSteps(s) +
+        '</section><div class="cw-item"><div class="cw-row"><strong>CCLink 更新说明</strong>' +
+        status('草稿已保存') +
+        '</div><p class="cw-muted cw-small">另一条示例内容 · 尚未公开发布，保存不等于发布成功。</p></div>'
+      return body
+    }
+    function knowledge(s) {
+      let body = heading(
+        '公司 / 资料与会话',
+        '资料与会话',
+        '由你选择关联；AI 建议与确认的决策分开展示。',
+      )
+      body += localTabs(
+        [
+          ['files', '资料'],
+          ['sessions', '相关会话'],
+          ['decisions', '决策'],
+        ],
+        s.knowledgeTab,
+        'knowledgeTab',
+      )
+      if (s.knowledgeTab === 'files')
+        body +=
+          '<article class="cw-item"><strong>产品规格.md</strong><p class="cw-muted cw-small">项目文件 · 已关联 AR 眼镜一代</p>' +
+          link('查看内容 →', 'specPreview') +
+          '</article><article class="cw-item"><strong>试戴记录-v2.md</strong><p class="cw-muted cw-small">项目文件 · ' +
+          (s.linkedTrial ? '已关联 AR 眼镜一代' : '尚未关联') +
+          '</p>' +
+          (s.linkedTrial
+            ? link('查看内容 →', 'trialPreview')
+            : action('关联到业务项目（演示）', 'attachTrial', true)) +
+          '</article>'
+      if (s.knowledgeTab === 'sessions')
+        body +=
+          '<article class="cw-item"><strong>眼镜定位讨论</strong><p class="cw-muted cw-small">已有会话 · 用户选定关联 · 内容与身份保留原归属</p>' +
+          link('查看会话摘要与出处 →', 'sessionPreview') +
+          '</article><p class="cw-muted cw-small">其他工作空间会话由你明确选择资料后关联；不会默认扫描全部历史。</p>'
+      if (s.knowledgeTab === 'decisions')
+        body +=
+          '<article class="cw-item"><div class="cw-row"><strong>介绍稿优先说明真实试戴体验</strong>' +
+          status('用户已确认', 'good') +
+          '</div><p class="cw-muted cw-small">来源：眼镜定位讨论 · 对应业务：AR 眼镜一代</p>' +
+          link('查看决策来源 →', 'sessionPreview') +
+          '</article><article class="cw-item"><strong>AI 建议：为试戴招募准备问卷</strong><p class="cw-muted cw-small">待你决定，不会自动成为任务或对外发送。</p>' +
+          action('查看建议', 'suggestionPreview') +
+          '</article>'
+      return body
+    }
+    function overlay(s) {
+      const entries = {
+        draft: [
+          '产品介绍稿.md · 演示产物 v1',
+          '<p><strong>AR 眼镜一代产品介绍</strong></p><p>规格部分引用产品规格.md。试戴体验引用用户选择的试戴记录-v2.md。</p><p class="cw-muted">此处是产品交互用的示例稿件。实际产品必须保存真实文件，并校验具体版本后进入验收。</p>',
+        ],
+        receipt: [
+          '测试服务收据.pdf · 演示原件',
+          '<p>交易日期：2026-09-27<br>交易对方：示例测试服务商<br>金额：¥180.00<br>用途：研发测试服务</p><p class="cw-muted">示例原件索引与流水关联。本效果稿没有真实收据文件。</p>',
+        ],
+        export: [
+          '9 月代账交付包 · 范围预览',
+          '<p>已确认账目.csv<br>确认与修改记录.csv<br>月度汇总.json<br>交付说明.md<br>关联凭证原件</p><p class="cw-muted">效果稿不生成或发送真实财务文件。</p>',
+        ],
+        backup: [
+          '完整备份范围',
+          '<p>账目 SQLite、原始资料、关联与修改历史、校验信息。</p><p class="cw-muted">实际恢复验证失败时拒绝覆盖现有数据。</p>',
+        ],
+        public: [
+          '平台结果证据 · 演示',
+          '<p>示例公开地址：example.invalid/articles/ar-glasses-demo<br>原账号、标题、正文、两张图片一致。</p><p class="cw-muted">此地址与回执均为示意，没有实际发布或访问平台。</p>',
+        ],
+        spec: [
+          '产品规格.md · 示意',
+          '<p>业务项目：AR 眼镜一代<br>产品定位、规格条目与测试边界由用户资料提供。</p>',
+        ],
+        trial: [
+          '试戴记录-v2.md · 示意',
+          '<p>记录测试条件、使用体验、问题与观察时间。此效果稿不包含真实试戴结论。</p>',
+        ],
+        session: [
+          '眼镜定位讨论 · 关联会话示意',
+          '<p>已关联现有会话。决策“优先说明真实试戴体验”保留来源，并由用户确认。</p>',
+        ],
+        suggestion: [
+          '待决定的 AI 建议',
+          '<p>准备试戴招募问卷。需要你先确定问题与招募范围，再创建工作。</p>',
+        ],
+      }
+      const entry = entries[s.overlay]
+      return entry
+        ? '<section class="cw-info" aria-label="' +
+            entry[0] +
+            '"><div class="cw-row"><h3>' +
+            entry[0] +
+            '</h3>' +
+            action('收起', 'closeOverlay') +
+            '</div>' +
+            entry[1] +
+            '</section>'
+        : ''
+    }
+    function nav(s, className) {
+      const active = ['project', 'task'].includes(s.page) ? 'projects' : s.page
+      return (
+        '<nav class="' +
+        className +
+        '" aria-label="公司功能">' +
+        pages
+          .map(function (it) {
+            return (
+              '<button type="button" data-action="' +
+              it[0] +
+              '"' +
+              (active === it[0] ? ' aria-current="page"' : '') +
+              '>' +
+              (className === 'cw-nav' ? icon(it[2]) : '') +
+              it[1] +
+              '</button>'
+            )
+          })
+          .join('') +
+        '</nav>'
+      )
+    }
+    function agent(s) {
+      const context =
+        s.page === 'finance'
+          ? '9 月经营账 / 测试服务记录'
+          : s.page === 'operations'
+            ? 'AR 眼镜一代 / 产品介绍发布'
+            : s.page === 'overview'
+              ? '公司本周工作'
+              : 'AR 眼镜一代 / 稿件准备'
+      const note =
+        s.page === 'finance'
+          ? '这笔 ¥180.00 仍需你核对。AI 建议只填写待核对信息，确认金额后才进入统计。'
+          : s.publishing === 'unknown'
+            ? '发布结果未知。当前先检查原账号和同一文章的结果，不重复提交。'
+            : s.taskPhase === 'accepted'
+              ? '介绍稿已验收。你可以查看发布范围，也可以继续补充这个业务的下一项工作。'
+              : !s.linkedTrial
+                ? '介绍稿需要试戴记录。当前没有这份材料的关联，可以先补资料再准备稿件。'
+                : '资料已齐。下一步可以读取选定资料，准备稿件，并交给你验收。'
+      return (
+        '<aside class="cw-agent"><div class="cw-agent-head">' +
+        icon('sparkles') +
+        'AI 协作</div><div class="cw-agent-context">当前上下文<br><strong>' +
+        context +
+        '</strong></div><div class="cw-agent-message"><p>' +
+        note +
+        '</p></div><div class="cw-agent-sources"><div class="cw-agent-source">' +
+        icon('folder') +
+        ' 当前公司工作空间</div><div class="cw-agent-source">' +
+        icon('file-text') +
+        ' 选定资料与来源</div><div class="cw-agent-source">' +
+        icon('circle-check') +
+        ' 具体产物与完成条件</div></div><div class="cw-actions">' +
+        action(
+          s.page === 'finance'
+            ? '查看待核对记录'
+            : s.publishing === 'unknown'
+              ? '检查发布结果'
+              : '打开当前工作',
+          s.page === 'finance' ? 'finance' : s.publishing === 'unknown' ? 'operations' : 'task',
+          true,
+        ) +
+        '</div><div class="cw-agent-input"><label>交代下一项工作<textarea data-input="request" maxlength="400" placeholder="例如：根据试戴资料准备介绍稿">' +
+        esc(s.userRequest) +
+        '</textarea></label>' +
+        action('准备工作草案', 'requestDraft') +
+        '</div><p class="cw-muted cw-small">任务范围随本次工作固定；切页面不改变正在执行的授权。</p></aside>'
+      )
+    }
+    function persist() {
+      if (!window.openai || !window.openai.setWidgetState) return
+      const privateContent = {}
+      variants.forEach(function (v) {
+        const saved = Object.assign({}, v.state)
+        delete saved.toast
+        delete saved.overlay
+        privateContent[v.el.id] = saved
+      })
+      window.openai
+        .setWidgetState({
+          modelContent: {
+            designPrototype: true,
+            topic: '公司工作空间',
+            use: '个人经营与 AI 协作',
+            requiredDomains: ['财务', '项目管理', '运营'],
+            lastView: variants.map(function (v) {
+              return {
+                layout: v.el.dataset.layout,
+                page: v.state.page,
+                task: taskStatus(v.state),
+                publishing: publicationStatus(v.state),
+              }
+            }),
+          },
+          privateContent: privateContent,
+        })
+        .catch(function () {})
+    }
+    function render(v) {
+      const s = v.state
+      const activeElement = document.activeElement
+      const previousAction = v.el.contains(activeElement) ? activeElement.dataset.action : ''
+      const renderer = {
+        overview: function () {
+          return overview(v)
+        },
+        projects: function () {
+          return projects(s)
+        },
+        project: function () {
+          return project(s)
+        },
+        task: function () {
+          return task(s)
+        },
+        finance: function () {
+          return finance(s)
+        },
+        operations: function () {
+          return operations(s)
+        },
+        knowledge: function () {
+          return knowledge(s)
+        },
+      }[s.page]
+      v.el.dataset.agent = s.showAgent ? 'visible' : 'hidden'
+      v.el.style.setProperty('--cw-space', v.design.density === '紧凑' ? '10px' : '16px')
+      v.el.innerHTML =
+        '<header class="cw-titlebar"><span class="cw-brand">CCLink Studio</span><span class="cw-workspace">' +
+        icon('building-2') +
+        '<strong>示例公司</strong><span class="cw-muted cw-small">公司工作空间</span></span>' +
+        action(s.showAgent ? '收起 AI' : '展开 AI', 'toggleAgent') +
+        '</header><div class="cw-body"><div class="cw-rail" aria-hidden="true"><div>' +
+        icon('building-2') +
+        '<span>公司</span></div><div>' +
+        icon('files') +
+        '<span>文件</span></div><div>' +
+        icon('messages-square') +
+        '<span>会话</span></div><div>' +
+        icon('globe') +
+        '<span>浏览</span></div><div>' +
+        icon('terminal') +
+        '<span>终端</span></div></div><aside class="cw-sidebar"><div class="cw-sidebar-title">公司经营</div>' +
+        nav(s, 'cw-nav') +
+        '<div class="cw-side-bottom"><span class="cw-muted">当前业务</span><p>' +
+        link('AR 眼镜一代', 'project') +
+        '</p><p class="cw-muted">本地 · 个人使用</p></div></aside><main class="cw-main">' +
+        (v.el.dataset.layout === 'inbox' ? nav(s, 'cw-topnav') : '') +
+        (s.toast ? '<div class="cw-toast" role="status">' + esc(s.toast) + '</div>' : '') +
+        renderer() +
+        overlay(s) +
+        '</main>' +
+        agent(s) +
+        '</div><footer class="cw-footer"><span>交互演示 · 数据与执行结果均为示意</span><span>未连接真实账目或平台</span></footer>'
+      if (globalThis.lucide) globalThis.lucide.createIcons({ attrs: { width: 16, height: 16 } })
+      if (previousAction) {
+        const candidate =
+          Array.from(v.el.querySelectorAll('button[data-action]')).find(function (button) {
+            return button.dataset.action === previousAction && !button.disabled
+          }) ||
+          v.el.querySelector('.cw-main .cw-main-action:not(:disabled)') ||
+          v.el.querySelector('button[aria-current="page"]')
+        if (candidate) candidate.focus({ preventScroll: true })
+      }
+    }
+    variants.forEach(function (v) {
+      render(v)
+      v.el.addEventListener('input', function (event) {
+        if (event.target.dataset.input === 'request') v.state.userRequest = event.target.value
+      })
+      v.el.addEventListener('click', function (event) {
+        const button = event.target.closest('button[data-action]')
+        if (!button || !v.el.contains(button) || button.disabled) return
+        const cmd = button.dataset.action
+        const s = v.state
+        s.toast = ''
+        s.overlay = ''
+        if (
+          [
+            'overview',
+            'projects',
+            'project',
+            'task',
+            'finance',
+            'operations',
+            'knowledge',
+          ].includes(cmd)
+        )
+          s.page = cmd
+        if (cmd.startsWith('projectTab:')) s.projectTab = cmd.split(':')[1]
+        if (cmd.startsWith('financeTab:')) s.financeTab = cmd.split(':')[1]
+        if (cmd.startsWith('knowledgeTab:')) s.knowledgeTab = cmd.split(':')[1]
+        if (cmd.startsWith('step:')) {
+          const selected = cmd.split(':')[1]
+          s.selectedStep = s.selectedStep === selected ? '' : selected
+        }
+        if (cmd === 'toggleAgent') s.showAgent = !s.showAgent
+        if (cmd === 'attachTrial') {
+          s.linkedTrial = true
+          s.taskPhase = 'ready'
+          s.toast = '已关联示例试戴资料。工作现在可以开始准备。'
+        }
+        if (cmd === 'preparePlan') s.taskPhase = 'plan'
+        if (cmd === 'runDraft' && s.linkedTrial) {
+          s.taskPhase = 'draft'
+          s.draftOpened = false
+          s.toast = '示例产物已准备，等待你查看并验收。'
+        }
+        if (cmd === 'openDraft') {
+          s.draftOpened = true
+          s.overlay = 'draft'
+        }
+        if (cmd === 'acceptDraft' && s.draftOpened && s.taskPhase === 'draft') {
+          s.taskPhase = 'accepted'
+          s.toast = '已验收示例稿件 v1，尚未公开发布。'
+        }
+        if (cmd === 'openReceipt') {
+          s.receiptOpened = true
+          s.overlay = 'receipt'
+        }
+        if (cmd === 'confirmBill' && s.receiptOpened && !s.billConfirmed) {
+          s.billConfirmed = true
+          s.toast = '示例记录已确认，汇总增加 ¥180.00。'
+        }
+        if (cmd === 'summary') {
+          s.page = 'finance'
+          s.financeTab = 'summary'
+        }
+        if (cmd === 'projectSpending') {
+          s.page = 'project'
+          s.projectTab = 'spending'
+        }
+        if (cmd === 'publishPlan' && s.taskPhase === 'accepted') s.publishing = 'plan'
+        if (cmd === 'startPublish' && s.taskPhase === 'accepted' && s.publishing === 'plan') {
+          s.publishing = 'unknown'
+          s.toast = '示例提交结果未知：保留现场，仅允许核验。'
+        }
+        if (cmd === 'verifyPublish' && s.publishing === 'unknown') {
+          s.publishing = 'verified'
+          s.toast = '示例公开结果已核验；没有再次提交。'
+        }
+        const overlays = {
+          exportPreview: 'export',
+          backupPreview: 'backup',
+          publicEvidence: 'public',
+          specPreview: 'spec',
+          trialPreview: 'trial',
+          sessionPreview: 'session',
+          suggestionPreview: 'suggestion',
+        }
+        if (overlays[cmd]) s.overlay = overlays[cmd]
+        if (cmd === 'newProject') {
+          const input = v.el.querySelector('[data-input="projectName"]')
+          const name = input && input.value.trim()
+          s.toast = name
+            ? '项目草案：“' + name + '”。下一步填写目标与交付物；演示未保存真实项目。'
+            : '请先填写项目名称。'
+        }
+        if (cmd === 'requestDraft') {
+          s.toast = s.userRequest.trim()
+            ? '工作草案：“' +
+              s.userRequest.trim() +
+              '”。下一步确认资料范围、产物与完成条件；演示未启动真实 AI。'
+            : '请先写下一句话目标。'
+        }
+        render(v)
+        persist()
+      })
+      if (globalThis.Tweak) {
+        const tweak = new globalThis.Tweak({
+          container: v.el,
+          onChange: function () {
+            render(v)
+          },
+        })
+        tweak.addSelect(v.design, 'density', { options: ['舒适', '紧凑'], label: '信息密度' })
+      }
+    })
+    window.addEventListener('openai:set_globals', function (event) {
+      const incoming = event.detail && event.detail.globals && event.detail.globals.widgetState
+      if (!incoming || !incoming.privateContent) return
+      variants.forEach(function (v) {
+        const next = compatible(incoming.privateContent[v.el.id])
+        if (next.page === v.state.page) {
+          next.toast = v.state.toast
+          next.overlay = v.state.overlay
+        }
+        v.state = next
+        render(v)
+      })
+    })
+  })()
+</script>

@@ -299,8 +299,8 @@ agent-tool
 Runtime 组件可以通过 npm 的精确平台包分发，也可以使用本仓库不可变 Tag 对应的公开组件
 资产。npm 在这里仅是下载源；Runtime 下载后仍由 `RuntimeComponentManager` 完成平台、架构、
 哈希、发布者和 probe 校验，不能进入普通 Plugin Host。若使用组件 Tag，其命名空间必须与 App
-Release 隔离，App updater 必须忽略组件 Tag。商业版组件源由 `cclink-dev` 独立注入，不与
-OSS 共享凭证、签名密钥或发布状态。
+Release 隔离，App updater 必须忽略组件 Tag。`cclink-dev` 遗留 overlay 不得向 Studio 注入
+第二套组件目录、签名根或发布状态。
 
 安装包必须保留最低可用版本或明确的本地降级：
 
@@ -390,14 +390,15 @@ NO_FALLBACK_AVAILABLE
 脱敏消息。不得记录下载签名私钥、凭证、Cookie、完整插件请求正文、工作空间正文、完整 Home
 路径或任意用户文件内容。
 
-## OSS 与商业版边界
+## Studio 与远程服务边界
 
-- OSS 默认只使用公开、免登录、维护者签名的组件目录；不内置 npm token、GitHub token、
-  私有 Registry、商业更新源或 CCLink 账号依赖。
-- 开源组件发布只从本仓库不可变 Tag 或受控 npm provenance 构建，不能 checkout
-  `cclink-dev` 或读取商业发布状态。
-- 商业版可以通过官方集成层提供独立目录和签名根，但不能让 OSS 反向 import 商业实现。
-- 插件不能引入官方账号、entitlement、quota 或生产 API 作为 OSS 本地能力的启动条件。
+- Studio 本地组件默认只使用公开、免登录、维护者签名的允许目录；不内置 npm token、
+  GitHub token、私有 Registry 或 CCLink 账号依赖。
+- 本地组件发布只从本仓库不可变 Tag 或受控 npm provenance 构建，不能 checkout
+  `cclink-dev` 或读取遗留 overlay 的发布状态。
+- CCLink 托管服务可以在服务端拥有独立 Runtime 和授权事实，但不能向桌面注入第二套组件
+  owner、扩大本地插件权限或让本地能力依赖登录。
+- 插件不能引入官方账号、entitlement、quota 或生产 API 作为 Studio 本地能力的启动条件。
 - “插件目录”不是 Agent Registry。ACP、外部 Agent 框架和用户自带 Agent 可执行文件继续受
   ADR 0006 排除。
 
@@ -441,7 +442,7 @@ NO_FALLBACK_AVAILABLE
   实现前必须新增 ADR，明确 supersede 的具体条款、许可、签名根、缓存、选择和回滚语义。
 - ADR 0006 继续有效：插件和可更新 Claude 执行引擎都不能拥有 Thread、Agent loop、工具权限
   或 Agent Registry。
-- ADR 0004 继续有效：OSS 与商业版发布、凭证和状态独立。
+- ADR 0009 已取代 ADR 0004 的双桌面前提；不可变发布物、凭证不入库和发布可审计要求继续有效。
 - `UpdateService` 继续是完整 App 更新唯一所有者；组件更新不能复制应用安装状态机。
 
 ## 成功指标

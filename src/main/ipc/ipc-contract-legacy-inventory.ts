@@ -1,3 +1,4 @@
+import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
 import { articlePublishingIpc } from '../../shared/article-publishing/article-publishing'
 import { gitIpc } from '../../shared/git/git-contract'
 import { mediaProjectsIpc } from '../../shared/media-production/media-project-contract'
@@ -254,6 +255,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitions: companyAccountsIpc,
     handlerFiles: ['src/main/company-accounts/company-accounts-ipc.ts'],
     preloadFiles: ['src/preload/company-accounts-api.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'CompanyWorkspace',
+    definitionFile: 'src/shared/company-workspace/company-workspace.ts',
+    definitionName: 'companyWorkspaceIpc',
+    definitions: companyWorkspaceIpc,
+    handlerFiles: ['src/main/company-workspace/company-workspace-ipc.ts'],
+    preloadFiles: ['src/preload/company-workspace-api.ts'],
   }),
   ...expandInvokeGroup({
     owner: 'MediaProjects',

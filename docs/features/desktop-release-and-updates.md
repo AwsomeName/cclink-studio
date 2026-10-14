@@ -100,11 +100,11 @@ App 更新只有一个状态所有者”的范围。
 | 能力                                                    | 所有者                 |
 | ------------------------------------------------------- | ---------------------- |
 | Manifest、Provider、UpdateService、UpdateCache、更新 UI | `cclink-studio`        |
-| 开源版签名、公证和 Release 上传                         | 本仓库 GitHub Actions  |
-| 开源版公开更新元数据和资产                              | 本仓库 GitHub Releases |
+| Studio 签名、公证和 Release 上传                        | 本仓库 GitHub Actions  |
+| Studio 公开更新元数据和资产                             | 本仓库 GitHub Releases |
 | 发布授权、下载确认、安装确认                            | 人类                   |
 
-开源版安装包不保存 GitHub Token。公开 Release 的检查与下载不需要用户凭证。签名和
+Studio 安装包不保存 GitHub Token。公开 Release 的检查与下载不需要用户凭证。签名和
 公证凭证只存在于本仓库受保护的 `studio-release` GitHub Environment：
 
 ```text
@@ -116,11 +116,11 @@ APPLE_API_KEY_ID
 APPLE_API_ISSUER
 ```
 
-开源版不得 checkout `cclink-dev`、读取商业版更新源或共享商业版发布状态。
+Studio 发布工作流不得 checkout `cclink-dev`、读取遗留 overlay 更新源或共享其发布状态。
 
 ## Manifest v3
 
-开源版使用 GitHub Releases API 查找订阅轨道内最新的公开 Release，不依赖
+Studio 使用 GitHub Releases API 查找订阅轨道内最新的公开 Release，不依赖
 `latest-mac.yml`。发布工作流只构建一个 arm64 DMG，并在公开 Release 前生成和
 反向校验唯一的 `update-manifest.json`：
 
@@ -275,7 +275,7 @@ install_failed
 
 ## 发布流程
 
-开源版正式发布入口：
+Studio 正式发布入口：
 
 ```bash
 pnpm release -- --patch

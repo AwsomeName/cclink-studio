@@ -93,6 +93,12 @@ export class CompanyAccountsService {
     assertMonth(month)
     const workspacePath = this.getActiveWorkspacePath()
     if (!workspacePath) return emptySnapshot(month, false)
+    return this.getSnapshotForWorkspace(workspacePath, month)
+  }
+
+  /** Main-only bounded caller: workspace ownership is validated by its IPC domain. */
+  getSnapshotForWorkspace(workspacePath: string, month: string): CompanyAccountsSnapshot {
+    assertMonth(month)
     const paths = ledgerPaths(workspacePath)
     if (!existsSync(paths.database)) return emptySnapshot(month, true)
     try {

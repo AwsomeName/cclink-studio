@@ -33,7 +33,12 @@ import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onb
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
-import { clampPanelWidth, getAgentPanelWidthBounds } from './utils/panel-layout'
+import {
+  clampPanelWidth,
+  getAgentPanelWidthBounds,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+} from './utils/panel-layout'
 import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
 import { WorkspaceOpenSurface } from './features/workspace-open/WorkspaceOpenSurface'
 import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-store'
@@ -110,7 +115,9 @@ function MainLayout(): React.ReactElement {
 
   const handleSidebarResize = useCallback(
     (delta: number) => {
-      setSidebarWidth(Math.max(160, Math.min(500, sidebarWidth + delta)))
+      setSidebarWidth(
+        clampPanelWidth(sidebarWidth + delta, { min: MIN_SIDEBAR_WIDTH, max: MAX_SIDEBAR_WIDTH }),
+      )
     },
     [sidebarWidth, setSidebarWidth],
   )

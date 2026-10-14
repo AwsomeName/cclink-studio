@@ -15,6 +15,8 @@ import {
   reconcileAgentRuntimeStatuses,
 } from './workspace-runtime'
 import { flushMountedMarkdownViewStates } from '../features/markdown/markdown-view-state-lifecycle'
+import { captureWorkspaceLayout, persistCapturedWorkspaceLayout } from '../stores/ui-store'
+import { cancelActivePanelResize } from './panel-layout-drag-lifecycle'
 
 export interface WorkspaceRuntimeTransition {
   ref: WorkspaceRef
@@ -63,6 +65,7 @@ async function waitForOptionalRuntime<T>(
 }
 
 export function beginWorkspaceRuntimeTransition(): number {
+  cancelActivePanelResize()
   workspaceTransitionGeneration += 1
   return workspaceTransitionGeneration
 }
@@ -166,6 +169,7 @@ export async function prepareWorkspaceRuntimeTransition(
   const currentKey = getWorkspaceStateKey()
   const currentRef = useWorkspaceStore.getState().activeWorkspaceRef
   const outgoingOwnership = collectWorkspaceRuntimeResourceOwnership(currentKey)
+  if (isWorkspaceRuntimeTransitionCurrent(generation)) cancelActivePanelResize()
 
   if (options.persistCurrent !== false && key !== currentKey) {
     // Markdown 滚动位置在组件内防抖；项目切换前必须先采样 DOM，
@@ -173,7 +177,11 @@ export async function prepareWorkspaceRuntimeTransition(
     flushMountedMarkdownViewStates()
     // 单个恢复快照写入失败不能让用户失去打开其他项目的能力。失败会由
     // persistRuntimeSections 写入框架日志，当前内存态仍保留并可继续重试。
-    await persistRuntimeSections(currentKey, currentRef)
+    const layout = isWorkspaceRuntimeTransitionCurrent(generation) ? captureWorkspaceLayout() : null
+    await Promise.all([
+      persistRuntimeSections(currentKey, currentRef),
+      ...(layout ? [persistCapturedWorkspaceLayout(layout).catch(() => {})] : []),
+    ])
   }
 
   const snapshot = await window.cclinkStudio.workspaceState.get(key, getWorkspaceStateOwnerKey())
@@ -201,11 +209,15 @@ export async function applyWorkspaceRuntimeTransition(
     console.warn('[WorkspaceTransition] 主进程工作空间提交失败:', activeResult.error)
     return false
   }
+  // 等待期间用户可能又开始拖拽；最终提交前同步释放，不能让 Browser 继续处于 resize 隐藏态。
+  cancelActivePanelResize()
+  // 同工作空间重开时，内存布局可能比读取的磁盘快照更新；保持用户最新布局，避免迟到写回旧宽度。
+  const restoreLayout = transition.key !== getWorkspaceStateKey()
   options.commitProjection?.()
   useWorkspaceStore.getState().commitActiveWorkspace(transition.ref)
 
   if (options.hydrate !== false) {
-    hydrateRuntimeSections(transition.snapshot, transition.ref)
+    hydrateRuntimeSections(transition.snapshot, transition.ref, { restoreLayout })
     if (terminalSessions) applyTerminalRuntimeStatuses(terminalSessions, transition.key)
     void reconcileAgentRuntimeStatuses(transition.key)
   }

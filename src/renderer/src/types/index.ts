@@ -18,6 +18,7 @@ export type ActivityPanel =
   | 'files'
   | 'data-sources'
   | 'company-accounts'
+  | 'company-workspace'
   | 'video-creation'
   | 'production'
   | 'terminal'
@@ -53,6 +54,7 @@ export type TabType =
   | 'remote-file'
   | 'media-production'
   | 'company-accounts'
+  | 'company-workspace'
 
 export type ConversationSurface = 'assistant-panel' | 'workbench-tab'
 
@@ -208,6 +210,12 @@ export interface Tab {
     packagePath: string
     entry?: string
   }
+  companyWorkspace?: {
+    section: 'overview' | 'projects' | 'operations' | 'knowledge'
+    businessId: string | null
+    month?: string
+  }
+  companyAccounts?: { month: string; projectId: string | null }
   /** Terminal 工作现场；M6 先定义模型，不开放真实 shell */
   terminal?: TerminalTabRef
   /** Terminal 只读历史记录 */

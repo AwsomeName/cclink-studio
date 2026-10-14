@@ -1,0 +1,4139 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>公司工作空间产品设计</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="公司工作空间产品设计" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;公司工作空间产品设计&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, &quot;Segoe UI&quot;,
+    Helvetica, &quot;Apple Color Emoji&quot;, Arial, sans-serif, &quot;Segoe UI Emoji&quot;,
+    &quot;Segoe UI Symbol&quot;;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget &gt; :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(&gt; .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel &gt; [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel &gt; [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host&#x27;s design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker &gt; summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-picker &gt; summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls &gt; button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker &gt; summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls &gt; button &gt; svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls &gt; button::before,
+.viz-carousel-picker &gt; summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: &quot;&quot;;
+  pointer-events: none;
+}
+
+.viz-carousel-controls &gt; button:hover::before,
+.viz-carousel-picker &gt; summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls &gt; button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker &gt; summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker &gt; summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options &gt; button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options &gt; [aria-current=&quot;true&quot;],
+.viz-carousel-options &gt; button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type=&quot;file&quot;],
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;],
+  [type=&quot;color&quot;]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type=&quot;date&quot;],
+  [type=&quot;datetime-local&quot;],
+  [type=&quot;month&quot;],
+  [type=&quot;week&quot;]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid=&quot;true&quot;] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select option {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: &quot;&quot;;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type=&quot;radio&quot;]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;radio&quot;]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host&#x27;s proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(&gt; .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker &gt; summary,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type=&quot;file&quot;],
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;week&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;color&quot;]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;company-workspace-design&quot;&gt;
+  &lt;div
+    class=&quot;viz-carousel&quot;
+    aria-label=&quot;公司工作空间布局方案&quot;
+    data-previous-label=&quot;上一方案&quot;
+    data-next-label=&quot;下一方案&quot;
+  &gt;
+    &lt;section data-variant=&quot;经营导航&quot; aria-label=&quot;经营导航方案&quot;&gt;
+      &lt;div
+        id=&quot;cw-navigation&quot;
+        class=&quot;cw-product&quot;
+        data-layout=&quot;navigation&quot;
+        aria-label=&quot;公司工作空间经营导航&quot;
+      &gt;&lt;/div&gt;
+    &lt;/section&gt;
+    &lt;section data-variant=&quot;经营收件箱&quot; aria-label=&quot;经营收件箱方案&quot; hidden&gt;
+      &lt;div
+        id=&quot;cw-inbox&quot;
+        class=&quot;cw-product&quot;
+        data-layout=&quot;inbox&quot;
+        aria-label=&quot;公司工作空间经营收件箱&quot;
+      &gt;&lt;/div&gt;
+    &lt;/section&gt;
+  &lt;/div&gt;
+&lt;/div&gt;
+&lt;style&gt;
+  #company-workspace-design .cw-product {
+    --cw-bg: light-dark(#ffffff, #1f1f1f);
+    --cw-side: light-dark(#f5f5f5, #252526);
+    --cw-top: light-dark(#eeeeee, #2b2b2b);
+    --cw-text: light-dark(#252525, #dedede);
+    --cw-muted: light-dark(#626262, #a8a8ad);
+    --cw-line: light-dark(#dcdcdc, #3c3c3c);
+    --cw-selected: light-dark(#e5eff7, #18384d);
+    --cw-blue: light-dark(#0967a6, #79b8e8);
+    --cw-good: light-dark(#25734b, #8ac9a5);
+    --cw-warn: light-dark(#855a12, #e7bf77);
+    --cw-space: 16px;
+    font:
+      400 13px/1.6 -apple-system,
+      BlinkMacSystemFont,
+      &#x27;Segoe UI&#x27;,
+      &#x27;PingFang SC&#x27;,
+      sans-serif;
+    color: var(--cw-text);
+    background: var(--cw-bg);
+    border: 1px solid var(--cw-line);
+    border-radius: 7px;
+    min-height: 840px;
+    overflow-wrap: anywhere;
+  }
+  #company-workspace-design .cw-product * {
+    box-sizing: border-box;
+  }
+  #company-workspace-design .cw-product button,
+  #company-workspace-design .cw-product input,
+  #company-workspace-design .cw-product select,
+  #company-workspace-design .cw-product textarea {
+    font: inherit;
+    color: inherit;
+  }
+  #company-workspace-design .cw-product button {
+    border: 1px solid var(--cw-line);
+    background: var(--cw-side);
+    border-radius: 4px;
+    padding: 5px 10px;
+    text-align: center;
+  }
+  #company-workspace-design .cw-product button:hover:not(:disabled) {
+    background: var(--cw-selected);
+  }
+  #company-workspace-design .cw-product button:disabled {
+    opacity: 0.48;
+  }
+  #company-workspace-design .cw-product .cw-main-action {
+    background: var(--cw-selected);
+    border-color: var(--cw-blue);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-product .cw-link {
+    border: 0;
+    padding: 1px 0;
+    background: transparent;
+    color: var(--cw-blue);
+    text-align: left;
+  }
+  #company-workspace-design .cw-product .cw-link:hover {
+    text-decoration: underline;
+    background: transparent;
+  }
+  #company-workspace-design .cw-product input,
+  #company-workspace-design .cw-product textarea,
+  #company-workspace-design .cw-product select {
+    max-width: 100%;
+    width: 100%;
+    background: var(--cw-bg);
+    border: 1px solid var(--cw-line);
+    border-radius: 3px;
+    padding: 6px 8px;
+  }
+  #company-workspace-design .cw-product textarea {
+    resize: vertical;
+    min-height: 64px;
+  }
+  #company-workspace-design .cw-product h1 {
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.4;
+    margin: 0;
+  }
+  #company-workspace-design .cw-product h2 {
+    font-size: 15px;
+    font-weight: 500;
+    margin: 0 0 8px;
+  }
+  #company-workspace-design .cw-product h3 {
+    font-size: 13px;
+    font-weight: 500;
+    margin: 0 0 5px;
+  }
+  #company-workspace-design .cw-product p {
+    margin: 4px 0 10px;
+  }
+  #company-workspace-design .cw-product strong {
+    font-weight: 500;
+  }
+  #company-workspace-design .cw-muted {
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-small {
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  #company-workspace-design .cw-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  #company-workspace-design .cw-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 15px;
+    background: var(--cw-top);
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-brand {
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-workspace {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #company-workspace-design .cw-workspace i {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-body {
+    display: grid;
+    grid-template-columns: 44px 145px minmax(0, 1fr) 215px;
+    min-height: 745px;
+  }
+  #company-workspace-design .cw-rail {
+    background: var(--cw-side);
+    border-right: 1px solid var(--cw-line);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+  #company-workspace-design .cw-rail div {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-rail div:first-child {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-sidebar {
+    background: var(--cw-side);
+    padding: 16px 10px;
+    border-right: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-sidebar-title {
+    font-weight: 500;
+    padding: 0 7px;
+    margin-bottom: 14px;
+  }
+  #company-workspace-design .cw-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  #company-workspace-design .cw-nav button {
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    padding: 7px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+  }
+  #company-workspace-design .cw-nav button[aria-current=&#x27;page&#x27;] {
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-side-bottom {
+    padding: 18px 7px 0;
+    margin-top: 20px;
+    border-top: 1px solid var(--cw-line);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-main {
+    padding: calc(var(--cw-space) + 3px);
+    min-width: 0;
+  }
+  #company-workspace-design .cw-pagehead {
+    margin-bottom: 17px;
+  }
+  #company-workspace-design .cw-pagehead p {
+    margin-top: 4px;
+    color: var(--cw-muted);
+  }
+  #company-workspace-design .cw-kicker {
+    color: var(--cw-muted);
+    font-size: 12px;
+    margin-bottom: 5px;
+  }
+  #company-workspace-design .cw-section {
+    margin: 22px 0;
+  }
+  #company-workspace-design .cw-item {
+    border-top: 1px solid var(--cw-line);
+    padding: var(--cw-space) 0;
+  }
+  #company-workspace-design .cw-item:last-child {
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-item p {
+    margin: 3px 0 6px;
+  }
+  #company-workspace-design .cw-status {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12px;
+    color: var(--cw-muted);
+    gap: 5px;
+  }
+  #company-workspace-design .cw-status::before {
+    content: &#x27;&#x27;;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  #company-workspace-design .cw-status[data-tone=&#x27;warning&#x27;] {
+    color: var(--cw-warn);
+  }
+  #company-workspace-design .cw-status[data-tone=&#x27;good&#x27;] {
+    color: var(--cw-good);
+  }
+  #company-workspace-design .cw-status[data-tone=&#x27;active&#x27;] {
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--cw-line);
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-value {
+    font-size: 20px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    display: block;
+  }
+  #company-workspace-design .cw-localnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 13px;
+    margin: 14px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-localnav button {
+    padding: 6px 0;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+  }
+  #company-workspace-design .cw-localnav button[aria-pressed=&#x27;true&#x27;] {
+    border-bottom-color: var(--cw-blue);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-info {
+    background: var(--cw-side);
+    padding: 12px;
+    margin: 12px 0;
+    border-radius: 4px;
+  }
+  #company-workspace-design .cw-evidence {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin: 6px 0;
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-evidence i {
+    flex-shrink: 0;
+  }
+  #company-workspace-design .cw-agent {
+    border-left: 1px solid var(--cw-line);
+    background: var(--cw-side);
+    padding: 16px 13px;
+    min-width: 0;
+  }
+  #company-workspace-design .cw-agent-head {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 16px;
+    font-weight: 500;
+  }
+  #company-workspace-design .cw-agent-context {
+    font-size: 12px;
+    color: var(--cw-muted);
+    border-bottom: 1px solid var(--cw-line);
+    padding-bottom: 12px;
+  }
+  #company-workspace-design .cw-agent-message {
+    margin: 18px 0;
+  }
+  #company-workspace-design .cw-agent-source {
+    font-size: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-agent-input {
+    margin-top: 18px;
+  }
+  #company-workspace-design .cw-agent-input label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-footer {
+    padding: 8px 12px;
+    background: var(--cw-top);
+    color: var(--cw-muted);
+    font-size: 11px;
+    border-top: 1px solid var(--cw-line);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  #company-workspace-design .cw-product table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-product td,
+  #company-workspace-design .cw-product th {
+    text-align: left;
+    font-weight: 400;
+    padding: 9px 4px;
+    border-bottom: 1px solid var(--cw-line);
+    vertical-align: top;
+  }
+  #company-workspace-design .cw-product td:last-child {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  #company-workspace-design .cw-form {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  #company-workspace-design .cw-form label {
+    display: block;
+  }
+  #company-workspace-design .cw-form span {
+    display: block;
+    color: var(--cw-muted);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+  #company-workspace-design .cw-steps {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0;
+  }
+  #company-workspace-design .cw-steps li {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--cw-line);
+  }
+  #company-workspace-design .cw-step-number {
+    color: var(--cw-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  #company-workspace-design .cw-step-detail {
+    grid-column: 2 / -1;
+    color: var(--cw-muted);
+    font-size: 12px;
+  }
+  #company-workspace-design .cw-toast {
+    padding: 8px 10px;
+    margin-bottom: 14px;
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+    border-radius: 3px;
+  }
+  #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;] .cw-body {
+    grid-template-columns: 44px minmax(0, 1fr) 245px;
+  }
+  #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;] .cw-sidebar {
+    display: none;
+  }
+  #company-workspace-design .cw-topnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 17px;
+    border-bottom: 1px solid var(--cw-line);
+    padding-bottom: 10px;
+  }
+  #company-workspace-design .cw-topnav button {
+    border: 0;
+    background: transparent;
+    padding: 4px 7px;
+  }
+  #company-workspace-design .cw-topnav button[aria-current=&#x27;page&#x27;] {
+    background: var(--cw-selected);
+    color: var(--cw-blue);
+  }
+  #company-workspace-design .cw-inbox-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 22px;
+  }
+  #company-workspace-design .cw-product[data-agent=&#x27;hidden&#x27;] .cw-agent {
+    display: none;
+  }
+  #company-workspace-design .cw-product[data-agent=&#x27;hidden&#x27;] .cw-body {
+    grid-template-columns: 44px 145px minmax(0, 1fr);
+  }
+  #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;][data-agent=&#x27;hidden&#x27;] .cw-body {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+  @media (max-width: 850px) {
+    #company-workspace-design .cw-body {
+      grid-template-columns: 38px 130px minmax(0, 1fr);
+    }
+    #company-workspace-design .cw-agent {
+      grid-column: 2 / -1;
+      border-left: 0;
+      border-top: 1px solid var(--cw-line);
+    }
+    #company-workspace-design .cw-agent-sources {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;] .cw-body {
+      grid-template-columns: 38px minmax(0, 1fr);
+    }
+    #company-workspace-design .cw-product {
+      min-height: 1200px;
+    }
+    #company-workspace-design .cw-agent-input {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 10px;
+    }
+    #company-workspace-design .cw-agent-input label {
+      flex: 1 1 200px;
+    }
+    #company-workspace-design .cw-agent-input textarea {
+      min-height: 50px;
+    }
+  }
+  @media (max-width: 570px) {
+    #company-workspace-design .cw-rail {
+      display: none;
+    }
+    #company-workspace-design .cw-body,
+    #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;] .cw-body,
+    #company-workspace-design .cw-product[data-agent=&#x27;hidden&#x27;] .cw-body,
+    #company-workspace-design .cw-product[data-layout=&#x27;inbox&#x27;][data-agent=&#x27;hidden&#x27;] .cw-body {
+      display: block;
+      min-height: 0;
+    }
+    #company-workspace-design .cw-sidebar {
+      border-right: 0;
+      border-bottom: 1px solid var(--cw-line);
+      padding: 10px;
+    }
+    #company-workspace-design .cw-sidebar-title,
+    #company-workspace-design .cw-side-bottom {
+      display: none;
+    }
+    #company-workspace-design .cw-nav {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    #company-workspace-design .cw-nav button {
+      padding: 5px 7px;
+    }
+    #company-workspace-design .cw-nav button i {
+      display: none;
+    }
+    #company-workspace-design .cw-product {
+      min-height: 1490px;
+    }
+    #company-workspace-design .cw-main {
+      padding: 16px 12px;
+    }
+    #company-workspace-design .cw-facts {
+      gap: 7px;
+    }
+    #company-workspace-design .cw-value {
+      font-size: 17px;
+    }
+    #company-workspace-design .cw-inbox-columns {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+    #company-workspace-design .cw-agent {
+      padding: 14px 12px;
+    }
+  }
+  @media (pointer: coarse) {
+    #company-workspace-design .cw-product button {
+      min-height: 44px;
+    }
+    #company-workspace-design .cw-product input,
+    #company-workspace-design .cw-product textarea,
+    #company-workspace-design .cw-product select {
+      font-size: 16px;
+    }
+  }
+&lt;/style&gt;
+&lt;script&gt;
+  ;(function () {
+    const root = document.getElementById(&#x27;company-workspace-design&#x27;)
+    const pages = [
+      [&#x27;overview&#x27;, &#x27;公司总览&#x27;, &#x27;layout-dashboard&#x27;],
+      [&#x27;projects&#x27;, &#x27;业务项目&#x27;, &#x27;folder-kanban&#x27;],
+      [&#x27;finance&#x27;, &#x27;财务&#x27;, &#x27;receipt-text&#x27;],
+      [&#x27;operations&#x27;, &#x27;运营&#x27;, &#x27;send&#x27;],
+      [&#x27;knowledge&#x27;, &#x27;资料与会话&#x27;, &#x27;files&#x27;],
+    ]
+    const defaults = {
+      page: &#x27;overview&#x27;,
+      projectTab: &#x27;work&#x27;,
+      financeTab: &#x27;review&#x27;,
+      knowledgeTab: &#x27;files&#x27;,
+      taskPhase: &#x27;blocked&#x27;,
+      linkedTrial: false,
+      draftOpened: false,
+      receiptOpened: false,
+      billConfirmed: false,
+      publishing: &#x27;idle&#x27;,
+      selectedStep: &#x27;&#x27;,
+      showAgent: true,
+      toast: &#x27;&#x27;,
+      userRequest: &#x27;&#x27;,
+      overlay: &#x27;&#x27;,
+    }
+    const initial = window.openai &amp;&amp; window.openai.widgetState
+    const privateInitial = initial &amp;&amp; initial.privateContent
+    function compatible(saved) {
+      const next = Object.assign({}, defaults)
+      if (!saved || typeof saved !== &#x27;object&#x27;) return next
+      ;[
+        &#x27;page&#x27;,
+        &#x27;projectTab&#x27;,
+        &#x27;financeTab&#x27;,
+        &#x27;knowledgeTab&#x27;,
+        &#x27;taskPhase&#x27;,
+        &#x27;publishing&#x27;,
+        &#x27;selectedStep&#x27;,
+        &#x27;userRequest&#x27;,
+      ].forEach(function (k) {
+        if (typeof saved[k] === &#x27;string&#x27;) next[k] = saved[k]
+      })
+      ;[&#x27;linkedTrial&#x27;, &#x27;draftOpened&#x27;, &#x27;receiptOpened&#x27;, &#x27;billConfirmed&#x27;, &#x27;showAgent&#x27;].forEach(
+        function (k) {
+          if (typeof saved[k] === &#x27;boolean&#x27;) next[k] = saved[k]
+        },
+      )
+      if (
+        ![&#x27;overview&#x27;, &#x27;projects&#x27;, &#x27;project&#x27;, &#x27;task&#x27;, &#x27;finance&#x27;, &#x27;operations&#x27;, &#x27;knowledge&#x27;].includes(
+          next.page,
+        )
+      )
+        next.page = &#x27;overview&#x27;
+      if (![&#x27;blocked&#x27;, &#x27;ready&#x27;, &#x27;plan&#x27;, &#x27;draft&#x27;, &#x27;accepted&#x27;].includes(next.taskPhase))
+        next.taskPhase = &#x27;blocked&#x27;
+      if (![&#x27;idle&#x27;, &#x27;plan&#x27;, &#x27;unknown&#x27;, &#x27;verified&#x27;].includes(next.publishing))
+        next.publishing = &#x27;idle&#x27;
+      if (!next.linkedTrial) next.taskPhase = &#x27;blocked&#x27;
+      if (next.publishing !== &#x27;idle&#x27; &amp;&amp; next.taskPhase !== &#x27;accepted&#x27;) next.publishing = &#x27;idle&#x27;
+      return next
+    }
+    const variants = [&#x27;cw-navigation&#x27;, &#x27;cw-inbox&#x27;].map(function (id) {
+      return {
+        el: document.getElementById(id),
+        state: compatible(privateInitial &amp;&amp; privateInitial[id]),
+        design: { density: &#x27;舒适&#x27; },
+      }
+    })
+    function esc(value) {
+      return String(value).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g, function (c) {
+        return { &#x27;&amp;&#x27;: &#x27;&amp;amp;&#x27;, &#x27;&lt;&#x27;: &#x27;&amp;lt;&#x27;, &#x27;&gt;&#x27;: &#x27;&amp;gt;&#x27;, &#x27;&quot;&#x27;: &#x27;&amp;quot;&#x27;, &quot;&#x27;&quot;: &#x27;&amp;#39;&#x27; }[c]
+      })
+    }
+    function icon(name) {
+      return &#x27;&lt;i data-lucide=&quot;&#x27; + name + &#x27;&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&#x27;
+    }
+    function action(label, cmd, primary, disabled) {
+      return (
+        &#x27;&lt;button type=&quot;button&quot; data-action=&quot;&#x27; +
+        cmd +
+        &#x27;&quot;&#x27; +
+        (primary ? &#x27; class=&quot;cw-main-action&quot;&#x27; : &#x27;&#x27;) +
+        (disabled ? &#x27; disabled&#x27; : &#x27;&#x27;) +
+        &#x27;&gt;&#x27; +
+        label +
+        &#x27;&lt;/button&gt;&#x27;
+      )
+    }
+    function link(label, cmd) {
+      return (
+        &#x27;&lt;button type=&quot;button&quot; class=&quot;cw-link&quot; data-action=&quot;&#x27; + cmd + &#x27;&quot;&gt;&#x27; + label + &#x27;&lt;/button&gt;&#x27;
+      )
+    }
+    function status(label, tone) {
+      return &#x27;&lt;span class=&quot;cw-status&quot; data-tone=&quot;&#x27; + (tone || &#x27;&#x27;) + &#x27;&quot;&gt;&#x27; + label + &#x27;&lt;/span&gt;&#x27;
+    }
+    function taskStatus(s) {
+      return {
+        blocked: &#x27;需要补资料&#x27;,
+        ready: &#x27;待开始&#x27;,
+        plan: &#x27;计划待接受&#x27;,
+        draft: &#x27;待验收&#x27;,
+        accepted: &#x27;已验收&#x27;,
+      }[s.taskPhase]
+    }
+    function publicationStatus(s) {
+      return {
+        idle: &#x27;待发布&#x27;,
+        plan: &#x27;范围待确认&#x27;,
+        unknown: &#x27;提交结果未知&#x27;,
+        verified: &#x27;已发布 · 结果已核验&#x27;,
+      }[s.publishing]
+    }
+    function heading(kicker, title, subtitle) {
+      return (
+        &#x27;&lt;div class=&quot;cw-pagehead&quot;&gt;&lt;div class=&quot;cw-kicker&quot;&gt;&#x27; +
+        kicker +
+        &#x27;&lt;/div&gt;&lt;h1&gt;&#x27; +
+        title +
+        &#x27;&lt;/h1&gt;&lt;p&gt;&#x27; +
+        subtitle +
+        &#x27;&lt;/p&gt;&lt;/div&gt;&#x27;
+      )
+    }
+    function facts(s) {
+      return (
+        &#x27;&lt;div class=&quot;cw-facts&quot;&gt;&lt;div&gt;&lt;span class=&quot;cw-muted cw-small&quot;&gt;9 月已确认收入&lt;/span&gt;&lt;span class=&quot;cw-value&quot;&gt;¥3,000.00&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span class=&quot;cw-muted cw-small&quot;&gt;9 月已确认支出&lt;/span&gt;&lt;span class=&quot;cw-value&quot;&gt;¥&#x27; +
+        (s.billConfirmed ? &#x27;1,820.40&#x27; : &#x27;1,640.40&#x27;) +
+        &#x27;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span class=&quot;cw-muted cw-small&quot;&gt;净流入&lt;/span&gt;&lt;span class=&quot;cw-value&quot;&gt;¥&#x27; +
+        (s.billConfirmed ? &#x27;1,179.60&#x27; : &#x27;1,359.60&#x27;) +
+        &#x27;&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&#x27;
+      )
+    }
+    function needs(s) {
+      let html = &#x27;&#x27;
+      if (s.taskPhase !== &#x27;accepted&#x27;)
+        html +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;产品介绍稿：&#x27; +
+          (s.linkedTrial ? &#x27;下一步已可推进&#x27; : &#x27;缺少试戴记录&#x27;) +
+          &#x27;&lt;/strong&gt;&#x27; +
+          status(taskStatus(s), s.taskPhase === &#x27;draft&#x27; ? &#x27;active&#x27; : &#x27;warning&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;AR 眼镜一代 · &#x27; +
+          (s.linkedTrial
+            ? &#x27;已关联规格与试戴资料，完成条件是稿件保存并由你验收。&#x27;
+            : &#x27;试戴体验需要原始材料；当前只关联了产品规格。&#x27;) +
+          &#x27;&lt;/p&gt;&#x27; +
+          link(s.taskPhase === &#x27;draft&#x27; ? &#x27;查看产物并验收 →&#x27; : &#x27;查看卡点与下一步 →&#x27;, &#x27;task&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (!s.billConfirmed)
+        html +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;测试服务支出 ¥180.00&lt;/strong&gt;&#x27; +
+          status(&#x27;待核对&#x27;, &#x27;warning&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;9 月经营账 · 凭证已关联，尚未人工确认；未计入上方汇总。&lt;/p&gt;&#x27; +
+          link(&#x27;打开流水与原件 →&#x27;, &#x27;finance&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (s.publishing === &#x27;unknown&#x27;)
+        html +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;产品介绍文章：提交结果未知&lt;/strong&gt;&#x27; +
+          status(&#x27;仅允许核验&#x27;, &#x27;warning&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;需要检查平台结果；当前不允许重复发布。&lt;/p&gt;&#x27; +
+          link(&#x27;检查发布结果 →&#x27;, &#x27;operations&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (!html)
+        html =
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&#x27; +
+          status(&#x27;当前没有需要你处理的事项&#x27;, &#x27;good&#x27;) +
+          &#x27;&lt;p class=&quot;cw-muted cw-small&quot;&gt;已有成果与发布回执保留在对应业务中。&lt;/p&gt;&lt;/article&gt;&#x27;
+      return html
+    }
+    function projectSummary(s) {
+      return (
+        &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&#x27; +
+        link(&#x27;AR 眼镜一代&#x27;, &#x27;project&#x27;) +
+        status(
+          s.taskPhase === &#x27;accepted&#x27; ? &#x27;稿件已验收&#x27; : &#x27;正在推进&#x27;,
+          s.taskPhase === &#x27;accepted&#x27; ? &#x27;good&#x27; : &#x27;active&#x27;,
+        ) +
+        &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;目标：形成可验收的试戴资料与产品介绍稿。&lt;/p&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;span class=&quot;cw-small&quot;&gt;项目已确认支出 ¥&#x27; +
+        (s.billConfirmed ? &#x27;1,820.40&#x27; : &#x27;1,640.40&#x27;) +
+        &#x27;&lt;/span&gt;&lt;span class=&quot;cw-small cw-muted&quot;&gt;介绍稿 · &#x27; +
+        taskStatus(s) +
+        &#x27;&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+        action(&#x27;进入业务项目&#x27;, &#x27;project&#x27;) +
+        &#x27;&lt;/div&gt;&lt;/article&gt;&#x27;
+      )
+    }
+    function overview(v) {
+      const s = v.state
+      let body = heading(
+        &#x27;公司 / 本周工作&#x27;,
+        v.el.dataset.layout === &#x27;inbox&#x27; ? &#x27;今天需要推进什么&#x27; : &#x27;公司总览&#x27;,
+        &#x27;示例公司 · 个人经营，AI 协助推进&#x27;,
+      )
+      if (v.el.dataset.layout === &#x27;inbox&#x27;) {
+        body +=
+          &#x27;&lt;div class=&quot;cw-inbox-columns&quot;&gt;&lt;section&gt;&lt;h2&gt;需要我处理&lt;/h2&gt;&#x27; +
+          needs(s) +
+          &#x27;&lt;/section&gt;&lt;section&gt;&lt;h2&gt;业务上下文&lt;/h2&gt;&#x27; +
+          projectSummary(s) +
+          &#x27;&lt;div class=&quot;cw-section&quot;&gt;&lt;h3&gt;关联运营&lt;/h3&gt;&#x27; +
+          status(publicationStatus(s), s.publishing === &#x27;verified&#x27; ? &#x27;good&#x27; : &#x27;&#x27;) +
+          &#x27;&lt;p class=&quot;cw-muted cw-small&quot;&gt;产品介绍稿 → CSDN 示例账号&lt;/p&gt;&#x27; +
+          link(&#x27;查看内容和发布结果 →&#x27;, &#x27;operations&#x27;) +
+          &#x27;&lt;/div&gt;&lt;/section&gt;&lt;/div&gt;&lt;section class=&quot;cw-section&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h2&gt;9 月经营账&lt;/h2&gt;&#x27; +
+          link(&#x27;核对与导出 →&#x27;, &#x27;finance&#x27;) +
+          &#x27;&lt;/div&gt;&#x27; +
+          facts(s) +
+          &#x27;&lt;/section&gt;&#x27;
+      } else {
+        body +=
+          &#x27;&lt;section&gt;&lt;h2&gt;需要我处理&lt;/h2&gt;&#x27; +
+          needs(s) +
+          &#x27;&lt;/section&gt;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;正在推进&lt;/h2&gt;&#x27; +
+          projectSummary(s) +
+          &#x27;&lt;/section&gt;&lt;section class=&quot;cw-section&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h2&gt;9 月经营账&lt;/h2&gt;&#x27; +
+          link(&#x27;查看原始账目 →&#x27;, &#x27;finance&#x27;) +
+          &#x27;&lt;/div&gt;&#x27; +
+          facts(s) +
+          &#x27;&lt;p class=&quot;cw-muted cw-small&quot;&gt;按已确认记录汇总 · &#x27; +
+          (s.billConfirmed ? &#x27;5&#x27; : &#x27;4&#x27;) +
+          &#x27; 条已确认，&#x27; +
+          (s.billConfirmed ? &#x27;0&#x27; : &#x27;1&#x27;) +
+          &#x27; 条待核对 · 月份资料完整性仍需人工检查&lt;/p&gt;&lt;/section&gt;&#x27;
+      }
+      return body
+    }
+    function localTabs(items, current, actionPrefix) {
+      return (
+        &#x27;&lt;nav class=&quot;cw-localnav&quot; aria-label=&quot;当前业务视图&quot;&gt;&#x27; +
+        items
+          .map(function (it) {
+            return (
+              &#x27;&lt;button type=&quot;button&quot; aria-pressed=&quot;&#x27; +
+              (current === it[0]) +
+              &#x27;&quot; data-action=&quot;&#x27; +
+              actionPrefix +
+              &#x27;:&#x27; +
+              it[0] +
+              &#x27;&quot;&gt;&#x27; +
+              it[1] +
+              &#x27;&lt;/button&gt;&#x27;
+            )
+          })
+          .join(&#x27;&#x27;) +
+        &#x27;&lt;/nav&gt;&#x27;
+      )
+    }
+    function projects(s) {
+      return (
+        heading(&#x27;公司 / 业务项目&#x27;, &#x27;业务项目&#x27;, &#x27;围绕目标组织工作、支出、运营内容与资料。&#x27;) +
+        projectSummary(s) +
+        &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;创建下一件业务&lt;/h2&gt;&lt;label&gt;项目名称&lt;input data-input=&quot;projectName&quot; placeholder=&quot;例如：10 月客户调研&quot; maxlength=&quot;80&quot;&gt;&lt;/label&gt;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+        action(&#x27;生成项目草案&#x27;, &#x27;newProject&#x27;, true) +
+        &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;只需名称；目标与交付物可以随后补充。&lt;/p&gt;&lt;/section&gt;&#x27;
+      )
+    }
+    function project(s) {
+      let body = heading(
+        &#x27;公司 / 业务项目&#x27;,
+        &#x27;AR 眼镜一代&#x27;,
+        &#x27;交付物：试戴记录与产品介绍稿。截止日期尚未设定。&#x27;,
+      )
+      body += localTabs(
+        [
+          [&#x27;work&#x27;, &#x27;工作&#x27;],
+          [&#x27;spending&#x27;, &#x27;关联支出&#x27;],
+          [&#x27;content&#x27;, &#x27;运营内容&#x27;],
+          [&#x27;sources&#x27;, &#x27;资料&#x27;],
+        ],
+        s.projectTab,
+        &#x27;projectTab&#x27;,
+      )
+      if (s.projectTab === &#x27;work&#x27;)
+        body +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;准备产品介绍稿&lt;/strong&gt;&#x27; +
+          status(taskStatus(s), s.taskPhase === &#x27;accepted&#x27; ? &#x27;good&#x27; : &#x27;warning&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;执行者：AI · 验收者：你 · 完成条件：引用规格与试戴材料，保存稿件并验收。&lt;/p&gt;&#x27; +
+          link(&#x27;打开工作详情 →&#x27;, &#x27;task&#x27;) +
+          &#x27;&lt;/article&gt;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;试戴记录&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;&#x27; +
+          (s.linkedTrial
+            ? &#x27;已关联试戴记录-v2.md；原件可查看。&#x27;
+            : &#x27;还未关联到本项目，不根据聊天摘要推测体验。&#x27;) +
+          &#x27;&lt;/p&gt;&#x27; +
+          link(&#x27;查看资料 →&#x27;, &#x27;knowledge&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (s.projectTab === &#x27;spending&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;span class=&quot;cw-muted cw-small&quot;&gt;已绑定账目归属：AR 眼镜一代&lt;/span&gt;&lt;span class=&quot;cw-value&quot;&gt;¥&#x27; +
+          (s.billConfirmed ? &#x27;1,820.40&#x27; : &#x27;1,640.40&#x27;) +
+          &#x27;&lt;/span&gt;&lt;span class=&quot;cw-small&quot;&gt;已确认实际支出&lt;/span&gt;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;这是实际支出，不是完整项目成本。待核对 ¥&#x27; +
+          (s.billConfirmed ? &#x27;0.00&#x27; : &#x27;180.00&#x27;) +
+          &#x27; 单独列示。&lt;/p&gt;&#x27; +
+          action(&#x27;打开原始流水与凭证&#x27;, &#x27;finance&#x27;)
+      if (s.projectTab === &#x27;content&#x27;)
+        body +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;AR 眼镜一代：产品介绍&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;稿件：&#x27; +
+          taskStatus(s) +
+          &#x27; · 平台结果：&#x27; +
+          publicationStatus(s) +
+          &#x27;&lt;/p&gt;&#x27; +
+          link(&#x27;打开运营内容 →&#x27;, &#x27;operations&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (s.projectTab === &#x27;sources&#x27;)
+        body +=
+          sources(s) +
+          &#x27;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+          action(&#x27;管理关联资料与会话&#x27;, &#x27;knowledge&#x27;) +
+          &#x27;&lt;/div&gt;&#x27;
+      return body
+    }
+    function sources(s) {
+      return (
+        &#x27;&lt;div class=&quot;cw-evidence&quot;&gt;&#x27; +
+        icon(&#x27;file-text&#x27;) +
+        &#x27;产品规格.md &lt;span class=&quot;cw-muted&quot;&gt;已关联&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;cw-evidence&quot;&gt;&#x27; +
+        icon(&#x27;file-text&#x27;) +
+        &#x27;试戴记录-v2.md &lt;span class=&quot;cw-muted&quot;&gt;&#x27; +
+        (s.linkedTrial ? &#x27;已关联&#x27; : &#x27;尚未关联&#x27;) +
+        &#x27;&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;cw-evidence&quot;&gt;&#x27; +
+        icon(&#x27;messages-square&#x27;) +
+        &#x27;眼镜定位讨论 &lt;span class=&quot;cw-muted&quot;&gt;用户选定会话&lt;/span&gt;&lt;/div&gt;&#x27;
+      )
+    }
+    function task(s) {
+      let body = heading(
+        &#x27;AR 眼镜一代 / 工作详情&#x27;,
+        &#x27;准备产品介绍稿&#x27;,
+        &#x27;AI 准备材料与稿件，由你验收具体产物。&#x27;,
+      )
+      body +=
+        &#x27;&lt;div class=&quot;cw-row&quot;&gt;&#x27; +
+        status(taskStatus(s), s.taskPhase === &#x27;accepted&#x27; ? &#x27;good&#x27; : &#x27;warning&#x27;) +
+        &#x27;&lt;span class=&quot;cw-muted cw-small&quot;&gt;执行者 AI · 验收者 你&lt;/span&gt;&lt;/div&gt;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;使用的资料&lt;/h2&gt;&#x27; +
+        sources(s) +
+        &#x27;&lt;/section&gt;&#x27;
+      if (!s.linkedTrial)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;h3&gt;缺少原始试戴材料&lt;/h3&gt;&lt;p&gt;稿件的体验部分需要事实来源。可先关联现有记录，再让 AI 准备。&lt;/p&gt;&#x27; +
+          action(&#x27;关联试戴记录（演示）&#x27;, &#x27;attachTrial&#x27;, true) +
+          &#x27;&lt;/div&gt;&#x27;
+      body +=
+        &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;完成条件&lt;/h2&gt;&lt;p&gt;稿件引用选定规格和试戴记录，存到「运营/产品介绍稿.md」；你打开该版本并验收。&lt;/p&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;本项工作只准备稿件。平台与账号在后续发布范围中明确选择。&lt;/p&gt;&lt;/section&gt;&#x27;
+      if (s.taskPhase === &#x27;ready&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; + action(&#x27;让 AI 准备下一步&#x27;, &#x27;preparePlan&#x27;, true) + &#x27;&lt;/div&gt;&#x27;
+      if (s.taskPhase === &#x27;plan&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;h3&gt;本次准备计划&lt;/h3&gt;&lt;p&gt;1. 读取两份已选资料。&lt;br&gt;2. 整理规格与试戴事实，保留出处。&lt;br&gt;3. 保存介绍稿，提交你验收。&lt;/p&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;输出：运营/产品介绍稿.md · 不对外发送&lt;/p&gt;&#x27; +
+          action(&#x27;接受并开始准备（演示）&#x27;, &#x27;runDraft&#x27;, true) +
+          &#x27;&lt;/div&gt;&#x27;
+      if (s.taskPhase === &#x27;draft&#x27; || s.taskPhase === &#x27;accepted&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h3&gt;产品介绍稿.md&lt;/h3&gt;&#x27; +
+          status(
+            s.taskPhase === &#x27;accepted&#x27; ? &#x27;已验收版本 v1&#x27; : &#x27;产物 v1 · 待验收&#x27;,
+            s.taskPhase === &#x27;accepted&#x27; ? &#x27;good&#x27; : &#x27;active&#x27;,
+          ) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;来源：产品规格.md、试戴记录-v2.md&lt;/p&gt;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+          action(&#x27;查看稿件&#x27;, &#x27;openDraft&#x27;) +
+          (s.taskPhase === &#x27;draft&#x27;
+            ? action(&#x27;验收完成（演示）&#x27;, &#x27;acceptDraft&#x27;, true, !s.draftOpened)
+            : action(&#x27;继续准备发布&#x27;, &#x27;operations&#x27;, true)) +
+          &#x27;&lt;/div&gt;&#x27; +
+          (s.taskPhase === &#x27;draft&#x27; &amp;&amp; !s.draftOpened
+            ? &#x27;&lt;p class=&quot;cw-muted cw-small&quot;&gt;先打开稿件检查，再验收此版本。&lt;/p&gt;&#x27;
+            : &#x27;&#x27;) +
+          &#x27;&lt;/div&gt;&#x27;
+      return body
+    }
+    function finance(s) {
+      let body = heading(&#x27;公司 / 财务&#x27;, &#x27;9 月经营账&#x27;, &#x27;人工确认后进入统计，记录可追溯到原件。&#x27;)
+      body += localTabs(
+        [
+          [&#x27;review&#x27;, &#x27;导入与核对&#x27;],
+          [&#x27;summary&#x27;, &#x27;月度汇总&#x27;],
+          [&#x27;handoff&#x27;, &#x27;导出与备份&#x27;],
+        ],
+        s.financeTab,
+        &#x27;financeTab&#x27;,
+      )
+      if (s.financeTab === &#x27;summary&#x27;)
+        body +=
+          facts(s) +
+          &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;项目实际支出&lt;/h2&gt;&lt;div class=&quot;cw-item cw-row&quot;&gt;&#x27; +
+          link(&#x27;AR 眼镜一代 →&#x27;, &#x27;projectSpending&#x27;) +
+          &#x27;&lt;strong&gt;¥&#x27; +
+          (s.billConfirmed ? &#x27;1,820.40&#x27; : &#x27;1,640.40&#x27;) +
+          &#x27;&lt;/strong&gt;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;待核对不计入汇总；资料未齐时，净流入不代表完整月份，也不等于利润。&lt;/p&gt;&lt;/section&gt;&#x27;
+      if (s.financeTab === &#x27;review&#x27;) {
+        body +=
+          &#x27;&lt;table aria-label=&quot;示例流水&quot;&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;流水与用途&lt;/th&gt;&lt;th&gt;状态&lt;/th&gt;&lt;th&gt;金额&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;服务收入&lt;/td&gt;&lt;td&gt;已确认&lt;/td&gt;&lt;td&gt;+3,000.00&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;器件采购&lt;/td&gt;&lt;td&gt;已确认&lt;/td&gt;&lt;td&gt;−1,280.50&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;研发打样&lt;/td&gt;&lt;td&gt;已确认&lt;/td&gt;&lt;td&gt;−260.00&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;研发服务&lt;/td&gt;&lt;td&gt;已确认&lt;/td&gt;&lt;td&gt;−99.90&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;&lt;strong&gt;测试服务&lt;/strong&gt;&lt;/td&gt;&lt;td&gt;&#x27; +
+          (s.billConfirmed ? &#x27;已确认&#x27; : &#x27;待核对&#x27;) +
+          &#x27;&lt;/td&gt;&lt;td&gt;−180.00&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&#x27;
+        body +=
+          &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h2&gt;测试服务 · ¥180.00&lt;/h2&gt;&#x27; +
+          status(
+            s.billConfirmed ? &#x27;已人工确认（演示）&#x27; : &#x27;AI 建议待核对&#x27;,
+            s.billConfirmed ? &#x27;good&#x27; : &#x27;warning&#x27;,
+          ) +
+          &#x27;&lt;/div&gt;&lt;div class=&quot;cw-form&quot;&gt;&lt;label&gt;&lt;span&gt;用途&lt;/span&gt;&lt;input value=&quot;测试服务&quot; readonly&gt;&lt;/label&gt;&lt;label&gt;&lt;span&gt;所属项目&lt;/span&gt;&lt;input value=&quot;AR 眼镜一代&quot; readonly&gt;&lt;/label&gt;&lt;/div&gt;&lt;div class=&quot;cw-evidence&quot;&gt;&#x27; +
+          icon(&#x27;paperclip&#x27;) +
+          link(&#x27;测试服务收据.pdf · 查看原件&#x27;, &#x27;openReceipt&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;AI 建议：研发服务。确认后，本项目实际支出增加 ¥180.00。&lt;/p&gt;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+          action(
+            s.billConfirmed ? &#x27;已确认此版本&#x27; : &#x27;人工确认（演示）&#x27;,
+            &#x27;confirmBill&#x27;,
+            true,
+            s.billConfirmed || !s.receiptOpened,
+          ) +
+          action(&#x27;查看月度汇总&#x27;, &#x27;summary&#x27;) +
+          &#x27;&lt;/div&gt;&#x27; +
+          (!s.receiptOpened &amp;&amp; !s.billConfirmed
+            ? &#x27;&lt;p class=&quot;cw-muted cw-small&quot;&gt;先查看原件，再确认此版本。&lt;/p&gt;&#x27;
+            : &#x27;&#x27;) +
+          &#x27;&lt;/section&gt;&#x27;
+      }
+      if (s.financeTab === &#x27;handoff&#x27;)
+        body +=
+          &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;交给现有代账&lt;/h2&gt;&lt;p&gt;按 9 月已确认记录准备明细、汇总、修改历史与凭证索引。&lt;/p&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;待核对 &#x27; +
+          (s.billConfirmed ? &#x27;0&#x27; : &#x27;1&#x27;) +
+          &#x27; 条未计入。代账可用性需要真实交付确认。&lt;/p&gt;&#x27; +
+          action(&#x27;查看导出包内容&#x27;, &#x27;exportPreview&#x27;) +
+          &#x27;&lt;/section&gt;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;账目备份&lt;/h2&gt;&lt;p&gt;覆盖数据库、原件与修改历史。&lt;/p&gt;&#x27; +
+          action(&#x27;查看备份范围&#x27;, &#x27;backupPreview&#x27;) +
+          &#x27;&lt;/section&gt;&#x27;
+      return body
+    }
+    function opsSteps(s) {
+      const done = s.publishing === &#x27;unknown&#x27; || s.publishing === &#x27;verified&#x27;
+      const steps = [
+        [
+          &#x27;准备与资料检查&#x27;,
+          &#x27;Studio&#x27;,
+          &#x27;项目、原稿和图片范围已指定&#x27;,
+          &#x27;用户已验收稿件并接受本次发布范围&#x27;,
+          &#x27;校验原稿和两张图片，固定本次资料范围&#x27;,
+        ],
+        [
+          &#x27;账号与原稿核验&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;CSDN 示例账号 · 草稿 ID demo-001&#x27;,
+          &#x27;资料检查已通过，选定账号可用&#x27;,
+          &#x27;观察真实账号和同一草稿，核对作者与原稿身份&#x27;,
+        ],
+        [
+          &#x27;正文填写与回读&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;正文内容与本次原稿一致&#x27;,
+          &#x27;账号与草稿身份已核验&#x27;,
+          &#x27;写入正文，并回读段落、链接和格式&#x27;,
+        ],
+        [
+          &#x27;图片 1 上传与位置核验&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;图片 1 已加载，位置与原稿一致&#x27;,
+          &#x27;正文已回读，图片 1 来源与目标位置明确&#x27;,
+          &#x27;上传图片 1，核对实际结果及正文位置&#x27;,
+        ],
+        [
+          &#x27;图片 2 上传与位置核验&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;图片 2 已加载，位置与原稿一致&#x27;,
+          &#x27;图片 1 已核验，图片 2 来源与目标位置明确&#x27;,
+          &#x27;上传图片 2，核对实际结果及正文位置&#x27;,
+        ],
+        [
+          &#x27;平台字段&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;标题、摘要与标签按启动快照核对&#x27;,
+          &#x27;正文与全部图片均已核验&#x27;,
+          &#x27;填写本平台需要的字段，并回读结果&#x27;,
+        ],
+        [
+          &#x27;保存草稿&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;同一草稿 ID 的保存结果已回读&#x27;,
+          &#x27;内容和平台字段已完成&#x27;,
+          &#x27;保存后重新读取同一草稿，核验服务端结果&#x27;,
+        ],
+        [
+          &#x27;提交发布&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;一次提交的结果需核验&#x27;,
+          &#x27;草稿保存已核验，授权快照一致且无特殊人工卡点&#x27;,
+          &#x27;仅提交本次单篇文章；结果未知时立即停止写入&#x27;,
+        ],
+        [
+          &#x27;平台结果核验&#x27;,
+          &#x27;AI&#x27;,
+          &#x27;原账号、标题、正文和两张公开图片一致&#x27;,
+          &#x27;同一文章的提交已发出，或已有可识别公开结果&#x27;,
+          &#x27;只读检查原稿与公开结果，保留回执、状态和地址&#x27;,
+        ],
+      ]
+      return (
+        &#x27;&lt;ol class=&quot;cw-steps&quot;&gt;&#x27; +
+        steps
+          .map(function (it, i) {
+            const verified = s.publishing === &#x27;verified&#x27;
+            let label = done &amp;&amp; i &lt; 7 ? &#x27;已核验&#x27; : &#x27;待执行&#x27;
+            if (done &amp;&amp; i === 7) label = verified ? &#x27;已核验&#x27; : &#x27;结果未知&#x27;
+            if (done &amp;&amp; i === 8) label = verified ? &#x27;公开结果一致&#x27; : &#x27;待核验&#x27;
+            const detail = String(i) === s.selectedStep
+            const unknown = done &amp;&amp; !verified &amp;&amp; i &gt;= 7
+            return (
+              &#x27;&lt;li&gt;&lt;span class=&quot;cw-step-number&quot;&gt;&#x27; +
+              (i + 1) +
+              &#x27;&lt;/span&gt;&lt;span&gt;&#x27; +
+              it[0] +
+              &#x27;&lt;/span&gt;&#x27; +
+              status(
+                label,
+                label === &#x27;结果未知&#x27;
+                  ? &#x27;warning&#x27;
+                  : label === &#x27;已核验&#x27; || label === &#x27;公开结果一致&#x27;
+                    ? &#x27;good&#x27;
+                    : &#x27;&#x27;,
+              ) +
+              &#x27;&lt;span class=&quot;cw-step-detail&quot;&gt;执行者 &#x27; +
+              it[1] +
+              &#x27; · &#x27; +
+              (done ? it[2] : &#x27;尚未执行，完成证据未产生&#x27;) +
+              &#x27; · &#x27; +
+              link(detail ? &#x27;收起详情&#x27; : &#x27;查看本步&#x27;, &#x27;step:&#x27; + i) +
+              &#x27;&lt;/span&gt;&#x27; +
+              (detail
+                ? &#x27;&lt;div class=&quot;cw-step-detail cw-info&quot;&gt;&lt;strong&gt;动作&lt;/strong&gt;：&#x27; +
+                  it[4] +
+                  &#x27;&lt;br&gt;&lt;strong&gt;进入条件&lt;/strong&gt;：&#x27; +
+                  it[3] +
+                  &#x27;&lt;br&gt;&lt;strong&gt;当前状态&lt;/strong&gt;：&#x27; +
+                  label +
+                  &#x27;&lt;br&gt;&lt;strong&gt;完成条件与证据&lt;/strong&gt;：&#x27; +
+                  (done &amp;&amp; !unknown ? it[2] : &#x27;尚无完成证据；需按上述动作取得真实回读或回执&#x27;) +
+                  &#x27;&lt;br&gt;&lt;strong&gt;等待或失败原因&lt;/strong&gt;：&#x27; +
+                  (unknown
+                    ? &#x27;一次提交后未取得可靠回执，后续公开结果尚待核验&#x27;
+                    : done
+                      ? &#x27;无，本步已取得示例核验结果&#x27;
+                      : &#x27;执行尚未开始&#x27;) +
+                  &#x27;&lt;br&gt;&lt;strong&gt;允许下一步&lt;/strong&gt;：&#x27; +
+                  (unknown
+                    ? &#x27;只读核验；仍无法识别时由用户处理，禁止重复提交&#x27;
+                    : done
+                      ? &#x27;查看证据或进入下一个允许执行的步骤&#x27;
+                      : &#x27;先满足进入条件，再启动对应动作&#x27;) +
+                  &#x27;&lt;/div&gt;&#x27;
+                : &#x27;&#x27;) +
+              &#x27;&lt;/li&gt;&#x27;
+            )
+          })
+          .join(&#x27;&#x27;) +
+        &#x27;&lt;/ol&gt;&#x27;
+      )
+    }
+    function operations(s) {
+      let body = heading(
+        &#x27;公司 / 运营&#x27;,
+        &#x27;内容与发布&#x27;,
+        &#x27;同一件业务的稿件、账号、执行步骤和平台结果。&#x27;,
+      )
+      body +=
+        &#x27;&lt;div class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;AR 眼镜一代：产品介绍&lt;/strong&gt;&#x27; +
+        status(
+          publicationStatus(s),
+          s.publishing === &#x27;verified&#x27; ? &#x27;good&#x27; : s.publishing === &#x27;unknown&#x27; ? &#x27;warning&#x27; : &#x27;&#x27;,
+        ) +
+        &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;业务项目：AR 眼镜一代 · 原稿：运营/产品介绍稿.md&lt;/p&gt;&lt;p class=&quot;cw-small&quot;&gt;稿件 &#x27; +
+        taskStatus(s) +
+        &#x27; · 目标平台 CSDN · 示例账号&lt;/p&gt;&lt;/div&gt;&#x27;
+      if (s.taskPhase !== &#x27;accepted&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;h3&gt;原稿尚未验收&lt;/h3&gt;&lt;p&gt;先查看并验收稿件，再开始此次对外发布。&lt;/p&gt;&#x27; +
+          action(&#x27;打开稿件工作&#x27;, &#x27;task&#x27;, true) +
+          &#x27;&lt;/div&gt;&#x27;
+      if (s.taskPhase === &#x27;accepted&#x27; &amp;&amp; s.publishing === &#x27;idle&#x27;)
+        body += &#x27;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; + action(&#x27;查看发布范围&#x27;, &#x27;publishPlan&#x27;, true) + &#x27;&lt;/div&gt;&#x27;
+      if (s.publishing === &#x27;plan&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;h3&gt;本次发布范围&lt;/h3&gt;&lt;p&gt;平台：CSDN&lt;br&gt;账号：示例公司（演示）&lt;br&gt;原稿：产品介绍稿.md · 已验收 v1&lt;br&gt;图片：用户选定的 2 张示例图片&lt;br&gt;目标：单篇文章公开提交并核验结果&lt;/p&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;出现验证码、法律声明、账号变化或未知后果时交给你处理。&lt;/p&gt;&#x27; +
+          action(&#x27;开始执行（演示）&#x27;, &#x27;startPublish&#x27;, true) +
+          &#x27;&lt;/div&gt;&#x27;
+      if (s.publishing === &#x27;unknown&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;h3&gt;提交结果未知，已停止写入&lt;/h3&gt;&lt;p&gt;示例执行在一次提交后未取得可靠回执。保留原账号和草稿，仅允许查询结果。&lt;/p&gt;&#x27; +
+          action(&#x27;只读检查结果（演示）&#x27;, &#x27;verifyPublish&#x27;, true) +
+          &#x27;&lt;/div&gt;&#x27;
+      if (s.publishing === &#x27;verified&#x27;)
+        body +=
+          &#x27;&lt;div class=&quot;cw-info&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h3&gt;公开结果核验通过&lt;/h3&gt;&#x27; +
+          status(&#x27;示例回执&#x27;, &#x27;good&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-small&quot;&gt;原账号、标题、正文和 2 张图片一致。&lt;/p&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;核验时间：2026-10-14 10:30（演示）&lt;/p&gt;&#x27; +
+          action(&#x27;查看结果证据&#x27;, &#x27;publicEvidence&#x27;) +
+          &#x27;&lt;/div&gt;&#x27;
+      body +=
+        &#x27;&lt;section class=&quot;cw-section&quot;&gt;&lt;h2&gt;发布执行计划&lt;/h2&gt;&#x27; +
+        opsSteps(s) +
+        &#x27;&lt;/section&gt;&lt;div class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;CCLink 更新说明&lt;/strong&gt;&#x27; +
+        status(&#x27;草稿已保存&#x27;) +
+        &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;另一条示例内容 · 尚未公开发布，保存不等于发布成功。&lt;/p&gt;&lt;/div&gt;&#x27;
+      return body
+    }
+    function knowledge(s) {
+      let body = heading(
+        &#x27;公司 / 资料与会话&#x27;,
+        &#x27;资料与会话&#x27;,
+        &#x27;由你选择关联；AI 建议与确认的决策分开展示。&#x27;,
+      )
+      body += localTabs(
+        [
+          [&#x27;files&#x27;, &#x27;资料&#x27;],
+          [&#x27;sessions&#x27;, &#x27;相关会话&#x27;],
+          [&#x27;decisions&#x27;, &#x27;决策&#x27;],
+        ],
+        s.knowledgeTab,
+        &#x27;knowledgeTab&#x27;,
+      )
+      if (s.knowledgeTab === &#x27;files&#x27;)
+        body +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;产品规格.md&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;项目文件 · 已关联 AR 眼镜一代&lt;/p&gt;&#x27; +
+          link(&#x27;查看内容 →&#x27;, &#x27;specPreview&#x27;) +
+          &#x27;&lt;/article&gt;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;试戴记录-v2.md&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;项目文件 · &#x27; +
+          (s.linkedTrial ? &#x27;已关联 AR 眼镜一代&#x27; : &#x27;尚未关联&#x27;) +
+          &#x27;&lt;/p&gt;&#x27; +
+          (s.linkedTrial
+            ? link(&#x27;查看内容 →&#x27;, &#x27;trialPreview&#x27;)
+            : action(&#x27;关联到业务项目（演示）&#x27;, &#x27;attachTrial&#x27;, true)) +
+          &#x27;&lt;/article&gt;&#x27;
+      if (s.knowledgeTab === &#x27;sessions&#x27;)
+        body +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;眼镜定位讨论&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;已有会话 · 用户选定关联 · 内容与身份保留原归属&lt;/p&gt;&#x27; +
+          link(&#x27;查看会话摘要与出处 →&#x27;, &#x27;sessionPreview&#x27;) +
+          &#x27;&lt;/article&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;其他工作空间会话由你明确选择资料后关联；不会默认扫描全部历史。&lt;/p&gt;&#x27;
+      if (s.knowledgeTab === &#x27;decisions&#x27;)
+        body +=
+          &#x27;&lt;article class=&quot;cw-item&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;strong&gt;介绍稿优先说明真实试戴体验&lt;/strong&gt;&#x27; +
+          status(&#x27;用户已确认&#x27;, &#x27;good&#x27;) +
+          &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;来源：眼镜定位讨论 · 对应业务：AR 眼镜一代&lt;/p&gt;&#x27; +
+          link(&#x27;查看决策来源 →&#x27;, &#x27;sessionPreview&#x27;) +
+          &#x27;&lt;/article&gt;&lt;article class=&quot;cw-item&quot;&gt;&lt;strong&gt;AI 建议：为试戴招募准备问卷&lt;/strong&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;待你决定，不会自动成为任务或对外发送。&lt;/p&gt;&#x27; +
+          action(&#x27;查看建议&#x27;, &#x27;suggestionPreview&#x27;) +
+          &#x27;&lt;/article&gt;&#x27;
+      return body
+    }
+    function overlay(s) {
+      const entries = {
+        draft: [
+          &#x27;产品介绍稿.md · 演示产物 v1&#x27;,
+          &#x27;&lt;p&gt;&lt;strong&gt;AR 眼镜一代产品介绍&lt;/strong&gt;&lt;/p&gt;&lt;p&gt;规格部分引用产品规格.md。试戴体验引用用户选择的试戴记录-v2.md。&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;此处是产品交互用的示例稿件。实际产品必须保存真实文件，并校验具体版本后进入验收。&lt;/p&gt;&#x27;,
+        ],
+        receipt: [
+          &#x27;测试服务收据.pdf · 演示原件&#x27;,
+          &#x27;&lt;p&gt;交易日期：2026-09-27&lt;br&gt;交易对方：示例测试服务商&lt;br&gt;金额：¥180.00&lt;br&gt;用途：研发测试服务&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;示例原件索引与流水关联。本效果稿没有真实收据文件。&lt;/p&gt;&#x27;,
+        ],
+        export: [
+          &#x27;9 月代账交付包 · 范围预览&#x27;,
+          &#x27;&lt;p&gt;已确认账目.csv&lt;br&gt;确认与修改记录.csv&lt;br&gt;月度汇总.json&lt;br&gt;交付说明.md&lt;br&gt;关联凭证原件&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;效果稿不生成或发送真实财务文件。&lt;/p&gt;&#x27;,
+        ],
+        backup: [
+          &#x27;完整备份范围&#x27;,
+          &#x27;&lt;p&gt;账目 SQLite、原始资料、关联与修改历史、校验信息。&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;实际恢复验证失败时拒绝覆盖现有数据。&lt;/p&gt;&#x27;,
+        ],
+        public: [
+          &#x27;平台结果证据 · 演示&#x27;,
+          &#x27;&lt;p&gt;示例公开地址：example.invalid/articles/ar-glasses-demo&lt;br&gt;原账号、标题、正文、两张图片一致。&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;此地址与回执均为示意，没有实际发布或访问平台。&lt;/p&gt;&#x27;,
+        ],
+        spec: [
+          &#x27;产品规格.md · 示意&#x27;,
+          &#x27;&lt;p&gt;业务项目：AR 眼镜一代&lt;br&gt;产品定位、规格条目与测试边界由用户资料提供。&lt;/p&gt;&#x27;,
+        ],
+        trial: [
+          &#x27;试戴记录-v2.md · 示意&#x27;,
+          &#x27;&lt;p&gt;记录测试条件、使用体验、问题与观察时间。此效果稿不包含真实试戴结论。&lt;/p&gt;&#x27;,
+        ],
+        session: [
+          &#x27;眼镜定位讨论 · 关联会话示意&#x27;,
+          &#x27;&lt;p&gt;已关联现有会话。决策“优先说明真实试戴体验”保留来源，并由用户确认。&lt;/p&gt;&#x27;,
+        ],
+        suggestion: [
+          &#x27;待决定的 AI 建议&#x27;,
+          &#x27;&lt;p&gt;准备试戴招募问卷。需要你先确定问题与招募范围，再创建工作。&lt;/p&gt;&#x27;,
+        ],
+      }
+      const entry = entries[s.overlay]
+      return entry
+        ? &#x27;&lt;section class=&quot;cw-info&quot; aria-label=&quot;&#x27; +
+            entry[0] +
+            &#x27;&quot;&gt;&lt;div class=&quot;cw-row&quot;&gt;&lt;h3&gt;&#x27; +
+            entry[0] +
+            &#x27;&lt;/h3&gt;&#x27; +
+            action(&#x27;收起&#x27;, &#x27;closeOverlay&#x27;) +
+            &#x27;&lt;/div&gt;&#x27; +
+            entry[1] +
+            &#x27;&lt;/section&gt;&#x27;
+        : &#x27;&#x27;
+    }
+    function nav(s, className) {
+      const active = [&#x27;project&#x27;, &#x27;task&#x27;].includes(s.page) ? &#x27;projects&#x27; : s.page
+      return (
+        &#x27;&lt;nav class=&quot;&#x27; +
+        className +
+        &#x27;&quot; aria-label=&quot;公司功能&quot;&gt;&#x27; +
+        pages
+          .map(function (it) {
+            return (
+              &#x27;&lt;button type=&quot;button&quot; data-action=&quot;&#x27; +
+              it[0] +
+              &#x27;&quot;&#x27; +
+              (active === it[0] ? &#x27; aria-current=&quot;page&quot;&#x27; : &#x27;&#x27;) +
+              &#x27;&gt;&#x27; +
+              (className === &#x27;cw-nav&#x27; ? icon(it[2]) : &#x27;&#x27;) +
+              it[1] +
+              &#x27;&lt;/button&gt;&#x27;
+            )
+          })
+          .join(&#x27;&#x27;) +
+        &#x27;&lt;/nav&gt;&#x27;
+      )
+    }
+    function agent(s) {
+      const context =
+        s.page === &#x27;finance&#x27;
+          ? &#x27;9 月经营账 / 测试服务记录&#x27;
+          : s.page === &#x27;operations&#x27;
+            ? &#x27;AR 眼镜一代 / 产品介绍发布&#x27;
+            : s.page === &#x27;overview&#x27;
+              ? &#x27;公司本周工作&#x27;
+              : &#x27;AR 眼镜一代 / 稿件准备&#x27;
+      const note =
+        s.page === &#x27;finance&#x27;
+          ? &#x27;这笔 ¥180.00 仍需你核对。AI 建议只填写待核对信息，确认金额后才进入统计。&#x27;
+          : s.publishing === &#x27;unknown&#x27;
+            ? &#x27;发布结果未知。当前先检查原账号和同一文章的结果，不重复提交。&#x27;
+            : s.taskPhase === &#x27;accepted&#x27;
+              ? &#x27;介绍稿已验收。你可以查看发布范围，也可以继续补充这个业务的下一项工作。&#x27;
+              : !s.linkedTrial
+                ? &#x27;介绍稿需要试戴记录。当前没有这份材料的关联，可以先补资料再准备稿件。&#x27;
+                : &#x27;资料已齐。下一步可以读取选定资料，准备稿件，并交给你验收。&#x27;
+      return (
+        &#x27;&lt;aside class=&quot;cw-agent&quot;&gt;&lt;div class=&quot;cw-agent-head&quot;&gt;&#x27; +
+        icon(&#x27;sparkles&#x27;) +
+        &#x27;AI 协作&lt;/div&gt;&lt;div class=&quot;cw-agent-context&quot;&gt;当前上下文&lt;br&gt;&lt;strong&gt;&#x27; +
+        context +
+        &#x27;&lt;/strong&gt;&lt;/div&gt;&lt;div class=&quot;cw-agent-message&quot;&gt;&lt;p&gt;&#x27; +
+        note +
+        &#x27;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;cw-agent-sources&quot;&gt;&lt;div class=&quot;cw-agent-source&quot;&gt;&#x27; +
+        icon(&#x27;folder&#x27;) +
+        &#x27; 当前公司工作空间&lt;/div&gt;&lt;div class=&quot;cw-agent-source&quot;&gt;&#x27; +
+        icon(&#x27;file-text&#x27;) +
+        &#x27; 选定资料与来源&lt;/div&gt;&lt;div class=&quot;cw-agent-source&quot;&gt;&#x27; +
+        icon(&#x27;circle-check&#x27;) +
+        &#x27; 具体产物与完成条件&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;cw-actions&quot;&gt;&#x27; +
+        action(
+          s.page === &#x27;finance&#x27;
+            ? &#x27;查看待核对记录&#x27;
+            : s.publishing === &#x27;unknown&#x27;
+              ? &#x27;检查发布结果&#x27;
+              : &#x27;打开当前工作&#x27;,
+          s.page === &#x27;finance&#x27; ? &#x27;finance&#x27; : s.publishing === &#x27;unknown&#x27; ? &#x27;operations&#x27; : &#x27;task&#x27;,
+          true,
+        ) +
+        &#x27;&lt;/div&gt;&lt;div class=&quot;cw-agent-input&quot;&gt;&lt;label&gt;交代下一项工作&lt;textarea data-input=&quot;request&quot; maxlength=&quot;400&quot; placeholder=&quot;例如：根据试戴资料准备介绍稿&quot;&gt;&#x27; +
+        esc(s.userRequest) +
+        &#x27;&lt;/textarea&gt;&lt;/label&gt;&#x27; +
+        action(&#x27;准备工作草案&#x27;, &#x27;requestDraft&#x27;) +
+        &#x27;&lt;/div&gt;&lt;p class=&quot;cw-muted cw-small&quot;&gt;任务范围随本次工作固定；切页面不改变正在执行的授权。&lt;/p&gt;&lt;/aside&gt;&#x27;
+      )
+    }
+    function persist() {
+      if (!window.openai || !window.openai.setWidgetState) return
+      const privateContent = {}
+      variants.forEach(function (v) {
+        const saved = Object.assign({}, v.state)
+        delete saved.toast
+        delete saved.overlay
+        privateContent[v.el.id] = saved
+      })
+      window.openai
+        .setWidgetState({
+          modelContent: {
+            designPrototype: true,
+            topic: &#x27;公司工作空间&#x27;,
+            use: &#x27;个人经营与 AI 协作&#x27;,
+            requiredDomains: [&#x27;财务&#x27;, &#x27;项目管理&#x27;, &#x27;运营&#x27;],
+            lastView: variants.map(function (v) {
+              return {
+                layout: v.el.dataset.layout,
+                page: v.state.page,
+                task: taskStatus(v.state),
+                publishing: publicationStatus(v.state),
+              }
+            }),
+          },
+          privateContent: privateContent,
+        })
+        .catch(function () {})
+    }
+    function render(v) {
+      const s = v.state
+      const activeElement = document.activeElement
+      const previousAction = v.el.contains(activeElement) ? activeElement.dataset.action : &#x27;&#x27;
+      const renderer = {
+        overview: function () {
+          return overview(v)
+        },
+        projects: function () {
+          return projects(s)
+        },
+        project: function () {
+          return project(s)
+        },
+        task: function () {
+          return task(s)
+        },
+        finance: function () {
+          return finance(s)
+        },
+        operations: function () {
+          return operations(s)
+        },
+        knowledge: function () {
+          return knowledge(s)
+        },
+      }[s.page]
+      v.el.dataset.agent = s.showAgent ? &#x27;visible&#x27; : &#x27;hidden&#x27;
+      v.el.style.setProperty(&#x27;--cw-space&#x27;, v.design.density === &#x27;紧凑&#x27; ? &#x27;10px&#x27; : &#x27;16px&#x27;)
+      v.el.innerHTML =
+        &#x27;&lt;header class=&quot;cw-titlebar&quot;&gt;&lt;span class=&quot;cw-brand&quot;&gt;CCLink Studio&lt;/span&gt;&lt;span class=&quot;cw-workspace&quot;&gt;&#x27; +
+        icon(&#x27;building-2&#x27;) +
+        &#x27;&lt;strong&gt;示例公司&lt;/strong&gt;&lt;span class=&quot;cw-muted cw-small&quot;&gt;公司工作空间&lt;/span&gt;&lt;/span&gt;&#x27; +
+        action(s.showAgent ? &#x27;收起 AI&#x27; : &#x27;展开 AI&#x27;, &#x27;toggleAgent&#x27;) +
+        &#x27;&lt;/header&gt;&lt;div class=&quot;cw-body&quot;&gt;&lt;div class=&quot;cw-rail&quot; aria-hidden=&quot;true&quot;&gt;&lt;div&gt;&#x27; +
+        icon(&#x27;building-2&#x27;) +
+        &#x27;&lt;span&gt;公司&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&#x27; +
+        icon(&#x27;files&#x27;) +
+        &#x27;&lt;span&gt;文件&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&#x27; +
+        icon(&#x27;messages-square&#x27;) +
+        &#x27;&lt;span&gt;会话&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&#x27; +
+        icon(&#x27;globe&#x27;) +
+        &#x27;&lt;span&gt;浏览&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&#x27; +
+        icon(&#x27;terminal&#x27;) +
+        &#x27;&lt;span&gt;终端&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;aside class=&quot;cw-sidebar&quot;&gt;&lt;div class=&quot;cw-sidebar-title&quot;&gt;公司经营&lt;/div&gt;&#x27; +
+        nav(s, &#x27;cw-nav&#x27;) +
+        &#x27;&lt;div class=&quot;cw-side-bottom&quot;&gt;&lt;span class=&quot;cw-muted&quot;&gt;当前业务&lt;/span&gt;&lt;p&gt;&#x27; +
+        link(&#x27;AR 眼镜一代&#x27;, &#x27;project&#x27;) +
+        &#x27;&lt;/p&gt;&lt;p class=&quot;cw-muted&quot;&gt;本地 · 个人使用&lt;/p&gt;&lt;/div&gt;&lt;/aside&gt;&lt;main class=&quot;cw-main&quot;&gt;&#x27; +
+        (v.el.dataset.layout === &#x27;inbox&#x27; ? nav(s, &#x27;cw-topnav&#x27;) : &#x27;&#x27;) +
+        (s.toast ? &#x27;&lt;div class=&quot;cw-toast&quot; role=&quot;status&quot;&gt;&#x27; + esc(s.toast) + &#x27;&lt;/div&gt;&#x27; : &#x27;&#x27;) +
+        renderer() +
+        overlay(s) +
+        &#x27;&lt;/main&gt;&#x27; +
+        agent(s) +
+        &#x27;&lt;/div&gt;&lt;footer class=&quot;cw-footer&quot;&gt;&lt;span&gt;交互演示 · 数据与执行结果均为示意&lt;/span&gt;&lt;span&gt;未连接真实账目或平台&lt;/span&gt;&lt;/footer&gt;&#x27;
+      if (globalThis.lucide) globalThis.lucide.createIcons({ attrs: { width: 16, height: 16 } })
+      if (previousAction) {
+        const candidate =
+          Array.from(v.el.querySelectorAll(&#x27;button[data-action]&#x27;)).find(function (button) {
+            return button.dataset.action === previousAction &amp;&amp; !button.disabled
+          }) ||
+          v.el.querySelector(&#x27;.cw-main .cw-main-action:not(:disabled)&#x27;) ||
+          v.el.querySelector(&#x27;button[aria-current=&quot;page&quot;]&#x27;)
+        if (candidate) candidate.focus({ preventScroll: true })
+      }
+    }
+    variants.forEach(function (v) {
+      render(v)
+      v.el.addEventListener(&#x27;input&#x27;, function (event) {
+        if (event.target.dataset.input === &#x27;request&#x27;) v.state.userRequest = event.target.value
+      })
+      v.el.addEventListener(&#x27;click&#x27;, function (event) {
+        const button = event.target.closest(&#x27;button[data-action]&#x27;)
+        if (!button || !v.el.contains(button) || button.disabled) return
+        const cmd = button.dataset.action
+        const s = v.state
+        s.toast = &#x27;&#x27;
+        s.overlay = &#x27;&#x27;
+        if (
+          [
+            &#x27;overview&#x27;,
+            &#x27;projects&#x27;,
+            &#x27;project&#x27;,
+            &#x27;task&#x27;,
+            &#x27;finance&#x27;,
+            &#x27;operations&#x27;,
+            &#x27;knowledge&#x27;,
+          ].includes(cmd)
+        )
+          s.page = cmd
+        if (cmd.startsWith(&#x27;projectTab:&#x27;)) s.projectTab = cmd.split(&#x27;:&#x27;)[1]
+        if (cmd.startsWith(&#x27;financeTab:&#x27;)) s.financeTab = cmd.split(&#x27;:&#x27;)[1]
+        if (cmd.startsWith(&#x27;knowledgeTab:&#x27;)) s.knowledgeTab = cmd.split(&#x27;:&#x27;)[1]
+        if (cmd.startsWith(&#x27;step:&#x27;)) {
+          const selected = cmd.split(&#x27;:&#x27;)[1]
+          s.selectedStep = s.selectedStep === selected ? &#x27;&#x27; : selected
+        }
+        if (cmd === &#x27;toggleAgent&#x27;) s.showAgent = !s.showAgent
+        if (cmd === &#x27;attachTrial&#x27;) {
+          s.linkedTrial = true
+          s.taskPhase = &#x27;ready&#x27;
+          s.toast = &#x27;已关联示例试戴资料。工作现在可以开始准备。&#x27;
+        }
+        if (cmd === &#x27;preparePlan&#x27;) s.taskPhase = &#x27;plan&#x27;
+        if (cmd === &#x27;runDraft&#x27; &amp;&amp; s.linkedTrial) {
+          s.taskPhase = &#x27;draft&#x27;
+          s.draftOpened = false
+          s.toast = &#x27;示例产物已准备，等待你查看并验收。&#x27;
+        }
+        if (cmd === &#x27;openDraft&#x27;) {
+          s.draftOpened = true
+          s.overlay = &#x27;draft&#x27;
+        }
+        if (cmd === &#x27;acceptDraft&#x27; &amp;&amp; s.draftOpened &amp;&amp; s.taskPhase === &#x27;draft&#x27;) {
+          s.taskPhase = &#x27;accepted&#x27;
+          s.toast = &#x27;已验收示例稿件 v1，尚未公开发布。&#x27;
+        }
+        if (cmd === &#x27;openReceipt&#x27;) {
+          s.receiptOpened = true
+          s.overlay = &#x27;receipt&#x27;
+        }
+        if (cmd === &#x27;confirmBill&#x27; &amp;&amp; s.receiptOpened &amp;&amp; !s.billConfirmed) {
+          s.billConfirmed = true
+          s.toast = &#x27;示例记录已确认，汇总增加 ¥180.00。&#x27;
+        }
+        if (cmd === &#x27;summary&#x27;) {
+          s.page = &#x27;finance&#x27;
+          s.financeTab = &#x27;summary&#x27;
+        }
+        if (cmd === &#x27;projectSpending&#x27;) {
+          s.page = &#x27;project&#x27;
+          s.projectTab = &#x27;spending&#x27;
+        }
+        if (cmd === &#x27;publishPlan&#x27; &amp;&amp; s.taskPhase === &#x27;accepted&#x27;) s.publishing = &#x27;plan&#x27;
+        if (cmd === &#x27;startPublish&#x27; &amp;&amp; s.taskPhase === &#x27;accepted&#x27; &amp;&amp; s.publishing === &#x27;plan&#x27;) {
+          s.publishing = &#x27;unknown&#x27;
+          s.toast = &#x27;示例提交结果未知：保留现场，仅允许核验。&#x27;
+        }
+        if (cmd === &#x27;verifyPublish&#x27; &amp;&amp; s.publishing === &#x27;unknown&#x27;) {
+          s.publishing = &#x27;verified&#x27;
+          s.toast = &#x27;示例公开结果已核验；没有再次提交。&#x27;
+        }
+        const overlays = {
+          exportPreview: &#x27;export&#x27;,
+          backupPreview: &#x27;backup&#x27;,
+          publicEvidence: &#x27;public&#x27;,
+          specPreview: &#x27;spec&#x27;,
+          trialPreview: &#x27;trial&#x27;,
+          sessionPreview: &#x27;session&#x27;,
+          suggestionPreview: &#x27;suggestion&#x27;,
+        }
+        if (overlays[cmd]) s.overlay = overlays[cmd]
+        if (cmd === &#x27;newProject&#x27;) {
+          const input = v.el.querySelector(&#x27;[data-input=&quot;projectName&quot;]&#x27;)
+          const name = input &amp;&amp; input.value.trim()
+          s.toast = name
+            ? &#x27;项目草案：“&#x27; + name + &#x27;”。下一步填写目标与交付物；演示未保存真实项目。&#x27;
+            : &#x27;请先填写项目名称。&#x27;
+        }
+        if (cmd === &#x27;requestDraft&#x27;) {
+          s.toast = s.userRequest.trim()
+            ? &#x27;工作草案：“&#x27; +
+              s.userRequest.trim() +
+              &#x27;”。下一步确认资料范围、产物与完成条件；演示未启动真实 AI。&#x27;
+            : &#x27;请先写下一句话目标。&#x27;
+        }
+        render(v)
+        persist()
+      })
+      if (globalThis.Tweak) {
+        const tweak = new globalThis.Tweak({
+          container: v.el,
+          onChange: function () {
+            render(v)
+          },
+        })
+        tweak.addSelect(v.design, &#x27;density&#x27;, { options: [&#x27;舒适&#x27;, &#x27;紧凑&#x27;], label: &#x27;信息密度&#x27; })
+      }
+    })
+    window.addEventListener(&#x27;openai:set_globals&#x27;, function (event) {
+      const incoming = event.detail &amp;&amp; event.detail.globals &amp;&amp; event.detail.globals.widgetState
+      if (!incoming || !incoming.privateContent) return
+      variants.forEach(function (v) {
+        const next = compatible(incoming.privateContent[v.el.id])
+        if (next.page === v.state.page) {
+          next.toast = v.state.toast
+          next.overlay = v.state.overlay
+        }
+        v.state = next
+        render(v)
+      })
+    })
+  })()
+&lt;/script&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (event) =&gt; {
+    for (const target of event.composedPath()) {
+      if (target?.nodeType === Node.ELEMENT_NODE) {
+        const trigger = target.closest(&quot;[data-tooltip]&quot;);
+        if (trigger) return trigger;
+      }
+    }
+    return null;
+  };
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handlers = {
+    pointerover: handlePointerOpen,
+    pointerdown: handlePointer,
+    pointercancel: handlePointer,
+    click: handleTouchClick,
+    pointerout: handleLeave,
+    focusin: handleFocusIn,
+    focusout: handleLeave,
+    keydown: handleKeyDown,
+    contextmenu: handleContextMenu,
+  };
+  const roots = new Map();
+  const handledEvents = new WeakSet();
+  const handleEvent = (event) =&gt; {
+    if (handledEvents.has(event)) return;
+    handledEvents.add(event);
+    handlers[event.type](event);
+  };
+  const discoverRoots = (node) =&gt; {
+    if (node.shadowRoot) listen(node.shadowRoot);
+    for (const element of node.querySelectorAll(&quot;*&quot;)) {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    }
+  };
+  const listen = (root) =&gt; {
+    if (roots.has(root)) return;
+    for (const type of Object.keys(handlers)) root.addEventListener(type, handleEvent);
+    const observer = new window.MutationObserver((records) =&gt; {
+      for (const { addedNodes } of records) {
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) discoverRoots(node);
+        }
+      }
+      for (const [root, cleanup] of roots) {
+        if (root.host &amp;&amp; !root.host.isConnected) {
+          cleanup();
+          roots.delete(root);
+        }
+      }
+      if (activeTrigger &amp;&amp; !activeTrigger.isConnected) closeTooltip(false);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    roots.set(root, () =&gt; {
+      observer.disconnect();
+      for (const type of Object.keys(handlers)) root.removeEventListener(type, handleEvent);
+    });
+    discoverRoots(root);
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    for (const cleanup of roots.values()) cleanup();
+    roots.clear();
+    tooltip = null;
+  };
+
+  // Events between children of one shadow root never reach the document.
+  listen(document);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-carousel&quot;&gt;
+  (() =&gt; {
+    for (const root of document.querySelectorAll(&quot;.viz-carousel&quot;)) {
+      const panels = Array.from(
+        root.querySelectorAll(&quot;:scope &gt; [data-variant]&quot;),
+      );
+      if (panels.length === 0) {
+        continue;
+      }
+      root.setAttribute(&quot;role&quot;, &quot;group&quot;);
+      panels.forEach((panel, index) =&gt; {
+        panel.hidden = index !== 0;
+        panel.setAttribute(&quot;role&quot;, &quot;group&quot;);
+        if (!panel.hasAttribute(&quot;aria-label&quot;)) {
+          panel.setAttribute(&quot;aria-label&quot;, panel.dataset.variant);
+        }
+      });
+      root.dataset.activeVariant = panels[0].dataset.variant;
+      if (panels.length === 1) {
+        continue;
+      }
+
+      const controls = document.createElement(&quot;div&quot;);
+      controls.className = &quot;viz-carousel-controls&quot;;
+      // Portable copy of the settings dropdown&#x27;s legacy glyph; no 14px icon-package preset matches it.
+      // https://github.com/openai/openai/blob/master/codex/codex-apps/webview/src/icons/chevron.svg
+      controls.innerHTML = `
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-previous cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-left&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;details class=&quot;viz-carousel-picker&quot;&gt;
+        &lt;summary class=&quot;cursor-interaction&quot;&gt;
+          &lt;span class=&quot;viz-carousel-count tabular-nums&quot;&gt;&lt;/span&gt;
+          &lt;span class=&quot;viz-carousel-name&quot;&gt;&lt;/span&gt;
+          &lt;svg class=&quot;viz-carousel-caret&quot; width=&quot;14&quot; height=&quot;14&quot; viewBox=&quot;0 0 20 21&quot; fill=&quot;none&quot; aria-hidden=&quot;true&quot; focusable=&quot;false&quot;&gt;
+            &lt;path d=&quot;M15.2793 7.71101C15.539 7.45131 15.961 7.45131 16.2207 7.71101C16.4804 7.97071 16.4804 8.39272 16.2207 8.65242L10.4707 14.4024C10.211 14.6621 9.78902 14.6621 9.52932 14.4024L3.77932 8.65242L3.69436 8.54792C3.52385 8.28979 3.55205 7.93828 3.77932 7.71101C4.00659 7.48374 4.3581 7.45554 4.61623 7.62605L4.72073 7.71101L10 12.9903L15.2793 7.71101Z&quot; fill=&quot;currentColor&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;0.6&quot; /&gt;
+          &lt;/svg&gt;
+        &lt;/summary&gt;
+        &lt;div class=&quot;viz-carousel-options&quot;&gt;&lt;/div&gt;
+      &lt;/details&gt;
+      &lt;button type=&quot;button&quot; class=&quot;viz-carousel-next cursor-interaction&quot;&gt;&lt;i data-lucide=&quot;chevron-right&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;`;
+      const previous = controls.querySelector(&quot;.viz-carousel-previous&quot;);
+      const next = controls.querySelector(&quot;.viz-carousel-next&quot;);
+      const picker = controls.querySelector(&quot;.viz-carousel-picker&quot;);
+      const summary = picker.querySelector(&quot;summary&quot;);
+      const count = controls.querySelector(&quot;.viz-carousel-count&quot;);
+      const name = controls.querySelector(&quot;.viz-carousel-name&quot;);
+      const options = controls.querySelector(&quot;.viz-carousel-options&quot;);
+      const status = document.createElement(&quot;span&quot;);
+      status.className = &quot;sr-only&quot;;
+      status.setAttribute(&quot;role&quot;, &quot;status&quot;);
+      status.setAttribute(&quot;aria-live&quot;, &quot;polite&quot;);
+      status.setAttribute(&quot;aria-atomic&quot;, &quot;true&quot;);
+      previous.setAttribute(
+        &quot;aria-label&quot;,
+        root.dataset.previousLabel ?? &quot;Previous variant&quot;,
+      );
+      next.setAttribute(&quot;aria-label&quot;, root.dataset.nextLabel ?? &quot;Next variant&quot;);
+
+      let active = 0;
+      let mousePointerId = null;
+      let summaryPointerHandled = false;
+      summary.addEventListener(&quot;pointerdown&quot;, (event) =&gt; {
+        summaryPointerHandled =
+          event.pointerType === &quot;mouse&quot; &amp;&amp; event.button === 0 &amp;&amp; !event.ctrlKey;
+        if (!summaryPointerHandled) {
+          return;
+        }
+        event.preventDefault();
+        summary.focus({ preventScroll: true });
+        picker.open = !picker.open;
+        mousePointerId = picker.open ? event.pointerId : null;
+      });
+      summary.addEventListener(&quot;click&quot;, (event) =&gt; {
+        if (summaryPointerHandled &amp;&amp; event.detail &gt; 0) {
+          event.preventDefault();
+        }
+      });
+      const choices = panels.map((panel, index) =&gt; {
+        const choice = document.createElement(&quot;button&quot;);
+        choice.type = &quot;button&quot;;
+        choice.className = &quot;cursor-interaction&quot;;
+        choice.textContent = panel.dataset.variant;
+        choice.addEventListener(&quot;click&quot;, () =&gt; {
+          select(index);
+          summary.focus();
+        });
+        choice.addEventListener(&quot;pointerup&quot;, (event) =&gt; {
+          if (
+            picker.open &amp;&amp;
+            event.pointerType === &quot;mouse&quot; &amp;&amp;
+            event.button === 0 &amp;&amp;
+            event.pointerId === mousePointerId
+          ) {
+            choice.click();
+          }
+        });
+        options.appendChild(choice);
+        return choice;
+      });
+      const select = (index) =&gt; {
+        const changed = active !== index;
+        active = index;
+        panels.forEach((panel, position) =&gt; {
+          panel.hidden = position !== active;
+          choices[position].setAttribute(
+            &quot;aria-current&quot;,
+            String(position === active),
+          );
+        });
+        root.dataset.activeVariant = panels[active].dataset.variant;
+        count.textContent = `${active + 1} / ${panels.length}`;
+        name.textContent = panels[active].dataset.variant;
+        picker.open = false;
+        mousePointerId = null;
+        if (changed) {
+          status.textContent = `${count.textContent}: ${name.textContent}`;
+        }
+      };
+      previous.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + panels.length - 1) % panels.length),
+      );
+      next.addEventListener(&quot;click&quot;, () =&gt;
+        select((active + 1) % panels.length),
+      );
+      picker.addEventListener(&quot;keydown&quot;, (event) =&gt; {
+        if (event.key === &quot;Escape&quot; &amp;&amp; picker.open) {
+          event.preventDefault();
+          picker.open = false;
+          mousePointerId = null;
+          summary.focus();
+          return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey) {
+          return;
+        }
+        const index = choices.indexOf(document.activeElement);
+        let nextIndex;
+        if (event.key === &quot;ArrowDown&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + 1) % choices.length;
+        } else if (event.key === &quot;ArrowUp&quot;) {
+          nextIndex = index &lt; 0 ? active : (index + choices.length - 1) % choices.length;
+        } else if (picker.open &amp;&amp; event.key === &quot;Home&quot;) {
+          nextIndex = 0;
+        } else if (picker.open &amp;&amp; event.key === &quot;End&quot;) {
+          nextIndex = choices.length - 1;
+        } else {
+          return;
+        }
+        event.preventDefault();
+        picker.open = true;
+        choices[nextIndex].focus();
+      });
+      picker.addEventListener(&quot;focusout&quot;, (event) =&gt; {
+        if (!picker.contains(event.relatedTarget)) {
+          picker.open = false;
+          mousePointerId = null;
+        }
+      });
+      const dismiss = (event) =&gt; {
+        if (!summary.contains(event.target)) {
+          mousePointerId = null;
+        }
+        if (!picker.contains(event.target)) {
+          picker.open = false;
+        }
+      };
+      const endPointerSelection = () =&gt; {
+        mousePointerId = null;
+      };
+      const sizePicker = () =&gt; {
+        root.style.setProperty(
+          &quot;--viz-carousel-picker-height&quot;,
+          `${picker.open ? options.offsetHeight : 0}px`,
+        );
+      };
+      picker.addEventListener(&quot;toggle&quot;, sizePicker);
+      window.addEventListener(&quot;resize&quot;, sizePicker);
+      document.addEventListener(&quot;pointerdown&quot;, dismiss);
+      document.addEventListener(&quot;pointerup&quot;, endPointerSelection);
+      document.addEventListener(&quot;pointercancel&quot;, endPointerSelection);
+      window.addEventListener(&quot;blur&quot;, endPointerSelection);
+      window.addEventListener(
+        &quot;pagehide&quot;,
+        () =&gt; {
+          document.removeEventListener(&quot;pointerdown&quot;, dismiss);
+          document.removeEventListener(&quot;pointerup&quot;, endPointerSelection);
+          document.removeEventListener(&quot;pointercancel&quot;, endPointerSelection);
+          window.removeEventListener(&quot;blur&quot;, endPointerSelection);
+          window.removeEventListener(&quot;resize&quot;, sizePicker);
+        },
+        { once: true },
+      );
+      root.append(controls, status);
+      select(0);
+    }
+  })();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  let viewportHeight = globalThis.innerHeight;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height >= 0 &&
+        height <= 10_000
+      ) {
+        frame.style.height = Math.ceil(height) + "px";
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!Number.isFinite(height) || height <= viewportHeight) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  frame.srcdoc = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>

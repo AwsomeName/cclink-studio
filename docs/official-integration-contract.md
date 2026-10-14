@@ -1,17 +1,17 @@
 # Official Integration Contract
 
-> Legacy assembly contract. Last updated: 2026-08-13.
+> Compatibility seam contract. Last updated: 2026-10-12.
 
 ## Conclusion
 
 The `OfficialIntegration` no-op seam remains temporarily for compatibility with the old
 commercial overlay, but it no longer defines the product boundary. CCLink account, device,
-realtime transport and the read-only first-stage remote workspace are now a built-in,
-optional GPL-3.0-only Studio feature domain.
+realtime transport, bounded remote file operations, remote Agent sessions and remote PTY are
+now a built-in, optional GPL-3.0-only Studio feature domain.
 
 The built-in remote domain is fail-soft: without service configuration, login, or a healthy
-remote service, Studio still starts and all local capabilities remain available. Publishing,
-production secrets, payment UI, WebDAV sync and cloud deployment remain outside this repository.
+remote service, Studio still starts and all local capabilities remain available. Desktop payment,
+WebDAV sync, cloud deployment and production service secrets remain outside this repository.
 
 ## Current Interface
 
@@ -68,49 +68,29 @@ reason code, not credentials or account data.
 - Official IPC uses `context.ipc.handle(...)` and a bounded runtime parser.
 - Access tokens, IM UserSig and complete remote identity stay in main-process memory. Only the
   refresh token uses the private local Session file.
-- System credential stores, keychain migration, Developer ID signing and notarization are forbidden.
+- Studio application runtime cannot use system credential stores, migrate keychain data, or access
+  Developer ID and notarization credentials. The protected GitHub Release runner may use an
+  ephemeral keychain for signing and notarization as defined by ADR 0011.
 
-## Legacy Commercial Assembly
+## Superseded Assembly Route
 
-This section records the overlay that still exists during transition; it is not the target
-architecture and must not receive new product functionality.
+The old `cclink-dev` commercial overlay is migration-time read-only reference and rollback
+history. It is not a current build, package or release route, and it must not receive new
+product functionality. ADR 0009 supersedes the earlier dual-desktop premise.
 
-The current assembly implementation is owned by
-`cclink-dev/scripts/prepare-commercial-build.mjs`:
-
-1. Copy `cclink-studio` into `.build/cclink-studio-commercial`.
-2. Overlay `commercial/src` onto the copied `src`.
-3. Install the commercial Vite and electron-builder configurations.
-4. Install commercial resources, scripts, and package metadata.
-5. Link the OSS dependency installation.
-6. Build and package only from the isolated assembly directory.
-7. Run `commercial:package:check` against product identity and artifacts.
-
-The commercial source may use the shared `OfficialIntegration` type, but the current
-commercial runtime also owns private composition files through the overlay. Documentation
-must not claim that replacing `official-integration-loader.ts` alone describes the complete
-commercial assembly.
-
-The overlay may stop shipping only after the single Studio app passes the real first-stage
-acceptance. Until then it remains a rollback artifact, not a second product line.
+The no-op seam remains only to avoid an unnecessary compatibility-breaking removal. Replacing
+`official-integration-loader.ts` is not an extension mechanism for another desktop product.
+New CCLink client behavior belongs in the bounded built-in remote domain and must preserve the
+Studio-owned Workspace, Tab, Workbench, Terminal adapter, IPC and lifecycle contracts.
 
 ## Acceptance
 
-OSS:
+Current Studio checks:
 
 ```bash
 pnpm verify:oss-boundary
 pnpm verify
 pnpm smoke:standalone
-```
-
-Legacy overlay, while it remains in service, from `cclink-dev`:
-
-```bash
-pnpm commercial:typecheck
-pnpm commercial:build
-pnpm commercial:package
-pnpm commercial:package:check
 ```
 
 The package identity gate is documented in `docs/ops/package-target-check.md`.

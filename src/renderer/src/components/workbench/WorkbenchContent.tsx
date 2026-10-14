@@ -1,3 +1,4 @@
+import { CompanyWorkbench } from '../../features/company-workspace/CompanyWorkbench'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Terminal as XtermTerminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -214,7 +215,16 @@ export function WorkbenchContent({
             {activeTab.type === 'media-production' && activeTab.mediaProject && (
               <MediaProductionTab tab={activeTab} />
             )}
-            {activeTab.type === 'company-accounts' && <CompanyAccountsWorkbench />}
+            {activeTab.type === 'company-workspace' && (
+              <CompanyWorkbench key={`${activeTab.id}:${workspaceGeneration}`} tab={activeTab} />
+            )}
+            {activeTab.type === 'company-accounts' && (
+              <CompanyAccountsWorkbench
+                key={`${activeTab.id}:${activeTab.companyAccounts?.month}:${activeTab.companyAccounts?.projectId}`}
+                initialMonth={activeTab.companyAccounts?.month}
+                initialProjectId={activeTab.companyAccounts?.projectId ?? undefined}
+              />
+            )}
           </>
         )}
       </ErrorBoundary>

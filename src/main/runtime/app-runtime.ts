@@ -1,3 +1,4 @@
+import type { CompanyWorkspaceService } from '../company-workspace/company-workspace-service'
 import type { BrowserWindow } from 'electron'
 import type { BrowserManager } from '../browser/browser-manager'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
@@ -115,6 +116,7 @@ export interface CclinkStudioRuntimeState {
   cadConversionService: CadConversionService | null
   cadModificationService: CadModificationService | null
   dataSourceService: DataSourceService | null
+  companyWorkspaceService: CompanyWorkspaceService | null
   companyAccountsService: CompanyAccountsService | null
   terminalAuditStore: TerminalAuditStore | null
   terminalConfirmationService: TerminalConfirmationService | null
@@ -191,6 +193,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     cadConversionService: null,
     cadModificationService: null,
     dataSourceService: null,
+    companyWorkspaceService: null,
     companyAccountsService: null,
     terminalAuditStore: null,
     terminalConfirmationService: null,

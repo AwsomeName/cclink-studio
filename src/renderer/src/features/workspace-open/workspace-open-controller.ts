@@ -2,7 +2,6 @@ import type { RemoteWorkspaceRef, WorkspaceRef } from '@shared/workspace-ref'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
-import { useUIStore } from '../../stores/ui-store'
 import { confirmRemoteWorkspaceRef } from '../cclink-remote/remote-workspace-confirmation'
 import {
   applyWorkspaceRuntimeTransition,
@@ -20,13 +19,12 @@ export interface OpenWorkspaceRefOptions {
   remoteRequestId?: string
 }
 
-/** 从系统目录选择器打开本地工作空间，并统一落到文件面板。 */
+/** 从系统目录选择器打开本地工作空间，保持目标工作空间恢复出的布局。 */
 export async function pickLocalWorkspace(): Promise<boolean> {
   const opened = await useFsStore.getState().openWorkspacePicker()
   if (!opened) return false
   const path = useFsStore.getState().workspacePath
   if (!path) return false
-  useUIStore.getState().showPanel('files')
   return true
 }
 

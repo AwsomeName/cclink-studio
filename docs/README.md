@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-10-10。
+> 当前事实源。最后更新：2026-10-14。
 
 ## 先读这些
 
@@ -23,12 +23,12 @@
 - `docs/architecture/bionic-brain.md`：仿生大脑项目目录、对象关系、唯一状态 owner、运行快照、引擎边界和失败降级提案，尚未实现。
 - `docs/design/bionic-brain/pages.html`：聚焦模型工作台和实验记录的效果示意；网络、参数、波形与终态均为示意。
 - `docs/features/neural-circuit-lab.md`、`docs/architecture/neural-circuit-lab.md`：已取代的混合神经/芯片方案，仅保留迁移说明。
-- `docs/ops/local-smoke-check.md`：验证 Studio 开源壳可独立启动和本地核心能力可用。
-- `docs/ops/package-target-check.md`：开源版与商业版打包目标、身份和产物交付检查。
+- `docs/ops/local-smoke-check.md`：验证 Studio 可独立启动和本地核心能力可用。
+- `docs/ops/package-target-check.md`：唯一 Studio 本地包与正式 Release 的目标、身份和产物检查。
 - `docs/ops/cclink-remote-entitlement-audit.md`：CCLink 远程服务端身份与付费门禁审计。
 - `docs/ops/cclink-remote-stage-1-acceptance.md`：单一 Studio 远程第一阶段真实 App 验收结果、
   v0.1.65-v0.1.71 审批/分页读取/图片/停止等待/realtime 事故补充与未完成在线闭环。
-- `docs/ops/oss-release-runbook.md`：开源版打包、签名、公证、Draft 验收和公开发布手册。
+- `docs/ops/oss-release-runbook.md`：Studio 打包、签名、公证和公开发布手册。
 - `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
 - `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
 - `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理、已暂停的
@@ -38,15 +38,20 @@
 - `docs/features/eyewear-step-ai-editing-development-plan.md`：收缩后的眼镜 STEP AI 修改 P0、E0、M1 最小开发计划；其余能力全部后移且不排期。
 - `docs/design/eyewear-step-ai-editing/pages.html`：收缩后的 STEP 查看、参数快照确认和新版结果自动打开三页效果示意；示例数据不代表当前实现状态。
 - `docs/features/company-accounts-product-design.md`：公司账目首版产品事实源，定义一个月份的导入、核对、汇总、导出和备份闭环。
+- `docs/features/company-workspace-product-design.md`：用户已确认、尚未实现的公司经营工作空间首版；采用经营导航，单人使用，业务项目关联财务、运营、资料与会话。
+- `docs/features/company-workspace-development-plan.md`：公司工作空间的状态所有权、存储、IPC、AI 工作绑定、财务与发布复用及四批真人验收方案，尚未开发。
+- `docs/design/company-workspace/preview.html`：公司工作空间两种布局与可点击业务路径；全部交易、任务和发布结果均为演示。
 - `docs/features/company-accounts-development-plan.md`：公司账目最小开发计划与真实业务退出条件。
 - `docs/testing/company-accounts-v1-acceptance.md`：公司账目代表性桌面样本、自动门禁和仍待真实资料关闭的业务验收。
 - `docs/features/robotics-remote-simulation-workbench.md`：通过 frp 连接远程 Ubuntu Robot Runner，在 Studio 启动仿真、推理和训练并查看画面、日志与运行证据的低优先级讨论稿，尚未实现。
 - `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`：已暂停的参考计划；只有重启门禁成立并提交新 ADR 后才可恢复。
 - `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
-- `docs/official-integration-contract.md`：Studio 暴露给官方构建层的接口边界。
-- `docs/ops/cclink-dev-official-integration-handoff.md`：发给 `cclink-dev` 的 official loader 接入清单。
-- `docs/features/workspace-system.md`：当前 OSS 本地工作空间模型。
+- `docs/official-integration-contract.md`：已降级为兼容缝的 official integration 契约及当前边界。
+- `docs/ops/cclink-dev-official-integration-handoff.md`：已被 ADR 0009 取代的旧 overlay 交接说明。
+- `docs/features/workspace-system.md`：当前 Studio 统一的本地与远程工作空间模型。
+- `docs/features/workspace-layout-development-plan.md`：尚未实现的工作空间级三栏布局记忆方案；
+  复用 WorkspaceState 与统一切换事务，覆盖缺失快照、竞态和 Browser 原生 View 回归。
 - `docs/features/recent-session-switcher.md`：本地/远程工作空间统一最近会话切换器、唯一新建入口、标题策略和验收边界。
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
@@ -117,8 +122,8 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 
 相关代码库位置：
 
-- Studio OSS：`/Users/apple/Desktop/cclink-dev/cclink-studio`
-- 官方闭源构建：`/Users/apple/Desktop/cclink-dev`
+- Studio：`/Users/apple/Desktop/cclink-dev/cclink-studio`
+- 迁移期只读参考与云端/发布运维工作区：`/Users/apple/Desktop/cclink-dev`
 - CCLink 云函数：`/Users/apple/Desktop/chat-cc/deploy`
 - CCLink Agent runtime：`/Users/apple/Desktop/chat-cc/Agent`
 
@@ -129,7 +134,7 @@ Studio 默认可单仓库独立启动，不要求 `cclink-dev`、`chat-cc/deploy
 - 架构与开发：`docs/architecture.md`、`docs/stabilization.md`、`docs/development.md`、`docs/decisions/`。
 - 本地验收与发布：`docs/ops/local-smoke-check.md`、`docs/ops/oss-release-runbook.md`、`docs/features/desktop-release-and-updates.md`。
 - 桌面更新验收证据：`docs/ops/desktop-update-acceptance.md`。
-- 官方集成：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
+- 兼容缝与迁移记录：`docs/official-integration-contract.md`、`docs/ops/cclink-dev-official-integration-handoff.md`。
 - 工作台能力：`docs/features/workspace-system.md`、`docs/features/recent-session-switcher.md`、`docs/features/unified-agent-panel.md`、`docs/features/context-action-system.md`、`docs/features/configurable-keybinding-system.md`、`docs/features/detachable-workbench-tabs.md`、`docs/features/local-credentials.md`、`docs/features/local-credentials-development-plan.md`、`docs/features/git-source-control.md`、`docs/features/git-source-control-development-plan.md`、`docs/features/manual-git-backup.md`、`docs/features/agent-system.md`、`docs/features/agent-panel-product-model.md`、`docs/features/agent-role-configuration.md`、`docs/features/ai-employees.md`、`docs/features/agent-profiles.md`、`docs/features/ai-web-affairs-agent.md`、`docs/features/global-web-accounts-development-plan.md`、`docs/features/ai-web-affairs-agent-development-plan.md`、`docs/features/browser-automation.md`、`docs/testing/browser-http-basic-auth.md`、`docs/testing/browser-playwright-cdp-recovery.md`、`docs/testing/browser-tab-bar-native-view-occlusion.md`、`docs/features/document-editor.md`、`docs/features/markdown-wysiwyg.md`、`docs/features/markdown-auto-illustration.md`、`docs/features/article-platform-publishing.md`、`docs/features/article-platform-publishing-development-plan.md`、`docs/features/image-research.md`、`docs/features/image-research-development-plan.md`、`docs/features/promotional-video-workbench.md`、`docs/features/scheduled-tasks.md`、`docs/features/scheduled-tasks-development-plan.md`、`docs/features/file-type-support.md`、`docs/features/terminal-tab-model.md`、`docs/features/agent-device.md`、`docs/features/runtime-components-and-capability-plugins.md`、`docs/features/runtime-components-and-capability-plugins-development-plan.md`。
 - 行业能力：数据源、硬件工作空间、FPC 改版、CAD 转换、工作空间内运营助手。
 

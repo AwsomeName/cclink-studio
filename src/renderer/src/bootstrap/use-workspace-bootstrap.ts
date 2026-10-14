@@ -26,6 +26,7 @@ import {
 import { runOpenProjectsBootstrapOnce } from '../stores/open-projects-store'
 import { restoreCclinkConnectionForOpenProjects } from '../features/cclink-remote/cclink-connection-policy'
 import { recoverPendingFileRelocations } from '../features/file-relocation/file-relocation-transition'
+import { createWorkspaceLayoutRestore } from '../stores/ui-store'
 
 export type { WorkspaceBootstrapDeps } from './workspace-bootstrap-core'
 export { restoreWorkspaceState } from './workspace-bootstrap-core'
@@ -45,6 +46,7 @@ export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
     beginRestore: beginWorkspaceStateRestore,
     endRestore: endWorkspaceStateRestore,
     hydrateLayout: (value) => useUIStore.getState().hydrateFromWorkspaceState(value),
+    createLayoutRestore: createWorkspaceLayoutRestore,
     hydrateBrowserTabs: (value) => useBrowserStore.getState().hydrateFromWorkspaceState(value),
     hydrateTabs: (value) => useTabStore.getState().hydrateFromWorkspaceState(value),
     hydrateEditorDrafts: (value) => useEditorStore.getState().hydrateFromWorkspaceState(value),
