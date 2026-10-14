@@ -86,6 +86,8 @@ export interface AgentMountedResource {
   kind: AgentMountedResourceKind
   label: string
   detail?: string
+  /** Raster data URL for immediate message preview; stripped before persistence. */
+  previewDataUrl?: string
   ref: {
     type: AgentMountedResourceKind
     path?: string
@@ -97,6 +99,7 @@ export interface AgentMountedResource {
     queryId?: string
     recordId?: string
     sourceUrl?: string
+    imageAssetId?: string
     publishedAt?: string
     collectedAt?: string
     executedAt?: string

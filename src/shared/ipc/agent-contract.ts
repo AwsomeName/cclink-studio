@@ -16,6 +16,7 @@ import {
   agentConversationConfigurationSchema,
   agentConfirmationIdSchema,
   agentConversationIdSchema,
+  agentImagesSchema,
   agentPermissionModeSchema,
   agentRoleDraftSchema,
   agentRoleRefSchema,
@@ -60,6 +61,20 @@ function mapCommandParseError(error: unknown): AgentCommandResult {
 }
 
 export const agentIpcContracts = {
+  saveMessageImages: bindIpcParser(agentIpc.saveMessageImages, (args) => {
+    requireArgs(args, 2, agentIpc.saveMessageImages.channel)
+    return ipcArgs(agentConversationIdSchema.parse(args[0]), agentImagesSchema.parse(args[1]))
+  }),
+  readMessageImage: bindIpcParser(agentIpc.readMessageImage, (args) => {
+    requireArgs(args, 2, agentIpc.readMessageImage.channel)
+    return ipcArgs(
+      agentConversationIdSchema.parse(args[0]),
+      z
+        .string()
+        .regex(/^[a-f0-9]{64}\.(png|jpg|gif|webp)$/)
+        .parse(args[1]),
+    )
+  }),
   sendMessage: bindIpcParser(
     agentIpc.sendMessage,
     (args): AgentSendMessageArgs => {

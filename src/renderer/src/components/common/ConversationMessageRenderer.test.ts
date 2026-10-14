@@ -15,6 +15,33 @@ beforeAll(() => vi.stubGlobal('React', React))
 afterAll(() => vi.unstubAllGlobals())
 
 describe('ConversationMessageRenderer', () => {
+  it('renders a sent local image as a preview instead of a filename chip', () => {
+    const rendered = renderToStaticMarkup(
+      createElement(ConversationMessageRenderer, {
+        conversationId: 'local-thread',
+        workspaceKey: null,
+        message: {
+          id: 'user-local-image',
+          role: 'user',
+          timestamp: 1,
+          rawText: '确认一下这个事情',
+          content: [{ type: 'text', text: '确认一下这个事情' }],
+          resources: [
+            {
+              id: 'image-1',
+              kind: 'image',
+              label: 'screen.png',
+              previewDataUrl: 'data:image/png;base64,AQID',
+              ref: { type: 'image', mediaType: 'image/png', size: 3 },
+            },
+          ],
+        },
+      }),
+    )
+    expect(rendered).toContain('src="data:image/png;base64,AQID"')
+    expect(rendered).toContain('alt="screen.png"')
+    expect(rendered).not.toContain('message-resource-chip')
+  })
   it('keeps large tool output out of a collapsed group while preserving the copyable record', () => {
     const content = 'large-result-marker'.repeat(10000)
     const message = {

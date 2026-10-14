@@ -89,6 +89,7 @@ export function transientMessageResources(
       kind: 'image' as const,
       label: image.name,
       detail: `${image.mediaType} · ${formatBytes(image.size)}`,
+      previewDataUrl: `data:${image.mediaType};base64,${image.data}`,
       ref: {
         type: 'image' as const,
         mediaType: image.mediaType,

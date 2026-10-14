@@ -513,6 +513,7 @@ export async function bootstrapMainProcessServices(
   await runtime.mcpClientMgr.loadFromConfig()
 
   registerAgentIpc({
+    messageImageRoot: join(app.getPath('userData'), 'agent-message-images'),
     trustedRendererGuard: runtime.trustedRendererGuard,
     getAgentBridge: () => runtime.agentBridge,
     getAgentRuntimeStateStore: () => runtime.agentRuntimeStateStore,

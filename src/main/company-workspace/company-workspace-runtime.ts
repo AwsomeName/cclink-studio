@@ -1,4 +1,5 @@
-import { realpath } from 'node:fs/promises'
+import { lstat, realpath } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { CclinkStudioRuntimeState } from '../runtime/app-runtime'
 import type { RuntimeService } from '../runtime/service-registry'
 import {
@@ -83,6 +84,12 @@ export function createCompanyWorkspaceRuntime(runtime: CclinkStudioRuntimeState)
               '请从工作空间选择器打开已授权的本地目录',
             )
           const workspacePath = await realpath(input.workspaceRef.path)
+          const metadata = await lstat(join(workspacePath, '.cclink-studio')).catch((error) => {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+            throw error
+          })
+          if (metadata?.isSymbolicLink())
+            throw new CompanyWorkspaceError('WORKSPACE_DENIED', '公司资料目录不能是符号链接')
           const workspaceId = await runtime.workspaceStateService?.getLocalProjectId(workspacePath)
           if (!workspaceId)
             throw new CompanyWorkspaceError(

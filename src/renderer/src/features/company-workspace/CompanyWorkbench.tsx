@@ -289,6 +289,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                 <input
                   type="month"
                   value={month}
+                  disabled={busy}
                   onChange={(event) => {
                     if (event.target.value) {
                       setMonth(event.target.value)

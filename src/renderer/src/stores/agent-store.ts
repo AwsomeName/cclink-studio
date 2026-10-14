@@ -20,6 +20,7 @@ import type {
   AgentStatus,
 } from '@shared/agent-protocol'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
+import type { AgentMessageImageAsset } from '@shared/image-attachment'
 import type { WorkspaceStateSetSectionOptions } from '@shared/ipc/workspace-state'
 import {
   DEFAULT_AGENT_RUNTIME_BINDING,
@@ -141,6 +142,7 @@ interface AgentState {
     conversationId?: string,
     resources?: AgentMountedResource[],
   ) => void
+  setMessageImageAssets: (conversationId: string, assets: AgentMessageImageAsset[]) => void
   addSystemMessage: (content: string, conversationId?: string) => void
   beginRun: (conversationId?: string) => string
   startStreamingMessage: (messageId: string, conversationId?: string, runId?: string) => void
@@ -826,6 +828,26 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           updatedAt: Date.now(),
         }
       }),
+    ),
+
+  setMessageImageAssets: (conversationId, assets) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => {
+          if (message.role !== 'user' || !message.resources) return message
+          return {
+            ...message,
+            resources: message.resources.map((resource) => {
+              const asset = assets.find((item) => item.id === resource.id)
+              return resource.kind === 'image' && asset
+                ? { ...resource, ref: { ...resource.ref, imageAssetId: asset.assetId } }
+                : resource
+            }),
+          }
+        }),
+        updatedAt: Date.now(),
+      })),
     ),
 
   addSystemMessage: (content, conversationId) =>

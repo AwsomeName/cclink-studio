@@ -6,6 +6,7 @@ import {
   beginWorkspaceStateRestore,
   endWorkspaceStateRestore,
   flushPendingWorkspaceStateWrites,
+  flushPendingWorkspaceSectionWrites,
   isWorkspaceStateRestoring,
   persistWorkspaceSection,
   persistWorkspaceSectionNow,
@@ -22,6 +23,82 @@ afterEach(() => {
 })
 
 describe('workspace-state utils', () => {
+  it('目标分区 flush 等待 running 和合并后的 pending，只等待指定 workspace/owner/section', async () => {
+    let releaseAll = false
+    const blocked: Array<{
+      key: string | null | undefined
+      section: string
+      owner: string | null | undefined
+      value: unknown
+      finish: () => void
+    }> = []
+    const setSection = vi.fn(
+      (
+        key: string | null | undefined,
+        section: string,
+        value: unknown,
+        owner: string | null | undefined,
+      ) => {
+        if (releaseAll) return Promise.resolve({ success: true })
+        return new Promise<{ success: boolean }>((resolve) =>
+          blocked.push({ key, section, owner, value, finish: () => resolve({ success: true }) }),
+        )
+      },
+    )
+    vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+    const writes = [
+      persistWorkspaceSectionNow('layout', { width: 200 }, '/workspace/a', 'owner-a'),
+      persistWorkspaceSectionNow('layout', { width: 300 }, '/workspace/a', 'owner-a'),
+      persistWorkspaceSectionNow('layout', { width: 400 }, '/workspace/a', 'owner-a'),
+      persistWorkspaceSectionNow('layout', { width: 900 }, '/workspace/a', 'owner-b'),
+      persistWorkspaceSectionNow('layout', { width: 800 }, '/workspace/b', 'owner-a'),
+      persistWorkspaceSectionNow('editorDrafts', { files: {} }, '/workspace/a', 'owner-a'),
+    ]
+    let flushed = false
+    const flush = flushPendingWorkspaceSectionWrites('layout', '/workspace/a', 'owner-a').then(
+      () => {
+        flushed = true
+      },
+    )
+    try {
+      expect(flushed).toBe(false)
+      blocked
+        .find(
+          (entry) =>
+            entry.key === '/workspace/a' && entry.owner === 'owner-a' && entry.section === 'layout',
+        )!
+        .finish()
+      await writes[0]
+      expect(flushed).toBe(false)
+      await vi.waitFor(() =>
+        expect(blocked.some((entry) => JSON.stringify(entry.value) === '{"width":400}')).toBe(true),
+      )
+      blocked.find((entry) => JSON.stringify(entry.value) === '{"width":400}')!.finish()
+      await flush
+      expect(flushed).toBe(true)
+      // 三条无关写入仍被阻塞，目标 layout flush 不依赖它们。
+      expect(
+        blocked.filter(
+          (entry) =>
+            entry.key !== '/workspace/a' || entry.owner !== 'owner-a' || entry.section !== 'layout',
+        ),
+      ).toHaveLength(3)
+      expect(
+        setSection.mock.calls
+          .filter(
+            ([key, section, , owner]) =>
+              key === '/workspace/a' && section === 'layout' && owner === 'owner-a',
+          )
+          .map(([, , value]) => value),
+      ).toEqual([{ width: 200 }, { width: 400 }])
+    } finally {
+      releaseAll = true
+      for (const entry of blocked) entry.finish()
+      await Promise.all(writes)
+      await flush
+    }
+  })
+
   it('默认使用当前工作区路径持久化 section', () => {
     const setSection = vi.fn().mockResolvedValue({ success: true })
     vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })

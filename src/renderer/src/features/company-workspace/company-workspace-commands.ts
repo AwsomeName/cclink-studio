@@ -26,11 +26,15 @@ export function openCompanyWorkspace(
         tab.workspaceRef.path === workspaceRef.path,
     )
   const selectedMonth = month ?? previous?.companyWorkspace?.month
-  useUIStore.getState().setActivePanel('company-workspace')
+  useUIStore.getState().showPanel('company-workspace')
   if (section === 'finance') {
-    useTabStore
-      .getState()
-      .openTab({ type: 'company-accounts', title: '公司账目', icon: '账', workspaceRef })
+    useTabStore.getState().openTab({
+      type: 'company-accounts',
+      title: '公司账目',
+      icon: '账',
+      workspaceRef,
+      companyAccounts: selectedMonth ? { month: selectedMonth, projectId: null } : undefined,
+    })
   } else {
     useTabStore.getState().openTab({
       type: 'company-workspace',

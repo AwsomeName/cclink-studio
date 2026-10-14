@@ -6,7 +6,11 @@ import { useAgentStore } from '../stores/agent-store'
 import { useBrowserTaskStore } from '../stores/browser-task-store'
 import { useTabStore } from '../stores/tab-store'
 import { useWorkspaceStore } from '../stores/workspace-store'
-import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from './workspace-state'
+import {
+  flushPendingWorkspaceSectionWrites,
+  getWorkspaceStateKey,
+  getWorkspaceStateOwnerKey,
+} from './workspace-state'
 import {
   applyTerminalRuntimeStatuses,
   hydrateRuntimeSections,
@@ -184,7 +188,11 @@ export async function prepareWorkspaceRuntimeTransition(
     ])
   }
 
-  const snapshot = await window.cclinkStudio.workspaceState.get(key, getWorkspaceStateOwnerKey())
+  // A 离开前最后一次调整可能仍在写入；快速切回时必须先等待目标 layout，再读取磁盘快照。
+  const ownerKey = getWorkspaceStateOwnerKey()
+  // 同工作空间重开不 hydrate layout，继续保留内存值，无需等待其未使用的磁盘布局。
+  if (key !== currentKey) await flushPendingWorkspaceSectionWrites('layout', key, ownerKey)
+  const snapshot = await window.cclinkStudio.workspaceState.get(key, ownerKey)
 
   return { ref, key, snapshot, generation, outgoingOwnership }
 }

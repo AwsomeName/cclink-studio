@@ -152,8 +152,10 @@ try {
     (value) => value.success && value.data.conversations.length > 0,
     'Persisted conversation directory',
   )
-  // Returning from the source editor remounts the company tab; select the ledger month again.
-  await page.getByLabel('账目月份').fill('2026-09')
+  assert(
+    (await page.getByLabel('账目月份').inputValue()) === '2026-09',
+    'Returning from a source editor lost the selected month',
+  )
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await page.getByLabel('选择关联会话').selectOption(conversation.data.conversations[0].id)
   await page.getByRole('button', { name: '关联会话', exact: true }).click()
@@ -219,6 +221,67 @@ try {
   await page.getByText('示例服务商', { exact: true }).first().waitFor()
   pass('绑定原账目归属并下钻到实际确认流水')
   await page.getByRole('button', { name: '公司总览', exact: true }).click()
+  await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
+  // Create an original, unstarted publishing task in the isolated profile; no login or execution.
+  const manuscript = join(a, '运营介绍.md')
+  await writeFile(manuscript, '# AR 眼镜介绍\n\n首轮产品介绍稿，仅用于关联与下钻验收。\n')
+  const publication = await page.evaluate(
+    async ({ workspacePath, markdownPath }) => {
+      const workspaceRef = { kind: 'local', path: workspacePath }
+      const account = await window.cclinkStudio.webResources.createConnection({
+        workspaceRef,
+        websiteName: 'CSDN 验收账号',
+        entryUrl: 'https://blog.csdn.net/',
+        principalKind: 'company',
+        principalName: '验收公司',
+        accountLabel: '本地未登录验收账号',
+      })
+      if (!account.success) throw new Error(account.error.message)
+      const result = await window.cclinkStudio.articlePublishing.createTask({
+        workspaceRef,
+        markdownPath,
+        accountId: account.data.account.id,
+        fields: { title: 'AR 眼镜介绍', summary: '关联验收稿', tags: [], category: '' },
+      })
+      if (!result.success) throw new Error(result.error.message)
+      return result.data
+    },
+    { workspacePath: a, markdownPath: manuscript },
+  )
+  await page.getByRole('button', { name: '刷新', exact: true }).click()
+  await page.getByLabel('选择已有发布任务').selectOption(publication.id)
+  await page.getByRole('button', { name: '关联发布任务', exact: true }).click()
+  const publishingRow = page.locator('.company-row').filter({ hasText: publication.title })
+  await publishingRow.getByRole('button', { name: '打开原记录', exact: true }).click()
+  await page.getByRole('heading', { name: publication.title, exact: true }).waitFor()
+  const publishingFact = await page.evaluate(
+    (input) => window.cclinkStudio.companyWorkspace.getSnapshot(input),
+    scope(a),
+  )
+  assert(
+    publishingFact.success &&
+      publishingFact.data.publications.some(
+        (item) => item.id === publication.id && item.status === 'not-started',
+      ),
+    'Company changed the original publication fact',
+  )
+  await page.getByRole('button', { name: '业务项目', exact: true }).click()
+  await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
+  pass('关联原发布事务并下钻，未开始事实保持不变')
+  await page.getByRole('button', { name: '归档业务', exact: true }).click()
+  await page.getByRole('button', { name: '重新打开业务', exact: true }).waitFor()
+  const archived = await page.evaluate(
+    (input) => window.cclinkStudio.companyWorkspace.getSnapshot(input),
+    scope(a),
+  )
+  assert(
+    archived.success && archived.data.projects[0].archived && archived.data.links.length === 3,
+    'Archiving removed resource references',
+  )
+  await page.getByRole('button', { name: '重新打开业务', exact: true }).click()
+  await page.getByRole('button', { name: '归档业务', exact: true }).waitFor()
+  pass('业务归档和重新打开保留三类来源关联')
+  await page.getByRole('button', { name: '公司总览', exact: true }).click()
   await writeFile(material, '# 产品规格\n\n已更新。')
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await page.getByRole('button', { name: '查看下一步', exact: true }).click()
@@ -240,6 +303,10 @@ try {
   await page.getByRole('button', { name: '公司经营', exact: true }).click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
+  assert(
+    (await page.getByLabel('账目月份').inputValue()) === '2026-09',
+    'Workspace switching lost the selected company month',
+  )
   pass('A/B 切换隔离并恢复业务关联')
   await app.close()
   app = null
@@ -247,6 +314,10 @@ try {
   await page.getByRole('button', { name: '公司经营', exact: true }).click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
+  assert(
+    (await page.getByLabel('账目月份').inputValue()) === '2026-09',
+    'Restart lost the selected company month',
+  )
   const restored = await page.evaluate(
     (input) => window.cclinkStudio.companyWorkspace.getSnapshot(input),
     scope(a),
@@ -254,7 +325,7 @@ try {
   assert(
     restored.success &&
       restored.data.projects.length === 1 &&
-      restored.data.links.length === 2 &&
+      restored.data.links.length === 3 &&
       restored.data.projects[0].ledgerProjectId === ledger.id,
     'Restart did not restore company state',
   )

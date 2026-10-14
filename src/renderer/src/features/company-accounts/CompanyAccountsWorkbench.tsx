@@ -79,7 +79,7 @@ export function CompanyAccountsWorkbench({
     )
     if (visibleRecords.some((record) => record.id === selectedRecordId)) return
     setSelectedRecordId(visibleRecords[0]?.id ?? null)
-  }, [filter, selectedRecordId, snapshot?.records])
+  }, [filter, projectFilter, selectedRecordId, snapshot?.records])
 
   const load = async (targetMonth = month): Promise<void> => {
     const requestId = ++loadRequestId.current

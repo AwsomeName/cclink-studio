@@ -4,7 +4,7 @@ import {
   AGENT_CONVERSATION_SNAPSHOT_SCHEMA_VERSION,
   deriveAgentMessageRawText,
 } from '@shared/agent-conversation-persistence'
-import type { AgentMessage, AgentMountedSkill } from '../../types'
+import type { AgentMessage, AgentMountedSkill, AgentMountedResource } from '../../types'
 import {
   DEFAULT_AGENT_ROLE_REF,
   agentRoleRefsEqual,
@@ -126,7 +126,7 @@ export function normalizeConversationSnapshot(
         : null,
       archivedAt: conversation.archivedAt ?? null,
       mountedResources: Array.isArray(conversation.mountedResources)
-        ? conversation.mountedResources
+        ? conversation.mountedResources.map(stripImagePreview)
         : [],
       pendingImages: [],
       mountedSkills: normalizeMountedSkills(conversation.mountedSkills),
@@ -158,6 +158,7 @@ export function normalizeConversationSnapshot(
             const derivedRawText = deriveAgentMessageRawText(message.content)
             return {
               ...message,
+              ...(message.resources ? { resources: message.resources.map(stripImagePreview) } : {}),
               rawText:
                 typeof message.rawText === 'string' ? message.rawText : (derivedRawText ?? ''),
               isStreaming: awaitingRuntimeReconciliation && message.isStreaming === true,
@@ -408,11 +409,13 @@ export function buildAgentConversationWorkspaceSnapshot(
       streamingMessageId: null,
       input: '',
       pendingImages: [],
+      mountedResources: conversation.mountedResources.map(stripImagePreview),
       messages: conversation.messages.map((message) => {
         const { rawText, ...persistedMessage } = message
         const derivedRawText = deriveAgentMessageRawText(message.content)
         return {
           ...persistedMessage,
+          ...(message.resources ? { resources: message.resources.map(stripImagePreview) } : {}),
           ...(derivedRawText === rawText ? {} : { rawText }),
           isStreaming: false,
         }
@@ -448,4 +451,9 @@ export function buildAgentConversationWorkspaceSnapshot(
     conversationOrder,
     activeConversationId,
   }
+}
+
+function stripImagePreview(resource: AgentMountedResource): AgentMountedResource {
+  const { previewDataUrl: _preview, ...persisted } = resource
+  return persisted
 }

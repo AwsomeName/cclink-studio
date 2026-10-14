@@ -8792,6 +8792,14 @@ body.is-resizing-panels .main-area > div {
   object-fit: contain;
 }
 
+.message-image-unavailable {
+  padding: 6px 8px;
+  border: 1px dashed currentColor;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
 .message-resource-chip {
   max-width: 100%;
   overflow: hidden;

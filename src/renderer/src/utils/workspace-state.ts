@@ -199,6 +199,23 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
   }
 }
 
+/** 读取某分区前等待捕获目标的队列排空；不等待其他 workspace、owner 或分区。 */
+export async function flushPendingWorkspaceSectionWrites(
+  section: WorkspaceStateSection,
+  workspaceKey: string | null,
+  ownerKey: string | null,
+): Promise<void> {
+  const queueKey = JSON.stringify([ownerKey, workspaceKey, section])
+  for (;;) {
+    const queue = sectionWriteQueues.get(queueKey)
+    if (!queue) return
+    await new Promise<void>((resolve) => {
+      if (!queue.running && !queue.pending) resolve()
+      else queue.idleWaiters.push(resolve)
+    })
+  }
+}
+
 /** 等待 renderer 内所有尚未送达 main process 的工作空间快照完成写盘。 */
 export async function flushPendingWorkspaceStateWrites(): Promise<void> {
   while (sectionWriteQueues.size > 0) {

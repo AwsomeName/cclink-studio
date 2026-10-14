@@ -1,0 +1,50 @@
+{
+  "runDir": "/private/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-company-smoke-D75C7v",
+  "results": [
+    {
+      "name": "普通本地工作空间免登录启用公司视图",
+      "status": "pass"
+    },
+    {
+      "name": "创建真实业务项目并打开详情",
+      "status": "pass"
+    },
+    {
+      "name": "关联真实文件并通过原编辑器查看",
+      "status": "pass"
+    },
+    {
+      "name": "关联主进程持久化的原有会话",
+      "status": "pass"
+    },
+    {
+      "name": "绑定原账目归属并下钻到实际确认流水",
+      "status": "pass"
+    },
+    {
+      "name": "关联原发布事务并下钻，未开始事实保持不变",
+      "status": "pass"
+    },
+    {
+      "name": "业务归档和重新打开保留三类来源关联",
+      "status": "pass"
+    },
+    {
+      "name": "变化与缺失资料显示真实卡点",
+      "status": "pass"
+    },
+    {
+      "name": "A/B 切换隔离并恢复业务关联",
+      "status": "pass"
+    },
+    {
+      "name": "完整 Electron 重启保留业务、文件和会话引用及财务绑定",
+      "status": "pass"
+    },
+    {
+      "name": "关闭公司视图后本地文件能力继续可用",
+      "status": "pass"
+    }
+  ],
+  "scope": "Real Electron automated acceptance; fixtures only, file picker return controlled; no model request or publication."
+}

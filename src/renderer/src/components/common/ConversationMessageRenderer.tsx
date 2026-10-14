@@ -10,6 +10,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 import { ConversationMarkdown, markdownPreviewText } from './ConversationMarkdown'
+import { MessageImagePreview } from '../../features/agent-conversations/message-image-preview'
 
 type ToolContentBlock = Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>
 type ThinkingContentBlock = Extract<ContentBlock, { type: 'thinking' }>
@@ -32,13 +33,8 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
 }): React.ReactElement {
   const units = buildContentRenderUnits(message.content)
   const copyText = getMessageCopyText(message)
-  const imageResources = (message.resources ?? []).flatMap((resource) => {
-    const sourceUrl = renderableMessageImageUrl(resource)
-    return sourceUrl ? [{ resource, sourceUrl }] : []
-  })
-  const chipResources = (message.resources ?? []).filter(
-    (resource) => !renderableMessageImageUrl(resource),
-  )
+  const imageResources = (message.resources ?? []).filter((resource) => resource.kind === 'image')
+  const chipResources = (message.resources ?? []).filter((resource) => resource.kind !== 'image')
 
   const handleCopyMessage = async (): Promise<void> => {
     try {
@@ -98,17 +94,11 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
       ))}
       {imageResources.length > 0 && (
         <div className="message-image-list" aria-label="消息图片">
-          {imageResources.map(({ resource, sourceUrl }) => (
-            <img
+          {imageResources.map((resource) => (
+            <MessageImagePreview
               key={resource.id}
-              className="message-image-preview"
-              src={sourceUrl}
-              alt={resource.label}
-              title={resource.label}
-              loading="lazy"
-              decoding="async"
-              draggable={false}
-              referrerPolicy="no-referrer"
+              resource={resource}
+              conversationId={conversationId}
             />
           ))}
         </div>
@@ -132,19 +122,6 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
     </div>
   )
 })
-
-function renderableMessageImageUrl(
-  resource: NonNullable<AgentMessage['resources']>[number],
-): string | null {
-  if (resource.kind !== 'image' || typeof resource.ref.sourceUrl !== 'string') return null
-  try {
-    const parsed = new URL(resource.ref.sourceUrl)
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) return null
-    return resource.ref.sourceUrl
-  } catch {
-    return null
-  }
-}
 
 export function getMessageCopyText(message: AgentMessage): string {
   if (message.rawText.trim()) return message.rawText

@@ -266,7 +266,7 @@ describe('buildAgentSendPayload', () => {
     expect(transientMessageResources([file, range])).toEqual([range])
   })
 
-  it('sends pending images separately and records only bounded image metadata in the user message', () => {
+  it('sends pending images separately and keeps an immediate message preview outside the resource ref', () => {
     const conversationId = useAgentStore.getState().createConversation()
     const image = {
       id: 'image-1',
@@ -285,10 +285,11 @@ describe('buildAgentSendPayload', () => {
         kind: 'image',
         label: 'screen.png',
         detail: 'image/png · 3 B',
+        previewDataUrl: 'data:image/png;base64,AQID',
         ref: { type: 'image', mediaType: 'image/png', size: 3 },
       },
     ])
-    expect(JSON.stringify(transientMessageResources([], [image]))).not.toContain('AQID')
+    expect(JSON.stringify(transientMessageResources([], [image])[0].ref)).not.toContain('AQID')
   })
 })
 

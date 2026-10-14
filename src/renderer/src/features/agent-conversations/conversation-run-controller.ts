@@ -3,7 +3,8 @@ import type {
   AgentCommandResult,
   AgentCompactConversationPayload,
 } from '@shared/agent-protocol'
-import type { AgentSendMessageInput } from '@shared/ipc/agent'
+import type { AgentSendMessageInput, AgentApiContract } from '@shared/ipc/agent'
+import type { AgentMessageImageAsset } from '@shared/image-attachment'
 import type { AgentBackendState, AgentMountedResource } from '../../types'
 import type { AgentRunConfigurationReceipt } from '@shared/agent-role'
 import {
@@ -30,6 +31,7 @@ export type ConversationCommandResult =
   | { status: 'failed'; error: string; runId?: string }
 
 interface ConversationRunAgentApi {
+  saveMessageImages: AgentApiContract['saveMessageImages']
   sendMessage: (
     conversationId: string,
     message: AgentSendMessageInput,
@@ -42,6 +44,7 @@ interface ConversationRunAgentApi {
 }
 
 interface ConversationRunStore {
+  setMessageImageAssets: (conversationId: string, assets: AgentMessageImageAsset[]) => void
   conversations: Record<string, AgentConversationState>
   setInput: (text: string, conversationId?: string) => void
   addUserMessage: (
@@ -128,6 +131,14 @@ export function createConversationRunController({
       const runId = store.beginRun(conversationId)
 
       try {
+        if (images.length > 0) {
+          const saved = await agentApi.saveMessageImages(conversationId, images).catch(() => ({
+            success: false as const,
+            error: '图片附件保存失败，当前会话仍可预览，重启后可能无法恢复',
+          }))
+          if (saved.success) store.setMessageImageAssets(conversationId, saved.assets)
+          else store.addSystemMessage(saved.error, conversationId)
+        }
         const current = getStore().conversations[conversationId]
         const result = await agentApi.sendMessage(
           conversationId,

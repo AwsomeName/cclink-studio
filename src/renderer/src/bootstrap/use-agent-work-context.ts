@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useTabStore } from '../stores/tab-store'
 import { useUIStore, type WorkContext } from '../stores/ui-store'
+import { useWorkspaceStore } from '../stores/workspace-store'
 import type { Tab } from '../types'
 
 function workContextFromTab(tab: Tab | undefined): WorkContext {
@@ -24,9 +25,11 @@ export function useAgentWorkContext(workspaceReady: boolean): void {
   const tabs = useTabStore((s) => s.tabs)
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  // 全局设置 Tab 会原样保留；workspace 提交也必须重新评估 system 布局，user 仍由 UI store 优先。
+  const workspaceGeneration = useWorkspaceStore((s) => s.generation)
 
   useEffect(() => {
     if (!workspaceReady) return
     applySystemWorkContext(workContextFromTab(activeTab))
-  }, [activeTab, applySystemWorkContext, workspaceReady])
+  }, [activeTab, applySystemWorkContext, workspaceReady, workspaceGeneration])
 }

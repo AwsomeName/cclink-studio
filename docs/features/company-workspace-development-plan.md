@@ -1,6 +1,6 @@
 # 公司工作空间实现方案
 
-> 状态：首个纵向闭环已实现并通过自动化门禁；普通工作验收、发布关联与决策批次尚未实现，真实 App 真人验收待完成；产品范围已由用户确认。
+> 状态：第一批公司组织、资料及原发布事务关联、财务下钻已实现并通过真实 Electron 自动化验证；真人验收待完成。AI 工作验收、公司内新建发布关联与经营决策属于后续批次。
 > 日期：2026-10-14。
 > 产品事实源：[公司工作空间产品设计](company-workspace-product-design.md)。
 > 首版布局：经营导航。经营收件箱仅保留为设计对比，不进入首版实施。
@@ -26,7 +26,7 @@
 | `src/main/runtime/bootstrap-runtime.ts`、`src/main/runtime/service-registry.ts`                           | 对称启动、失败回滚、停止与重建             | 公司模块的单份生命周期声明及独立降级         |
 | `src/main/agent-core/tools/agent-tool-authorization-broker.ts`、现有工具宿主                              | SDK、MCP 的统一工具授权                    | 公司准备工作的精确读写范围校验               |
 
-当前账目 `getSnapshot(month)` 从主进程活跃工作空间取路径，API 未提供公司所需的显式归属及变更事件。公司聚合不能在异步完成后再读全局活跃路径，也不能假设已确认账目会主动通知总览；这两项是直接接入缺口。
+原账目 `getSnapshot(month)` 继续从主进程活跃工作空间取路径。第一批新增同一服务的内部 `getSnapshotForWorkspace(path, month)`，公司按请求固定归属读取；不复制确认与汇总逻辑。第一批在页面进入、回到公司页、窗口重新聚焦及显式刷新时重新查询财务；连续停留总览时的主动失效通知仍需第三批补齐。
 
 原 Agent 运行记录最多保留 500 条。公司长期验收记录不能依赖运行记录永远存在；运行引用丢失时显示事实不可查询，不伪造成功。已保存的用户验收与产物版本仍由公司领域拥有。
 
@@ -39,7 +39,7 @@
 | Preload  | 有界 `companyWorkspace` API 与变更事件              | 原有 API；不暴露数据库、任意 SQL 或凭证             |
 | Renderer | 公司导航、总览、项目详情、关联选择与验收界面        | 原 Agent 面板、财务工作台、发布 Tab、浏览器生命周期 |
 
-建议文件位置如下，均为待创建代码：
+完整首版的候选文件位置如下；按批次实施，不能将清单当成当前已存在的模块：
 
 ```text
 src/shared/company-workspace/
@@ -68,6 +68,8 @@ src/renderer/src/features/company-workspace/
 ```
 
 按当前批次创建实际需要的文件，不先生成空页面和空服务。Renderer store 仅持查询投影、筛选与选中，不能提交整个领域快照覆盖数据库。
+
+第一批实际落点为 shared 类型、schema、纯 IPC 定义和绑定 contract；Main 单个 `CompanyWorkspaceService`、IPC 与 Runtime；preload API；Renderer `CompanyWorkbench`、`CompanySidebar`、统一导航命令和样式。当前只有公司配置、业务项目、资料关联三张表；没有工作、验收、决策或执行状态表。
 
 财务区域直接接入既有 `CompanyAccountsWorkbench`。需要从原记录进入时，增加明确的月份或记录选择输入；查询和修改继续通过 CompanyAccountsService。运营内容由公司领域保存原稿和事务引用，点击执行进入既有 ArticlePublishingTab，详细步骤来自 WebAffair。
 
@@ -186,7 +188,9 @@ IPC 使用本模块受信任注册 scope，停止时只释放自己的 handler�
 
 ## 工程准备度和验证
 
-当前用户功能进度：公司入口、公司业务关联及普通工作验收尚未实现。当前工程准备度：产品范围与实现方案已落盘，效果稿交互检查通过；功能代码、源码门禁和真实公司闭环均未验证。
+当前用户功能进度：可以免登录启用公司视图，创建、修改、归档与重新打开业务，关联本地文件、已有会话及原发布事务，绑定既有账目归属并打开原流水。工作空间切换和应用重启保留这些关联。AI 受控产物、业务验收、公司内创建发布流程和经营决策尚未实现；完整公司经营闭环不能声明完成。
+
+当前工程准备度：第一批代码、`pnpm verify` 与真实 Electron 操作 smoke 已通过；真人业务验收待完成。自动化使用隔离资料与用户数据目录，未调用模型或提交公开文章。操作步骤、证据和未覆盖项见[第一批验收记录](../testing/company-workspace-first-loop.md)。
 
 每批补当前改动必要的 domain、contract、授权和恢复测试，随后运行受影响 smoke。阶段合入遵守架构宪法的源码门禁；首版完整交付前执行 `pnpm verify` 与真实 App 验收。效果稿测试不计入功能验证。
 

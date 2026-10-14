@@ -149,6 +149,65 @@ afterEach(async () => {
 })
 
 describe('workspace layout integration', () => {
+  it('waits for A layout writes made while B commits before reading A on a rapid return', async () => {
+    const original = normalizeWorkspaceLayout({ sidebarWidth: 200, agentPanelModeSource: 'user' })
+    snapshots.set(a.path, { layout: original })
+    snapshots.set(b.path, { layout: layoutB })
+    beginWorkspaceStateRestore()
+    useUIStore.getState().hydrateFromWorkspaceState(original)
+    endWorkspaceStateRestore()
+    const preparedB = await prepareWorkspaceRuntimeTransition(b)
+    let acknowledgeB: (() => void) | undefined
+    vi.mocked(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          acknowledgeB = () => resolve({ success: true })
+        }),
+    )
+    const committingB = applyWorkspaceRuntimeTransition(preparedB, { flush: false })
+    await vi.waitFor(() => expect(acknowledgeB).toBeTypeOf('function'))
+    let finishAWrite: (() => void) | undefined
+    const write = vi.mocked(window.cclinkStudio.workspaceState.setSection)
+    const realWrite = write.getMockImplementation()!
+    write.mockImplementation(async (key, section, value, owner) => {
+      if (key === a.path && section === 'layout') {
+        await new Promise<void>((resolve) => {
+          finishAWrite = resolve
+        })
+        write.mockImplementation(realWrite)
+      }
+      return realWrite(key, section, value, owner)
+    })
+    useUIStore.getState().setSidebarWidth(300)
+    await vi.waitFor(() => expect(finishAWrite).toBeTypeOf('function'))
+    const read = vi.mocked(window.cclinkStudio.workspaceState.get)
+    try {
+      acknowledgeB!()
+      expect(await committingB).toBe(true)
+      expect(useUIStore.getState()).toMatchObject(layoutB)
+      expect(snapshots.get(a.path)?.layout).toMatchObject({ sidebarWidth: 200 })
+      read.mockClear()
+      const returningA = switchTo(a)
+      // 让无需等待的 B 保存及 Promise 回调全部执行；A 的布局写入仍被显式阻塞。
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      const readsBeforeWriteFinishes = read.mock.calls.filter(([key]) => key === a.path).length
+      finishAWrite!()
+      expect(await returningA).toBe(true)
+      useUIStore.getState().hideSidebar()
+      await flushPendingWorkspaceStateWrites()
+      expect(readsBeforeWriteFinishes).toBe(0)
+      expect(useUIStore.getState()).toMatchObject({ sidebarWidth: 300, sidebarVisible: false })
+      expect(snapshots.get(a.path)?.layout).toMatchObject({
+        sidebarWidth: 300,
+        sidebarVisible: false,
+      })
+    } finally {
+      acknowledgeB!()
+      finishAWrite!()
+      await flushPendingWorkspaceStateWrites()
+    }
+  })
+
   it('preserves edits made while main commits a reopen of the current workspace', async () => {
     const original = normalizeWorkspaceLayout({ sidebarWidth: 200, agentPanelModeSource: 'user' })
     snapshots.set(a.path, { layout: original })

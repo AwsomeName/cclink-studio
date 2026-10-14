@@ -43,7 +43,34 @@ workspace；同 workspace 只跳过 layout hydrate，不改变其他分区的恢
 这两条延迟竞态由自动化注入 IPC 延迟验证；真实 Electron 10 项回归继续覆盖主线布局及 Browser，
 没有宣称已执行真人的目录选择器验收。
 
+## P2：快速切回与保留设置 Tab 补修
+
+快速 A→B→A 原先会在 A 最后宽度写入完成前读回旧 layout：等待 B main 提交时调整 A 到 300px，
+B 成功后立即返回 A，可能恢复磁盘 200px，后续侧栏操作再把 200px 写回。现在不同 workspace 的读取前，
+等待捕获目标 key/owner 的 layout 待写队列排空，再以同一身份读快照；不等待其他项目、身份或分区。
+复用原队列及合并规则，不新增缓存。同项目重开仍保留内存 layout，不增加无用等待。
+
+全局设置 Tab 会保留同一个对象，原 effect 仅依赖 Tab，缺布局项目恢复的 `center/system` 因此可能一直
+遮住设置页。现在 hook 订阅已有 workspace 提交 generation，提交后重新计算 system context；既有
+`user` 优先 no-op 保持不变，没有改造 Agent 数据或切换事务。
+
+- 两条定向回归先在旧代码失败，修复后通过：A 返回前不得提前读旧快照，返回并收起侧栏后 UI/持久值
+  均为 300px；同一个设置 Tab 在无 layout 项目得到 right/system。user center/right/hidden 均保持。
+- 队列测试验证 running 及最新合并 pending 都完成后才继续，其他 workspace/owner/section 的阻塞写入
+  不影响目标等待。既有持久化失败、同项目重开、过期请求和拖拽测试继续通过。
+- 本轮 12 个受影响测试文件、162 项通过；Web/Node 类型检查及定向 lint 通过。未重跑全量 verify。
+- 真实 Electron 11/11 通过：原有 10 项布局/Browser 回归全部重跑；新增真实设置页可见断言，确认同一个
+  Tab 跨无布局项目仍可见，切到 B 后 hidden/user 不被覆盖。两条 visual scale 均实测
+  `0.3000000119 → 1`。
+  [本轮原始结果](/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-workspace-layout-Ouy8OV/results.json)
+  [设置页截图](/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-workspace-layout-Ouy8OV/settings-preserved.png)
+- 首次 smoke 在启动阶段未取得调试端口，未执行验收项；查明原启动器会复用仓库已有 Electron，不能确保
+  进程隔离。测试脚本改为仅启动/清理自身进程组后，重跑通过；没有修改通用启动器或产品 Browser 代码。
+  本次创建的临时工作空间已清理，证据目录保留。
+
 ## Browser 实测读数
+
+下表为主线首次实现的原始读数；本轮重跑结果见上一节证据。
 
 | 场景              | pane / native View / 页面 viewport 宽度 | raw / applied / page zoom | visual scale     |
 | ----------------- | --------------------------------------- | ------------------------- | ---------------- |
@@ -79,9 +106,12 @@ Browser 页面使用本机可重复的外溢 fixture，未操作第三方账号�
 6. 在 A 拖拽栏宽时切换到 B，继续移动并松开，确认 B 未被旧拖拽修改。
 7. 在 A、B 打开 Browser，检查不同栏宽、收起/展开、导航、适宽和重启时原生网页区域与中央面板匹配。
 8. 已登录、已配对真实远程 Agent 时，重复工作空间布局往返与重启验收。
+9. 切向 B 的等待期间继续调整 A 栏宽，B 打开后立即切回 A；再收起/展开侧栏，确认最后宽度保持。
+10. 打开设置 Tab 并保留它，切到无布局的新项目，确认设置页可见；已有 user 布局的项目仍保持其用户模式。
 
 ## 残余边界
 
-本次修复限定在 layout 恢复、捕获保存、legacy 迁移、拖拽及本地打开收尾。独立既有的 main/renderer
+本次修复限定在 layout 恢复、捕获保存、目标队列等待、system 布局重算、legacy 迁移、拖拽及本地打开收尾。
+独立既有的 main/renderer
 工作空间事务、fs 异步尾处理、Editor 草稿归属、Agent pending update 和文件移动崩溃窗口没有被本次修改
 修复，也不能用全量测试通过来宣称关闭。

@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http'
+import { spawn } from 'node:child_process'
+import { openSync, closeSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -13,7 +15,8 @@ const workspaceRoot = await mkdtemp(join(homedir(), '.cclink-workspace-layout-')
 const a = join(workspaceRoot, 'layout-a')
 const b = join(workspaceRoot, 'layout-b')
 const c = join(workspaceRoot, 'layout-default')
-await Promise.all([a, b, c].map((path) => mkdir(path)))
+const settingsDefault = join(workspaceRoot, 'settings-default')
+await Promise.all([a, b, c, settingsDefault].map((path) => mkdir(path)))
 // 沿用 restore-smoke 的测试登记：只授权本次创建的目录，不修改应用权限入口。
 await mkdir(join(evidenceDir, 'user-data'))
 await writeFile(
@@ -22,7 +25,7 @@ await writeFile(
     version: 2,
     workspaces: {},
     localWorkspaces: Object.fromEntries(
-      [a, b, c].map((path, index) => [
+      [a, b, c, settingsDefault].map((path, index) => [
         `layout-smoke-${index}`,
         {
           workspaceKey: path,
@@ -51,7 +54,7 @@ await new Promise((resolve) => portProbe.close(resolve))
 process.env.CCLINK_STUDIO_SMOKE_RUN_DIR = evidenceDir
 process.env.CCLINK_STUDIO_SCREEN_NAME = basename(evidenceDir)
 process.env.CCLINK_STUDIO_SMOKE_RENDERER_PORT = String(rendererPort)
-const { runRestart, logFile, rendererOrigin, rootDir } = createSmokeRuntime(import.meta.url)
+const { logFile, rendererOrigin, rootDir } = createSmokeRuntime(import.meta.url)
 const controlledUserData = join(evidenceDir, 'controlled-user-data')
 await mkdir(controlledUserData)
 await writeFile(
@@ -62,7 +65,44 @@ let electronApp
 let browser
 let page
 let browserATabId
+let runtimeChild
 const results = []
+
+function startRuntime() {
+  const fd = openSync(logFile, 'w')
+  try {
+    runtimeChild = spawn('bash', ['scripts/dev.sh'], {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '',
+        CCLINK_STUDIO_TEST_USER_DATA_PATH: join(evidenceDir, 'user-data'),
+        CCLINK_STUDIO_RENDERER_PORT: String(rendererPort),
+      },
+      detached: true,
+      stdio: ['ignore', fd, fd],
+    })
+  } finally {
+    closeSync(fd)
+  }
+}
+
+async function stopRuntime() {
+  if (!runtimeChild) return
+  // 只清理本次创建的进程组，禁止 restart.sh 按整个仓库复用或停止其他开发实例。
+  const pid = runtimeChild.pid
+  try {
+    process.kill(-pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    /* 本次隔离运行已经退出。 */
+  }
+}
 
 function assert(condition, message) {
   if (!condition) throw new Error(message)
@@ -352,7 +392,7 @@ const urlA = `${fixtureOrigin}/a`
 const urlB = `${fixtureOrigin}/b`
 
 try {
-  runRestart('start')
+  startRuntime()
   await connect()
   const setupReady = await check('default workspace and create A/B layouts', async () => {
     await open(c)
@@ -507,17 +547,45 @@ try {
     await assertLayout(a, layoutA)
     await page.screenshot({ path: join(evidenceDir, 'restored-layout.png') })
   })
+  await check(
+    'preserved Settings stays visible after system layout restore; user mode wins',
+    async () => {
+      const preserved = await page.evaluate(async (targetPath) => {
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        const { openWorkspaceRef } =
+          await import('/src/features/workspace-open/workspace-open-controller.ts')
+        useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+        const settingsTab = useTabStore.getState().getActiveTab()
+        await openWorkspaceRef({ kind: 'local', path: targetPath })
+        return {
+          sameTab: useTabStore.getState().getActiveTab() === settingsTab,
+          activeTabId: useTabStore.getState().activeTabId,
+        }
+      }, settingsDefault)
+      assert(preserved.sameTab, 'The same global Settings Tab was not retained')
+      await page.waitForFunction(async () => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        const ui = useUIStore.getState()
+        return ui.agentPanelMode === 'right' && ui.agentPanelModeSource === 'system'
+      })
+      await page.locator('.settings-page').waitFor({ state: 'visible' })
+      const systemLayout = await layout()
+      await open(b)
+      await assertLayout(b, layoutB)
+      await page.locator('.settings-page').waitFor({ state: 'visible' })
+      const userLayout = await layout()
+      assert(userLayout.agentPanelModeSource === 'user', 'Settings context overwrote user source')
+      await page.screenshot({ path: join(evidenceDir, 'settings-preserved.png') })
+      return { preserved, systemLayout, userLayout }
+    },
+  )
 } finally {
   await writeFile(
     join(evidenceDir, 'results.json'),
     JSON.stringify({ results, evidenceDir }, null, 2),
   )
   await browser?.close().catch(() => {})
-  try {
-    runRestart('stop')
-  } catch {
-    /* 本次隔离运行已经退出。 */
-  }
+  await stopRuntime()
   await new Promise((resolve) => fixture.close(resolve))
   await rm(workspaceRoot, { recursive: true, force: true })
   console.log(`Evidence: ${evidenceDir}`)

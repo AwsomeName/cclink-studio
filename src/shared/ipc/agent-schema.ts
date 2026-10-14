@@ -192,7 +192,7 @@ const resourcesSchema = z
 
 const skillsSchema = agentSkillRefsSchema
 
-const imagesSchema = z
+export const agentImagesSchema = z
   .array(
     z
       .object({
@@ -220,7 +220,7 @@ export const agentSendMessageInputSchema = z.union([
       runId: boundedIdentifierSchema().optional(),
       resources: resourcesSchema.optional(),
       skills: skillsSchema.optional(),
-      images: imagesSchema.optional(),
+      images: agentImagesSchema.optional(),
       sessionId: nullableAgentSessionIdSchema.optional(),
       sessionCompatibilityFingerprint:
         nullableAgentSessionCompatibilityFingerprintSchema.optional(),

@@ -58,6 +58,7 @@ function createHarness(conversation = createConversation()) {
     conversations: { 'agent-1': conversation },
     setInput: vi.fn(),
     addUserMessage: vi.fn(),
+    setMessageImageAssets: vi.fn(),
     addSystemMessage: vi.fn(),
     beginRun: vi.fn(() => 'run-1'),
     cancelStreaming: vi.fn(),
@@ -70,6 +71,10 @@ function createHarness(conversation = createConversation()) {
     setRunConfigurationReceipt: vi.fn(() => true),
   }
   const agentApi = {
+    saveMessageImages: vi.fn().mockResolvedValue({
+      success: true,
+      assets: [{ id: 'image-1', assetId: `${'a'.repeat(64)}.png` }],
+    }),
     sendMessage: vi.fn().mockResolvedValue({
       success: true,
       configurationReceipt: {
@@ -251,6 +256,31 @@ describe('conversation-run-controller', () => {
       }),
     )
     expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
+    expect(agentApi.saveMessageImages).toHaveBeenCalledWith('agent-1', [image])
+    expect(store.setMessageImageAssets).toHaveBeenCalledWith('agent-1', [
+      { id: 'image-1', assetId: `${'a'.repeat(64)}.png` },
+    ])
+  })
+
+  it('keeps immediate image previews and sends the turn when attachment persistence fails', async () => {
+    const image = {
+      id: 'image-1',
+      name: 'screen.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    const { controller, store, agentApi } = createHarness(
+      createConversation({ pendingImages: [image] }),
+    )
+    agentApi.saveMessageImages.mockResolvedValue({ success: false, error: '图片保存失败' })
+    await expect(controller.send('看看图片')).resolves.toMatchObject({ status: 'accepted' })
+    expect(store.addSystemMessage).toHaveBeenCalledWith('图片保存失败', 'agent-1')
+    expect(store.addUserMessage).toHaveBeenCalledWith('看看图片', 'agent-1', [
+      expect.objectContaining({ previewDataUrl: 'data:image/png;base64,AQID' }),
+    ])
+    expect(store.setMessageImageAssets).not.toHaveBeenCalled()
+    expect(agentApi.sendMessage).toHaveBeenCalledOnce()
   })
 
   it.each([

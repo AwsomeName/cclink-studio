@@ -36,6 +36,8 @@ main CAS/transaction lease/repair 重构，以及文件权限或文件移动事�
 7. 在 A 拖拽栏宽时立即切换到 B，继续移动并松开鼠标，确认旧拖拽不能改变或写入 B 的布局。
 8. 在 A 收起左栏后切到 B，再通过系统目录选择器打开 A；等待目录恢复及打开流程全部结束，确认左栏仍
    收起，其他布局字段保持 A 的保存值。再次切回 A 或重启后，确认未被收尾代码覆盖保存。
+9. 切向 B 的等待期间继续调整 A 的栏宽，B 打开后立即切回 A；再收起/展开侧栏，确认最后宽度仍保持。
+10. 保留设置 Tab，切到无布局的新项目，确认设置页仍可见；切到已有 user 布局的项目时，仍以用户模式为准。
 
 ### 2.2 完成声明
 
@@ -53,6 +55,8 @@ main CAS/transaction lease/repair 重构，以及文件权限或文件移动事�
 - `workspace-runtime.ts` 在已有 restore guard 中首先恢复 layout；`workspace-transition.ts` 沿用最终
   generation 检查，同步提交目标身份并 hydrate，不新增 await 或跨域事务。
   同工作空间重新打开时跳过磁盘 layout 恢复，保留最新内存布局；不同工作空间仍按目标快照恢复。
+- 不同工作空间读取快照前，等待捕获的目标 key/owner 的 layout 待写队列排空；包括等待上一项目提交时
+  产生的最后调整，不等待其他身份、项目或分区。复用现有队列，不新增布局缓存。
 - `ResizeHandle.tsx` 的每个 move 回调校验捕获的 WorkspaceTarget；切换开始、prepare 和最终提交均可
   同步取消拖拽。最终提交取消也覆盖等待期间重新开始的拖拽；过期 apply 不能取消新工作空间的拖拽。
 - `workspace-bootstrap-core.ts` 在读取快照前创建目标绑定的 layout restore；成功恢复后在 guard 外完成
@@ -60,7 +64,8 @@ main CAS/transaction lease/repair 重构，以及文件权限或文件移动事�
 - `workspace-open-controller.ts` 已删除 `pickLocalWorkspace()` 收尾的无条件 `showPanel('files')`。
   原路径“恢复收起侧栏 → guard 结束 → 收尾展开 → subscription 覆盖保存”已由完整打开结束后的测试覆盖。
 - `App.tsx/panel-layout.ts` 继续区分 Agent 保存目标与有效显示宽度，并共用 Sidebar 目标范围常量。
-  Agent 的 user 来源仍复用现有系统布局 no-op；Browser 继续使用现有生命周期与 bounds 上报。
+  `use-agent-work-context.ts` 订阅已有 workspace 提交 generation，保留同一个全局 Tab 时也重新计算
+  system 布局；user 来源仍复用现有 no-op。Browser 继续使用现有生命周期与 bounds 上报。
 
 源码实现与验证已经形成布局闭环。Editor、Agent pending update、main CAS、通用投影及权限事务没有加入
 本次修改；它们的独立风险仍按第 6.2 节记录。
@@ -144,6 +149,10 @@ UI 变化时，在同一个同步调用栈完成两件事：
 
 只在现有提交点恢复 layout：
 
+读取阶段先捕获目标 key 与 owner，等待该目标的 layout 队列（running 及合并后的 pending）排空，再用
+同一 key/owner 读取快照。写入失败不使等待拒绝：沿用保存诊断，读取最后成功值。不同项目才需要此等待；
+同项目重开不 hydrate 磁盘 layout，继续保留内存值。既有最终 generation 检查仍控制是否允许 apply。
+
 1. `applyWorkspaceRuntimeTransition()` 保留当前 generation 检查；旧请求在最终检查失败时不执行 layout
    hydrate。
 2. 最终检查通过后，现有代码在同一同步调用栈提交 `activeWorkspaceRef` 并调用
@@ -191,8 +200,10 @@ remote/global/local 都通过现有 `WorkspaceRef` 和 `workspaceRefKey()` 隔�
 
 ### 5.6 Agent 与 Browser
 
-- 不修改 Agent 数据或 hook。只验证恢复出的 `agentPanelModeSource === 'user'` 会继续阻止
-  `applySystemWorkContext()` 覆盖；`system` 来源仍按现有 Tab context 自动选择布局。
+- 不修改 Agent 数据。`use-agent-work-context.ts` effect 增加已有 workspace 提交 generation 依赖：即使
+  全局设置 Tab 对象不变，也在提交后的渲染重新按 Tab context 计算 system 布局，避免缺布局的默认
+  `center/system` 遮住设置页。恢复出的 `user` 来源仍由 `applySystemWorkContext()` 的既有 no-op 保护，
+  `center/right/hidden` 三种 user 模式均不覆盖。
 - 不修改 Browser IPC、BrowserManager、缩放算法或 View 生命周期。布局恢复改变 DOM 宽度后，继续依赖
   现有 `ResizeObserver → reportWorkbenchBounds → BrowserManager` 链路收敛原生 View bounds。
 - 由于曾发生 30% page/visual scale 事故，mock 测试不足以关闭 Browser 回归；必须执行第 8.2 节真实
@@ -209,6 +220,8 @@ remote/global/local 都通过现有 `WorkspaceRef` 和 `workspaceRefKey()` 隔�
 | 全局 localStorage 初始化与持续双写泄漏         | 只作启动兼容输入；迁移成功删除、失败重试及已有 layout 优先测试通过 |
 | 旧 pointer callback 可修改新 workspace         | target/generation 校验及同步取消；事件单测与真实拖拽切换通过       |
 | 本地打开收尾展开侧栏并覆盖保存                 | 删除无条件调用；完整 picker 流程结束并 drain 写队列后断言布局保持  |
+| B 提交等待期产生的 A 调整在快速切回时未落盘    | 读 A 前等待 A layout 队列；延迟成功路径测试覆盖读取及后续保存      |
+| 全局设置 Tab 对象不变，system 布局未重新评估   | hook 依赖提交 generation；设置页可见及 user 三种模式优先回归       |
 
 layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没有新增“任意 workspace key + 当前 UI”
 组合。延迟写入测试确认捕获的 A snapshot 与 owner 在 B 激活后仍只写 A。
@@ -217,7 +230,7 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 
 以下风险在当前代码中存在，但本次 layout 变更不创建它们，也不修改对应领域：
 
-- `workspace-transition.ts:189-203` 在 main identity 提交前会等待 Browser/Terminal，且 main 接口不是 CAS；
+- `workspace-transition.ts:204-218` 在 main identity 提交前会等待 Browser/Terminal，且 main 接口不是 CAS；
   这是整体 workspace 事务风险。本次只依赖最后 renderer generation 检查，不能宣称该风险已修复。
 - `fs-store.ts:603-624,688-699` 的目录恢复和调用者尾处理仍有独立的迟到状态问题；layout hydrate 已在
   更早的同步提交点完成，不依赖这些尾处理。
@@ -235,13 +248,15 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 | `src/renderer/src/stores/ui-store.test.ts`                                             | 默认值、非法字段与 mode/visible 一致性                            |
 | `src/renderer/src/utils/panel-layout.ts`、`src/renderer/src/App.tsx`                   | Sidebar 目标范围共用；保留目标/有效宽度分离                       |
 | `src/renderer/src/utils/workspace-runtime.ts`                                          | 在现有 guard 内首先恢复 layout                                    |
-| `src/renderer/src/utils/workspace-transition.ts`                                       | 捕获出站布局并等待保存；切换开始、prepare、提交同步取消拖拽       |
+| `src/renderer/src/utils/workspace-transition.ts`                                       | 捕获出站保存、读前等待目标 layout、同项目保留内存、同步取消拖拽   |
+| `src/renderer/src/utils/workspace-state.ts` 及 `.test.ts`                              | 复用现有队列提供目标分区等待；验证隔离与合并 pending 排空         |
+| `src/renderer/src/bootstrap/use-agent-work-context.ts` 及 `.test.ts`                   | 提交 generation 触发 system 重算；保留设置 Tab 及 user 模式优先   |
 | `src/renderer/src/utils/panel-layout-drag-lifecycle.ts` 及 `.test.ts`                  | 单一取消入口及幂等释放，不保存布局                                |
 | `src/renderer/src/components/common/ResizeHandle.tsx` 及 `.test.tsx`                   | pointer target/generation 绑定，blur/cancel/卸载/切换释放         |
 | `src/renderer/src/bootstrap/workspace-bootstrap-core.ts`、`use-workspace-bootstrap.ts` | 读取前捕获布局恢复目标；迁移写入在 guard 外                       |
 | `src/renderer/src/features/workspace-open/workspace-open-controller.ts` 及 `.test.ts`  | 删除打开收尾覆盖；完整 picker 流程测试                            |
 | `src/renderer/src/utils/workspace-layout.test.ts`                                      | 切换、默认、隔离、失败、迁移、bootstrap stale、用户优先级集成测试 |
-| `scripts/workspace-layout-smoke.mjs`                                                   | 隔离 Studio/真实窗口/View 的布局、重启、bounds 与两类缩放回归     |
+| `scripts/workspace-layout-smoke.mjs`                                                   | 真实 Studio 的布局、设置页、重启、View bounds 与两类缩放回归      |
 | `docs/testing/workspace-layout-memory.md`                                              | 工程结果、证据与待真人验收动作                                    |
 
 原有 runtime、transition、bootstrap 和 panel-layout 测试继续参与验证；没有为本功能新增 Browser IPC、
@@ -256,6 +271,9 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 - C 无 layout 时得到完整 defaults；A 的宽度、可见性和模式不残留。
 - 同工作空间重开：磁盘宽度 200px、300px 布局写入仍在等待时，经完整目录选择器流程重开；写入完成后
   再收起侧栏，UI 和持久值仍为 300px。另测等待 main 提交期间的新调整，不能被准备阶段的旧快照覆盖。
+- 快速 A→B→A：B main 提交等待时把 A 从 200px 调到 300px，并延迟这次保存；返回 A 不得提前读取
+  旧 layout，保存完成后恢复 300px，后续侧栏操作仍保存 300px。目标队列等待涵盖 running 与最新 pending，
+  不等待不同 workspace、owner 或分区的阻塞写入。
 - 目标 layout 的侧栏为收起状态，await `pickLocalWorkspace()` 完整结束并 flush 写队列后，断言所有布局
   字段仍与恢复快照一致，未出现收尾产生的 `sidebarVisible=true/activePanel=files` 覆盖写入；断言不能只
   停在 hydrate 完成时。
@@ -270,11 +288,14 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 - 窗口从大变小再变大：有效 Agent 宽度被临时 clamp，但 UI store 与 WorkspaceState 中目标宽度不变。
 - 恢复 `agentPanelModeSource: 'user'` 后分别触发 empty/browser context，模式与可见性不被覆盖；`system`
   来源仍按现有规则变化。
+- 同一个全局设置 Tab 跨项目保留：无 layout 项目提交后 system 重算为 right，设置页可见；恢复的
+  user center/right/hidden 均不被重算覆盖。真实 Electron 补验 system 设置页可见与 user hidden 优先。
 - restore guard 内 hydrate layout 不触发 WorkspaceState 写入；guard 结束后的真实用户修改才写入。
 - legacy：缺 layout 时只迁入启动目标，成功才删；写失败、target/generation 失配均保留；已有 layout 时
   不用 legacy 补字段。
 
-运行受影响测试、`pnpm typecheck` 和 `pnpm verify`。它们只证明工程门禁，不替代真实应用验收。
+主线实现运行 `pnpm verify`；定向补修运行受影响测试、`pnpm typecheck`、定向 lint 及真实 Electron smoke。
+它们只证明对应工程门禁，不替代真实应用验收，也不把早期完整 verify 当成本轮全量复验。
 
 ### 8.2 真实 Electron Browser 回归
 
@@ -297,8 +318,9 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 
 ## 9. 验证门禁与退出条件
 
-布局实现、受影响测试、typecheck、lint、生产构建及完整 `pnpm verify` 已通过。
-`node scripts/workspace-layout-smoke.mjs` 的 10 项真实 Electron 自动化回归全部通过，记录见
+主线首次实现的生产构建及完整 `pnpm verify` 已通过；本轮定向补修通过受影响 162 项测试、Web/Node
+typecheck、定向 lint，以及 `node scripts/workspace-layout-smoke.mjs` 的 11 项真实 Electron 自动化回归。
+没有重新执行全量 verify，记录见
 `docs/testing/workspace-layout-memory.md`。
 
 只有第 2 节真人本地动作全部签收，才能声明本地产品验收完成。remote/global/local 隔离的自动化通过
@@ -318,6 +340,8 @@ layout 生产调用点只接收同步形成的 `CapturedWorkspaceLayout`，没�
 8. Browser 证据是否同时包含原生 View bounds、page zoom 和 visual scale？
 9. 本地打开流程全部结束后，侧栏收起状态是否仍保持，且没有被收尾覆盖保存？
 10. Browser visual scale 是否先实测为 30%，再经产品恢复链路实测回到 100%？
+11. 快速切回 A 是否在读快照前排空 A layout 待写队列，而不是恢复旧值后再次覆盖保存？
+12. 保留同一全局设置 Tab 时是否按提交 generation 重算 system，且 user 模式始终优先？
 
 **判断：本轮布局实现与工程门禁通过，可以进入真人验收。** 五项直接缺口已随布局实现修复，
 没有新增跨域事务或第二状态 owner。真实 View 的两条 visual scale 回归均先实测为

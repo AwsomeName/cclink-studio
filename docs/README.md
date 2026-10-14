@@ -38,8 +38,9 @@
 - `docs/features/eyewear-step-ai-editing-development-plan.md`：收缩后的眼镜 STEP AI 修改 P0、E0、M1 最小开发计划；其余能力全部后移且不排期。
 - `docs/design/eyewear-step-ai-editing/pages.html`：收缩后的 STEP 查看、参数快照确认和新版结果自动打开三页效果示意；示例数据不代表当前实现状态。
 - `docs/features/company-accounts-product-design.md`：公司账目首版产品事实源，定义一个月份的导入、核对、汇总、导出和备份闭环。
-- `docs/features/company-workspace-product-design.md`：用户已确认、尚未实现的公司经营工作空间首版；采用经营导航，单人使用，业务项目关联财务、运营、资料与会话。
-- `docs/features/company-workspace-development-plan.md`：公司工作空间的状态所有权、存储、IPC、AI 工作绑定、财务与发布复用及四批真人验收方案，尚未开发。
+- `docs/features/company-workspace-product-design.md`：用户已确认的公司经营首版基线；第一批公司组织与原记录下钻已实现，AI 经营闭环尚待后续批次。
+- `docs/features/company-workspace-development-plan.md`：公司工作空间的状态所有权、存储、IPC、AI 工作绑定、财务与发布复用，以及当前实现状态与四批验收方案。
+- `docs/testing/company-workspace-first-loop.md`：第一批真人操作步骤、真实 Electron 自动化证据及残余验收项。
 - `docs/design/company-workspace/preview.html`：公司工作空间两种布局与可点击业务路径；全部交易、任务和发布结果均为演示。
 - `docs/features/company-accounts-development-plan.md`：公司账目最小开发计划与真实业务退出条件。
 - `docs/testing/company-accounts-v1-acceptance.md`：公司账目代表性桌面样本、自动门禁和仍待真实资料关闭的业务验收。

@@ -42,6 +42,10 @@ function setScope(
 }
 
 export const agentApi: AgentApiContract = {
+  saveMessageImages: (conversationId, images) =>
+    invokeIpcContract(agentIpc.saveMessageImages, conversationId, images),
+  readMessageImage: (conversationId, assetId) =>
+    invokeIpcContract(agentIpc.readMessageImage, conversationId, assetId),
   sendMessage,
   abort: (conversationId, runId) => invokeIpcContract(agentIpc.abort, conversationId, runId),
   getStatus: (conversationId) => invokeIpcContract(agentIpc.getStatus, conversationId),

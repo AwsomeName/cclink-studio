@@ -4,6 +4,7 @@ import { defineIpcCall } from './contract'
 import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 import type { PermissionMode } from '../settings-constants'
 import type { ImageAttachmentMediaType, TransientImageAttachment } from '../image-attachment'
+import type { AgentMessageImageSaveResult, AgentMessageImageReadResult } from '../image-attachment'
 import type {
   AgentApiContract as CoreAgentApiContract,
   AgentAbortResult,
@@ -150,6 +151,14 @@ export interface AgentErrorEvent {
 }
 
 export interface AgentApiContract extends Omit<CoreAgentApiContract, 'sendMessage'> {
+  saveMessageImages: (
+    conversationId: string,
+    images: AgentImageAttachment[],
+  ) => Promise<AgentMessageImageSaveResult>
+  readMessageImage: (
+    conversationId: string,
+    assetId: string,
+  ) => Promise<AgentMessageImageReadResult>
   sendMessage: {
     (message: AgentSendMessageInput): Promise<AgentCommandResult>
     (conversationId: string, message: AgentSendMessageInput): Promise<AgentCommandResult>
@@ -171,6 +180,14 @@ export interface AgentApiContract extends Omit<CoreAgentApiContract, 'sendMessag
 }
 
 export const agentIpc = {
+  saveMessageImages: defineIpcCall<
+    [conversationId: string, images: AgentImageAttachment[]],
+    AgentMessageImageSaveResult
+  >('agent:saveMessageImages'),
+  readMessageImage: defineIpcCall<
+    [conversationId: string, assetId: string],
+    AgentMessageImageReadResult
+  >('agent:readMessageImage'),
   sendMessage: defineIpcCall<AgentSendMessageArgs, AgentCommandResult>('agent:sendMessage'),
   abort: defineIpcCall<[conversationId: string, runId: string], AgentAbortResult>('agent:abort'),
   getStatus: defineIpcCall<[conversationId?: string], AgentStatus>('agent:getStatus'),

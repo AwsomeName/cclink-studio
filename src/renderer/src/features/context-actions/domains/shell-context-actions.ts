@@ -15,6 +15,7 @@ import type { ActivityPanel } from '../../../types'
 import { recordTerminalLifecycleEvent } from '../../../utils/terminal-lifecycle'
 import { buildTerminalTabDraft } from '../../../utils/terminal-tab'
 import { createScheduledTaskTab } from '../../scheduled-tasks/scheduled-task-view-model'
+import { openCompanyWorkspace } from '../../company-workspace/company-workspace-commands'
 import { openDefaultBrowserTab } from '../../web-resources/open-default-browser-tab'
 import type { CommandContext, ContextTarget } from '../context-target'
 import type { MenuContribution } from '../menu-contribution-registry'
@@ -185,6 +186,10 @@ export function createShellContextCommands(): Command[] {
         }
         const panel = activityPanel(id)
         if (!panel) throw new Error('活动入口不可用')
+        if (panel === 'company-workspace') {
+          openCompanyWorkspace()
+          return
+        }
         const ui = useUIStore.getState()
         if (ui.activePanel !== panel || !ui.sidebarVisible) ui.setActivePanel(panel)
       },

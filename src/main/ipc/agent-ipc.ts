@@ -8,6 +8,7 @@
 
 import type { IpcMainInvokeEvent } from 'electron'
 import type { AgentBridge } from '../agent/agent-bridge'
+import { AgentMessageImageStore } from '../agent/agent-message-image-store'
 import type { AgentRuntimeStateStore } from '../agent/agent-runtime-state-store'
 import type { AgentRoleRegistry } from '../agent/agent-role-registry'
 import { listBuiltinAgentRoles } from '../agent/agent-profile-registry'
@@ -40,6 +41,7 @@ import {
 import { legacyAgentProfileRefToRoleRef } from '../../shared/agent-profile'
 
 interface AgentIpcDeps {
+  messageImageRoot?: string
   trustedRendererGuard: TrustedRendererGuard
   getAgentBridge: () => AgentBridge | null
   getAgentRuntimeStateStore?: () => AgentRuntimeStateStore | null
@@ -249,6 +251,9 @@ async function bindTrustedConversationWorkspace(
  * 注册所有 Agent 相关 IPC 处理器
  */
 export function registerAgentIpc(deps: AgentIpcDeps): void {
+  const messageImages = deps.messageImageRoot
+    ? new AgentMessageImageStore(deps.messageImageRoot)
+    : null
   const conversationWorkspaceBindings = new Map<string, WorkspaceRef>()
   const handle = <Args extends unknown[], Result>(
     contract: IpcInvokeContract<Args, Result>,
@@ -260,6 +265,23 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   const requireAgentBridge = (): AgentBridge | null => deps.getAgentBridge()
   const requireMcpClientMgr = (): McpClientManager | null => deps.getMcpClientMgr()
   const permissionManager = deps.permissionManager
+
+  handle(agentIpc.saveMessageImages, async (_event, conversationId, images) => {
+    try {
+      if (!messageImages) return { success: false, error: '图片附件存储不可用' }
+      return { success: true, assets: await messageImages.save(conversationId, images) }
+    } catch {
+      return { success: false, error: '图片附件保存失败，当前会话仍可预览，重启后可能无法恢复' }
+    }
+  })
+  handle(agentIpc.readMessageImage, async (_event, conversationId, assetId) => {
+    try {
+      if (!messageImages) return { success: false, error: '图片附件存储不可用' }
+      return { success: true, dataUrl: await messageImages.read(conversationId, assetId) }
+    } catch {
+      return { success: false, error: '图片附件不可用或已损坏' }
+    }
+  })
 
   // ─── AI 后端通信 ─────────────────────────────────
 

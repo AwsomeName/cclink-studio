@@ -6,6 +6,42 @@ import {
 } from './conversation-workspace-state'
 
 describe('Agent conversation runtime migration', () => {
+  it('persists sent image references without image bytes and restores those references', () => {
+    const conversation = createAgentConversationState('image-thread')
+    conversation.messages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        content: [{ type: 'text', text: '查看图片' }],
+        rawText: '查看图片',
+        timestamp: 1,
+        resources: [
+          {
+            id: 'image-1',
+            kind: 'image',
+            label: 'screen.png',
+            previewDataUrl: 'data:image/png;base64,AQID',
+            ref: { type: 'image', imageAssetId: `${'a'.repeat(64)}.png` },
+          },
+        ],
+      },
+    ]
+    const snapshot = buildAgentConversationWorkspaceSnapshot(
+      {
+        conversations: { [conversation.id]: conversation },
+        conversationOrder: [conversation.id],
+        activeConversationId: conversation.id,
+      },
+      null,
+    )
+    expect(JSON.stringify(snapshot)).not.toContain('AQID')
+    expect(conversation.messages[0].resources?.[0].previewDataUrl).toBe(
+      'data:image/png;base64,AQID',
+    )
+    const restored = normalizeConversationSnapshot(snapshot)?.conversations[conversation.id]
+    expect(restored?.messages[0].resources?.[0].ref.imageAssetId).toBe(`${'a'.repeat(64)}.png`)
+    expect(restored?.messages[0].resources?.[0]).not.toHaveProperty('previewDataUrl')
+  })
   it('loads an old Thread without runtimeBinding as Claude Code', () => {
     const conversation = createAgentConversationState('legacy-thread')
     delete conversation.runtimeBinding

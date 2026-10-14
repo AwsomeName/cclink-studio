@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useUIStore, useTabStore, useCommandStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
+import { useToastStore } from '../common/Toast'
 import {
   ActivityAffairsIcon,
   ActivityArticlePublishingIcon,
@@ -130,7 +131,13 @@ export function ActivityBar(): React.ReactElement {
 
   const handleClick = (id: ActivityPanel): void => {
     if (id === 'company-workspace') {
-      void useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' })
+      void useCommandStore
+        .getState()
+        .executeCommand('company.overview', { source: 'toolbar' })
+        .then((result) => {
+          if (!result.ok)
+            useToastStore.getState().show(result.message ?? '公司入口暂不可用', 'error')
+        })
       return
     }
     setActivePanel(id)

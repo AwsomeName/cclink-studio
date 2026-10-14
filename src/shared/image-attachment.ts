@@ -12,3 +12,17 @@ export interface TransientImageAttachment {
   data: string
   size: number
 }
+
+/** Stable reference to image bytes owned by the main process, outside workspace snapshots. */
+export interface AgentMessageImageAsset {
+  id: string
+  assetId: string
+}
+
+export type AgentMessageImageSaveResult =
+  | { success: true; assets: AgentMessageImageAsset[] }
+  | { success: false; error: string }
+
+export type AgentMessageImageReadResult =
+  | { success: true; dataUrl: string }
+  | { success: false; error: string }
