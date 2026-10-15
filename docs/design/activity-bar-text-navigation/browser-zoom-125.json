@@ -1,0 +1,137 @@
+{
+  "name": "browser-app-zoom-1.25",
+  "diagnostic": {
+    "requestedTabId": "tab-2-1792076655979",
+    "visibleTabId": "tab-2-1792076655979",
+    "visibleUrl": "http://127.0.0.1:56599/a#layout-navigation",
+    "visibleTitle": "127.0.0.1:56599/a#layout-navigation",
+    "webContentsId": 2,
+    "ownerWindowId": "main",
+    "profileId": null,
+    "viewState": {
+      "viewMode": "desktop",
+      "zoomMode": "fit",
+      "zoomFactor": 1
+    },
+    "popup": null,
+    "recentUrls": [
+      "http://127.0.0.1:56599/a",
+      "http://127.0.0.1:56599/a#layout-navigation",
+      "http://127.0.0.1:56599/a?navigation=2"
+    ],
+    "engineVersions": {
+      "electron": "43.1.1",
+      "chromium": "150.0.7871.114",
+      "node": "24.18.0"
+    },
+    "lastClaim": {
+      "status": "succeeded",
+      "timestamp": 1792076677992,
+      "expectedUrl": "http://127.0.0.1:56599/a#layout-navigation"
+    },
+    "fitWidth": {
+      "trigger": "bounds",
+      "status": "rejected",
+      "timestamp": 1792076685920,
+      "documentGeneration": 1,
+      "paneWidth": 1228,
+      "viewBounds": {
+        "x": 193,
+        "y": 150,
+        "width": 1228,
+        "height": 693
+      },
+      "contentWidth": 3563,
+      "rawFactor": 0.34465338198147627,
+      "appliedFactor": 1,
+      "actualZoomFactor": 1,
+      "visualScaleBeforeReset": 1,
+      "actualVisualScale": 1,
+      "rejectionReason": "auto-fit-too-small",
+      "samples": [
+        {
+          "offsetMs": 0,
+          "viewportWidth": 1228,
+          "rootWidth": 3563,
+          "bodyWidth": 1228
+        },
+        {
+          "offsetMs": 252,
+          "viewportWidth": 1228,
+          "rootWidth": 3563,
+          "bodyWidth": 1228
+        },
+        {
+          "offsetMs": 754,
+          "viewportWidth": 1228,
+          "rootWidth": 3563,
+          "bodyWidth": 1228
+        }
+      ]
+    },
+    "httpAuth": null,
+    "layout": {
+      "rendererBounds": {
+        "x": 154,
+        "y": 120,
+        "width": 982,
+        "height": 554,
+        "protectedTop": 120
+      },
+      "nativeBounds": {
+        "x": 193,
+        "y": 150,
+        "width": 1228,
+        "height": 693
+      },
+      "protectedTop": 120,
+      "nativeProtectedTop": 150,
+      "overlapsProtectedTop": false
+    },
+    "session": {
+      "partition": "default",
+      "persistent": true,
+      "cookieStoreFlushed": true,
+      "cookieCount": 0,
+      "persistentCookieCount": 0,
+      "expiredCookieCount": 0,
+      "likelyAuthCookies": [],
+      "cookieNames": [],
+      "recentCookieChanges": []
+    },
+    "playwrightTabId": "tab-2-1792076655979",
+    "playwrightUrl": "http://127.0.0.1:56599/a#layout-navigation",
+    "playwrightTitle": "",
+    "automationConnection": {
+      "isConnected": true,
+      "connectionGeneration": 1,
+      "contextCount": 1,
+      "pageCount": 3,
+      "reconnectInFlight": false,
+      "lastDisconnectedAt": null,
+      "lastReconnectAt": 1792076677211,
+      "lastReconnectTrigger": "initial_connect",
+      "lastReconnectError": null,
+      "forcedByEmptyContexts": false,
+      "boundGeneration": 1,
+      "boundConnectionGeneration": 1,
+      "boundWebContentsId": 2
+    },
+    "bindingStatus": "matched",
+    "page": {
+      "tabId": "tab-2-1792076655979",
+      "url": "http://127.0.0.1:56599/a#layout-navigation",
+      "title": "",
+      "consoleErrors": [],
+      "networkIssues": [],
+      "suspectedChallenges": [],
+      "pageTextSample": "Layout /a overflow"
+    }
+  },
+  "pane": 982,
+  "actual": {
+    "viewport": 1228,
+    "scroll": 3563,
+    "visualScale": 1
+  }
+}

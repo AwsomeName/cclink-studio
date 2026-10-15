@@ -15,13 +15,18 @@ import {
   registerPanelResizeCancel,
 } from '../../utils/panel-layout-drag-lifecycle'
 
+export interface PanelResizeEnd {
+  reason: 'commit' | 'cancel'
+  delta: number
+}
+
 interface ResizeHandleProps {
   /** 拖拽时回调，参数为本次拖拽从起点到当前的宽度变化量 (px) */
   onResize: (delta: number) => void
   /** 拖拽开始回调。 */
   onResizeStart?: () => void
   /** 拖拽结束回调 */
-  onResizeEnd?: () => void
+  onResizeEnd?: (result: PanelResizeEnd) => void
   /** 被调整的面板位置：左侧面板向右拖变宽，右侧面板向左拖变宽 */
   side?: 'left' | 'right'
   area: 'sidebar' | 'agent'
@@ -68,7 +73,7 @@ export function ResizeHandle({
       const handlePointerMove = (moveEvent: PointerEvent): void => {
         if (!dragging || moveEvent.pointerId !== pointerId) return
         if (!isWorkspaceTargetCurrent(workspaceTarget)) {
-          cleanup()
+          cancel()
           return
         }
         const delta = moveEvent.clientX - startX
@@ -78,11 +83,19 @@ export function ResizeHandle({
       }
 
       const finishResize = (upEvent: PointerEvent): void => {
-        if (upEvent.pointerId !== pointerId) return
-        cleanup()
+        if (!dragging || upEvent.pointerId !== pointerId) return
+        const delta = upEvent.clientX - startX
+        cleanup({
+          reason: isWorkspaceTargetCurrent(workspaceTarget) ? 'commit' : 'cancel',
+          delta: side === 'left' ? delta : -delta,
+        })
       }
 
-      const cleanup = (): void => {
+      const cancel = (): void => cleanup({ reason: 'cancel', delta: 0 })
+      const cancelPointer = (event: PointerEvent): void => {
+        if (event.pointerId === pointerId) cancel()
+      }
+      const cleanup = (result: PanelResizeEnd): void => {
         if (!dragging) return
         dragging = false
         unregister()
@@ -91,21 +104,21 @@ export function ResizeHandle({
         document.body.classList.remove('is-resizing-panels')
         window.removeEventListener('pointermove', handlePointerMove, true)
         window.removeEventListener('pointerup', finishResize, true)
-        window.removeEventListener('pointercancel', finishResize, true)
-        window.removeEventListener('blur', cleanup)
+        window.removeEventListener('pointercancel', cancelPointer, true)
+        window.removeEventListener('blur', cancel)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
-        onResizeEnd?.()
+        onResizeEnd?.(result)
       }
-      const unregister = registerPanelResizeCancel(cleanup)
-      cancelRef.current = cleanup
+      const unregister = registerPanelResizeCancel(cancel)
+      cancelRef.current = cancel
 
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
       window.addEventListener('pointermove', handlePointerMove, true)
       window.addEventListener('pointerup', finishResize, true)
-      window.addEventListener('pointercancel', finishResize, true)
-      window.addEventListener('blur', cleanup)
+      window.addEventListener('pointercancel', cancelPointer, true)
+      window.addEventListener('blur', cancel)
     },
     [onResize, onResizeEnd, onResizeStart, side],
   )

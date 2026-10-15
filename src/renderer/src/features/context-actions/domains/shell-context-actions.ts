@@ -27,6 +27,11 @@ type LayoutTarget = Extract<ContextTarget, { kind: 'layout' }>
 
 const ACTIVITY_LABELS: Record<string, string> = {
   'company-workspace': '公司经营',
+  'company-accounts': '公司账目',
+  'agent-roles': '角色',
+  cclink: 'CCLink 远程',
+  affairs: '事务',
+  'article-publishing': '文章发布',
   sessions: '会话',
   files: '文件',
   browser: '浏览器',
@@ -56,7 +61,7 @@ function layoutTarget(context?: CommandContext): LayoutTarget | null {
 }
 
 function activityPanel(id: string): ActivityPanel | null {
-  return id in ACTIVITY_LABELS && id !== 'settings' ? (id as ActivityPanel) : null
+  return Object.hasOwn(ACTIVITY_LABELS, id) && id !== 'settings' ? (id as ActivityPanel) : null
 }
 
 async function copyText(value: string, label: string): Promise<void> {
@@ -192,6 +197,12 @@ export function createShellContextCommands(): Command[] {
         }
         const ui = useUIStore.getState()
         if (ui.activePanel !== panel || !ui.sidebarVisible) ui.setActivePanel(panel)
+        if (panel === 'browser') ui.setAgentPanelMode('right', 'user')
+        if (panel === 'company-accounts') {
+          useTabStore
+            .getState()
+            .openTab({ type: 'company-accounts', title: '公司账目', icon: '账' })
+        }
       },
     },
     {

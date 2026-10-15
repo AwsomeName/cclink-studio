@@ -109,6 +109,25 @@ afterEach(() => {
 })
 
 describe('ResizeHandle workspace lifetime', () => {
+  it('previews cumulative moves and commits the final pointer-up position exactly once', () => {
+    const handle = renderHandle()
+    handle.down(100)
+    emit('pointermove', 80)
+    emit('pointermove', 90)
+    expect(handle.onResize.mock.calls).toEqual([[-20], [-10]])
+    expect(handle.onResizeEnd).not.toHaveBeenCalled()
+    emit('pointerup', 100)
+    expect(handle.onResizeEnd).toHaveBeenCalledExactlyOnceWith({ reason: 'commit', delta: 0 })
+    emit('pointerup', 70)
+    expect(handle.onResizeEnd).toHaveBeenCalledOnce()
+  })
+
+  it('uses pointer-up coordinates even without a last move event', () => {
+    const handle = renderHandle()
+    handle.down(100)
+    emit('pointerup', 82)
+    expect(handle.onResizeEnd).toHaveBeenCalledExactlyOnceWith({ reason: 'commit', delta: -18 })
+  })
   it('cancels synchronously when switching starts; old callbacks cannot resize B', () => {
     const handle = renderHandle()
     handle.down()
@@ -119,6 +138,7 @@ describe('ResizeHandle workspace lifetime', () => {
     const oldUp = [...listeners.get('pointerup')!][0]!
     beginWorkspaceRuntimeTransition()
     expect(handle.onResizeEnd).toHaveBeenCalledOnce()
+    expect(handle.onResizeEnd).toHaveBeenCalledWith({ reason: 'cancel', delta: 0 })
     useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef('/workspace/b'))
     oldMove({ clientX: 250, pointerId: 1 } as PointerEvent)
     oldUp({ clientX: 250, pointerId: 1 } as PointerEvent)
@@ -148,6 +168,7 @@ describe('ResizeHandle workspace lifetime', () => {
       emit('pointerup', 240)
       expect(handle.onResize).not.toHaveBeenCalled()
       expect(handle.onResizeEnd).toHaveBeenCalledOnce()
+      expect(handle.onResizeEnd).toHaveBeenCalledWith({ reason: 'cancel', delta: 0 })
       expect([...listeners.values()].every((group) => group.size === 0)).toBe(true)
       expect(captured.size).toBe(0)
     },

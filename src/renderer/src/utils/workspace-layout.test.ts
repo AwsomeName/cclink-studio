@@ -36,7 +36,7 @@ import {
   isWorkspaceStateRestoring,
   setWorkspaceStateOwnerKey,
 } from './workspace-state'
-import { clampPanelWidth, getAgentPanelWidthBounds } from './panel-layout'
+import { getPanelLayout } from './panel-layout'
 import { cancelActivePanelResize, registerPanelResizeCancel } from './panel-layout-drag-lifecycle'
 import {
   getRendererDiagnosticLogSnapshot,
@@ -370,10 +370,13 @@ describe('workspace layout integration', () => {
   it('does not persist viewport clamp and keeps restored user mode above system context', async () => {
     useUIStore.setState(layoutB)
     const displayed = (width: number): number =>
-      clampPanelWidth(
-        useUIStore.getState().agentPanelWidth,
-        getAgentPanelWidthBounds({ viewportWidth: width, sidebarVisible: true, sidebarWidth: 420 }),
-      )
+      getPanelLayout({
+        viewportWidth: width,
+        sidebarVisible: true,
+        sidebarWidth: 420,
+        agentPanelWidth: useUIStore.getState().agentPanelWidth,
+        agentInRight: true,
+      }).agentPanelWidth
     expect(displayed(1600)).toBe(600)
     expect(displayed(800)).toBe(220)
     expect(displayed(1600)).toBe(600)

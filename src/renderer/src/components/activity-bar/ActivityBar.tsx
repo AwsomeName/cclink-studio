@@ -33,7 +33,7 @@ interface ActivityBarItem {
   id: ActivityPanel
   Icon: React.ComponentType<{ size?: number }>
   label: string
-  shortLabel?: string
+  displayLabel?: string
 }
 
 const MAIN_ICON_GROUPS: Array<{
@@ -52,12 +52,11 @@ const MAIN_ICON_GROUPS: Array<{
         id: 'company-workspace',
         Icon: ActivityCompanyAccountsIcon,
         label: '公司经营',
-        shortLabel: '公司',
       },
       { id: 'files', Icon: ActivityFilesIcon, label: '文件' },
       { id: 'sessions', Icon: ActivitySessionsIcon, label: '会话' },
       { id: 'browser', Icon: ActivityBrowserIcon, label: '浏览器' },
-      { id: 'terminal', Icon: ActivityTerminalIcon, label: 'Terminal', shortLabel: '终端' },
+      { id: 'terminal', Icon: ActivityTerminalIcon, label: 'Terminal', displayLabel: '终端' },
     ],
   },
   {
@@ -65,15 +64,14 @@ const MAIN_ICON_GROUPS: Array<{
     label: '资源',
     items: [
       { id: 'agent-roles', Icon: ActivityRolesIcon, label: '角色' },
-      { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号', shortLabel: '账号' },
-      { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源', shortLabel: '数据' },
+      { id: 'operations', Icon: ActivityWebAccountsIcon, label: '网站与账号' },
+      { id: 'data-sources', Icon: ActivityDataSourcesIcon, label: '数据源' },
       {
         id: 'company-accounts',
         Icon: ActivityCompanyAccountsIcon,
         label: '公司账目',
-        shortLabel: '账目',
       },
-      { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程', shortLabel: '远程' },
+      { id: 'cclink', Icon: ActivityRemoteIcon, label: 'CCLink 远程' },
     ],
   },
   {
@@ -84,26 +82,22 @@ const MAIN_ICON_GROUPS: Array<{
         id: 'article-publishing',
         Icon: ActivityArticlePublishingIcon,
         label: '文章发布',
-        shortLabel: '发布',
       },
       { id: 'affairs', Icon: ActivityAffairsIcon, label: '事务' },
       {
         id: 'scheduled-tasks',
         Icon: ActivityScheduledTasksIcon,
         label: '定时任务',
-        shortLabel: '定时',
       },
       {
         id: 'video-creation',
         Icon: ActivityVideoCreationIcon,
         label: '视频创作',
-        shortLabel: '视频',
       },
       {
         id: 'production',
         Icon: ActivityProductionIcon,
         label: '硬件生产',
-        shortLabel: '硬件',
       },
     ],
   },
@@ -119,14 +113,26 @@ export function ActivityBar(): React.ReactElement {
   const [scheduledRunCount, setScheduledRunCount] = useState(0)
 
   useEffect(() => {
+    let disposed = false
+    let generation = 0
     const refresh = (): void => {
+      const requested = ++generation
       void window.cclinkStudio.scheduledTasks
         .getRuntimeStatus()
-        .then((status) => setScheduledRunCount(status.queuedCount + (status.runningRunId ? 1 : 0)))
-        .catch(() => setScheduledRunCount(0))
+        .then((status) => {
+          if (!disposed && requested === generation)
+            setScheduledRunCount(status.queuedCount + (status.runningRunId ? 1 : 0))
+        })
+        .catch(() => {
+          if (!disposed && requested === generation) setScheduledRunCount(0)
+        })
     }
     refresh()
-    return window.cclinkStudio.scheduledTasks.onChanged(() => refresh())
+    const unsubscribe = window.cclinkStudio.scheduledTasks.onChanged(() => refresh())
+    return () => {
+      disposed = true
+      unsubscribe()
+    }
   }, [])
 
   const handleClick = (id: ActivityPanel): void => {
@@ -160,7 +166,7 @@ export function ActivityBar(): React.ReactElement {
             <div className="activity-bar-group-label" aria-hidden="true">
               {group.label}
             </div>
-            {group.items.map(({ id, Icon, label, shortLabel }) => (
+            {group.items.map(({ id, Icon, label, displayLabel }) => (
               <button
                 type="button"
                 key={id}
@@ -189,14 +195,15 @@ export function ActivityBar(): React.ReactElement {
                 aria-pressed={activePanel === id}
                 title={label}
               >
-                <Icon size={22} />
+                <Icon size={18} />
                 <span className="activity-bar-label" aria-hidden="true">
-                  {shortLabel ?? label}
+                  {displayLabel ?? label}
                 </span>
                 {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
                   <span
                     className="activity-bar-badge"
-                    aria-label={`${scheduledRunCount} 个任务运行中`}
+                    role="status"
+                    aria-label={`${scheduledRunCount} 个任务排队或运行中`}
                   >
                     {scheduledRunCount > 99 ? '99+' : scheduledRunCount}
                   </span>
@@ -233,7 +240,7 @@ export function ActivityBar(): React.ReactElement {
           aria-label="设置"
           title="设置"
         >
-          <ActivitySettingsIcon size={22} />
+          <ActivitySettingsIcon size={18} />
           <span className="activity-bar-label" aria-hidden="true">
             设置
           </span>

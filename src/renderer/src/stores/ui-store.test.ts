@@ -90,6 +90,18 @@ describe('useUIStore', () => {
   })
 
   describe('showPanel', () => {
+    it('keeps company accounts selectable and restorable instead of falling back to files', () => {
+      useUIStore.getState().setActivePanel('company-accounts')
+      expect(useUIStore.getState().activePanel).toBe('company-accounts')
+      useUIStore.getState().showPanel('company-accounts')
+      expect(useUIStore.getState()).toMatchObject({
+        activePanel: 'company-accounts',
+        sidebarVisible: true,
+      })
+      expect(normalizeWorkspaceLayout({ activePanel: 'company-accounts' }).activePanel).toBe(
+        'company-accounts',
+      )
+    })
     it('重复展示同一面板不会反向折叠侧栏', () => {
       useUIStore.getState().showPanel('files')
       useUIStore.getState().showPanel('files')

@@ -451,27 +451,27 @@ async function main() {
       'visible group headings missing',
     )
     const labels = [
-      '公司',
+      '公司经营',
       '文件',
       '会话',
       '浏览器',
       '终端',
       '角色',
-      '账号',
-      '数据',
-      '账目',
-      '远程',
-      '发布',
+      '网站与账号',
+      '数据源',
+      '公司账目',
+      'CCLink 远程',
+      '文章发布',
       '事务',
-      '定时',
-      '视频',
-      '硬件',
+      '定时任务',
+      '视频创作',
+      '硬件生产',
       '设置',
     ]
     assert(
       JSON.stringify(await bar.locator('.activity-bar-label').allTextContents()) ===
         JSON.stringify(labels),
-      'short labels missing or reordered',
+      'complete labels missing or reordered',
     )
     const width = await page.evaluate(async () => {
       const { ACTIVITY_BAR_WIDTH } = await import('/src/utils/panel-layout.ts')
@@ -490,8 +490,10 @@ async function main() {
           return (
             text.width <= button.width &&
             text.bottom <= button.bottom &&
-            text.top >= icon.bottom &&
-            Number.parseFloat(getComputedStyle(label).fontSize) >= 11
+            text.left >= icon.right &&
+            Math.abs((text.top + text.bottom) / 2 - (icon.top + icon.bottom) / 2) <= 1 &&
+            label.scrollWidth <= label.clientWidth &&
+            Number.parseFloat(getComputedStyle(label).fontSize) === 13
           )
         }),
       ),
@@ -622,6 +624,21 @@ async function main() {
       )
       await settings.click()
       await page.locator('.settings-page').waitFor({ state: 'visible' })
+      await settings.click({ button: 'right' })
+      await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
+      await page.keyboard.press('Escape')
+      await page.waitForFunction(
+        () => document.activeElement?.getAttribute('aria-label') === '设置',
+      )
+      for (const trigger of ['pointer', 'keyboard']) {
+        if (trigger === 'pointer') await settings.click({ button: 'right' })
+        else await settings.press('Shift+F10')
+        const menu = page.locator('.unified-context-menu')
+        await menu.waitFor({ state: 'visible' })
+        await menu.getByText('打开设置', { exact: true }).click()
+        await menu.waitFor({ state: 'hidden' })
+        await page.locator('.settings-page').waitFor({ state: 'visible' })
+      }
       await ensureActivityPanel(page, 'browser', '浏览器')
       const tabId = await page.evaluate(async (fixtureOrigin) => {
         const [{ openDefaultBrowserTab }, { useWorkspaceStore }] = await Promise.all([
@@ -671,7 +688,7 @@ async function main() {
     } finally {
       await page.setViewportSize({ width: 1440, height: 920 })
     }
-    return `14 separated activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
+    return `15 separated activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
   })
 
   await runCheck('workspace file and search boundaries survive a real project switch', async () => {

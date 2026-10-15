@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-10-14。
+> 当前事实源。最后更新：2026-10-15。
 
 ## 先读这些
 
@@ -90,6 +90,8 @@
 - `docs/features/promotional-video-workbench.md`：宣发视频工作台产品事实源，定义稿件、分镜、素材、AI 生成、合成和导出的用户闭环与架构边界。
 - `docs/features/promotional-video-development-plan.md`：宣发视频 M0-M6 开发事实源；M0 已完成，后续连续推进 Agent 分镜、素材、国内云视频、合成导出和统一验收。
 - `docs/features/video-hardware-navigation-separation-plan.md`：已通过独立审查并实施的最小导航修复；新增“视频”入口并让现有 `production` 恢复为硬件生产，不改 IPC、工程数据或领域服务。
+- `docs/features/activity-bar-text-navigation-product-design.md`：2026-10-15 用户选定的文字横排导航目标；固定完整名称、稳定入口、状态区分、小窗口宽度取舍及 U1–U8 验收；源码已实现，真实 Electron 自动化通过，真人签收待执行。
+- `docs/features/activity-bar-text-navigation-development-plan.md`：已实施的最小导航方案；包含入口定向修复、完整手势提交、有效栏宽和精简计数夹具；验证见文字横排验收记录。
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。
 - `docs/features/ai-employees.md`：已确认但暂停的 AI 员工领域边界；角色与员工分离、产品组合、单一 Studio 交付，当前商业范围仅保留 CCLink 托管远程功能。
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。

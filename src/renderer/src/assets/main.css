@@ -27,7 +27,7 @@
   --border-subtle: #2b2b2b;
 
   /* ====== 尺寸变量 ====== */
-  --activitybar-width: 76px;
+  --activitybar-width: 154px;
   --sidebar-width: 250px;
   --agent-panel-width: 350px;
   --statusbar-height: 22px;
@@ -1292,6 +1292,7 @@ input:focus {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
 }
 
@@ -1313,11 +1314,12 @@ input:focus {
 }
 
 .activity-bar-group + .activity-bar-group {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 .activity-bar-group-label {
-  padding: 3px 0;
+  align-self: stretch;
+  padding: 3px 16px;
   color: var(--text-secondary);
   font-size: 11px;
   line-height: 16px;
@@ -1330,32 +1332,36 @@ input:focus {
 }
 
 .activity-bar-icon {
-  width: calc(100% - 8px);
-  height: 48px;
+  width: calc(100% - 12px);
+  height: 32px;
   flex-shrink: 0;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  flex-direction: row;
+  gap: 8px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   cursor: pointer;
   border: 0;
-  border-radius: 7px;
+  border-radius: 4px;
   color: var(--text-secondary);
   transition:
     color var(--transition-fast),
     background var(--transition-fast);
   position: relative;
-  padding: 0;
+  padding: 0 10px;
   background: transparent;
   font: inherit;
 }
 
 .activity-bar-label {
   color: var(--text-primary);
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 13px;
+  line-height: 18px;
   white-space: nowrap;
+}
+
+.activity-bar-icon > svg {
+  flex-shrink: 0;
 }
 
 .activity-bar-icon:hover .activity-bar-label,
@@ -1364,9 +1370,8 @@ input:focus {
 }
 
 .activity-bar-badge {
-  position: absolute;
-  right: 4px;
-  top: 2px;
+  flex-shrink: 0;
+  margin-left: auto;
   min-width: 15px;
   height: 15px;
   box-sizing: border-box;
@@ -1374,8 +1379,8 @@ input:focus {
   border-radius: 8px;
   background: var(--text-accent);
   color: #fff;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 500;
   line-height: 15px;
   text-align: center;
 }
@@ -1399,9 +1404,9 @@ input:focus {
   content: '';
   position: absolute;
   left: 0;
-  top: 12px;
+  top: 7px;
   width: 3px;
-  height: 24px;
+  height: 18px;
   background: var(--text-accent);
   border-radius: 0 2px 2px 0;
 }

@@ -6,7 +6,7 @@ import { Sidebar } from './components/sidebar/Sidebar'
 import { Workbench } from './components/workbench/Workbench'
 import { AgentPanel } from './components/agent-panel/AgentPanel'
 import { StatusBar } from './components/status-bar/StatusBar'
-import { ResizeHandle } from './components/common/ResizeHandle'
+import { ResizeHandle, type PanelResizeEnd } from './components/common/ResizeHandle'
 import { IconFolder, IconPanelLeft, IconPanelRight } from './components/common/Icons'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { PanelErrorFallback } from './components/common/ErrorFallback'
@@ -33,12 +33,8 @@ import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onb
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
-import {
-  clampPanelWidth,
-  getAgentPanelWidthBounds,
-  MIN_SIDEBAR_WIDTH,
-  MAX_SIDEBAR_WIDTH,
-} from './utils/panel-layout'
+import { clampPanelWidth, getPanelLayout } from './utils/panel-layout'
+import { cancelActivePanelResize } from './utils/panel-layout-drag-lifecycle'
 import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
 import { WorkspaceOpenSurface } from './features/workspace-open/WorkspaceOpenSurface'
 import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-store'
@@ -67,6 +63,17 @@ function MainLayout(): React.ReactElement {
   const contextMenuOpen = useContextMenuStore((s) => s.open)
   const [tabCreateMenuOpen, setTabCreateMenuOpen] = useState(false)
   const [panelResizing, setPanelResizing] = useState(false)
+  const [resizePreview, setResizePreview] = useState<{
+    area: 'sidebar' | 'agent'
+    target: number
+  } | null>(null)
+  const resizeStartRef = useRef<{
+    area: 'sidebar' | 'agent'
+    effective: number
+    saved: number
+    bounds: { min: number; max: number }
+    viewport: { width: number; height: number; dpr: number }
+  } | null>(null)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const floatingSurfaceOpen = useAnyFloatingSurfaceOpen()
   const workspaceOpenButtonRef = useRef<HTMLButtonElement>(null)
@@ -76,17 +83,26 @@ function MainLayout(): React.ReactElement {
   const agentInRight = agentPanelMode === 'right'
   const agentPanelVisible = agentPanelMode !== 'hidden'
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const agentPanelWidthBounds = useMemo(
-    () => getAgentPanelWidthBounds({ viewportWidth, sidebarVisible, sidebarWidth }),
-    [sidebarVisible, sidebarWidth, viewportWidth],
+  const panelLayout = useMemo(
+    () =>
+      getPanelLayout({
+        viewportWidth,
+        sidebarVisible,
+        sidebarWidth: resizePreview?.area === 'sidebar' ? resizePreview.target : sidebarWidth,
+        agentPanelWidth: resizePreview?.area === 'agent' ? resizePreview.target : agentPanelWidth,
+        agentInRight,
+      }),
+    [viewportWidth, sidebarVisible, sidebarWidth, agentPanelWidth, agentInRight, resizePreview],
   )
-  const effectiveAgentPanelWidth = clampPanelWidth(agentPanelWidth, agentPanelWidthBounds)
 
   // 订阅主题变化，触发 theme-store 初始化并应用 data-theme。
   useThemeStore((s) => s.resolvedTheme)
 
   useEffect(() => {
-    const handleResize = (): void => setViewportWidth(window.innerWidth)
+    const handleResize = (): void => {
+      cancelActivePanelResize()
+      setViewportWidth(window.innerWidth)
+    }
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
@@ -113,20 +129,45 @@ function MainLayout(): React.ReactElement {
     workspaceReady && workbenchWindowReady,
   )
 
-  const handleSidebarResize = useCallback(
-    (delta: number) => {
-      setSidebarWidth(
-        clampPanelWidth(sidebarWidth + delta, { min: MIN_SIDEBAR_WIDTH, max: MAX_SIDEBAR_WIDTH }),
+  const beginPanelResize = (area: 'sidebar' | 'agent'): void => {
+    resizeStartRef.current = {
+      area,
+      effective: area === 'sidebar' ? panelLayout.sidebarWidth : panelLayout.agentPanelWidth,
+      saved: area === 'sidebar' ? sidebarWidth : agentPanelWidth,
+      bounds: area === 'sidebar' ? panelLayout.sidebarBounds : panelLayout.agentBounds,
+      viewport: { width: viewportWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
+    }
+    setPanelResizing(true)
+  }
+  const previewPanelResize = useCallback((delta: number): void => {
+    const start = resizeStartRef.current
+    if (!start) return
+    const candidate = clampPanelWidth(start.effective + delta, start.bounds)
+    setResizePreview({
+      area: start.area,
+      target: candidate === start.effective ? start.saved : candidate,
+    })
+  }, [])
+  const finishPanelResize = useCallback(
+    ({ reason, delta }: PanelResizeEnd): void => {
+      const start = resizeStartRef.current
+      resizeStartRef.current = null
+      setResizePreview(null)
+      setPanelResizing(false)
+      if (
+        !start ||
+        reason !== 'commit' ||
+        start.viewport.width !== window.innerWidth ||
+        start.viewport.height !== window.innerHeight ||
+        start.viewport.dpr !== window.devicePixelRatio
       )
+        return
+      const candidate = clampPanelWidth(start.effective + delta, start.bounds)
+      if (candidate === start.effective) return
+      if (start.area === 'sidebar') setSidebarWidth(candidate)
+      else setAgentPanelWidth(candidate)
     },
-    [sidebarWidth, setSidebarWidth],
-  )
-
-  const handleAgentResize = useCallback(
-    (delta: number) => {
-      setAgentPanelWidth(clampPanelWidth(effectiveAgentPanelWidth + delta, agentPanelWidthBounds))
-    },
-    [agentPanelWidthBounds, effectiveAgentPanelWidth, setAgentPanelWidth],
+    [setSidebarWidth, setAgentPanelWidth],
   )
 
   const toggleUnifiedAgentPanel = useCallback(() => {
@@ -171,11 +212,11 @@ function MainLayout(): React.ReactElement {
         <ProjectStrip />
         <div
           className="app-topbar-right"
-          style={agentInRight ? { width: effectiveAgentPanelWidth } : undefined}
+          style={agentInRight ? { width: panelLayout.agentPanelWidth } : undefined}
         >
           <ConversationQuickSwitcher
             panelMode={agentPanelMode}
-            panelWidth={effectiveAgentPanelWidth}
+            panelWidth={panelLayout.agentPanelWidth}
           />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
@@ -196,8 +237,8 @@ function MainLayout(): React.ReactElement {
             display: 'flex',
             overflow: 'hidden',
             transition: 'width 200ms ease-out, opacity 200ms ease-out',
-            width: sidebarVisible ? sidebarWidth : 0,
-            minWidth: sidebarVisible ? sidebarWidth : 0,
+            width: panelLayout.sidebarWidth,
+            minWidth: panelLayout.sidebarWidth,
             opacity: sidebarVisible ? 1 : 0,
           }}
         >
@@ -212,9 +253,9 @@ function MainLayout(): React.ReactElement {
           <ResizeHandle
             area="sidebar"
             side="left"
-            onResize={handleSidebarResize}
-            onResizeStart={() => setPanelResizing(true)}
-            onResizeEnd={() => setPanelResizing(false)}
+            onResize={previewPanelResize}
+            onResizeStart={() => beginPanelResize('sidebar')}
+            onResizeEnd={finishPanelResize}
           />
         )}
 
@@ -243,9 +284,9 @@ function MainLayout(): React.ReactElement {
           <ResizeHandle
             area="agent"
             side="right"
-            onResize={handleAgentResize}
-            onResizeStart={() => setPanelResizing(true)}
-            onResizeEnd={() => setPanelResizing(false)}
+            onResize={previewPanelResize}
+            onResizeStart={() => beginPanelResize('agent')}
+            onResizeEnd={finishPanelResize}
           />
         )}
 
@@ -255,8 +296,8 @@ function MainLayout(): React.ReactElement {
             display: 'flex',
             overflow: 'hidden',
             transition: 'width 200ms ease-out, opacity 200ms ease-out',
-            width: agentInRight ? effectiveAgentPanelWidth : 0,
-            minWidth: agentInRight ? effectiveAgentPanelWidth : 0,
+            width: panelLayout.agentPanelWidth,
+            minWidth: panelLayout.agentPanelWidth,
             opacity: agentInRight ? 1 : 0,
           }}
         >

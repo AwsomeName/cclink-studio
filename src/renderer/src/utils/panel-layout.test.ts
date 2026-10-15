@@ -1,23 +1,57 @@
 import { describe, expect, it } from 'vitest'
-import { clampPanelWidth, getAgentPanelWidthBounds } from './panel-layout'
+import { clampPanelWidth, getPanelLayout } from './panel-layout'
 
-describe('getAgentPanelWidthBounds', () => {
-  it('allows a wide Agent panel when the sidebar is hidden', () => {
-    expect(
-      getAgentPanelWidthBounds({ viewportWidth: 1400, sidebarVisible: false, sidebarWidth: 250 }),
-    ).toEqual({ min: 220, max: 960 })
+describe('panel width budget', () => {
+  it.each([
+    [1400, true, true, 250, 350, 250, 350],
+    [900, true, true, 250, 350, 198, 220],
+    [900, true, false, 250, 350, 250, 0],
+    [900, false, true, 250, 350, 0, 350],
+    [900, true, false, 500, 350, 422, 0],
+    [900, false, false, 250, 350, 0, 0],
+    [862, true, true, 250, 350, 160, 220],
+    [800, true, true, 250, 350, 160, 220],
+  ])(
+    'allocates viewport %s, sidebar %s, right Agent %s',
+    (viewportWidth, sidebarVisible, agentInRight, sidebarWidth, agentPanelWidth, left, right) => {
+      expect(
+        getPanelLayout({
+          viewportWidth,
+          sidebarVisible,
+          agentInRight,
+          sidebarWidth,
+          agentPanelWidth,
+        }),
+      ).toMatchObject({ sidebarWidth: left, agentPanelWidth: right })
+    },
+  )
+
+  it('only clamps presentation; growing restores the original input targets', () => {
+    const input = {
+      viewportWidth: 900,
+      sidebarVisible: true,
+      agentInRight: true,
+      sidebarWidth: 250,
+      agentPanelWidth: 350,
+    }
+    expect(getPanelLayout(input)).toMatchObject({ sidebarWidth: 198, agentPanelWidth: 220 })
+    expect(input).toMatchObject({ sidebarWidth: 250, agentPanelWidth: 350 })
+    expect(getPanelLayout({ ...input, viewportWidth: 1400 })).toMatchObject({
+      sidebarWidth: 250,
+      agentPanelWidth: 350,
+    })
   })
 
-  it('preserves workbench room when the sidebar is visible', () => {
-    expect(
-      getAgentPanelWidthBounds({ viewportWidth: 1200, sidebarVisible: true, sidebarWidth: 250 }),
-    ).toEqual({ min: 220, max: 546 })
-  })
-
-  it('never returns a maximum below the usable Agent minimum', () => {
-    expect(
-      getAgentPanelWidthBounds({ viewportWidth: 600, sidebarVisible: true, sidebarWidth: 250 }),
-    ).toEqual({ min: 220, max: 220 })
+  it.each([NaN, Infinity, -100])('does not produce invalid widths for %s', (viewportWidth) => {
+    const result = getPanelLayout({
+      viewportWidth,
+      sidebarVisible: true,
+      agentInRight: true,
+      sidebarWidth: NaN,
+      agentPanelWidth: Infinity,
+    })
+    expect(result.sidebarWidth).toBe(160)
+    expect(result.agentPanelWidth).toBe(220)
   })
 })
 

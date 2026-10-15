@@ -1,0 +1,32 @@
+{
+  "status": {
+    "state": "ready",
+    "startedAt": 1792077051552,
+    "timerDueAt": null,
+    "queuedCount": 0,
+    "runningRunId": "b5934d18-b616-4907-a918-fa256179ca80",
+    "enabledCount": 0,
+    "systemScheduler": "none"
+  },
+  "final": {
+    "state": "ready",
+    "startedAt": 1792077051552,
+    "timerDueAt": null,
+    "queuedCount": 0,
+    "runningRunId": null,
+    "enabledCount": 0,
+    "systemScheduler": "none"
+  },
+  "events": 4,
+  "boundaries": [
+    {
+      "value": "99",
+      "fits": true
+    },
+    {
+      "value": "99+",
+      "fits": true
+    }
+  ],
+  "executor": "test-only; no Agent calls"
+}

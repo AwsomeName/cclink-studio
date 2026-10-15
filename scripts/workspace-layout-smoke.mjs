@@ -8,6 +8,7 @@ import { basename, join } from 'node:path'
 import { _electron } from 'playwright-core'
 import electronPath from 'electron'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
+import { runActivityCountSmoke } from './activity-count-smoke.mjs'
 
 // 所有布局和 Browser 回归都在独立 userData 与临时工作空间中运行。
 const evidenceDir = await mkdtemp(join(tmpdir(), 'cclink-workspace-layout-'))
@@ -153,13 +154,18 @@ async function connect(previousLog = '') {
   await resizeWindow(1440)
 }
 
-async function resizeWindow(width) {
-  await electronApp.evaluate(({ BrowserWindow }, contentWidth) => {
-    BrowserWindow.getAllWindows()[0].setContentSize(contentWidth, 920)
-  }, width)
+async function resizeWindow(width, height = 920) {
+  await electronApp.evaluate(
+    ({ BrowserWindow }, size) => {
+      const window = BrowserWindow.getAllWindows()[0]
+      const zoom = window.webContents.getZoomFactor()
+      window.setContentSize(Math.round(size.width * zoom), Math.round(size.height * zoom))
+    },
+    { width, height },
+  )
   await until(
     () => page.evaluate(() => window.innerWidth),
-    (value) => Math.abs(value - width) < 5,
+    (value) => Math.abs(value - width) < 2,
     `window width ${width}`,
   )
 }
@@ -208,7 +214,7 @@ async function setLayout(value) {
   await page.evaluate(async (next) => {
     const { useUIStore } = await import('/src/stores/ui-store.ts')
     const ui = useUIStore.getState()
-    ui.showPanel('files')
+    ui.showPanel(next.activePanel ?? 'files')
     ui.setSidebarWidth(next.sidebarWidth)
     ui.setAgentPanelWidth(next.agentPanelWidth)
     ui.setAgentPanelMode(next.agentPanelMode, 'user')
@@ -375,6 +381,7 @@ async function check(name, operation) {
 }
 
 const layoutA = {
+  activePanel: 'files',
   sidebarWidth: 180,
   agentPanelWidth: 260,
   sidebarVisible: false,
@@ -382,6 +389,7 @@ const layoutA = {
   agentPanelModeSource: 'user',
 }
 const layoutB = {
+  activePanel: 'company-accounts',
   sidebarWidth: 420,
   agentPanelWidth: 600,
   sidebarVisible: true,
@@ -458,6 +466,185 @@ try {
     )
     await setLayout(layoutA)
   })
+  await check('text navigation, all pointer and keyboard menu opens, and settings', async () => {
+    await setLayout({ ...layoutA, sidebarVisible: true })
+    const entries = await page.locator('.activity-bar-main button').evaluateAll((buttons) =>
+      buttons.map((button) => ({
+        label: button.getAttribute('aria-label'),
+        title: button.title,
+      })),
+    )
+    assert(entries.length === 15, 'Expected all fifteen activities')
+    for (const entry of entries) {
+      const button = page
+        .locator('.activity-bar-main')
+        .getByRole('button', { name: entry.label, exact: true })
+      await button.click()
+      assert(
+        (await button.getAttribute('aria-pressed')) === 'true',
+        `Wrong selection after click ${entry.label}`,
+      )
+      await button.click({ button: 'right' })
+      const menu = page.locator('.unified-context-menu')
+      await menu.waitFor({ state: 'visible' })
+      await menu.getByText(`打开${entry.title}`, { exact: true }).click()
+      await menu.waitFor({ state: 'hidden' })
+      assert(
+        (await button.getAttribute('aria-pressed')) === 'true',
+        `Wrong selection after menu ${entry.label}`,
+      )
+      await button.press('Shift+F10')
+      await menu.waitFor({ state: 'visible' })
+      await menu.getByText(`打开${entry.title}`, { exact: true }).click()
+      assert((await button.getAttribute('aria-pressed')) === 'true', `Keyboard menu ${entry.label}`)
+      if (entry.label === '公司账目' || entry.label === '公司经营') {
+        const tabType = await page.evaluate(
+          async () =>
+            (await import('/src/stores/tab-store.ts')).useTabStore.getState().getActiveTab()?.type,
+        )
+        assert(
+          tabType === (entry.label === '公司账目' ? 'company-accounts' : 'company-workspace'),
+          `Wrong special Tab ${tabType}`,
+        )
+      }
+    }
+    await page.locator('.activity-bar-bottom button').click()
+    await page.locator('.settings-page').waitFor({ state: 'visible' })
+    const files = page.locator('.activity-bar').getByRole('button', { name: '文件', exact: true })
+    await files.click()
+    await files.click()
+    assert(
+      !(await page.evaluate(
+        async () => (await import('/src/stores/ui-store.ts')).useUIStore.getState().sidebarVisible,
+      )),
+      'Repeated ordinary click must collapse',
+    )
+    await files.click()
+    assert(
+      await page.evaluate(
+        async () => (await import('/src/stores/ui-store.ts')).useUIStore.getState().sidebarVisible,
+      ),
+      'Repeated ordinary click must reopen',
+    )
+    await setLayout(layoutA)
+    await page.evaluate(
+      async (id) =>
+        (await import('/src/stores/tab-store.ts')).useTabStore.getState().activateTab(id),
+      browserATabId,
+    )
+  })
+  await check(
+    'compressed sidebar gestures preview without saving and commit only final changes',
+    async () => {
+      const targets = { ...layoutA, sidebarWidth: 250, agentPanelWidth: 350, sidebarVisible: true }
+      await setLayout(targets)
+      await resizeWindow(900, 560)
+      await until(
+        () =>
+          page
+            .locator('.workspace-sidebar-shell')
+            .evaluate((el) => el.getBoundingClientRect().width),
+        (width) => Math.abs(width - 198) < 1,
+        'Sidebar 198px clamp',
+      )
+      const expectedWidths = { navigation: 154, sidebar: 198, agent: 220, workbench: 320 }
+      const widths = await until(
+        () =>
+          page.evaluate(() =>
+            Object.fromEntries(
+              [
+                ['navigation', '.activity-bar'],
+                ['sidebar', '.workspace-sidebar-shell'],
+                ['agent', '.agent-side-shell'],
+                ['workbench', '.workbench'],
+              ].map(([key, selector]) => [
+                key,
+                document.querySelector(selector).getBoundingClientRect().width,
+              ]),
+            ),
+          ),
+        (widths) =>
+          Object.entries(expectedWidths).every(
+            ([key, expected]) => Math.abs(widths[key] - expected) < 1,
+          ),
+        'Complete real 900px layout after transitions',
+      )
+      await page.screenshot({ path: join(evidenceDir, 'compressed-three-columns.png') })
+      await writeFile(
+        join(evidenceDir, 'compressed-three-columns.json'),
+        JSON.stringify(widths, null, 2),
+      )
+      const before = await stored(a)
+      const handle = page.getByRole('separator', { name: '侧栏宽度', exact: true })
+      const box = await handle.boundingBox()
+      const x = box.x + 2,
+        y = box.y + 50
+      const start = async () => {
+        await page.mouse.move(x, y)
+        await page.mouse.down()
+      }
+      await start()
+      await page.mouse.move(x - 18, y)
+      await until(
+        () =>
+          page
+            .locator('.workspace-sidebar-shell')
+            .evaluate((el) => el.getBoundingClientRect().width),
+        (width) => Math.abs(width - 180) < 1,
+        'live preview 180',
+      )
+      assert(
+        JSON.stringify(await stored(a)) === JSON.stringify(before),
+        'Preview wrote persistent layout',
+      )
+      await page.mouse.move(x, y)
+      await page.mouse.up()
+      assert(
+        JSON.stringify(await stored(a)) === JSON.stringify(before),
+        'Round trip overwrote target',
+      )
+      await start()
+      await page.mouse.move(x + 40, y)
+      await page.mouse.up()
+      assert(
+        JSON.stringify(await stored(a)) === JSON.stringify(before),
+        'Clamped gesture overwrote target',
+      )
+      await start()
+      await page.mouse.move(x - 18, y)
+      await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+      await page.mouse.up()
+      assert(
+        JSON.stringify(await stored(a)) === JSON.stringify(before),
+        'Cancelled gesture overwrote target',
+      )
+      await start()
+      await page.mouse.move(x - 18, y)
+      await resizeWindow(920, 560)
+      await page.mouse.up()
+      const afterResize = await stored(a)
+      assert(
+        JSON.stringify(afterResize) === JSON.stringify(before),
+        `Window resize committed preview: ${JSON.stringify({ before, afterResize })}`,
+      )
+      await resizeWindow(900, 560)
+      await until(
+        () =>
+          page
+            .locator('.workspace-sidebar-shell')
+            .evaluate((el) => el.getBoundingClientRect().width),
+        (width) => Math.abs(width - 198) < 1,
+        'Clamp after resize cancellation',
+      )
+      await start()
+      await page.mouse.move(x - 18, y)
+      await page.mouse.up()
+      assert((await stored(a)).sidebarWidth === 180, 'Final target not committed')
+      await resizeWindow(1440)
+      assert((await layout()).sidebarWidth === 180, 'Grow lost committed target')
+      await setLayout(layoutA)
+    },
+  )
   await check('active drag cancels on workspace switch and ignores the old pointer', async () => {
     const handle = page.getByRole('separator', { name: 'Agent 面板宽度' })
     const bounds = await handle.boundingBox()
@@ -548,6 +735,137 @@ try {
     await page.screenshot({ path: join(evidenceDir, 'restored-layout.png') })
   })
   await check(
+    'real window sizes, complete text, states, themes and non-default app zoom',
+    async () => {
+      await setLayout({ ...layoutA, sidebarVisible: true, sidebarWidth: 250, agentPanelWidth: 350 })
+      for (const zoom of [1, 1.25]) {
+        await electronApp.evaluate(
+          ({ BrowserWindow }, factor) =>
+            BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(factor),
+          zoom,
+        )
+        for (const [width, height] of [
+          [1400, 900],
+          [900, 560],
+          [800, 560],
+        ]) {
+          await resizeWindow(width, height)
+          for (const theme of ['dark', 'light']) {
+            await page.evaluate(
+              async (value) =>
+                (await import('/src/stores/theme-store.ts')).useThemeStore
+                  .getState()
+                  .setTheme(value),
+              theme,
+            )
+            const geometry = await page.locator('.activity-bar').evaluate((bar) => {
+              const nav = bar.getBoundingClientRect()
+              const labels = [...bar.querySelectorAll('.activity-bar-label')].map((label) => {
+                const rect = label.getBoundingClientRect(),
+                  button = label.parentElement.getBoundingClientRect()
+                const range = document.createRange()
+                range.selectNodeContents(label)
+                return {
+                  text: label.textContent,
+                  fits:
+                    range.getBoundingClientRect().width <= rect.width + 0.5 &&
+                    rect.left >= button.left &&
+                    rect.right <= button.right,
+                  font: getComputedStyle(label).fontSize,
+                }
+              })
+              const settings = bar.querySelector('.activity-bar-bottom').getBoundingClientRect()
+              return {
+                width: nav.width,
+                labels,
+                settingsBottom: settings.bottom,
+                viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio },
+              }
+            })
+            assert(
+              geometry.width === 154 &&
+                geometry.labels.length === 16 &&
+                geometry.labels.every((label) => label.fits && label.font === '13px'),
+              `Text does not fit: ${JSON.stringify(geometry)}`,
+            )
+            assert(
+              geometry.settingsBottom <= geometry.viewport.height,
+              'Settings outside real window',
+            )
+            const file = page
+              .locator('.activity-bar')
+              .getByRole('button', { name: '文件', exact: true })
+            const roles = page
+              .locator('.activity-bar')
+              .getByRole('button', { name: '角色', exact: true })
+            await file.click()
+            await roles.hover()
+            await roles.focus()
+            assert(
+              (await page.locator('.activity-bar-icon.active').count()) === 1 &&
+                (await file.getAttribute('aria-pressed')) === 'true',
+              'Hover/focus changed selection',
+            )
+            await page
+              .locator('.activity-bar')
+              .getByRole('button', { name: '硬件生产', exact: true })
+              .focus()
+            const visible = await page.evaluate(() => {
+              const el = document.activeElement.getBoundingClientRect()
+              const main = document.querySelector('.activity-bar-main').getBoundingClientRect()
+              return el.top >= main.top && el.bottom <= main.bottom + 1
+            })
+            assert(visible, 'Keyboard focus not scrolled into navigation')
+            if (width === 900 && theme === 'dark' && zoom === 1) {
+              await page.locator('.activity-bar-main button').first().focus()
+              for (let index = 0; index < 15; index++) await page.keyboard.press('Tab')
+              assert(
+                await page.evaluate(
+                  () => document.activeElement?.getAttribute('aria-label') === '设置',
+                ),
+                'Natural Tab order lost the fixed settings action',
+              )
+            }
+            const windowBounds = await electronApp.evaluate(({ BrowserWindow }) => ({
+              content: BrowserWindow.getAllWindows()[0].getContentBounds(),
+              zoom: BrowserWindow.getAllWindows()[0].webContents.getZoomFactor(),
+            }))
+            await writeFile(
+              join(evidenceDir, `navigation-${width}-${theme}-${zoom}.json`),
+              JSON.stringify({ geometry, windowBounds }, null, 2),
+            )
+            const screenshot = await electronApp.evaluate(async ({ BrowserWindow }) =>
+              (await BrowserWindow.getAllWindows()[0].capturePage()).toPNG().toString('base64'),
+            )
+            await writeFile(
+              join(evidenceDir, `navigation-${width}-${theme}-${zoom}.png`),
+              Buffer.from(screenshot, 'base64'),
+            )
+          }
+        }
+        await resizeWindow(1400, 900)
+        await setLayout(layoutA)
+        await page.evaluate(
+          async (id) =>
+            (await import('/src/stores/tab-store.ts')).useTabStore.getState().activateTab(id),
+          browserATabId,
+        )
+        const native = await measure(browserATabId, urlA, `browser-app-zoom-${zoom}`)
+        const { rendererBounds, nativeBounds } = native.diagnostic.layout
+        for (const key of ['x', 'y', 'width', 'height'])
+          assert(
+            Math.abs(nativeBounds[key] - rendererBounds[key] * zoom) <= 1,
+            `Browser DIP conversion ${key} at ${zoom}`,
+          )
+      }
+      await electronApp.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1),
+      )
+      await resizeWindow(1440)
+      await setLayout(layoutA)
+    },
+  )
+  await check(
     'preserved Settings stays visible after system layout restore; user mode wins',
     async () => {
       const preserved = await page.evaluate(async (targetPath) => {
@@ -578,6 +896,9 @@ try {
       await page.screenshot({ path: join(evidenceDir, 'settings-preserved.png') })
       return { preserved, systemLayout, userLayout }
     },
+  )
+  await check('real scheduled Runtime query/event counter without Agent calls', async () =>
+    runActivityCountSmoke({ evidenceDir, workspaceRoot, rootDir }),
   )
 } finally {
   await writeFile(

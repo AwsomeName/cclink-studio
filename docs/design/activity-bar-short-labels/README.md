@@ -1,12 +1,17 @@
 # Activity Bar · 图标下加短标签
 
-2026-10-09。用户选定的方案：保留窄导航，在每个图标下常驻显示名称；视频创作与硬件生产使用独立入口。
+> 旧窄导航实现的历史证据；源码目标已于 2026-10-15 更新为[文字横排产品方案](../../features/activity-bar-text-navigation-product-design.md)，
+> 对应[开发方案](../../features/activity-bar-text-navigation-development-plan.md)已实施并通过真实 Electron 自动化，详见[新版验收记录](../activity-bar-text-navigation/README.md)。本轮未发版。
+
+下文记录 2026-10-09 已实现的窄导航基线：在每个图标下常驻显示短名称，视频创作与硬件生产使用独立入口。
+这些旧截图和验证结果不代表新的文字横排已通过验收。
 
 ## 保存的设计
 
 ![用户选定的效果图](./selected-design.png)
 
-[交互效果图](./navigation-preview.html)默认打开选定方案；另一文字导航仅保留作设计对照，不实现。
+[交互效果图](./navigation-preview.html)默认打开已实现的窄导航；其中的文字导航是当时对照稿，
+新一轮实施以 2026-10-15 产品文档为准，不能直接照搬旧对照稿。
 可编辑来源为 `navigation.fragment.html`。这是设计示意，不是实际应用截图。
 
 ## 实现范围与验收动作
@@ -40,8 +45,8 @@ Terminal 保留兼容名称，视觉标签显示「终端」。定时任务计�
 工程门禁：相关单元测试、web 类型检查、相关文件 ESLint、脚本语法检查与 diff 空白检查通过。
 不声称完整全量回归或正式版本已发布；本轮未覆盖非零定时任务计数的真实运行状态。
 
-## 当前查看方式
+## 查看当前源码
 
-本次另外启动了隔离数据的源码预览，未关闭正在运行的安装版，也未更改正式用户数据。
-如需重开预览：`pnpm smoke:ui --activity-bar-only --keep-running`。
+隔离数据预览入口：`pnpm smoke:ui --activity-bar-only --keep-running`。该命令现在输出新版文字横排导航，
+不是本目录的历史窄导航；测试实例与截图不代表已安装版本发生改变。
 普通 `pnpm dev` 与安装版共用单实例保护；要使用正式工作区数据查看源码版，先自行退出安装版再启动。
