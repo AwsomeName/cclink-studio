@@ -105,7 +105,12 @@ const CHUNK_SEND_CONCURRENCY = 8
 const REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT = 100
 const REMOTE_FILE_READ_PAGE_LINES = 100
 const MAX_REMOTE_FILE_READ_ATTEMPTS = 4096
-const AUTO_APPROVED_REMOTE_AGENT_TOOLS = new Set(['WebSearch'])
+const AUTO_APPROVED_REMOTE_AGENT_TOOLS = new Set(['WebSearch', 'WebFetch'])
+const ENDED_TOOL_APPROVAL_CODES = new Set([
+  'CONTROL_NOT_PENDING',
+  'CONTROL_REQUEST_ENDED',
+  'CONTROL_ALREADY_RESOLVED',
+])
 
 export class CclinkRemoteService implements RemoteProvider {
   hasActiveWork(): boolean {
@@ -652,6 +657,17 @@ export class CclinkRemoteService implements RemoteProvider {
       await this.requireOnline()
       await this.requireCapability(input.ref, 'agent.session')
       this.assertSessionMatches(input.ref, input.sessionId)
+      const pending = (this.messages.get(input.sessionId) ?? []).find(
+        (message) => message.type === 'agentTool' && message.tool.id === input.toolUseId,
+      )
+      if (
+        pending?.type !== 'agentTool' ||
+        !pending.tool.requiresApproval ||
+        pending.tool.requestId !== input.requestId ||
+        (pending.tool.state !== 'pending' && pending.tool.state !== 'executing')
+      ) {
+        return { success: false, error: '该操作已完成审批或权限请求已失效，请重新发起任务。' }
+      }
       const controlRequestId = randomUUID()
       const response = (await this.requestRouter.request(
         input.ref.endpointId,
@@ -683,10 +699,41 @@ export class CclinkRemoteService implements RemoteProvider {
       ) {
         throw new Error('远程 Agent 返回了不匹配的审批确认')
       }
-      this.updateToolApproval(input.sessionId, input.toolUseId, input.approved)
+      this.updateToolApproval(input.sessionId, input.toolUseId, input.requestId, input.approved)
       return { success: true }
     } catch (error) {
       this.recordDiagnostic('agent.approval', input.ref.endpointId, error)
+      if (
+        error instanceof CclinkRequestError &&
+        ENDED_TOOL_APPROVAL_CODES.has(error.remoteError.code)
+      ) {
+        const reason = '该操作的 Runtime 权限请求已失效，无法继续审批。请重新发起任务。'
+        const pending = (this.messages.get(input.sessionId) ?? []).find(
+          (message) => message.type === 'agentTool' && message.tool.id === input.toolUseId,
+        )
+        // 远端明确关闭请求才能撤销确认卡；超时和断网仍保留未确认状态。
+        // 迟到的拒绝不能覆盖已收到的完成事件或新的权限请求。
+        if (
+          pending?.type === 'agentTool' &&
+          pending.tool.requiresApproval &&
+          pending.tool.requestId === input.requestId &&
+          (pending.tool.state === 'pending' || pending.tool.state === 'executing')
+        ) {
+          const failed: CclinkRemoteMessage = {
+            ...pending,
+            tool: { ...pending.tool, state: 'failed', requiresApproval: false, error: reason },
+          }
+          this.appendMessage(input.sessionId, failed)
+          this.emitRealtime({
+            type: 'conversation',
+            serverId: input.ref.endpointId,
+            sessionId: input.sessionId,
+            phase: 'message',
+            message: failed,
+          })
+        }
+        return { success: false, error: reason }
+      }
       return { success: false, error: error instanceof Error ? error.message : '远程审批发送失败' }
     }
   }
@@ -1894,6 +1941,18 @@ export class CclinkRemoteService implements RemoteProvider {
           (item): item is Extract<CclinkRemoteMessage, { type: 'agentTool' }> =>
             item.id === messageId && item.type === 'agentTool',
         )
+        if (
+          previousMessage &&
+          !previousMessage.tool.requiresApproval &&
+          (event.state === 'pending' || event.state === 'executing') &&
+          ((event.requires_approval === true &&
+            previousMessage.tool.requestId !== undefined &&
+            previousMessage.tool.requestId === event.request_id) ||
+            ['completed', 'failed', 'denied'].includes(previousMessage.tool.state))
+        ) {
+          // 重投的审批卡不能重新打开已批准/失效的请求，迟到进度不能回退终态。
+          return
+        }
         const preservesPendingApproval =
           (event.state === 'pending' || event.state === 'executing') &&
           event.requires_approval !== false &&
@@ -1916,9 +1975,7 @@ export class CclinkRemoteService implements RemoteProvider {
             expiresAt:
               event.expires_at ??
               (preservesPendingApproval ? previousMessage.tool.expiresAt : undefined),
-            requestId:
-              event.request_id ??
-              (preservesPendingApproval ? previousMessage.tool.requestId : undefined),
+            requestId: event.request_id ?? previousMessage?.tool.requestId,
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
@@ -2048,7 +2105,11 @@ export class CclinkRemoteService implements RemoteProvider {
           message: string
           code?: string
           request_id?: string
+          type?: string
         }
+        // 审批回执由 requestRouter 交还 resolveToolApproval，错误只属于对应工具。
+        // 每次控制请求都生成一个 ID，若追加为普通消息，重试就会让同一错误刷屏。
+        if (event.type === 'tool_approval_failed') return
         if (!event.session_id) return
         const remoteMessage: CclinkRemoteMessage = {
           type: 'system',
@@ -2303,12 +2364,21 @@ export class CclinkRemoteService implements RemoteProvider {
     return session
   }
 
-  private updateToolApproval(sessionId: string, toolUseId: string, approved: boolean): void {
+  private updateToolApproval(
+    sessionId: string,
+    toolUseId: string,
+    requestId: string,
+    approved: boolean,
+  ): void {
     const current = this.messages.get(sessionId) ?? []
     this.messages.set(
       sessionId,
       current.map((message) =>
-        message.type === 'agentTool' && message.tool.id === toolUseId
+        message.type === 'agentTool' &&
+        message.tool.id === toolUseId &&
+        message.tool.requestId === requestId &&
+        message.tool.requiresApproval &&
+        (message.tool.state === 'pending' || message.tool.state === 'executing')
           ? {
               ...message,
               tool: {
