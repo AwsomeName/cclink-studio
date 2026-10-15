@@ -1,6 +1,6 @@
 # CCLink 远程第一阶段验收记录
 
-> 日期：2026-08-13，最近补充：2026-09-02。状态：用户已在 0.1.29 真实 App 中登录并打开远程
+> 日期：2026-08-13，最近补充：2026-10-15。状态：用户已在 0.1.29 真实 App 中登录并打开远程
 > 项目；v0.1.65-v0.1.71 又完成审批、分页读取、图片输入、停止等待和 realtime 启动的工程修复，
 > 这些新增能力仍待同一真实在线 Agent 回归。
 
@@ -82,6 +82,59 @@
 
 远程停止的产品边界没有改变：当前协议没有绑定具体远端 Run 的可靠 cancel capability。“停止等待”不是
 真正取消远端任务，不能在验收或发布说明中写成“远程 Agent 已停止”。
+
+## 2026-10-15 远端 Claude CLI 发现失败
+
+### 现象与用户验收
+
+用户在另一台 Mac 的 Studio v0.1.114 中打开远程工作空间 `/home/lc/argus`，连接的 Linux
+设备为 `lc-All-Series`，远端 Agent 版本为 `0.8.50`。设备在线、界面显示“Agent 就绪”，但
+新建远程会话失败：
+
+```text
+Error invoking remote method 'cclink:createSession':
+Error: Claude CLI not found. Install it first: npm install -g @anthropic-ai/claude-code
+```
+
+本次用户验收动作：在远端处理运行时发现问题，等待 Mac 上设备重新在线，再新建远程会话。
+用户执行下述恢复命令后回复“可以了”，确认本次故障恢复。
+
+### 已确认的证据
+
+- 检查对象是远端 Linux Agent；Mac 客户端的 npm、Claude 安装不参与这次远程会话启动。
+- 远端用户为 `lc`。直接 SSH 命令可找到 `/usr/bin/node`、`/usr/bin/npm` 和
+  `/usr/local/bin/chatcc`，但 `claude --version` 返回 `command not found`。
+- `chatcc runtimes` 使用 `/bin/bash -lic` 加载环境后，`claude_code` 为 `status: ok`，
+  找到 `/home/lc/.npm-global/bin/claude`，版本为 `2.1.190 (Claude Code)`，adapter 为
+  `sdk (primary)`。因此 Claude 已安装且能在该检测环境中运行；其他 15 项运行时缺失不影响
+  当前选择的 Claude 运行时。
+- `systemctl show chatcc-agent` 返回 `MainPID=0`；实际 `index.js --daemon` 和
+  `utility-worker.js` 进程均属于 `lc`。本次不是由 root 运行或活动 systemd 服务导致。
+- `chatcc runtimes` 会启动新的检测流程，其成功结果不代表正在服务的后台 Agent 已使用
+  相同环境。能力探测的 `ready` 表示探测完成，不能替代 Claude 运行时的预检结果。
+
+### 已验证的恢复操作
+
+等待远端任务结束后，在 **Linux 主机上以 `lc` 用户**执行：
+
+```bash
+CLAUDE_CODE_BIN=/home/lc/.npm-global/bin/claude /usr/local/bin/chatcc restart
+```
+
+这条命令明确指定已验证的 Claude 可执行文件，并重新启动后台 Agent、检测子进程及运行时
+探测。随后回到 Mac，等待设备重新在线，再创建远程会话。该命令中的用户名、Claude 路径和
+`chatcc` 路径是本次实测值；其他主机必须替换为该运行用户实际可执行的路径。
+
+### 定位结论与残余边界
+
+已确认的故障范围是远端在线 Agent 的运行时发现或启动预检；显式路径加重启已恢复本次使用。
+旧进程的 PATH、原始预检错误和缓存未留证，且恢复同时改变了路径选择与进程状态，因此不能
+将“旧 PATH”或“旧探测缓存”单独写成已证实的唯一根因，也不能继续建议重装 npm 或 Claude。
+Agent 的预检还会将 CLI 执行失败统一报成 `Claude CLI not found`，该文本本身不证明文件不存在。
+
+命令前的 `CLAUDE_CODE_BIN=...` 只影响本次启动及其子进程，没有写入持久配置；后续普通重启
+或机器重启后是否仍可自动发现尚未验证。本次只记录现场恢复，没有修改 Studio、远端 Agent
+或云服务代码，也不据此声明自动发现缺陷已永久修复或全部远程能力已完成验收。
 
 ## 工程验证（独立审查修复后）
 
