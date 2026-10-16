@@ -7,9 +7,11 @@ const electronMocks = vi.hoisted(() => {
     cookies: {
       on: vi.fn(),
       flushStore: vi.fn().mockResolvedValue(undefined),
+      set: vi.fn().mockResolvedValue(undefined),
       get: vi.fn().mockResolvedValue([]),
     },
     webRequest: { onBeforeSendHeaders: vi.fn() },
+    flushStorageData: vi.fn().mockResolvedValue(undefined),
   })
 
   const defaultSession = makeSession()
@@ -1423,6 +1425,129 @@ describe('BrowserManager popup adoption', () => {
 
     expect(electronCallback).toHaveBeenCalledOnce()
     expect(electronCallback).toHaveBeenCalledWith()
+    manager.destroy()
+  })
+})
+
+describe('BrowserManager isolated BigModel login', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    electronMocks.createdViews.length = 0
+  })
+
+  async function createLogin(active = true) {
+    const manager = new BrowserManager(electronMocks.mainWindow as never)
+    const open = vi.fn()
+    manager.attachBrowserAuthRequestHandler(open)
+    manager.reconcileViews({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'login-tab', profileId: 'web-account-a' }],
+      activeTabId: null,
+    })
+    await manager.createView('login-tab', 'https://bigmodel.cn/coding-plan/personal/usage', {
+      profileId: 'web-account-a',
+      workspaceKey: '/workspace/a',
+    })
+    const view = electronMocks.createdViews[0]
+    Object.defineProperty(electronMocks.mainWindow.contentView, 'children', {
+      configurable: true,
+      get: () => (active ? [view] : []),
+    })
+    manager.setRendererProjectionActive('login-tab')
+    if (!active) manager.setRendererProjectionActive(null)
+    view.webContents.currentUrl = 'https://bigmodel.cn/login?redirect=%2Fconsole'
+    return { manager, open, source: view.webContents }
+  }
+
+  const authCookie = {
+    name: 'bigmodel_token_production',
+    value: 'test-login-state',
+    domain: '.bigmodel.cn',
+    path: '/',
+    secure: true,
+    httpOnly: false,
+    session: false,
+    sameSite: 'no_restriction' as const,
+    expirationDate: Date.now() / 1000 + 3600,
+  }
+
+  it('routes both full and SPA login navigation without starting duplicate windows', async () => {
+    const { manager, source, open } = await createLogin()
+    source.emit('did-navigate', {}, source.currentUrl)
+    source.emit('did-navigate-in-page', {}, source.currentUrl, true)
+    expect(open).toHaveBeenCalledTimes(2)
+    expect(open.mock.calls[1][0]).toBe(open.mock.calls[0][0])
+    expect(open.mock.calls[0][0]).toMatchObject({
+      provider: 'bigmodel',
+      profileId: 'web-account-a',
+      tabId: 'login-tab',
+    })
+    manager.destroy()
+  })
+
+  it('defers a background login window until its original tab is activated', async () => {
+    const { manager, source, open } = await createLogin(false)
+    source.emit('did-navigate-in-page', {}, source.currentUrl, true)
+    expect(open).not.toHaveBeenCalled()
+    const view = electronMocks.createdViews[0]
+    Object.defineProperty(electronMocks.mainWindow.contentView, 'children', {
+      configurable: true,
+      get: () => [view],
+    })
+    manager.setRendererProjectionActive('login-tab')
+    expect(open).toHaveBeenCalledOnce()
+    const request = open.mock.calls[0][0]
+    manager.cancelBrowserAuth(request)
+    manager.setRendererProjectionActive('login-tab')
+    expect(open).toHaveBeenCalledOnce()
+    manager.destroy()
+  })
+
+  it('returns login state to the same profile and loads the authenticated page', async () => {
+    const { manager, source, open } = await createLogin()
+    source.emit('did-navigate-in-page', {}, source.currentUrl, true)
+    const request = open.mock.calls[0][0]
+    const originalSession = source.session
+    await manager.completeBrowserAuth({
+      ...request,
+      type: 'browser-auth-complete',
+      returnUrl: 'https://bigmodel.cn/console',
+      cookies: [authCookie],
+    })
+    expect(source.session).toBe(originalSession)
+    expect(manager.getViewProfileId('login-tab')).toBe('web-account-a')
+    expect(originalSession.cookies.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: authCookie.name,
+        value: authCookie.value,
+        url: 'https://bigmodel.cn/',
+      }),
+    )
+    expect(originalSession.cookies.flushStore).toHaveBeenCalled()
+    expect(source.loadURL).toHaveBeenLastCalledWith('https://bigmodel.cn/console')
+    expect(manager.isBrowserAuthCurrent(request)).toBe(false)
+    manager.destroy()
+  })
+
+  it('rejects expired tokens and completions from a closed or recreated tab', async () => {
+    const { manager, source, open } = await createLogin()
+    source.emit('did-navigate-in-page', {}, source.currentUrl, true)
+    const request = open.mock.calls[0][0]
+    const complete = {
+      ...request,
+      type: 'browser-auth-complete' as const,
+      returnUrl: 'https://bigmodel.cn/console',
+      cookies: [authCookie],
+    }
+    await expect(
+      manager.completeBrowserAuth({ ...complete, cookies: [{ ...authCookie, expirationDate: 1 }] }),
+    ).rejects.toThrow('有效')
+    manager.destroyView('login-tab')
+    await manager.createView('login-tab', 'https://bigmodel.cn/', {
+      profileId: 'web-account-a',
+      workspaceKey: '/workspace/a',
+    })
+    await expect(manager.completeBrowserAuth(complete)).rejects.toThrow('失效')
     manager.destroy()
   })
 })

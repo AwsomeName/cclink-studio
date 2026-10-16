@@ -250,7 +250,7 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
     runtime.browserTaskRuntime?.cancelTasksForTab(tabId, 'tab_closed'),
   )
   runtime.browserManager.onViewDestroyed((tabId) =>
-    runtime.browserAuthProcessService?.cancelHttpBasicForTab(tabId),
+    runtime.browserAuthProcessService?.cancelForTab(tabId),
   )
   registerBrowserIpc(
     runtime.browserManager,

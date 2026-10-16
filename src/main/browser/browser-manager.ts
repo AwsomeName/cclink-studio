@@ -28,7 +28,9 @@ import { assertBrowserUrlAccess, isSupportedBrowserUrl } from './browser-url-acc
 import { installBrowserCompatibilityHeaders, normalizeDesktopUserAgent } from './browser-stealth'
 import {
   isAllowedBrowserAuthCookie,
-  isSupportedBrowserAuthRequest,
+  browserAuthCookieName,
+  isBrowserAuthChildMessage,
+  resolveBrowserAuthProvider,
   resolveBrowserAuthReturnUrl,
   sanitizeBrowserAuthMainUrl,
   type BrowserAuthCompleteMessage,
@@ -342,6 +344,7 @@ export class BrowserManager {
   >()
   private readonly sessionDiagnostics = new BrowserSessionDiagnostics()
   private browserAuthRequestHandler: ((request: BrowserAuthRequest) => void) | null = null
+  private readonly browserAuthRequests = new Map<string, BrowserAuthRequest>()
   private browserHttpAuthRequestHandler:
     | ((
         request: BrowserHttpAuthRequest,
@@ -1310,12 +1313,60 @@ export class BrowserManager {
     })
   }
 
-  private routeBrowserAuth(tabId: string, entry: ViewEntry, url: string): boolean {
+  private routeBrowserAuth(
+    tabId: string,
+    entry: ViewEntry,
+    url: string,
+    includeBigModel = false,
+  ): boolean {
     if (!entry.profileId || !this.browserAuthRequestHandler) return false
-    const request = { tabId, profileId: entry.profileId, url }
-    if (!isSupportedBrowserAuthRequest(request)) return false
-    this.browserAuthRequestHandler(request)
+    const provider = resolveBrowserAuthProvider({ profileId: entry.profileId, url })
+    // BigModel uses SPA redirects too. Keep its original login page visible for cancellation,
+    // and start authentication only after navigation or intentional activation of that page.
+    if (!provider || (provider === 'bigmodel' && (!includeBigModel || !this.isViewVisible(tabId))))
+      return false
+    const pending = this.browserAuthRequests.get(tabId)
+    if (
+      pending &&
+      pending.runtimeGeneration === entry.runtimeGeneration &&
+      pending.provider === provider
+    ) {
+      this.browserAuthRequestHandler(pending)
+      return true
+    }
+    const request: BrowserAuthRequest = {
+      requestId: randomUUID(),
+      tabId,
+      profileId: entry.profileId,
+      runtimeGeneration: entry.runtimeGeneration,
+      provider,
+      url,
+    }
+    this.browserAuthRequests.set(tabId, request)
+    try {
+      this.browserAuthRequestHandler(request)
+    } catch (error) {
+      this.cancelBrowserAuth(request)
+      console.error('[BrowserAuth] 认证窗口启动失败:', error)
+    }
     return true
+  }
+
+  isBrowserAuthCurrent(request: BrowserAuthRequest): boolean {
+    const entry = this.views.get(request.tabId)
+    return (
+      !!entry &&
+      !entry.view.webContents.isDestroyed() &&
+      entry.profileId === request.profileId &&
+      entry.runtimeGeneration === request.runtimeGeneration &&
+      this.browserAuthRequests.get(request.tabId)?.requestId === request.requestId
+    )
+  }
+
+  cancelBrowserAuth(request: BrowserAuthRequest): void {
+    if (this.browserAuthRequests.get(request.tabId)?.requestId === request.requestId) {
+      this.browserAuthRequests.delete(request.tabId)
+    }
   }
 
   /** 导航事件：记录 URL 并同步给渲染进程 */
@@ -1349,6 +1400,12 @@ export class BrowserManager {
         history: entry.history,
         historyIndex: entry.historyIndex,
       })
+    if (
+      entry &&
+      resolveBrowserAuthProvider({ profileId: entry.profileId ?? '', url }) === 'bigmodel'
+    ) {
+      this.routeBrowserAuth(tabId, entry, url, true)
+    }
   }
 
   private emitPageMeta(tabId: string, meta: { title?: string; faviconUrl?: string | null }): void {
@@ -1462,6 +1519,7 @@ export class BrowserManager {
       }
     }
     this.views.delete(tabId)
+    this.browserAuthRequests.delete(tabId)
     this.lastHttpAuthByTab.delete(tabId)
     if (host?.activeViewId === tabId) host.activeViewId = null
 
@@ -1497,6 +1555,7 @@ export class BrowserManager {
     const host = this.hosts.get(windowId)
     const win = this.hostWindow(windowId)
     if (!host || !win) return
+    const wasActive = host.activeViewId === tabId
 
     // activeViewId 可能因旧异步调用或 removeChildView 异常失真。
     // 每次都遍历并 detach 非目标视图，避免原生 View 盖到编辑器/其他项目 Tab 上。
@@ -1540,6 +1599,15 @@ export class BrowserManager {
 
     // 首次激活时加载页面；之后保持 warm 状态
     this.ensureLoaded(tabId)
+    if (
+      !wasActive &&
+      resolveBrowserAuthProvider({
+        profileId: entry.profileId ?? '',
+        url: this.getCurrentURL(tabId),
+      }) === 'bigmodel'
+    ) {
+      this.routeBrowserAuth(tabId, entry, this.getCurrentURL(tabId), true)
+    }
     // 重新计算缩放（适配当前面板宽度）
     void this.applyZoom(tabId, 'activation')
     this.emitState(tabId)
@@ -2640,19 +2708,35 @@ export class BrowserManager {
   }
 
   async completeBrowserAuth(message: BrowserAuthCompleteMessage): Promise<void> {
+    const request = this.browserAuthRequests.get(message.tabId)
+    if (
+      !request ||
+      !this.isBrowserAuthCurrent(request) ||
+      !isBrowserAuthChildMessage(message, request)
+    ) {
+      throw new Error('登录请求已失效或返回了不匹配的目标')
+    }
     const entry = this.views.get(message.tabId)
     if (!entry) throw new Error(`登录对应的浏览器 Tab 已关闭: ${message.tabId}`)
     if (entry.profileId !== message.profileId) throw new Error('登录 Profile 与目标 Tab 不一致')
 
     const cookies = message.cookies.filter((cookie) =>
-      isAllowedBrowserAuthCookie(message.profileId, cookie),
+      isAllowedBrowserAuthCookie(request.provider, cookie),
     )
-    if (!cookies.some((cookie) => cookie.name === 'A2')) {
-      throw new Error('登录进程未返回 V2EX 登录 Cookie')
+    if (
+      !cookies.some(
+        (cookie) =>
+          cookie.name === browserAuthCookieName(request.provider) &&
+          cookie.value &&
+          (cookie.expirationDate === undefined || cookie.expirationDate > Date.now() / 1000),
+      )
+    ) {
+      throw new Error('登录进程未返回有效的目标网站登录状态')
     }
 
     const targetSession = entry.view.webContents.session
     for (const cookie of cookies) {
+      if (!this.isBrowserAuthCurrent(request)) throw new Error('登录请求已失效')
       const host = cookie.domain.replace(/^\./, '')
       await targetSession.cookies.set({
         url: `${cookie.secure ? 'https' : 'http'}://${host}${cookie.path || '/'}`,
@@ -2670,11 +2754,13 @@ export class BrowserManager {
     }
     await targetSession.cookies.flushStore()
     await targetSession.flushStorageData()
+    if (!this.isBrowserAuthCurrent(request)) throw new Error('登录请求已失效')
 
-    const returnUrl = resolveBrowserAuthReturnUrl(message.profileId, message.returnUrl)
+    const returnUrl = resolveBrowserAuthReturnUrl(request.provider, message.returnUrl)
     entry.pendingUrl = returnUrl
     entry.url = returnUrl
     await entry.view.webContents.loadURL(returnUrl)
+    this.cancelBrowserAuth(request)
   }
 
   recordHttpAuthOutcome(

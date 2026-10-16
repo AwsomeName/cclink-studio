@@ -14,6 +14,7 @@ import {
   BROWSER_AUTH_CHILD_ARGUMENT,
   encodeBrowserAuthChildOptions,
   isSupportedBrowserAuthRequest,
+  isBrowserAuthChildMessage,
   type BrowserAuthAcknowledgement,
   type BrowserAuthChildMessage,
   type BrowserAuthRequest,
@@ -52,6 +53,7 @@ const HTTP_AUTH_MAX_ATTEMPTS = 3
 export class BrowserAuthProcessService {
   private activeChild: ChildProcess | null = null
   private activeChildKind: 'browser-auth' | 'clean-browser' | null = null
+  private activeAuthRequest: BrowserAuthRequest | null = null
   private readonly activeHttpAuthChildren = new Map<string, ActiveHttpAuthChild>()
   private readonly httpAuthAttempts = new Map<string, HttpAuthAttemptState>()
 
@@ -61,7 +63,16 @@ export class BrowserAuthProcessService {
   ) {}
 
   open(request: BrowserAuthRequest): void {
-    if (!isSupportedBrowserAuthRequest(request)) return
+    if (
+      !isSupportedBrowserAuthRequest(request) ||
+      !this.browserManager.isBrowserAuthCurrent(request)
+    )
+      return
+
+    if (this.activeAuthRequest?.requestId === request.requestId && this.activeChild?.connected) {
+      this.activeChild.send?.({ type: 'browser-auth-focus', requestId: request.requestId })
+      return
+    }
 
     this.stopActiveChild()
     const userDataPath = join(app.getPath('userData'), 'Browser Auth', request.profileId)
@@ -77,6 +88,8 @@ export class BrowserAuthProcessService {
     })
     this.activeChild = child
     this.activeChildKind = 'browser-auth'
+    this.activeAuthRequest = request
+    console.log(`[BrowserAuth] provider=${request.provider} outcome=opened`)
 
     child.stdout?.on('data', (chunk) => {
       const text = String(chunk).trim()
@@ -86,8 +99,12 @@ export class BrowserAuthProcessService {
       const text = String(chunk).trim()
       if (text) console.warn(`[BrowserAuth] ${text}`)
     })
-    child.on('message', (message: BrowserAuthChildMessage) => {
-      if (message.tabId !== request.tabId || message.profileId !== request.profileId) {
+    child.on('message', (message: unknown) => {
+      if (
+        this.activeChild !== child ||
+        !this.browserManager.isBrowserAuthCurrent(request) ||
+        !isBrowserAuthChildMessage(message, request)
+      ) {
         console.error('[BrowserAuth] 登录进程返回了不匹配的目标')
         return
       }
@@ -97,6 +114,8 @@ export class BrowserAuthProcessService {
       if (this.activeChild !== child) return
       this.activeChild = null
       this.activeChildKind = null
+      this.activeAuthRequest = null
+      this.browserManager.cancelBrowserAuth(request)
       if (!this.browserManager.focusTabOwner(request.tabId) && !this.mainWindow.isDestroyed()) {
         if (this.mainWindow.isMinimized()) this.mainWindow.restore()
         this.mainWindow.show()
@@ -108,6 +127,8 @@ export class BrowserAuthProcessService {
       if (this.activeChild === child) {
         this.activeChild = null
         this.activeChildKind = null
+        this.activeAuthRequest = null
+        this.browserManager.cancelBrowserAuth(request)
       }
     })
   }
@@ -259,6 +280,11 @@ export class BrowserAuthProcessService {
     this.clearHttpAuthAttempt(tabId)
   }
 
+  cancelForTab(tabId: string): void {
+    if (this.activeAuthRequest?.tabId === tabId) this.stopActiveChild()
+    this.cancelHttpBasicForTab(tabId)
+  }
+
   destroy(): void {
     this.stopActiveChild()
     for (const tabId of [...this.activeHttpAuthChildren.keys()]) {
@@ -272,6 +298,8 @@ export class BrowserAuthProcessService {
     message: BrowserAuthChildMessage,
   ): Promise<void> {
     if (message.type === 'browser-auth-cancelled') {
+      if (this.activeAuthRequest) this.browserManager.cancelBrowserAuth(this.activeAuthRequest)
+      console.log(`[BrowserAuth] provider=${message.provider} outcome=cancelled`)
       if (!this.browserManager.focusTabOwner(message.tabId) && !this.mainWindow.isDestroyed()) {
         this.mainWindow.focus()
       }
@@ -285,7 +313,11 @@ export class BrowserAuthProcessService {
         this.mainWindow.show()
         this.mainWindow.focus()
       }
-      const acknowledgement: BrowserAuthAcknowledgement = { type: 'browser-auth-ack' }
+      console.log(`[BrowserAuth] provider=${message.provider} outcome=returned`)
+      const acknowledgement: BrowserAuthAcknowledgement = {
+        type: 'browser-auth-ack',
+        requestId: message.requestId,
+      }
       child.send?.(acknowledgement)
     } catch (error) {
       console.error('[BrowserAuth] 登录状态写回失败:', error)
@@ -295,6 +327,8 @@ export class BrowserAuthProcessService {
   private stopActiveChild(): void {
     if (!this.activeChild) return
     const child = this.activeChild
+    if (this.activeAuthRequest) this.browserManager.cancelBrowserAuth(this.activeAuthRequest)
+    this.activeAuthRequest = null
     this.activeChild = null
     this.activeChildKind = null
     child.kill('SIGTERM')
