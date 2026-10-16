@@ -3,7 +3,10 @@ import { promises as fs } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
-import type { UpdateErrorCode } from '../../shared/update'
+import { verifyPureArm64Executable } from './mach-o-architecture'
+import { UpdateAssetVerificationError, verificationFailure } from './update-verification-error'
+
+export { UpdateAssetVerificationError } from './update-verification-error'
 
 const execFileAsync = promisify(execFile)
 const EXPECTED_BUNDLE_ID = 'com.cclink.studio'
@@ -40,16 +43,6 @@ interface CodeSignatureIdentity {
   developerIdAuthority: string
 }
 
-export class UpdateAssetVerificationError extends Error {
-  constructor(
-    readonly code: UpdateErrorCode,
-    message: string,
-  ) {
-    super(message)
-    this.name = 'UpdateAssetVerificationError'
-  }
-}
-
 export class MacDmgVerifier implements VerifiedDmgInspector {
   private readonly runCommand: RunCommand
 
@@ -71,23 +64,27 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
 
     const mounted = await this.attachReadOnly(input.dmgPath)
     let verificationError: unknown = null
+    let step = '挂载候选定位'
     try {
       const candidateApp = await this.findCandidateApp(mounted.mountPoints)
       await this.verifyCandidateApp(
         candidateApp,
         input.expectedVersion,
         currentIdentity.teamIdentifier,
+        '挂载候选',
       )
       if (destination) {
+        step = '候选复制'
         await this.runCommand('/usr/bin/ditto', [candidateApp, destination])
         await this.verifyCandidateApp(
           destination,
           input.expectedVersion,
           currentIdentity.teamIdentifier,
+          '暂存候选',
         )
       }
     } catch (error) {
-      verificationError = error
+      verificationError = verificationFailure(step, error)
     }
 
     try {
@@ -112,20 +109,22 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         !identity.teamIdentifier ||
         !identity.developerIdAuthority
       ) {
-        throw new Error('Current application is not a trusted Developer ID build')
+        throw new UpdateAssetVerificationError(
+          'install_blocked',
+          '当前安装无法作为可信更新来源，请先手工安装官方基线后再更新',
+        )
       }
       return identity
-    } catch {
-      throw new UpdateAssetVerificationError(
-        'publisher_mismatch',
-        '当前安装不是可验证的官方签名版本，不能从应用内打开更新包',
-      )
+    } catch (error) {
+      throw verificationFailure('当前应用身份读取', error)
     }
   }
 
   private async verifyDiskImageSignature(dmgPath: string, expectedTeamId: string): Promise<void> {
+    let step = 'DMG签名检查'
     try {
       await this.runCommand('/usr/bin/codesign', ['--verify', '--strict', '--verbose=2', dmgPath])
+      step = 'DMG安全评估'
       await this.runCommand('/usr/sbin/spctl', [
         '--assess',
         '--type',
@@ -135,15 +134,16 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         '--verbose=4',
         dmgPath,
       ])
+      step = 'DMG身份读取'
       const identity = await this.readCodeSignature(dmgPath)
       if (identity.teamIdentifier !== expectedTeamId || !identity.developerIdAuthority) {
-        throw new Error('Disk image publisher does not match')
+        throw new UpdateAssetVerificationError(
+          'publisher_mismatch',
+          '更新安装包的 Apple 签名或发布者身份不匹配',
+        )
       }
-    } catch {
-      throw new UpdateAssetVerificationError(
-        'publisher_mismatch',
-        '更新安装包的 Apple 签名或发布者身份不匹配',
-      )
+    } catch (error) {
+      throw verificationFailure(step, error)
     }
   }
 
@@ -162,12 +162,9 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         dmgPath,
       ])
       return { mountPoints: [mountPoint], cleanupRoot: temporaryDirectory }
-    } catch {
+    } catch (error) {
       await fs.rm(temporaryDirectory, { recursive: true, force: true }).catch(() => undefined)
-      throw new UpdateAssetVerificationError(
-        'release_invalid',
-        'macOS 无法以只读方式检查更新安装包',
-      )
+      throw verificationFailure('DMG只读挂载', error)
     }
   }
 
@@ -197,7 +194,9 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
     appPath: string,
     expectedVersion: string,
     expectedTeamId: string,
+    target: '挂载候选' | '暂存候选',
   ): Promise<void> {
+    let step = `${target}：应用签名检查`
     try {
       await this.runCommand('/usr/bin/codesign', [
         '--verify',
@@ -206,6 +205,7 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         '--verbose=2',
         appPath,
       ])
+      step = `${target}：应用安全评估`
       await this.runCommand('/usr/sbin/spctl', [
         '--assess',
         '--type',
@@ -213,6 +213,7 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         '--verbose=4',
         appPath,
       ])
+      step = `${target}：应用身份读取`
       const identity = await this.readCodeSignature(appPath)
       if (
         identity.identifier !== EXPECTED_BUNDLE_ID ||
@@ -225,6 +226,7 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         )
       }
 
+      step = `${target}：应用声明读取`
       const infoPlist = join(appPath, 'Contents', 'Info.plist')
       const [bundleId, version, executableName] = await Promise.all([
         this.readPlistString(infoPlist, 'CFBundleIdentifier'),
@@ -241,24 +243,15 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
         throw new UpdateAssetVerificationError('release_invalid', '更新应用的可执行文件声明无效')
       }
       const executablePath = join(appPath, 'Contents', 'MacOS', executableName)
+      step = `${target}：可执行文件检查`
       const executableStat = await fs.lstat(executablePath)
       if (!executableStat.isFile() || executableStat.isSymbolicLink()) {
         throw new UpdateAssetVerificationError('release_invalid', '更新应用的可执行文件无效')
       }
-      const { stdout } = await this.runCommand('/usr/bin/lipo', ['-archs', executablePath])
-      const architectures = stdout.trim().split(/\s+/).filter(Boolean)
-      if (architectures.length !== 1 || architectures[0] !== 'arm64') {
-        throw new UpdateAssetVerificationError(
-          'unsupported_arch',
-          '更新应用不是纯 Apple Silicon arm64 构建',
-        )
-      }
+      step = `${target}：应用架构读取`
+      await verifyPureArm64Executable(executablePath, step)
     } catch (error) {
-      if (error instanceof UpdateAssetVerificationError) throw error
-      throw new UpdateAssetVerificationError(
-        'publisher_mismatch',
-        '更新应用未通过 Apple 签名、公证或身份检查',
-      )
+      throw verificationFailure(step, error)
     }
   }
 
@@ -283,7 +276,9 @@ export class MacDmgVerifier implements VerifiedDmgInspector {
       plistPath,
     ])
     const value = stdout.trim()
-    if (!value || /[\0\r\n]/.test(value)) throw new Error(`Missing plist key ${key}`)
+    if (!value || /[\0\r\n]/.test(value)) {
+      throw new UpdateAssetVerificationError('release_invalid', '更新应用的声明字段无效')
+    }
     return value
   }
 

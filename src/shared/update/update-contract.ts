@@ -36,6 +36,7 @@ export const updateErrorCodeSchema = z.enum([
   'download_cancelled',
   'download_corrupt',
   'publisher_mismatch',
+  'verification_failed',
   'install_blocked',
   'install_failed',
 ])

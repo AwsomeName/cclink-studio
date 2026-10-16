@@ -11,6 +11,11 @@ import {
 } from '../../shared/update'
 import type { ResolvedUpdateAsset, ResolvedUpdateRelease } from './update-provider'
 import { compareStableVersions } from './version'
+import {
+  UpdateAssetVerificationError,
+  logVerificationFailure,
+  verificationFailure,
+} from './update-verification-error'
 
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/)
 
@@ -126,8 +131,11 @@ export class UpdateCache {
       try {
         const candidate = await this.verifyDirectory(directory)
         candidates.push({ ...candidate, directory })
-      } catch {
-        await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+      } catch (error) {
+        logVerificationFailure(null, error)
+        if (error instanceof UpdateAssetVerificationError && error.code === 'download_corrupt') {
+          await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+        }
       }
     }
 
@@ -160,11 +168,16 @@ export class UpdateCache {
         verified.filePath !== candidate.filePath ||
         verified.record.manifestDigest !== candidate.record.manifestDigest
       ) {
-        throw new Error('Cached update handle no longer matches the verified record')
+        throw verificationFailure(
+          '缓存句柄复验',
+          new UpdateAssetVerificationError('download_corrupt', '更新缓存记录已变化，请重新下载'),
+        )
       }
       return verified
     } catch (error) {
-      await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+      if (error instanceof UpdateAssetVerificationError && error.code === 'download_corrupt') {
+        await fs.rm(directory, { recursive: true, force: true }).catch(() => undefined)
+      }
       throw error
     }
   }
@@ -176,42 +189,55 @@ export class UpdateCache {
   }
 
   private async verifyDirectory(directory: string): Promise<RestoredVerifiedUpdate> {
-    const rawRecord = await fs.readFile(join(directory, 'verified.json'), 'utf8')
-    const record = verifiedUpdateRecordSchema.parse(JSON.parse(rawRecord))
-    if (
-      record.architecture !== this.options.architecture ||
-      record.manifestDigest !== digestManifest(record.manifest) ||
-      compareStableVersions(record.manifest.version, this.options.currentVersion) <= 0 ||
-      (this.options.track === 'stable' && record.prerelease) ||
-      compareStableVersions(
-        normalizeSystemVersion(this.options.systemVersion),
-        normalizeSystemVersion(record.manifest.minimumSystemVersion),
-      ) < 0
-    ) {
-      throw new Error('Cached update is no longer applicable')
-    }
+    let step = '缓存记录读取'
+    try {
+      const rawRecord = await fs.readFile(join(directory, 'verified.json'), 'utf8')
+      step = '缓存记录解析'
+      const record = verifiedUpdateRecordSchema.parse(JSON.parse(rawRecord))
+      if (
+        record.architecture !== this.options.architecture ||
+        record.manifestDigest !== digestManifest(record.manifest) ||
+        compareStableVersions(record.manifest.version, this.options.currentVersion) <= 0 ||
+        (this.options.track === 'stable' && record.prerelease) ||
+        compareStableVersions(
+          normalizeSystemVersion(this.options.systemVersion),
+          normalizeSystemVersion(record.manifest.minimumSystemVersion),
+        ) < 0
+      ) {
+        throw new UpdateAssetVerificationError('download_corrupt', '更新缓存已不适用，请重新下载')
+      }
 
-    const expectedAsset = record.manifest.assets[record.architecture].dmg
-    if (
-      record.asset.name !== expectedAsset.name ||
-      record.asset.size !== expectedAsset.size ||
-      record.asset.sha256 !== expectedAsset.sha256
-    ) {
-      throw new Error('Cached update metadata does not match its manifest')
-    }
+      const expectedAsset = record.manifest.assets[record.architecture].dmg
+      if (
+        record.asset.name !== expectedAsset.name ||
+        record.asset.size !== expectedAsset.size ||
+        record.asset.sha256 !== expectedAsset.sha256
+      ) {
+        throw new UpdateAssetVerificationError('download_corrupt', '更新缓存记录不一致，请重新下载')
+      }
 
-    const filePath = join(directory, basename(record.asset.name))
-    const stats = await fs.lstat(filePath)
-    if (!stats.isFile() || stats.isSymbolicLink() || stats.size !== record.asset.size) {
-      throw new Error('Cached update asset is invalid')
-    }
-    if ((await hashFile(filePath)) !== record.asset.sha256) {
-      throw new Error('Cached update checksum does not match')
-    }
-    return {
-      filePath,
-      releaseSummary: summarizeRecord(record),
-      record,
+      const filePath = join(directory, basename(record.asset.name))
+      step = '缓存文件检查'
+      const stats = await fs.lstat(filePath)
+      if (!stats.isFile() || stats.isSymbolicLink() || stats.size !== record.asset.size) {
+        throw new UpdateAssetVerificationError('download_corrupt', '更新缓存文件无效，请重新下载')
+      }
+      step = '缓存哈希复验'
+      if ((await hashFile(filePath)) !== record.asset.sha256) {
+        throw new UpdateAssetVerificationError('download_corrupt', '更新缓存哈希不匹配，请重新下载')
+      }
+      return {
+        filePath,
+        releaseSummary: summarizeRecord(record),
+        record,
+      }
+    } catch (error) {
+      const systemCode = (error as NodeJS.ErrnoException | null)?.code
+      const invalid =
+        error instanceof SyntaxError ||
+        error instanceof z.ZodError ||
+        ['ENOENT', 'ENOTDIR', 'EISDIR', 'ELOOP'].includes(systemCode ?? '')
+      throw verificationFailure(step, error, invalid ? 'download_corrupt' : 'verification_failed')
     }
   }
 
@@ -237,7 +263,10 @@ export class UpdateCache {
     const candidate = resolve(directory)
     const childPath = relative(cacheRoot, candidate)
     if (!childPath || childPath.startsWith('..') || childPath.includes('/')) {
-      throw new Error('Update cache handle is outside its private release directory')
+      throw verificationFailure(
+        '缓存目录边界',
+        new UpdateAssetVerificationError('download_corrupt', '更新缓存句柄无效，请重新下载'),
+      )
     }
   }
 }

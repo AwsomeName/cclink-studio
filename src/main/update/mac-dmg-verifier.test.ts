@@ -17,6 +17,7 @@ interface FixtureOptions {
   architecture?: string
   bundleId?: string
   candidateCount?: number
+  binary?: Buffer
 }
 
 function createFixture(options: FixtureOptions = {}) {
@@ -39,7 +40,14 @@ function createFixture(options: FixtureOptions = {}) {
         const appPath = `${mountPoint}/CCLink Studio ${index}.app`
         await fs.mkdir(`${appPath}/Contents/MacOS`, { recursive: true })
         await fs.writeFile(`${appPath}/Contents/Info.plist`, 'fixture')
-        await fs.writeFile(`${appPath}/Contents/MacOS/CCLink Studio`, 'fixture')
+        const header = Buffer.alloc(32)
+        header.writeUInt32LE(0xfeedfacf, 0)
+        header.writeUInt32LE(0x0100000c, 4)
+        if (architecture !== 'arm64') {
+          header.writeUInt32BE(0xcafebabe, 0)
+          header.writeUInt32BE(2, 4)
+        }
+        await fs.writeFile(`${appPath}/Contents/MacOS/CCLink Studio`, options.binary ?? header)
       }
       return { stdout: '', stderr: '' }
     }
@@ -63,8 +71,8 @@ function createFixture(options: FixtureOptions = {}) {
       }
       return { stdout: `${values[key] ?? ''}\n`, stderr: '' }
     }
-    if (executable === '/usr/bin/lipo') {
-      return { stdout: `${architecture}\n`, stderr: '' }
+    if (['lipo', 'xcrun', 'xcodebuild'].some((name) => executable.endsWith(`/${name}`))) {
+      throw new Error('You have not agreed to the Xcode and Apple SDKs license.')
     }
     if (executable === '/usr/bin/ditto') {
       await fs.cp(args[0], args[1], { recursive: true })
@@ -82,6 +90,64 @@ function createFixture(options: FixtureOptions = {}) {
 }
 
 describe('MacDmgVerifier', () => {
+  it.each(['current', 'dmg', 'mounted', 'staged'] as const)(
+    'does not misreport incomplete %s checks as a publisher mismatch',
+    async (target) => {
+      const fixture = createFixture()
+      const original = fixture.runCommand.getMockImplementation()!
+      fixture.runCommand.mockImplementation(async (executable, args) => {
+        const path = args.at(-1) ?? ''
+        const match =
+          target === 'current'
+            ? path === '/Applications/CCLink Studio 开源版.app'
+            : target === 'dmg'
+              ? path.endsWith('.dmg')
+              : target === 'staged'
+                ? path.endsWith('/candidate.app')
+                : path.includes('/volume/')
+        if (match && executable === '/usr/bin/codesign') {
+          throw Object.assign(new Error('command failed'), {
+            code: 'ETIMEDOUT',
+            stderr: 'assessment incomplete',
+          })
+        }
+        return original(executable, args)
+      })
+      const root = await fs.mkdtemp('/private/tmp/cclink-verifier-stage-')
+      cleanupPaths.push(root)
+      await expect(
+        fixture.verifier.stage(fixture.input, `${root}/candidate.app`),
+      ).rejects.toMatchObject({
+        code: 'verification_failed',
+        diagnostic: { systemCode: 'ETIMEDOUT', timedOut: true },
+      })
+      if (target === 'mounted' || target === 'staged') {
+        expect(fixture.calls.some((call) => call.args[0] === 'detach')).toBe(true)
+      }
+    },
+  )
+
+  it('rechecks the actual copied executable instead of trusting the mounted header', async () => {
+    const fixture = createFixture()
+    const original = fixture.runCommand.getMockImplementation()!
+    fixture.runCommand.mockImplementation(async (executable, args) => {
+      const result = await original(executable, args)
+      if (executable === '/usr/bin/ditto') {
+        await fs.writeFile(`${args[1]}/Contents/MacOS/CCLink Studio`, Buffer.alloc(32))
+      }
+      return result
+    })
+    const root = await fs.mkdtemp('/private/tmp/cclink-verifier-stage-')
+    cleanupPaths.push(root)
+    await expect(
+      fixture.verifier.stage(fixture.input, `${root}/candidate.app`),
+    ).rejects.toMatchObject({
+      code: 'release_invalid',
+      diagnostic: { step: '暂存候选：应用架构读取' },
+    })
+    expect(fixture.calls.some((call) => call.args[0] === 'detach')).toBe(true)
+  })
+
   it('copies the verified mounted app and verifies the copied signature, version and architecture before detaching', async () => {
     const fixture = createFixture()
     const stage = await fs.mkdtemp('/private/tmp/cclink-verifier-stage-')
@@ -96,6 +162,7 @@ describe('MacDmgVerifier', () => {
       fixture.calls.findIndex((call) => call.args[0] === 'detach'),
     )
     expect((await fs.stat(`${destination}/Contents/MacOS/CCLink Studio`)).isFile()).toBe(true)
+    expect(fixture.calls.some((call) => /lipo|xcrun|xcodebuild/.test(call.executable))).toBe(false)
   })
   it('accepts one notarized arm64 app from the same Developer ID team', async () => {
     const fixture = createFixture()
@@ -153,9 +220,12 @@ describe('MacDmgVerifier', () => {
   it('does not trust an ad-hoc current build as the publisher identity source', async () => {
     const fixture = createFixture({ currentTeam: '' })
 
-    await expect(fixture.verifier.verify(fixture.input)).rejects.toBeInstanceOf(
-      UpdateAssetVerificationError,
-    )
+    const failure = await fixture.verifier.verify(fixture.input).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(UpdateAssetVerificationError)
+    expect(failure).toMatchObject({
+      code: 'install_blocked',
+      diagnostic: { step: '当前应用身份读取' },
+    })
     expect(fixture.runCommand).not.toHaveBeenCalledWith(
       '/usr/bin/hdiutil',
       expect.arrayContaining(['attach']),

@@ -292,7 +292,7 @@ function formatRuntimeState(): string {
     `- 文件树：根节点=${fs.tree.length} 已展开=${fs.expandedPaths.length} 最近项目=${fs.recentWorkspacePaths.length}`,
     `- 非 Agent Tab：总数=${frameworkTabs.length} 类型=${JSON.stringify(tabTypeCounts)}`,
     `- 当前 Tab：${activeTab?.type === 'conversation' ? 'Agent（细节已省略）' : (activeTab?.type ?? '无')}`,
-    `- 更新：phase=${update.phase} error=${update.error ?? '无'}`,
+    `- 更新：phase=${update.phase} error=${update.error ? JSON.stringify(update.error) : '无'}`,
   ].join('\n')
 }
 

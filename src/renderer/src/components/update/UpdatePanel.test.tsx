@@ -57,6 +57,8 @@ describe('UpdatePanel native browser occlusion', () => {
   beforeEach(() => {
     useEscapeDismiss.mockClear()
     useFloatingSurfaceRegistration.mockClear()
+    updateState.check.mockClear()
+    updateState.startDownload.mockClear()
     updateState.panelOpen = false
     updateState.installPreparation = null
     vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() })
@@ -131,6 +133,24 @@ describe('UpdatePanel native browser occlusion', () => {
     expect(manual).toContain('打开安装包')
   })
 
+  it.each([false, true])(
+    'routes retry to the valid next action when a candidate is present=%s',
+    (hasCandidate) => {
+      updateState.panelOpen = true
+      updateState.snapshot = {
+        ...availableSnapshot(),
+        phase: 'failed',
+        availableRelease: hasCandidate ? availableSnapshot().availableRelease : null,
+        error: { code: 'download_corrupt', userMessage: '下载失败，请重试', retryable: true },
+      }
+      const click = findRetryAction(UpdatePanel())
+      expect(click).toBeTypeOf('function')
+      click!()
+      expect(updateState.check).toHaveBeenCalledTimes(hasCandidate ? 0 : 1)
+      expect(updateState.startDownload).toHaveBeenCalledTimes(hasCandidate ? 1 : 0)
+    },
+  )
+
   it('shows real preparation blockers and prevents dismissal during installation', () => {
     updateState.panelOpen = true
     updateState.snapshot = {
@@ -151,6 +171,14 @@ describe('UpdatePanel native browser occlusion', () => {
     expect(useEscapeDismiss).toHaveBeenLastCalledWith(false, updateState.closePanel)
   })
 })
+
+function findRetryAction(node: React.ReactNode): (() => void) | undefined {
+  if (Array.isArray(node)) return node.map(findRetryAction).find(Boolean)
+  if (!React.isValidElement<{ children?: React.ReactNode; onClick?: () => void }>(node))
+    return undefined
+  if (node.type === 'button' && node.props.children === '重试') return node.props.onClick
+  return findRetryAction(node.props.children)
+}
 
 function availableSnapshot(): UpdateSnapshot {
   return {

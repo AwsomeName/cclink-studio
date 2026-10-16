@@ -5,6 +5,7 @@ import {
   useFsStore,
   useOpenProjectsStore,
   useTabStore,
+  useUpdateStore,
   useWorkspaceStore,
 } from '../../stores'
 import {
@@ -35,6 +36,7 @@ describe('collectFrameworkDiagnosticReport', () => {
       recentWorkspacePaths: ['/Users/alice/project'],
     })
     useTabStore.setState({ tabs: [], activeTabId: null })
+    useUpdateStore.setState(useUpdateStore.getInitialState(), true)
   })
 
   it('collects framework state and filters Agent runtime logs', async () => {
@@ -129,6 +131,12 @@ describe('collectFrameworkDiagnosticReport', () => {
   })
 
   it('keeps the remaining report when IPC diagnostic sources fail', async () => {
+    useUpdateStore.setState({
+      snapshot: {
+        ...useUpdateStore.getState().snapshot,
+        error: { code: 'verification_failed', userMessage: '缓存记录读取未完成', retryable: true },
+      },
+    })
     vi.stubGlobal('window', {
       cclinkStudio: {
         workspaceState: {
@@ -153,6 +161,10 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('- 采集失败：main unavailable')
     expect(report).toContain('- 采集失败：credentials unavailable')
     expect(report).toContain('- 采集失败：scheduler unavailable')
+    expect(report).toContain('"code":"verification_failed"')
+    expect(report).toContain('"retryable":true')
+    expect(report).toContain('缓存记录读取未完成')
+    expect(report).not.toContain('[object Object]')
   })
 
   it('includes bounded diagnostics for the active browser page', async () => {

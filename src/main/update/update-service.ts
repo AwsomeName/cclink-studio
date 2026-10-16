@@ -20,6 +20,7 @@ import { UpdateProviderRequestError } from './github-release-provider'
 import { UpdateCache, type RestoredVerifiedUpdate } from './update-cache'
 import { compareStableVersions } from './version'
 import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
+import { logVerificationFailure, verificationFailure } from './update-verification-error'
 import {
   UpdateInstallFlushError,
   type UpdateInstaller,
@@ -448,13 +449,8 @@ export class UpdateService {
       await assertReady()
       try {
         this.verifiedUpdate = await this.updateCache.revalidate(this.verifiedUpdate)
-      } catch {
-        this.verifiedUpdate = null
-        throw new UpdateOperationError(
-          'download_corrupt',
-          '更新安装包完整性复验失败，请重新检查并下载',
-          true,
-        )
+      } catch (error) {
+        throw verificationFailure('缓存完整性复验', error)
       }
       releaseWorkGuard = lifecycle.acquire?.()
       await assertReady()
@@ -488,6 +484,12 @@ export class UpdateService {
     } catch (error) {
       await staged?.cancel().catch(() => undefined)
       releaseWorkGuard?.()
+      if (error instanceof UpdateAssetVerificationError) {
+        logVerificationFailure(
+          this.snapshot.operationId,
+          verificationFailure('自动安装校验', error),
+        )
+      }
       const code =
         error instanceof UpdateAssetVerificationError || error instanceof UpdateOperationError
           ? error.code
@@ -496,12 +498,7 @@ export class UpdateService {
         error instanceof UpdateAssetVerificationError || error instanceof UpdateOperationError
           ? error.message
           : '自动安装准备失败（可能没有替换权限）；当前版本未退出，可重试或打开安装包'
-      const invalidAsset = [
-        'download_corrupt',
-        'publisher_mismatch',
-        'release_invalid',
-        'unsupported_arch',
-      ].includes(code)
+      const invalidAsset = isInvalidUpdateAsset(code)
       if (invalidAsset && this.verifiedUpdate) {
         await this.updateCache.invalidate(this.verifiedUpdate).catch(() => undefined)
         this.verifiedUpdate = null
@@ -533,42 +530,40 @@ export class UpdateService {
       )
     }
 
+    this.setSnapshot({ ...this.snapshot, error: null })
     try {
       this.verifiedUpdate = await this.updateCache.revalidate(candidate)
-    } catch {
-      this.verifiedUpdate = null
-      this.fail(
-        this.snapshot.operationId ?? randomUUID(),
-        new UpdateOperationError(
-          'download_corrupt',
-          '更新安装包在打开前的完整性复验失败，请重新下载',
-          true,
-        ),
-      )
-      return this.manualInstallerResult(
-        false,
-        new UpdateOperationError(
-          'download_corrupt',
-          '更新安装包在打开前的完整性复验失败，请重新下载',
-          true,
-        ),
-      )
-    }
-
-    try {
       await this.options.dmgInspector.verify({
         dmgPath: this.verifiedUpdate.filePath,
         expectedVersion: this.verifiedUpdate.record.manifest.version,
       })
     } catch (error) {
-      const mapped =
-        error instanceof UpdateAssetVerificationError
-          ? new UpdateOperationError(error.code, error.message, false)
-          : new UpdateOperationError('publisher_mismatch', '更新安装包未通过发布者身份检查', false)
-      if (mapped.code !== 'install_failed') {
-        await this.updateCache.invalidate(this.verifiedUpdate).catch(() => undefined)
+      const failure = verificationFailure('安装包校验', error)
+      logVerificationFailure(this.snapshot.operationId, failure)
+      const invalidAsset = isInvalidUpdateAsset(failure.code)
+      const mapped = new UpdateOperationError(
+        failure.code,
+        failure.message,
+        !invalidAsset || failure.code === 'download_corrupt',
+      )
+      if (invalidAsset) {
+        await this.updateCache.invalidate(candidate).catch(() => undefined)
         this.verifiedUpdate = null
-        this.fail(this.snapshot.operationId ?? randomUUID(), mapped)
+        this.resolvedRelease = null
+        this.setSnapshot({
+          ...this.snapshot,
+          phase: 'failed',
+          operationId: this.snapshot.operationId ?? randomUUID(),
+          availableRelease: null,
+          progress: null,
+          error: { code: mapped.code, userMessage: mapped.message, retryable: mapped.retryable },
+        })
+      } else {
+        this.setSnapshot({
+          ...this.snapshot,
+          phase: 'readyToInstall',
+          error: { code: mapped.code, userMessage: mapped.message, retryable: mapped.retryable },
+        })
       }
       return this.manualInstallerResult(false, mapped)
     }
@@ -844,6 +839,12 @@ export class UpdateService {
       snapshot: this.getSnapshot(),
     })
   }
+}
+
+function isInvalidUpdateAsset(code: UpdateErrorCode): boolean {
+  return ['download_corrupt', 'publisher_mismatch', 'release_invalid', 'unsupported_arch'].includes(
+    code,
+  )
 }
 
 async function flushInstallWorkspace(lifecycle: UpdateInstallLifecycle): Promise<void> {

@@ -9,12 +9,17 @@ import type {
   UpdateProviderCheckResult,
 } from './update-provider'
 import { UpdateService, type UpdateServiceOptions } from './update-service'
-import { UpdateAssetVerificationError, type VerifiedDmgInspector } from './mac-dmg-verifier'
+import {
+  MacDmgVerifier,
+  UpdateAssetVerificationError,
+  type VerifiedDmgInspector,
+} from './mac-dmg-verifier'
 import { UpdateInstallFlushError } from './update-installer'
 
 const temporaryDirectories: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -249,6 +254,58 @@ describe('transactional automatic installation', () => {
     expect(service.getSnapshot().error?.code).toBe('install_blocked')
     expect(staged.cancel).toHaveBeenCalledOnce()
     expect(staged.commit).not.toHaveBeenCalled()
+    expect(lifecycle.quit).not.toHaveBeenCalled()
+    await service.stop()
+  })
+
+  it.each(['record-read', 'asset-stat', 'candidate-check'])(
+    'keeps the download and performs a full retry after incomplete %s verification',
+    async (step) => {
+      const { service, installer, lifecycle, cacheRoot } = await fixture()
+      const directory = await onlyReleaseDirectory(cacheRoot)
+      const prepared = await service.prepareInstall()
+      const failure = Object.assign(new Error('temporary I/O failure'), { code: 'EIO' })
+      if (step === 'record-read') vi.spyOn(fs, 'readFile').mockRejectedValueOnce(failure)
+      else if (step === 'asset-stat') vi.spyOn(fs, 'lstat').mockRejectedValueOnce(failure)
+      else
+        installer.stage.mockRejectedValueOnce(
+          new UpdateAssetVerificationError('verification_failed', '暂存候选校验未完成'),
+        )
+      const result = await service.installAndRestart({
+        confirmationToken: prepared.confirmationToken!,
+      })
+      expect(result).toMatchObject({
+        ok: false,
+        snapshot: {
+          phase: 'readyToInstall',
+          availableRelease: { version: '1.2.3' },
+          error: { code: 'verification_failed', retryable: true },
+        },
+      })
+      expect(lifecycle.quit).not.toHaveBeenCalled()
+      if (step !== 'candidate-check') expect(installer.stage).not.toHaveBeenCalled()
+      await expect(fs.stat(join(directory, 'studio-arm64.dmg'))).resolves.toBeDefined()
+      const retry = await service.prepareInstall()
+      expect(
+        (await service.installAndRestart({ confirmationToken: retry.confirmationToken! })).ok,
+      ).toBe(true)
+      expect(lifecycle.quit).toHaveBeenCalledOnce()
+      await service.stop()
+    },
+  )
+
+  it('invalidates same-size checksum corruption instead of treating it as incomplete I/O', async () => {
+    const { service, lifecycle, cacheRoot } = await fixture()
+    const directory = await onlyReleaseDirectory(cacheRoot)
+    const file = join(directory, 'studio-arm64.dmg')
+    const original = await fs.readFile(file)
+    await fs.writeFile(file, Buffer.alloc(original.length, 0xff))
+    const prepared = await service.prepareInstall()
+    const result = await service.installAndRestart({
+      confirmationToken: prepared.confirmationToken!,
+    })
+    expect(result.snapshot).toMatchObject({ phase: 'failed', error: { code: 'download_corrupt' } })
+    await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
     expect(lifecycle.quit).not.toHaveBeenCalled()
     await service.stop()
   })
@@ -650,6 +707,30 @@ describe('UpdateService', () => {
     await service.stop()
   })
 
+  it('retains a valid candidate so a failed download can retry without another check', async () => {
+    const data = Buffer.from('trusted update')
+    const fetch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network unavailable'))
+      .mockImplementationOnce(async () => downloadResponse(data))
+    const { service } = await createService(availableRelease(data), fetch)
+    await service.check()
+    expect(await service.startDownload()).toMatchObject({
+      ok: false,
+      snapshot: {
+        phase: 'failed',
+        availableRelease: { version: '1.2.3' },
+        error: { retryable: true },
+      },
+    })
+    expect(await service.startDownload()).toMatchObject({
+      ok: true,
+      snapshot: { phase: 'readyToInstall' },
+    })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    await service.stop()
+  })
+
   it('cancels an active stream, deletes the part file and returns to available', async () => {
     const data = Buffer.alloc(32, 7)
     const fetchImpl = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
@@ -740,10 +821,11 @@ describe('UpdateService', () => {
   it('invalidates a DMG changed between download and the open action', async () => {
     const data = Buffer.from('trusted update')
     const verify = vi.fn(async () => undefined)
+    const openPath = vi.fn(async () => '')
     const { service, cacheRoot } = await createService(
       availableRelease(data),
       async () => downloadResponse(data),
-      { dmgInspector: { verify }, openPath: async () => '' },
+      { dmgInspector: { verify }, openPath },
     )
     await service.check()
     await service.startDownload()
@@ -755,11 +837,102 @@ describe('UpdateService', () => {
     expect(result).toMatchObject({
       ok: false,
       error: { code: 'download_corrupt', retryable: true },
-      snapshot: { phase: 'failed' },
+      snapshot: { phase: 'failed', availableRelease: null, progress: null },
     })
     expect(verify).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
     await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+    // The UI routes retry to check() only when the invalid summary is absent.
+    expect((await service.check()).snapshot.phase).toBe('available')
+    expect((await service.startDownload()).ok).toBe(true)
+    expect((await service.openManualInstaller()).ok).toBe(true)
+    expect(verify).toHaveBeenCalledOnce()
+    expect(openPath).toHaveBeenCalledOnce()
     await service.stop()
+  })
+
+  it.each(['record-read', 'asset-stat', 'candidate-check'])(
+    'does not open or delete a download after incomplete manual %s verification',
+    async (step) => {
+      const data = Buffer.from('trusted update')
+      const verify = vi.fn(async () => undefined)
+      const openPath = vi.fn(async () => '')
+      const { service, cacheRoot } = await createService(
+        availableRelease(data),
+        async () => downloadResponse(data),
+        { dmgInspector: { verify }, openPath },
+      )
+      await service.check()
+      await service.startDownload()
+      const directory = await onlyReleaseDirectory(cacheRoot)
+      const error = Object.assign(new Error('read denied'), { code: 'EACCES' })
+      if (step === 'record-read') vi.spyOn(fs, 'readFile').mockRejectedValueOnce(error)
+      else if (step === 'asset-stat') vi.spyOn(fs, 'lstat').mockRejectedValueOnce(error)
+      else verify.mockRejectedValueOnce(new Error('system assessment did not complete'))
+      const failed = await service.openManualInstaller()
+      expect(failed).toMatchObject({
+        ok: false,
+        error: { code: 'verification_failed', retryable: true },
+        snapshot: { phase: 'readyToInstall', availableRelease: { version: '1.2.3' } },
+      })
+      expect(openPath).not.toHaveBeenCalled()
+      if (step !== 'candidate-check') expect(verify).not.toHaveBeenCalled()
+      await expect(fs.readFile(join(directory, 'studio-arm64.dmg'))).resolves.toEqual(data)
+      expect((await service.openManualInstaller()).ok).toBe(true)
+      expect(service.getSnapshot().error).toBeNull()
+      expect(verify).toHaveBeenCalledTimes(step === 'candidate-check' ? 2 : 1)
+      expect(openPath).toHaveBeenCalledOnce()
+      await service.stop()
+    },
+  )
+
+  it.each(['missing-asset', 'malformed-record'])(
+    'invalidates confirmed %s during manual cache revalidation',
+    async (kind) => {
+      const data = Buffer.from('trusted update')
+      const verify = vi.fn(async () => undefined)
+      const openPath = vi.fn(async () => '')
+      const { service, cacheRoot } = await createService(
+        availableRelease(data),
+        async () => downloadResponse(data),
+        { dmgInspector: { verify }, openPath },
+      )
+      await service.check()
+      await service.startDownload()
+      const directory = await onlyReleaseDirectory(cacheRoot)
+      if (kind === 'missing-asset') await fs.unlink(join(directory, 'studio-arm64.dmg'))
+      else await fs.writeFile(join(directory, 'verified.json'), '{broken JSON')
+      expect(await service.openManualInstaller()).toMatchObject({
+        ok: false,
+        error: { code: 'download_corrupt' },
+        snapshot: { phase: 'failed' },
+      })
+      await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
+      expect(verify).not.toHaveBeenCalled()
+      expect(openPath).not.toHaveBeenCalled()
+      await service.stop()
+    },
+  )
+
+  it('keeps an unreadable cache on startup so a later restart can revalidate it', async () => {
+    const data = Buffer.from('trusted update')
+    const release = availableRelease(data)
+    const { service, cacheRoot } = await createService(release, async () => downloadResponse(data))
+    await service.check()
+    await service.startDownload()
+    await service.stop()
+    vi.spyOn(fs, 'readFile').mockRejectedValueOnce(
+      Object.assign(new Error('busy'), { code: 'EBUSY' }),
+    )
+    const incomplete = serviceForCache(release, cacheRoot)
+    await incomplete.start()
+    expect(incomplete.getSnapshot().phase).toBe('idle')
+    await expect(fs.readdir(cacheRoot)).resolves.toHaveLength(1)
+    await incomplete.stop()
+    const retried = serviceForCache(release, cacheRoot)
+    await retried.start()
+    expect(retried.getSnapshot().phase).toBe('readyToInstall')
+    await retried.stop()
   })
 
   it('invalidates a cache that fails publisher verification', async () => {
@@ -787,11 +960,76 @@ describe('UpdateService', () => {
     expect(result).toMatchObject({
       ok: false,
       error: { code: 'publisher_mismatch', retryable: false },
-      snapshot: { phase: 'failed' },
+      snapshot: { phase: 'failed', availableRelease: null },
     })
     await expect(fs.readdir(cacheRoot)).resolves.toEqual([])
     await service.stop()
   })
+})
+
+describe('current App identity does not determine downloaded asset validity', () => {
+  it.each(['manual', 'automatic'] as const)(
+    'blocks %s installation but retains the verified download',
+    async (mode) => {
+      const data = Buffer.from('trusted update')
+      const currentAppBundlePath = '/Applications/CCLink Studio 开源版.app'
+      const runCommand = vi.fn(async (executable: string, args: string[]) => {
+        expect(executable).toBe('/usr/bin/codesign')
+        expect(args).toEqual(['--display', '--verbose=4', currentAppBundlePath])
+        return { stdout: '', stderr: 'Identifier=com.cclink.studio\nTeamIdentifier=\n' }
+      })
+      const verifier = new MacDmgVerifier({ currentAppBundlePath, runCommand })
+      const staged = { arm: vi.fn(), commit: vi.fn(), cancel: vi.fn() }
+      const stage = vi.fn(async (input: { dmgPath: string; expectedVersion: string }) => {
+        await verifier.verify(input)
+        return staged
+      })
+      const openPath = vi.fn(async () => '')
+      const quit = vi.fn()
+      const release = vi.fn()
+      const { service, cacheRoot } = await createService(
+        availableRelease(data),
+        async () => downloadResponse(data),
+        {
+          dmgInspector: verifier,
+          openPath,
+          installer: { stage },
+          installLifecycle: {
+            inspect: async () => [],
+            flush: async () => {},
+            acquire: () => release,
+            quit,
+          },
+        },
+      )
+      try {
+        await service.check()
+        await service.startDownload()
+        const summary = service.getSnapshot().availableRelease
+        const directory = await onlyReleaseDirectory(cacheRoot)
+        if (mode === 'manual') await service.openManualInstaller()
+        else {
+          const prepared = await service.prepareInstall()
+          await service.installAndRestart({ confirmationToken: prepared.confirmationToken! })
+        }
+        expect(service.getSnapshot()).toMatchObject({
+          phase: 'readyToInstall',
+          availableRelease: summary,
+          error: { code: 'install_blocked', userMessage: expect.stringContaining('官方基线') },
+        })
+        await expect(fs.readFile(join(directory, 'studio-arm64.dmg'))).resolves.toEqual(data)
+        await expect(fs.stat(join(directory, 'verified.json'))).resolves.toBeDefined()
+        expect(runCommand).toHaveBeenCalledOnce()
+        expect(openPath).not.toHaveBeenCalled()
+        expect(staged.arm).not.toHaveBeenCalled()
+        expect(staged.commit).not.toHaveBeenCalled()
+        expect(quit).not.toHaveBeenCalled()
+        if (mode === 'automatic') expect(release).toHaveBeenCalledOnce()
+      } finally {
+        await service.stop()
+      }
+    },
+  )
 })
 
 async function waitFor(predicate: () => boolean): Promise<void> {
