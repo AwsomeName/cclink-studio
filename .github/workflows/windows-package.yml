@@ -1,0 +1,59 @@
+name: windows-package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/windows-package']
+    paths:
+      - '.github/workflows/windows-package.yml'
+      - 'electron-builder.yml'
+      - 'package.json'
+      - 'scripts/package-windows.mjs'
+      - 'scripts/windows-packaged-smoke.mjs'
+      - 'src/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-test-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build unsigned x64 test installer
+        run: pnpm package:windows
+      - name: Install and smoke test the packaged application
+        run: pnpm smoke:windows-packaged
+      - name: Upload test installer and verification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: cclink-studio-windows-x64-test
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            dist/windows/*-test-setup.exe
+            dist/windows/checksums-windows-x64.txt
+            dist/windows/build-record-windows-x64.json
+            dist/windows/smoke/*.json
+            dist/windows/smoke/*.png
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-package-failure
+          retention-days: 7
+          if-no-files-found: ignore
+          path: dist/windows/smoke/*.log

@@ -14,6 +14,7 @@ const exactBuildInputs = new Set([
   'scripts/managed-runtime-packaged-smoke.mjs',
   'scripts/build-update-helper.mjs',
   'scripts/package.sh',
+  'scripts/package-windows.mjs',
   'scripts/source-fingerprint.mjs',
   'tsconfig.json',
   'tsconfig.node.json',

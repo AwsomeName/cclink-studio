@@ -31,6 +31,8 @@
     "postinstall": "node scripts/ensure-electron-runtime.mjs && electron-builder install-app-deps",
     "package:local": "bash scripts/package.sh",
     "package:local:dev": "bash scripts/package.sh --dev",
+    "package:windows": "node scripts/package-windows.mjs",
+    "smoke:windows-packaged": "node scripts/windows-packaged-smoke.mjs",
     "release": "node scripts/oss-release.mjs",
     "release:oss": "node scripts/oss-release.mjs",
     "test": "vitest run",

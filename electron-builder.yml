@@ -19,8 +19,6 @@ asarUnpack:
   # occt-import-js：OpenCascade wasm 运行时需要随 STEP/STP 转换后端一起可读
   - node_modules/occt-import-js/dist/**
 extraResources:
-  - from: out/update-helper/cclink-update-helper
-    to: update-helper/cclink-update-helper
   - from: resources/scrcpy-server.jar
     to: scrcpy-server.jar
     filter:
@@ -41,4 +39,23 @@ mac:
   identity: '-'
   binaries:
     - Contents/Resources/update-helper/cclink-update-helper
+  extraResources:
+    - from: out/update-helper/cclink-update-helper
+      to: update-helper/cclink-update-helper
+win:
+  icon: resources/icon.png
+  executableName: cclink-studio
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # 测试包没有 Windows 签名凭证，也不生成第二套更新元数据。
+  publish: null
+nsis:
+  artifactName: cclink-studio-${version}-windows-${arch}-test-setup.${ext}
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: false
 # 不使用 electron-builder 的更新 Provider；公开版本检查由 UpdateService 统一拥有。
