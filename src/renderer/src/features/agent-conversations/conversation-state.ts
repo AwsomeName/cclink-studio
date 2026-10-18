@@ -46,6 +46,27 @@ export interface AgentContextCompactionState {
   updatedAt: number | null
 }
 
+export interface QueuedAgentMessage {
+  id: string
+  content: string
+  createdAt: number
+  contextKey: string
+  mountedResources: AgentMountedResource[]
+  pendingImages: AgentImageAttachment[]
+  /** Image bodies are transient; restored entries require reattachment. */
+  missingImages?: boolean
+}
+
+export function conversationQueueContextKey(conversation: AgentConversationState): string {
+  return JSON.stringify([
+    conversation.runtime,
+    conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+    conversation.scope,
+    conversation.configuration,
+    conversation.mountedSkills,
+  ])
+}
+
 export interface AgentConversationState {
   id: string
   title: string
@@ -74,6 +95,9 @@ export interface AgentConversationState {
   mountedResources: AgentMountedResource[]
   /** Full image data is transient and is removed before workspace persistence. */
   pendingImages?: AgentImageAttachment[]
+  queuedMessages?: QueuedAgentMessage[]
+  queuedMessageDispatchId?: string | null
+  messageQueuePauseReason?: string | null
   mountedSkills: AgentMountedSkill[]
   createdAt: number
   updatedAt: number

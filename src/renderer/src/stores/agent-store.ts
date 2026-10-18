@@ -46,6 +46,7 @@ import {
   type AgentConversationState,
   type AgentRunStatus,
   type AgentRunTerminalReason,
+  conversationQueueContextKey,
 } from '../features/agent-conversations/conversation-state'
 import {
   buildAgentConversationWorkspaceSnapshot,
@@ -137,6 +138,16 @@ interface AgentState {
 
   // --- 当前/指定会话 Actions ---
   setInput: (text: string, conversationId?: string) => void
+  setQueuedMessageDispatchId: (id: string | null, conversationId: string) => void
+  enqueueMessage: (content: string, conversationId: string) => string | null
+  removeQueuedMessage: (id: string, conversationId: string) => void
+  editQueuedMessage: (id: string, conversationId: string) => boolean
+  setMessageQueuePauseReason: (reason: string | null, conversationId: string) => void
+  restoreFailedMessage: (
+    content: string,
+    snapshot: AgentConversationState,
+    conversationId: string,
+  ) => void
   addUserMessage: (
     content: string,
     conversationId?: string,
@@ -190,7 +201,7 @@ interface AgentState {
   addPendingImages: (images: AgentImageAttachment[], conversationId?: string) => void
   removePendingImage: (imageId: string, conversationId?: string) => void
   rebaseMountedResourcePaths: (oldPrefix: string, newPrefix: string) => void
-  clearTransientResources: (conversationId?: string) => void
+  clearTransientResources: (conversationId?: string, consumedIds?: string[]) => void
   addMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => Promise<boolean>
   removeMountedSkill: (skill: AgentMountedSkill, conversationId?: string) => Promise<boolean>
   hydrateFromWorkspaceState: (
@@ -273,7 +284,16 @@ function updateConversation(
   const current = state.conversations[id]
   if (!current) return {}
 
-  const next = updater(current)
+  let next = updater(current)
+  if (
+    next.queuedMessages?.length &&
+    next.lastRunTerminalReason &&
+    next.lastRunTerminalReason !== 'completed' &&
+    (next.lastRunTerminalReason !== current.lastRunTerminalReason ||
+      (current.loading && !next.loading))
+  ) {
+    next = { ...next, messageQueuePauseReason: '上一轮已失败或中断，请检查后继续队列' }
+  }
   const conversations = {
     ...state.conversations,
     [id]: next,
@@ -544,6 +564,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const archived = {
         ...current,
         archivedAt: now,
+        messageQueuePauseReason: current.queuedMessages?.length
+          ? '会话已归档；恢复后请确认并继续队列'
+          : current.messageQueuePauseReason,
         updatedAt: now,
       }
       const conversations = {
@@ -803,6 +826,123 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         updatedAt: Date.now(),
       })),
     ),
+
+  setQueuedMessageDispatchId: (id, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        queuedMessageDispatchId: id,
+      })),
+    ),
+
+  enqueueMessage: (content, conversationId) => {
+    const current = get().conversations[conversationId]
+    if (!current || current.archivedAt || (current.queuedMessages?.length ?? 0) >= 20) return null
+    const id = crypto.randomUUID()
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        queuedMessages: [
+          ...(conversation.queuedMessages ?? []),
+          {
+            id,
+            content,
+            createdAt: Date.now(),
+            contextKey: conversationQueueContextKey(conversation),
+            mountedResources: conversation.mountedResources,
+            pendingImages: conversation.pendingImages ?? [],
+          },
+        ],
+        input: '',
+        pendingImages: [],
+        mountedResources: conversation.mountedResources.filter(
+          (resource) => resource.kind !== 'file-range',
+        ),
+        updatedAt: Date.now(),
+      })),
+    )
+    return id
+  },
+
+  removeQueuedMessage: (id, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) =>
+        conversation.queuedMessageDispatchId === id
+          ? conversation
+          : {
+              ...conversation,
+              queuedMessages: conversation.queuedMessages?.filter((item) => item.id !== id),
+              updatedAt: Date.now(),
+            },
+      ),
+    ),
+
+  editQueuedMessage: (id, conversationId) => {
+    const current = get().conversations[conversationId]
+    const item = current?.queuedMessages?.find((entry) => entry.id === id)
+    if (
+      !item ||
+      current.queuedMessageDispatchId === id ||
+      current.input.trim() ||
+      current.pendingImages?.length
+    )
+      return false
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        input: item.content,
+        mountedResources: item.mountedResources,
+        pendingImages: item.pendingImages,
+        queuedMessages: conversation.queuedMessages?.filter((entry) => entry.id !== id),
+        messageQueuePauseReason: '正在编辑待发送消息；重新发送后点击继续队列',
+        updatedAt: Date.now(),
+      })),
+    )
+    return true
+  },
+
+  setMessageQueuePauseReason: (reason, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messageQueuePauseReason: reason,
+        updatedAt: Date.now(),
+      })),
+    ),
+
+  restoreFailedMessage: (content, snapshot, conversationId) => {
+    const current = get().conversations[conversationId]
+    if (!current) return
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => {
+        const draftEmpty = !conversation.input.trim() && !conversation.pendingImages?.length
+        return {
+          ...conversation,
+          ...(draftEmpty
+            ? {
+                input: content,
+                pendingImages: snapshot.pendingImages,
+                mountedResources: snapshot.mountedResources,
+              }
+            : {
+                queuedMessages: [
+                  {
+                    id: crypto.randomUUID(),
+                    content,
+                    createdAt: Date.now(),
+                    contextKey: conversationQueueContextKey(snapshot),
+                    mountedResources: snapshot.mountedResources,
+                    pendingImages: snapshot.pendingImages ?? [],
+                  },
+                  ...(conversation.queuedMessages ?? []),
+                ],
+              }),
+          messageQueuePauseReason: '发送失败，请检查后重试',
+          updatedAt: Date.now(),
+        }
+      }),
+    )
+  },
 
   addUserMessage: (content, conversationId, resources) =>
     set((state) =>
@@ -1392,14 +1532,18 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     })
   },
 
-  clearTransientResources: (conversationId) =>
+  clearTransientResources: (conversationId, consumedIds) =>
     set((state) =>
       updateConversation(state, conversationId, (conversation) => ({
         ...conversation,
         mountedResources: conversation.mountedResources.filter(
-          (resource) => resource.kind !== 'file-range',
+          (resource) =>
+            resource.kind !== 'file-range' ||
+            Boolean(consumedIds && !consumedIds.includes(resource.id)),
         ),
-        pendingImages: [],
+        pendingImages: consumedIds
+          ? conversation.pendingImages?.filter((image) => !consumedIds.includes(image.id))
+          : [],
         updatedAt: Date.now(),
       })),
     ),

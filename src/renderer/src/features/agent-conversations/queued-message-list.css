@@ -1,0 +1,104 @@
+.agent-message-queue {
+  flex-shrink: 0;
+  margin: 0 12px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+}
+.agent-message-queue-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+.agent-message-queue button {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 5px;
+}
+.agent-message-queue button:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+.agent-message-queue button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.agent-message-queue p {
+  color: var(--text-secondary);
+  margin: 5px 0;
+  font-size: 11px;
+}
+.agent-message-queue ol {
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-message-queue li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.agent-message-queue-number {
+  color: var(--text-secondary);
+  min-width: 14px;
+}
+.agent-message-queue-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.agent-message-queue-content > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-message-queue-content small {
+  color: var(--text-secondary);
+}
+
+.agent-composer-primary-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-composer-wrap {
+  container: agent-composer / inline-size;
+}
+@container agent-composer (max-width: 420px) {
+  .agent-composer-primary-actions button {
+    width: 28px;
+    height: 28px;
+  }
+  .agent-composer-primary-actions {
+    gap: 4px;
+  }
+  .agent-composer-toolbar {
+    gap: 4px;
+  }
+  .agent-composer-tools {
+    gap: 2px;
+  }
+  .agent-model-btn {
+    white-space: nowrap;
+    max-width: 110px;
+    overflow: hidden;
+  }
+  .agent-model-btn > span {
+    display: none;
+  }
+}

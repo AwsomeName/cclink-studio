@@ -31,10 +31,29 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
   workspaceKey: string | null
   onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
-  const units = buildContentRenderUnits(message.content)
   const copyText = getMessageCopyText(message)
   const imageResources = (message.resources ?? []).filter((resource) => resource.kind === 'image')
   const chipResources = (message.resources ?? []).filter((resource) => resource.kind !== 'image')
+  const isUserImageMessage = message.role === 'user' && imageResources.length > 0
+  const units = buildContentRenderUnits(
+    isUserImageMessage
+      ? message.content.filter((block) => block.type !== 'text' || block.text.trim().length > 0)
+      : message.content,
+  )
+  const imageList = imageResources.length > 0 && (
+    <div
+      className={`message-image-list${imageResources.length === 1 ? ' single' : ''}`}
+      aria-label="消息图片"
+    >
+      {imageResources.map((resource) => (
+        <MessageImagePreview
+          key={resource.id}
+          resource={resource}
+          conversationId={conversationId}
+        />
+      ))}
+    </div>
+  )
 
   const handleCopyMessage = async (): Promise<void> => {
     try {
@@ -47,7 +66,7 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
 
   return (
     <div
-      className={`agent-message ${message.role} ${message.isStreaming ? 'streaming' : ''}`}
+      className={`agent-message ${message.role} ${message.isStreaming ? 'streaming' : ''}${isUserImageMessage ? ' has-images' : ''}`}
       tabIndex={0}
       onContextMenu={(event) => {
         event.preventDefault()
@@ -83,42 +102,35 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
           <IconClipboard size={12} />
         </button>
       )}
-      {units.map((unit, index) => (
-        <ContentRenderUnitRenderer
-          key={index}
-          unit={unit}
-          isStreaming={message.isStreaming === true}
-          renderMarkdown={message.role === 'assistant'}
-          onOpenFilePath={onOpenFilePath}
-        />
-      ))}
-      {imageResources.length > 0 && (
-        <div className="message-image-list" aria-label="消息图片">
-          {imageResources.map((resource) => (
-            <MessageImagePreview
-              key={resource.id}
-              resource={resource}
-              conversationId={conversationId}
-            />
-          ))}
-        </div>
-      )}
-      {chipResources.length > 0 && (
-        <div className="message-resource-list">
-          {chipResources.map((resource) => (
-            <button
-              key={resource.id}
-              type="button"
-              className="message-resource-chip"
-              onClick={() => openFileRangeResource(resource)}
-              title={resource.detail}
-            >
-              {resource.kind === 'image' ? `图片：${resource.label}` : resource.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {message.isStreaming && <span className="streaming-cursor" />}
+      {isUserImageMessage && imageList}
+      <div className="agent-message-body">
+        {units.map((unit, index) => (
+          <ContentRenderUnitRenderer
+            key={index}
+            unit={unit}
+            isStreaming={message.isStreaming === true}
+            renderMarkdown={message.role === 'assistant'}
+            onOpenFilePath={onOpenFilePath}
+          />
+        ))}
+        {!isUserImageMessage && imageList}
+        {chipResources.length > 0 && (
+          <div className="message-resource-list">
+            {chipResources.map((resource) => (
+              <button
+                key={resource.id}
+                type="button"
+                className="message-resource-chip"
+                onClick={() => openFileRangeResource(resource)}
+                title={resource.detail}
+              >
+                {resource.kind === 'image' ? `图片：${resource.label}` : resource.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {message.isStreaming && <span className="streaming-cursor" />}
+      </div>
     </div>
   )
 })

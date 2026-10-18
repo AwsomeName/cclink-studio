@@ -14,10 +14,14 @@ export function ImageAttachmentStrip({
   return (
     <div className="agent-image-attachment-strip" aria-label="待发送图片">
       {images.map((image) => (
-        <div key={image.id} className="agent-image-attachment">
-          <img src={imageAttachmentDataUrl(image)} alt={image.name} />
-          <span title={image.name}>{image.name}</span>
-          <button type="button" title={`移除 ${image.name}`} onClick={() => onRemove(image.id)}>
+        <div key={image.id} className="agent-image-attachment" title={image.name}>
+          <img src={imageAttachmentDataUrl(image)} alt={image.name} draggable={false} />
+          <button
+            type="button"
+            title={`移除 ${image.name}`}
+            aria-label={`移除 ${image.name}`}
+            onClick={() => onRemove(image.id)}
+          >
             <IconClose size={12} />
           </button>
         </div>

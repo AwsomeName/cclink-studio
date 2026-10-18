@@ -2,6 +2,8 @@
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
 import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { openSync, closeSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 
@@ -10,7 +12,7 @@ process.env.CCLINK_STUDIO_SMOKE_RUN_DIR = await mkdtemp(
   join(tmpdir(), 'studio-message-images-smoke-'),
 )
 process.env.CCLINK_STUDIO_SMOKE_RENDERER_PORT ??= String(42000 + Math.floor(Math.random() * 1500))
-const { runDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
+const { runDir, logFile, rendererOrigin, rootDir } = createSmokeRuntime(import.meta.url)
 const workspace = await mkdtemp(join(homedir(), '.cclink-studio-message-images-smoke-'))
 const userData = join(runDir, 'user-data')
 await mkdir(userData)
@@ -39,18 +41,53 @@ await writeFile(
   }),
 )
 let browser
+let runtimeChild
+
+function startRuntime() {
+  const fd = openSync(logFile, 'w')
+  try {
+    runtimeChild = spawn('bash', ['scripts/dev.sh'], {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: '',
+        CCLINK_STUDIO_TEST_USER_DATA_PATH: userData,
+        CCLINK_STUDIO_RENDERER_PORT: new URL(rendererOrigin).port,
+        CLAUDE_CONFIG_DIR: join(runDir, 'claude-config'),
+      },
+      detached: true,
+      stdio: ['ignore', fd, fd],
+    })
+  } finally {
+    closeSync(fd)
+  }
+}
+
+async function stopRuntime() {
+  if (!runtimeChild) return
+  // Only stop this smoke's process group; restart.sh can reuse/stop the user's Studio.
+  const pid = runtimeChild.pid
+  try {
+    process.kill(-pid, 'SIGTERM')
+  } catch {
+    return
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  try {
+    process.kill(-pid, 'SIGKILL')
+  } catch {
+    // The isolated runtime already exited.
+  }
+  runtimeChild = null
+}
 
 function assert(value, message) {
   if (!value) throw new Error(message)
 }
-async function connect(previousLog = '') {
+async function connect() {
   const deadline = Date.now() + 45000
   while (Date.now() < deadline) {
-    const completeLog = await readFile(logFile, 'utf8').catch(() => '')
-    const log =
-      previousLog && completeLog.startsWith(previousLog)
-        ? completeLog.slice(previousLog.length)
-        : completeLog
+    const log = await readFile(logFile, 'utf8').catch(() => '')
     const match = log.match(/DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)\//)
     if (match) {
       browser = await chromium.connectOverCDP(`http://127.0.0.1:${match[1]}`)
@@ -67,6 +104,68 @@ async function connect(previousLog = '') {
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
   throw new Error('Isolated Studio renderer did not become ready')
+}
+
+async function setPanelMode(page, mode) {
+  await page.evaluate(async (mode) => {
+    const { useUIStore } = await import('/src/stores/ui-store.ts')
+    useUIStore.getState().setAgentPanelMode(mode, 'user')
+  }, mode)
+}
+
+async function inspectLayout(page) {
+  return page
+    .locator('.agent-message.user.has-images')
+    .last()
+    .evaluate((message) => {
+      const images = message.querySelector('.message-image-list')
+      const body = message.querySelector('.agent-message-body')
+      const imageBox = images.getBoundingClientRect()
+      const bodyBox = body.getBoundingClientRect()
+      const list = message.closest('.agent-messages')
+      return {
+        imageBeforeText: imageBox.bottom <= bodyBox.top,
+        noHorizontalOverflow: list.scrollWidth <= list.clientWidth,
+        imageCount: images.children.length,
+        columns: getComputedStyle(images).gridTemplateColumns,
+        transparentFrame: getComputedStyle(message).backgroundColor === 'rgba(0, 0, 0, 0)',
+        imageWidth: imageBox.width,
+        messageWidth: message.getBoundingClientRect().width,
+      }
+    })
+}
+
+async function sendDraft(page, conversationId) {
+  // Stub paid inference only; attachment save/read and persistence use real main IPC.
+  await page.evaluate(async (id) => {
+    const [{ createConversationRunController }, { useAgentStore }] = await Promise.all([
+      import('/src/features/agent-conversations/conversation-run-controller.ts'),
+      import('/src/stores/agent-store.ts'),
+    ])
+    const result = await createConversationRunController({
+      conversationId: id,
+      agentApi: {
+        ...window.cclinkStudio.agent,
+        sendMessage: async (conversationId, payload) => ({
+          success: true,
+          configurationReceipt: {
+            conversationId,
+            runId: payload.runId,
+            roleRef: payload.configuration.roleRef,
+            configurationRevision: payload.configuration.revision,
+            configurationFingerprint: null,
+            runtimeSessionMode: 'new',
+            skills: [],
+          },
+        }),
+      },
+    }).send(useAgentStore.getState().conversations[id].input)
+    if (result.status !== 'accepted')
+      throw new Error(`Image turn rejected: ${JSON.stringify(result)}`)
+    useAgentStore.getState().finishStreamingMessage(id, result.runId)
+    if (useAgentStore.getState().conversations[id].pendingImages.length)
+      throw new Error('Accepted turn left pending image bytes in the composer')
+  }, conversationId)
 }
 
 async function showConversation(page, conversationId) {
@@ -103,7 +202,7 @@ async function inspectImage(page) {
 }
 
 try {
-  runRestart('start')
+  startRuntime()
   let page = await connect()
   await page.evaluate(async (path) => {
     const { openWorkspaceRef } =
@@ -150,37 +249,19 @@ try {
   })
   await page.locator('.agent-image-attachment img').waitFor({ state: 'visible' })
   await composer.fill('确认一下这个事情')
-  // Keep this UI/IPC smoke independent of paid inference. Attachment save/read uses real main IPC.
-  await page.evaluate(async (id) => {
-    const [{ createConversationRunController }, { useAgentStore }] = await Promise.all([
-      import('/src/features/agent-conversations/conversation-run-controller.ts'),
-      import('/src/stores/agent-store.ts'),
-    ])
-    const result = await createConversationRunController({
-      conversationId: id,
-      agentApi: {
-        ...window.cclinkStudio.agent,
-        sendMessage: async (conversationId, payload) => ({
-          success: true,
-          configurationReceipt: {
-            conversationId,
-            runId: payload.runId,
-            roleRef: payload.configuration.roleRef,
-            configurationRevision: payload.configuration.revision,
-            configurationFingerprint: null,
-            runtimeSessionMode: 'new',
-            skills: [],
-          },
-        }),
-      },
-    }).send(useAgentStore.getState().conversations[id].input)
-    if (result.status !== 'accepted')
-      throw new Error(`Image turn rejected: ${JSON.stringify(result)}`)
-    useAgentStore.getState().finishStreamingMessage(id, result.runId)
-    if (useAgentStore.getState().conversations[id].pendingImages.length)
-      throw new Error('Accepted turn left pending image bytes in the composer')
-  }, conversationId)
+  await page.screenshot({ path: join(runDir, 'composer.png') })
+  await sendDraft(page, conversationId)
   const initial = await inspectImage(page)
+  const narrow = await inspectLayout(page)
+  assert(narrow.imageBeforeText && narrow.transparentFrame, 'Image is still inside the text bubble')
+  assert(narrow.noHorizontalOverflow, 'Narrow conversation overflows horizontally')
+  await setPanelMode(page, 'center')
+  await page.waitForFunction(() => document.querySelector('.agent-panel-center'))
+  await inspectImage(page)
+  const wide = await inspectLayout(page)
+  const wideImage = await inspectImage(page)
+  assert(wide.imageBeforeText && wide.noHorizontalOverflow, 'Center image layout is invalid')
+  assert(wideImage.width > 320, 'Center image is still limited to the old thumbnail size')
   const persisted = await page.evaluate(async (id) => {
     const {
       useAgentStore,
@@ -204,11 +285,25 @@ try {
   }, conversationId)
   await inspectImage(page)
   await page.screenshot({ path: join(runDir, 'sent.png') })
+  await page
+    .locator('.agent-message.user.has-images')
+    .first()
+    .screenshot({
+      path: join(runDir, 'single-dark.png'),
+    })
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+  await page
+    .locator('.agent-message.user.has-images')
+    .first()
+    .screenshot({
+      path: join(runDir, 'single-light.png'),
+    })
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'))
 
-  const previousLog = await readFile(logFile, 'utf8')
   await browser.close()
-  runRestart('restart')
-  page = await connect(previousLog)
+  await stopRuntime()
+  startRuntime()
+  page = await connect()
   await page.evaluate(async (path) => {
     const { openWorkspaceRef } =
       await import('/src/features/workspace-open/workspace-open-controller.ts')
@@ -228,10 +323,99 @@ try {
     restoredResource.ref.imageAssetId === persisted.assetId,
     'Restart lost the stable image reference',
   )
-  const result = { initial, restored, assetId: persisted.assetId, runtimeWasStubbed: true, runDir }
+  await setPanelMode(page, 'center')
+  const multiComposer = page.locator('[data-agent-panel-runtime="local"] textarea').first()
+  await multiComposer.evaluate(async (element) => {
+    const data = new DataTransfer()
+    for (const [index, [width, height]] of [
+      [1200, 720],
+      [240, 960],
+      [1600, 180],
+    ].entries()) {
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d')
+      context.fillStyle = ['#234254', '#34473d', '#594b38'][index]
+      context.fillRect(0, 0, width, height)
+      context.fillStyle = '#fff'
+      context.font = '36px sans-serif'
+      context.fillText(`IMAGE ${index + 1}`, 24, 64)
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+      data.items.add(new File([blob], `image-${index + 1}.png`, { type: 'image/png' }))
+    }
+    element.dispatchEvent(
+      new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+    )
+  })
+  await page.waitForFunction(
+    () => document.querySelectorAll('.agent-image-attachment').length === 3,
+  )
+  await page.locator('.agent-image-attachment button').last().click()
+  assert((await page.locator('.agent-image-attachment').count()) === 2, 'Remove attachment failed')
+  await page.screenshot({ path: join(runDir, 'multi-composer.png') })
+  await multiComposer.fill('横图和长图应该完整显示，文字放在图片下方。')
+  await sendDraft(page, conversationId)
+  await page.waitForFunction(() => {
+    const messages = document.querySelectorAll('.agent-message.user.has-images')
+    const images = messages[messages.length - 1]?.querySelectorAll('img')
+    return (
+      images?.length === 2 && [...images].every((image) => image.complete && image.naturalWidth)
+    )
+  })
+  const multi = await inspectLayout(page)
+  assert(
+    multi.imageCount === 2 && multi.imageBeforeText && multi.noHorizontalOverflow,
+    'Multi-image layout failed',
+  )
+  await page.screenshot({ path: join(runDir, 'multi-dark.png') })
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'))
+  await page.screenshot({ path: join(runDir, 'multi-light.png') })
+  await setPanelMode(page, 'right')
+  await page.waitForFunction(() => !document.querySelector('.agent-panel-center'))
+  const multiNarrow = await inspectLayout(page)
+  assert(multiNarrow.noHorizontalOverflow, 'Narrow multi-image conversation overflows')
+  await page.screenshot({ path: join(runDir, 'multi-narrow.png') })
+  await page.evaluate(async (id) => {
+    const { useAgentStore } = await import('/src/stores/agent-store.ts')
+    useAgentStore.getState().addUserMessage('', id, [
+      {
+        id: 'missing-image',
+        kind: 'image',
+        label: 'missing.png',
+        ref: { type: 'image', mediaType: 'image/png', size: 3 },
+      },
+    ])
+  }, conversationId)
+  const unavailable = page.locator('.agent-message.user.has-images').last()
+  await unavailable
+    .getByRole('status')
+    .getByText('图片不可用：missing.png', { exact: true })
+    .waitFor()
+  const emptyBody = await unavailable.locator('.agent-message-body').evaluate((body) => ({
+    height: body.getBoundingClientRect().height,
+    background: getComputedStyle(body).backgroundColor,
+  }))
+  assert(emptyBody.height === 0, 'Image-only message renders an empty text bubble')
+  assert(
+    emptyBody.background === 'rgba(0, 0, 0, 0)',
+    'Image-only message keeps a bubble background',
+  )
+  const result = {
+    initial,
+    restored,
+    narrow,
+    wide,
+    wideImage,
+    multi,
+    multiNarrow,
+    assetId: persisted.assetId,
+    runtimeWasStubbed: true,
+    runDir,
+  }
   await writeFile(join(runDir, 'result.json'), JSON.stringify(result, null, 2))
   console.log(JSON.stringify(result, null, 2))
 } finally {
   await browser?.close().catch(() => undefined)
-  runRestart('stop')
+  await stopRuntime()
 }

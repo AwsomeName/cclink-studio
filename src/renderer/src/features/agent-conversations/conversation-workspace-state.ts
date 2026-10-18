@@ -129,6 +129,30 @@ export function normalizeConversationSnapshot(
         ? conversation.mountedResources.map(stripImagePreview)
         : [],
       pendingImages: [],
+      queuedMessageDispatchId: null,
+      queuedMessages: Array.isArray(conversation.queuedMessages)
+        ? conversation.queuedMessages
+            .slice(0, 21)
+            .filter(
+              (item) =>
+                item &&
+                typeof item.id === 'string' &&
+                typeof item.content === 'string' &&
+                typeof item.contextKey === 'string',
+            )
+            .map((item) => ({
+              ...item,
+              mountedResources: Array.isArray(item.mountedResources)
+                ? item.mountedResources.map(stripImagePreview)
+                : [],
+              pendingImages: [],
+              queuedMessageDispatchId: null,
+              missingImages: item.missingImages || Boolean(item.pendingImages?.length),
+            }))
+        : [],
+      messageQueuePauseReason: conversation.queuedMessages?.length
+        ? '已恢复待发送消息，请确认内容后继续队列'
+        : null,
       mountedSkills: normalizeMountedSkills(conversation.mountedSkills),
       sessionId: invalidPersistedSession ? null : (conversation.sessionId ?? null),
       sessionCompatibilityFingerprint: invalidPersistedSession ? null : persistedFingerprint,
@@ -381,6 +405,7 @@ export function isInitialSeedConversation(
     !conversation.sessionId &&
     conversation.lastCost === null &&
     conversation.input === '' &&
+    !conversation.queuedMessages?.length &&
     conversation.mountedResources.length === 0 &&
     conversation.mountedSkills.length === 0 &&
     agentRoleRefsEqual(conversation.configuration.roleRef, DEFAULT_AGENT_ROLE_REF) &&
@@ -409,6 +434,13 @@ export function buildAgentConversationWorkspaceSnapshot(
       streamingMessageId: null,
       input: '',
       pendingImages: [],
+      queuedMessageDispatchId: null,
+      queuedMessages: conversation.queuedMessages?.map((item) => ({
+        ...item,
+        pendingImages: [],
+        missingImages: item.missingImages || item.pendingImages.length > 0,
+        mountedResources: item.mountedResources.map(stripImagePreview),
+      })),
       mountedResources: conversation.mountedResources.map(stripImagePreview),
       messages: conversation.messages.map((message) => {
         const { rawText, ...persistedMessage } = message

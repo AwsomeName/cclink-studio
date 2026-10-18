@@ -50,6 +50,10 @@ import {
 } from '../../features/agent-composer/AgentComposerToolbar'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 import { AGENT_IMAGE_ACCEPT } from '../../features/agent-conversations/image-attachments'
+import {
+  QueuedMessageList,
+  type QueuedMessageListModel,
+} from '../../features/agent-conversations/queued-message-list'
 
 export type AgentPanelVariant = 'center' | 'side'
 export type AgentPanelRuntime = 'local' | 'remote'
@@ -187,6 +191,9 @@ export interface AgentPanelComposerEnhancements {
 }
 
 export interface AgentPanelComposerModel {
+  queue?: QueuedMessageListModel
+  allowQueueWhileRunning?: boolean
+  submitLabel?: string
   value: string
   placeholder: string
   canSubmit: boolean
@@ -756,7 +763,8 @@ export function ComposerFrame({
   )
 
   const submit = useCallback(() => {
-    if (model.disabled || model.submitting || !model.canSubmit) return
+    if (model.disabled || (model.submitting && !model.allowQueueWhileRunning) || !model.canSubmit)
+      return
     void model.onSubmit()
   }, [model])
 
@@ -770,7 +778,10 @@ export function ComposerFrame({
         isComposing: false,
         keyCode: event.nativeEvent.keyCode,
         handledBeforeSubmit,
-        canSubmit: !model.disabled && !model.submitting && model.canSubmit,
+        canSubmit:
+          !model.disabled &&
+          (!model.submitting || Boolean(model.allowQueueWhileRunning)) &&
+          model.canSubmit,
       })
       if (decision !== 'submit' && decision !== 'block-submit') return
       event.preventDefault()
@@ -801,6 +812,7 @@ export function ComposerFrame({
           setHeight(clampHeight(current + (event.key === 'ArrowUp' ? 12 : -12)))
         }}
       />
+      {model.queue ? <QueuedMessageList model={model.queue} /> : null}
       <div
         ref={composerRef}
         className={`agent-composer-wrap ${height === null ? '' : 'resized'}`}
@@ -889,7 +901,7 @@ export function ActionBar({
 }): ReactElement {
   const remoteImageInputRef = useRef<HTMLInputElement>(null)
   const stopLabel = model.stopLabel || '停止'
-  const primaryAction =
+  const stopAction =
     model.submitting && model.stopCapability.state !== 'hidden' ? (
       <span
         className="agent-disabled-action"
@@ -914,19 +926,28 @@ export function ActionBar({
           <IconStop size={15} />
         </button>
       </span>
-    ) : (
-      <button
-        type="button"
-        className="agent-send-btn"
-        data-agent-action="send"
-        onClick={submit}
-        disabled={!model.canSubmit || model.submitting || model.disabled}
-        title="发送"
-        aria-label="发送"
-      >
-        <IconSend size={17} />
-      </button>
-    )
+    ) : null
+  const sendAction = (
+    <button
+      type="button"
+      className="agent-send-btn"
+      data-agent-action="send"
+      onClick={submit}
+      disabled={
+        !model.canSubmit || (model.submitting && !model.allowQueueWhileRunning) || model.disabled
+      }
+      title={model.submitLabel || '发送'}
+      aria-label={model.submitLabel || '发送'}
+    >
+      <IconSend size={17} />
+    </button>
+  )
+  const primaryAction = (
+    <span className="agent-composer-primary-actions">
+      {stopAction}
+      {!stopAction || model.allowQueueWhileRunning ? sendAction : null}
+    </span>
+  )
 
   if (model.actionBar.kind === 'local') {
     return (

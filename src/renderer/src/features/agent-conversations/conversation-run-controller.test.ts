@@ -56,6 +56,11 @@ function createConversation(updates: Partial<AgentConversationState> = {}): Agen
 function createHarness(conversation = createConversation()) {
   const store = {
     conversations: { 'agent-1': conversation },
+    setQueuedMessageDispatchId: vi.fn(),
+    enqueueMessage: vi.fn(() => 'queued-1'),
+    removeQueuedMessage: vi.fn(),
+    setMessageQueuePauseReason: vi.fn(),
+    restoreFailedMessage: vi.fn(),
     setInput: vi.fn(),
     addUserMessage: vi.fn(),
     setMessageImageAssets: vi.fn(),
@@ -190,7 +195,7 @@ describe('conversation-run-controller', () => {
       'agent-1',
       expect.objectContaining({ message: '你好', runId: 'run-1', sessionId: 'session-1' }),
     )
-    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
+    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1', expect.any(Array))
     expect(store.setRunConfigurationReceipt).toHaveBeenCalledWith(
       expect.objectContaining({
         roleRef: { roleId: 'default-assistant', version: 1 },
@@ -222,10 +227,10 @@ describe('conversation-run-controller', () => {
       error: expect.stringContaining('实际角色配置'),
     })
     expect(agentApi.abort).toHaveBeenCalledWith('agent-1', 'run-1')
-    expect(store.clearTransientResources).not.toHaveBeenCalled()
+    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1', expect.any(Array))
   })
 
-  it('allows an image-only turn and clears image data only after the backend accepts it', async () => {
+  it('allows an image-only turn and detaches its image data from the next draft', async () => {
     const image = {
       id: 'image-1',
       name: 'screen.png',
@@ -255,7 +260,7 @@ describe('conversation-run-controller', () => {
         images: [image],
       }),
     )
-    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1')
+    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1', expect.any(Array))
     expect(agentApi.saveMessageImages).toHaveBeenCalledWith('agent-1', [image])
     expect(store.setMessageImageAssets).toHaveBeenCalledWith('agent-1', [
       { id: 'image-1', assetId: `${'a'.repeat(64)}.png` },
@@ -286,27 +291,33 @@ describe('conversation-run-controller', () => {
   it.each([
     ['空消息', '   ', createConversation(), 'empty'],
     ['归档会话', 'hello', createConversation({ archivedAt: 2 }), 'archived'],
-    ['运行中会话', 'hello', createConversation({ loading: true }), 'busy'],
-    [
-      '压缩中会话',
-      'hello',
-      createConversation({
-        contextCompaction: {
-          status: 'compacting',
-          trigger: 'manual',
-          preTokens: 10,
-          postTokens: null,
-          error: null,
-          updatedAt: 2,
-        },
-      }),
-      'busy',
-    ],
   ])('%s 不启动发送事务', async (_label, content, conversation, reason) => {
     const { store, agentApi, controller } = createHarness(conversation)
 
     await expect(controller.send(content)).resolves.toEqual({ status: 'ignored', reason })
     expect(store.beginRun).not.toHaveBeenCalled()
+    expect(agentApi.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    createConversation({ loading: true }),
+    createConversation({
+      contextCompaction: {
+        status: 'compacting',
+        trigger: 'manual',
+        preTokens: null,
+        postTokens: null,
+        error: null,
+        updatedAt: 1,
+      },
+    }),
+  ])('queues messages while a run or compaction is active', async (conversation) => {
+    const { store, agentApi, controller } = createHarness(conversation)
+    await expect(controller.send('稍后执行')).resolves.toEqual({
+      status: 'queued',
+      messageId: 'queued-1',
+    })
+    expect(store.enqueueMessage).toHaveBeenCalledWith('稍后执行', 'agent-1')
     expect(agentApi.sendMessage).not.toHaveBeenCalled()
   })
 
@@ -322,7 +333,8 @@ describe('conversation-run-controller', () => {
     expect(store.cancelStreaming).toHaveBeenCalledWith('agent-1', 'error', 'run-1')
     expect(store.addSystemMessage).toHaveBeenCalledWith('发送失败: runtime unavailable', 'agent-1')
     expect(store.setBackendState).toHaveBeenCalledWith('error', 'agent-1')
-    expect(store.clearTransientResources).not.toHaveBeenCalled()
+    expect(store.restoreFailedMessage).toHaveBeenCalledWith('hello', expect.any(Object), 'agent-1')
+    expect(store.clearTransientResources).toHaveBeenCalledWith('agent-1', expect.any(Array))
   })
 
   it('停止请求只进入 cancelling，且允许对同一 run 再次取消', async () => {

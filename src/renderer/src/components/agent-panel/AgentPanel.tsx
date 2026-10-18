@@ -362,8 +362,9 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const handleSend = useCallback(async () => {
     setResourceQuery(null)
     setSkillQuery(null)
-    await runController.send(input)
-  }, [input, runController])
+    const result = await runController.send(input)
+    if (result.status === 'failed') showToast(result.error, 'error')
+  }, [input, runController, showToast])
 
   const handleCompactContext = useCallback(
     async (instructions: string) => {
@@ -1035,11 +1036,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     tabs,
     editorFiles,
   })
-  const canSubmit =
-    !loading &&
-    (Boolean(input.trim()) || pendingImages.length > 0) &&
-    !contextCompacting &&
-    Boolean(activeRole)
+  const canSubmit = (Boolean(input.trim()) || pendingImages.length > 0) && Boolean(activeRole)
 
   return (
     <AgentPanelView
@@ -1101,6 +1098,32 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         },
         costLabel: lastCost === null ? null : `费用 $${lastCost.toFixed(4)}`,
         composer: {
+          allowQueueWhileRunning: true,
+          submitLabel:
+            loading ||
+            contextCompacting ||
+            activeConversation.queuedMessages?.length ||
+            activeConversation.messageQueuePauseReason
+              ? '加入队列'
+              : '发送',
+          queue: {
+            items: activeConversation.queuedMessages ?? [],
+            pauseReason: activeConversation.messageQueuePauseReason,
+            dispatchId: activeConversation.queuedMessageDispatchId,
+            canEdit: !input.trim() && !pendingImages.length,
+            onEdit: (id) => {
+              if (useAgentStore.getState().editQueuedMessage(id, activeConversationId))
+                inputRef.current?.focus()
+            },
+            onRemove: (id) =>
+              useAgentStore.getState().removeQueuedMessage(id, activeConversationId),
+            onResume: () =>
+              useAgentStore.getState().setMessageQueuePauseReason(null, activeConversationId),
+            onPause: () =>
+              useAgentStore
+                .getState()
+                .setMessageQueuePauseReason('已手动暂停队列', activeConversationId),
+          },
           textareaRef: inputRef,
           value: input,
           onChange: handleInputChange,
@@ -1113,7 +1136,10 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
             : contextCompacting
               ? { state: 'hidden', reason: '上下文压缩期间不能停止 Agent' }
               : { state: 'hidden' },
-          placeholder: '输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行',
+          placeholder:
+            loading || contextCompacting
+              ? '继续输入，Enter 加入队列；Shift+Enter 换行'
+              : '输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行',
           onKeyDownBeforeSubmit: handleKeyDownBeforeSubmit,
           onPaste: (event) => {
             const files = Array.from(event.clipboardData.files).filter((file) =>
