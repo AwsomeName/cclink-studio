@@ -56,4 +56,6 @@ jobs:
           name: windows-package-failure
           retention-days: 7
           if-no-files-found: ignore
-          path: dist/windows/smoke/*.log
+          path: |
+            dist/windows/smoke/*.log
+            dist/windows/smoke/*.json

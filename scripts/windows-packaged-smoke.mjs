@@ -64,10 +64,13 @@ try {
     )
     pass('NSIS silent installation on isolated Windows runner')
   }
+  // Electron 43 checks whether this variable exists; an empty value still changes startup.
+  const guiEnvironment = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE'),
+  )
   child = spawn(executable, [], {
     env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '',
+      ...guiEnvironment,
       CCLINK_STUDIO_PACKAGED_SMOKE: '1',
       CCLINK_STUDIO_TEST_USER_DATA_PATH: userData,
       ELECTRON_ENABLE_LOGGING: '1',
