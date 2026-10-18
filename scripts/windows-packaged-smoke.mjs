@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFile, spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdtemp, mkdir, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, open, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -14,7 +14,7 @@ if (process.platform !== 'win32' || process.arch !== 'x64') {
 const execFileAsync = promisify(execFile)
 const output = resolve(import.meta.dirname, '../dist/windows')
 const evidence = join(output, 'smoke')
-const temporary = await mkdtemp(join(tmpdir(), 'cclink-windows-smoke-'))
+const temporary = await realpath(await mkdtemp(join(tmpdir(), 'cclink-windows-smoke-')))
 const userData = join(temporary, 'user-data')
 const workspace = join(temporary, 'workspace')
 // 静默安装会写 Windows 卸载注册项，因此仅允许在隔离 CI runner 上执行。
@@ -24,6 +24,17 @@ const executable = join(appDir, 'cclink-studio.exe')
 const report = { platform: process.platform, arch: process.arch, checks: [] }
 await mkdir(evidence, { recursive: true })
 await mkdir(workspace, { recursive: true })
+await mkdir(userData, { recursive: true })
+// Exercise the normal persisted-workspace restore path, including its existing
+// activation grants. The test cannot activate arbitrary folders through renderer IPC.
+await writeFile(
+  join(userData, 'settings.json'),
+  JSON.stringify({
+    lastWorkspacePath: workspace,
+    recentWorkspacePaths: [workspace],
+    componentSetupPageSeenVersion: 1,
+  }),
+)
 const log = await open(join(evidence, 'application.log'), 'w')
 let child
 let browser
@@ -120,7 +131,7 @@ try {
     { workspace, file },
   )
   assert.match(fileResult.content, /File round trip/)
-  pass('local workspace file write and read through preload IPC')
+  pass('restored local workspace file write and read through preload IPC')
 
   const sessionId = `windows-smoke-${Date.now()}`
   const terminal = await page.evaluate(

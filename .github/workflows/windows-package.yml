@@ -59,3 +59,4 @@ jobs:
           path: |
             dist/windows/smoke/*.log
             dist/windows/smoke/*.json
+            dist/windows/smoke/*.png

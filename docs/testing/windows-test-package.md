@@ -26,8 +26,10 @@ pnpm smoke:windows-packaged
 不接受从 Mac 直接交叉打包后跳过原生验证。构建失败时不会上传成功安装包。
 
 `windows-package.yml` 在 Windows 2022 runner 上执行以上流程。CI 使用临时目录实际静默
-安装，再从已安装 EXE 启动，检查免登录工作台、隔离 userData、文件读写、真实 PTY 命令与
+安装，再从已安装 EXE 启动，检查免登录工作台、隔离 userData、恢复工作空间的文件读写、真实 PTY 命令与
 内嵌浏览器页面，最后卸载。普通本地 smoke 只启动 `win-unpacked`，不改本机安装注册项。
+自动 smoke 在临时 userData 中预置临时目录为上次工作空间，沿正常恢复流程取得文件作用域；
+不伪造 renderer 授权，不关闭文件访问校验。首次从系统选择器打开文件夹仍需真人验收。
 成功 Actions artifact 保留 14 天，包含测试 EXE、校验记录、自动 smoke JSON 和截图；
 失败只上传诊断。自动 smoke 属于工程验证，不代替真人安装验收。
 
