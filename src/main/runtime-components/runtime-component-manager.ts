@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join, posix, resolve } from 'node:path'
-import { Readable, Transform } from 'node:stream'
+import { Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { promisify } from 'node:util'
 import { createGunzip } from 'node:zlib'
@@ -27,16 +27,15 @@ import {
   type ResolvedRuntimeResource,
   type ResolvedRuntimeResourceLease,
 } from './runtime-resource-manager'
+import { RuntimeComponentInstallError } from './runtime-install-error'
+import { downloadPackage } from './runtime-package-download'
 
 const execFileAsync = promisify(execFile)
 const INSTALL_RECORD_SCHEMA_VERSION = 1
-const MAX_DOWNLOAD_BYTES = 160 * 1024 * 1024
 const MAX_ARCHIVE_ENTRIES = 64
 const MAX_EXPANDED_BYTES = 300 * 1024 * 1024
-const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000
 const DOWNLOAD_ATTEMPTS = 3
 const PROBE_TIMEOUT_MS = 15_000
-const ALLOWED_DOWNLOAD_HOSTS = new Set(['registry.npmjs.org'])
 
 interface ManagedClaudeInstallRecord {
   schemaVersion: 1
@@ -74,16 +73,6 @@ export interface RuntimeComponentManagerDependencies {
     platform: NodeJS.Platform,
     arch: string,
   ) => ManagedClaudeRuntimeCatalogEntry | null
-}
-
-export class RuntimeComponentInstallError extends Error {
-  readonly code: ManagedClaudeInstallErrorCode
-
-  constructor(code: ManagedClaudeInstallErrorCode, message: string) {
-    super(message)
-    this.name = 'RuntimeComponentInstallError'
-    this.code = code
-  }
 }
 
 export class RuntimeComponentManager {
@@ -618,76 +607,6 @@ async function downloadWithRetry(
   }
 }
 
-export async function downloadPackage(
-  urlValue: string,
-  destination: string,
-  expectedIntegrity: string,
-  onProgress: (progress: ManagedClaudeInstallProgress) => void,
-): Promise<void> {
-  const url = new URL(urlValue)
-  if (url.protocol !== 'https:' || !ALLOWED_DOWNLOAD_HOSTS.has(url.hostname)) {
-    throw new RuntimeComponentInstallError('DOWNLOAD_FAILED', '下载地址不在允许列表')
-  }
-  const response = await fetch(url, {
-    redirect: 'error',
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
-    headers: { 'user-agent': 'CCLink-Studio-Runtime-Installer/1' },
-  })
-  if (!response.ok || !response.body) {
-    throw new RuntimeComponentInstallError(
-      'DOWNLOAD_FAILED',
-      `npm 包下载失败：HTTP ${response.status}`,
-    )
-  }
-  const declaredLength = parseContentLength(response.headers.get('content-length'))
-  if (declaredLength !== null && declaredLength > MAX_DOWNLOAD_BYTES) {
-    throw new RuntimeComponentInstallError('DOWNLOAD_TOO_LARGE', 'npm 包超过允许大小')
-  }
-
-  const expectedDigest = parseSha512Integrity(expectedIntegrity)
-  const hash = createHash('sha512')
-  let receivedBytes = 0
-  const tracker = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      receivedBytes += chunk.length
-      if (receivedBytes > MAX_DOWNLOAD_BYTES) {
-        callback(new RuntimeComponentInstallError('DOWNLOAD_TOO_LARGE', 'npm 包超过允许大小'))
-        return
-      }
-      hash.update(chunk)
-      onProgress({
-        receivedBytes,
-        totalBytes: declaredLength,
-        percent:
-          declaredLength && declaredLength > 0
-            ? Math.min(100, Math.round((receivedBytes / declaredLength) * 100))
-            : null,
-      })
-      callback(null, chunk)
-    },
-  })
-
-  try {
-    await pipeline(
-      Readable.fromWeb(response.body as import('node:stream/web').ReadableStream),
-      tracker,
-      createWriteStream(destination, { flags: 'wx', mode: 0o600 }),
-    )
-  } catch (error) {
-    await rm(destination, { force: true })
-    if (error instanceof RuntimeComponentInstallError) throw error
-    throw new RuntimeComponentInstallError(
-      'DOWNLOAD_FAILED',
-      `npm 包下载失败：${describeError(error)}`,
-    )
-  }
-
-  if (!hash.digest().equals(expectedDigest)) {
-    await rm(destination, { force: true })
-    throw new RuntimeComponentInstallError('PACKAGE_INTEGRITY_FAILED', 'npm 包 integrity 校验失败')
-  }
-}
-
 async function extractClaudeBinary(
   packagePath: string,
   destination: string,
@@ -840,26 +759,6 @@ function assertRecordMatchesCatalog(
       throw new RuntimeComponentInstallError('INSTALL_FAILED', `安装记录与允许目录不匹配：${key}`)
     }
   }
-}
-
-function parseContentLength(value: string | null): number | null {
-  if (!value) return null
-  const parsed = Number(value)
-  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
-}
-
-function parseSha512Integrity(value: string): Buffer {
-  if (!value.startsWith('sha512-')) {
-    throw new RuntimeComponentInstallError(
-      'PACKAGE_INTEGRITY_FAILED',
-      '允许目录缺少 SHA-512 integrity',
-    )
-  }
-  const digest = Buffer.from(value.slice('sha512-'.length), 'base64')
-  if (digest.length !== 64) {
-    throw new RuntimeComponentInstallError('PACKAGE_INTEGRITY_FAILED', 'SHA-512 integrity 无效')
-  }
-  return digest
 }
 
 async function sha256File(path: string): Promise<string> {

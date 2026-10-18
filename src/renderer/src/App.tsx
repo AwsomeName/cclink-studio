@@ -73,6 +73,10 @@ function MainLayout(): React.ReactElement {
     saved: number
     bounds: { min: number; max: number }
     viewport: { width: number; height: number; dpr: number }
+    budget: Pick<
+      ReturnType<typeof useUIStore.getState>,
+      'sidebarVisible' | 'agentPanelMode' | 'sidebarWidth' | 'agentPanelWidth'
+    >
   } | null>(null)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const floatingSurfaceOpen = useAnyFloatingSurfaceOpen()
@@ -107,6 +111,23 @@ function MainLayout(): React.ReactElement {
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  useEffect(
+    () =>
+      useUIStore.subscribe((state, previous) => {
+        // 同步取消，避免 React 重绘前或预算切回原值后继续提交旧手势。
+        if (
+          resizeStartRef.current &&
+          (state.sidebarVisible !== previous.sidebarVisible ||
+            state.agentPanelMode !== previous.agentPanelMode ||
+            state.sidebarWidth !== previous.sidebarWidth ||
+            state.agentPanelWidth !== previous.agentPanelWidth)
+        ) {
+          cancelActivePanelResize()
+        }
+      }),
+    [],
+  )
+
   useRegisterCommands()
   const workbenchWindowReady = useWorkbenchWindowEvents()
   useRegisterContextActions()
@@ -136,6 +157,7 @@ function MainLayout(): React.ReactElement {
       saved: area === 'sidebar' ? sidebarWidth : agentPanelWidth,
       bounds: area === 'sidebar' ? panelLayout.sidebarBounds : panelLayout.agentBounds,
       viewport: { width: viewportWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
+      budget: { sidebarVisible, agentPanelMode, sidebarWidth, agentPanelWidth },
     }
     setPanelResizing(true)
   }
@@ -154,12 +176,17 @@ function MainLayout(): React.ReactElement {
       resizeStartRef.current = null
       setResizePreview(null)
       setPanelResizing(false)
+      const current = useUIStore.getState()
       if (
         !start ||
         reason !== 'commit' ||
         start.viewport.width !== window.innerWidth ||
         start.viewport.height !== window.innerHeight ||
-        start.viewport.dpr !== window.devicePixelRatio
+        start.viewport.dpr !== window.devicePixelRatio ||
+        start.budget.sidebarVisible !== current.sidebarVisible ||
+        start.budget.agentPanelMode !== current.agentPanelMode ||
+        start.budget.sidebarWidth !== current.sidebarWidth ||
+        start.budget.agentPanelWidth !== current.agentPanelWidth
       )
         return
       const candidate = clampPanelWidth(start.effective + delta, start.bounds)

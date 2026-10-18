@@ -5,6 +5,7 @@ import type {
   RemoteDiagnosticReport,
   RemoteStatus,
 } from '../../shared/remote-protocol'
+import { remoteTerminalUnavailableError } from '../../shared/remote-terminal-availability'
 
 export function buildRemoteDiagnosticReport(
   status: RemoteStatus,
@@ -59,7 +60,12 @@ export function buildRemoteDiagnosticReport(
       status.capabilities.agent.stream,
       capabilityError,
     ),
-    capability('shell.pty', '远程 PTY', status.capabilities.shell.pty),
+    capability(
+      'shell.pty',
+      '远程 PTY',
+      status.capabilities.shell.pty,
+      remoteTerminalUnavailableError(status),
+    ),
   ]
   return {
     ref: status.ref,

@@ -13,7 +13,8 @@ import type {
   RuntimeResourceOperationResult,
   RuntimeResourceStatus,
 } from '../../shared/ipc/runtime-components'
-import { RuntimeComponentInstallError, downloadPackage } from './runtime-component-manager'
+import { RuntimeComponentInstallError } from './runtime-install-error'
+import { downloadPackage } from './runtime-package-download'
 import {
   getRuntimeResourceCatalogEntry,
   listRuntimeResourceCatalogEntries,

@@ -1681,6 +1681,7 @@ export class CclinkRemoteService implements RemoteProvider {
         server.capabilityList = [...capabilitySignals]
       }
       const transientProbe =
+        response.terminal_workspace_pty_reason === 'node_pty_probe_pending' ||
         response.runtime_probe?.refresh_state === 'pending' ||
         response.runtime_probe?.refresh_state === 'refreshing' ||
         response.runtime_probe?.stale === true ||

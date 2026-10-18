@@ -22,6 +22,10 @@ import {
 } from '../../shared/web-resources/web-resource-schema'
 import { WebResourceStore } from './web-resource-store'
 import { WebResourceDraftStore, type WebResourceDraftRecord } from './web-resource-draft-store'
+import {
+  classifyWebServiceStartupError,
+  WebServiceStartupError,
+} from '../diagnostics/web-service-startup-error'
 
 const WEBSITE_LIMIT = 1_000
 const PRINCIPAL_LIMIT = 500
@@ -53,8 +57,21 @@ export class WebResourceService {
   ) {}
 
   async load(): Promise<void> {
-    ;[this.snapshot, this.drafts] = await Promise.all([this.store.load(), this.draftStore.load()])
-    this.assertReferentialIntegrity(this.snapshot)
+    try {
+      ;[this.snapshot, this.drafts] = await Promise.all([this.store.load(), this.draftStore.load()])
+    } catch (error) {
+      throw classifyWebServiceStartupError(error, 'read-state')
+    }
+    try {
+      this.assertReferentialIntegrity(this.snapshot)
+    } catch (error) {
+      throw new WebServiceStartupError(
+        'validate-state',
+        'STATE_INVALID',
+        '网站账号状态引用校验失败',
+        error,
+      )
+    }
   }
 
   async beginDraft(

@@ -6,6 +6,10 @@ import {
   type WebResourceSnapshot,
 } from '../../shared/web-resources/web-resource-types'
 import { parseWebResourceSnapshot } from '../../shared/web-resources/web-resource-schema'
+import {
+  classifyWebServiceStartupError,
+  WebServiceStartupError,
+} from '../diagnostics/web-service-startup-error'
 
 const MAX_STORE_BYTES = 2 * 1024 * 1024
 
@@ -31,18 +35,40 @@ export class WebResourceStore {
   async load(): Promise<WebResourceSnapshot> {
     const primary = await this.readSnapshot(this.filePath)
     if (primary.kind === 'valid') {
-      if (primary.sourceVersion < 3) await this.persist(primary.snapshot, true)
+      if (primary.sourceVersion < 3) {
+        try {
+          await this.persist(primary.snapshot, true)
+        } catch (error) {
+          throw classifyWebServiceStartupError(error, 'restore-state')
+        }
+      }
       return primary.snapshot
     }
 
     const backup = await this.readSnapshot(this.backupPath)
     if (backup.kind === 'valid') {
-      await this.persist(backup.snapshot, false)
+      try {
+        await this.persist(backup.snapshot, false)
+      } catch (error) {
+        throw classifyWebServiceStartupError(error, 'restore-state')
+      }
       return backup.snapshot
     }
 
     if (primary.kind === 'invalid' || backup.kind === 'invalid') {
-      throw new Error('网站与账号数据文件损坏；原文件已保留，请从诊断或备份恢复')
+      const error =
+        primary.kind === 'invalid'
+          ? primary.error
+          : backup.kind === 'invalid'
+            ? backup.error
+            : undefined
+      const classified = classifyWebServiceStartupError(error, 'read-state', 'STATE_INVALID')
+      throw new WebServiceStartupError(
+        classified.stage,
+        classified.code,
+        '网站与账号数据无法加载；原文件已保留，请根据诊断恢复',
+        error,
+      )
     }
     return cloneSnapshot(EMPTY_WEB_RESOURCE_SNAPSHOT)
   }
@@ -60,17 +86,30 @@ export class WebResourceStore {
     try {
       const metadata = await stat(path)
       if (metadata.size > MAX_STORE_BYTES) {
-        throw new Error(`资源文件超过 ${MAX_STORE_BYTES} 字节限制`)
+        throw new WebServiceStartupError(
+          'read-state',
+          'STATE_TOO_LARGE',
+          '资源文件超过安全大小限制',
+        )
       }
       const raw = await readFile(path, 'utf8')
-      const decoded = JSON.parse(raw) as { schemaVersion?: unknown }
-      const sourceVersion = typeof decoded.schemaVersion === 'number' ? decoded.schemaVersion : 0
-      return { kind: 'valid', snapshot: parseWebResourceSnapshot(decoded), sourceVersion }
+      try {
+        const decoded = JSON.parse(raw) as { schemaVersion?: unknown }
+        const sourceVersion = typeof decoded.schemaVersion === 'number' ? decoded.schemaVersion : 0
+        return { kind: 'valid', snapshot: parseWebResourceSnapshot(decoded), sourceVersion }
+      } catch (error) {
+        throw new WebServiceStartupError(
+          'read-state',
+          'STATE_INVALID',
+          '网站与账号状态格式无效',
+          error,
+        )
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return { kind: 'missing' }
       }
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
+      const normalizedError = classifyWebServiceStartupError(error, 'read-state')
       console.warn(`[WebResourceStore] 无法读取 ${path}:`, normalizedError.message)
       return { kind: 'invalid', error: normalizedError }
     }

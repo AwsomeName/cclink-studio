@@ -9,6 +9,7 @@ import type {
   CclinkTerminalPtyStateMessage,
 } from '../../shared/cclink'
 import { createCclinkEnvelope } from '../../shared/cclink'
+import { remoteTerminalUnavailableError } from '../../shared/remote-terminal-availability'
 import type { TerminalExecutionErrorInfo, TerminalExecutionEvent } from '../../shared/terminal'
 import type { CclinkRemoteService } from '../cclink-remote/cclink-remote-service'
 import type { CclinkRequestRouter } from '../cclink-remote/request-router'
@@ -67,7 +68,13 @@ export class CclinkTerminalExecutionAdapter implements TerminalExecutionAdapter 
     const status = await this.service.getStatus(ref)
     if (status.state !== 'online') throw terminalError('TERMINAL_OFFLINE', '远程设备不在线', true)
     if (!status.capabilities.shell.pty) {
-      throw terminalError('TERMINAL_PTY_UNAVAILABLE', '当前 Agent 未声明持久远程 Terminal 能力')
+      const remoteError = remoteTerminalUnavailableError(status)!
+      const error = Object.assign(
+        terminalError(remoteError.code, remoteError.message, remoteError.retryable),
+        { remoteError },
+      )
+      this.service.recordDiagnostic('terminal.capability', ref.endpointId, error)
+      throw error
     }
     const existing = this.sessions.get(input.sessionId)
     if (existing) {

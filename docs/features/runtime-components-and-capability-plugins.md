@@ -1,9 +1,9 @@
 # Runtime 组件与能力插件
 
 > 状态：固定版本 Runtime 管理已交付；远程版本目录、真实双版本更新/回滚、内容包和通用能力插件
-> 自 2026-08-15 起暂停。2026-08-29 复查发现 `RuntimeComponentManager` 初始化失败仍可能阻断
-> Studio 启动，该降级缺口尚未修复。
-> 最后更新：2026-08-29。
+> 自 2026-08-15 起暂停。`RuntimeComponentManager.initialize()` 失败已有独立捕获与同 owner
+> 重试；2026-10-16 真实 Electron 复核通过目录阻塞、可见失败和修复后检查恢复。
+> 最后更新：2026-10-16。
 > 当前 Studio 仍通过完整应用 Release 更新程序代码；Claude Code Runtime 按需安装到 `userData`，OCCT 和 scrcpy 支持固定版本安装与随 App 资源回退，但均不支持远程新版本发现。
 > “设置 > 组件管理”的本地盘点页面已实现，交互事实见 `component-management-settings.md`。
 > 已暂停的参考计划见 `runtime-components-and-capability-plugins-development-plan.md`。
@@ -46,6 +46,8 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 - 在统一组件清单中查看能力类型、本地安装状态和已知版本，并重新检测 Claude 与 CAD。
 - 在缺少 adb、CAD 后端或其他已进入隔离 bootstrap 的可选能力时继续启动 Studio，并看到相应
   降级状态。
+- Runtime 组件目录初始化失败时继续进入工作台，在组件页查看失败；修复目录后点击“检查”，
+  由同一个管理器重试初始化。
 
 ### 用户现在还不能做什么
 
@@ -54,26 +56,23 @@ IPC、直接修改主 renderer、接管 Thread/Agent loop、绕过工作空间�
 - 从远程目录取得可更新版本、权限、兼容性和健康状态。
 - 在首次启动时从远程目录发现新版 Runtime。
 - 在插件或 Runtime 更新失败后由产品自动回退到上一已知可用版本。
-- 在 `RuntimeComponentManager.initialize()` 因目录权限、损坏状态或初始化异常失败时继续进入本地
-  工作台；它当前仍位于窗口创建前的 state-services 硬启动路径，失败会触发 ServiceRegistry 回滚。
 
 因此当前只宣称“固定版本 Runtime 独立安装、修复和 App 替换复用”，不宣称插件安装、npm 热更新或 Runtime 独立版本更新。
 
-### 当前已知启动降级缺口
+### 当前启动降级与模块依赖
 
-CAD、Hardware、数据源、Meshy、图片生成和 Terminal 已由独立 capability bootstrap 捕获失败，
-一个领域失败后可以继续初始化后续领域。但 `RuntimeComponentManager` 本身在
-`bootstrapStateServices()` 中直接构造并 `await initialize()`，位于主窗口创建前；这条路径没有
-独立 capability 状态、故障注入或可见恢复界面。
+`bootstrapStateServices()` 独立捕获 `RuntimeComponentManager.initialize()` 失败，让后续工作台
+继续启动。原管理器保留 `phase=failed`、失败原因和组件清单；检查、安装等操作通过
+`ensureInitialized()` 在同一个 owner 上重试，不增加第二套初始化生命周期。
 
-所以以下两句话不能混用：
+2026-10-16 的真实 Electron 故障注入以普通文件占用 Runtime 组件目录：主窗口和组件页仍可用，
+失败状态可查询；移除阻塞后点击“检查”，Claude Runtime 与资源管理器均恢复到未安装且可检查
+状态。该证据只覆盖目录阻塞和恢复，不替代任意磁盘故障或所有业务使用方的完整验收。
 
-- “某个已隔离的 Runtime 使用方缺失或失败时，其他能力继续启动”——当前成立；
-- “Runtime 组件管理器自身任何初始化失败都不会阻断 Studio”——当前不成立。
-
-关闭该问题至少需要：管理器状态读取失败的故障注入；失败后主窗口与本地文件/编辑器/Browser/
-Terminal 可用；组件页显示失败原因和恢复入口；修复前不得用一般性的“可选能力独立降级”覆盖
-这个已知例外。
+模块依赖保持单向：`RuntimeComponentManager` 组合 `RuntimeResourceManager`；两者共同依赖
+无状态的 `runtime-package-download.ts` 与唯一的 `runtime-install-error.ts` 错误类。
+资源管理器不得反向 import 组件管理器。2026-10-16 拆分仅移动共用代码，下载白名单、大小上限、
+SHA-512 校验、文件权限和错误类身份保持不变，不引入新的组件 owner。
 
 ## 条件性重启后的用户目标与端到端验收
 

@@ -544,10 +544,10 @@ try {
           page
             .locator('.workspace-sidebar-shell')
             .evaluate((el) => el.getBoundingClientRect().width),
-        (width) => Math.abs(width - 198) < 1,
-        'Sidebar 198px clamp',
+        (width) => Math.abs(width - 212) < 1,
+        'Sidebar 212px clamp',
       )
-      const expectedWidths = { navigation: 154, sidebar: 198, agent: 220, workbench: 320 }
+      const expectedWidths = { navigation: 140, sidebar: 212, agent: 220, workbench: 320 }
       const widths = await until(
         () =>
           page.evaluate(() =>
@@ -584,7 +584,7 @@ try {
         await page.mouse.down()
       }
       await start()
-      await page.mouse.move(x - 18, y)
+      await page.mouse.move(x - 32, y)
       await until(
         () =>
           page
@@ -611,7 +611,7 @@ try {
         'Clamped gesture overwrote target',
       )
       await start()
-      await page.mouse.move(x - 18, y)
+      await page.mouse.move(x - 32, y)
       await page.evaluate(() => window.dispatchEvent(new Event('blur')))
       await page.mouse.up()
       assert(
@@ -619,7 +619,7 @@ try {
         'Cancelled gesture overwrote target',
       )
       await start()
-      await page.mouse.move(x - 18, y)
+      await page.mouse.move(x - 32, y)
       await resizeWindow(920, 560)
       await page.mouse.up()
       const afterResize = await stored(a)
@@ -633,11 +633,11 @@ try {
           page
             .locator('.workspace-sidebar-shell')
             .evaluate((el) => el.getBoundingClientRect().width),
-        (width) => Math.abs(width - 198) < 1,
+        (width) => Math.abs(width - 212) < 1,
         'Clamp after resize cancellation',
       )
       await start()
-      await page.mouse.move(x - 18, y)
+      await page.mouse.move(x - 32, y)
       await page.mouse.up()
       assert((await stored(a)).sidebarWidth === 180, 'Final target not committed')
       await resizeWindow(1440)
@@ -645,6 +645,61 @@ try {
       await setLayout(layoutA)
     },
   )
+  await check('sidebar toggle cancels Agent drag without saving stale budget', async () => {
+    const agentWidth = () =>
+      page.locator('.agent-side-shell').evaluate((el) => el.getBoundingClientRect().width)
+    const snapshot = async () => ({
+      saved: await stored(a),
+      displayedAgentWidth: await agentWidth(),
+      activeDrag: await page.evaluate(() => document.body.classList.contains('is-resizing-panels')),
+    })
+    try {
+      await setLayout({ ...layoutA, sidebarWidth: 250, agentPanelWidth: 700 })
+      await resizeWindow(900, 560)
+      await until(agentWidth, (width) => Math.abs(width - 436) < 1, 'Agent 436px clamp')
+      const before = await snapshot()
+      assert(before.saved.agentPanelWidth === 700, 'Agent target precondition not 700px')
+      const box = await page.getByRole('separator', { name: 'Agent 面板宽度' }).boundingBox()
+      const x = box.x + 2,
+        y = box.y + 50
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      await page.mouse.move(x + 20, y)
+      await until(agentWidth, (width) => Math.abs(width - 416) < 1, 'Agent 416px preview')
+      const preview = await snapshot()
+      assert(preview.activeDrag, 'Agent preview has no active gesture')
+      assert(preview.saved.agentPanelWidth === 700, 'Preview overwrote Agent target')
+      await page.keyboard.press('Meta+b')
+      await page.waitForFunction(async () => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        return useUIStore.getState().sidebarVisible
+      })
+      await until(
+        agentWidth,
+        (width) => Math.abs(width - 220) < 1,
+        'Agent 220px after sidebar toggle',
+      )
+      const cancelled = await snapshot()
+      assert(!cancelled.activeDrag, 'Sidebar budget change did not cancel the gesture')
+      await page.mouse.up()
+      const after = await snapshot()
+      assert(after.saved.sidebarVisible, 'Sidebar toggle was discarded')
+      assert(after.saved.agentPanelWidth === 700, 'Stale drag candidate overwrote Agent target')
+      await resizeWindow(1440)
+      await until(agentWidth, (width) => Math.abs(width - 700) < 1, 'Agent restored to 700px')
+      const restored = await snapshot()
+      const evidence = { before, preview, cancelled, after, restored }
+      await writeFile(
+        join(evidenceDir, 'drag-budget-change.json'),
+        JSON.stringify(evidence, null, 2),
+      )
+      return evidence
+    } finally {
+      await page.mouse.up()
+      await resizeWindow(1440)
+      await setLayout(layoutA)
+    }
+  })
   await check('active drag cancels on workspace switch and ignores the old pointer', async () => {
     const handle = page.getByRole('separator', { name: 'Agent 面板宽度' })
     const bounds = await handle.boundingBox()
@@ -783,7 +838,7 @@ try {
               }
             })
             assert(
-              geometry.width === 154 &&
+              geometry.width === 140 &&
                 geometry.labels.length === 16 &&
                 geometry.labels.every((label) => label.fits && label.font === '13px'),
               `Text does not fit: ${JSON.stringify(geometry)}`,

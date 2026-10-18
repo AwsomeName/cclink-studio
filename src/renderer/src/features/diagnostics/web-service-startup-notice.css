@@ -1,0 +1,27 @@
+.web-service-startup-notice {
+  margin: 8px;
+  padding: 10px;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.web-service-startup-notice p {
+  margin: 0 0 8px;
+}
+
+.web-service-startup-notice [role='status'] {
+  display: block;
+}
+
+.web-service-startup-notice details {
+  margin-top: 8px;
+}
+
+.web-service-startup-notice pre {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  user-select: text;
+}

@@ -3,6 +3,67 @@ import { createCclinkEnvelope, type CclinkProtocolMessage } from '../../shared/c
 import { CclinkTerminalExecutionAdapter } from './terminal-cclink-execution-adapter'
 
 describe('CclinkTerminalExecutionAdapter', () => {
+  it.each([
+    ['node_pty_external_not_installed', '未安装独立的 node-pty 依赖', false],
+    ['node_pty_probe_pending', '稍后重试启动 Terminal', true],
+  ])('保留 PTY 不可用原因 %s，且不发送 open 请求', async (reason, message, retryable) => {
+    const ref = {
+      kind: 'remote' as const,
+      transport: 'cclink' as const,
+      endpointId: 'agent-1',
+      workspaceId: 'workspace-1',
+      path: '/srv/project',
+    }
+    const client = {
+      onProtocolEvent: vi.fn(() => () => undefined),
+      request: vi.fn(),
+    }
+    const service = {
+      getRealtimeStatus: vi.fn(() => ({ state: 'online' })),
+      onStatus: vi.fn(() => () => undefined),
+      recordDiagnostic: vi.fn(),
+      getStatus: vi.fn(async () => ({
+        ref,
+        state: 'online',
+        capabilities: { shell: { pty: false } },
+        capabilityProbe: {
+          response: {
+            ...createCclinkEnvelope('capability_probe_response'),
+            terminal_workspace_pty_status: 'unavailable',
+            terminal_workspace_pty_reason: reason,
+          },
+        },
+      })),
+    }
+    const adapter = new CclinkTerminalExecutionAdapter(service as never, client as never)
+
+    await expect(
+      adapter.start({
+        sessionId: 'local-session',
+        runtime: {
+          location: 'remote',
+          transport: 'cclink',
+          backend: 'remote-shell',
+          endpointId: ref.endpointId,
+          workspaceRef: ref,
+          cwd: ref.path,
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining(message),
+      executionError: { code: 'TERMINAL_PTY_UNAVAILABLE', retryable },
+      remoteError: { context: { reason } },
+    })
+    expect(client.request).not.toHaveBeenCalled()
+    expect(service.recordDiagnostic).toHaveBeenCalledWith(
+      'terminal.capability',
+      ref.endpointId,
+      expect.objectContaining({
+        remoteError: expect.objectContaining({ context: expect.objectContaining({ reason }) }),
+      }),
+    )
+  })
+
   it('校验工作区绑定并把远程输出定向到本地 Terminal session', async () => {
     const protocolListeners: Array<
       (event: { serverId: string; message: CclinkProtocolMessage }) => void

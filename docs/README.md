@@ -32,7 +32,7 @@
 - `docs/features/desktop-release-and-updates.md`：桌面发布、自动检查、受控下载、确认安装和 U0-U5 开发计划。
 - `docs/features/desktop-update-development-plan.md`：桌面更新 U0-U5 的任务编号、代码落点、工作量、失败矩阵、真人验收和退出证据。
 - `docs/features/runtime-components-and-capability-plugins.md`：已交付的固定 Runtime 管理、已暂停的
-  双版本更新/能力插件边界，以及尚未关闭的 RuntimeComponentManager 启动降级缺口。
+  双版本更新/能力插件边界，以及当前启动降级、同 owner 重试与单向模块依赖。
 - `docs/features/npm-updatable-capability-inventory.md`：当前 npm 只用于固定 Runtime 下载的事实清单、暂停项与必须走完整 App 更新的边界。
 - `docs/features/eyewear-step-ai-editing.md`：眼镜 STEP 外壳 AI 加宽/加长的最小闭环；复用 Claude Code、现有查看器与 FreeCAD，只新增计划与修改两个工具、结果回显和基本核验。
 - `docs/features/eyewear-step-ai-editing-development-plan.md`：收缩后的眼镜 STEP AI 修改 P0、E0、M1 最小开发计划；其余能力全部后移且不排期。
@@ -51,8 +51,10 @@
 - `docs/official-integration-contract.md`：已降级为兼容缝的 official integration 契约及当前边界。
 - `docs/ops/cclink-dev-official-integration-handoff.md`：已被 ADR 0009 取代的旧 overlay 交接说明。
 - `docs/features/workspace-system.md`：当前 Studio 统一的本地与远程工作空间模型。
-- `docs/features/workspace-layout-development-plan.md`：尚未实现的工作空间级三栏布局记忆方案；
-  复用 WorkspaceState 与统一切换事务，覆盖缺失快照、竞态和 Browser 原生 View 回归。
+- `docs/features/workspace-layout-development-plan.md`：已实现的工作空间级三栏布局记忆；复用 WorkspaceState
+  与现有切换守卫。2026-10-16 用户初步确认本地可用并要求收尾，未扩张为跨域事务重构。
+- `docs/testing/workspace-layout-memory.md`：布局工程门禁、真实 Electron 回归与用户收尾反馈；本地逐项
+  结果未完整补录，真实在线远程及事故页专项复验仍待完成。
 - `docs/features/recent-session-switcher.md`：本地/远程工作空间统一最近会话切换器、唯一新建入口、标题策略和验收边界。
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。

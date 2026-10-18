@@ -282,6 +282,69 @@ describe('CclinkRemoteService runtime protocol', () => {
     ).toBe(true)
   })
 
+  it('preserves the Agent PTY failure reason through a live capability probe', async () => {
+    const { service } = createService()
+    installOnlineServer(service)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('capability_probe_response'),
+      capabilities: { shell: { terminal_workspace_pty: false }, session: { streaming: true } },
+      terminal_workspace_pty_status: 'unavailable',
+      terminal_workspace_pty_reason: 'node_pty_external_not_installed',
+    })
+
+    await expect(service.getStatus(remoteRef)).resolves.toMatchObject({
+      capabilities: { shell: { pty: false }, agent: { stream: true } },
+      capabilityProbe: {
+        response: {
+          terminal_workspace_pty_status: 'unavailable',
+          terminal_workspace_pty_reason: 'node_pty_external_not_installed',
+        },
+      },
+    })
+    const report = await service.diagnose(remoteRef)
+    expect(report.checks.find((check) => check.id === 'capability.shell.pty')).toMatchObject({
+      status: 'warn',
+      message: expect.stringContaining('未安装独立的 node-pty 依赖'),
+      remoteError: { context: { reason: 'node_pty_external_not_installed' } },
+    })
+    expect(report.checks.find((check) => check.id === 'capability.agent.stream')?.status).toBe(
+      'pass',
+    )
+  })
+
+  it('refreshes a pending PTY probe promptly even when the model runtime is ready', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service } = createService()
+      installOnlineServer(service)
+      const request = vi
+        .spyOn(service.getRequestRouter(), 'request')
+        .mockResolvedValueOnce({
+          ...createCclinkEnvelope('capability_probe_response'),
+          capabilities: { shell: { terminal_workspace_pty: false } },
+          terminal_workspace_pty_reason: 'node_pty_probe_pending',
+          runtime_probe: { refresh_state: 'ready', stale: false },
+        })
+        .mockResolvedValueOnce({
+          ...createCclinkEnvelope('capability_probe_response'),
+          capabilities: { shell: { terminal_workspace_pty: true } },
+          terminal_workspace_pty_status: 'available',
+          terminal_workspace_pty_reason: '',
+          runtime_probe: { refresh_state: 'ready', stale: false },
+        })
+
+      expect((await service.getStatus(remoteRef)).capabilities.shell.pty).toBe(false)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect((await service.getStatus(remoteRef)).capabilities.shell.pty).toBe(false)
+      expect(request).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1_001)
+      expect((await service.getStatus(remoteRef)).capabilities.shell.pty).toBe(true)
+      expect(request).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uploads remote images before sending their URLs in user_text', async () => {
     const { service } = createService()
     await service.initialize()

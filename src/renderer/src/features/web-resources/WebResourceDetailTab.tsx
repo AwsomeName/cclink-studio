@@ -12,6 +12,8 @@ import {
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
 import { resolveAndOpenWebResourceTab } from './web-resource-tab'
+import type { WebServiceStartupFailure } from '@shared/web-service-startup'
+import { WebServiceStartupNotice } from '../diagnostics/WebServiceStartupNotice'
 
 interface WebResourceDetail {
   website: WebsiteResource
@@ -24,6 +26,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
   const [detail, setDetail] = useState<WebResourceDetail | null>(null)
   const [observation, setObservation] = useState<WebResourceLoginObservation>()
   const [error, setError] = useState<string | null>(null)
+  const [startupFailure, setStartupFailure] = useState<WebServiceStartupFailure | null>(null)
   const [checking, setChecking] = useState(false)
 
   useEffect(() => {
@@ -33,6 +36,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
       .then((result) => {
         if (cancelled) return
         if (!result.success) {
+          setStartupFailure(result.error.startupFailure ?? null)
           setError(result.error.message)
           return
         }
@@ -48,6 +52,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
           return
         }
         setDetail({ account, website, principal })
+        setStartupFailure(null)
         setError(null)
       })
       .catch((reason) => {
@@ -85,6 +90,7 @@ export function WebResourceDetailTab({ accountId }: { accountId: string }): Reac
   )
 
   if (error && !detail) {
+    if (startupFailure) return <WebServiceStartupNotice failure={startupFailure} />
     return <div className="web-resource-detail-state error">{error}</div>
   }
   if (!detail) {

@@ -11,6 +11,8 @@ import {
 import { WebAffairFlowEditor } from './WebAffairFlowEditor'
 import { WebAffairNodeActions } from './WebAffairNodeActions'
 import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
+import type { WebServiceStartupFailure } from '@shared/web-service-startup'
+import { WebServiceStartupNotice } from '../diagnostics/WebServiceStartupNotice'
 
 export function WebAffairTab({ affairId }: { affairId: string }): React.ReactElement {
   const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
@@ -21,14 +23,23 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
   const [resultNote, setResultNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [startupFailure, setStartupFailure] = useState<WebServiceStartupFailure | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
     const [affairResult, resourceResult] = await Promise.all([
       window.cclinkStudio.webAffairs.getSnapshot({ workspaceRef }),
       window.cclinkStudio.webResources.getSnapshot({ workspaceRef }),
     ])
-    if (!affairResult.success) throw new Error(affairResult.error.message)
-    if (!resourceResult.success) throw new Error(resourceResult.error.message)
+    const loadError = !affairResult.success
+      ? affairResult.error
+      : !resourceResult.success
+        ? resourceResult.error
+        : null
+    setStartupFailure(loadError?.startupFailure ?? null)
+    if (!affairResult.success || !resourceResult.success) {
+      setError(loadError!.message)
+      return
+    }
     const found = affairResult.data.affairs.find((item) => item.id === affairId)
     if (!found) throw new Error('事务不存在或已失效')
     setAffair(found)
@@ -150,7 +161,13 @@ export function WebAffairTab({ affairId }: { affairId: string }): React.ReactEle
     }
   }
 
-  if (error && !affair) return <div className="web-affair-tab-state error">{error}</div>
+  if (error && !affair) {
+    return startupFailure ? (
+      <WebServiceStartupNotice failure={startupFailure} />
+    ) : (
+      <div className="web-affair-tab-state error">{error}</div>
+    )
+  }
   if (!affair || !resources) return <div className="web-affair-tab-state">正在读取事务…</div>
 
   if (affair.kind === 'image-research') {

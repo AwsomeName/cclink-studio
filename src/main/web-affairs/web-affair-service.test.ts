@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { WebResourceSnapshot } from '../../shared/web-resources/web-resource-types'
+import type { WebAffairFlowDiffOperation } from '../../shared/web-affairs/web-affair-types'
 import { WebAffairService } from './web-affair-service'
 import { WebAffairStore } from './web-affair-store'
 
@@ -518,6 +519,89 @@ describe('WebAffairService', () => {
     ).resolves.toMatchObject({ success: false, error: { code: 'IMMUTABLE_HISTORY' } })
   })
 
+  it.each([
+    ['cycle', 'INVALID_INPUT'],
+    ['foreign-account', 'INVALID_RESOURCE_REFERENCE'],
+    ['foreign-material', 'INVALID_RESOURCE_REFERENCE'],
+    ['missing-node', 'INVALID_INPUT'],
+    ['duplicate-node', 'INVALID_INPUT'],
+    ['history-content', 'IMMUTABLE_HISTORY'],
+    ['history-edge', 'IMMUTABLE_HISTORY'],
+  ])('rejects a %s revision without changing memory or disk', async (scenario, code) => {
+    const service = createService(filePath)
+    await service.load()
+    const created = await service.createAffair(validInput(), WORKSPACE_ID)
+    if (!created.success) throw new Error(created.error.message)
+    const completed = await service.updateNode(
+      {
+        workspaceRef: WORKSPACE_REF,
+        affairId: created.data.id,
+        nodeId: created.data.flow.nodes[0].id,
+        status: 'completed',
+        resultNote: '准备材料已完成',
+      },
+      WORKSPACE_ID,
+    )
+    if (!completed.success) throw new Error(completed.error.message)
+    const [first, second, third] = completed.data.flow.nodes
+    const nodes = completed.data.flow.nodes.map(toRevision)
+    let edges = completed.data.flow.edges.map(({ fromNodeId, toNodeId }) => ({
+      fromNodeId,
+      toNodeId,
+    }))
+    if (scenario === 'cycle') edges.push({ fromNodeId: third.id, toNodeId: second.id })
+    if (scenario === 'foreign-account') nodes[1].accountIds = [OTHER_WORKSPACE_ID]
+    if (scenario === 'foreign-material') nodes[1].materialIds = [OTHER_WORKSPACE_ID]
+    if (scenario === 'missing-node') edges.push({ fromNodeId: second.id, toNodeId: 'missing' })
+    if (scenario === 'duplicate-node') nodes.push(toRevision(second))
+    if (scenario === 'history-content') nodes[0].title = '改写历史'
+    if (scenario === 'history-edge') edges = edges.filter((edge) => edge.fromNodeId !== first.id)
+    const before = service.getSnapshot()
+    const storedBefore = await readFile(filePath, 'utf8')
+
+    await expect(
+      service.reviseFlow(
+        {
+          workspaceRef: WORKSPACE_REF,
+          affairId: completed.data.id,
+          expectedVersion: completed.data.flow.version,
+          nodes,
+          edges,
+        },
+        WORKSPACE_ID,
+      ),
+    ).resolves.toMatchObject({ success: false, error: { code } })
+    expect(service.getSnapshot()).toEqual(before)
+    expect(await readFile(filePath, 'utf8')).toBe(storedBefore)
+    await service.flush()
+  })
+
+  it('serializes competing revisions and persists only the matching flow version', async () => {
+    const service = createService(filePath)
+    await service.load()
+    const created = await service.createAffair(validInput(), WORKSPACE_ID)
+    if (!created.success) throw new Error(created.error.message)
+    const input = {
+      workspaceRef: WORKSPACE_REF,
+      affairId: created.data.id,
+      expectedVersion: 1,
+      nodes: created.data.flow.nodes.map(toRevision),
+      edges: created.data.flow.edges.map(({ fromNodeId, toNodeId }) => ({ fromNodeId, toNodeId })),
+    }
+    const [accepted, stale] = await Promise.all([
+      service.reviseFlow(input, WORKSPACE_ID),
+      service.reviseFlow(input, WORKSPACE_ID),
+    ])
+    expect(accepted).toMatchObject({ success: true, data: { flow: { version: 2 } } })
+    expect(stale).toMatchObject({ success: false, error: { code: 'FLOW_VERSION_CONFLICT' } })
+    const beforeRestart = service.getSnapshot()
+    await service.flush()
+    const reloaded = createService(filePath)
+    await reloaded.load()
+    expect(reloaded.getSnapshot()).toEqual(beforeRestart)
+    await reloaded.flush()
+  })
+
   it('detects changed and missing local materials instead of assuming they are usable', async () => {
     const materialPath = join(directory, 'license.png')
     await writeFile(materialPath, 'first')
@@ -789,6 +873,74 @@ describe('WebAffairService', () => {
     ).toBe(true)
     await reloaded.flush()
   })
+
+  it.each([
+    ['cycle', 'INVALID_INPUT'],
+    ['history-edge', 'IMMUTABLE_HISTORY'],
+    ['missing-node', 'NOT_FOUND'],
+  ])(
+    'keeps a failed %s proposal pending without applying earlier operations',
+    async (scenario, code) => {
+      const service = createService(filePath)
+      await service.load()
+      const created = await service.createAffair(validInput(), WORKSPACE_ID)
+      if (!created.success) throw new Error(created.error.message)
+      const completed = await service.updateNode(
+        {
+          workspaceRef: WORKSPACE_REF,
+          affairId: created.data.id,
+          nodeId: created.data.flow.nodes[0].id,
+          status: 'completed',
+          resultNote: '准备材料已完成',
+        },
+        WORKSPACE_ID,
+      )
+      if (!completed.success) throw new Error(completed.error.message)
+      const [, second, third] = completed.data.flow.nodes
+      const invalidOperation: WebAffairFlowDiffOperation =
+        scenario === 'cycle'
+          ? { kind: 'add-edge', fromNodeId: third.id, toNodeId: second.id }
+          : scenario === 'history-edge'
+            ? { kind: 'remove-edge', edgeId: completed.data.flow.edges[0].id }
+            : { kind: 'update-node', nodeId: OTHER_WORKSPACE_ID, title: '不存在的节点' }
+      const proposed = await service.proposeFlowDiff(
+        {
+          workspaceRef: WORKSPACE_REF,
+          affairId: created.data.id,
+          baseVersion: 1,
+          reason: '验证失败时不提交部分变更',
+          operations: [
+            { kind: 'update-node', nodeId: second.id, title: '不应写入的修改' },
+            invalidOperation,
+          ],
+          impacts: [],
+          proposedBy: 'ai',
+        },
+        WORKSPACE_ID,
+      )
+      if (!proposed.success) throw new Error(proposed.error.message)
+      const before = service.getSnapshot()
+      const storedBefore = await readFile(filePath, 'utf8')
+      await expect(
+        service.decideFlowProposal(
+          {
+            workspaceRef: WORKSPACE_REF,
+            affairId: created.data.id,
+            proposalId: proposed.data.flowProposals[0].id,
+            decision: 'accept',
+          },
+          WORKSPACE_ID,
+        ),
+      ).resolves.toMatchObject({ success: false, error: { code } })
+      expect(service.getSnapshot()).toEqual(before)
+      expect(await readFile(filePath, 'utf8')).toBe(storedBefore)
+      await service.flush()
+      const reloaded = createService(filePath)
+      await reloaded.load()
+      expect(reloaded.getSnapshot()).toEqual(before)
+      await reloaded.flush()
+    },
+  )
 
   it('stores an AI flow diff as a proposal and only applies it after user acceptance', async () => {
     const service = createService(filePath)

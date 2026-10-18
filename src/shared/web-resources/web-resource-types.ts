@@ -1,4 +1,5 @@
 import type { WorkspaceRef } from '../workspace-ref'
+import type { WebServiceStartupFailure } from '../web-service-startup'
 
 export type WebPrincipalKind = 'personal' | 'sole-proprietor' | 'company' | 'organization'
 
@@ -194,6 +195,7 @@ export type WebResourceErrorCode =
 export interface WebResourceOperationError {
   code: WebResourceErrorCode
   message: string
+  startupFailure?: WebServiceStartupFailure
   context?: {
     existingAccountId?: string
   }

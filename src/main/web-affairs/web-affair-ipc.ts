@@ -13,31 +13,24 @@ import type { WebAffairService } from './web-affair-service'
 import type { BrowserTaskRuntime } from '../browser/browser-task-runtime'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { ImageResearchService } from '../image-research/image-research-service'
+import {
+  describeWebServiceStartupFailure,
+  type WebServiceStartupFailure,
+} from '../../shared/web-service-startup'
 
-function unavailable<T>(): WebAffairOperationResult<T> {
+function unavailableResult<T>(
+  startupFailure?: WebServiceStartupFailure,
+): WebAffairOperationResult<T> {
   return {
     success: false,
     error: {
       code: 'SERVICE_UNAVAILABLE',
-      message: '事务服务当前不可用，其他工作台能力不受影响',
+      message: startupFailure
+        ? describeWebServiceStartupFailure(startupFailure)
+        : '事务服务当前不可用，其他工作台能力不受影响',
+      ...(startupFailure ? { startupFailure } : {}),
     },
   }
-}
-
-async function invokeScoped<T>(
-  input: WebAffairWorkspaceScopeInput,
-  getService: () => WebAffairService | null,
-  getWorkspaceStateService: () => WorkspaceStateService | null,
-  invoke: (
-    service: WebAffairService,
-    workspaceId: string,
-  ) => Promise<WebAffairOperationResult<T>> | WebAffairOperationResult<T>,
-): Promise<WebAffairOperationResult<T>> {
-  const service = getService()
-  if (!service) return unavailable()
-  const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
-  if (!workspaceId.success) return workspaceId
-  return invoke(service, workspaceId.data)
 }
 
 export function registerWebAffairIpc(
@@ -46,7 +39,44 @@ export function registerWebAffairIpc(
   getBrowserTaskRuntime: () => BrowserTaskRuntime | null = () => null,
   getWorkspaceStateService: () => WorkspaceStateService | null = () => null,
   getImageResearchService: () => ImageResearchService | null = () => null,
+  getStartupFailure: () => WebServiceStartupFailure | undefined = () => undefined,
 ): void {
+  const unavailable = <T>(): WebAffairOperationResult<T> => unavailableResult(getStartupFailure())
+
+  async function invokeScoped<T>(
+    input: WebAffairWorkspaceScopeInput,
+    getService: () => WebAffairService | null,
+    getWorkspaceStateService: () => WorkspaceStateService | null,
+    invoke: (
+      service: WebAffairService,
+      workspaceId: string,
+    ) => Promise<WebAffairOperationResult<T>> | WebAffairOperationResult<T>,
+  ): Promise<WebAffairOperationResult<T>> {
+    const service = getService()
+    if (!service) return unavailable()
+    const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
+    if (!workspaceId.success) return workspaceId
+    return invoke(service, workspaceId.data)
+  }
+
+  async function invokeImageResearch<T extends WebAffairWorkspaceScopeInput>(
+    input: T,
+    getWebAffairService: () => WebAffairService | null,
+    getWorkspaceStateService: () => WorkspaceStateService | null,
+    getImageResearchService: () => ImageResearchService | null,
+    invoke: (
+      service: ImageResearchService,
+      workspaceId: string,
+    ) => Promise<WebAffairOperationResult<WebAffair>>,
+  ): Promise<WebAffairOperationResult<WebAffair>> {
+    if (!getWebAffairService()) return unavailable()
+    const service = getImageResearchService()
+    if (!service) return unavailableResult()
+    const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
+    if (!workspaceId.success) return workspaceId
+    return invoke(service, workspaceId.data)
+  }
+
   registerTrustedIpcContract(
     webAffairsIpcContracts.getCatalog,
     trustedRendererGuard,
@@ -278,24 +308,6 @@ export function registerWebAffairIpc(
         service.inspectMaterials(input, workspaceId),
       ),
   )
-}
-
-async function invokeImageResearch<T extends WebAffairWorkspaceScopeInput>(
-  input: T,
-  getWebAffairService: () => WebAffairService | null,
-  getWorkspaceStateService: () => WorkspaceStateService | null,
-  getImageResearchService: () => ImageResearchService | null,
-  invoke: (
-    service: ImageResearchService,
-    workspaceId: string,
-  ) => Promise<WebAffairOperationResult<WebAffair>>,
-): Promise<WebAffairOperationResult<WebAffair>> {
-  if (!getWebAffairService()) return unavailable()
-  const service = getImageResearchService()
-  if (!service) return unavailable()
-  const workspaceId = await resolveWorkspaceId(input, getWorkspaceStateService())
-  if (!workspaceId.success) return workspaceId
-  return invoke(service, workspaceId.data)
 }
 
 async function resolveWorkspaceId(

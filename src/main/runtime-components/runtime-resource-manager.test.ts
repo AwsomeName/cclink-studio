@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { pack } from 'tar-stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeComponentInstallError } from './runtime-component-manager'
+import { RuntimeComponentInstallError } from './runtime-install-error'
 import { RuntimeResourceManager } from './runtime-resource-manager'
 import { getRuntimeResourceCatalogEntry } from './runtime-resource-catalog'
 

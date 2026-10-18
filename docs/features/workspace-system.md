@@ -189,8 +189,9 @@ Home 展示：
 目标宽度、可见性和 Agent 布局；切换使用现有 generation/restore guard，缺失布局回完整默认值。
 旧 localStorage 只作启动时的一次性兼容输入；窗口 clamp 不写回保存目标，拖拽在切换时同步取消。
 实现边界见 `docs/features/workspace-layout-development-plan.md`，工程验证与真实 Electron 回归记录见
-`docs/testing/workspace-layout-memory.md`。当前工程门禁已通过，本地真人签收和真实在线远程验收待完成，
-不得将自动化结果宣称为真人产品验收完成。
+`docs/testing/workspace-layout-memory.md`。2026-10-16 用户初步确认本地可用并要求收尾归档；此前工程
+门禁记录保留。本地逐项结果未完整补录，真实在线远程及事故页专项复验仍待完成，不将使用反馈或
+自动化结果扩写为全部真人产品验收通过。
 
 ## 文件重命名与移动事务（2026-08-28）
 

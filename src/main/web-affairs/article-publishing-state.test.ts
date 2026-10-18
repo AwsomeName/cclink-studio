@@ -2159,6 +2159,145 @@ describe('article publishing persistent state', () => {
     })
   })
 
+  it.each([
+    ['csdn', 'https://blog.csdn.net/test/article/details/123456'],
+    ['zhihu', 'https://zhuanlan.zhihu.com/p/123456'],
+    ['juejin', 'https://juejin.cn/post/123456'],
+    ['xiaohongshu', 'https://www.xiaohongshu.com/explore/6a8ed725000000002102ea10'],
+    ['weibo', 'https://weibo.com/5961101548/RhAKon2wi'],
+    ['toutiao', 'https://www.toutiao.com/w/1876018407641100/'],
+    ['bilibili', 'https://t.bilibili.com/1246694229973925912'],
+    ['jike', 'https://web.okjike.com/u/account-a/post/6aaac1a3bd0563695ba68bdf'],
+  ] as const)(
+    'rejects unverifiable %s publication results without changing memory or disk',
+    async (adapterId, publicationUrl) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await created.service.flush()
+      const filePath = join(directory, 'affairs.json')
+      const prepared: WebAffairSnapshot = JSON.parse(await readFile(filePath, 'utf8'))
+      const affair = prepared.affairs.find((item) => item.id === created.affairId)!
+      const publishing = affair.articlePublishing!
+      publishing.adapterId = adapterId
+      publishing.composer = { platformAccountId: '5961101548', allowPublish: true }
+      publishing.execution.currentStepId = 'verify-publication'
+      publishing.publication = { status: 'result-unknown' }
+      publishing.checkpoints.forEach((checkpoint) => {
+        checkpoint.status = checkpoint.stepId === 'verify-publication' ? 'verifying' : 'completed'
+      })
+      publishing.assets.forEach((asset) => {
+        asset.status = 'uploaded'
+        asset.platformUrl = 'https://example.com/verified-image.png'
+      })
+      const now = new Date().toISOString()
+      publishing.sideEffects = [
+        {
+          key: 'publication-to-reconcile',
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          executionGeneration: created.reporter.executionGeneration,
+          kind: 'publish',
+          targetId: 'final',
+          status: 'result-unknown',
+          reservedAt: now,
+          dispatchedAt: now,
+        },
+      ]
+      const input = {
+        workspaceRef: { kind: 'local' as const, path: directory },
+        affairId: created.affairId,
+        attemptId: created.attemptId,
+        stepId: 'verify-publication',
+        status: 'completed' as const,
+        evidence: 'main adapter verified the public result',
+        outputRefs: { publicationUrl },
+      }
+      const reporter: ArticlePublishingAgentReporter = {
+        ...created.reporter,
+        trustedPageEvidence: {
+          adapterId,
+          adapterVersion: 1,
+          kind: 'published',
+          observedAt: now,
+          url: publicationUrl,
+          platformAccountId: '5961101548',
+          bodyMatchesFrozen: true,
+          isCurrent: () => true,
+        },
+      }
+      const modes = [
+        'missing-evidence',
+        'wrong-adapter',
+        'stale-page',
+        'wrong-run',
+        'foreign-url',
+        'insecure-url',
+        'not-dispatched',
+        ...(['weibo', 'bilibili', 'jike'].includes(adapterId) ? ['not-authorized'] : []),
+      ]
+      for (const mode of modes) {
+        const fixture = structuredClone(prepared)
+        const state = fixture.affairs.find(
+          (item) => item.id === created.affairId,
+        )!.articlePublishing!
+        if (mode === 'not-dispatched') {
+          state.sideEffects[0].status = 'reserved'
+          state.sideEffects[0].dispatchedAt = undefined
+        }
+        if (mode === 'not-authorized') state.composer!.allowPublish = false
+        Reflect.set(created.service, 'snapshot', fixture)
+        await writeFile(filePath, JSON.stringify(fixture))
+        const before = created.service.getSnapshot()
+        const storedBefore = await readFile(filePath, 'utf8')
+        const candidateReporter: ArticlePublishingAgentReporter = {
+          ...reporter,
+          agentRunId: mode === 'wrong-run' ? 'another-run' : reporter.agentRunId,
+          trustedPageEvidence:
+            mode === 'missing-evidence'
+              ? undefined
+              : {
+                  ...reporter.trustedPageEvidence!,
+                  adapterId:
+                    mode === 'wrong-adapter'
+                      ? adapterId === 'csdn'
+                        ? 'zhihu'
+                        : 'csdn'
+                      : adapterId,
+                  isCurrent: () => mode !== 'stale-page',
+                },
+        }
+        const result = await created.service.reportArticlePublishingCheckpoint(
+          {
+            ...input,
+            outputRefs: {
+              publicationUrl:
+                mode === 'foreign-url'
+                  ? 'https://example.com/p/123456'
+                  : mode === 'insecure-url'
+                    ? publicationUrl.replace('https:', 'http:')
+                    : publicationUrl,
+            },
+          },
+          WORKSPACE_ID,
+          candidateReporter,
+        )
+        expect(
+          result.success,
+          `${mode}: ${JSON.stringify(result.success ? null : result.error)}`,
+        ).toBe(false)
+        if (!result.success) {
+          expect(result.error.code, mode).toBe(
+            ['missing-evidence', 'wrong-adapter', 'not-authorized'].includes(mode)
+              ? 'EVIDENCE_REQUIRED'
+              : 'INVALID_TRANSITION',
+          )
+          expect(created.service.getSnapshot(), mode).toEqual(before)
+          expect(await readFile(filePath, 'utf8'), mode).toBe(storedBefore)
+        }
+      }
+      await created.service.flush()
+    },
+  )
+
   it('requires waiting and verification evidence before an image becomes uploaded', async () => {
     const { service, affairId, attemptId, assetId, reporter } = await createStartedTask(
       directory,
@@ -2244,6 +2383,99 @@ describe('article publishing persistent state', () => {
       platformUrl: 'https://img-blog.csdnimg.cn/example.png',
       uploadAttempts: [{ number: 1, status: 'succeeded' }],
     })
+  })
+
+  it('serializes simultaneous upload starts into one persisted attempt', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    const before = created.service.getSnapshot()
+    if (!before.success) throw new Error(before.error.message)
+    const input = {
+      workspaceRef: { kind: 'local' as const, path: directory },
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      assetId: created.assetId,
+      status: 'uploading' as const,
+    }
+    const results = await Promise.all([
+      created.service.reportArticlePublishingAsset(
+        input,
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-absent'),
+      ),
+      created.service.reportArticlePublishingAsset(
+        input,
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-absent'),
+      ),
+    ])
+    expect(results.map((result) => result.success)).toEqual([true, false])
+    const stored = JSON.parse(await readFile(join(directory, 'affairs.json'), 'utf8'))
+    expect(stored.revision).toBe(before.data.revision + 1)
+    expect(stored.affairs[0].articlePublishing.assets[0].uploadAttempts).toEqual([
+      expect.objectContaining({ number: 1, status: 'uploading' }),
+    ])
+    await created.service.flush()
+  })
+
+  it('requires a dispatched receipt before upload verification can change memory or disk', async () => {
+    const created = await createStartedTask(directory, sourcePath, imagePath)
+    await prepareUploadCheckpoint(created)
+    const input = {
+      workspaceRef: { kind: 'local' as const, path: directory },
+      affairId: created.affairId,
+      attemptId: created.attemptId,
+      assetId: created.assetId,
+    }
+    await expectStatus(
+      created.service.reportArticlePublishingAsset(
+        { ...input, status: 'uploading' },
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-absent'),
+      ),
+      'uploading',
+    )
+    for (const status of ['waiting-platform', 'verifying'] as const) {
+      await expectStatus(
+        created.service.reportArticlePublishingAsset(
+          { ...input, status, evidence: '重新观察上传现场' },
+          WORKSPACE_ID,
+          created.reporter,
+        ),
+        status,
+      )
+    }
+    const completion = {
+      ...input,
+      status: 'uploaded' as const,
+      platformUrl: 'https://i-blog.csdnimg.cn/direct/verified.png',
+      evidence: '适配器已核验图片节点',
+    }
+    const before = created.service.getSnapshot()
+    const filePath = join(directory, 'affairs.json')
+    const storedBefore = await readFile(filePath, 'utf8')
+    await expect(
+      created.service.reportArticlePublishingAsset(
+        completion,
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-uploaded'),
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: { code: 'INVALID_TRANSITION', message: expect.stringContaining('已派发上传凭证') },
+    })
+    expect(created.service.getSnapshot()).toEqual(before)
+    expect(await readFile(filePath, 'utf8')).toBe(storedBefore)
+    await dispatchUploadEffect(created, 1)
+    await expectStatus(
+      created.service.reportArticlePublishingAsset(
+        completion,
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-uploaded'),
+      ),
+      'uploaded',
+    )
+    await created.service.flush()
   })
 
   it('persists the observed file-to-image URL without declaring upload success and rejects stale observations', async () => {
@@ -2586,57 +2818,96 @@ describe('article publishing persistent state', () => {
     },
   )
 
-  it('blocks an unknown upload until the user visually confirms whether the image exists', async () => {
-    const created = await createStartedTask(directory, sourcePath, imagePath)
-    await prepareUploadCheckpoint(created)
-    await dispatchUploadEffect(created, 1)
-    const workspaceRef = { kind: 'local' as const, path: directory }
-    const uploading = await created.service.reportArticlePublishingAsset(
-      {
-        workspaceRef,
-        affairId: created.affairId,
-        attemptId: created.attemptId,
-        assetId: created.assetId,
-        status: 'uploading',
-      },
-      WORKSPACE_ID,
-      trustedReporter(created.reporter, 'asset-absent'),
-    )
-    expect(uploading.success).toBe(true)
-    const unknown = await created.service.reportArticlePublishingAsset(
-      {
-        workspaceRef,
-        affairId: created.affairId,
-        attemptId: created.attemptId,
-        assetId: created.assetId,
-        status: 'result-unknown',
-        evidence: '上传动作已派发，但连接在页面读回前断开',
-        error: { code: 'CDP_DISCONNECTED', message: '无法确认上传结果' },
-      },
-      WORKSPACE_ID,
-      created.reporter,
-    )
-    expect(unknown.success).toBe(true)
-
-    await expect(resumeAndBindPublishingTask(created)).rejects.toThrow(
-      '旧代次图片或保存结果仍不确定',
-    )
-    const resolved = await created.service.resolveArticlePublishingAsset(
-      created.affairId,
-      created.assetId,
-      'present',
-      WORKSPACE_ID,
-    )
-    expect(resolved).toMatchObject({
-      success: true,
-      data: {
-        articlePublishing: {
-          execution: { status: 'interrupted' },
-          assets: [{ status: 'uploaded', manualResolution: { status: 'present' } }],
+  it.each(['present', 'missing'] as const)(
+    'blocks an unknown upload until user confirmation: %s',
+    async (resolution) => {
+      const created = await createStartedTask(directory, sourcePath, imagePath)
+      await prepareUploadCheckpoint(created)
+      await dispatchUploadEffect(created, 1)
+      const workspaceRef = { kind: 'local' as const, path: directory }
+      const uploading = await created.service.reportArticlePublishingAsset(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          assetId: created.assetId,
+          status: 'uploading',
         },
-      },
-    })
-  })
+        WORKSPACE_ID,
+        trustedReporter(created.reporter, 'asset-absent'),
+      )
+      expect(uploading.success).toBe(true)
+      const unknown = await created.service.reportArticlePublishingAsset(
+        {
+          workspaceRef,
+          affairId: created.affairId,
+          attemptId: created.attemptId,
+          assetId: created.assetId,
+          status: 'result-unknown',
+          evidence: '上传动作已派发，但连接在页面读回前断开',
+          error: { code: 'CDP_DISCONNECTED', message: '无法确认上传结果' },
+        },
+        WORKSPACE_ID,
+        created.reporter,
+      )
+      expect(unknown.success).toBe(true)
+
+      await expect(resumeAndBindPublishingTask(created)).rejects.toThrow(
+        '旧代次图片或保存结果仍不确定',
+      )
+      const before = created.service.getSnapshot()
+      const filePath = join(directory, 'affairs.json')
+      const storedBefore = await readFile(filePath, 'utf8')
+      await expect(
+        created.service.resolveArticlePublishingAsset(
+          created.affairId,
+          created.assetId,
+          resolution,
+          WORKSPACE_ID,
+          { platformUrl: 'https://i-blog.csdnimg.cn/direct/observed.png', isCurrent: () => false },
+        ),
+      ).resolves.toMatchObject({ success: false, error: { code: 'INVALID_TRANSITION' } })
+      expect(created.service.getSnapshot()).toEqual(before)
+      expect(await readFile(filePath, 'utf8')).toBe(storedBefore)
+      const resolved = await created.service.resolveArticlePublishingAsset(
+        created.affairId,
+        created.assetId,
+        resolution,
+        WORKSPACE_ID,
+      )
+      expect(resolved).toMatchObject({
+        success: true,
+        data: {
+          articlePublishing: {
+            execution: { status: 'interrupted' },
+            assets: [
+              {
+                status: resolution === 'present' ? 'uploaded' : 'retryable-failed',
+                manualResolution: { status: resolution },
+              },
+            ],
+            sideEffects: [
+              expect.objectContaining({
+                kind: 'upload-asset',
+                status: resolution === 'present' ? 'verified' : 'rejected',
+              }),
+            ],
+          },
+        },
+      })
+      await created.service.flush()
+      const reloaded = createService(directory)
+      await reloaded.load()
+      const restored = reloaded.getProjectSnapshot(WORKSPACE_ID)
+      if (!restored.success) throw new Error(restored.error.message)
+      expect(restored.data.affairs[0].articlePublishing?.assets[0]).toMatchObject({
+        status: resolution === 'present' ? 'uploaded' : 'retryable-failed',
+        manualResolution: { status: resolution },
+      })
+      expect(restored.data.affairs[0].articlePublishing?.publication.status).toBe('not-started')
+      await reloaded.flush()
+    },
+  )
 
   it.each([
     'verified',

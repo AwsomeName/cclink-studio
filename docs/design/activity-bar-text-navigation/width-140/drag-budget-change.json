@@ -1,0 +1,72 @@
+{
+  "before": {
+    "saved": {
+      "activePanel": "files",
+      "sidebarVisible": false,
+      "agentPanelVisible": true,
+      "sidebarWidth": 250,
+      "agentPanelWidth": 700,
+      "agentPanelMode": "right",
+      "agentPanelLastVisibleMode": "right",
+      "agentPanelModeSource": "user"
+    },
+    "displayedAgentWidth": 436,
+    "activeDrag": false
+  },
+  "preview": {
+    "saved": {
+      "activePanel": "files",
+      "sidebarVisible": false,
+      "agentPanelVisible": true,
+      "sidebarWidth": 250,
+      "agentPanelWidth": 700,
+      "agentPanelMode": "right",
+      "agentPanelLastVisibleMode": "right",
+      "agentPanelModeSource": "user"
+    },
+    "displayedAgentWidth": 416,
+    "activeDrag": true
+  },
+  "cancelled": {
+    "saved": {
+      "activePanel": "files",
+      "sidebarVisible": true,
+      "agentPanelVisible": true,
+      "sidebarWidth": 250,
+      "agentPanelWidth": 700,
+      "agentPanelMode": "right",
+      "agentPanelLastVisibleMode": "right",
+      "agentPanelModeSource": "user"
+    },
+    "displayedAgentWidth": 220,
+    "activeDrag": false
+  },
+  "after": {
+    "saved": {
+      "activePanel": "files",
+      "sidebarVisible": true,
+      "agentPanelVisible": true,
+      "sidebarWidth": 250,
+      "agentPanelWidth": 700,
+      "agentPanelMode": "right",
+      "agentPanelLastVisibleMode": "right",
+      "agentPanelModeSource": "user"
+    },
+    "displayedAgentWidth": 220,
+    "activeDrag": false
+  },
+  "restored": {
+    "saved": {
+      "activePanel": "files",
+      "sidebarVisible": true,
+      "agentPanelVisible": true,
+      "sidebarWidth": 250,
+      "agentPanelWidth": 700,
+      "agentPanelMode": "right",
+      "agentPanelLastVisibleMode": "right",
+      "agentPanelModeSource": "user"
+    },
+    "displayedAgentWidth": 700,
+    "activeDrag": false
+  }
+}

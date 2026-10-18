@@ -16,13 +16,22 @@ import type { ProjectOpsService } from '../project-ops/project-ops-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { BrowserManager } from '../browser/browser-manager'
 import { workspaceRefKey } from '../../shared/workspace-ref'
+import {
+  describeWebServiceStartupFailure,
+  type WebServiceStartupFailure,
+} from '../../shared/web-service-startup'
 
-function unavailable<T>(): WebResourceOperationResult<T> {
+function unavailableResult<T>(
+  startupFailure?: WebServiceStartupFailure,
+): WebResourceOperationResult<T> {
   return {
     success: false,
     error: {
       code: 'SERVICE_UNAVAILABLE',
-      message: '网站与账号服务当前不可用，其他工作台能力不受影响',
+      message: startupFailure
+        ? describeWebServiceStartupFailure(startupFailure)
+        : '网站与账号服务当前不可用，其他工作台能力不受影响',
+      ...(startupFailure ? { startupFailure } : {}),
     },
   }
 }
@@ -33,7 +42,9 @@ export function registerWebResourceIpc(
   getWorkspaceStateService: () => WorkspaceStateService | null,
   trustedRendererGuard: TrustedRendererGuard,
   getBrowserManager: () => BrowserManager | null = () => null,
+  getStartupFailure: () => WebServiceStartupFailure | undefined = () => undefined,
 ): void {
+  const unavailable = <T>(): WebResourceOperationResult<T> => unavailableResult(getStartupFailure())
   registerTrustedIpcContract(
     webResourcesIpcContracts.getSnapshot,
     trustedRendererGuard,

@@ -10,6 +10,7 @@ const mockIpcMain = vi.hoisted(() => ({
 vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
 import { registerWebResourceIpc } from './web-resource-ipc'
+import { createWebServiceStartupFailure } from '../diagnostics/web-service-startup-error'
 
 const PROJECT_ID = '11111111-1111-4111-8111-111111111111'
 const PROJECT_SCOPE = { workspaceRef: { kind: 'local' as const, path: '/Users/example/project' } }
@@ -83,6 +84,47 @@ describe('registerWebResourceIpc', () => {
         message: '网站与账号服务当前不可用，其他工作台能力不受影响',
       },
     })
+  })
+
+  it('returns the recorded startup reason on reads and mutations without resolving workspace state', async () => {
+    const failure = createWebServiceStartupFailure(
+      'web-resources',
+      Object.assign(new Error('private token=secret'), { code: 'EACCES' }),
+    )
+    const getFailure = vi.fn(() => failure)
+    const workspace = createWorkspaceState()
+    registerWebResourceIpc(
+      () => null,
+      () => null,
+      () => workspace as never,
+      createGuard('trusted') as never,
+      () => null,
+      getFailure,
+    )
+
+    const result = await mockIpcMain.handlers.get('webResources:getSnapshot')?.(
+      { sender: 'trusted' },
+      PROJECT_SCOPE,
+    )
+    expect(result).toMatchObject({
+      success: false,
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        startupFailure: failure,
+        message: expect.stringContaining('读写权限'),
+      },
+    })
+    expect(JSON.stringify(result)).not.toMatch(/private|secret/)
+    expect(() =>
+      mockIpcMain.handlers.get('webResources:getSnapshot')?.({ sender: 'other' }, PROJECT_SCOPE),
+    ).toThrow('untrusted')
+    expect(getFailure).toHaveBeenCalledOnce()
+    expect(
+      await mockIpcMain.handlers.get('webResources:updateAccount')?.(
+        { sender: 'trusted' },
+        { accountId: PROJECT_ID, label: 'Name' },
+      ),
+    ).toMatchObject({ error: { startupFailure: failure } })
   })
 
   it('validates and forwards an account label update', async () => {

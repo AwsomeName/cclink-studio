@@ -242,6 +242,34 @@ adapter 会把 session ID、endpoint、workspace 和 path 确定性映射为同�
 修复状态：Studio 代码与自动化门禁已完成；真实在线 Agent 断网验收仍待执行。在第 1-5 步
 真人验收通过前，只能声明工程修复完成，不能声明远程 Terminal 用户闭环完成。
 
+## 远程 PTY 依赖与启动诊断
+
+远程文件与 Agent 会话可用，不代表远程主机已具备 PTY。当前 Agent 的持久 Terminal 使用与
+Agent 位于同一 npm prefix 的独立 `node-pty`；Agent 的安装或升级不会代为安装该可选依赖。
+Studio 继续只接受实时探测确认的 `terminal_workspace_pty`，不能把普通 shell 执行能力
+当成持久 PTY，也不能因缺少依赖改为在本机执行远程命令。
+
+Terminal 启动失败和远程诊断应展示同一份 Agent 原因：未安装依赖、版本/ABI 不兼容、启动
+检查失败和探测中分别呈现。能力探测超时保留原超时错误；PTY 探测中使用两秒短缓存并允许
+用户稍后重试，不被模型 Runtime 已就绪的十五秒缓存延迟。未返回原因的旧 Agent 只能提示
+未声明能力，不能推断为缺少依赖。
+
+缺少依赖时，用户在远程主机使用安装 Agent 的同一用户及 Node/npm 环境执行：
+
+```bash
+npm install -g --prefix "$(npm config get prefix)" node-pty@1.1.0
+chatcc doctor pty
+chatcc restart
+```
+
+`chatcc doctor pty` 是只读检查，返回真实加载/启动结果、预期安装路径和对应修复命令；安装
+失败应按该主机的编译环境处理，Studio 不自动安装依赖或提升权限。
+
+真人验收：先在缺少依赖的远程主机打开 Terminal，确认报错和诊断都说明缺少独立依赖；
+安装后确认 doctor 输出 `terminal_workspace_pty: true`，重启 Agent，在 Studio 点“重试启动”，
+运行 `pwd` 确认路径为远程工作空间，再运行交互命令确认输入、输出和 resize。当前变更只能
+证明原因传递与能力门禁的工程行为；上述远端安装及真实 Terminal 操作尚待现场验收。
+
 ## 执行编排器
 
 `TerminalCommandOrchestrator` 把命令提交压成可测试闭环：

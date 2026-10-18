@@ -18,6 +18,8 @@ import {
 import { resolveAndOpenWebResourceTab } from './web-resource-tab'
 import { observeWebResourcesChanged } from './web-resource-events'
 import { openWebAccountDraftTab } from './open-default-browser-tab'
+import type { WebServiceStartupFailure } from '@shared/web-service-startup'
+import { WebServiceStartupNotice } from '../diagnostics/WebServiceStartupNotice'
 
 interface AccountRow {
   account: WebAccount
@@ -34,6 +36,7 @@ export function WebResourcesSidebar({
 }): React.ReactElement {
   const [snapshot, setSnapshot] = useState<WebResourceSnapshot | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [startupFailure, setStartupFailure] = useState<WebServiceStartupFailure | null>(null)
   const [showImportForm, setShowImportForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(false)
@@ -64,10 +67,12 @@ export function WebResourcesSidebar({
   const reload = useCallback(async (): Promise<void> => {
     const result = await window.cclinkStudio.webResources.getSnapshot({ workspaceRef })
     if (!result.success) {
+      setStartupFailure(result.error.startupFailure ?? null)
       setLoadError(result.error.message)
       return
     }
     setSnapshot(result.data)
+    setStartupFailure(null)
     setLoadError(null)
   }, [workspaceRef])
 
@@ -409,7 +414,11 @@ export function WebResourcesSidebar({
         </form>
       ) : null}
 
-      {loadError ? <div className="web-resources-error">{loadError}</div> : null}
+      {startupFailure ? (
+        <WebServiceStartupNotice failure={startupFailure} />
+      ) : loadError ? (
+        <div className="web-resources-error">{loadError}</div>
+      ) : null}
       {importMessage ? <div className="web-resources-success">{importMessage}</div> : null}
       {duplicateSets.map((items) => (
         <div className="web-resources-legacy-notice" key={items[0].account.id}>

@@ -1,0 +1,214 @@
+{
+  "results": [
+    {
+      "name": "default workspace and create A/B layouts",
+      "ok": true
+    },
+    {
+      "name": "A → B → A after full open completion and persisted isolation",
+      "ok": true,
+      "detail": {
+        "a": {
+          "activePanel": "files",
+          "sidebarVisible": false,
+          "agentPanelVisible": true,
+          "sidebarWidth": 180,
+          "agentPanelWidth": 260,
+          "agentPanelMode": "right",
+          "agentPanelLastVisibleMode": "right",
+          "agentPanelModeSource": "user"
+        },
+        "b": {
+          "activePanel": "company-accounts",
+          "sidebarVisible": true,
+          "agentPanelVisible": false,
+          "sidebarWidth": 420,
+          "agentPanelWidth": 600,
+          "agentPanelMode": "hidden",
+          "agentPanelLastVisibleMode": "right",
+          "agentPanelModeSource": "user"
+        }
+      }
+    },
+    {
+      "name": "native View bounds follow sidebar and Agent layout",
+      "ok": true
+    },
+    {
+      "name": "window shrink/grow never overwrites the saved target width",
+      "ok": true
+    },
+    {
+      "name": "text navigation, all pointer and keyboard menu opens, and settings",
+      "ok": true
+    },
+    {
+      "name": "compressed sidebar gestures preview without saving and commit only final changes",
+      "ok": true
+    },
+    {
+      "name": "sidebar toggle cancels Agent drag without saving stale budget",
+      "ok": true,
+      "detail": {
+        "before": {
+          "saved": {
+            "activePanel": "files",
+            "sidebarVisible": false,
+            "agentPanelVisible": true,
+            "sidebarWidth": 250,
+            "agentPanelWidth": 700,
+            "agentPanelMode": "right",
+            "agentPanelLastVisibleMode": "right",
+            "agentPanelModeSource": "user"
+          },
+          "displayedAgentWidth": 422,
+          "activeDrag": false
+        },
+        "preview": {
+          "saved": {
+            "activePanel": "files",
+            "sidebarVisible": false,
+            "agentPanelVisible": true,
+            "sidebarWidth": 250,
+            "agentPanelWidth": 700,
+            "agentPanelMode": "right",
+            "agentPanelLastVisibleMode": "right",
+            "agentPanelModeSource": "user"
+          },
+          "displayedAgentWidth": 402,
+          "activeDrag": true
+        },
+        "cancelled": {
+          "saved": {
+            "activePanel": "files",
+            "sidebarVisible": true,
+            "agentPanelVisible": true,
+            "sidebarWidth": 250,
+            "agentPanelWidth": 700,
+            "agentPanelMode": "right",
+            "agentPanelLastVisibleMode": "right",
+            "agentPanelModeSource": "user"
+          },
+          "displayedAgentWidth": 220,
+          "activeDrag": false
+        },
+        "after": {
+          "saved": {
+            "activePanel": "files",
+            "sidebarVisible": true,
+            "agentPanelVisible": true,
+            "sidebarWidth": 250,
+            "agentPanelWidth": 700,
+            "agentPanelMode": "right",
+            "agentPanelLastVisibleMode": "right",
+            "agentPanelModeSource": "user"
+          },
+          "displayedAgentWidth": 220,
+          "activeDrag": false
+        },
+        "restored": {
+          "saved": {
+            "activePanel": "files",
+            "sidebarVisible": true,
+            "agentPanelVisible": true,
+            "sidebarWidth": 250,
+            "agentPanelWidth": 700,
+            "agentPanelMode": "right",
+            "agentPanelLastVisibleMode": "right",
+            "agentPanelModeSource": "user"
+          },
+          "displayedAgentWidth": 700,
+          "activeDrag": false
+        }
+      }
+    },
+    {
+      "name": "active drag cancels on workspace switch and ignores the old pointer",
+      "ok": true
+    },
+    {
+      "name": "page zoom 30% restores to 100% through production fit",
+      "ok": true
+    },
+    {
+      "name": "visual scale 30% restores to 100% without reload through production fit",
+      "ok": true,
+      "detail": {
+        "before": 0.30000001192092896,
+        "after": 1,
+        "pageZoom": 1
+      }
+    },
+    {
+      "name": "visual scale 30% resets across A → B → A through existing View lifecycle",
+      "ok": true,
+      "detail": {
+        "before": 0.30000001192092896,
+        "after": 1
+      }
+    },
+    {
+      "name": "in-page navigation and browser history preserve 100% zoom",
+      "ok": true
+    },
+    {
+      "name": "restart restores layouts and native Browser zoom",
+      "ok": true
+    },
+    {
+      "name": "real window sizes, complete text, states, themes and non-default app zoom",
+      "ok": true
+    },
+    {
+      "name": "preserved Settings stays visible after system layout restore; user mode wins",
+      "ok": true,
+      "detail": {
+        "preserved": {
+          "sameTab": true,
+          "activeTabId": "tab-1-1792130208905"
+        },
+        "systemLayout": {
+          "activePanel": "files",
+          "sidebarVisible": true,
+          "agentPanelVisible": true,
+          "sidebarWidth": 250,
+          "agentPanelWidth": 350,
+          "agentPanelMode": "right",
+          "agentPanelLastVisibleMode": "right",
+          "agentPanelModeSource": "system",
+          "workspaceKey": "/Users/apple/.cclink-workspace-layout-UGq1PR/settings-default"
+        },
+        "userLayout": {
+          "activePanel": "company-accounts",
+          "sidebarVisible": true,
+          "agentPanelVisible": false,
+          "sidebarWidth": 420,
+          "agentPanelWidth": 600,
+          "agentPanelMode": "hidden",
+          "agentPanelLastVisibleMode": "right",
+          "agentPanelModeSource": "user",
+          "workspaceKey": "/Users/apple/.cclink-workspace-layout-UGq1PR/layout-b"
+        }
+      }
+    },
+    {
+      "name": "real scheduled Runtime query/event counter without Agent calls",
+      "ok": true,
+      "detail": {
+        "events": 4,
+        "transitions": "0 → 1 → 0",
+        "boundaries": [
+          {
+            "value": "99",
+            "fits": true
+          },
+          {
+            "value": "99+",
+            "fits": true
+          }
+        ]
+      }
+    }
+  ],
+  "evidenceDir": "/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-workspace-layout-dreetu"
+}

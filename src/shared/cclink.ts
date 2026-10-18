@@ -183,6 +183,8 @@ export interface CclinkCapabilityProbeResponseMessage extends CclinkEnvelope {
   }
   capability_map?: Record<string, boolean>
   capability_list?: string[]
+  terminal_workspace_pty_status?: string
+  terminal_workspace_pty_reason?: string
   runtime?: string
   runtime_probe?: {
     version?: number

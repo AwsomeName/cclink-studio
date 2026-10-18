@@ -4,12 +4,12 @@ import { clampPanelWidth, getPanelLayout } from './panel-layout'
 describe('panel width budget', () => {
   it.each([
     [1400, true, true, 250, 350, 250, 350],
-    [900, true, true, 250, 350, 198, 220],
+    [900, true, true, 250, 350, 212, 220],
     [900, true, false, 250, 350, 250, 0],
     [900, false, true, 250, 350, 0, 350],
-    [900, true, false, 500, 350, 422, 0],
+    [900, true, false, 500, 350, 436, 0],
     [900, false, false, 250, 350, 0, 0],
-    [862, true, true, 250, 350, 160, 220],
+    [848, true, true, 250, 350, 160, 220],
     [800, true, true, 250, 350, 160, 220],
   ])(
     'allocates viewport %s, sidebar %s, right Agent %s',
@@ -34,7 +34,7 @@ describe('panel width budget', () => {
       sidebarWidth: 250,
       agentPanelWidth: 350,
     }
-    expect(getPanelLayout(input)).toMatchObject({ sidebarWidth: 198, agentPanelWidth: 220 })
+    expect(getPanelLayout(input)).toMatchObject({ sidebarWidth: 212, agentPanelWidth: 220 })
     expect(input).toMatchObject({ sidebarWidth: 250, agentPanelWidth: 350 })
     expect(getPanelLayout({ ...input, viewportWidth: 1400 })).toMatchObject({
       sidebarWidth: 250,

@@ -51,6 +51,7 @@ import type { TrustedRendererRegistry } from '../ipc/trusted-renderer-guard'
 import type { UpdateService } from '../update/update-service'
 import type { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { RuntimeCapabilityRegistry } from './capability-registry'
+import type { WebServiceName, WebServiceStartupFailure } from '../../shared/web-service-startup'
 import type { ServiceRegistry } from './service-registry'
 import type { RendererWorkspaceStateFlushCoordinator } from '../workspace/renderer-workspace-state-flush'
 import type { RuntimeComponentManager } from '../runtime-components/runtime-component-manager'
@@ -108,6 +109,7 @@ export interface CclinkStudioRuntimeState {
   usageLedgerService: UsageLedgerService | null
   projectOpsService: ProjectOpsService | null
   webResourceService: WebResourceService | null
+  webServiceStartupFailures: Partial<Record<WebServiceName, WebServiceStartupFailure>>
   agentWebResourceLaunchCoordinator: AgentWebResourceLaunchCoordinator | null
   webAffairService: WebAffairService | null
   articlePublishingService: ArticlePublishingService | null
@@ -185,6 +187,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     usageLedgerService: null,
     projectOpsService: null,
     webResourceService: null,
+    webServiceStartupFailures: {},
     agentWebResourceLaunchCoordinator: null,
     webAffairService: null,
     articlePublishingService: null,

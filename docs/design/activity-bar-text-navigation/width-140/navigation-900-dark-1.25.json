@@ -1,0 +1,102 @@
+{
+  "geometry": {
+    "width": 140,
+    "labels": [
+      {
+        "text": "公司经营",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "文件",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "会话",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "浏览器",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "终端",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "角色",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "网站与账号",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "数据源",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "公司账目",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "CCLink 远程",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "文章发布",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "事务",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "定时任务",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "视频创作",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "硬件生产",
+        "fits": true,
+        "font": "13px"
+      },
+      {
+        "text": "设置",
+        "fits": true,
+        "font": "13px"
+      }
+    ],
+    "settingsBottom": 538,
+    "viewport": {
+      "width": 900,
+      "height": 560,
+      "dpr": 2.5
+    }
+  },
+  "windowBounds": {
+    "content": {
+      "x": 20,
+      "y": 30,
+      "width": 1125,
+      "height": 700
+    },
+    "zoom": 1.25
+  }
+}

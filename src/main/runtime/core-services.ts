@@ -10,6 +10,7 @@ import { WebResourceService } from '../web-resources/web-resource-service'
 import { registerWebResourceIpc } from '../web-resources/web-resource-ipc'
 import { WebAffairService } from '../web-affairs/web-affair-service'
 import { registerWebAffairIpc } from '../web-affairs/web-affair-ipc'
+import { createWebServiceStartupFailure } from '../diagnostics/web-service-startup-error'
 import { webAffairsIpcEvents } from '../../shared/web-affairs/web-affair'
 import { ArticlePublishingService } from '../article-publishing/article-publishing-service'
 import { ImageResearchService } from '../image-research/image-research-service'
@@ -421,12 +422,17 @@ export async function bootstrapMainProcessServices(
   registerProjectOpsIpc(runtime.projectOpsService, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 项目运营 IPC 已注册')
 
+  runtime.webServiceStartupFailures = {}
   try {
     runtime.webResourceService = new WebResourceService()
     await runtime.webResourceService.load()
     console.log('[CCLink Studio] 网站与账号服务已初始化')
   } catch (error) {
     runtime.webResourceService = null
+    runtime.webServiceStartupFailures['web-resources'] = createWebServiceStartupFailure(
+      'web-resources',
+      error,
+    )
     console.error('[CCLink Studio] 网站与账号服务初始化失败，其他本地能力继续启动:', error)
   }
   registerWebResourceIpc(
@@ -435,6 +441,7 @@ export async function bootstrapMainProcessServices(
     () => runtime.workspaceStateService,
     runtime.trustedRendererGuard,
     () => runtime.browserManager,
+    () => runtime.webServiceStartupFailures['web-resources'],
   )
   console.log('[CCLink Studio] 网站与账号 IPC 已注册')
 
@@ -464,6 +471,10 @@ export async function bootstrapMainProcessServices(
     console.log('[CCLink Studio] 事务服务已初始化')
   } catch (error) {
     runtime.webAffairService = null
+    runtime.webServiceStartupFailures['web-affairs'] = createWebServiceStartupFailure(
+      'web-affairs',
+      error,
+    )
     console.error('[CCLink Studio] 事务服务初始化失败，其他本地能力继续启动:', error)
   }
   registerWebAffairIpc(
@@ -472,6 +483,7 @@ export async function bootstrapMainProcessServices(
     () => runtime.browserTaskRuntime,
     () => runtime.workspaceStateService,
     () => runtime.imageResearchService,
+    () => runtime.webServiceStartupFailures['web-affairs'],
   )
   console.log('[CCLink Studio] 事务 IPC 已注册')
 
@@ -674,6 +686,7 @@ export async function shutdownMainProcessServices(
   runtime.projectOpsService = null
   runtime.webResourceService = null
   runtime.webAffairService = null
+  runtime.webServiceStartupFailures = {}
   runtime.articlePublishingService = null
   runtime.imageResearchService = null
   runtime.permissionManager = null

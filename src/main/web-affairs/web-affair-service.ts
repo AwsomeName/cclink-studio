@@ -2,6 +2,10 @@ import {
   eligibleCsdnRetryEffect,
   hasCsdnRetryAuthorization,
 } from '../../shared/article-publishing/csdn-retry'
+import {
+  classifyWebServiceStartupError,
+  WebServiceStartupError,
+} from '../diagnostics/web-service-startup-error'
 import { reduceUnsubmittedTags } from '../../shared/article-publishing/reduce-unsubmitted-tags'
 import type { ReduceArticlePublishingTagsInput } from '../../shared/article-publishing/article-publishing-types'
 import { canResumeUnsubmittedToutiaoImage } from '../article-publishing/toutiao-unsubmitted-upload'
@@ -59,9 +63,7 @@ import type {
   WebAffair,
   WebAffairAttempt,
   WebAffairCatalog,
-  WebAffairEdge,
   WebAffairEvent,
-  WebAffairFlowDiffOperation,
   WebAffairMaterialRef,
   WebAffairNode,
   WebAffairNodeStatus,
@@ -69,7 +71,6 @@ import type {
   WebAffairProjectSnapshot,
   WebAffairRuntimeBinding,
   WebAffairSnapshot,
-  WebAffairStatus,
 } from '../../shared/web-affairs/web-affair-types'
 import {
   bindWebAffairAttemptInputSchema,
@@ -91,8 +92,31 @@ import {
   updateWebAffairNodeInputSchema,
 } from '../../shared/web-affairs/web-affair-schema'
 import { WebAffairStore } from './web-affair-store'
+import {
+  evaluateArticlePublishingAssetReport,
+  evaluateArticlePublishingAssetResolution,
+} from './article-publishing-asset-rules'
+import {
+  evaluateArticlePublishingCheckpoint,
+  isPlatformPublicationUrl,
+  type ArticlePublishingPageEvidence,
+} from './article-publishing-checkpoint-rules'
+import { applyFlowDiff, buildRevisedFlow } from './web-affair-flow-revision'
+import {
+  ALLOWED_TRANSITIONS,
+  TERMINAL_NODE_STATUSES,
+  createNode,
+  normalizeNodeStates,
+  deriveAffairStatus,
+  hasCycle,
+} from './web-affair-flow'
+import {
+  createArticlePublishingOperation,
+  appendArticlePublishingTransition,
+  reduceArticlePublishingLifecycle,
+  type ArticlePublishingLifecycleTarget,
+} from './article-publishing-lifecycle'
 import type {
-  ArticlePublishingCurrentOperation,
   ArticlePublishingFields,
   ArticlePublishingOperationFailure,
   ArticlePublishingOperationTransition,
@@ -119,7 +143,6 @@ import {
 
 const AFFAIR_LIMIT = 1_000
 const EVENT_LIMIT = 2_000
-const TERMINAL_NODE_STATUSES = new Set<WebAffairNodeStatus>(['completed', 'skipped', 'cancelled'])
 const TERMINAL_ATTEMPT_STATUSES = new Set<WebAffairAttempt['status']>([
   'succeeded',
   'failed',
@@ -127,7 +150,6 @@ const TERMINAL_ATTEMPT_STATUSES = new Set<WebAffairAttempt['status']>([
   'interrupted',
 ])
 const OWNERLESS_RUNTIME_INTERRUPTION = '应用或 Agent 运行时已结束，未恢复为假运行'
-const ARTICLE_OPERATION_TRANSITION_LIMIT = 200
 
 const ARTICLE_CHECKPOINT_TRANSITIONS: Readonly<
   Record<
@@ -166,17 +188,6 @@ const ARTICLE_CHECKPOINT_TRANSITIONS: Readonly<
   completed: new Set(),
 }
 
-type ArticlePublishingLifecycleTarget =
-  | 'preparing'
-  | 'running'
-  | 'checking-runtime'
-  | 'waiting-human'
-  | 'interrupted'
-  | 'cancelled'
-  | 'failed'
-  | 'result-unknown'
-  | 'published'
-
 export interface ArticlePublishingAgentReporter {
   workspaceId: string
   affairId: string
@@ -185,29 +196,7 @@ export interface ArticlePublishingAgentReporter {
   launchOperationId: string
   conversationId: string
   agentRunId: string
-  trustedPageEvidence?: {
-    /** Main-only live guard; never persisted or accepted from IPC. */
-    isCurrent?: () => boolean
-    adapterId:
-      | 'csdn'
-      | 'zhihu'
-      | 'juejin'
-      | 'xiaohongshu'
-      | 'weibo'
-      | 'toutiao'
-      | 'bilibili'
-      | 'jike'
-    adapterVersion: 1
-    observedAt: string
-    url: string
-    kind: 'checkpoint' | 'asset-absent' | 'asset-uploaded' | 'published'
-    platformAccountId?: string
-    draftId?: string
-    normalizedTitle?: string
-    saveState?: 'saved' | 'saving' | 'unknown'
-    /** Main adapter compared the complete frozen body, links and image positions. */
-    bodyMatchesFrozen?: boolean
-  }
+  trustedPageEvidence?: ArticlePublishingPageEvidence
 }
 
 export interface ArticlePublishingRecoveryVerification {
@@ -232,34 +221,6 @@ const ARTICLE_EXECUTION_STATUSES_BY_ATTEMPT: Partial<
   cancelled: ['cancelled'],
   failed: ['failed'],
   succeeded: ['published'],
-}
-
-const ALLOWED_TRANSITIONS: Record<WebAffairNodeStatus, ReadonlySet<WebAffairNodeStatus>> = {
-  blocked: new Set(['cancelled']),
-  ready: new Set([
-    'running',
-    'waiting-human',
-    'waiting-external',
-    'completed',
-    'failed',
-    'skipped',
-    'cancelled',
-  ]),
-  running: new Set([
-    'waiting-human',
-    'waiting-external',
-    'verifying',
-    'completed',
-    'failed',
-    'cancelled',
-  ]),
-  'waiting-human': new Set(['ready', 'verifying', 'completed', 'failed', 'cancelled']),
-  'waiting-external': new Set(['ready', 'verifying', 'completed', 'failed', 'cancelled']),
-  verifying: new Set(['waiting-human', 'waiting-external', 'completed', 'failed', 'cancelled']),
-  failed: new Set(['ready', 'cancelled']),
-  completed: new Set(),
-  skipped: new Set(),
-  cancelled: new Set(),
 }
 
 function publicStorageError(error: unknown): WebAffairOperationResult<never> {
@@ -290,11 +251,28 @@ export class WebAffairService {
   ) {}
 
   async load(): Promise<void> {
-    this.snapshot = await this.store.load()
-    this.assertIntegrity(this.snapshot, true)
-    await this.reconcileInterruptedAttempts()
-    this.assertIntegrity(this.snapshot)
-    await this.reconcileOverdueChecks(true)
+    try {
+      this.snapshot = await this.store.load()
+    } catch (error) {
+      throw classifyWebServiceStartupError(error, 'read-state')
+    }
+    try {
+      this.assertIntegrity(this.snapshot, true)
+    } catch (error) {
+      throw new WebServiceStartupError(
+        'validate-state',
+        'STATE_INVALID',
+        '事务状态引用校验失败',
+        error,
+      )
+    }
+    try {
+      await this.reconcileInterruptedAttempts()
+      this.assertIntegrity(this.snapshot)
+      await this.reconcileOverdueChecks(true)
+    } catch (error) {
+      throw classifyWebServiceStartupError(error, 'recover-runtime')
+    }
     this.dueTimer = setInterval(() => void this.reconcileOverdueChecks(false), 30_000)
     this.dueTimer.unref?.()
   }
@@ -1856,7 +1834,7 @@ export class WebAffairService {
         },
       )
       return this.persistAffair(
-        this.reduceArticlePublishingLifecycle(
+        reduceArticlePublishingLifecycle(
           { ...found.affair, articlePublishing: resolvedPublishing, updatedAt: now },
           found.attempt,
           'failed',
@@ -2159,7 +2137,7 @@ export class WebAffairService {
     const nodes: WebAffairNode[] = input.nodeTitles.map((title, index) => {
       const catalogId = template?.nodeCatalogIds[index]
       const definition = WEB_AFFAIR_CATALOG.atomicNodes.find((item) => item.id === catalogId)
-      return this.createNode({
+      return createNode({
         title,
         description: definition?.description,
         type: definition?.nodeType,
@@ -2584,7 +2562,7 @@ export class WebAffairService {
       execution: { status: 'draft', currentGeneration: 0 },
       publication: { status: 'not-started' },
     })
-    const node = this.createNode({
+    const node = createNode({
       title: `发布文章到 ${platformLabel}`,
       description: '按冻结文章、账号和平台字段执行；特殊卡点转人工。',
       type: 'web-task',
@@ -2652,7 +2630,7 @@ export class WebAffairService {
       return this.resourceError('首版只能选择小红书账号')
     }
     const now = this.timestamp()
-    const node = this.createNode({
+    const node = createNode({
       title: '逐张查找小红书候选',
       description: 'Agent 每轮只提出一张；用户自行保存或截图后确认或跳过。',
       type: 'web-task',
@@ -2986,7 +2964,7 @@ export class WebAffairService {
       return this.transitionError(`节点不能从“${currentNode.status}”变为“${input.status}”`)
     }
     const now = this.timestamp()
-    const nodes = this.normalizeNodeStates(
+    const nodes = normalizeNodeStates(
       affair.flow.nodes.map((node) =>
         node.id === currentNode.id
           ? {
@@ -3002,7 +2980,7 @@ export class WebAffairService {
     )
     return this.persistAffair({
       ...affair,
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       flow: { ...affair.flow, nodes },
       events: this.appendEvent(
         affair,
@@ -3034,14 +3012,14 @@ export class WebAffairService {
         error: { code: 'FLOW_VERSION_CONFLICT', message: '流程已被更新，请刷新后重试' },
       }
     }
-    const nextFlow = this.buildRevisedFlow(affair, input)
+    const nextFlow = buildRevisedFlow(affair, input, () => this.timestamp())
     if (!nextFlow.success) return nextFlow
     const now = this.timestamp()
-    const nodes = this.normalizeNodeStates(nextFlow.data.nodes, nextFlow.data.edges, now)
+    const nodes = normalizeNodeStates(nextFlow.data.nodes, nextFlow.data.edges, now)
     return this.persistAffair({
       ...affair,
       flow: { version: affair.flow.version + 1, nodes, edges: nextFlow.data.edges },
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       events: this.appendEvent(
         affair,
         this.event('flow-revised', `流程已修订为版本 ${affair.flow.version + 1}`, now),
@@ -3065,7 +3043,7 @@ export class WebAffairService {
     return this.persistAffair({
       ...affair,
       materials,
-      status: unavailableCount > 0 ? 'needs-attention' : this.deriveAffairStatus(affair.flow.nodes),
+      status: unavailableCount > 0 ? 'needs-attention' : deriveAffairStatus(affair.flow.nodes),
       events: this.appendEvent(
         affair,
         this.event(
@@ -3147,7 +3125,7 @@ export class WebAffairService {
     )
     const publishing = affair.articlePublishing
     const recoveryOperation = publishing?.draft?.platformDraftId
-      ? this.createArticlePublishingOperation(
+      ? createArticlePublishingOperation(
           'recovery.restore-exact-draft',
           'open-editor',
           'studio',
@@ -3175,7 +3153,7 @@ export class WebAffairService {
                       now,
                     ),
                     executionProtocol: {
-                      ...this.appendArticlePublishingTransition(publishing, {
+                      ...appendArticlePublishingTransition(publishing, {
                         operationRunId: recoveryOperation.operationRunId,
                         kind: 'recovery-started',
                         occurredAt: now,
@@ -3247,7 +3225,7 @@ export class WebAffairService {
     }
     return this.persistAffair(
       found.affair.articlePublishing
-        ? this.reduceArticlePublishingLifecycle(
+        ? reduceArticlePublishingLifecycle(
             baseAffair,
             boundAttempt,
             'running',
@@ -3301,7 +3279,7 @@ export class WebAffairService {
         updatedAt: now,
       }
       return this.persistAffair(
-        this.reduceArticlePublishingLifecycle(
+        reduceArticlePublishingLifecycle(
           baseAffair,
           nextAttempt,
           'waiting-human',
@@ -3363,7 +3341,7 @@ export class WebAffairService {
         updatedAt: now,
       }
       return this.persistAffair(
-        this.reduceArticlePublishingLifecycle(
+        reduceArticlePublishingLifecycle(
           baseAffair,
           nextAttempt,
           'running',
@@ -3560,7 +3538,7 @@ export class WebAffairService {
       evidence: [...found.attempt.evidence, evidence],
       endedAt: now,
     }
-    const nodes = this.normalizeNodeStates(
+    const nodes = normalizeNodeStates(
       found.affair.flow.nodes.map((item) =>
         item.id === node.id
           ? { ...item, status: nodeStatus, lastResultNote: input.summary, updatedAt: now }
@@ -3575,7 +3553,7 @@ export class WebAffairService {
         item.id === found.attempt.id ? finishedAttempt : item,
       ),
       flow: { ...found.affair.flow, nodes },
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       events: this.appendEvent(
         found.affair,
         this.event('attempt-finished', `${node.title}：${input.outcome}，${input.summary}`, now, {
@@ -3611,7 +3589,7 @@ export class WebAffairService {
       },
     }
     return this.persistAffair(
-      this.reduceArticlePublishingLifecycle(
+      reduceArticlePublishingLifecycle(
         articleBaseAffair,
         finishedAttempt,
         target,
@@ -3820,7 +3798,7 @@ export class WebAffairService {
     )
     let edges = affair.flow.edges
     if (input.outcome === 'rejected') {
-      const correction = this.createNode({
+      const correction = createNode({
         title: `处理“${node.title}”驳回补正`,
         description: input.summary,
         status: 'ready',
@@ -3842,7 +3820,7 @@ export class WebAffairService {
       ]
       nodes = [...nodes, correction]
     }
-    nodes = this.normalizeNodeStates(nodes, edges, now)
+    nodes = normalizeNodeStates(nodes, edges, now)
     return this.persistAffair({
       ...affair,
       flow: {
@@ -3862,7 +3840,7 @@ export class WebAffairService {
             }
           : item,
       ),
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       events: this.appendEvent(
         affair,
         this.event('wait-due', `${node.title}：${input.outcome}，${input.summary}`, now, {
@@ -3942,7 +3920,7 @@ export class WebAffairService {
         flowProposals: affair.flowProposals.map((item) =>
           item.id === proposal.id ? { ...item, status: 'rejected' as const, decidedAt: now } : item,
         ),
-        status: this.deriveAffairStatus(affair.flow.nodes),
+        status: deriveAffairStatus(affair.flow.nodes),
         events: this.appendEvent(
           affair,
           this.event('flow-proposal-decided', `已拒绝流程建议：${proposal.reason}`, now),
@@ -3950,16 +3928,16 @@ export class WebAffairService {
         updatedAt: now,
       })
     }
-    const applied = this.applyFlowDiff(affair, proposal.operations, now)
+    const applied = applyFlowDiff(affair, proposal.operations, now)
     if (!applied.success) return applied
-    const nodes = this.normalizeNodeStates(applied.data.nodes, applied.data.edges, now)
+    const nodes = normalizeNodeStates(applied.data.nodes, applied.data.edges, now)
     return this.persistAffair({
       ...affair,
       flow: { version: affair.flow.version + 1, nodes, edges: applied.data.edges },
       flowProposals: affair.flowProposals.map((item) =>
         item.id === proposal.id ? { ...item, status: 'accepted' as const, decidedAt: now } : item,
       ),
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       events: this.appendEvent(
         affair,
         this.event(
@@ -3970,179 +3948,6 @@ export class WebAffairService {
       ),
       updatedAt: now,
     })
-  }
-
-  private buildRevisedFlow(
-    affair: WebAffair,
-    input: ReviseWebAffairFlowInput,
-  ): WebAffairOperationResult<{ nodes: WebAffairNode[]; edges: WebAffairEdge[] }> {
-    const existingById = new Map(affair.flow.nodes.map((node) => [node.id, node]))
-    const immutableIds = new Set(
-      affair.flow.nodes
-        .filter(
-          (node) =>
-            TERMINAL_NODE_STATUSES.has(node.status) ||
-            affair.attempts.some((attempt) => attempt.nodeId === node.id),
-        )
-        .map((node) => node.id),
-    )
-    for (const id of immutableIds) {
-      const proposed = input.nodes.find((node) => node.id === id)
-      const existing = existingById.get(id)!
-      if (!proposed) return this.immutable('已执行节点不能删除')
-      if (
-        proposed.title !== existing.title ||
-        proposed.type !== existing.type ||
-        proposed.executor !== existing.executor ||
-        JSON.stringify(proposed.accountIds) !== JSON.stringify(existing.accountIds) ||
-        JSON.stringify(proposed.materialIds) !== JSON.stringify(existing.materialIds) ||
-        JSON.stringify(proposed.successCriteria) !== JSON.stringify(existing.successCriteria)
-      )
-        return this.immutable('已执行节点内容不能修改，只能新增补正节点')
-    }
-    const idMap = new Map<string, string>()
-    const now = this.timestamp()
-    const nodes = input.nodes.map((item) => {
-      const existing = existingById.get(item.id)
-      const id = existing ? existing.id : randomUUID()
-      idMap.set(item.id, id)
-      if (existing) {
-        return {
-          ...existing,
-          title: item.title,
-          description: item.description,
-          type: item.type,
-          executor: item.executor,
-          accountIds: [...new Set(item.accountIds)],
-          materialIds: [...new Set(item.materialIds)],
-          successCriteria: item.successCriteria,
-          updatedAt: now,
-        }
-      }
-      return this.createNode({ ...item, id, status: 'blocked', now })
-    })
-    const edges = input.edges.map((edge) => ({
-      id: randomUUID(),
-      fromNodeId: idMap.get(edge.fromNodeId) ?? edge.fromNodeId,
-      toNodeId: idMap.get(edge.toNodeId) ?? edge.toNodeId,
-    }))
-    const invalid = this.validateFlow(affair, nodes, edges, immutableIds)
-    return invalid ?? { success: true, data: { nodes, edges } }
-  }
-
-  private applyFlowDiff(
-    affair: WebAffair,
-    operations: WebAffairFlowDiffOperation[],
-    now: string,
-  ): WebAffairOperationResult<{ nodes: WebAffairNode[]; edges: WebAffairEdge[] }> {
-    let nodes = affair.flow.nodes.map((node) => ({ ...node }))
-    let edges = affair.flow.edges.map((edge) => ({ ...edge }))
-    const tempIds = new Map<string, string>()
-    const immutableIds = new Set(
-      nodes
-        .filter(
-          (node) =>
-            TERMINAL_NODE_STATUSES.has(node.status) ||
-            affair.attempts.some((attempt) => attempt.nodeId === node.id),
-        )
-        .map((node) => node.id),
-    )
-    for (const operation of operations) {
-      if (operation.kind === 'add-node') {
-        const id = randomUUID()
-        tempIds.set(operation.tempId, id)
-        nodes.push(
-          this.createNode({
-            id,
-            title: operation.title,
-            description: operation.description,
-            type: operation.nodeType,
-            catalogId: operation.catalogId,
-            executor: operation.executor,
-            status: 'blocked',
-            accountIds: affair.accountIds,
-            materialIds: affair.materials.map((item) => item.id),
-            now,
-          }),
-        )
-      } else if (operation.kind === 'update-node') {
-        if (immutableIds.has(operation.nodeId)) return this.immutable('已执行节点不能修改')
-        if (!nodes.some((node) => node.id === operation.nodeId))
-          return this.notFound('待修改节点不存在')
-        nodes = nodes.map((node) =>
-          node.id === operation.nodeId
-            ? {
-                ...node,
-                title: operation.title ?? node.title,
-                description: operation.description ?? node.description,
-                executor: operation.executor ?? node.executor,
-                updatedAt: now,
-              }
-            : node,
-        )
-      } else if (operation.kind === 'remove-node') {
-        if (immutableIds.has(operation.nodeId)) return this.immutable('已执行节点不能删除')
-        nodes = nodes.filter((node) => node.id !== operation.nodeId)
-        edges = edges.filter(
-          (edge) => edge.fromNodeId !== operation.nodeId && edge.toNodeId !== operation.nodeId,
-        )
-      } else if (operation.kind === 'remove-edge') {
-        const edge = edges.find((item) => item.id === operation.edgeId)
-        if (edge && (immutableIds.has(edge.fromNodeId) || immutableIds.has(edge.toNodeId)))
-          return this.immutable('已执行节点的历史依赖不能删除')
-        edges = edges.filter((item) => item.id !== operation.edgeId)
-      } else {
-        const fromNodeId = tempIds.get(operation.fromNodeId) ?? operation.fromNodeId
-        const toNodeId = tempIds.get(operation.toNodeId) ?? operation.toNodeId
-        edges.push({ id: randomUUID(), fromNodeId, toNodeId })
-      }
-    }
-    const invalid = this.validateFlow(affair, nodes, edges, immutableIds)
-    return invalid ?? { success: true, data: { nodes, edges } }
-  }
-
-  private validateFlow(
-    affair: WebAffair,
-    nodes: WebAffairNode[],
-    edges: WebAffairEdge[],
-    immutableIds: Set<string>,
-  ): WebAffairOperationResult<never> | null {
-    if (nodes.length < 1 || nodes.length > 40 || edges.length > 160)
-      return this.invalid('流程规模超出限制')
-    const nodeIds = new Set(nodes.map((node) => node.id))
-    const materialIds = new Set(affair.materials.map((item) => item.id))
-    if (nodeIds.size !== nodes.length) return this.invalid('流程包含重复节点')
-    for (const node of nodes) {
-      if (
-        node.accountIds.some((id) => !affair.accountIds.includes(id)) ||
-        node.materialIds.some((id) => !materialIds.has(id))
-      ) {
-        return this.resourceError('节点引用了事务范围之外的账号或材料')
-      }
-    }
-    for (const edge of edges) {
-      if (
-        !nodeIds.has(edge.fromNodeId) ||
-        !nodeIds.has(edge.toNodeId) ||
-        edge.fromNodeId === edge.toNodeId
-      )
-        return this.invalid('流程依赖包含无效节点或自循环')
-    }
-    const oldImmutableEdges = affair.flow.edges.filter(
-      (edge) => immutableIds.has(edge.fromNodeId) || immutableIds.has(edge.toNodeId),
-    )
-    if (
-      oldImmutableEdges.some(
-        (old) =>
-          !edges.some(
-            (edge) => edge.fromNodeId === old.fromNodeId && edge.toNodeId === old.toNodeId,
-          ),
-      )
-    ) {
-      return this.immutable('已执行节点的历史依赖不能删除')
-    }
-    if (this.hasCycle(nodes, edges)) return this.invalid('事务流程必须是有向无环图')
-    return null
   }
 
   private async reconcileOverdueChecks(startup: boolean): Promise<void> {
@@ -4426,7 +4231,7 @@ export class WebAffairService {
           (attempt) => attempt.id === normalizedPublishing.execution.currentAttemptId,
         )
         if (repairedCurrentAttempt && interruptedIds.has(repairedCurrentAttempt.id)) {
-          reconciled = this.reduceArticlePublishingLifecycle(
+          reconciled = reduceArticlePublishingLifecycle(
             reconciled,
             repairedCurrentAttempt,
             'interrupted',
@@ -4451,7 +4256,7 @@ export class WebAffairService {
                   : repairedCurrentAttempt.status === 'waiting-human'
                     ? 'waiting-human'
                     : 'interrupted'
-          reconciled = this.reduceArticlePublishingLifecycle(
+          reconciled = reduceArticlePublishingLifecycle(
             reconciled,
             repairedCurrentAttempt,
             target,
@@ -4521,76 +4326,6 @@ export class WebAffairService {
     }
   }
 
-  private createNode(input: {
-    id?: string
-    title: string
-    description?: string
-    type?: WebAffairNode['type']
-    catalogId?: string
-    status: WebAffairNodeStatus
-    executor: WebAffairNode['executor']
-    accountIds: string[]
-    materialIds: string[]
-    successCriteria?: string[]
-    now: string
-  }): WebAffairNode {
-    return {
-      id: input.id ?? randomUUID(),
-      type: input.type ?? 'web-task',
-      catalogId: input.catalogId,
-      title: input.title,
-      description: input.description,
-      status: input.status,
-      executor: input.executor,
-      accountIds: [...new Set(input.accountIds)],
-      materialIds: [...new Set(input.materialIds)],
-      successCriteria: input.successCriteria ?? [`“${input.title}”已有明确结果说明`],
-      availableTransitions: [...ALLOWED_TRANSITIONS[input.status]],
-      createdAt: input.now,
-      updatedAt: input.now,
-    }
-  }
-
-  private normalizeNodeStates(
-    nodes: WebAffairNode[],
-    edges: WebAffairEdge[],
-    now: string,
-  ): WebAffairNode[] {
-    const byId = new Map(nodes.map((node) => [node.id, node]))
-    return nodes.map((node) => {
-      let status = node.status
-      if (
-        !TERMINAL_NODE_STATUSES.has(status) &&
-        !['running', 'waiting-human', 'waiting-external', 'verifying', 'failed'].includes(status)
-      ) {
-        const dependencies = edges.filter((edge) => edge.toNodeId === node.id)
-        status =
-          dependencies.length === 0 ||
-          dependencies.every((edge) => {
-            const dependency = byId.get(edge.fromNodeId)
-            return dependency?.status === 'completed' || dependency?.status === 'skipped'
-          })
-            ? 'ready'
-            : 'blocked'
-      }
-      return {
-        ...node,
-        status,
-        availableTransitions: [...ALLOWED_TRANSITIONS[status]],
-        ...(status !== node.status ? { updatedAt: now } : {}),
-      }
-    })
-  }
-
-  private deriveAffairStatus(nodes: WebAffairNode[]): WebAffairStatus {
-    if (nodes.every((node) => node.status === 'cancelled')) return 'cancelled'
-    if (nodes.every((node) => TERMINAL_NODE_STATUSES.has(node.status))) return 'completed'
-    if (nodes.some((node) => node.status === 'waiting-human')) return 'needs-attention'
-    if (nodes.some((node) => node.status === 'waiting-external')) return 'waiting-external'
-    if (nodes.some((node) => node.status === 'failed')) return 'failed'
-    return 'active'
-  }
-
   private persistAttemptChange(
     affair: WebAffair,
     current: WebAffairAttempt,
@@ -4614,7 +4349,7 @@ export class WebAffairService {
     )
     return this.persistAffair({
       ...affair,
-      status: this.deriveAffairStatus(nodes),
+      status: deriveAffairStatus(nodes),
       flow: { ...affair.flow, nodes },
       attempts: affair.attempts.map((attempt) =>
         attempt.id === current.id ? input.attempt : attempt,
@@ -4653,7 +4388,7 @@ export class WebAffairService {
     const now = this.timestamp()
     const executionGeneration = found.attempt.executionGeneration + 1
     const launchOperationId = randomUUID()
-    const recoveryOperation = this.createArticlePublishingOperation(
+    const recoveryOperation = createArticlePublishingOperation(
       'recovery.restore-exact-draft',
       'open-editor',
       'studio',
@@ -4662,7 +4397,7 @@ export class WebAffairService {
       '用户已完成人工卡点，准备从草稿管理页恢复原草稿',
       '核验原账号、draftId、标题和保存状态',
     )
-    const recoveryProtocol = this.appendArticlePublishingTransition(publishing, {
+    const recoveryProtocol = appendArticlePublishingTransition(publishing, {
       operationRunId: recoveryOperation.operationRunId,
       kind: 'recovery-started',
       occurredAt: now,
@@ -4906,7 +4641,7 @@ export class WebAffairService {
           }
         : attempt,
     )
-    const recoveryOperation = this.createArticlePublishingOperation(
+    const recoveryOperation = createArticlePublishingOperation(
       'recovery.restore-exact-draft',
       'open-editor',
       'studio',
@@ -4915,7 +4650,7 @@ export class WebAffairService {
       '应用从中断状态恢复原 CSDN 草稿',
       '从草稿管理页核验原账号、draftId、标题和保存状态',
     )
-    const recoveryProtocol = this.appendArticlePublishingTransition(publishing, {
+    const recoveryProtocol = appendArticlePublishingTransition(publishing, {
       operationRunId: recoveryOperation.operationRunId,
       kind: 'recovery-started',
       occurredAt: now,
@@ -5038,7 +4773,7 @@ export class WebAffairService {
       publishing.draft?.recovery?.executionGeneration === found.attempt.executionGeneration
     const runtimeOperation =
       !publishing.executionProtocol.current && recoveryIsCurrent
-        ? this.createArticlePublishingOperation(
+        ? createArticlePublishingOperation(
             'runtime.prepare-first-inspect',
             'open-editor',
             'studio',
@@ -5050,7 +4785,7 @@ export class WebAffairService {
         : null
     const executionProtocol = runtimeOperation
       ? {
-          ...this.appendArticlePublishingTransition(publishing, {
+          ...appendArticlePublishingTransition(publishing, {
             operationRunId: runtimeOperation.operationRunId,
             kind: 'runtime-prepare-started',
             occurredAt: now,
@@ -5118,7 +4853,7 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistAffair(
-      this.reduceArticlePublishingLifecycle(
+      reduceArticlePublishingLifecycle(
         baseAffair,
         interruptedAttempt,
         'interrupted',
@@ -5388,7 +5123,7 @@ export class WebAffairService {
     const runtimeOperation = publishingForBind.executionProtocol.current
     const firstInspectOperation =
       runtimeOperation?.definitionId === 'runtime.prepare-first-inspect'
-        ? this.createArticlePublishingOperation(
+        ? createArticlePublishingOperation(
             'page.first-inspect',
             publishingForBind.execution.currentStepId ?? 'open-editor',
             'agent',
@@ -5403,7 +5138,7 @@ export class WebAffairService {
     let executionProtocol = publishingForBind.executionProtocol
     if (runtimeOperation?.definitionId === 'runtime.prepare-first-inspect') {
       if (recoveryVerification) {
-        executionProtocol = this.appendArticlePublishingTransition(
+        executionProtocol = appendArticlePublishingTransition(
           { ...publishingForBind, executionProtocol },
           {
             operationRunId: runtimeOperation.operationRunId,
@@ -5426,7 +5161,7 @@ export class WebAffairService {
         },
         { kind: 'runtime-ready' as const, summary: '第一次页面检查 Runtime 已就绪' },
       ]) {
-        executionProtocol = this.appendArticlePublishingTransition(
+        executionProtocol = appendArticlePublishingTransition(
           { ...publishingForBind, executionProtocol },
           {
             operationRunId: runtimeOperation.operationRunId,
@@ -5463,7 +5198,7 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistAffair(
-      this.reduceArticlePublishingLifecycle(
+      reduceArticlePublishingLifecycle(
         baseAffair,
         nextAttempt,
         'running',
@@ -5663,7 +5398,7 @@ export class WebAffairService {
       }
     }
     let executionProtocol = currentOperation
-      ? this.appendArticlePublishingTransition(publishing, {
+      ? appendArticlePublishingTransition(publishing, {
           operationRunId: currentOperation.operationRunId,
           kind: 'page-identity-changed',
           occurredAt: now,
@@ -5673,7 +5408,7 @@ export class WebAffairService {
         })
       : publishing.executionProtocol
     if (currentOperation && recovery?.executionGeneration === input.executionGeneration) {
-      executionProtocol = this.appendArticlePublishingTransition(
+      executionProtocol = appendArticlePublishingTransition(
         { ...publishing, executionProtocol },
         {
           operationRunId: currentOperation.operationRunId,
@@ -5684,7 +5419,7 @@ export class WebAffairService {
           currentRuntime: nextRuntime,
         },
       )
-      executionProtocol = this.appendArticlePublishingTransition(
+      executionProtocol = appendArticlePublishingTransition(
         { ...publishing, executionProtocol },
         {
           operationRunId: currentOperation.operationRunId,
@@ -5850,7 +5585,7 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistAffair(
-      this.reduceArticlePublishingLifecycle(
+      reduceArticlePublishingLifecycle(
         baseAffair,
         nextAttempt,
         requestedTarget,
@@ -5994,212 +5729,15 @@ export class WebAffairService {
     if (['retryable-failed', 'waiting-human', 'failed'].includes(input.status) && !input.error) {
       return this.transitionError('失败或人工卡点必须包含结构化原因')
     }
-    // Recovery only settled the old save lock. A fresh complete body comparison
-    // can now verify that dispatched write without manufacturing another write.
-    const recoveredBodyEffect =
-      input.stepId === 'fill-body' &&
-      reporter.trustedPageEvidence?.bodyMatchesFrozen === true &&
-      reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
-      reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
-      reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
-      reporter.trustedPageEvidence.saveState === 'saved'
-        ? [...publishing.sideEffects]
-            .reverse()
-            .find(
-              (effect) =>
-                effect.attemptId === found.attempt.id &&
-                effect.status === 'reconciled' &&
-                effect.executionGeneration < found.attempt.executionGeneration &&
-                effect.kind === 'save-draft' &&
-                effect.targetId.startsWith('autosave:fill-body:') &&
-                Boolean(effect.dispatchedAt),
-            )
-        : undefined
-    const eligibleEffects = publishing.sideEffects.filter(
-      (effect) =>
-        effect.attemptId === found.attempt.id &&
-        // A pre-dispatch rejection has no platform effect and must not shadow a
-        // later real write. Dispatched/unknown writes still require reconciliation.
-        !(effect.status === 'rejected' && !effect.dispatchedAt) &&
-        (effect.status !== 'reconciled' || effect === recoveredBodyEffect),
-    )
-    if (input.status === 'completed') {
-      const expectedEvidenceKind =
-        input.stepId === 'verify-publication' ? 'published' : 'checkpoint'
-      if (
-        reporter.trustedPageEvidence?.kind !== expectedEvidenceKind ||
-        reporter.trustedPageEvidence.adapterId !== publishing.adapterId
-      ) {
-        return this.evidenceRequired('检查点完成必须附带当前 CSDN 页面适配器证据')
-      }
-      if (input.stepId === 'verify-account' && !reporter.trustedPageEvidence.platformAccountId) {
-        return this.evidenceRequired('账号核验必须保存真实 CSDN 平台账号标识')
-      }
-      if (
-        !['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
-        ['upload-assets', 'fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
-        (!reporter.trustedPageEvidence.platformAccountId ||
-          !reporter.trustedPageEvidence.draftId ||
-          reporter.trustedPageEvidence.saveState !== 'saved')
-      ) {
-        return this.evidenceRequired('网页写入步骤完成必须读回同一账号、同一草稿和已保存状态')
-      }
-      if (
-        input.stepId === 'upload-assets' &&
-        publishing.assets.some((asset) => asset.kind === 'local' && asset.status !== 'uploaded')
-      ) {
-        return this.transitionError('仍有正文图片未完成页面核验，不能完成上传步骤')
-      }
-      if (
-        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
-        (reporter.trustedPageEvidence.platformAccountId !==
-          publishing.composer?.platformAccountId ||
-          (['fill-body', 'fill-fields', 'save-draft'].includes(input.stepId) &&
-            reporter.trustedPageEvidence.bodyMatchesFrozen !== true))
-      )
-        return this.evidenceRequired('图文动态完成步骤必须核验目标 UID、冻结正文和逐图现场')
-      if (
-        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
-        ['publish', 'verify-publication'].includes(input.stepId) &&
-        publishing.composer?.allowPublish !== true
-      )
-        return this.evidenceRequired('本任务未授权动态提交，禁止标记发布成功')
-      // A verified autosave of this draft already fulfills saving. Do not force an
-      // extra click merely to manufacture a manual-save receipt. Unknown writes
-      // still require reconciliation, and the current adapter must verify identity.
-      const verifiedAutosave =
-        input.stepId === 'save-draft' &&
-        reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
-        reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
-        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
-        !eligibleEffects.some(
-          (effect) => effect.kind === 'save-draft' && effect.status !== 'verified',
-        )
-          ? eligibleEffects.find(
-              (effect) =>
-                effect.kind === 'save-draft' &&
-                effect.targetId.startsWith('autosave:') &&
-                effect.status === 'verified',
-            )
-          : undefined
-      // An already matching Zhihu title is a read-only branch. Main must have
-      // observed both the skipped write and its current-generation verification.
-      const verifiedWeiboPreparation =
-        ['weibo', 'bilibili', 'jike'].includes(publishing.adapterId) &&
-        ['fill-fields', 'save-draft'].includes(input.stepId) &&
-        reporter.trustedPageEvidence.bodyMatchesFrozen === true
-      // A recovered Toutiao draft may already contain the complete frozen article.
-      // Main must prove the read-only branch; never create a fictitious write receipt.
-      const unchangedToutiaoDraft =
-        publishing.adapterId === 'toutiao' &&
-        ['fill-body', 'save-draft'].includes(input.stepId) &&
-        publishing.draft?.recovery?.status === 'verified' &&
-        publishing.draft.recovery.executionGeneration === found.attempt.executionGeneration &&
-        reporter.trustedPageEvidence.isCurrent?.() === true &&
-        reporter.trustedPageEvidence.bodyMatchesFrozen === true &&
-        reporter.trustedPageEvidence.saveState === 'saved' &&
-        reporter.trustedPageEvidence.draftId === publishing.draft.platformDraftId &&
-        reporter.trustedPageEvidence.platformAccountId === publishing.draft.platformAccountId &&
-        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
-        publishing.assets.every(
-          (asset) => asset.status === 'uploaded' && Boolean(asset.platformUrl),
-        ) &&
-        ['dispatch', 'verify'].every((suffix) =>
-          checkpoint.details?.some(
-            (detail) =>
-              detail.id === `${input.stepId === 'fill-body' ? 'body' : 'save'}.${suffix}` &&
-              detail.generation === found.attempt.executionGeneration &&
-              detail.status === (suffix === 'dispatch' ? 'skipped' : 'completed'),
-          ),
-        ) &&
-        !eligibleEffects.some(
-          (effect) => effect.kind === 'save-draft' && effect.status !== 'verified',
-        )
-      const unchangedPlatformFields =
-        publishing.adapterId !== 'csdn' &&
-        input.stepId === 'fill-fields' &&
-        reporter.trustedPageEvidence.draftId === publishing.draft?.platformDraftId &&
-        reporter.trustedPageEvidence.platformAccountId === publishing.draft?.platformAccountId &&
-        reporter.trustedPageEvidence.normalizedTitle === publishing.fields.title.trim() &&
-        (['title', 'summary', 'tags', 'category', 'cover'] as const)
-          .filter((field) =>
-            ['zhihu', 'xiaohongshu'].includes(publishing.adapterId)
-              ? field === 'title'
-              : field === 'cover'
-                ? Boolean(publishing.fields.coverAssetId)
-                : Array.isArray(publishing.fields[field])
-                  ? publishing.fields[field].length > 0
-                  : Boolean(publishing.fields[field]),
-          )
-          .flatMap((field) => [`field.${field}.dispatch`, `field.${field}.verify`])
-          .every((id) =>
-            checkpoint.details?.some(
-              (detail) =>
-                detail.id === id &&
-                ((detail.generation === found.attempt.executionGeneration &&
-                  detail.status === (id.endsWith('.dispatch') ? 'skipped' : 'completed')) ||
-                  (id.endsWith('.dispatch') &&
-                    detail.status === 'completed' &&
-                    detail.generation < found.attempt.executionGeneration &&
-                    reporter.trustedPageEvidence?.isCurrent?.() === true &&
-                    reporter.trustedPageEvidence.bodyMatchesFrozen === true &&
-                    publishing.sideEffects.some(
-                      (effect) =>
-                        effect.attemptId === found.attempt.id &&
-                        effect.executionGeneration === detail.generation &&
-                        effect.kind === 'save-draft' &&
-                        effect.status === 'reconciled' &&
-                        Boolean(effect.dispatchedAt) &&
-                        effect.targetId.startsWith(`autosave:fill-fields:${id.split('.')[1]}:`),
-                    ))),
-            ),
-          ) &&
-        !eligibleEffects.some(
-          (effect) =>
-            effect.kind === 'save-draft' &&
-            effect.targetId.startsWith('autosave:fill-fields:') &&
-            effect.status !== 'verified',
-        )
-      const requiredEffect =
-        input.stepId === 'save-draft'
-          ? (verifiedAutosave ??
-            eligibleEffects.find(
-              (effect) => effect.kind === 'save-draft' && !effect.targetId.startsWith('autosave:'),
-            ))
-          : ['fill-body', 'fill-fields'].includes(input.stepId)
-            ? eligibleEffects.find(
-                (effect) =>
-                  effect.kind === 'save-draft' &&
-                  effect.targetId.startsWith(`autosave:${input.stepId}:`),
-              )
-            : input.stepId === 'publish'
-              ? eligibleEffects.find((effect) => effect.kind === 'publish')
-              : undefined
-      if (
-        ['fill-body', 'fill-fields', 'save-draft', 'publish'].includes(input.stepId) &&
-        !unchangedPlatformFields &&
-        !verifiedWeiboPreparation &&
-        !unchangedToutiaoDraft &&
-        (!requiredEffect ||
-          (!['dispatched', 'result-unknown', 'verified'].includes(requiredEffect.status) &&
-            requiredEffect !== recoveredBodyEffect))
-      ) {
-        return this.transitionError('当前步骤没有匹配的已派发副作用凭证，不能标记完成')
-      }
-      if (input.stepId === 'verify-publication') {
-        const publicationUrl = input.outputRefs?.['publicationUrl']
-        const publishEffect = eligibleEffects.find((effect) => effect.kind === 'publish')
-        if (!publicationUrl || !isPlatformPublicationUrl(publicationUrl, publishing.adapterId)) {
-          return this.transitionError('发布核验必须返回当前平台可复核的公开作品 URL')
-        }
-        if (
-          !publishEffect ||
-          !['dispatched', 'result-unknown', 'verified'].includes(publishEffect.status)
-        ) {
-          return this.transitionError('没有本 Attempt 的发布动作凭证，不能核验发布结果')
-        }
-      }
-    }
+    const evaluation = evaluateArticlePublishingCheckpoint({
+      publishing,
+      attempt: found.attempt,
+      checkpoint,
+      input,
+      trustedPageEvidence: reporter.trustedPageEvidence,
+    })
+    if (!evaluation.success) return evaluation
+    const { eligibleEffects } = evaluation.data
     const now = this.timestamp()
     const checkpoints = publishing.checkpoints.map((item) =>
       item.stepId === input.stepId
@@ -6371,7 +5909,7 @@ export class WebAffairService {
             : null
     return this.persistAffair(
       lifecycleTarget
-        ? this.reduceArticlePublishingLifecycle(
+        ? reduceArticlePublishingLifecycle(
             baseAffair,
             found.attempt,
             lifecycleTarget,
@@ -6488,48 +6026,6 @@ export class WebAffairService {
     })
   }
 
-  private createArticlePublishingOperation(
-    definitionId: ArticlePublishingCurrentOperation['definitionId'],
-    checkpointId: ArticlePublishingCurrentOperation['checkpointId'],
-    owner: ArticlePublishingCurrentOperation['owner'],
-    attempt: Pick<WebAffairAttempt, 'id' | 'executionGeneration' | 'launchOperationId'>,
-    now: string,
-    startSummary: string,
-    goalSummary: string,
-    status: ArticlePublishingCurrentOperation['status'] = 'running',
-    runtime?: ArticlePublishingRuntimeSnapshot,
-  ): ArticlePublishingCurrentOperation {
-    return {
-      operationRunId: randomUUID(),
-      revision: 1,
-      definitionId,
-      checkpointId,
-      status,
-      owner,
-      attemptId: attempt.id,
-      executionGeneration: attempt.executionGeneration,
-      launchOperationId: attempt.launchOperationId,
-      startSummary,
-      goalSummary,
-      ...(status === 'running' ? { startedAt: now } : {}),
-      lastTransitionAt: now,
-      ...(runtime ? { runtime } : {}),
-    }
-  }
-
-  private appendArticlePublishingTransition(
-    publishing: ArticlePublishingState,
-    transition: Omit<ArticlePublishingOperationTransition, 'id'>,
-  ): ArticlePublishingState['executionProtocol'] {
-    return {
-      ...publishing.executionProtocol,
-      recentTransitions: [
-        ...publishing.executionProtocol.recentTransitions,
-        { id: randomUUID(), ...transition },
-      ].slice(-ARTICLE_OPERATION_TRANSITION_LIMIT),
-    }
-  }
-
   private async transitionArticlePublishingFirstInspectNow(
     input: {
       workspaceId: string
@@ -6633,7 +6129,7 @@ export class WebAffairService {
         : 'Agent 已开始第一次只读页面检查',
       currentRuntime: input.runtime,
     }
-    const protocol = this.appendArticlePublishingTransition(publishing, transition)
+    const protocol = appendArticlePublishingTransition(publishing, transition)
     const ownsBusinessCheckpoint = ['open-editor', 'verify-account'].includes(current.checkpointId)
     const checkpoints =
       completed && ownsBusinessCheckpoint
@@ -6658,7 +6154,7 @@ export class WebAffairService {
         : undefined
     const nextOperation =
       completed && nextCheckpoint?.stepId === 'verify-account'
-        ? this.createArticlePublishingOperation(
+        ? createArticlePublishingOperation(
             'page.first-inspect',
             'verify-account',
             'agent',
@@ -6756,7 +6252,7 @@ export class WebAffairService {
       return { success: true, data: structuredClone(found.affair) }
     }
     const now = this.timestamp()
-    const protocol = this.appendArticlePublishingTransition(publishing, {
+    const protocol = appendArticlePublishingTransition(publishing, {
       operationRunId: current.operationRunId,
       kind: 'operation-failed',
       occurredAt: now,
@@ -6795,7 +6291,7 @@ export class WebAffairService {
       updatedAt: now,
     }
     return this.persistAffair(
-      this.reduceArticlePublishingLifecycle(
+      reduceArticlePublishingLifecycle(
         failedAffair,
         found.attempt,
         'interrupted',
@@ -6901,7 +6397,7 @@ export class WebAffairService {
     const currentOperation = publishing.executionProtocol.current
     const runtimeOperation =
       currentOperation?.definitionId === 'recovery.restore-exact-draft'
-        ? this.createArticlePublishingOperation(
+        ? createArticlePublishingOperation(
             'runtime.prepare-first-inspect',
             'open-editor',
             'studio',
@@ -6915,14 +6411,14 @@ export class WebAffairService {
         : currentOperation
     let executionProtocol = publishing.executionProtocol
     if (currentOperation?.definitionId === 'recovery.restore-exact-draft' && runtimeOperation) {
-      executionProtocol = this.appendArticlePublishingTransition(publishing, {
+      executionProtocol = appendArticlePublishingTransition(publishing, {
         operationRunId: currentOperation.operationRunId,
         kind: 'draft-restored',
         occurredAt: now,
         summary: `已核验原草稿 ${input.draftId}`,
         currentRuntime: runtimeSnapshot,
       })
-      executionProtocol = this.appendArticlePublishingTransition(
+      executionProtocol = appendArticlePublishingTransition(
         { ...publishing, executionProtocol },
         {
           operationRunId: runtimeOperation.operationRunId,
@@ -6933,7 +6429,7 @@ export class WebAffairService {
         },
       )
     } else if (runtimeOperation?.definitionId === 'runtime.prepare-first-inspect') {
-      executionProtocol = this.appendArticlePublishingTransition(publishing, {
+      executionProtocol = appendArticlePublishingTransition(publishing, {
         operationRunId: runtimeOperation.operationRunId,
         kind: 'draft-reverified',
         occurredAt: now,
@@ -7092,86 +6588,16 @@ export class WebAffairService {
     if (!affair || affair.kind !== 'article-publishing' || !publishing || !asset) {
       return this.notFound('待确认的文章图片不存在')
     }
-    if (
-      publishing.adapterId === 'weibo' &&
-      resolution === 'missing' &&
-      (!missingConfirmationIsCurrent?.() ||
-        !['interrupted', 'waiting-human'].includes(publishing.execution.status) ||
-        publishing.execution.currentStepId !== 'upload-assets' ||
-        publishing.publication.status !== 'not-started' ||
-        publishing.sideEffects.some((effect) => effect.kind === 'publish'))
-    )
-      return this.transitionError(
-        '微博缺图确认需要当前原账号编辑器证据，且原任务必须暂停并从未提交',
-      )
-    const importingExisting =
-      ['xiaohongshu', 'toutiao'].includes(publishing.adapterId) &&
-      asset.status === 'pending' &&
-      asset.uploadAttempts.length === 0 &&
-      publishing.draft?.recovery?.status === 'verified' &&
-      resolution === 'present' &&
-      Boolean(observation)
-    const recoveringLostBilibiliUpload =
-      publishing.adapterId === 'bilibili' &&
-      resolution === 'missing' &&
-      asset.status === 'uploaded' &&
-      publishing.execution.status === 'interrupted' &&
-      publishing.execution.currentStepId === 'upload-assets' &&
-      publishing.publication.status === 'not-started'
-    if (
-      asset.kind !== 'local' ||
-      (!importingExisting &&
-        !recoveringLostBilibiliUpload &&
-        !['result-unknown', 'reconciling'].includes(asset.status))
-    ) {
-      return this.transitionError('只有结果未知的本地图片可以人工确认')
-    }
-    if (
-      publishing.adapterId === 'toutiao' &&
-      observation &&
-      (!['waiting-human', 'interrupted'].includes(publishing.execution.status) ||
-        !isPlatformImageUrl('toutiao', observation.platformUrl) ||
-        publishing.assets.some(
-          (a) => a.id !== assetId && a.platformUrl === observation.platformUrl,
-        ))
-    )
-      return this.transitionError('头条图片确认必须在暂停状态且不能重复认领同一张图')
-    const now = this.timestamp()
-    const nextStatus =
-      resolution === 'present' ? ('uploaded' as const) : ('retryable-failed' as const)
-    const assets = publishing.assets.map((candidate) =>
-      candidate.id === assetId
-        ? {
-            ...candidate,
-            status: nextStatus,
-            ...(observation
-              ? { platformUrl: observation.platformUrl }
-              : resolution === 'missing'
-                ? { platformUrl: undefined, verifiedAt: undefined }
-                : {}),
-            manualResolution: { status: resolution, resolvedAt: now },
-            verifiedAt: resolution === 'present' ? now : candidate.verifiedAt,
-            uploadAttempts: candidate.uploadAttempts.map((attempt, index) =>
-              index === candidate.uploadAttempts.length - 1
-                ? {
-                    ...attempt,
-                    status:
-                      resolution === 'present'
-                        ? ('succeeded' as const)
-                        : ('retryable-failed' as const),
-                    finishedAt: now,
-                    evidence: [
-                      ...attempt.evidence,
-                      resolution === 'present'
-                        ? '已通过可见原稿确认图片存在'
-                        : '已通过可见原稿确认图片缺失',
-                    ].slice(-40),
-                  }
-                : attempt,
-            ),
-          }
-        : candidate,
-    )
+    const evaluation = evaluateArticlePublishingAssetResolution({
+      publishing,
+      asset,
+      resolution,
+      observation,
+      missingConfirmationIsCurrent,
+      timestamp: () => this.timestamp(),
+    })
+    if (!evaluation.success) return evaluation
+    const { assets, now } = evaluation.data
     const sideEffects = this.updateLatestSideEffect(
       publishing,
       affair.attempts.find((attempt) => attempt.id === publishing.execution.currentAttemptId) ??
@@ -7535,121 +6961,16 @@ export class WebAffairService {
     }
     const target = publishing.assets.find((asset) => asset.id === input.assetId)
     if (!target || target.kind !== 'local') return this.notFound('正文图片不存在')
-    if (input.status === 'reconciling') {
-      return this.transitionError('reconciling 只能由主进程在恢复时设置')
-    }
-    if (input.status !== 'uploading' && !input.evidence) {
-      return this.transitionError('图片状态变化必须包含重新观察到的页面证据')
-    }
-    if (input.status === 'uploaded' && reporter.trustedPageEvidence?.kind !== 'asset-uploaded') {
-      return this.evidenceRequired('图片上传成功必须由当前 CSDN 页面适配器读回并核验')
-    }
-    if (input.status === 'uploading' && reporter.trustedPageEvidence?.kind !== 'asset-absent') {
-      return this.evidenceRequired('开始上传前必须由当前 CSDN 页面适配器证明图片尚不存在')
-    }
-    if (['retryable-failed', 'result-unknown', 'failed'].includes(input.status) && !input.error) {
-      return this.transitionError('图片失败或结果未知必须包含结构化原因')
-    }
-    if (input.status === 'uploading' && target.status === 'reconciling' && !input.evidence) {
-      return this.transitionError('恢复后重新上传前必须先证明页面中不存在已上传结果')
-    }
-    const now = this.timestamp()
-    const activeAttempt = target.uploadAttempts[target.uploadAttempts.length - 1]
-    let uploadAttempts = target.uploadAttempts
-    let nextStatus = input.status
-
-    if (input.status === 'uploading') {
-      if (!['pending', 'retryable-failed', 'reconciling'].includes(target.status)) {
-        return this.transitionError('当前图片状态不能开始新的上传尝试')
-      }
-      if (target.uploadAttempts.length >= 3) {
-        return this.transitionError('当前图片已达到 3 次尝试上限，需要人工处理')
-      }
-      uploadAttempts = [
-        ...target.uploadAttempts,
-        {
-          number: target.uploadAttempts.length + 1,
-          status: 'uploading' as const,
-          startedAt: now,
-          evidence: input.evidence ? [input.evidence] : [],
-        },
-      ]
-    } else {
-      if (!activeAttempt) return this.transitionError('图片尚未开始上传')
-      const allowedPrevious: Partial<
-        Record<typeof input.status, ArticlePublishingState['assets'][number]['status'][]>
-      > = {
-        'waiting-platform': ['uploading'],
-        verifying: ['waiting-platform', 'reconciling'],
-        uploaded: ['verifying', 'reconciling'],
-        'retryable-failed': ['uploading', 'waiting-platform', 'verifying', 'reconciling'],
-        'result-unknown': ['uploading', 'waiting-platform', 'verifying'],
-        failed: ['uploading', 'waiting-platform', 'verifying', 'reconciling'],
-      }
-      const previous = allowedPrevious[input.status]
-      if (previous && !previous.includes(target.status)) {
-        return this.transitionError(`图片状态不能从 ${target.status} 进入 ${input.status}`)
-      }
-      if (input.status === 'uploaded' && (!input.platformUrl || !input.evidence)) {
-        return this.transitionError('图片成功必须包含平台 URL 和页面核验证据')
-      }
-      if (
-        input.status === 'uploaded' &&
-        target.status !== 'verifying' &&
-        target.status !== 'reconciling'
-      ) {
-        return this.transitionError('图片必须经过页面核验后才能标记成功')
-      }
-      if (input.status === 'uploaded') {
-        const allowRecoveredEffect = target.status === 'reconciling'
-        const uploadEffect = publishing.sideEffects.find(
-          (effect) =>
-            effect.attemptId === found.attempt.id &&
-            (allowRecoveredEffect ||
-              effect.executionGeneration === found.attempt.executionGeneration) &&
-            effect.kind === 'upload-asset' &&
-            effect.targetId.startsWith(`${target.id}:`) &&
-            ['dispatched', 'result-unknown', 'verified'].includes(effect.status),
-        )
-        if (!uploadEffect) {
-          return this.transitionError('图片没有匹配的已派发上传凭证，不能标记成功')
-        }
-      }
-      if (input.status === 'retryable-failed' && activeAttempt.number >= 3) nextStatus = 'failed'
-      uploadAttempts = target.uploadAttempts.map((attempt, index) =>
-        index === target.uploadAttempts.length - 1
-          ? {
-              ...attempt,
-              status:
-                input.status === 'uploaded'
-                  ? ('succeeded' as const)
-                  : input.status === 'reconciling'
-                    ? attempt.status
-                    : (nextStatus as typeof attempt.status),
-              finishedAt: ['uploaded', 'retryable-failed', 'result-unknown', 'failed'].includes(
-                nextStatus,
-              )
-                ? now
-                : attempt.finishedAt,
-              evidence: input.evidence
-                ? [...attempt.evidence, input.evidence].slice(-40)
-                : attempt.evidence,
-              error: input.error,
-            }
-          : attempt,
-      )
-    }
-    const assets = publishing.assets.map((asset) =>
-      asset.id === target.id
-        ? {
-            ...asset,
-            status: nextStatus,
-            platformUrl: input.status === 'uploaded' ? input.platformUrl : asset.platformUrl,
-            verifiedAt: input.status === 'uploaded' ? now : asset.verifiedAt,
-            uploadAttempts,
-          }
-        : asset,
-    )
+    const evaluation = evaluateArticlePublishingAssetReport({
+      publishing,
+      attempt: found.attempt,
+      target,
+      input,
+      trustedPageEvidence: reporter.trustedPageEvidence,
+      timestamp: () => this.timestamp(),
+    })
+    if (!evaluation.success) return evaluation
+    const { assets, now, nextStatus, uploadAttempts } = evaluation.data
     const sideEffects =
       input.status === 'uploaded'
         ? this.updateLatestSideEffect(
@@ -7696,7 +7017,7 @@ export class WebAffairService {
           : null
     return this.persistAffair(
       lifecycleTarget
-        ? this.reduceArticlePublishingLifecycle(
+        ? reduceArticlePublishingLifecycle(
             baseAffair,
             found.attempt,
             lifecycleTarget,
@@ -8002,7 +7323,7 @@ export class WebAffairService {
     const base = { ...found.affair, articlePublishing, updatedAt: now }
     return this.persistAffair(
       status === 'result-unknown'
-        ? this.reduceArticlePublishingLifecycle(
+        ? reduceArticlePublishingLifecycle(
             base,
             found.attempt,
             'result-unknown',
@@ -8013,11 +7334,6 @@ export class WebAffairService {
     )
   }
 
-  /**
-   * The only place that projects an article publishing lifecycle decision across the affair,
-   * Attempt, node, checkpoint, asset and publication state. Callers validate identity/evidence;
-   * this reducer prevents partially-updated terminal states.
-   */
   private updateLatestSideEffect(
     publishing: ArticlePublishingState,
     attempt: WebAffairAttempt,
@@ -8043,235 +7359,6 @@ export class WebAffairService {
     return publishing.sideEffects.map((effect, index) =>
       index === targetIndex ? { ...effect, status, observedAt } : effect,
     )
-  }
-
-  private reduceArticlePublishingLifecycle(
-    affair: WebAffair,
-    attempt: WebAffairAttempt,
-    requestedTarget: ArticlePublishingLifecycleTarget,
-    now: string,
-    reason: string,
-    options: {
-      publicationUrl?: string
-      runtimeCheck?: ArticlePublishingState['execution']['runtimeCheck']
-    } = {},
-  ): WebAffair {
-    const publishing = affair.articlePublishing
-    if (!publishing || affair.kind !== 'article-publishing') return affair
-
-    const hasUnknownFinalAction =
-      publishing.publication.status === 'dispatched' ||
-      publishing.publication.status === 'verifying' ||
-      publishing.publication.status === 'result-unknown' ||
-      publishing.sideEffects.some(
-        (effect) =>
-          effect.kind === 'publish' &&
-          (effect.status === 'dispatched' || effect.status === 'result-unknown'),
-      )
-    const target =
-      hasUnknownFinalAction && ['interrupted', 'cancelled', 'failed'].includes(requestedTarget)
-        ? ('result-unknown' as const)
-        : requestedTarget
-
-    const attemptStatus: WebAffairAttempt['status'] =
-      target === 'preparing'
-        ? 'preparing'
-        : target === 'running'
-          ? 'running-ai'
-          : target === 'checking-runtime'
-            ? 'checking-runtime'
-            : target === 'waiting-human'
-              ? 'waiting-human'
-              : target === 'published'
-                ? 'succeeded'
-                : target === 'failed'
-                  ? 'failed'
-                  : target === 'cancelled'
-                    ? 'cancelled'
-                    : 'interrupted'
-    const nodeStatus: WebAffairNodeStatus =
-      target === 'preparing' || target === 'running'
-        ? 'running'
-        : target === 'checking-runtime' || target === 'result-unknown'
-          ? 'verifying'
-          : target === 'waiting-human' || target === 'interrupted'
-            ? 'waiting-human'
-            : target === 'published'
-              ? 'completed'
-              : target === 'failed'
-                ? 'failed'
-                : 'cancelled'
-    const isRuntimeLoss = ['checking-runtime', 'interrupted', 'result-unknown'].includes(target)
-    const isTerminal = [
-      'interrupted',
-      'cancelled',
-      'failed',
-      'result-unknown',
-      'published',
-    ].includes(target)
-    const closesExecution = isTerminal || target === 'waiting-human'
-    const currentStepId = publishing.execution.currentStepId
-    const nextAttempt: WebAffairAttempt = {
-      ...attempt,
-      status: attemptStatus,
-      runtimeBindings: closesExecution
-        ? attempt.runtimeBindings.map((binding) =>
-            binding.executionGeneration === attempt.executionGeneration &&
-            binding.status === 'active'
-              ? {
-                  ...binding,
-                  status: 'terminal' as const,
-                  endedAt: now,
-                  lastObservedAt: now,
-                  terminalReason: reason,
-                }
-              : binding,
-          )
-        : attempt.runtimeBindings,
-      ...(isTerminal && target !== 'result-unknown' ? { endedAt: attempt.endedAt ?? now } : {}),
-      ...(target === 'failed' || target === 'interrupted' || target === 'result-unknown'
-        ? { failureMessage: attempt.failureMessage ?? reason }
-        : {}),
-    }
-    const attempts = affair.attempts.map((item) => (item.id === attempt.id ? nextAttempt : item))
-    const nodes = affair.flow.nodes.map((node) =>
-      node.id === attempt.nodeId
-        ? {
-            ...node,
-            status: nodeStatus,
-            lastResultNote: reason,
-            availableTransitions: [...ALLOWED_TRANSITIONS[nodeStatus]],
-            updatedAt: now,
-          }
-        : node,
-    )
-    const checkpoints = publishing.checkpoints.map((checkpoint) => {
-      if (checkpoint.stepId !== currentStepId) return checkpoint
-      if (
-        target === 'running' &&
-        ['pending', 'needs-reconcile', 'waiting-human'].includes(checkpoint.status)
-      ) {
-        return {
-          ...checkpoint,
-          status: 'running' as const,
-          attemptCount: checkpoint.attemptCount + 1,
-          startedAt: now,
-          finishedAt: undefined,
-        }
-      }
-      if (
-        (isRuntimeLoss || target === 'cancelled') &&
-        ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
-      ) {
-        return { ...checkpoint, status: 'needs-reconcile' as const, finishedAt: undefined }
-      }
-      if (
-        target === 'failed' &&
-        ['running', 'waiting-platform', 'verifying'].includes(checkpoint.status)
-      ) {
-        return { ...checkpoint, status: 'failed' as const, finishedAt: now }
-      }
-      return checkpoint
-    })
-    const assets = publishing.assets.map((asset) =>
-      isRuntimeLoss && ['uploading', 'waiting-platform', 'verifying'].includes(asset.status)
-        ? { ...asset, status: 'reconciling' as const }
-        : asset,
-    )
-    const sideEffects = publishing.sideEffects.map((effect) =>
-      closesExecution && effect.status === 'dispatched'
-        ? { ...effect, status: 'result-unknown' as const, observedAt: now }
-        : closesExecution && effect.status === 'reserved'
-          ? { ...effect, status: 'rejected' as const, observedAt: now }
-          : effect,
-    )
-    const publication =
-      target === 'published'
-        ? { status: 'published' as const, url: options.publicationUrl, observedAt: now }
-        : target === 'result-unknown' && hasUnknownFinalAction
-          ? { ...publishing.publication, status: 'result-unknown' as const, observedAt: now }
-          : publishing.publication
-    const executionStatus: ArticlePublishingState['execution']['status'] = target
-    const currentOperation = publishing.executionProtocol.current
-    let executionProtocol = publishing.executionProtocol
-    if (
-      closesExecution &&
-      currentOperation &&
-      !['interrupted', 'result-unknown', 'failed'].includes(currentOperation.status)
-    ) {
-      const operationStatus =
-        target === 'waiting-human'
-          ? ('waiting-human' as const)
-          : target === 'result-unknown'
-            ? ('result-unknown' as const)
-            : target === 'failed'
-              ? ('failed' as const)
-              : ('interrupted' as const)
-      executionProtocol = this.appendArticlePublishingTransition(publishing, {
-        operationRunId: currentOperation.operationRunId,
-        kind: 'operation-interrupted',
-        occurredAt: now,
-        summary: reason,
-        ...(currentOperation.runtime ? { currentRuntime: currentOperation.runtime } : {}),
-      })
-      executionProtocol = {
-        ...executionProtocol,
-        current:
-          target === 'published'
-            ? undefined
-            : {
-                ...currentOperation,
-                revision: currentOperation.revision + 1,
-                status: operationStatus,
-                owner: target === 'waiting-human' ? ('human' as const) : currentOperation.owner,
-                lastTransitionAt: now,
-              },
-      }
-    }
-    const draft =
-      closesExecution && publishing.draft?.recovery?.writePermit
-        ? {
-            ...publishing.draft,
-            recovery: {
-              ...publishing.draft.recovery,
-              writePermit: undefined,
-            },
-          }
-        : publishing.draft
-    const articlePublishing: ArticlePublishingState = {
-      ...publishing,
-      draft,
-      assets,
-      checkpoints,
-      sideEffects,
-      executionProtocol,
-      execution: {
-        ...publishing.execution,
-        status: executionStatus,
-        currentAttemptId: attempt.id,
-        currentGeneration: attempt.executionGeneration,
-        currentLaunchOperationId: attempt.launchOperationId,
-        ...(target === 'checking-runtime'
-          ? { runtimeCheck: options.runtimeCheck ?? publishing.execution.runtimeCheck }
-          : { runtimeCheck: undefined }),
-        ...(target === 'running'
-          ? {}
-          : { lastAgentRunId: undefined, lastBrowserTaskRunId: undefined }),
-      },
-      publication,
-    }
-    return {
-      ...affair,
-      attempts,
-      flow: { ...affair.flow, nodes },
-      status: ['checking-runtime', 'waiting-human', 'interrupted', 'result-unknown'].includes(
-        target,
-      )
-        ? 'needs-attention'
-        : this.deriveAffairStatus(nodes),
-      articlePublishing,
-      updatedAt: now,
-    }
   }
 
   private async persistNewAffair(affair: WebAffair): Promise<WebAffairOperationResult<WebAffair>> {
@@ -8352,27 +7439,6 @@ export class WebAffairService {
 
   private timestamp(): string {
     return this.now().toISOString()
-  }
-
-  private hasCycle(nodes: WebAffairNode[], edges: WebAffairEdge[]): boolean {
-    const incoming = new Map(nodes.map((node) => [node.id, 0]))
-    const outgoing = new Map(nodes.map((node) => [node.id, [] as string[]]))
-    for (const edge of edges) {
-      incoming.set(edge.toNodeId, (incoming.get(edge.toNodeId) ?? 0) + 1)
-      outgoing.get(edge.fromNodeId)?.push(edge.toNodeId)
-    }
-    const pending = [...incoming.entries()].filter(([, count]) => count === 0).map(([id]) => id)
-    let visited = 0
-    while (pending.length > 0) {
-      const id = pending.pop()!
-      visited += 1
-      for (const target of outgoing.get(id) ?? []) {
-        const count = (incoming.get(target) ?? 0) - 1
-        incoming.set(target, count)
-        if (count === 0) pending.push(target)
-      }
-    }
-    return visited !== nodes.length
   }
 
   private enqueue(
@@ -8458,7 +7524,7 @@ export class WebAffairService {
         throw new Error('事务 Attempt 存在失效节点引用')
       if (affair.waitPlans.some((plan) => !nodeIds.has(plan.nodeId)))
         throw new Error('事务等待计划存在失效节点引用')
-      if (this.hasCycle(affair.flow.nodes, affair.flow.edges))
+      if (hasCycle(affair.flow.nodes, affair.flow.edges))
         throw new Error('事务流程必须是有向无环图')
       const publishing = affair.articlePublishing
       if (!publishing) continue
@@ -8520,35 +7586,5 @@ export class WebAffairService {
         }
       }
     }
-  }
-}
-
-function isPlatformPublicationUrl(
-  rawUrl: string,
-  platform: 'csdn' | 'zhihu' | 'juejin' | 'xiaohongshu' | 'weibo' | 'toutiao' | 'bilibili' | 'jike',
-): boolean {
-  try {
-    const url = new URL(rawUrl)
-    return (
-      url.protocol === 'https:' &&
-      ((platform === 'toutiao' && Boolean(parseToutiaoPublicationUrl(rawUrl))) ||
-        (platform === 'weibo' && Boolean(parseWeiboPublicationUrl(rawUrl))) ||
-        (platform === 'bilibili' && Boolean(parseBilibiliPublicationUrl(rawUrl))) ||
-        (platform === 'jike' && Boolean(parseJikePublicationUrl(rawUrl))) ||
-        (platform === 'xiaohongshu' &&
-          url.origin === 'https://www.xiaohongshu.com' &&
-          /^\/explore\/[a-f\d]{24}\/?$/iu.test(url.pathname)) ||
-        (platform === 'juejin' &&
-          url.origin === 'https://juejin.cn' &&
-          /^\/post\/\d+\/?$/u.test(url.pathname)) ||
-        (platform === 'csdn' &&
-          url.hostname === 'blog.csdn.net' &&
-          /^\/[^/]+\/article\/details\/\d+\/?$/u.test(url.pathname)) ||
-        (platform === 'zhihu' &&
-          url.hostname === 'zhuanlan.zhihu.com' &&
-          /^\/p\/\d+\/?$/u.test(url.pathname)))
-    )
-  } catch {
-    return false
   }
 }

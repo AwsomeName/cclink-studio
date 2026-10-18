@@ -198,6 +198,16 @@ Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、�
 - `WebAffairService` 是事务、流程版本、节点、Attempt、人工交接、证据、等待计划和流程
   建议的唯一 owner，并继续以稳定 `workspaceId` 隔离事务、本地物料和证据；renderer、
   Agent、BrowserTask 和模板只持有引用或可丢弃投影。
+- 该 owner 可以委托无状态领域函数：`web-affair-flow.ts` 集中节点转换、依赖放行与流程状态
+  规则；`web-affair-flow-revision.ts` 生成修订流程、应用差异并校验资源引用、历史依赖和 DAG；
+  `article-publishing-lifecycle.ts` 统一生成文章发布生命周期的新快照；
+  `article-publishing-checkpoint-rules.ts` 判定检查点的页面事实、动作凭证与平台 URL 是否满足
+  既有完成条件；`article-publishing-asset-rules.ts` 计算图片上传转换、重试上限及人工确认投影。
+  `WebAffairService` 在调用规则前校验报告者身份、执行代次、Runtime binding
+  和页面证据时效，继续统一拥有版本冲突检查、建议确认、执行排队、持久化、事件通知与
+  定时器，并在同一提交中更新动作凭证与收敛生命周期；辅助模块不保存快照，也不签发执行
+  权限或派发动作。分批拆分的工程验证边界见
+  `docs/testing/web-affair-service-refactor.md`。
 - “网站与账号”侧栏以及 Browser 新标签页中的账号快捷区查询全局 WebResource Snapshot。用户手动打开账号时，renderer 提交
   `workspaceRef + accountId`，主进程解析全局账号、URL 和唯一 Profile，Workspace/Tab 层
   只在当前工作空间创建或激活 Browser Tab 投影。renderer 不得按当前 Tab、URL 或 Profile

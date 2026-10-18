@@ -1,4 +1,5 @@
 import type { WorkspaceRef } from '../workspace-ref'
+import type { WebServiceStartupFailure } from '../web-service-startup'
 import type { ArticlePublishingState } from '../article-publishing/article-publishing-types'
 
 export type ImageResearchDecision = 'self-saved' | 'skipped'
@@ -565,6 +566,7 @@ export type WebAffairErrorCode =
 export interface WebAffairOperationError {
   code: WebAffairErrorCode
   message: string
+  startupFailure?: WebServiceStartupFailure
 }
 
 export type WebAffairOperationResult<T> =

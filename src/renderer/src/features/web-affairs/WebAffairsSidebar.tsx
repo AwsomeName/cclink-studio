@@ -6,6 +6,8 @@ import { useTabStore } from '../../stores'
 import { createWebAffairDraftTab } from './web-affair-draft'
 import { getStaleWebAffairTabIds } from './web-affair-tab-reconciliation'
 import { WEB_AFFAIR_CHANGED_EVENT, WEB_AFFAIR_STATUS_LABELS } from './web-affair-view-model'
+import type { WebServiceStartupFailure } from '@shared/web-service-startup'
+import { WebServiceStartupNotice } from '../diagnostics/WebServiceStartupNotice'
 
 export function WebAffairsSidebar({
   workspaceRef,
@@ -16,16 +18,22 @@ export function WebAffairsSidebar({
   const [affairs, setAffairs] = useState<WebAffairProjectSnapshot | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [startupFailure, setStartupFailure] = useState<WebServiceStartupFailure | null>(null)
   const [confirmClaimId, setConfirmClaimId] = useState<string | null>(null)
 
   const reload = useCallback(async (): Promise<void> => {
     const affairResult = await window.cclinkStudio.webAffairs.getSnapshot({ workspaceRef })
-    if (!affairResult.success) throw new Error(affairResult.error.message)
+    if (!affairResult.success) {
+      setStartupFailure(affairResult.error.startupFailure ?? null)
+      setError(affairResult.error.message)
+      return
+    }
     const tabStore = useTabStore.getState()
     for (const tabId of getStaleWebAffairTabIds(tabStore.tabs, affairResult.data, workspaceRef)) {
       tabStore.closeTab(tabId)
     }
     setAffairs(affairResult.data)
+    setStartupFailure(null)
     setError(null)
   }, [workspaceRef])
 
@@ -104,7 +112,11 @@ export function WebAffairsSidebar({
         </button>
       </div>
 
-      {error ? <div className="web-affairs-error">{error}</div> : null}
+      {startupFailure ? (
+        <WebServiceStartupNotice failure={startupFailure} />
+      ) : error ? (
+        <div className="web-affairs-error">{error}</div>
+      ) : null}
       {affairs && affairs.unassignedAffairCount > 0 ? (
         <div className="web-affairs-legacy-notice">
           <strong>待归属旧事务 · {affairs.unassignedAffairCount}</strong>

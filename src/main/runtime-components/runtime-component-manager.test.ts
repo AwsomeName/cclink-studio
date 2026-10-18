@@ -6,7 +6,8 @@ import { gzipSync } from 'node:zlib'
 import { pack } from 'tar-stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedClaudeRuntimeCatalogEntry } from './claude-runtime-catalog'
-import { RuntimeComponentInstallError, RuntimeComponentManager } from './runtime-component-manager'
+import { RuntimeComponentManager } from './runtime-component-manager'
+import { RuntimeComponentInstallError } from './runtime-install-error'
 
 const BINARY = Buffer.from('fixture-managed-claude-runtime')
 const temporaryDirectories: string[] = []

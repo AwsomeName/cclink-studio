@@ -10,6 +10,10 @@ const mockIpcMain = vi.hoisted(() => ({
 vi.mock('electron', () => ({ ipcMain: mockIpcMain }))
 
 import { registerWebAffairIpc } from './web-affair-ipc'
+import {
+  createWebServiceStartupFailure,
+  WebServiceStartupError,
+} from '../diagnostics/web-service-startup-error'
 
 const WORKSPACE_ID = '11111111-1111-4111-8111-111111111111'
 const WORKSPACE_SCOPE = { workspaceRef: { kind: 'local', path: '/Users/example/project' } }
@@ -100,6 +104,44 @@ describe('registerWebAffairIpc', () => {
       mockIpcMain.handlers.get('webAffairs:claimLegacyAffair')?.({ sender: 'trusted' }, input),
     ).resolves.toMatchObject({ success: true })
     expect(claimLegacyAffair).toHaveBeenCalledWith(input, WORKSPACE_ID)
+  })
+
+  it('returns recorded startup diagnostics before any workspace or execution action', async () => {
+    const failure = createWebServiceStartupFailure(
+      'web-affairs',
+      new WebServiceStartupError('read-state', 'STATE_INVALID', 'private snapshot'),
+    )
+    const getFailure = vi.fn(() => failure)
+    const resolve = vi.fn()
+    registerWebAffairIpc(
+      () => null,
+      createGuard('trusted') as never,
+      () => null,
+      () => ({ getLocalProjectId: resolve }) as never,
+      () => null,
+      getFailure,
+    )
+
+    for (const [channel, input] of [
+      ['webAffairs:getSnapshot', WORKSPACE_SCOPE],
+      ['webAffairs:startImageResearch', { ...WORKSPACE_SCOPE, affairId: WORKSPACE_ID }],
+    ] as const) {
+      expect(await mockIpcMain.handlers.get(channel)?.({ sender: 'trusted' }, input)).toMatchObject(
+        {
+          success: false,
+          error: {
+            code: 'SERVICE_UNAVAILABLE',
+            startupFailure: failure,
+            message: expect.stringContaining('备份'),
+          },
+        },
+      )
+    }
+    expect(resolve).not.toHaveBeenCalled()
+    expect(() =>
+      mockIpcMain.handlers.get('webAffairs:getSnapshot')?.({ sender: 'other' }, WORKSPACE_SCOPE),
+    ).toThrow('untrusted')
+    expect(getFailure).toHaveBeenCalledTimes(2)
   })
 
   it('returns a structured degraded result', async () => {

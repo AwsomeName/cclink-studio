@@ -7,6 +7,10 @@ import {
   type WebAffairSnapshot,
 } from '../../shared/web-affairs/web-affair-types'
 import { parseWebAffairSnapshot } from '../../shared/web-affairs/web-affair-schema'
+import {
+  classifyWebServiceStartupError,
+  WebServiceStartupError,
+} from '../diagnostics/web-service-startup-error'
 
 const STORE_HIGH_WATER_BYTES = 7 * 1024 * 1024
 const MAX_STORE_BYTES = 64 * 1024 * 1024
@@ -40,6 +44,16 @@ export class WebAffairStore {
   }
 
   async load(): Promise<WebAffairSnapshot> {
+    try {
+      return await this.loadState()
+    } catch (error) {
+      // Read/validation errors already carry their stage. Remaining failures here
+      // are writes performed while migrating or restoring a valid snapshot.
+      throw classifyWebServiceStartupError(error, 'restore-state')
+    }
+  }
+
+  private async loadState(): Promise<WebAffairSnapshot> {
     const primary = await this.readSnapshot(this.filePath)
     if (primary.kind === 'valid') {
       if (primary.discardedArticleCount > 0) {
@@ -77,7 +91,19 @@ export class WebAffairStore {
     }
 
     if (primary.kind === 'invalid' || backup.kind === 'invalid') {
-      throw new Error('事务数据文件损坏；原文件已保留，请从诊断或备份恢复')
+      const error =
+        primary.kind === 'invalid'
+          ? primary.error
+          : backup.kind === 'invalid'
+            ? backup.error
+            : undefined
+      const classified = classifyWebServiceStartupError(error, 'read-state', 'STATE_INVALID')
+      throw new WebServiceStartupError(
+        classified.stage,
+        classified.code,
+        '事务数据无法加载；原文件已保留，请根据诊断恢复',
+        error,
+      )
     }
     console.info('[WebAffairStore] 未找到事务数据，以空历史启动', {
       filePath: this.filePath,
@@ -126,7 +152,11 @@ export class WebAffairStore {
     try {
       const metadata = await stat(path)
       if (metadata.size > MAX_STORE_BYTES) {
-        throw new Error(`事务文件超过 ${MAX_STORE_BYTES} 字节限制`)
+        throw new WebServiceStartupError(
+          'read-state',
+          'STATE_TOO_LARGE',
+          '事务文件超过安全大小限制',
+        )
       }
       const raw = JSON.parse(await readFile(path, 'utf8')) as unknown
       const rawAffairs =
@@ -150,7 +180,7 @@ export class WebAffairStore {
       }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
-      const normalized = error instanceof Error ? error : new Error(String(error))
+      const normalized = classifyWebServiceStartupError(error, 'read-state', 'STATE_INVALID')
       console.warn(`[WebAffairStore] 无法读取 ${path}:`, normalized.message)
       return { kind: 'invalid', error: normalized }
     }
@@ -194,29 +224,57 @@ export class WebAffairStore {
     const journal = await this.readRecoveryJournal()
     if (journal.kind === 'missing') return snapshot
     if (journal.kind === 'invalid') {
-      throw new Error('事务恢复日志损坏；原文件已保留，已停止发布写入')
+      const classified = classifyWebServiceStartupError(
+        journal.error,
+        'recover-runtime',
+        'STATE_INVALID',
+      )
+      throw new WebServiceStartupError(
+        classified.stage,
+        classified.code,
+        '事务恢复日志损坏或不可读；原文件已保留，已停止发布写入',
+        journal.error,
+      )
     }
     if (journal.journal.targetRevision <= snapshot.revision) {
       await this.clearRecoveryJournal()
       return snapshot
     }
     if (journal.journal.baseRevision > snapshot.revision) {
-      throw new Error('事务恢复日志与主文件 revision 不连续；已停止发布写入')
+      throw new WebServiceStartupError(
+        'recover-runtime',
+        'STATE_INVALID',
+        '事务恢复日志与主文件 revision 不连续；已停止发布写入',
+      )
     }
     const affairs = new Map(snapshot.affairs.map((affair) => [affair.id, affair]))
     for (const affair of journal.journal.affairs) affairs.set(affair.id, affair)
-    const recovered = parseWebAffairSnapshot({
-      ...snapshot,
-      revision: journal.journal.targetRevision,
-      affairs: [...affairs.values()],
-    })
+    let recovered: WebAffairSnapshot
+    try {
+      recovered = parseWebAffairSnapshot({
+        ...snapshot,
+        revision: journal.journal.targetRevision,
+        affairs: [...affairs.values()],
+      })
+    } catch (error) {
+      throw new WebServiceStartupError(
+        'recover-runtime',
+        'STATE_INVALID',
+        '恢复后的事务状态无效',
+        error,
+      )
+    }
     console.warn('[WebAffairStore] 已从固定恢复日志补回未完成的事务状态', {
       filePath: this.filePath,
       recoveryPath: this.recoveryPath,
       revision: recovered.revision,
       recoveredAffairCount: journal.journal.affairs.length,
     })
-    await this.persist(recovered, false)
+    try {
+      await this.persist(recovered, false)
+    } catch (error) {
+      throw classifyWebServiceStartupError(error, 'recover-runtime')
+    }
     await this.clearRecoveryJournal()
     return recovered
   }
@@ -229,7 +287,11 @@ export class WebAffairStore {
     try {
       const metadata = await stat(this.recoveryPath)
       if (metadata.size > MAX_RECOVERY_BYTES) {
-        throw new Error(`事务恢复日志超过 ${MAX_RECOVERY_BYTES} 字节限制`)
+        throw new WebServiceStartupError(
+          'recover-runtime',
+          'STATE_TOO_LARGE',
+          '事务恢复日志超过安全大小限制',
+        )
       }
       const raw = JSON.parse(await readFile(this.recoveryPath, 'utf8')) as Partial<RecoveryJournal>
       if (
