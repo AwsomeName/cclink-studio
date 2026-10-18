@@ -1912,6 +1912,8 @@ async function main() {
     await page.getByRole('button', { name: '编辑角色', exact: true }).click()
     await page.getByLabel('名称').fill(customRoleV2Name)
     await page.getByRole('button', { name: '保存为新版本' }).click()
+    // The editor heading follows the draft, so it does not prove the save has completed.
+    await page.locator('[data-role-editor]').waitFor({ state: 'hidden', timeout: 10_000 })
     await page.getByRole('heading', { name: customRoleV2Name, exact: true }).waitFor({
       state: 'visible',
       timeout: 10_000,
