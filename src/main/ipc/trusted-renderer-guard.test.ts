@@ -215,6 +215,31 @@ describe('TrustedRendererGuard', () => {
 })
 
 describe('isAllowedMainRendererUrl', () => {
+  it('recognizes Chromium and Node encodings of the same Windows short-path entry', () => {
+    const chromiumUrl =
+      'file:///C:/Users/RUNNER~1/Studio/resources/app.asar/out/renderer/index.html'
+    const nodeUrl = 'file:///C:/Users/RUNNER%7E1/Studio/resources/app.asar/out/renderer/index.html'
+    expect(isAllowedMainRendererUrl(chromiumUrl, nodeUrl)).toBe(true)
+    expect(isAllowedMainRendererUrl(`${chromiumUrl}#settings`, nodeUrl)).toBe(true)
+    expect(isAllowedMainRendererUrl(chromiumUrl.replace('index.html', 'other.html'), nodeUrl)).toBe(
+      false,
+    )
+    expect(isAllowedMainRendererUrl(chromiumUrl.replace('RUNNER~1', 'OTHER~1'), nodeUrl)).toBe(
+      false,
+    )
+  })
+
+  it('rejects encoded separators and non-file URLs when comparing production files', () => {
+    const entry = 'file:///app/renderer/index.html'
+    expect(isAllowedMainRendererUrl('file:///app%2Frenderer/index.html', entry)).toBe(false)
+    expect(isAllowedMainRendererUrl('file:///app%5Crenderer/index.html', entry)).toBe(false)
+    expect(isAllowedMainRendererUrl('https://example.com/app/renderer/index.html', entry)).toBe(
+      false,
+    )
+    expect(isAllowedMainRendererUrl('file:///app/renderer/index.html%00', entry)).toBe(false)
+    expect(isAllowedMainRendererUrl('file:///app/renderer/%2569ndex.html', entry)).toBe(false)
+  })
+
   it('allows same-origin development routes and exact production files', () => {
     expect(
       isAllowedMainRendererUrl('http://localhost:5173/settings', 'http://localhost:5173/'),

@@ -7,6 +7,9 @@
 本轮范围为未签名测试安装包，不进入 macOS 稳定 Release，也不修改版本号或 Tag。
 应用、Workspace、Browser、Terminal、Runtime 和更新状态继续由既有 owner 管理，
 不增加 IPC、权限或另一套更新实现。Mac 原生更新助手只进入 Mac 包。
+Windows 短路径中的 `~` 会被 Node 编码为 `%7E`，而 Chromium 保留字面量；生产入口
+按解码后的精确文件路径比较，继续校验已登记 WebContents、主 frame 与角色，拒绝
+不同入口、跨协议和编码路径分隔符。该兼容修复解决真实安装后主页面 IPC 被拒绝的问题。
 
 ## 构建
 

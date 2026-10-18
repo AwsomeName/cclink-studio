@@ -5,6 +5,7 @@ import {
   type IpcMainInvokeEvent,
   type WebContents,
 } from 'electron'
+import { fileURLToPath } from 'node:url'
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import type { WorkbenchWindowRole } from '../../shared/ipc/workbench-window'
 
@@ -247,11 +248,15 @@ export function isAllowedMainRendererUrl(candidateUrl: string, rendererEntryUrl:
       return candidate.origin === entry.origin
     }
     if (entry.protocol === 'file:') {
+      if (candidate.protocol !== 'file:') return false
       candidate.hash = ''
       candidate.search = ''
       entry.hash = ''
       entry.search = ''
-      return candidate.href === entry.href
+      // Node encodes '~' as %7E while Chromium leaves it literal (notably RUNNER~1
+      // and Windows short paths). Compare the exact decoded file paths; encoded
+      // separators remain invalid and the WebContents/main-frame checks still apply.
+      return fileURLToPath(candidate) === fileURLToPath(entry)
     }
     return false
   } catch {
