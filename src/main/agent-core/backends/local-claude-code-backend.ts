@@ -18,6 +18,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentImageAttachment } from '../../../shared/ipc/agent.js'
 import type { AgentContextUsageSnapshot } from '../../../shared/agent-protocol.js'
+import type { ContextCompactionFailureCode } from '../../../shared/agent-failure.js'
 import type { McpToolHost } from '../tools/tool-host.js'
 import type { ToolDefinition, ToolExecutionContext } from '../tools/types.js'
 import type {
@@ -609,10 +610,15 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       sdkInput.close()
       void this.cleanupMcpConfig()
       this.terminalEventEmitted = true
+      const failure = classifySdkFailure(
+        err instanceof Error ? err.message : String(err),
+        operation,
+      )
       this.emit('error', {
         type: 'error',
         operation,
-        message: `无法启动 Claude Agent SDK: ${String(err)}`,
+        code: failure.code,
+        message: failure.code ? failure.message : `无法启动 Claude Agent SDK: ${failure.message}`,
       })
     }
   }
@@ -738,7 +744,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       if (this.currentQuery === sdkQuery && !this.aborted && !this.terminalEventEmitted) {
         this.terminalEventEmitted = true
         const rawMessage = err instanceof Error ? err.message : String(err)
-        const failure = classifySdkFailure(rawMessage)
+        const failure = classifySdkFailure(rawMessage, operation)
         if (failure.invalidatesSession) {
           this.sessionId = null
           this.lastContextUsage = null
@@ -772,7 +778,18 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         if (event.subtype === 'init' && event.session_id) {
           this.sessionId = event.session_id as string
         }
-        this.emit('system', payload)
+        this.emit(
+          'system',
+          event.subtype === 'status' && event.compact_result === 'failed'
+            ? {
+                ...payload,
+                compact_failure_code: classifySdkFailure(
+                  typeof event.compact_error === 'string' ? event.compact_error : '',
+                  'compact',
+                ).code,
+              }
+            : payload,
+        )
         break
       }
       case 'stream_event':
@@ -794,7 +811,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
                 ? errors.join('\n')
                 : 'Claude Agent SDK 返回错误结果'
           this.lastSdkErrorMessage = message
-          const failure = classifySdkFailure(message)
+          const failure = classifySdkFailure(message, operation)
           if (failure.invalidatesSession) {
             // 预算中止可能让 transcript 停在尚未配对 tool_result 的 tool_use 尾部；
             // 继续 resume 会被 API 以 invalid_request 拒绝。保留 UI 对话，但丢弃坏 SDK session。
@@ -973,6 +990,9 @@ interface SdkFailureClassification {
     | 'rate_limited'
     | 'network_unavailable'
     | 'proxy_gateway_error'
+    | ContextCompactionFailureCode
+    | 'content_rejected'
+    | 'context_limit_exceeded'
   invalidatesSession: boolean
   message: string
 }
@@ -1126,7 +1146,49 @@ async function resolveWorkspaceToolInput(
   return changed ? { updatedInput } : {}
 }
 
-function classifySdkFailure(message: string): SdkFailureClassification {
+function classifySdkFailure(
+  message: string,
+  operation: AgentQueryOperation = 'message',
+): SdkFailureClassification {
+  // Automatic compaction runs inside a message query. Classify its nested provider error
+  // before generic invalid-request handling so a failed summary never discards the old session.
+  const compactionFailed =
+    operation === 'compact' ||
+    /(?:automatic\s+)?compaction failed|failed to compact|error during compaction|error compacting/i.test(
+      message,
+    )
+  const contentRejected =
+    /\[1301\]|["']?code["']?\s*:\s*["']?1301\b|content[_ -]?(?:filter|policy)|内容.*(?:不安全|敏感|审核)|safety.*(?:reject|block)|content.*(?:unsafe|sensitive)/i.test(
+      message,
+    )
+  const contextExceeded =
+    /prompt is too long|context[_ -]?(?:length|window).*(?:exceed|limit)|too many (?:input )?tokens/i.test(
+      message,
+    )
+  if (compactionFailed) {
+    const nestedCause = message.match(/(?:automatic\s+)?compaction failed:?\s*([\s\S]*)/i)?.[1]
+    const cause = classifySdkFailureCause(nestedCause || message)
+    const code = contentRejected
+      ? 'context_compaction_content_rejected'
+      : cause.code === 'authentication_failed'
+        ? 'context_compaction_authentication_failed'
+        : cause.code === 'rate_limited'
+          ? 'context_compaction_rate_limited'
+          : cause.code === 'network_unavailable'
+            ? 'context_compaction_network_unavailable'
+            : cause.code === 'proxy_gateway_error'
+              ? 'context_compaction_proxy_gateway_error'
+              : contextExceeded
+                ? 'context_compaction_context_limit'
+                : 'context_compaction_failed'
+    return { code, invalidatesSession: false, message }
+  }
+  if (contentRejected) return { code: 'content_rejected', invalidatesSession: false, message }
+  if (contextExceeded) return { code: 'context_limit_exceeded', invalidatesSession: false, message }
+  return classifySdkFailureCause(message)
+}
+
+function classifySdkFailureCause(message: string): SdkFailureClassification {
   if (/reached maximum budget/i.test(message)) {
     return {
       code: 'budget_exceeded',

@@ -92,6 +92,7 @@ export interface ClaudeStreamEventData {
   status?: 'compacting' | 'requesting' | null
   compact_result?: 'success' | 'failed'
   compact_error?: string
+  compact_failure_code?: import('./agent-failure').ContextCompactionFailureCode
   compact_metadata?: {
     trigger: 'manual' | 'auto'
     pre_tokens: number

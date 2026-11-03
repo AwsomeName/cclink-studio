@@ -7095,6 +7095,23 @@ body.is-resizing-panels .main-area > div {
   color: var(--text-primary);
 }
 
+.agent-panel-notice-diagnostic {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-panel-notice-diagnostic summary {
+  cursor: pointer;
+}
+
+.agent-panel-notice-diagnostic pre {
+  max-height: 120px;
+  margin: 6px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: inherit;
+}
+
 .agent-panel-notice.warning {
   border-color: rgba(234, 179, 8, 0.4);
   background: rgba(234, 179, 8, 0.07);

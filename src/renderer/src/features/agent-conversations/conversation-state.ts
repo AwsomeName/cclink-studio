@@ -43,6 +43,8 @@ export interface AgentContextCompactionState {
   preTokens: number | null
   postTokens: number | null
   error: string | null
+  /** Main-process classification; optional for snapshots written by older versions. */
+  errorCode?: string | null
   updatedAt: number | null
 }
 

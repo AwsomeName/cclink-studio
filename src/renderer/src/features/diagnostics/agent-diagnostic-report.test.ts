@@ -7,6 +7,7 @@ import {
 } from './agent-diagnostic-report'
 import type { AgentMessage, AgentScope } from '../../types'
 import type { BrowserTaskRun } from '@shared/ipc/browser'
+import { createAgentConversationState } from '../agent-conversations/conversation-state'
 
 const messages: AgentMessage[] = [
   {
@@ -73,6 +74,25 @@ function minimalReportInput(scope: AgentScope): Parameters<typeof buildAgentDiag
 }
 
 describe('agent diagnostic report', () => {
+  it('includes the classified compaction cause with credentials redacted', () => {
+    const input = minimalReportInput({ kind: 'all' })
+    input.conversation = createAgentConversationState('failed-compaction')
+    input.conversation.contextCompaction = {
+      status: 'failed',
+      trigger: 'auto',
+      preTokens: null,
+      postTokens: null,
+      errorCode: 'context_compaction_content_rejected',
+      error: 'API Error: [1301] token=super-secret',
+      updatedAt: 1,
+    }
+    const report = buildAgentDiagnosticMarkdown(input)
+    expect(report).toContain('上下文压缩：failed')
+    expect(report).toContain('压缩失败分类：context_compaction_content_rejected')
+    expect(report).toContain('API Error: [1301]')
+    expect(report).not.toContain('super-secret')
+  })
+
   it('redacts sensitive values recursively', () => {
     expect(redactDiagnosticValue('cookie', 'sid=123')).toBe('[redacted]')
     expect(

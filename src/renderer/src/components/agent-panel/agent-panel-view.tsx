@@ -84,6 +84,8 @@ export interface AgentPanelNoticeModel {
   tone: 'info' | 'warning' | 'error'
   title: string
   detail?: string
+  diagnostic?: string
+  actions?: AgentPanelActivityAction[]
 }
 
 export interface AgentPanelActivityAction {
@@ -422,6 +424,26 @@ export function NoticePermissionArea({
         <div key={notice.id} className={`agent-panel-notice ${notice.tone}`} role="status">
           <strong>{notice.title}</strong>
           {notice.detail ? <span>{notice.detail}</span> : null}
+          {notice.diagnostic ? (
+            <details className="agent-panel-notice-diagnostic">
+              <summary>原始错误</summary>
+              <pre>{notice.diagnostic}</pre>
+            </details>
+          ) : null}
+          {notice.actions?.length ? (
+            <div className="agent-panel-activity-actions">
+              {notice.actions.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  disabled={action.disabled}
+                  onClick={action.onInvoke}
+                >
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ))}
       {activities.map((activity) => (

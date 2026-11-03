@@ -4,6 +4,8 @@ import { useSettingsStore } from '../stores/settings-store'
 import type { ContentBlock, PermissionMode, ToolConfirmationRequest } from '../types'
 import type { AgentContextUsageSnapshot, AgentRuntimeRunRecord } from '@shared/agent-protocol'
 import { handleCadModificationStreamEvent } from '../features/cad/cad-modification-auto-open'
+import { isContextCompactionFailure } from '@shared/agent-failure'
+import { agentFailurePresentation } from '../features/agent-conversations/agent-failure-presentation'
 
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
@@ -57,6 +59,7 @@ type AgentStreamEventPayload = {
   status?: 'compacting' | 'requesting' | null
   compact_result?: 'success' | 'failed'
   compact_error?: string
+  compact_failure_code?: string
   compact_metadata?: {
     trigger: 'manual' | 'auto'
     pre_tokens: number
@@ -139,6 +142,8 @@ export function applyAgentStreamEventToStore(
           {
             status: 'failed',
             error: event.compact_error ?? 'Claude SDK 压缩失败',
+            errorCode: event.compact_failure_code ?? 'context_compaction_failed',
+            trigger: event.operation === 'compact' ? 'manual' : 'auto',
           },
           conversationId,
         )
@@ -350,9 +355,28 @@ export function applyAgentErrorToStore(
 ): void {
   const conversationId = error.conversationId
   if (!acceptsRunEvent(store, conversationId, error.runId)) return
+  const compactionFailed = error.operation === 'compact' || isContextCompactionFailure(error.code)
+  const failureCode = compactionFailed
+    ? isContextCompactionFailure(error.code)
+      ? error.code
+      : 'context_compaction_failed'
+    : error.code
+  const presentation = agentFailurePresentation(failureCode)
+  if (compactionFailed) {
+    store.setContextCompaction(
+      {
+        status: 'failed',
+        trigger: error.operation === 'compact' ? 'manual' : 'auto',
+        error: error.message,
+        errorCode: failureCode,
+      },
+      conversationId,
+    )
+  }
+  const failureMessage = `${presentation.title}: ${presentation.detail ? `${presentation.detail}\n原始错误: ` : ''}${error.message}`
   if (error.operation === 'compact') {
     store.finishContextCompaction(false, conversationId, error.runId, error.message)
-    store.addSystemMessage(`上下文压缩失败: ${error.message}`, conversationId)
+    store.addSystemMessage(failureMessage, conversationId)
     return
   }
   const runtimeSessionInvalid =
@@ -368,14 +392,8 @@ export function applyAgentErrorToStore(
     error.code === 'stream_ended_without_result' ? 'stream-ended' : 'error',
     error.runId,
   )
-  const errorPrefix =
-    error.code === 'browser_task_waiting_human'
-      ? '任务暂停'
-      : error.code === 'browser_reobservation_required'
-        ? '任务待核验'
-        : '连接错误'
   store.addSystemMessage(
-    `${errorPrefix}: ${error.message}${
+    `${failureMessage}${
       runtimeSessionInvalid ? '；旧 Runtime Session 已保留，未自动创建新会话' : ''
     }`,
     conversationId,

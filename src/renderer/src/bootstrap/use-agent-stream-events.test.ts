@@ -211,7 +211,70 @@ describe('applyAgentStreamEventToStore', () => {
     expect(useUIStore.getState().agentPanelMode).toBe('hidden')
     expect(conversation.backendState).toBe('error')
     expect(lastMessage.role).toBe('system')
-    expect(lastMessage.rawText).toBe('连接错误: network down')
+    expect(lastMessage.rawText).toBe('Agent 运行失败: network down')
+  })
+
+  it.each(['message', 'compact'] as const)(
+    'shows the classified %s compaction failure without clearing the old session',
+    (operation) => {
+      const conversationId = useAgentStore.getState().activeConversationId
+      const store = useAgentStore.getState()
+      store.setSessionId('preserved-session', conversationId)
+      const runId =
+        operation === 'compact'
+          ? store.beginContextCompaction(conversationId)
+          : store.beginRun(conversationId)
+      applyAgentErrorToStore({
+        conversationId,
+        runId,
+        operation,
+        code: 'context_compaction_content_rejected',
+        message: 'Prompt is too long · automatic compaction failed: API Error: [1301]',
+      })
+      const conversation = useAgentStore.getState().conversations[conversationId]
+      expect(conversation.contextCompaction).toMatchObject({
+        status: 'failed',
+        trigger: operation === 'compact' ? 'manual' : 'auto',
+        errorCode: 'context_compaction_content_rejected',
+        error: expect.stringContaining('[1301]'),
+      })
+      expect(conversation.sessionId).toBe('preserved-session')
+      expect(conversation.activeRunId).toBeNull()
+      expect(conversation.messages.at(-1)?.rawText).toContain('上下文压缩失败: 模型服务以内容安全')
+      expect(conversation.messages.at(-1)?.rawText).not.toContain('连接错误')
+    },
+  )
+
+  it('ignores a late compaction failure after a new run has started', () => {
+    const conversationId = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(conversationId)
+    const newerRunId = useAgentStore.getState().beginRun(conversationId)
+    applyAgentErrorToStore({
+      conversationId,
+      runId,
+      code: 'context_compaction_failed',
+      message: 'late failure',
+    })
+    const conversation = useAgentStore.getState().conversations[conversationId]
+    expect(conversation.activeRunId).toBe(newerRunId)
+    expect(conversation.contextCompaction.status).toBe('idle')
+    expect(conversation.messages.at(-1)?.rawText).not.toContain('late failure')
+  })
+
+  it('records a background compaction cause only in its own conversation', () => {
+    const store = useAgentStore.getState()
+    const backgroundId = store.createConversation({ activate: false })
+    const runId = store.beginRun(backgroundId)
+    applyAgentErrorToStore({
+      conversationId: backgroundId,
+      runId,
+      code: 'context_compaction_network_unavailable',
+      message: 'fetch failed',
+    })
+    expect(useAgentStore.getState().contextCompaction.status).toBe('idle')
+    expect(useAgentStore.getState().conversations[backgroundId].contextCompaction.errorCode).toBe(
+      'context_compaction_network_unavailable',
+    )
   })
 
   it('把浏览器人工接管显示为任务暂停，而不是连接错误', () => {

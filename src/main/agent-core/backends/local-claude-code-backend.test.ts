@@ -1516,6 +1516,130 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     },
   )
 
+  it.each([
+    [
+      'context_compaction_content_rejected',
+      'Prompt is too long · automatic compaction failed: API Error: [1301][输入或生成内容可能包含不安全或敏感内容]',
+    ],
+    [
+      'context_compaction_context_limit',
+      'Prompt is too long · automatic compaction failed: context length exceeded',
+    ],
+    [
+      'context_compaction_authentication_failed',
+      'Prompt is too long · automatic compaction failed: API Error: 401 authentication_error',
+    ],
+    [
+      'context_compaction_rate_limited',
+      'automatic compaction failed: API Error: 429 Too many requests',
+    ],
+    [
+      'context_compaction_network_unavailable',
+      'Prompt is too long · automatic compaction failed: fetch failed ECONNRESET',
+    ],
+    [
+      'context_compaction_failed',
+      'automatic compaction failed: API Error: 400 invalid_request_error',
+    ],
+    ['content_rejected', 'API Error: [1301][输入或生成内容可能包含不安全或敏感内容]'],
+    ['context_limit_exceeded', 'Prompt is too long: invalid_request_error'],
+  ])(
+    'classifies %s before generic invalid requests and preserves the old session',
+    async (code, message) => {
+      const backend = createBackend()
+      backend.setSessionId('old-session')
+      const events: Array<{ type: string; data: any }> = []
+      backend.onEvent((type, data) => events.push({ type, data }))
+      queryMock.mockReturnValueOnce(
+        createMockQuery([{ type: 'result', is_error: true, result: message }]),
+      )
+      await backend.sendMessage('继续')
+      await vi.waitFor(() =>
+        expect(events).toContainEqual({
+          type: 'error',
+          data: expect.objectContaining({ code, message }),
+        }),
+      )
+      expect(backend.getSessionId()).toBe('old-session')
+    },
+  )
+
+  it('classifies an exception during manual compaction and retains its original cause', async () => {
+    const backend = createBackend()
+    backend.setSessionId('old-session')
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    const message = 'API Error: [1301][输入或生成内容可能包含不安全或敏感内容]'
+    queryMock.mockReturnValueOnce({
+      ...createMockQuery(),
+      async *[Symbol.asyncIterator]() {
+        throw new Error(message)
+      },
+    })
+    await backend.compact()
+    await vi.waitFor(() =>
+      expect(events).toContainEqual({
+        type: 'error',
+        data: expect.objectContaining({
+          operation: 'compact',
+          code: 'context_compaction_content_rejected',
+          message,
+        }),
+      }),
+    )
+    expect(backend.getSessionId()).toBe('old-session')
+  })
+
+  it('classifies failure before the manual compaction query starts', async () => {
+    const backend = createBackend()
+    backend.setSessionId('old-session')
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockImplementationOnce(() => {
+      throw new Error('fetch failed')
+    })
+    await backend.compact()
+    expect(events).toContainEqual({
+      type: 'error',
+      data: expect.objectContaining({
+        operation: 'compact',
+        code: 'context_compaction_network_unavailable',
+        message: 'fetch failed',
+      }),
+    })
+    expect(backend.getSessionId()).toBe('old-session')
+  })
+
+  it('classifies the SDK compaction status event in main', async () => {
+    const backend = createBackend()
+    const events: Array<{ type: string; data: any }> = []
+    backend.onEvent((type, data) => events.push({ type, data }))
+    queryMock.mockReturnValueOnce(
+      createMockQuery([
+        {
+          type: 'system',
+          subtype: 'status',
+          compact_result: 'failed',
+          compact_error: 'API Error: [1301]',
+        },
+        {
+          type: 'result',
+          is_error: true,
+          result: 'automatic compaction failed: API Error: [1301]',
+        },
+      ]),
+    )
+    await backend.sendMessage('继续')
+    await vi.waitFor(() =>
+      expect(events).toContainEqual({
+        type: 'system',
+        data: expect.objectContaining({
+          compact_failure_code: 'context_compaction_content_rejected',
+        }),
+      }),
+    )
+  })
+
   it('does not duplicate an SDK error already delivered as a result event', async () => {
     const backend = createBackend()
     const events: Array<{ type: string; data: any }> = []

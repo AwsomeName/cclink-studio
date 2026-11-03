@@ -152,6 +152,9 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 主进程当前 runId：${redactText(input.agentRuntime?.runId ?? '无')}`,
     `- 最近运行事件：${conversation?.lastRunEventAt ? formatDateTime(conversation.lastRunEventAt) : '无'}`,
     `- 最近终止原因：${conversation?.lastRunTerminalReason ?? '无'}`,
+    `- 上下文压缩：${conversation?.contextCompaction.status ?? 'unknown'}`,
+    `- 压缩失败分类：${conversation?.contextCompaction.errorCode ?? '-'}`,
+    `- 压缩失败原因：${redactText(conversation?.contextCompaction.error ?? '-')}`,
     `- 后端 Session：${input.agentRuntime?.sessionId ? '已存在' : '无'}`,
     `- Agent 角色：${
       conversation?.configuration

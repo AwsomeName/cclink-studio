@@ -21,6 +21,8 @@ import {
   toMountedSkill,
 } from '../../features/agent-conversations/payload'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
+import { createCompactionRecoveryConversation } from '../../features/agent-conversations/compaction-recovery'
+import { agentFailurePresentation } from '../../features/agent-conversations/agent-failure-presentation'
 import {
   buildResourceCandidates,
   buildSkillCandidates,
@@ -676,7 +678,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     connecting: '连接中...',
     connected: '已就绪',
     streaming: '思考中...',
-    error: '连接错误',
+    error: contextCompaction.status === 'failed' ? '压缩失败' : '运行失败',
   }
 
   const riskLabel: Record<string, string> = {
@@ -1067,6 +1069,31 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         },
         contextChips,
         notices: [
+          ...(contextCompaction.status === 'failed'
+            ? [
+                {
+                  id: 'context-compaction-failed',
+                  tone: 'error' as const,
+                  title: '上下文压缩失败',
+                  detail: `${agentFailurePresentation(contextCompaction.errorCode ?? 'context_compaction_failed').detail} 旧会话和消息已保留。可新建对话，补充简短背景后继续；历史和附件不会自动带入。`,
+                  diagnostic: contextCompaction.error ?? undefined,
+                  actions: [
+                    {
+                      id: 'new-conversation-after-compaction',
+                      label: '保留旧会话，新建对话继续',
+                      disabled: loading || Boolean(activeConversation?.activeRunId),
+                      onInvoke: () => {
+                        const id = createCompactionRecoveryConversation(
+                          activeConversationId,
+                          activeWorkspaceRef,
+                        )
+                        if (id) requestAnimationFrame(() => inputRef.current?.focus())
+                      },
+                    },
+                  ],
+                },
+              ]
+            : []),
           ...(!activeRole
             ? [
                 {
@@ -1077,12 +1104,12 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
                 },
               ]
             : []),
-          ...(backendState === 'error'
+          ...(backendState === 'error' && contextCompaction.status !== 'failed'
             ? [
                 {
                   id: 'backend-error',
                   tone: 'error' as const,
-                  title: '本地 Agent 连接错误',
+                  title: '本地 Agent 运行失败',
                   detail: '可复制诊断日志检查本地 Runtime。',
                 },
               ]

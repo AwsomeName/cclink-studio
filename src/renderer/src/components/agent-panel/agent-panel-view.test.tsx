@@ -18,6 +18,25 @@ afterAll(() => {
 })
 
 describe('AgentPanelView product contract', () => {
+  it('shows compaction cause, expandable raw error and an explicit recovery action', () => {
+    const viewModel = model('local', 'error')
+    viewModel.notices = [
+      {
+        id: 'compaction',
+        tone: 'error',
+        title: '上下文压缩失败',
+        detail: '模型服务拒绝了压缩请求，旧会话已保留。',
+        diagnostic: 'API Error: [1301] <untrusted>',
+        actions: [{ id: 'recover', label: '保留旧会话，新建对话继续', onInvoke: vi.fn() }],
+      },
+    ]
+    const html = renderToStaticMarkup(<AgentPanelView model={viewModel} />)
+    expect(html).toContain('上下文压缩失败')
+    expect(html).toContain('<summary>原始错误</summary>')
+    expect(html).toContain('[1301] &lt;untrusted&gt;')
+    expect(html).toContain('保留旧会话，新建对话继续</button>')
+  })
+
   it('changes the timeline revision when a tool result changes inside the same message', () => {
     const message = {
       id: 'tool-message',

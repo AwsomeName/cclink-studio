@@ -1017,6 +1017,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         loading: true,
         backendState: 'connecting' as AgentBackendState,
         runStatus: 'starting',
+        contextCompaction:
+          conversation.contextCompaction.status === 'failed'
+            ? {
+                ...conversation.contextCompaction,
+                status: 'idle',
+                error: null,
+                errorCode: null,
+              }
+            : conversation.contextCompaction,
         activeRunId: runId,
         lastRunEventAt: now,
         lastRunTerminalReason: null,
@@ -1303,6 +1312,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         contextCompaction: {
           ...conversation.contextCompaction,
           ...update,
+          ...(update.status && update.status !== 'failed' ? { errorCode: null } : {}),
           updatedAt: update.updatedAt ?? Date.now(),
         },
         updatedAt: Date.now(),
@@ -1326,6 +1336,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             ...conversation.contextCompaction,
             status: success ? 'completed' : 'failed',
             error: error ?? null,
+            ...(success ? { errorCode: null } : {}),
             updatedAt: now,
           },
           updatedAt: now,
