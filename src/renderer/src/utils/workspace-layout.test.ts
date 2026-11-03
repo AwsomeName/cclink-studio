@@ -84,6 +84,7 @@ async function switchTo(ref: WorkspaceRef): Promise<boolean> {
 function bootstrapDeps(): WorkspaceBootstrapDeps {
   return {
     getSettings: async () => ({ lastWorkspacePath: a.path }) as AppSettings,
+    ensureDefaultWorkspace: async () => ({ success: true, workspacePath: a.path }),
     resolveWorkspacePath: async (path) => path,
     initWorkspace: async (path) => {
       useWorkspaceStore

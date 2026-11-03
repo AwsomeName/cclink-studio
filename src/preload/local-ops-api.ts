@@ -56,10 +56,14 @@ export const cadApi: CadApiContract = {
 }
 
 export const workspaceStateApi: WorkspaceStateApiContract = {
+  getDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.getDefaultWorkspace),
+  ensureDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.ensureDefaultWorkspace),
+  setDefaultWorkspace: (workspacePath) =>
+    invokeIpcContract(workspaceStateIpc.setDefaultWorkspace, workspacePath),
   resolveLocalWorkspace: (workspacePath) =>
     invokeIpcContract(workspaceStateIpc.resolveLocalWorkspace, workspacePath),
-  setActiveLocalWorkspace: (workspacePath) =>
-    invokeIpcContract(workspaceStateIpc.setActiveLocalWorkspace, workspacePath),
+  setActiveLocalWorkspace: (workspacePath, intent) =>
+    invokeIpcContract(workspaceStateIpc.setActiveLocalWorkspace, workspacePath, intent),
   get: (workspacePath, ownerKey) =>
     invokeIpcContract(workspaceStateIpc.get, workspacePath, ownerKey),
   setSection: (workspacePath, section, value, ownerKey, options) =>

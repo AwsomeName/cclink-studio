@@ -298,6 +298,7 @@ export function WebResourcesSidebar({
 
   return (
     <div className="web-resources-sidebar">
+      <p className="workspace-data-location">网站与账号 · 本机全局</p>
       <div className="web-resources-toolbar">
         <button
           type="button"

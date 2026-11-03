@@ -1,5 +1,5 @@
 import type { AppSettings } from '@shared/ipc/settings'
-import type { WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
+import type { DefaultWorkspaceResult, WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { summarizeWorkspaceConversationSnapshot } from '@shared/workspace-conversation-diagnostics'
 import {
@@ -13,6 +13,8 @@ import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-di
 
 export interface WorkspaceBootstrapDeps {
   getSettings: () => Promise<AppSettings | null>
+  ensureDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
+  reportWorkspaceError?: (error: string) => void
   resolveWorkspacePath: (workspacePath: string) => Promise<string | null>
   getWorkspaceState: (workspacePath?: string | null) => Promise<WorkspaceStateSnapshot>
   setWorkspacePath: (workspacePath: string | null) => void
@@ -53,16 +55,32 @@ export async function restoreWorkspaceState(
   let settings: AppSettings | null = null
   try {
     settings = await deps.getSettings().catch(() => null)
-    const candidatePath = settings?.lastWorkspacePath || null
+    if (!settings) throw new Error('无法读取启动设置，未创建或修改工作空间')
+    let candidatePath = settings.lastWorkspacePath || null
+    let startupError: string | null = null
+    if (settings.startupWorkspaceTarget === 'unfiled') candidatePath = null
+    else if (
+      settings.startupWorkspaceTarget === 'default' ||
+      (!candidatePath && settings.startupWorkspaceTarget !== 'resume')
+    ) {
+      const result = await deps.ensureDefaultWorkspace()
+      candidatePath = result.success ? result.workspacePath : null
+      if (!result.success)
+        startupError = result.error || '默认工作空间不可用，请定位原目录或选择其他工作空间'
+    }
     const resolvedPath = candidatePath
       ? await deps.resolveWorkspacePath(candidatePath).catch(() => null)
       : null
+    if (candidatePath && !resolvedPath)
+      startupError = '上次工作空间不可用，请定位原目录或选择其他工作空间；未创建空目录替代'
     workspacePath = await deps.initWorkspace(resolvedPath, settings)
     deps.setWorkspacePath(workspacePath)
+    if (startupError) deps.reportWorkspaceError?.(startupError)
   } catch (error) {
     deps.warn('[WorkspaceBootstrap] 工作区确认失败:', error)
     workspacePath = null
     deps.setWorkspacePath(null)
+    deps.reportWorkspaceError?.(error instanceof Error ? error.message : '工作空间恢复失败')
   }
 
   const layoutRestore = deps.createLayoutRestore?.()

@@ -36,6 +36,8 @@ let workspaceBootstrapPromise: Promise<WorkspaceBootstrapResult> | null = null
 export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
   return {
     getSettings: () => window.cclinkStudio.settings.getAll().catch(() => null),
+    ensureDefaultWorkspace: () => window.cclinkStudio.workspaceState.ensureDefaultWorkspace(),
+    reportWorkspaceError: (error) => useFsStore.setState({ error }),
     resolveWorkspacePath: async (workspacePath) => {
       const result = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(workspacePath)
       return result.valid ? result.workspacePath : null

@@ -32,6 +32,7 @@ const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
+  startupWorkspaceTarget: new Set(['resume', 'default', 'unfiled']),
   updateTrack: new Set<string>(['stable', 'beta']),
   backendType: new Set<string>(['claude-code']),
   permissionMode: new Set<string>(PERMISSION_MODES),
@@ -73,6 +74,7 @@ export class SettingsService {
   async loadState(): Promise<void> {
     let parsed: Record<string, unknown> = {}
     let settingsFileExists = false
+    let settingsReadFailed = false
     try {
       const raw = await readFile(this.storeFilePath, 'utf-8')
       const value: unknown = JSON.parse(raw)
@@ -84,6 +86,7 @@ export class SettingsService {
       const isEnoent =
         err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT'
       if (!isEnoent) {
+        settingsReadFailed = true
         console.warn('[SettingsService] 设置文件读取失败，使用默认值:', err)
       }
     }
@@ -95,6 +98,12 @@ export class SettingsService {
 
     this.store = { ...DEFAULT_SETTINGS }
     this.applyPersistedSettings(parsed)
+    if (parsed.startupWorkspaceTarget === undefined && this.store.lastWorkspacePath) {
+      this.store.startupWorkspaceTarget = 'resume'
+    }
+    if (settingsReadFailed) this.store.startupWorkspaceTarget = 'unfiled'
+    const needsWorkspaceStartupMigration =
+      settingsFileExists && parsed.startupWorkspaceTarget === undefined
     if (needsAgentApiMigration) this.migrateUnsupportedAgentApiConfiguration()
     this.migrateClaudeRuntimeSelection(parsed)
     const needsComponentSetupMigration =
@@ -128,6 +137,7 @@ export class SettingsService {
         (hasLegacySecretFields ||
           needsClaudeRuntimeMigration ||
           needsComponentSetupMigration ||
+          needsWorkspaceStartupMigration ||
           needsAgentApiMigration)
       ) {
         await this.saveState()
@@ -336,6 +346,13 @@ export class SettingsService {
     for (const key of Object.keys(parsed)) {
       if (!SETTINGS_KEYS.has(key) || SECRET_KEYS.has(key)) continue
       const val = parsed[key]
+      if (key === 'defaultWorkspacePath') {
+        if (typeof val === 'string' && val.length <= 4096 && !val.includes('\0')) {
+          this.store.defaultWorkspacePath = val
+        }
+        continue
+      }
+      if (key === 'startupWorkspaceTarget' && typeof val !== 'string') continue
       if (key === 'disabledAgentToolModules') {
         this.store.disabledAgentToolModules = normalizeModuleIds(val)
         continue

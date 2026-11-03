@@ -522,7 +522,7 @@ export const useFsStore = create<FsState>((set, get) => ({
           ? normalizeWorkspacePath(settings.lastWorkspacePath)
           : workspacePath
       if (!last) {
-        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null)
+        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null, 'restore')
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
         hydrateRuntimeSections(null)
         set({
@@ -541,13 +541,16 @@ export const useFsStore = create<FsState>((set, get) => ({
         persistPanelState: false,
       })
       if (!ok) {
-        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null)
+        await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null, 'restore')
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
         hydrateRuntimeSections(null)
         setWorkspaceStatePath(null)
         return null
       }
-      const activeResult = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(last)
+      const activeResult = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(
+        last,
+        'restore',
+      )
       if (!activeResult.success) throw new Error(activeResult.error || '主进程无法绑定工作空间')
       useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef(last))
       const canonicalRecentPaths = updateRecentWorkspacePaths(get().recentWorkspacePaths, last)

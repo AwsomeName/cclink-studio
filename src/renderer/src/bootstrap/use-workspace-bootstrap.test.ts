@@ -32,7 +32,13 @@ function snapshot(
 
 function createDeps(overrides: Partial<WorkspaceBootstrapDeps> = {}): WorkspaceBootstrapDeps {
   return {
-    getSettings: vi.fn().mockResolvedValue({ lastWorkspacePath: '' } as any),
+    getSettings: vi
+      .fn()
+      .mockResolvedValue({ lastWorkspacePath: '', startupWorkspaceTarget: 'unfiled' } as any),
+    ensureDefaultWorkspace: vi
+      .fn()
+      .mockResolvedValue({ success: true, workspacePath: '/workspace/default' }),
+    reportWorkspaceError: vi.fn(),
     resolveWorkspacePath: vi.fn(async (workspacePath: string) => workspacePath),
     getWorkspaceState: vi.fn().mockResolvedValue(snapshot(null, {})),
     setWorkspacePath: vi.fn(),
@@ -52,6 +58,57 @@ function createDeps(overrides: Partial<WorkspaceBootstrapDeps> = {}): WorkspaceB
 }
 
 describe('restoreWorkspaceState', () => {
+  it('creates the default only for a first/default startup, without claiming global drafts', async () => {
+    const deps = createDeps({
+      getSettings: vi
+        .fn()
+        .mockResolvedValue({ lastWorkspacePath: '', startupWorkspaceTarget: 'default' }),
+    })
+    await restoreWorkspaceState(deps)
+    expect(deps.ensureDefaultWorkspace).toHaveBeenCalledTimes(1)
+    expect(deps.initWorkspace).toHaveBeenCalledWith('/workspace/default', expect.anything())
+    expect(deps.getWorkspaceState).toHaveBeenCalledWith('/workspace/default')
+  })
+
+  it('does not replace an unavailable old root with a new default', async () => {
+    const deps = createDeps({
+      getSettings: vi.fn().mockResolvedValue({
+        lastWorkspacePath: '/workspace/old',
+        startupWorkspaceTarget: 'resume',
+      }),
+      resolveWorkspacePath: vi.fn().mockResolvedValue(null),
+    })
+    await restoreWorkspaceState(deps)
+    expect(deps.ensureDefaultWorkspace).not.toHaveBeenCalled()
+    expect(deps.initWorkspace).toHaveBeenCalledWith(null, expect.anything())
+    expect(deps.reportWorkspaceError).toHaveBeenCalledWith(expect.stringContaining('未创建空目录'))
+  })
+
+  it('preserves an explicit unfiled choice even with a remembered local path', async () => {
+    const deps = createDeps({
+      getSettings: vi.fn().mockResolvedValue({
+        lastWorkspacePath: '/workspace/old',
+        startupWorkspaceTarget: 'unfiled',
+      }),
+    })
+    await restoreWorkspaceState(deps)
+    expect(deps.ensureDefaultWorkspace).not.toHaveBeenCalled()
+    expect(deps.resolveWorkspacePath).not.toHaveBeenCalled()
+    expect(deps.getWorkspaceState).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps the workbench usable and reports a default initialization failure', async () => {
+    const deps = createDeps({
+      getSettings: vi
+        .fn()
+        .mockResolvedValue({ lastWorkspacePath: '', startupWorkspaceTarget: 'default' }),
+      ensureDefaultWorkspace: vi
+        .fn()
+        .mockResolvedValue({ success: false, workspacePath: null, error: '目录已被占用' }),
+    })
+    await expect(restoreWorkspaceState(deps)).resolves.toMatchObject({ workspacePath: null })
+    expect(deps.reportWorkspaceError).toHaveBeenCalledWith('目录已被占用')
+  })
   afterEach(() => {
     resetWorkspaceBootstrapForTests()
     resetRendererDiagnosticsForTest()

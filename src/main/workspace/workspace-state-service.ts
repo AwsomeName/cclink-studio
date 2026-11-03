@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import {
   copyFile,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -11,7 +12,7 @@ import {
   stat,
   writeFile,
 } from 'fs/promises'
-import { dirname, isAbsolute, join, resolve, sep } from 'path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { isDeepStrictEqual } from 'node:util'
 import type {
   WorkspaceRecoveryTraceEntry,
@@ -430,6 +431,7 @@ export class WorkspaceStateService {
   }
   private stateLoadError: Error | null = null
   private saveQueue: Promise<void> = Promise.resolve()
+  private defaultWorkspaceQueue: Promise<unknown> = Promise.resolve()
   private readonly workspaceQueues = new Map<string, Promise<unknown>>()
   private readonly pendingOperations = new Set<Promise<unknown>>()
 
@@ -520,6 +522,85 @@ export class WorkspaceStateService {
         error: error instanceof Error ? error.message : String(error),
       }
     }
+  }
+
+  getDefaultWorkspacePath(configuredPath = ''): string {
+    return configuredPath || join(app.getPath('home'), 'CCLink Studio', '默认工作空间')
+  }
+
+  /** Initialize only a new default root or one already registered by this owner. */
+  async ensureDefaultWorkspace(configuredPath = ''): Promise<string> {
+    const operation = this.defaultWorkspaceQueue.then(async () => {
+      this.assertCentralStateAvailable()
+      const home = await realpath(app.getPath('home'))
+      const target = configuredPath
+        ? resolve(configuredPath)
+        : join(home, 'CCLink Studio', '默认工作空间')
+      const within = relative(home, target)
+      if (!within || within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within)) {
+        throw new Error('默认工作空间必须位于受支持的本地主目录内')
+      }
+      let cursor = home
+      const segments = within.split(sep)
+      for (const [index, segment] of segments.entries()) {
+        cursor = join(cursor, segment)
+        let info = await lstat(cursor).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null
+          throw error
+        })
+        const last = index === segments.length - 1
+        if (info && (info.isSymbolicLink() || !info.isDirectory())) {
+          throw new Error('默认工作空间路径存在文件或符号链接，请另选目录')
+        }
+        if (last && info) {
+          const known = Object.values(this.state.localWorkspaces).some(
+            (entry) => entry.workspacePath === target && entry.projectId,
+          )
+          if (!known) throw new Error('默认目录已被占用，请选择已有工作空间后设置为默认')
+        }
+        if (!info) {
+          if (
+            configuredPath ||
+            (last &&
+              Object.values(this.state.localWorkspaces).some(
+                (entry) => entry.workspacePath === target,
+              ))
+          ) {
+            throw new Error('已登记的默认工作空间不可用，请定位原目录；不会新建空目录替代')
+          }
+          await mkdir(cursor, { mode: 0o700 })
+          info = await lstat(cursor)
+          if (info.isSymbolicLink() || !info.isDirectory()) throw new Error('默认目录创建失败')
+        }
+      }
+      const metadata = await lstat(join(target, PROJECT_METADATA_DIR)).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code === 'ENOENT') return null
+          throw error
+        },
+      )
+      if (metadata?.isSymbolicLink()) throw new Error('工作空间资料目录不能是符号链接')
+      const known = Object.values(this.state.localWorkspaces).find(
+        (entry) => entry.workspacePath === target && entry.projectId,
+      )
+      if (known) {
+        const manifest = await this.readProjectManifest(
+          join(target, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
+        )
+        if (manifest.status !== 'ok' || manifest.value.projectId !== known.projectId) {
+          throw new Error('默认工作空间身份与登记信息不一致，原文件已保留')
+        }
+        if (await this.findExistingProjectIdConflict(manifest.value.projectId, target)) {
+          throw new Error('默认工作空间存在身份冲突，请先定位原空间')
+        }
+      }
+      const context = await this.ensureProjectContext(target)
+      if (!context.projectId || !context.writable) throw new Error('默认工作空间身份无法保存')
+      await this.getSnapshot(target)
+      return target
+    })
+    this.defaultWorkspaceQueue = operation.catch(() => {})
+    return operation
   }
 
   getActiveLocalWorkspace(): ActiveLocalWorkspaceSnapshot {

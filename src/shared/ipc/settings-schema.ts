@@ -54,6 +54,7 @@ const settingsUpdateSchema = z
     editorLineNumbers: z.boolean(),
     appZoomLevel: z.number().finite().min(APP_ZOOM_LEVEL_MIN).max(APP_ZOOM_LEVEL_MAX),
     recentWorkspacePaths: z.array(pathString).max(100),
+    startupWorkspaceTarget: z.enum(['resume', 'default', 'unfiled']),
     gitBackupUsername: z.string().max(256),
     showHiddenFiles: z.boolean(),
     keybindingOverrides: z

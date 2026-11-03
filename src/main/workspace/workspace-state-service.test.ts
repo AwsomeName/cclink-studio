@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from 'fs/promises'
+import { cp, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'fs/promises'
 import { createHash } from 'crypto'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -43,6 +43,50 @@ afterEach(async () => {
 })
 
 describe('WorkspaceStateService', () => {
+  it('creates and registers exactly one default identity across concurrent requests and restart', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const [a, b] = await Promise.all([
+      service.ensureDefaultWorkspace(),
+      service.ensureDefaultWorkspace(),
+    ])
+    expect(a).toBe(b)
+    const identity = await service.getLocalProjectId(a)
+    const restarted = new WorkspaceStateService()
+    await restarted.loadState()
+    expect(await restarted.ensureDefaultWorkspace(a)).toBe(a)
+    expect(await restarted.getLocalProjectId(a)).toBe(identity)
+  })
+
+  it('does not adopt occupied data or recreate an unavailable registered root', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const path = join(await realpath(tempDir), 'CCLink Studio', '默认工作空间')
+    await mkdir(path, { recursive: true })
+    await writeFile(join(path, 'existing.md'), 'original')
+    await expect(service.ensureDefaultWorkspace()).rejects.toThrow('已被占用')
+    expect(await readFile(join(path, 'existing.md'), 'utf8')).toBe('original')
+    await rm(path, { recursive: true })
+    const initialized = await service.ensureDefaultWorkspace()
+    await rename(initialized, initialized + '-moved')
+    await expect(service.ensureDefaultWorkspace(initialized)).rejects.toThrow('不会新建空目录')
+  })
+
+  it('rejects a symlink default ancestor and identity replacement without overwriting either', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const home = await realpath(tempDir)
+    const ancestor = join(home, 'CCLink Studio')
+    await symlink(workspaceA, ancestor)
+    await expect(service.ensureDefaultWorkspace()).rejects.toThrow('符号链接')
+    await rm(ancestor)
+    const path = await service.ensureDefaultWorkspace()
+    const manifest = join(path, '.cclink-studio', 'project.json')
+    const replaced = JSON.stringify({ version: 1, projectId: 'replaced-identity', createdAt: 1 })
+    await writeFile(manifest, replaced)
+    await expect(service.ensureDefaultWorkspace(path)).rejects.toThrow('不一致')
+    expect(await readFile(manifest, 'utf8')).toBe(replaced)
+  })
   it('owns a canonical, generation-stamped active local workspace projection', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()

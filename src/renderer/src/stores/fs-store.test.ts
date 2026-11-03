@@ -768,7 +768,10 @@ describe('fs-store workspace switching', () => {
     expect(useBrowserStore.getState().tabs).toEqual({})
     expect(useEditorStore.getState().files).toEqual({})
     expect(useAgentStore.getState().activeConversationId).not.toBe(staleConversationId)
-    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).toHaveBeenCalledWith(null)
+    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).toHaveBeenCalledWith(
+      null,
+      'restore',
+    )
   })
 
   it('refreshes root tree after renaming a root-level file', async () => {

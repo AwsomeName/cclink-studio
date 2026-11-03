@@ -179,9 +179,24 @@ export interface ActiveLocalWorkspaceResult {
   error?: string
 }
 
+export type WorkspaceActivationIntent = 'selection' | 'restore' | 'remote'
+
+export interface DefaultWorkspaceResult {
+  success: boolean
+  workspacePath: string | null
+  error?: string
+  errorCode?: 'DEFAULT_WORKSPACE_UNAVAILABLE'
+}
+
 export interface WorkspaceStateApiContract {
+  getDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
+  ensureDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
+  setDefaultWorkspace: (workspacePath: string) => Promise<DefaultWorkspaceResult>
   resolveLocalWorkspace: (workspacePath: string) => Promise<WorkspaceStateResolveResult>
-  setActiveLocalWorkspace: (workspacePath: string | null) => Promise<ActiveLocalWorkspaceResult>
+  setActiveLocalWorkspace: (
+    workspacePath: string | null,
+    intent?: WorkspaceActivationIntent,
+  ) => Promise<ActiveLocalWorkspaceResult>
   get: (workspaceKey?: string | null, ownerKey?: string | null) => Promise<WorkspaceStateSnapshot>
   setSection: (
     workspaceKey: string | null | undefined,
@@ -201,11 +216,20 @@ export interface WorkspaceStateApiContract {
 }
 
 export const workspaceStateIpc = {
+  getDefaultWorkspace: defineIpcCall<[], DefaultWorkspaceResult>(
+    'workspaceState:getDefaultWorkspace',
+  ),
+  ensureDefaultWorkspace: defineIpcCall<[], DefaultWorkspaceResult>(
+    'workspaceState:ensureDefaultWorkspace',
+  ),
+  setDefaultWorkspace: defineIpcCall<[workspacePath: string], DefaultWorkspaceResult>(
+    'workspaceState:setDefaultWorkspace',
+  ),
   resolveLocalWorkspace: defineIpcCall<[workspacePath: string], WorkspaceStateResolveResult>(
     'workspaceState:resolveLocalWorkspace',
   ),
   setActiveLocalWorkspace: defineIpcCall<
-    [workspacePath: string | null],
+    [workspacePath: string | null, intent: WorkspaceActivationIntent | undefined],
     ActiveLocalWorkspaceResult
   >('workspaceState:setActiveLocalWorkspace'),
   get: defineIpcCall<

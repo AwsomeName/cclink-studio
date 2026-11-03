@@ -178,6 +178,10 @@ export interface AppSettings {
 
   /** 上次打开的工作区路径（空串 = 未选过，启动时自动恢复） */
   lastWorkspacePath: string
+  /** 默认本地空间的实际路径；空串表示尚未登记。 */
+  defaultWorkspacePath: string
+  /** 启动选择与运行中的活跃 Workspace 状态分离。 */
+  startupWorkspaceTarget: 'resume' | 'default' | 'unfiled'
   /** 最近打开的工作区路径列表（产品侧显示为最近项目） */
   recentWorkspacePaths: string[]
 
@@ -292,6 +296,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   // 工作区
   lastWorkspacePath: '',
+  defaultWorkspacePath: '',
+  startupWorkspaceTarget: 'default',
   recentWorkspacePaths: [],
 
   // 手动 Git 备份

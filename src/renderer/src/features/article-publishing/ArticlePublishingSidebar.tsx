@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { WebAffairProjectSnapshot } from '@shared/web-affairs/web-affair-types'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import { useTabStore } from '../../stores/tab-store'
+import { useCommandStore } from '../../stores/command-store'
+import { WorkspaceDataLocation } from '../workspace-open/WorkspaceDataLocation'
 
 const STATUS_LABELS = {
   draft: '草稿',
@@ -57,6 +59,20 @@ export function ArticlePublishingSidebar({
 
   return (
     <div className="article-publishing-sidebar">
+      <WorkspaceDataLocation path={workspaceRef.path} />
+      <button
+        type="button"
+        onClick={() => {
+          void useCommandStore
+            .getState()
+            .executeCommand('workspace.create-operations-draft', { source: 'toolbar' })
+            .then((result) => {
+              if (!result.ok) setError(result.message || '新建运营稿失败')
+            })
+        }}
+      >
+        新建运营稿
+      </button>
       {error ? <div className="article-publishing-error">{error}</div> : null}
       {!snapshot && !error ? (
         <div className="article-publishing-sidebar-empty">正在读取发布历史…</div>

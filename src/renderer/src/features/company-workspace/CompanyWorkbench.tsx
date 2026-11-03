@@ -13,6 +13,7 @@ import { getTabTypeForFile } from '../../utils/model-files'
 import { openConversationInWorkbench } from '../agent-conversations/conversation-workbench'
 import { openCompanyWorkspace } from './company-workspace-commands'
 import './company-workspace.css'
+import { WorkspaceDataLocation } from '../workspace-open/WorkspaceDataLocation'
 const currentMonth = () => {
   const d = new Date()
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
@@ -231,6 +232,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
   )
   return (
     <div className="company-workbench">
+      <WorkspaceDataLocation path={ref.path} />
       {error && (
         <div className="company-error" role="alert">
           {error} <button onClick={() => void load()}>重新读取</button>

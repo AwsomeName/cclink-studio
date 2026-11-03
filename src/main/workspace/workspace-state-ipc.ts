@@ -8,6 +8,7 @@ import type { SettingsService } from '../settings/settings-service'
 import type { FileService } from '../fs/file-service'
 import type { WebContents } from 'electron'
 import { isAbsolute } from 'node:path'
+import type { DefaultWorkspaceResult } from '../../shared/ipc/workspace-state'
 
 export function registerWorkspaceStateIpc(
   workspaceStateService: WorkspaceStateService,
@@ -31,6 +32,60 @@ export function registerWorkspaceStateIpc(
       throw new Error('工作空间状态只能访问当前项目或主进程已授权的项目')
     }
   }
+  const defaultFailure = (error: unknown): DefaultWorkspaceResult => ({
+    success: false,
+    workspacePath: null,
+    errorCode: 'DEFAULT_WORKSPACE_UNAVAILABLE',
+    error: error instanceof Error ? error.message : '默认工作空间当前不可用',
+  })
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.getDefaultWorkspace,
+    trustedRendererGuard,
+    () => ({
+      success: true,
+      workspacePath: workspaceStateService.getDefaultWorkspacePath(
+        settingsService?.getAll().defaultWorkspacePath,
+      ),
+    }),
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.ensureDefaultWorkspace,
+    trustedRendererGuard,
+    async (event) => {
+      bindCapabilityCleanup(event.sender)
+      try {
+        if (!settingsService) throw new Error('设置服务当前不可用')
+        const workspacePath = await workspaceStateService.ensureDefaultWorkspace(
+          settingsService.getAll().defaultWorkspacePath,
+        )
+        await settingsService.set({ defaultWorkspacePath: workspacePath })
+        fileService?.registerKnownWorkspaces(event.sender.id, [workspacePath])
+        fileService?.registerPickerSelection(event.sender.id, [workspacePath], 'workspace')
+        return { success: true, workspacePath }
+      } catch (error) {
+        return defaultFailure(error)
+      }
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.setDefaultWorkspace,
+    trustedRendererGuard,
+    async (event, path) => {
+      bindCapabilityCleanup(event.sender)
+      try {
+        if (!settingsService || !fileService?.canActivateWorkspace(event.sender.id, path)) {
+          throw new Error('请先通过工作空间选择器打开要设为默认的目录')
+        }
+        const resolved = await workspaceStateService.resolveLocalWorkspace(path)
+        if (!resolved.valid || !resolved.workspacePath) throw new Error(resolved.error)
+        await workspaceStateService.getSnapshot(resolved.workspacePath)
+        await settingsService.set({ defaultWorkspacePath: resolved.workspacePath })
+        return { success: true, workspacePath: resolved.workspacePath }
+      } catch (error) {
+        return defaultFailure(error)
+      }
+    },
+  )
   registerTrustedIpcContract(
     workspaceStateIpcContracts.resolveLocalWorkspace,
     trustedRendererGuard,
@@ -54,7 +109,7 @@ export function registerWorkspaceStateIpc(
   registerTrustedIpcContract(
     workspaceStateIpcContracts.setActiveLocalWorkspace,
     trustedRendererGuard,
-    async (_event, workspacePath) => {
+    async (_event, workspacePath, intent = 'selection') => {
       bindCapabilityCleanup(_event.sender)
       try {
         if (
@@ -65,8 +120,19 @@ export function registerWorkspaceStateIpc(
           throw new Error('工作空间授权已失效，请重新从项目选择器打开')
         }
         const activeWorkspace = await workspaceStateService.setActiveLocalWorkspace(workspacePath)
-        if (settingsService) {
-          await settingsService.set({ lastWorkspacePath: activeWorkspace.workspacePath ?? '' })
+        if (settingsService && intent !== 'restore') {
+          const path = activeWorkspace.workspacePath
+          await settingsService.set({
+            lastWorkspacePath: path ?? '',
+            startupWorkspaceTarget:
+              intent === 'remote'
+                ? 'resume'
+                : path
+                  ? path === settingsService.getAll().defaultWorkspacePath
+                    ? 'default'
+                    : 'resume'
+                  : 'unfiled',
+          })
         }
         return { success: true, activeWorkspace }
       } catch (error) {

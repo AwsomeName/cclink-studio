@@ -406,6 +406,9 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
   return (
     <div className="scheduled-task-tab">
+      <p className="workspace-data-location" title={workspacePath}>
+        工作空间：{workspacePath.split(/[\\/]/).filter(Boolean).at(-1)}
+      </p>
       <header className="scheduled-task-tab-header">
         <div className="scheduled-task-tab-heading">
           <IconClock size={24} />

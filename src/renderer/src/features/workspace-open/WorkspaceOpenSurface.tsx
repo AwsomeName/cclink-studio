@@ -18,6 +18,7 @@ import {
 import { CclinkWorkspacePicker } from '../cclink-remote/CclinkPanel'
 import { openWorkspaceRef, pickLocalWorkspace } from './workspace-open-controller'
 import { useWorkspaceOpenStore } from './workspace-open-store'
+import { useCommandStore } from '../../stores/command-store'
 
 interface WorkspaceOpenSurfaceProps {
   anchorRef: RefObject<HTMLElement | null>
@@ -80,6 +81,32 @@ function WorkspaceSourceChooser({
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [defaultPath, setDefaultPath] = useState('')
+  useEffect(() => {
+    let live = true
+    void window.cclinkStudio.workspaceState
+      .getDefaultWorkspace()
+      .then((result) => {
+        if (live && result.success) setDefaultPath(result.workspacePath ?? '')
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  const runWorkspaceCommand = async (id: string): Promise<void> => {
+    setBusyKey(id)
+    setError(null)
+    try {
+      const result = await useCommandStore.getState().executeCommand(id, { source: 'toolbar' })
+      if (!result.ok) throw new Error(result.message || '工作空间操作失败')
+      onOpened()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason))
+    } finally {
+      setBusyKey(null)
+    }
+  }
   const pendingRemoteOperationRef = useRef<{
     generation: number
     requestId: string
@@ -153,6 +180,20 @@ function WorkspaceSourceChooser({
           type="button"
           className="workspace-open-source-card"
           disabled={busyKey !== null}
+          title={defaultPath}
+          onClick={() => void runWorkspaceCommand('workspace.open-default')}
+        >
+          <IconFolder size={22} />
+          <span>
+            <strong>默认工作空间</strong>
+            <small>{defaultPath || '打开日常资料目录'}</small>
+          </span>
+          <IconChevronRight size={14} />
+        </button>
+        <button
+          type="button"
+          className="workspace-open-source-card"
+          disabled={busyKey !== null}
           onClick={() => void openLocal()}
         >
           <IconFolder size={22} />
@@ -176,6 +217,23 @@ function WorkspaceSourceChooser({
           <IconChevronRight size={14} />
         </button>
       </div>
+
+      {activeWorkspaceRef.kind === 'local' && (
+        <button
+          type="button"
+          disabled={busyKey !== null}
+          onClick={() => void runWorkspaceCommand('workspace.set-default')}
+        >
+          将当前工作空间设为默认
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={busyKey !== null}
+        onClick={() => void runWorkspaceCommand('workspace.unfiled')}
+      >
+        进入未归档
+      </button>
 
       {error && <div className="workspace-open-error">{error}</div>}
 

@@ -26,6 +26,32 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
+describe('SettingsService workspace startup', () => {
+  it('preserves an existing workspace on upgrade and persists the compatibility decision', async () => {
+    await writeFile(
+      join(tempDir, 'settings.json'),
+      JSON.stringify({ lastWorkspacePath: '/existing/workspace' }),
+    )
+    const service = createSettingsService()
+    await service.loadState()
+    expect(service.getAll()).toMatchObject({
+      lastWorkspacePath: '/existing/workspace',
+      startupWorkspaceTarget: 'resume',
+      defaultWorkspacePath: '',
+    })
+    expect(
+      JSON.parse(await readFile(join(tempDir, 'settings.json'), 'utf8')).startupWorkspaceTarget,
+    ).toBe('resume')
+  })
+  it('does not treat unreadable settings as permission to create a new default', async () => {
+    await writeFile(join(tempDir, 'settings.json'), '{broken')
+    const service = createSettingsService()
+    await service.loadState()
+    expect(service.getAll().startupWorkspaceTarget).toBe('unfiled')
+    expect(await readFile(join(tempDir, 'settings.json'), 'utf8')).toBe('{broken')
+  })
+})
+
 describe('SettingsService secrets', () => {
   it('migrates legacy plaintext secrets without exposing them to the renderer', async () => {
     await writeFile(

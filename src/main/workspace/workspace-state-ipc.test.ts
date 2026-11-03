@@ -16,6 +16,65 @@ describe('registerWorkspaceStateIpc', () => {
     mockIpcMain.handlers.clear()
   })
 
+  it('does not overwrite remembered intent when startup falls back to global', async () => {
+    const service = createService()
+    const settings = { set: vi.fn(), getAll: () => ({ defaultWorkspacePath: '' }) }
+    registerWorkspaceStateIpc(service as never, createGuard('trusted') as never, settings as never)
+    await mockIpcMain.handlers.get('workspaceState:setActiveLocalWorkspace')!(
+      { sender: 'trusted' },
+      null,
+      'restore',
+    )
+    expect(settings.set).not.toHaveBeenCalled()
+  })
+
+  it('keeps a registered default retryable after settings failure without granting a new root', async () => {
+    const service = createService()
+    const sender = { id: 31 }
+    const settings = {
+      getAll: () => ({ defaultWorkspacePath: '' }),
+      set: vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue({}),
+    }
+    const files = { registerKnownWorkspaces: vi.fn(), registerPickerSelection: vi.fn() }
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard(sender) as never,
+      settings as never,
+      files as never,
+    )
+    const ensure = mockIpcMain.handlers.get('workspaceState:ensureDefaultWorkspace')!
+    await expect(ensure({ sender })).resolves.toMatchObject({
+      success: false,
+      errorCode: 'DEFAULT_WORKSPACE_UNAVAILABLE',
+    })
+    expect(files.registerPickerSelection).not.toHaveBeenCalled()
+    await expect(ensure({ sender })).resolves.toMatchObject({
+      success: true,
+      workspacePath: '/default',
+    })
+    expect(files.registerPickerSelection).toHaveBeenCalledWith(31, ['/default'], 'workspace')
+    expect(() => ensure({ sender: 'other' })).toThrow('untrusted')
+  })
+
+  it('rejects setting a renderer-invented default before touching its identity', async () => {
+    const service = createService()
+    const settings = { getAll: () => ({}), set: vi.fn() }
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard('trusted') as never,
+      settings as never,
+      { canActivateWorkspace: () => false } as never,
+    )
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setDefaultWorkspace')!(
+        { sender: 'trusted' },
+        '/invented',
+      ),
+    ).resolves.toMatchObject({ success: false })
+    expect(service.getSnapshot).not.toHaveBeenCalled()
+    expect(settings.set).not.toHaveBeenCalled()
+  })
+
   it('rejects an untrusted sender before reading persistent state', () => {
     const service = createService()
     registerWorkspaceStateIpc(service as never, createGuard('trusted') as never)
@@ -127,7 +186,7 @@ describe('registerWorkspaceStateIpc', () => {
 
   it('commits the main-process active workspace and persists only its canonical path', async () => {
     const service = createService()
-    const settings = { set: vi.fn(async () => ({})) }
+    const settings = { set: vi.fn(async () => ({})), getAll: () => ({ defaultWorkspacePath: '' }) }
     registerWorkspaceStateIpc(service as never, createGuard('trusted') as never, settings as never)
 
     await expect(
@@ -139,7 +198,10 @@ describe('registerWorkspaceStateIpc', () => {
       success: true,
       activeWorkspace: { workspacePath: '/private/tmp/project', generation: 2 },
     })
-    expect(settings.set).toHaveBeenCalledWith({ lastWorkspacePath: '/private/tmp/project' })
+    expect(settings.set).toHaveBeenCalledWith({
+      lastWorkspacePath: '/private/tmp/project',
+      startupWorkspaceTarget: 'resume',
+    })
   })
 
   it('rejects a renderer-invented workspace that has no picker or recent-project capability', async () => {
@@ -251,6 +313,8 @@ describe('registerWorkspaceStateIpc', () => {
 
 function createService() {
   return {
+    getDefaultWorkspacePath: vi.fn(() => '/default'),
+    ensureDefaultWorkspace: vi.fn(async () => '/default'),
     getSnapshot: vi.fn(async () => ({ sections: {} })),
     setSection: vi.fn(async () => ({ sections: {} })),
     clear: vi.fn(async () => undefined),

@@ -186,12 +186,21 @@ class WorkspaceStateWriteContractError extends Error {
 }
 
 export const workspaceStateIpcContracts = {
+  getDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.getDefaultWorkspace),
+  ensureDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.ensureDefaultWorkspace),
+  setDefaultWorkspace: bindIpcParser(workspaceStateIpc.setDefaultWorkspace, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
   resolveLocalWorkspace: bindIpcParser(workspaceStateIpc.resolveLocalWorkspace, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
   ),
   setActiveLocalWorkspace: bindIpcParser(
     workspaceStateIpc.setActiveLocalWorkspace,
-    (args) => ipcArgs(args[0] === null ? null : absolutePathSchema.parse(args[0])),
+    (args) =>
+      ipcArgs(
+        args[0] === null ? null : absolutePathSchema.parse(args[0]),
+        z.enum(['selection', 'restore', 'remote']).optional().parse(args[1]),
+      ),
     async (error): Promise<ActiveLocalWorkspaceResult> => ({
       success: false,
       error: error instanceof Error ? error.message : String(error),
