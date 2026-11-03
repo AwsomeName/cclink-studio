@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-10-15。
+> 当前事实源。最后更新：2026-11-03。
 
 ## 先读这些
 
@@ -51,6 +51,9 @@
 - `docs/official-integration-contract.md`：已降级为兼容缝的 official integration 契约及当前边界。
 - `docs/ops/cclink-dev-official-integration-handoff.md`：已被 ADR 0009 取代的旧 overlay 交接说明。
 - `docs/features/workspace-system.md`：当前 Studio 统一的本地与远程工作空间模型。
+- `docs/features/default-workspace-data-design.md`：已确认方向、尚未实现的默认工作空间与业务资料归属设计，定义公司、账目、运营、账号和任务的目录及本机边界。
+- `docs/features/default-workspace-data-development-plan.md`：默认入口、旧事务目录化、备份移动与副本恢复的三批施工计划，以及迁移提交点、中断恢复和版本回退规则。
+- `docs/testing/default-workspace-data-acceptance.md`：上述三批的真人操作、迁移故障和权限矩阵；全部待执行，发布步骤与实际提交分别验收。
 - `docs/features/workspace-layout-development-plan.md`：已实现的工作空间级三栏布局记忆；复用 WorkspaceState
   与现有切换守卫。2026-10-16 用户初步确认本地可用并要求收尾，未扩张为跨域事务重构。
 - `docs/testing/workspace-layout-memory.md`：布局工程门禁、真实 Electron 回归与用户收尾反馈；本地逐项

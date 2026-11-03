@@ -2,6 +2,8 @@
 
 > 当前事实源。最后更新：2026-10-14。
 
+> 默认入口与资料归属的后续调整见[默认工作空间与业务数据归属设计](default-workspace-data-design.md)及[实施计划](default-workspace-data-development-plan.md)。方向已确认，功能尚未实现；本文件的 Home、未归档与现有持久化描述仍是当前实现事实。
+
 ## 结论
 
 CCLink Studio 以本地工作空间为免登录默认能力，并内置按需登录的 CCLink 远程工作空间。
