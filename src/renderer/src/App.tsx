@@ -56,6 +56,7 @@ function MainLayout(): React.ReactElement {
   const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
   const workspaceLoading = useFsStore((s) => s.loading)
   const workspacePicking = useFsStore((s) => s.picking)
+  const workspaceError = useFsStore((s) => s.error)
   const executeCommand = useCommandStore((s) => s.executeCommand)
   const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
@@ -255,6 +256,20 @@ function MainLayout(): React.ReactElement {
         </div>
       </div>
 
+      {workspaceError && activeWorkspaceRef.kind === 'global' && (
+        <div className="workspace-recovery-notice" role="alert">
+          <span>{workspaceError}</span>
+          <button
+            type="button"
+            onClick={() => void executeCommand('workspace.open', { source: 'toolbar' })}
+          >
+            定位或选择工作空间
+          </button>
+          <button type="button" onClick={() => useFsStore.setState({ error: null })}>
+            关闭提示
+          </button>
+        </div>
+      )}
       <div className="main-area">
         <ActivityBar />
 

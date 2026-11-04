@@ -1,9 +1,9 @@
 # 默认工作空间与数据迁移实施计划
 
-> 日期：2026-11-03。
-> 状态：详细施工计划，尚未开始功能实现；所有批次的用户验收均待执行。
+> 日期：2026-11-04。
+> 状态：第一批代码及真实 Electron 自动验收通过，真人签收待执行；第二、第三批尚未实现。实际结果见[第一批实现与验收](../testing/default-workspace-first-batch.md)。
 > 产品边界：[默认工作空间与业务数据归属设计](default-workspace-data-design.md)。
-> 架构决策：[ADR 0020](../decisions/0020-default-workspace-data-boundary.md)，proposed。
+> 架构决策：[ADR 0020](../decisions/0020-default-workspace-data-boundary.md)，accepted。
 > 验收记录：[默认工作空间与业务数据验收](../testing/default-workspace-data-acceptance.md)。
 
 ## 实施结论
@@ -195,7 +195,7 @@ WebAffairService 继续是单一实例和唯一执行 owner，其内部按稳定
 
 现有自动化可复用 `node scripts/company-workspace-smoke.mjs`、`pnpm smoke:scheduled-tasks`、`pnpm smoke:restore` 和 `pnpm smoke:scheduled-task-git-sharing`。新增默认入口及分区迁移 smoke 按当前批次创建，当前尚不存在，不把文档中的入口写成已运行。
 
-不为本轮纯文档变更运行构建或业务测试。功能实现时先运行受影响测试，按仓库门禁完成 verify 与必要真实 Electron smoke；通过后不无理由重复全套。若实际触及 BrowserManager 缩放或原生 View 激活链路，才按既有 30% 事故专项补验，不能用 mock 替代。
+功能实现先运行受影响测试，按仓库门禁完成 verify 与必要真实 Electron smoke；通过后不无理由重复全套。若实际触及 BrowserManager 缩放或原生 View 激活链路，才按既有 30% 事故专项补验，不能用 mock 替代。
 
 发布存储迁移不改变文章发布能力验收：步骤可观测性必须在真实执行、等待、失败和恢复中观察；实际提交及平台核验必须有具体账号和文章授权。未获授权时该项记录“未执行”，不能以草稿或首次 inspect 通过关闭。
 

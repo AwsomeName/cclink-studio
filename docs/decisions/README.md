@@ -66,4 +66,4 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0019-freeze-cclink-agent-runtime-unification.md`：冻结把 `cclink-agent` 继续迁移为 Studio 本地
   默认 Runtime/控制面的路线；保留默认关闭实验和验收证据，未来若恢复则优先从“Studio 控制本地
   Agent、cclink-agent 只转发消息”的边界重新评审。
-- `0020-default-workspace-data-boundary.md`：proposed；默认本地入口、工作空间内业务资料与事务分区、全局账号及本机调度授权边界，以及移动和副本恢复的长期取舍，尚未实现。
+- `0020-default-workspace-data-boundary.md`：accepted；默认本地入口、工作空间内业务资料与事务分区、全局账号及本机调度授权边界，以及移动和副本恢复的长期取舍；第一批入口已实现，事务目录化与恢复尚未实现。

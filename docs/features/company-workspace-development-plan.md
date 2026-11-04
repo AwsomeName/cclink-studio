@@ -5,7 +5,7 @@
 > 产品事实源：[公司工作空间产品设计](company-workspace-product-design.md)。
 > 首版布局：经营导航。经营收件箱仅保留为设计对比，不进入首版实施。
 
-> 默认工作空间与资料归属的后续施工见[默认工作空间与数据迁移实施计划](default-workspace-data-development-plan.md)。事务目录化、公司库副本身份重绑及跨域备份尚未实现，不计入下述第一批既有验收结果。
+> 默认工作空间与资料归属的施工见[默认工作空间与数据迁移实施计划](default-workspace-data-development-plan.md)。默认入口与原记录保存恢复已通过[专项真实 App 自动验收](../testing/default-workspace-first-batch.md)；事务目录化、公司库副本身份重绑及跨域备份尚未实现，不计入下述公司经营第一批既有结果。
 
 ## 实现结论
 

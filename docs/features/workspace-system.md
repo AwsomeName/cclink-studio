@@ -1,8 +1,8 @@
 # CCLink Studio 工作空间系统
 
-> 当前事实源。最后更新：2026-10-14。
+> 当前事实源。最后更新：2026-11-04。
 
-> 默认入口与资料归属的后续调整见[默认工作空间与业务数据归属设计](default-workspace-data-design.md)及[实施计划](default-workspace-data-development-plan.md)。方向已确认，功能尚未实现；本文件的 Home、未归档与现有持久化描述仍是当前实现事实。
+> 默认入口与资料归属的后续调整见[默认工作空间与业务数据归属设计](default-workspace-data-design.md)及[实施计划](default-workspace-data-development-plan.md)。第一批默认本地入口及原功能保存恢复已实现，见[真实 App 自动验收](../testing/default-workspace-first-batch.md)；事务目录化、备份移动与副本恢复仍未实现。Home 保持全局 Tab，global 保持未归档归属。
 
 ## 结论
 

@@ -1,10 +1,10 @@
 # 默认工作空间与业务数据归属设计
 
-> 日期：2026-11-03。
-> 状态：用户已确认“默认工作空间与工作空间内统一资料目录”的方向；以下详细设计尚未实现。
+> 日期：2026-11-04。
+> 状态：第一批默认入口及原功能保存恢复已实现，工程门禁和真实 Electron 自动验收通过，真人签收待执行；事务目录化及整体备份恢复尚未实现。
 > 实施顺序：[默认工作空间与数据迁移实施计划](default-workspace-data-development-plan.md)。
 > 验收：[默认工作空间与业务数据验收](../testing/default-workspace-data-acceptance.md)。
-> 长期取舍：[ADR 0020](../decisions/0020-default-workspace-data-boundary.md)，状态为 proposed。
+> 长期取舍：[ADR 0020](../decisions/0020-default-workspace-data-boundary.md)，accepted。第一批实际结果见[实现与验收](../testing/default-workspace-first-batch.md)。
 
 ## 产品结论
 
@@ -31,15 +31,15 @@ Studio 首次启动即提供可写的默认本地工作空间。公司、账目�
 
 ## 当前实现与缺口
 
-以下为 2026-11-03 的源码基线，不把目标目录写成现有能力。
+下表区分当前实现与后续缺口，不把目标目录写成现有能力。
 
 | 领域               | 当前事实                                                                                                                      | 本次直接缺口                                                |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 启动               | `workspace-bootstrap-core.ts` 解析上次目录；`fs-store.ts` 在无路径时进入 global                                               | 自动创建默认目录；区分首次无选择、明确未归档和原路径失效    |
+| 启动               | 首次提供默认空间；有效历史选择、主动未归档及原路径失效分别处理                                                                | 真人签收；移动副本属于第三批                                |
 | 工作空间身份与现场 | `WorkspaceStateService` 使用 `.cclink-studio/project.json` 与 `state/<owner-hash>.json`；中央文件保留索引、global 与 fallback | 默认入口复用同一身份与 transition；移动、复制需覆盖业务数据 |
 | 公司               | `CompanyWorkspaceService` 在 `company-workspace/company.sqlite` 保存配置、业务与关联，并校验库内工作空间 ID                   | 复制时处理身份；迁移事务后关联仍可下钻                      |
 | 账目与财务账户     | `CompanyAccountsService` 在 `company-accounts/accounts.sqlite`、`documents/` 保存账目与原件，已有备份恢复                     | 复用原备份和确认事实，纳入工作空间备份清单                  |
-| 运营稿件           | 普通文件；旧 `ProjectOpsService` 默认创建 `docs/<稿名>.md`                                                                    | 默认新稿位置清晰；旧文件不因布局调整而移动                  |
+| 运营稿件           | 新稿保存到 `运营/原稿/`，继续使用原文件服务及编辑器，旧目录原位保留                                                           | 完整材料备份及外部引用处理                                  |
 | 网页事务与发布证据 | `WebAffairStore` 使用 `userData/web-affairs/web-affairs.json`，对象按稳定 `workspaceId` 隔离，已有备份及恢复日志              | 按工作空间迁入目录；保留恢复日志语义、后台执行与引用        |
 | 网站与账号         | `WebResourceStore` 使用 `userData/web-resources/web-resources.json`，ADR 0014 已确定全局复用                                  | 展示全局归属；迁移不创建工作空间账号副本                    |
 | 定时任务           | 私有定义在 `scheduled-tasks/`，共享定义在 `shared/scheduled-tasks/`；启用和运行账本在 `userData/scheduled-tasks/`             | 默认空间可直接使用；移动重定位、备份范围和副本停用需明确    |

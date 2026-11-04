@@ -1,7 +1,7 @@
 # ADR 0020 默认工作空间与业务资料边界
 
-- 状态：proposed
-- 日期：2026-11-03
+- 状态：accepted
+- 日期：2026-11-03；第一批实施与架构核对：2026-11-04
 - 依据：用户确认默认工作空间与工作空间内统一资料目录的方向，并要求详细设计和实施计划。
 - 关联：[产品设计](../features/default-workspace-data-design.md)、[实施计划](../features/default-workspace-data-development-plan.md)。
 
@@ -54,4 +54,4 @@
 
 ## 验证
 
-按[验收矩阵](../testing/default-workspace-data-acceptance.md)分别记录首次启动、旧数据原记录下钻、迁移中断、切换与重启、备份恢复、移动副本、权限隔离和发布专项结果。方向确认和文档完成均不代表产品验收通过；详细决策在实现前完成评审后才能标记 accepted。
+按[验收矩阵](../testing/default-workspace-data-acceptance.md)分别记录首次启动、旧数据原记录下钻、迁移中断、切换与重启、备份恢复、移动副本、权限隔离和发布专项结果。本决策已按唯一 owner、生命周期和权限边界完成第一批实施核对；第一批真实 App 自动验收通过，真人签收待执行，第二、第三批尚未实现。

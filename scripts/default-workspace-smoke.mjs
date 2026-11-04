@@ -322,7 +322,7 @@ try {
   assert.equal(digest(await readFile(preserved)), preservedHash)
   pass('A02 重启优先恢复原明确选择，已有资料内容不变')
   await chooser()
-  await page.getByRole('button', { name: /默认工作空间/ }).click()
+  await page.locator('.workspace-open-source-card').filter({ hasText: '默认工作空间' }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })
     .waitFor({ state: 'hidden' })
@@ -354,7 +354,14 @@ try {
   )
   pass('A03 明确未归档选择跨重启保留，不重新打开默认空间')
   await chooser()
-  await page.getByRole('button', { name: /默认工作空间/ }).click()
+  await page.locator('.workspace-open-source-card').filter({ hasText: '默认工作空间' }).click()
+  await page
+    .getByRole('button', { name: '关闭打开工作空间', exact: true })
+    .waitFor({ state: 'hidden' })
+  assert.equal(
+    (await page.evaluate(() => window.cclinkStudio.settings.getAll())).startupWorkspaceTarget,
+    'default',
+  )
   await close()
   await rename(a, a + '-moved')
   await launch()

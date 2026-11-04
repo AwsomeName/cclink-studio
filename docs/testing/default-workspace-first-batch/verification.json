@@ -1,0 +1,22 @@
+{
+  "baselineCommit": "9c8d0b6cfed58bf6d1f5f062af841184c2bd448a",
+  "sourceDiffSha256": "7e7172b715dd5a93ae65271db625f944d5e7acbcfffce7740540a7826ff76a07",
+  "mainBundleSha256": "fd26af809a0ecf29bd99c118b96d8e9b475d3fd580a71213bd8b377a0dd4b1bf",
+  "verification": {
+    "command": "pnpm verify",
+    "status": "passed",
+    "testFilesPassed": 421,
+    "testsPassed": 3543,
+    "testsSkipped": 10
+  },
+  "realApp": {
+    "liveModel": true,
+    "mainFlowChecksPassed": 13,
+    "edgeFlowChecksPassed": 5,
+    "humanAcceptance": "pending"
+  },
+  "scripts": {
+    "scripts/default-workspace-smoke.mjs": "b6bf3cf82c3e931238e801ac23b5324569a567d5a94f32ac46f7bc1b4ab34358",
+    "scripts/default-workspace-edge-smoke.mjs": "b18e82c297ed708154d1c6d2d2b9d4d4b7ad4663268eece443701492b8bb5695"
+  }
+}

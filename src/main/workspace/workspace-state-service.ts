@@ -600,7 +600,7 @@ export class WorkspaceStateService {
       return target
     })
     this.defaultWorkspaceQueue = operation.catch(() => {})
-    return operation
+    return this.trackOperation(operation)
   }
 
   getActiveLocalWorkspace(): ActiveLocalWorkspaceSnapshot {

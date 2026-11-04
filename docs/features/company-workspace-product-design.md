@@ -8,7 +8,7 @@
 > 实现方案：[公司工作空间实现方案](company-workspace-development-plan.md)。
 > 当前验收记录：[第一批操作与验证](../testing/company-workspace-first-loop.md)。
 
-> 默认工作空间、资料目录、旧数据迁移和移动副本边界见[默认工作空间与业务数据归属设计](default-workspace-data-design.md)，尚未实现；不改变本设计的公司经营范围，也不替代财务、AI 工作及实际发布的独立验收。
+> 默认工作空间、资料目录、旧数据迁移和移动副本边界见[默认工作空间与业务数据归属设计](default-workspace-data-design.md)。默认入口及原记录保存恢复已经通过[第一批真实 App 自动验收](../testing/default-workspace-first-batch.md)，事务迁移与移动副本尚未实现；不改变公司经营范围，也不替代 AI 工作及实际发布的独立验收。
 
 ## 已确认的首版范围
 

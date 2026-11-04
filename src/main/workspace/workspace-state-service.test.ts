@@ -72,6 +72,18 @@ describe('WorkspaceStateService', () => {
     await expect(service.ensureDefaultWorkspace(initialized)).rejects.toThrow('不会新建空目录')
   })
 
+  it('flushes an accepted default initialization before shutdown completes', async () => {
+    const service = new WorkspaceStateService()
+    await service.loadState()
+    const creation = service.ensureDefaultWorkspace()
+    await service.flush()
+    const index = JSON.parse(await readFile(join(tempDir, 'workspace-state.json'), 'utf8'))
+    const path = await creation
+    expect(
+      Object.values(index.localWorkspaces).some((entry: any) => entry.workspacePath === path),
+    ).toBe(true)
+  })
+
   it('rejects a symlink default ancestor and identity replacement without overwriting either', async () => {
     const service = new WorkspaceStateService()
     await service.loadState()

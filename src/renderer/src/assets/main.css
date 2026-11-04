@@ -444,6 +444,19 @@ input:focus {
  * title-area 是 macOS 标题栏（hiddenInset 模式下是覆盖层，占位但不遮挡交互）
  * main-area 用 flex:1 填满剩余空间（从标题栏下方到状态栏上方）
  */
+.workspace-recovery-notice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--vscode-inputValidation-warningBackground, #352a05);
+  border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, #b89500);
+}
+
+.workspace-recovery-notice span {
+  flex: 1;
+}
+
 .main-window {
   display: flex;
   flex-direction: column;
