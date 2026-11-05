@@ -10,6 +10,7 @@ import {
   LocalClaudeCodeBackend,
   type BrowserAutomationHost,
   type McpConfigComposer,
+  type ClaudeCodeBackendOptions,
 } from './local-claude-code-backend'
 
 const queryMock = vi.hoisted(() => vi.fn())
@@ -99,6 +100,7 @@ function createTool(name: string): ToolDefinition {
 function createBackendFixture(
   externalMcp?: Record<string, unknown>,
   workspacePath = '/Users/apple/Desktop/project',
+  createUsageObserver?: ClaudeCodeBackendOptions['createUsageObserver'],
 ): {
   backend: LocalClaudeCodeBackend
   createToolSession: ReturnType<typeof vi.fn>
@@ -147,6 +149,7 @@ function createBackendFixture(
     undefined as never,
     {
       claudeCodePath: '/usr/local/bin/claude',
+      createUsageObserver,
       apiBaseUrl: 'https://open.bigmodel.cn/api/anthropic',
       apiKey: 'test-api-key',
       modelName: 'glm-4.6',
@@ -198,6 +201,67 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
   beforeEach(() => {
     queryMock.mockReset()
     queryMock.mockImplementation(() => createMockQuery())
+  })
+
+  it('observes raw usage before SDK error projection and includes the bound task identity', async () => {
+    const observe = vi.fn()
+    const finish = vi.fn()
+    const createUsageObserver = vi.fn(() => ({ observe, finish }))
+    const { backend } = createBackendFixture(undefined, '/workspace', createUsageObserver)
+    const result = {
+      type: 'result',
+      is_error: true,
+      usage: { input_tokens: 9, output_tokens: 3 },
+      result: 'failed',
+    }
+    queryMock.mockReturnValueOnce(createMockQuery([result]))
+    await backend.sendMessage('test', {
+      runId: 'usage-run',
+      conversationId: 'conversation',
+      scheduledTaskPolicy: {
+        origin: 'scheduled-task',
+        taskId: 'scheduled',
+        taskRevision: 1,
+        runId: 'scheduler-run',
+        workspaceRoot: '/workspace',
+        readRoots: [],
+        allowedTools: [],
+      },
+    })
+    await vi.waitFor(() => expect(finish).toHaveBeenCalled())
+    expect(observe).toHaveBeenCalledWith(result)
+    expect(createUsageObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'usage-run',
+        taskId: 'scheduled',
+        workspace: '/workspace',
+        provider: 'open.bigmodel.cn',
+      }),
+    )
+  })
+
+  it('does not fail a real backend lifecycle when the usage observer throws', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const { backend } = createBackendFixture(undefined, '/workspace', () => ({
+        observe: () => {
+          throw new Error('disk full')
+        },
+        finish: () => {
+          throw new Error('disk full')
+        },
+      }))
+      const complete = vi.fn()
+      backend.onEvent((type) => {
+        if (type === 'complete') complete()
+      })
+      queryMock.mockReturnValueOnce(createMockQuery([{ type: 'result', is_error: false }]))
+      await backend.sendMessage('test')
+      await vi.waitFor(() => expect(complete).toHaveBeenCalledOnce())
+      expect(warning).toHaveBeenCalled()
+    } finally {
+      warning.mockRestore()
+    }
   })
 
   it('keeps the bounded article-publishing HTTP timeout for CSDN autosave readback', async () => {

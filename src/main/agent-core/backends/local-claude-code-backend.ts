@@ -5,7 +5,8 @@
  * 实现 IAgentBackend 接口。
  */
 
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
+import type { CreateModelUsageObserver, ModelUsageObserver } from '../../../shared/model-usage'
 import { lstat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'path'
 import {
@@ -70,6 +71,7 @@ export interface AndroidAdbHost {
 }
 
 export interface ClaudeCodeBackendOptions {
+  createUsageObserver?: CreateModelUsageObserver
   /** Claude Code executable path；产品运行时应传入主进程已探测的绝对路径。 */
   claudeCodePath?: string
   /** 注入到子进程的环境变量（如 ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY） */
@@ -106,6 +108,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   /** 当前 Claude Code 进程使用的 MCP 会话 token（进程退出时释放） */
   private mcpSessionToken: string | null = null
   private readonly claudeCodePath?: string
+  private readonly createUsageObserver?: CreateModelUsageObserver
   private readonly extraEnv: Record<string, string>
   private readonly apiBaseUrl?: string
   private readonly apiKey?: string
@@ -133,6 +136,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     this.mcpClientMgr = mcpClientMgr
     this.adbBridge = adbBridge
     this.claudeCodePath = options?.claudeCodePath?.trim() || undefined
+    this.createUsageObserver = options?.createUsageObserver
     this.extraEnv = options?.env ?? {}
     this.apiBaseUrl = options?.apiBaseUrl?.trim() || undefined
     this.apiKey = options?.apiKey?.trim() || undefined
@@ -588,6 +592,32 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
 
     const sdkInput = createSdkPrompt(userMessage, options?.images, abortController.signal)
+    let usage: ModelUsageObserver | undefined
+    try {
+      let provider: string | null = null
+      const baseUrl = sdkOptions.env?.ANTHROPIC_BASE_URL
+      if (baseUrl) {
+        try {
+          provider = new URL(baseUrl).hostname
+        } catch {
+          /* unknown provider */
+        }
+      }
+      usage = this.createUsageObserver?.({
+        workspace: workspacePath || null,
+        runId: options?.runId,
+        conversationId: options?.conversationId,
+        sessionId: this.sessionId,
+        taskId: options?.scheduledTaskPolicy?.taskId ?? options?.articlePublishingPolicy?.affairId,
+        provider,
+        transcriptRoot: join(
+          sdkOptions.env?.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
+          'projects',
+        ),
+      })
+    } catch {
+      console.warn('[ModelUsage] observer unavailable; Agent continues')
+    }
     try {
       if (options?.images?.length) {
         console.info(
@@ -603,10 +633,15 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       this.currentQuery = sdkQuery
       this.currentOperation = operation
       this.abortController = abortController
-      const queryDone = this.consumeQuery(sdkQuery, operation, sdkInput.close)
+      const queryDone = this.consumeQuery(sdkQuery, operation, sdkInput.close, usage)
       this.currentQueryDone = queryDone
       void queryDone
     } catch (err) {
+      try {
+        usage?.finish('failed')
+      } catch {
+        console.warn('[ModelUsage] failed to record startup failure')
+      }
       sdkInput.close()
       void this.cleanupMcpConfig()
       this.terminalEventEmitted = true
@@ -696,6 +731,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     sdkQuery: Query,
     operation: AgentQueryOperation,
     closeInput: () => void,
+    usage?: ModelUsageObserver,
   ): Promise<void> {
     try {
       for await (const event of sdkQuery) {
@@ -703,6 +739,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         // 这些检查仍要保留，防止传输层在 query 被替换或销毁后转发迟到事件。
         if (this.currentQuery !== sdkQuery) break
         const record = event as Record<string, unknown>
+        try {
+          usage?.observe(record)
+        } catch {
+          console.warn('[ModelUsage] event recording failed; Agent continues')
+        }
         if (record.type === 'result') {
           // Restoring an interrupted background shell can finish its notification turn
           // before processing our prompt. Its result does not own this Agent Run.
@@ -757,6 +798,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         })
       }
     } finally {
+      try {
+        usage?.finish(this.aborted ? 'interrupted' : 'failed')
+      } catch {
+        console.warn('[ModelUsage] final usage recording failed; Agent continues')
+      }
       closeInput()
       if (this.currentQuery === sdkQuery) {
         this.currentQuery = null

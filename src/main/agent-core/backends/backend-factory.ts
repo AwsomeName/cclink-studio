@@ -37,6 +37,7 @@ export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): 
         deps.adbBridge,
         {
           claudeCodePath: config.claudeCode?.claudeCodePath,
+          createUsageObserver: config.claudeCode?.createUsageObserver,
           env: config.claudeCode?.env,
           apiBaseUrl: config.claudeCode?.apiBaseUrl,
           apiKey: config.claudeCode?.apiKey,

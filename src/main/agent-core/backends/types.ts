@@ -120,6 +120,7 @@ export type BackendConfig =
       type: 'local-claude-code'
       /** Claude Code 配置 */
       claudeCode?: {
+        createUsageObserver?: import('../../../shared/model-usage').CreateModelUsageObserver
         /** Claude Code executable 绝对路径；为空时按 PATH 解析。 */
         claudeCodePath?: string
         /** 注入到子进程的环境变量。第一版默认交给 Claude Code 自身管理模型登录。 */

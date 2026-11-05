@@ -2,6 +2,8 @@ import { app } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { ModelUsageService } from './model-usage-service'
+import type { CreateModelUsageObserver } from '../../shared/model-usage'
 
 export type UsageSource = 'agent-model' | 'image-generation' | 'video-generation'
 export type UsageUnit = 'usd' | 'cny' | 'credit' | 'image' | 'video' | 'token'
@@ -33,10 +35,14 @@ export interface UsageSummary {
 export class UsageLedgerService {
   private readonly filePath: string
   private writeQueue: Promise<void> = Promise.resolve()
+  private readonly modelUsage: ModelUsageService
 
   constructor(filePath = join(app.getPath('userData'), 'usage-events.jsonl')) {
     this.filePath = filePath
+    this.modelUsage = new ModelUsageService(join(dirname(filePath), 'model-usage'))
   }
+
+  readonly startModelRun: CreateModelUsageObserver = (context) => this.modelUsage.start(context)
 
   async record(input: UsageEventInput): Promise<UsageEvent> {
     const event: UsageEvent = {
@@ -82,6 +88,7 @@ export class UsageLedgerService {
 
   async flush(): Promise<void> {
     await this.writeQueue
+    await this.modelUsage.close()
   }
 }
 

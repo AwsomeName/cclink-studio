@@ -17,6 +17,8 @@
     "url": "https://github.com/AwsomeName/cclink-studio/issues"
   },
   "scripts": {
+    "usage": "node scripts/model-usage.mjs",
+    "smoke:model-usage": "node scripts/model-usage-smoke.mjs",
     "start": "bash scripts/restart.sh start",
     "stop": "bash scripts/restart.sh stop",
     "studio": "bash scripts/studio.sh",

@@ -7,6 +7,8 @@ import type {
   ClaudeModelConnectionTestResult,
 } from '../../shared/ipc/settings'
 import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
+import type { CreateModelUsageObserver, ModelUsageObserver } from '../../shared/model-usage'
+import { providerFromBaseUrl } from '../usage/model-usage-normalize'
 
 const CONNECTION_TEST_MARKER = 'CCLINK_CONNECTION_OK'
 const DEFAULT_TIMEOUT_MS = 45_000
@@ -18,6 +20,7 @@ export interface ClaudeModelConnectionTestInput {
   apiKey: string
   modelName: string
   timeoutMs?: number
+  createUsageObserver?: CreateModelUsageObserver
 }
 
 export interface ClaudeModelConnectionTestDependencies {
@@ -65,6 +68,15 @@ export async function testClaudeModelConnection(
   }, normalizeTimeout(input.timeoutMs))
   let sdkQuery: Query | null = null
   let assistantError: SDKAssistantMessageError | undefined
+  let usage: ModelUsageObserver | undefined
+  try {
+    usage = input.createUsageObserver?.({
+      provider: providerFromBaseUrl(input.apiBaseUrl),
+      category: 'other',
+    })
+  } catch {
+    console.warn('[ModelUsage] connection-test observer unavailable')
+  }
 
   try {
     sdkQuery = dependencies.createQuery({
@@ -77,11 +89,17 @@ export async function testClaudeModelConnection(
         tools: [],
         allowedTools: [],
         maxTurns: 1,
+        includePartialMessages: true,
         model: modelName,
       },
     })
 
     for await (const event of sdkQuery) {
+      try {
+        usage?.observe(event)
+      } catch {
+        console.warn('[ModelUsage] connection-test usage recording failed')
+      }
       if (event.type === 'assistant' && event.error) assistantError = event.error
       if (event.type !== 'result') continue
 
@@ -117,6 +135,11 @@ export async function testClaudeModelConnection(
       dependencies,
     )
   } finally {
+    try {
+      usage?.finish(timedOut ? 'interrupted' : 'failed')
+    } catch {
+      console.warn('[ModelUsage] connection-test final recording failed')
+    }
     clearTimeout(timeout)
     sdkQuery?.close()
   }

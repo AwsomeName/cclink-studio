@@ -246,6 +246,7 @@ export class AgentBridge {
     return {
       type: 'local-claude-code',
       claudeCode: {
+        createUsageObserver: this.deps.usageLedgerService?.startModelRun,
         claudeCodePath: options?.claudeCodePath,
         env:
           options?.runtimeProvenance?.source === 'managed'
@@ -1204,7 +1205,7 @@ export class AgentBridge {
         quantity: 1,
         unit: 'usd',
         amount: Math.max(0, totalCostUsd),
-        estimated: false,
+        estimated: true,
         status: this.isErrorResult(event.data) ? 'failed' : 'succeeded',
       })
       .catch((error) => {

@@ -40,6 +40,7 @@ import { bootstrapOptionalMainServices } from './optional-main-services'
 import { runShutdownStep } from './shutdown'
 import { registerDiagnosticsIpc } from '../ipc/diagnostics-ipc'
 import { UsageLedgerService } from '../usage/usage-ledger-service'
+import { testClaudeModelConnection } from '../agent/claude-model-connection-test'
 import { GitHubReleaseProvider } from '../update/github-release-provider'
 import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
@@ -563,7 +564,11 @@ export async function bootstrapMainProcessServices(
       await bootstrapAgentRuntime(runtime)
     },
     (level) => applyWindowZoomLevel(runtime, level),
-    undefined,
+    (input) =>
+      testClaudeModelConnection({
+        ...input,
+        createUsageObserver: runtime.usageLedgerService?.startModelRun,
+      }),
     async (track) => {
       await runtime.updateService?.setTrack(track)
     },
