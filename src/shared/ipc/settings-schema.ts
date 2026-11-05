@@ -51,6 +51,7 @@ const settingsUpdateSchema = z
     editorFontSize: z.number().finite().min(6).max(96),
     editorTabSize: z.number().finite().int().min(1).max(16),
     editorWordWrap: z.boolean(),
+    markdownAutoSave: z.boolean(),
     editorLineNumbers: z.boolean(),
     appZoomLevel: z.number().finite().min(APP_ZOOM_LEVEL_MIN).max(APP_ZOOM_LEVEL_MAX),
     recentWorkspacePaths: z.array(pathString).max(100),

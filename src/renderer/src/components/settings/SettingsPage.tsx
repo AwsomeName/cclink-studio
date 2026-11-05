@@ -1693,6 +1693,21 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           <section className="settings-section">
             <h2>编辑器与文件</h2>
             <div className="settings-group">
+              <SettingsRow settingKey="markdownAutoSave" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <span>Markdown 自动保存</span>
+                  <span className="settings-description">
+                    已命名的本地 Markdown 停止输入 1.5
+                    秒后保存。冲突或失败时暂停；未命名文档仅保留草稿。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <Toggle
+                    checked={settings.markdownAutoSave}
+                    onChange={(checked) => update({ markdownAutoSave: checked })}
+                  />
+                </div>
+              </SettingsRow>
               <SettingsRow settingKey="editorFontFamily" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
                   <span>编辑器字体</span>

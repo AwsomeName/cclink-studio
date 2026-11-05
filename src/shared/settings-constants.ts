@@ -166,6 +166,8 @@ export interface AppSettings {
   editorTabSize: number
   /** 是否自动换行 */
   editorWordWrap: boolean
+  /** Automatically save named local Markdown documents after editing pauses. */
+  markdownAutoSave: boolean
   /** 是否显示行号 */
   editorLineNumbers: boolean
 
@@ -289,6 +291,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   editorFontSize: 14,
   editorTabSize: 2,
   editorWordWrap: true,
+  markdownAutoSave: true,
   editorLineNumbers: true,
 
   // 外观

@@ -9,6 +9,7 @@ interface EditorToolbarProps {
   editor: Editor | null
   filePath?: string
   dirty: boolean
+  saving?: boolean
   diagnosticsCount: number
   onCopyDiagnostics: () => void
   onSave: () => void
@@ -51,6 +52,7 @@ export function EditorToolbar({
   editor,
   filePath,
   dirty,
+  saving,
   diagnosticsCount,
   onCopyDiagnostics,
   onSave,
@@ -340,8 +342,9 @@ export function EditorToolbar({
             className="toolbar-save-action"
             title={titleWithShortcut(saveControl.title, 'workbench.save')}
             onClick={onSave}
+            disabled={saving}
           >
-            {saveControl.label}
+            {saving ? '保存中…' : saveControl.label}
           </button>
         )}
       </div>

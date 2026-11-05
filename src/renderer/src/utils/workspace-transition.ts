@@ -21,6 +21,21 @@ import {
 import { flushMountedMarkdownViewStates } from '../features/markdown/markdown-view-state-lifecycle'
 import { captureWorkspaceLayout, persistCapturedWorkspaceLayout } from '../stores/ui-store'
 import { cancelActivePanelResize } from './panel-layout-drag-lifecycle'
+import { persistEditorDrafts } from '../stores/editor-store'
+import { flushMarkdownAutosaves } from '../features/markdown/markdown-autosave'
+import { useToastStore } from '../components/common/Toast'
+
+async function protectEditorDraftsBeforeSwitch(): Promise<void> {
+  await flushMarkdownAutosaves()
+  try {
+    await persistEditorDrafts()
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    const message = `草稿未能保存，已保留当前工作空间。请重试保留草稿或先保存文件：${reason}`
+    useToastStore.getState().show(message, 'error')
+    throw new Error(message)
+  }
+}
 
 export interface WorkspaceRuntimeTransition {
   ref: WorkspaceRef
@@ -44,7 +59,7 @@ let workspaceTransitionGeneration = 0
 const OPTIONAL_RUNTIME_RECONCILIATION_TIMEOUT_MS = 1_500
 
 async function waitForOptionalRuntime<T>(
-  label: 'Browser' | 'Terminal',
+  label: 'Browser' | 'Browser rollback' | 'Terminal',
   operation: Promise<T>,
 ): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout> | null = null
@@ -179,8 +194,8 @@ export async function prepareWorkspaceRuntimeTransition(
     // Markdown 滚动位置在组件内防抖；项目切换前必须先采样 DOM，
     // 再由统一 WorkspaceState 所有者持久化出站快照。
     flushMountedMarkdownViewStates()
-    // 单个恢复快照写入失败不能让用户失去打开其他项目的能力。失败会由
-    // persistRuntimeSections 写入框架日志，当前内存态仍保留并可继续重试。
+    await protectEditorDraftsBeforeSwitch()
+    // Optional view snapshots may degrade; editor content is guarded separately above.
     const layout = isWorkspaceRuntimeTransitionCurrent(generation) ? captureWorkspaceLayout() : null
     await Promise.all([
       persistRuntimeSections(currentKey, currentRef),
@@ -218,6 +233,52 @@ export async function applyWorkspaceRuntimeTransition(
   if (!activeResult.success || !isWorkspaceRuntimeTransitionCurrent(transition.generation)) {
     console.warn('[WorkspaceTransition] 主进程工作空间提交失败:', activeResult.error)
     return false
+  }
+  // Include edits made while the target workspace and its optional runtimes were loading.
+  if (transition.key !== getWorkspaceStateKey()) {
+    try {
+      await protectEditorDraftsBeforeSwitch()
+    } catch (error) {
+      const previous = useWorkspaceStore.getState().activeWorkspaceRef
+      if (isWorkspaceRuntimeTransitionCurrent(transition.generation)) {
+        const rollback = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(
+          previous.kind === 'local' ? previous.path : null,
+          previous.kind === 'remote' ? 'remote' : 'selection',
+        )
+        if (!rollback.success)
+          console.warn('[WorkspaceTransition] 恢复原工作空间选择失败:', rollback.error)
+        // The incoming reconciliation may already have hidden the outgoing browser views.
+        // Restore their ownership/activation along with the workspace selection on abort.
+        if (isWorkspaceRuntimeTransitionCurrent(transition.generation)) {
+          const tabs = useTabStore.getState()
+          const browserTabs = tabs.tabs.filter(
+            (tab) =>
+              tab.type === 'browser' &&
+              tab.workspaceRef &&
+              workspaceRefKey(tab.workspaceRef) === workspaceRefKey(previous),
+          )
+          const reconcile = window.cclinkStudio.browser?.reconcileViews
+          if (reconcile)
+            await waitForOptionalRuntime(
+              'Browser rollback',
+              reconcile({
+                workspaceKey: workspaceRefKey(previous),
+                views: browserTabs.map((tab) => ({
+                  tabId: tab.id,
+                  profileId: tab.browserProfile ?? null,
+                })),
+                activeTabId: browserTabs.some((tab) => tab.id === tabs.activeTabId)
+                  ? tabs.activeTabId
+                  : null,
+              }).catch((reason: unknown) => {
+                console.warn('[WorkspaceTransition] 恢复原浏览器绑定失败:', reason)
+              }),
+            )
+        }
+      }
+      throw error
+    }
+    if (!isWorkspaceRuntimeTransitionCurrent(transition.generation)) return false
   }
   // 等待期间用户可能又开始拖拽；最终提交前同步释放，不能让 Browser 继续处于 resize 隐藏态。
   cancelActivePanelResize()

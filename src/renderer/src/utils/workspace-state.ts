@@ -5,6 +5,7 @@ import type {
 } from '@shared/ipc/workspace-state'
 import type { WorkspaceRef } from '../../../shared/workspace-ref'
 import { workspaceRefKey } from '../../../shared/workspace-ref'
+import { create } from 'zustand'
 
 let activeWorkspaceKey: string | null = null
 let activeOwnerKey: string | null = null
@@ -29,6 +30,30 @@ interface SectionWriteQueue {
 }
 
 const sectionWriteQueues = new Map<string, SectionWriteQueue>()
+
+interface SectionPersistenceStatus {
+  status: 'saving' | 'saved' | 'error'
+  error: Error | null
+}
+
+/** Projection of acknowledged writes; document content remains in EditorStore/WorkspaceState. */
+export const useWorkspacePersistenceStore = create<{
+  sections: Record<string, SectionPersistenceStatus>
+}>(() => ({ sections: {} }))
+
+export function workspaceSectionPersistenceKey(
+  section: string,
+  workspaceKey = activeWorkspaceKey,
+  ownerKey = activeOwnerKey,
+): string {
+  return JSON.stringify([ownerKey, workspaceKey, section])
+}
+
+function reportSectionPersistence(key: string, status: SectionPersistenceStatus): void {
+  useWorkspacePersistenceStore.setState((state) => ({
+    sections: { ...state.sections, [key]: status },
+  }))
+}
 
 export class WorkspaceStatePersistenceError extends Error {
   constructor(
@@ -119,13 +144,17 @@ export function persistWorkspaceSectionNow(
     }
     const targetWorkspaceKey = workspaceKey === undefined ? activeWorkspaceKey : workspaceKey
     const targetOwnerKey = ownerKey === undefined ? activeOwnerKey : ownerKey
-    const queueKey = JSON.stringify([targetOwnerKey, targetWorkspaceKey, section])
+    const queueKey = workspaceSectionPersistenceKey(section, targetWorkspaceKey, targetOwnerKey)
     const queue = sectionWriteQueues.get(queueKey) ?? {
       running: false,
       pending: null,
       idleWaiters: [],
     }
     sectionWriteQueues.set(queueKey, queue)
+    reportSectionPersistence(queueKey, {
+      status: 'saving',
+      error: useWorkspacePersistenceStore.getState().sections[queueKey]?.error ?? null,
+    })
 
     const completion = new Promise<void>((resolve, reject) => {
       if (queue.pending) {
@@ -181,10 +210,15 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
             result.error || `保存 ${request.section} 失败`,
           )
         }
+        reportSectionPersistence(queueKey, {
+          status: queue.pending ? 'saving' : 'saved',
+          error: null,
+        })
         for (const waiter of request.waiters) waiter.resolve()
       } catch (error) {
         const normalizedError =
           error instanceof Error ? error : new Error(`保存 ${request.section} 失败`)
+        reportSectionPersistence(queueKey, { status: 'error', error: normalizedError })
         for (const waiter of request.waiters) waiter.reject(normalizedError)
       }
     }
@@ -229,4 +263,9 @@ export async function flushPendingWorkspaceStateWrites(): Promise<void> {
       ),
     )
   }
+  // An empty queue does not mean the last draft was written successfully.
+  const draftFailure = Object.entries(useWorkspacePersistenceStore.getState().sections).find(
+    ([key, value]) => JSON.parse(key)[2] === 'editorDrafts' && value.error,
+  )
+  if (draftFailure?.[1].error) throw draftFailure[1].error
 }

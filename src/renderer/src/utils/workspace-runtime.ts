@@ -2,7 +2,7 @@ import type { WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import { buildAgentConversationWorkspaceSnapshot, useAgentStore } from '../stores/agent-store'
 import { useBrowserStore } from '../stores/browser-store'
-import { useEditorStore } from '../stores/editor-store'
+import { persistEditorDrafts, useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
 import { useWorkspaceStore } from '../stores/workspace-store'
 import { useUIStore } from '../stores/ui-store'
@@ -171,7 +171,10 @@ export async function persistRuntimeSections(
     },
     {
       section: 'editorDrafts' as const,
-      promise: persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
+      promise:
+        targetWorkspaceKey === getWorkspaceStateKey()
+          ? persistEditorDrafts()
+          : persistWorkspaceSectionNow('editorDrafts', editorDrafts, targetWorkspaceKey),
     },
     ...(targetWorkspaceRef?.kind === 'remote'
       ? []

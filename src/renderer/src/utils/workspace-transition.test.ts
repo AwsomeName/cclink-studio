@@ -121,6 +121,61 @@ afterEach(() => {
 })
 
 describe('workspace-transition', () => {
+  it('retains the current workspace and dirty content when draft persistence fails', async () => {
+    useEditorStore.setState({
+      files: {
+        '/workspace/a/note.md': {
+          currentContent: '# Keep me',
+          savedContent: '# Old',
+          dirty: true,
+          loading: false,
+        },
+      },
+    })
+    const setSection = vi.mocked(window.cclinkStudio.workspaceState.setSection)
+    setSection.mockResolvedValue({ success: false, error: '磁盘已满' })
+    await expect(
+      prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b')),
+    ).rejects.toThrow('草稿未能保存')
+    expect(useEditorStore.getState().files['/workspace/a/note.md'].currentContent).toBe('# Keep me')
+    expect(getWorkspaceStateKey()).toBe('/workspace/a')
+    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).not.toHaveBeenCalled()
+    setSection.mockResolvedValue({ success: true })
+    const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
+    await applyWorkspaceRuntimeTransition(transition)
+    expect(getWorkspaceStateKey()).toBe('/workspace/b')
+  })
+
+  it('checks edits made after preparation and restores activation when the final draft write fails', async () => {
+    const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
+    const setSection = vi.mocked(window.cclinkStudio.workspaceState.setSection)
+    setSection.mockResolvedValue({ success: false, error: '写入失败' })
+    useEditorStore.setState({
+      files: {
+        '/workspace/a/note.md': {
+          currentContent: '# Late edit',
+          savedContent: '# Old',
+          dirty: true,
+          loading: false,
+        },
+      },
+    })
+    await expect(applyWorkspaceRuntimeTransition(transition)).rejects.toThrow('草稿未能保存')
+    expect(getWorkspaceStateKey()).toBe('/workspace/a')
+    expect(useEditorStore.getState().files['/workspace/a/note.md'].currentContent).toBe(
+      '# Late edit',
+    )
+    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).toHaveBeenLastCalledWith(
+      '/workspace/a',
+      'selection',
+    )
+    expect(window.cclinkStudio.browser.reconcileViews).toHaveBeenLastCalledWith({
+      workspaceKey: '/workspace/a',
+      views: [{ tabId: 'browser-a', profileId: 'account-a-profile' }],
+      activeTabId: 'browser-a',
+    })
+    setSection.mockResolvedValue({ success: true })
+  })
   it('persists the current workspace before loading and applying the next runtime snapshot', async () => {
     const transition = await prepareWorkspaceRuntimeTransition(localWorkspaceRef('/workspace/b'))
     const getSnapshot = window.cclinkStudio.workspaceState.get as ReturnType<typeof vi.fn>
@@ -142,7 +197,12 @@ describe('workspace-transition', () => {
       views: [{ tabId: 'browser-b', profileId: 'v2ex' }],
       activeTabId: null,
     })
-    expect(setSection.mock.calls.every((call) => call[0] === '/workspace/b')).toBe(true)
+    expect(
+      setSection.mock.calls.every(
+        (call) =>
+          call[0] === '/workspace/b' || (call[0] === '/workspace/a' && call[1] === 'editorDrafts'),
+      ),
+    ).toBe(true)
   })
 
   it('切换项目前强制采样尚在防抖期的 Markdown 滚动位置', async () => {

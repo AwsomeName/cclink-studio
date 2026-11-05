@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { workspaceRefKey } from '../../shared/workspace-ref'
 import { useCommandStore, useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
@@ -33,13 +34,16 @@ import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onb
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
-import { clampPanelWidth, getPanelLayout } from './utils/panel-layout'
+import { clampPanelWidth } from './utils/panel-layout'
+import { usePanelLayout } from './utils/use-panel-layout'
 import { cancelActivePanelResize } from './utils/panel-layout-drag-lifecycle'
 import { useBrowserFindBridge } from './features/browser/use-browser-find-bridge'
 import { WorkspaceOpenSurface } from './features/workspace-open/WorkspaceOpenSurface'
 import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-store'
 import { useWorkbenchWindowEvents } from './bootstrap/use-workbench-window-events'
 import { AuxiliaryBrowserLayout } from './components/workbench/AuxiliaryBrowserLayout'
+import { startMarkdownAutosave } from './features/markdown/markdown-autosave'
+import { EditorDraftFailureBanner } from './features/markdown/EditorPersistenceStatus'
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
@@ -61,12 +65,16 @@ function MainLayout(): React.ReactElement {
   const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  useEffect(() => {
+    if (workspaceReady) return startMarkdownAutosave()
+  }, [workspaceReady, activeWorkspaceRef])
   const contextMenuOpen = useContextMenuStore((s) => s.open)
   const [tabCreateMenuOpen, setTabCreateMenuOpen] = useState(false)
   const [panelResizing, setPanelResizing] = useState(false)
   const [resizePreview, setResizePreview] = useState<{
     area: 'sidebar' | 'agent'
     target: number
+    effectiveWidth: number
   } | null>(null)
   const resizeStartRef = useRef<{
     area: 'sidebar' | 'agent'
@@ -88,16 +96,10 @@ function MainLayout(): React.ReactElement {
   const agentInRight = agentPanelMode === 'right'
   const agentPanelVisible = agentPanelMode !== 'hidden'
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const panelLayout = useMemo(
-    () =>
-      getPanelLayout({
-        viewportWidth,
-        sidebarVisible,
-        sidebarWidth: resizePreview?.area === 'sidebar' ? resizePreview.target : sidebarWidth,
-        agentPanelWidth: resizePreview?.area === 'agent' ? resizePreview.target : agentPanelWidth,
-        agentInRight,
-      }),
-    [viewportWidth, sidebarVisible, sidebarWidth, agentPanelWidth, agentInRight, resizePreview],
+  const panelLayout = usePanelLayout(
+    workspaceRefKey(activeWorkspaceRef),
+    { viewportWidth, sidebarVisible, sidebarWidth, agentPanelWidth, agentInRight },
+    resizePreview,
   )
 
   // 订阅主题变化，触发 theme-store 初始化并应用 data-theme。
@@ -169,6 +171,7 @@ function MainLayout(): React.ReactElement {
     setResizePreview({
       area: start.area,
       target: candidate === start.effective ? start.saved : candidate,
+      effectiveWidth: candidate,
     })
   }, [])
   const finishPanelResize = useCallback(
@@ -215,6 +218,9 @@ function MainLayout(): React.ReactElement {
             className={`app-topbar-icon ${sidebarVisible ? 'active' : ''}`}
             onClick={toggleSidebar}
             title={sidebarVisible ? '收起左侧栏' : '展开左侧栏'}
+            aria-label={sidebarVisible ? '收起左侧导航与内容栏' : '展开左侧导航与内容栏'}
+            aria-expanded={sidebarVisible}
+            aria-controls="workspace-sidebar"
           >
             <IconPanelLeft size={15} />
           </button>
@@ -256,6 +262,7 @@ function MainLayout(): React.ReactElement {
         </div>
       </div>
 
+      <EditorDraftFailureBanner />
       {workspaceError && activeWorkspaceRef.kind === 'global' && (
         <div className="workspace-recovery-notice" role="alert">
           <span>{workspaceError}</span>
@@ -274,7 +281,9 @@ function MainLayout(): React.ReactElement {
         <ActivityBar />
 
         <div
+          id="workspace-sidebar"
           className={`workspace-sidebar-shell ${sidebarVisible ? '' : 'collapsed'}`}
+          inert={!sidebarVisible}
           style={{
             display: 'flex',
             overflow: 'hidden',

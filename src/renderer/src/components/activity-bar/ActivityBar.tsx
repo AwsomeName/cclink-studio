@@ -105,6 +105,7 @@ const MAIN_ICON_GROUPS: Array<{
 
 export function ActivityBar(): React.ReactElement {
   const activePanel = useUIStore((s) => s.activePanel)
+  const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const hideSidebar = useUIStore((s) => s.hideSidebar)
@@ -159,7 +160,7 @@ export function ActivityBar(): React.ReactElement {
   }
 
   return (
-    <div className="activity-bar">
+    <div className={`activity-bar${sidebarVisible ? '' : ' activity-bar-compact'}`}>
       <div className="activity-bar-main">
         {MAIN_ICON_GROUPS.map((group) => (
           <div key={group.id} className="activity-bar-group" role="group" aria-label={group.label}>

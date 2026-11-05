@@ -13,9 +13,11 @@ import {
   setWorkspaceStateOwnerKey,
   setWorkspaceStatePath,
   setWorkspaceStateRef,
+  useWorkspacePersistenceStore,
 } from './workspace-state'
 
 afterEach(() => {
+  useWorkspacePersistenceStore.setState({ sections: {} })
   vi.unstubAllGlobals()
   setWorkspaceStatePath(null)
   setWorkspaceStateOwnerKey(null)
@@ -23,6 +25,17 @@ afterEach(() => {
 })
 
 describe('workspace-state utils', () => {
+  it('does not treat a failed draft write as flushed, and clears failure only after a successful retry', async () => {
+    const setSection = vi.fn().mockResolvedValue({ success: false, error: '磁盘已满' })
+    vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+    persistWorkspaceSection('editorDrafts', { files: { draft: { currentContent: 'keep me' } } })
+    await expect(flushPendingWorkspaceStateWrites()).rejects.toThrow('磁盘已满')
+    setSection.mockResolvedValue({ success: true })
+    await persistWorkspaceSectionNow('editorDrafts', {
+      files: { draft: { currentContent: 'keep me' } },
+    })
+    await expect(flushPendingWorkspaceStateWrites()).resolves.toBeUndefined()
+  })
   it('目标分区 flush 等待 running 和合并后的 pending，只等待指定 workspace/owner/section', async () => {
     let releaseAll = false
     const blocked: Array<{

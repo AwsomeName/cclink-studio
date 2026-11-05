@@ -18,6 +18,16 @@ const b = join(workspaceRoot, 'layout-b')
 const c = join(workspaceRoot, 'layout-default')
 const settingsDefault = join(workspaceRoot, 'settings-default')
 await Promise.all([a, b, c, settingsDefault].map((path) => mkdir(path)))
+const treeDirectory = join(a, 'navigation-fixture')
+await mkdir(treeDirectory)
+await Promise.all(
+  Array.from({ length: 80 }, (_, index) =>
+    writeFile(
+      join(treeDirectory, `document-${String(index).padStart(2, '0')}.md`),
+      '# Layout fixture',
+    ),
+  ),
+)
 // 沿用 restore-smoke 的测试登记：只授权本次创建的目录，不修改应用权限入口。
 await mkdir(join(evidenceDir, 'user-data'))
 await writeFile(
@@ -438,6 +448,154 @@ try {
     await setLayout(layoutA)
     await measure(browserATabId, urlA, 'panels-restored')
   })
+  await check('unified left toggle retains tree position, widths and right Agent', async () => {
+    const measurements = []
+    const geometry = () =>
+      page.evaluate(() => {
+        const bounds = (selector) => {
+          const rect = document.querySelector(selector).getBoundingClientRect()
+          return { x: rect.x, width: rect.width }
+        }
+        return {
+          navigation: bounds('.activity-bar'),
+          sidebar: bounds('.workspace-sidebar-shell'),
+          workbench: bounds('.workbench'),
+          agent: bounds('.agent-side-shell'),
+          scroll: document.querySelector('[data-layout-scroll-fixture]')?.scrollTop,
+          expanded: document
+            .querySelector('.file-tree-item.directory')
+            ?.getAttribute('aria-expanded'),
+          inert: document.querySelector('.workspace-sidebar-shell').inert,
+        }
+      })
+    for (const viewport of [1440, 900]) {
+      await resizeWindow(1440)
+      await setLayout({ ...layoutA, sidebarVisible: true, sidebarWidth: 300, agentPanelWidth: 350 })
+      const directory = page.getByRole('treeitem').filter({ hasText: 'navigation-fixture' }).first()
+      if ((await directory.getAttribute('aria-expanded')) !== 'true') await directory.click()
+      await page.waitForFunction(
+        () => document.querySelectorAll('.file-tree-item.file').length >= 80,
+      )
+      await resizeWindow(viewport)
+      await page.evaluate(() => {
+        const scroller = ['.file-tree', '.sidebar-content']
+          .map((selector) => document.querySelector(selector))
+          .find((el) => el.scrollHeight > el.clientHeight + 620)
+        if (!scroller) throw new Error('No scrollable tree container')
+        scroller.dataset.layoutScrollFixture = 'true'
+        scroller.scrollTop = 620
+      })
+      await page.waitForTimeout(300)
+      const before = await geometry()
+      const saved = await stored(a)
+      assert(before.scroll >= 600, 'Scrollable file tree fixture not established')
+      await page.getByRole('button', { name: '收起左侧导航与内容栏', exact: true }).click()
+      await until(
+        geometry,
+        (value) => value.navigation.width === 48 && value.sidebar.width === 0,
+        '48px compact navigation',
+      )
+      const collapsed = await geometry()
+      assert(
+        collapsed.agent.width === before.agent.width && collapsed.agent.x === before.agent.x,
+        'Left toggle moved the Agent',
+      )
+      assert(collapsed.inert, 'Hidden sidebar remains keyboard-accessible')
+      assert(
+        collapsed.scroll === before.scroll && collapsed.expanded === 'true',
+        'Collapse discarded tree state',
+      )
+      assert(
+        collapsed.workbench.width > before.workbench.width + before.sidebar.width,
+        'Released width did not reach workbench',
+      )
+      assert(
+        await page
+          .locator('.activity-bar-label')
+          .evaluateAll((labels) =>
+            labels.every((label) => getComputedStyle(label).display === 'none'),
+          ),
+        'Compact navigation still shows text',
+      )
+      await measure(browserATabId, urlA, `unified-collapsed-${viewport}`)
+      await page.screenshot({ path: join(evidenceDir, `unified-collapsed-${viewport}.png`) })
+      await page.getByRole('button', { name: '展开左侧导航与内容栏', exact: true }).click()
+      await until(
+        geometry,
+        (value) => value.sidebar.width === before.sidebar.width && value.navigation.width === 140,
+        'Previous sidebar width restored',
+      )
+      const expanded = await geometry()
+      assert(
+        expanded.scroll === before.scroll && expanded.expanded === 'true',
+        'Expand lost tree position',
+      )
+      assert(
+        expanded.agent.width === before.agent.width && expanded.agent.x === before.agent.x,
+        'Expand moved the Agent',
+      )
+      assert(!expanded.inert, 'Expanded sidebar remains inert')
+      assert(
+        JSON.stringify(await stored(a)) === JSON.stringify(saved),
+        'Toggle changed saved width preferences',
+      )
+      await measure(browserATabId, urlA, `unified-expanded-${viewport}`)
+      await page.screenshot({ path: join(evidenceDir, `unified-expanded-${viewport}.png`) })
+      await page.getByRole('button', { name: '收起左侧导航与内容栏', exact: true }).click()
+      await page.locator('.activity-bar').getByRole('button', { name: '文件', exact: true }).click()
+      await until(
+        geometry,
+        (value) => value.sidebar.width === before.sidebar.width,
+        'Compact icon opens left group',
+      )
+      measurements.push({ viewport, before, collapsed, expanded })
+    }
+    await resizeWindow(1440)
+    await setLayout(layoutA)
+    return measurements
+  })
+  await check(
+    'compact Agent drag returning to origin retains display and saved target',
+    async () => {
+      await setLayout({ ...layoutA, sidebarVisible: true, sidebarWidth: 250, agentPanelWidth: 350 })
+      await resizeWindow(900, 560)
+      await page.getByRole('button', { name: '收起左侧导航与内容栏', exact: true }).click()
+      const agentWidth = () =>
+        page.locator('.agent-side-shell').evaluate((el) => el.getBoundingClientRect().width)
+      await until(agentWidth, (width) => width === 220, 'Compact Agent stays at 220px')
+      const box = await page.getByRole('separator', { name: 'Agent 面板宽度' }).boundingBox()
+      await page.mouse.move(box.x + 2, box.y + 50)
+      await page.mouse.down()
+      await page.mouse.move(box.x - 18, box.y + 50)
+      await until(agentWidth, (width) => Math.abs(width - 240) < 1, 'Retained Agent previews drag')
+      await page.mouse.move(box.x + 2, box.y + 50)
+      await until(
+        agentWidth,
+        (width) => Math.abs(width - 220) < 1,
+        'Returning pointer restores retained display',
+      )
+      await page.mouse.up()
+      assert(
+        (await stored(a)).agentPanelWidth === 350,
+        'Return-to-origin overwrote saved Agent target',
+      )
+      await page.mouse.move(box.x + 2, box.y + 50)
+      await page.mouse.down()
+      await page.mouse.move(box.x - 18, box.y + 50)
+      await page.mouse.up()
+      await until(agentWidth, (width) => Math.abs(width - 240) < 1, 'Explicit Agent resize commits')
+      assert((await stored(a)).agentPanelWidth === 240, 'Explicit resize not saved')
+      await page.getByRole('button', { name: '展开左侧导航与内容栏', exact: true }).click()
+      await until(
+        agentWidth,
+        (width) => Math.abs(width - 240) < 1,
+        'Expansion retains explicitly resized Agent',
+      )
+      await resizeWindow(1440)
+      await setLayout(layoutA)
+      return { before: 220, preview: 240, returned: 220, savedAfterReturn: 350, committed: 240 }
+    },
+  )
   await check('window shrink/grow never overwrites the saved target width', async () => {
     await setLayout({ ...layoutA, agentPanelWidth: 700 })
     const before = await stored(a)
@@ -656,7 +814,7 @@ try {
     try {
       await setLayout({ ...layoutA, sidebarWidth: 250, agentPanelWidth: 700 })
       await resizeWindow(900, 560)
-      await until(agentWidth, (width) => Math.abs(width - 436) < 1, 'Agent 436px clamp')
+      await until(agentWidth, (width) => Math.abs(width - 528) < 1, 'Agent 528px clamp')
       const before = await snapshot()
       assert(before.saved.agentPanelWidth === 700, 'Agent target precondition not 700px')
       const box = await page.getByRole('separator', { name: 'Agent 面板宽度' }).boundingBox()
@@ -665,7 +823,7 @@ try {
       await page.mouse.move(x, y)
       await page.mouse.down()
       await page.mouse.move(x + 20, y)
-      await until(agentWidth, (width) => Math.abs(width - 416) < 1, 'Agent 416px preview')
+      await until(agentWidth, (width) => Math.abs(width - 508) < 1, 'Agent 508px preview')
       const preview = await snapshot()
       assert(preview.activeDrag, 'Agent preview has no active gesture')
       assert(preview.saved.agentPanelWidth === 700, 'Preview overwrote Agent target')
@@ -676,8 +834,8 @@ try {
       })
       await until(
         agentWidth,
-        (width) => Math.abs(width - 220) < 1,
-        'Agent 220px after sidebar toggle',
+        (width) => Math.abs(width - 528) < 1,
+        'Agent returns to its pre-drag width after sidebar toggle',
       )
       const cancelled = await snapshot()
       assert(!cancelled.activeDrag, 'Sidebar budget change did not cancel the gesture')
@@ -806,6 +964,12 @@ try {
         ]) {
           await resizeWindow(width, height)
           for (const theme of ['dark', 'light']) {
+            await page.evaluate(async () =>
+              (await import('/src/stores/ui-store.ts')).useUIStore.getState().showPanel('files'),
+            )
+            await page.waitForFunction(
+              () => document.querySelector('.activity-bar').getBoundingClientRect().width === 140,
+            )
             await page.evaluate(
               async (value) =>
                 (await import('/src/stores/theme-store.ts')).useThemeStore
@@ -854,6 +1018,17 @@ try {
               .locator('.activity-bar')
               .getByRole('button', { name: '角色', exact: true })
             await file.click()
+            await page.waitForFunction(
+              () => document.querySelector('.activity-bar').getBoundingClientRect().width === 48,
+            )
+            assert(
+              await page
+                .locator('.activity-bar-label')
+                .evaluateAll((labels) =>
+                  labels.every((label) => getComputedStyle(label).display === 'none'),
+                ),
+              'Collapsed labels still visible',
+            )
             await roles.hover()
             await roles.focus()
             assert(

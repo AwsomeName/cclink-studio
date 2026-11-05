@@ -8,6 +8,8 @@
 >
 > 产品事实源：[文字横排产品方案](activity-bar-text-navigation-product-design.md)。
 >
+> 2026-11-05：展开态沿用本文件规格，收起态及 Agent 保宽以[左侧导航统一收放](unified-left-navigation.md)为准；导航不再始终占 140px。
+>
 > 下文保留已实施的范围与验收标准；实际执行结果、证据及未验证项以验收记录为准。
 
 ## 结论与本轮验收能力

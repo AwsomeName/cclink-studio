@@ -11,6 +11,8 @@ import {
 import { flushRemoteFileDrafts } from '../utils/remote-file-draft-registry'
 import { flushPendingWorkbenchTabWrites } from '../utils/workbench-tab-model'
 import { flushPendingWorkbenchBrowserWrites } from '../utils/workbench-browser-state'
+import { persistEditorDrafts } from '../stores/editor-store'
+import { flushMarkdownAutosaves } from '../features/markdown/markdown-autosave'
 
 /** 主进程关闭窗口前，确保 renderer 尚未送达的最终工作空间快照已经写盘。 */
 export function useWorkspaceStateFlush(): void {
@@ -63,8 +65,10 @@ export function useWorkspaceStateFlush(): void {
           await flushAgentConversationWorkspaceState()
           await flushPendingWorkbenchTabWrites()
           await flushPendingWorkbenchBrowserWrites()
-          await flushPendingWorkspaceStateWrites()
+          await flushMarkdownAutosaves()
           await flushRemoteFileDrafts()
+          await persistEditorDrafts()
+          await flushPendingWorkspaceStateWrites()
           success = true
           recordRendererDiagnosticLog('info', ['[ConversationPersistence] shutdown-flush-complete'])
         } catch (error) {

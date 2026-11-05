@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BrowserWindow, Event } from 'electron'
+import { dialog, type BrowserWindow, type Event } from 'electron'
 import {
   parseWorkspaceStateFlushAcknowledgement,
   workspaceStateIpcEvents,
@@ -27,7 +27,7 @@ export class RendererWorkspaceStateFlushCoordinator {
     (value: WorkspaceStateFlushAcknowledgement | null) => void
   >()
   private closeAllowed = false
-  private closeFlushPromise: Promise<RendererWorkspaceFlushOutcome> | null = null
+  private closeFlushPromise: Promise<void> | null = null
 
   constructor(
     private readonly mainWindow: BrowserWindow,
@@ -103,10 +103,38 @@ export class RendererWorkspaceStateFlushCoordinator {
     event.preventDefault()
     if (this.closeFlushPromise) return
 
-    this.closeFlushPromise = this.requestFlush()
+    this.closeFlushPromise = this.flushBeforeClose()
     void this.closeFlushPromise.finally(() => {
+      this.closeFlushPromise = null
+    })
+  }
+
+  private async flushBeforeClose(): Promise<void> {
+    try {
+      for (;;) {
+        const outcome = await this.requestFlush()
+        if (this.mainWindow.isDestroyed()) return
+        if (outcome === 'flushed') break
+        const { response } = await dialog.showMessageBox(this.mainWindow, {
+          type: 'warning',
+          title: '工作现场尚未安全保存',
+          message: '草稿或工作现场保存失败，尚未关闭窗口。',
+          detail:
+            outcome === 'timeout'
+              ? '保存尚未在规定时间内完成。可以继续编辑或重试；直接关闭可能丢失最新修改。'
+              : '请继续编辑并保存文件、另存为，或修复存储问题后重试。直接关闭可能丢失最新修改。',
+          buttons: ['继续编辑', '重试保存', '放弃未保存内容并关闭'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        })
+        if (response === 0) return
+        if (response === 2) break
+      }
       this.closeAllowed = true
       if (!this.mainWindow.isDestroyed()) this.mainWindow.close()
-    })
+    } catch (error) {
+      console.error('[WorkspaceStateService] 关闭前保存失败，窗口已保留:', error)
+    }
   }
 }

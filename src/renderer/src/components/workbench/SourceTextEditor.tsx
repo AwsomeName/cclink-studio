@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../stores/editor-store'
+import { EditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
 import { buildHtmlBrowserTabDraft } from '../../utils/html-files'
@@ -346,6 +347,7 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
         </button>
       </div>
 
+      <EditorPersistenceStatus fileKey={filePath} onSave={() => void handleSave()} />
       {findOpen && (
         <div className="markdown-find-bar" role="search" aria-label="在源码中查找">
           <input

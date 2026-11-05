@@ -75,6 +75,8 @@ import {
 } from '../../features/browser/browser-link-navigation'
 import { registerMarkdownViewStateFlusher } from '../../features/markdown/markdown-view-state-lifecycle'
 import { getWorkspaceStateKey } from '../../utils/workspace-state'
+import { EditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
+import { isMarkdownDocumentPath } from '@shared/markdown-document'
 
 const lowlight = createLowlight(common)
 
@@ -110,6 +112,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
   const editorTabSize = useSettingsStore((state) => state.settings.editorTabSize)
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
+  const markdownAutoSave = useSettingsStore((state) => state.settings.markdownAutoSave)
   const showToast = useToastStore((state) => state.show)
   const activeWorkspaceKey = useWorkspaceStore((state) => workspaceRefKey(state.activeWorkspaceRef))
   const dirty = fileState?.dirty ?? false
@@ -1041,6 +1044,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}
+        saving={fileState.saving}
         diagnosticsCount={diagnostics.length}
         onCopyDiagnostics={() => void handleCopyDiagnosticLog()}
         onSave={() => void handleSave()}
@@ -1048,6 +1052,11 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         onInsertImage={() => void handleInsertImage()}
         onInsertTable={handleInsertTable}
         onEditImage={handleEditImage}
+      />
+      <EditorPersistenceStatus
+        fileKey={fileKey}
+        autoSave={Boolean(filePath && isMarkdownDocumentPath(filePath) && markdownAutoSave)}
+        onSave={() => void handleSave()}
       />
 
       {findOpen && (

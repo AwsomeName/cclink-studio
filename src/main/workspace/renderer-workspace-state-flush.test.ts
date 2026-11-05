@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStateFlushAcknowledgement } from '../../shared/ipc/workspace-state'
+import { dialog } from 'electron'
+
+vi.mock('electron', () => ({
+  dialog: { showMessageBox: vi.fn().mockResolvedValue({ response: 0 }) },
+}))
 
 const ipcRegistration = vi.hoisted(() => ({
   listener: null as null | ((event: unknown, value: WorkspaceStateFlushAcknowledgement) => void),
@@ -20,6 +25,27 @@ vi.mock('../ipc/trusted-renderer-guard', () => ({
 import { RendererWorkspaceStateFlushCoordinator } from './renderer-workspace-state-flush'
 
 describe('RendererWorkspaceStateFlushCoordinator', () => {
+  it('keeps the window open after a failed write and permits a later successful retry', async () => {
+    const window = createWindow()
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 100)
+    window.emitClose({ preventDefault: vi.fn() })
+    ipcRegistration.listener?.({}, { requestId: window.lastRequestId(), success: false })
+    await vi.waitFor(() => expect(dialog.showMessageBox).toHaveBeenCalled())
+    expect(window.close).not.toHaveBeenCalled()
+    await Promise.resolve()
+    window.emitClose({ preventDefault: vi.fn() })
+    ipcRegistration.listener?.({}, { requestId: window.lastRequestId(), success: true })
+    await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce())
+  })
+
+  it('requires an explicit discard decision to close after a timeout', async () => {
+    vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({ response: 2, checkboxChecked: false })
+    const window = createWindow()
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 5)
+    window.emitClose({ preventDefault: vi.fn() })
+    expect(window.close).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce())
+  })
   it('uses an inspection request and returns actual installation blockers without a persistence flush', async () => {
     const window = createWindow()
     const coordinator = new RendererWorkspaceStateFlushCoordinator(

@@ -42,6 +42,42 @@ describe('panel width budget', () => {
     })
   })
 
+  it('gives the workbench the full released left area without expanding a compressed Agent', () => {
+    const input = {
+      viewportWidth: 900,
+      sidebarVisible: true,
+      sidebarWidth: 250,
+      agentPanelWidth: 350,
+      agentInRight: true,
+    }
+    const expanded = getPanelLayout(input)
+    const collapsed = getPanelLayout({ ...input, sidebarVisible: false }, expanded.agentPanelWidth)
+    expect(collapsed).toMatchObject({ sidebarWidth: 0, agentPanelWidth: 220 })
+    expect(getPanelLayout(input, collapsed.agentPanelWidth)).toEqual(expanded)
+    expect(input.agentPanelWidth).toBe(350)
+    expect(getPanelLayout({ ...input, viewportWidth: 1400 }).agentPanelWidth).toBe(350)
+  })
+
+  it('preserves an explicitly widened Agent on expansion, without overwriting sidebar preference', () => {
+    const input = {
+      viewportWidth: 900,
+      sidebarVisible: false,
+      sidebarWidth: 250,
+      agentPanelWidth: 700,
+      agentInRight: true,
+    }
+    const collapsed = getPanelLayout(input)
+    expect(collapsed.agentPanelWidth).toBe(528)
+    const expanded = getPanelLayout({ ...input, sidebarVisible: true }, collapsed.agentPanelWidth)
+    expect(expanded).toMatchObject({ sidebarWidth: 160, agentPanelWidth: 528 })
+    expect(expanded.agentBounds.max).toBeGreaterThanOrEqual(528)
+    expect(input.sidebarWidth).toBe(250)
+    expect(getPanelLayout({ ...input, sidebarVisible: true, viewportWidth: 1440 })).toMatchObject({
+      sidebarWidth: 250,
+      agentPanelWidth: 700,
+    })
+  })
+
   it.each([NaN, Infinity, -100])('does not produce invalid widths for %s', (viewportWidth) => {
     const result = getPanelLayout({
       viewportWidth,

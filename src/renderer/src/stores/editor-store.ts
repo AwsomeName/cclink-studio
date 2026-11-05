@@ -21,7 +21,13 @@ import {
 } from '@shared/markdown-document'
 import type { MarkdownDiagnostic } from '../features/markdown/markdown-codec'
 import { runEditorSaveGuard } from '../features/editor-save-guard'
-import { isWorkspaceStateRestoring, persistWorkspaceSection } from '../utils/workspace-state'
+import {
+  getWorkspaceStateKey,
+  getWorkspaceStateOwnerKey,
+  isWorkspaceStateRestoring,
+  persistWorkspaceSection,
+  persistWorkspaceSectionNow,
+} from '../utils/workspace-state'
 
 /** 单个文件的编辑器状态 */
 export interface EditorFileState {
@@ -35,6 +41,8 @@ export interface EditorFileState {
   dirty: boolean
   /** 是否正在加载 */
   loading: boolean
+  /** Transient file-write state; never restored from a draft snapshot. */
+  saving?: boolean
   /** Markdown 保真和兼容性诊断 */
   diagnostics?: MarkdownDiagnostic[]
   /** 最近一次读取/保存的磁盘内容指纹 */
@@ -218,7 +226,7 @@ function getPersistableEditorFiles(
   const result: Record<string, EditorFileState> = {}
   for (const [key, file] of Object.entries(files)) {
     if (key.startsWith('virtual:') || file.dirty) {
-      const { sessionId: _sessionId, ...persistable } = file
+      const { sessionId: _sessionId, saving: _saving, ...persistable } = file
       result[key] = { ...persistable, loading: false }
     }
   }
@@ -232,6 +240,30 @@ function saveStoredEditorFiles(state: EditorState): void {
     persistWorkspaceSection('editorDrafts', { files, markdownViewStates: state.markdownViewStates })
   } catch {
     // WorkspaceState 镜像失败不应影响当前编辑器状态。
+  }
+}
+
+/** Retry the current draft snapshot and include edits made while the write was in flight. */
+export async function persistEditorDrafts(): Promise<void> {
+  const workspaceKey = getWorkspaceStateKey()
+  const ownerKey = getWorkspaceStateOwnerKey()
+  for (;;) {
+    const state = useEditorStore.getState()
+    await persistWorkspaceSectionNow(
+      'editorDrafts',
+      {
+        files: getPersistableEditorFiles(state.files),
+        markdownViewStates: state.markdownViewStates,
+      },
+      workspaceKey,
+      ownerKey,
+    )
+    const current = useEditorStore.getState()
+    if (current.files === state.files && current.markdownViewStates === state.markdownViewStates)
+      return
+    if (workspaceKey !== getWorkspaceStateKey() || ownerKey !== getWorkspaceStateOwnerKey()) {
+      throw new Error('保存草稿期间工作空间已变化，请重试')
+    }
   }
 }
 
@@ -478,20 +510,26 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const located = findEditorFileSession(get().files, sessionId)
       if (!located) return 'moved'
       const [filePath] = located
-      const guardResult = runEditorSaveGuard(filePath)
-      if (guardResult) await guardResult
-      const guarded = findEditorFileSession(get().files, sessionId)
-      if (!guarded) return 'moved'
-      const [guardedPath, file] = guarded
-      if (guardedPath !== filePath) return 'moved'
-      const blockingDiagnostic = file.diagnostics?.find(
-        (diagnostic) => diagnostic.severity === 'error',
-      )
-      if (blockingDiagnostic) {
-        throw new Error(blockingDiagnostic.message)
-      }
-
+      set((state) => ({
+        files: {
+          ...state.files,
+          [filePath]: { ...state.files[filePath], saving: true, error: undefined },
+        },
+      }))
       try {
+        const guardResult = runEditorSaveGuard(filePath)
+        if (guardResult) await guardResult
+        const guarded = findEditorFileSession(get().files, sessionId)
+        if (!guarded) return 'moved'
+        const [guardedPath, file] = guarded
+        if (guardedPath !== filePath) return 'moved'
+        const blockingDiagnostic = file.diagnostics?.find(
+          (diagnostic) => diagnostic.severity === 'error',
+        )
+        if (blockingDiagnostic) {
+          throw new Error(blockingDiagnostic.message)
+        }
+
         const fsApi = window.cclinkStudio.fs
         if (fsApi.saveTextDocument) {
           const result = await fsApi.saveTextDocument({
@@ -591,6 +629,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           }
         })
         throw err
+      } finally {
+        const current = findEditorFileSession(get().files, sessionId)
+        if (current?.[1].saving) {
+          const [path, file] = current
+          set((state) => ({ files: { ...state.files, [path]: { ...file, saving: false } } }))
+        }
       }
     })
   },
@@ -827,8 +871,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 }))
 
-useEditorStore.subscribe((state) => {
-  saveStoredEditorFiles(state)
+useEditorStore.subscribe((state, previous) => {
+  if (state.files !== previous.files || state.markdownViewStates !== previous.markdownViewStates)
+    saveStoredEditorFiles(state)
 })
 
 async function readTextSnapshot(filePath: string): Promise<FsTextDocumentSnapshot> {
