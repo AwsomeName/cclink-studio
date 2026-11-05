@@ -104,6 +104,7 @@ export interface CCLinkStudioAPI {
   workbenchWindow: WorkbenchMainWindowApiContract
 
   scheduledTasks: ScheduledTasksApiContract
+  modelUsage: ModelUsageApiContract
 
   mediaProjects: MediaProjectsApiContract
 
@@ -122,3 +123,4 @@ declare global {
     cclinkAuxiliary?: WorkbenchWindowApiContract
   }
 }
+import type { ModelUsageApiContract } from '../shared/ipc/model-usage'

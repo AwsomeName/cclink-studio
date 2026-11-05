@@ -54,6 +54,10 @@ export default defineConfig({
     ],
     build: {
       rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts'),
+          'model-usage-worker': resolve(__dirname, 'src/main/usage/model-usage-worker.ts'),
+        },
         external: [
           'playwright-core',
           'playwright',

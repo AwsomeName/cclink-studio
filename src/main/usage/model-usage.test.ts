@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'nod
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawn } from 'node:child_process'
+import { Worker } from 'node:worker_threads'
+import { pathToFileURL } from 'node:url'
 import { ModelUsageStore } from './model-usage-store'
 import { ModelUsageCollector, createCall } from './model-usage-collector'
 import { importTranscripts } from './model-usage-import'
@@ -378,15 +380,22 @@ describe('model usage accounting', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const bad = join(dir, 'blocked')
     writeFileSync(bad, 'not a directory')
-    const service = new ModelUsageService(bad)
-    expect(service.start({})).toBeUndefined()
+    const factory = (options: import('node:worker_threads').WorkerOptions) =>
+      new Worker(new URL('./model-usage-worker.ts', import.meta.url), {
+        ...options,
+        execArgv: ['--import', pathToFileURL(resolve('scripts/model-usage.mjs')).href],
+      })
+    const service = new ModelUsageService(bad, factory)
+    await expect(service.initialize()).rejects.toThrow()
     expect(warning).toHaveBeenCalled()
     await service.close()
     const disabled = new ModelUsageStore(join(dir, 'disabled', 'usage.sqlite'))
     disabled.configure((config) => ({ ...config, enabled: false }))
     disabled.close()
-    const off = new ModelUsageService(join(dir, 'disabled'))
-    expect(off.start({})).toBeUndefined()
+    const off = new ModelUsageService(join(dir, 'disabled'), factory)
+    await off.initialize()
+    off.start({ runId: 'disabled-run' })?.observe(assistant('disabled-message'))
+    expect((await off.snapshot(timeRange({ month: '2026-11' }))).all.calls).toBe(0)
     await off.close()
   })
 

@@ -46,6 +46,7 @@ import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
+import { registerModelUsageIpc } from '../usage/model-usage-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 import { MacUpdateInstaller } from '../update/mac-update-installer'
 import { createUpdateInstallLifecycle } from '../update/update-install-lifecycle'
@@ -158,6 +159,7 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   console.log('[CCLink Studio] 宣发视频工程服务已初始化')
 
   runtime.usageLedgerService = new UsageLedgerService()
+  void runtime.usageLedgerService.modelUsage.initialize().catch(() => undefined)
   runtime.videoGenerationService = new VideoGenerationService(
     runtime.mediaProjectService,
     runtime.mediaAssetService,
@@ -267,6 +269,7 @@ export async function bootstrapMainProcessServices(
     runtime.mainWindow,
   )
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
+  registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
 
   runtime.mediaProjectIpcUnsubscribe?.()
   runtime.mediaProjectIpcUnsubscribe = registerMediaProjectIpc(

@@ -1,16 +1,8 @@
 import type { ModelUsageRecord, UsageConfig, UsageRun } from '../../shared/model-usage'
-import { tokenFields } from '../../shared/model-usage'
+import { tokenFields, usageCategoryLabels } from '../../shared/model-usage'
 import { normalizeUsage } from './model-usage-normalize'
 
-export const categoryLabels = {
-  collection: '采集',
-  analysis: '分析',
-  'daily-report': '日报',
-  writing: '文档／软文',
-  development: '开发',
-  other: '其他',
-  unclassified: '未分类',
-} as const
+export const categoryLabels = usageCategoryLabels
 const DAY = 86_400_000
 const OFFSET = 8 * 3_600_000
 export function beijingDate(iso: string): string {
@@ -76,7 +68,17 @@ export function classified(record: ModelUsageRecord, config: UsageConfig): Model
       record.category,
   }
 }
-export function summarize(records: ModelUsageRecord[]) {
+export function classifyRun(run: UsageRun, config: UsageConfig): UsageRun {
+  return {
+    ...run,
+    category:
+      config.runCategories[run.id] ??
+      (run.taskId ? config.taskCategories[run.taskId] : undefined) ??
+      (run.sessionId ? config.sessionCategories[run.sessionId] : undefined) ??
+      run.category,
+  }
+}
+export function summarize(records: ModelUsageRecord[], runs: UsageRun[] = []) {
   const tokens = Object.fromEntries(
     tokenFields.map((field) => {
       const known = records.filter((record) => record.normalized[field] !== null)
@@ -94,12 +96,15 @@ export function summarize(records: ModelUsageRecord[]) {
   return {
     calls: records.length,
     tasks: new Set(
-      records
+      [...records, ...runs]
         .map((record) => (record.taskId ? `${record.originId}:task:${record.taskId}` : null))
         .filter(Boolean),
     ).size,
     executions: new Set(
-      records.map((row) => (row.runId ? `${row.originId}:${row.runId}` : null)).filter(Boolean),
+      [
+        ...records.map((row) => (row.runId ? `${row.originId}:${row.runId}` : null)),
+        ...runs.map((row) => `${row.originId}:${row.id}`),
+      ].filter(Boolean),
     ).size,
     taskCountBasis:
       'tasks are distinct explicit task definitions; executions are distinct Studio runs (one user turn)',
@@ -150,7 +155,12 @@ export function peakWindow(records: ModelUsageRecord[], durationMs: number) {
   }
   return best
 }
-function grouped(records: ModelUsageRecord[], key: (record: ModelUsageRecord) => string) {
+function grouped(
+  records: ModelUsageRecord[],
+  key: (record: ModelUsageRecord) => string,
+  runs: UsageRun[] = [],
+  runKey?: (run: UsageRun) => string,
+) {
   const groups = new Map<string, ModelUsageRecord[]>()
   for (const record of records) {
     const id = key(record)
@@ -158,11 +168,18 @@ function grouped(records: ModelUsageRecord[], key: (record: ModelUsageRecord) =>
     group.push(record)
     groups.set(id, group)
   }
+  const runGroups = new Map<string, UsageRun[]>()
+  if (runKey)
+    for (const run of runs) {
+      const name = runKey(run)
+      if (!groups.has(name)) groups.set(name, [])
+      runGroups.set(name, [...(runGroups.get(name) ?? []), run])
+    }
   return [...groups]
-    .map(([name, rows]) => ({ name, ...summarize(rows) }))
+    .map(([name, rows]) => ({ name, ...summarize(rows, runGroups.get(name)) }))
     .sort((a, b) => b.calls - a.calls)
 }
-function scopeReport(records: ModelUsageRecord[]) {
+function scopeReport(records: ModelUsageRecord[], runs: UsageRun[] = []) {
   const dailyModels = new Map<string, { date: string; model: string; knownTokens: number }>()
   for (const row of records) {
     const date = beijingDate(row.timestamp)
@@ -173,13 +190,26 @@ function scopeReport(records: ModelUsageRecord[]) {
     dailyModels.set(key, value)
   }
   return {
-    ...summarize(records),
-    byDay: grouped(records, (row) => beijingDate(row.timestamp)).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    ),
+    ...summarize(records, runs),
+    byDay: grouped(
+      records,
+      (row) => beijingDate(row.timestamp),
+      runs,
+      (run) => beijingDate(run.startedAt),
+    ).sort((a, b) => a.name.localeCompare(b.name)),
     byDayModel: [...dailyModels.values()],
-    byWorkspace: grouped(records, (row) => row.workspace ?? '未知项目'),
-    byCategory: grouped(records, (row) => categoryLabels[row.category]),
+    byWorkspace: grouped(
+      records,
+      (row) => row.workspace ?? '未知工作空间',
+      runs,
+      (run) => run.workspace ?? '未知工作空间',
+    ),
+    byCategory: grouped(
+      records,
+      (row) => categoryLabels[row.category],
+      runs,
+      (run) => categoryLabels[run.category],
+    ),
     byModel: grouped(
       records,
       (row) => `${row.provider ?? '未知服务商'} / ${row.model ?? '未知模型'}`,
@@ -197,7 +227,9 @@ export function buildReport(
   const selected = records
     .filter((row) => row.timestamp >= range.from && row.timestamp < range.to)
     .map((row) => classified(row, config))
-  const selectedRuns = runs.filter((run) => run.startedAt >= range.from && run.startedAt < range.to)
+  const selectedRuns = runs
+    .filter((run) => run.startedAt >= range.from && run.startedAt < range.to)
+    .map((run) => classifyRun(run, config))
   const reconciliation = selectedRuns.map((run) => {
     const calls = records.filter((row) => row.runId === run.id && row.parentToolUseId === null)
     const sum = summarize(calls)
@@ -240,8 +272,11 @@ export function buildReport(
       excludeDevelopment:
         'Excludes explicitly classified development only; unclassified remains included',
     },
-    all: scopeReport(selected),
-    excludingDevelopment: scopeReport(selected.filter((row) => row.category !== 'development')),
+    all: scopeReport(selected, selectedRuns),
+    excludingDevelopment: scopeReport(
+      selected.filter((row) => row.category !== 'development'),
+      selectedRuns.filter((run) => run.category !== 'development'),
+    ),
     runCoverage: {
       observedRuns: selectedRuns.length,
       runsWithoutCalls: reconciliation.filter((row) => !row.observedCalls).length,

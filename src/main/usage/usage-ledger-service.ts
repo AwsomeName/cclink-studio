@@ -35,7 +35,7 @@ export interface UsageSummary {
 export class UsageLedgerService {
   private readonly filePath: string
   private writeQueue: Promise<void> = Promise.resolve()
-  private readonly modelUsage: ModelUsageService
+  readonly modelUsage: ModelUsageService
 
   constructor(filePath = join(app.getPath('userData'), 'usage-events.jsonl')) {
     this.filePath = filePath

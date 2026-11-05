@@ -435,6 +435,16 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   workbenchWindow: workbenchWindowApi,
 
   scheduledTasks: scheduledTasksApi,
+  modelUsage: {
+    snapshot: (query) => invokeIpcContract(modelUsageIpc.snapshot, query),
+    calls: (query, offset, exclude) =>
+      invokeIpcContract(modelUsageIpc.calls, query, offset, exclude),
+    setEnabled: (enabled) => invokeIpcContract(modelUsageIpc.setEnabled, enabled),
+    classify: (input) => invokeIpcContract(modelUsageIpc.classify, input),
+    backfill: (select) => invokeIpcContract(modelUsageIpc.backfill, select),
+    importFile: () => invokeIpcContract(modelUsageIpc.importFile),
+    exportFile: (input) => invokeIpcContract(modelUsageIpc.exportFile, input),
+  } satisfies ModelUsageApiContract,
 
   mediaProjects: mediaProjectsApi,
   mediaVideo: mediaVideoApi,
@@ -442,3 +452,4 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   update: updateApi,
 })
+import { modelUsageIpc, type ModelUsageApiContract } from '../shared/ipc/model-usage'

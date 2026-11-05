@@ -11,6 +11,15 @@ export const usageCategories = [
 ] as const
 export const usageCategorySchema = z.enum(usageCategories)
 export type UsageCategory = z.infer<typeof usageCategorySchema>
+export const usageCategoryLabels: Record<UsageCategory, string> = {
+  collection: '采集',
+  analysis: '分析',
+  'daily-report': '日报',
+  writing: '文档／软文',
+  development: '开发',
+  other: '其他',
+  unclassified: '未分类',
+}
 export interface ModelUsageContext {
   workspace?: string | null
   runId?: string | null
@@ -214,6 +223,8 @@ export interface UsageSnapshot {
   models: string[]
   lastError: { timestamp: string; code: string } | null
   unfinishedRuns: number
+  runsWithoutCalls: number
+  failedRuns: number
   mismatchedRuns: number
 }
 export type UsageResult<T> =

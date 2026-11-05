@@ -19,6 +19,7 @@
   "scripts": {
     "usage": "node scripts/model-usage.mjs",
     "smoke:model-usage": "node scripts/model-usage-smoke.mjs",
+    "smoke:model-usage-ui": "node scripts/model-usage-ui-smoke.mjs",
     "start": "bash scripts/restart.sh start",
     "stop": "bash scripts/restart.sh stop",
     "studio": "bash scripts/studio.sh",

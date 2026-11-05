@@ -2,9 +2,13 @@
 
 ## 用户验收与边界
 
-用户在 Studio 完成一次普通 Claude Code 任务（允许多轮工具调用），在项目终端执行
-`pnpm usage report --month YYYY-MM`，能看到新增调用、Token 与数据覆盖；再次导入同一份
-会话日志后总量不变；可导出 CSV / JSON，停止统计不影响 Agent。
+用户在 Studio 完成一次普通 Claude Code 任务（允许多轮工具调用），打开 **设置 → 模型用量**，
+能看到新增调用、Token 与数据覆盖；点击活跃日期或柱状图查看调用，显式分类后切换“排除开发”；
+CSV / JSON 导出与界面筛选一致；再次回填相同日志总量不变；关闭采集、重启后历史仍在。
+终端 `pnpm usage report` 继续可用。模型服务商、套餐和原任务调度方式保持不变。
+
+效果图存档：`docs/design/model-usage/settings-overview.{html,png}` 与
+`docs/design/model-usage/activity-trends.{html,png}`；设计示例不是实际用量证据。
 
 本轮选择现有 Claude Agent SDK 事件作为实时来源、Claude Code JSONL 作为历史回填来源。
 不增加模型代理，不改变服务商、套餐、任务调度或权限。现有 usage-events.jsonl 是混合媒体
@@ -13,8 +17,27 @@ node:sqlite，独立保存在 userData/model-usage/usage.sqlite，由现有 Usag
 拥有生命周期。原有媒体账本保留。
 
 统计是可降级的观察者：错误写入脱敏诊断和统计健康状态，不抛给任务；只保存白名单元数据，
-不保存提示词、回答、工具参数、文件正文、鉴权信息或原始事件。无新增 renderer 权限或 IPC。
+不保存提示词、回答、工具参数、文件正文、鉴权信息或原始事件。事件进入后台队列前即提取
+白名单元数据。renderer 只通过受信任、参数校验的专用 IPC 查询、分类、开关与导入导出；
+文件选择和导出位置由主进程原生对话框决定，不接受 renderer 传入的任意读写路径。
 统计金额不是安全、预算或套餐授权边界。
+
+## 设置页与生命周期
+
+- 设置页紧邻 Agent。支持今日、本周、本月、近 30 天和任意日期，以及工作空间、模型、
+  任务类别筛选。UI 日期两端均含当天，转换为北京时间左闭右开的查询区间。
+- 界面与 CLI 共用 `buildReport`。概览提供最近一年活跃热力图、按日／周／月汇总的堆叠
+  柱状图（Token 构成／模型）、分类汇总、滚动峰值与字段缺失。点击日期进入调用明细。
+- 活跃图以调用次数或已知 Token 着色；没有记录不等于零。按本机采集时段和心跳判断覆盖，
+  未证明全天健康采集的空日期显示斜纹。日志起止日期不代表中间连续覆盖。
+- `UsageLedgerService` 仍拥有唯一的用量服务。后台 Worker 执行 SQLite、导入和汇总，
+  不阻塞 Electron 主进程；最多 1,024 个待确认请求，超限／超时告警，原模型任务继续。
+  原数据库记录不重写，新增采集时段、恢复检查点和显式执行分类配置。
+- 启动、任务结束和每 30 秒维护时补扫已由 Studio 观测的会话。按文件 inode、偏移和修改
+  时间读取增量，未完成尾行留待重试；截断后重扫仍去重。晚到子代理无法可靠归属执行时
+  保留归属为空。关闭采集后的新主调用不会被自动补扫重新计入；主动历史回填仍可使用。
+- UI 只拥有筛选和展开等临时展示状态。IPC 跟随现有可信注册表清理，Worker 跟随原用量服务
+  关闭；不新增代理、后台守护进程或调度器，不依赖登录或远程初始化。
 
 ## 已核实的来源
 
@@ -82,6 +105,8 @@ system/custom Claude 或其他目录必须显式传 `--root /path/to/projects`�
 的时间，不包含服务端排队和首 Token 等待；历史耗时为空。
 
 已知任务数仅按明确的 taskId 去重；执行次数单独按 Studio runId（一次用户 turn）去重。
+同一日报配置执行 30 次为 1 个任务、30 次执行。没有可识别调用的执行仍保留在执行数量和
+运行缺口中，不能当成免费请求。在明细中可标记本次执行、整个任务或整个会话的类别。
 历史没有两者时列为无任务归属调用，不能把会话数当成任务数。显式分类存于用量配置，
 不改变原调度：
 
@@ -92,7 +117,8 @@ pnpm usage configure
 ```
 
 类别为 collection、analysis、daily-report、writing、development、other、unclassified。
-任务分类优先于会话分类；排除开发仍保留未分类。配置 JSON 可用
+分类优先级为本次执行覆盖（`runCategories`）→ 任务 → 会话 → 原记录显式类别；
+排除开发仍保留未分类。配置 JSON 可用
 `pnpm usage configure --file config.json` 整体载入。`prices` 保留币种、单位 Token 数、模型、
 来源 URL、生效/失效时间及北京时间峰谷输入/输出/缓存费率接口；本阶段没有导入可靠价格表，
 不执行费用套算。实际账单保持独立且未录入；SDK 的美元估算不是 GLM 账单。旧媒体账本中的
@@ -117,7 +143,7 @@ pnpm usage enable
 已有文件的导出拒绝覆盖，请选择新文件名。
 
 统计写入失败不改变 Agent 结果；控制台有 `[ModelUsage]` 警告，`last-error.json` 只保存错误
-代码、时间和本进程失败次数，`pnpm usage status` 显示最后一次告警。该历史告警不会因后续
+代码和时间，设置页与 `pnpm usage status` 显示最后一次告警。该历史告警不会因后续
 一次成功而消失。磁盘本身不可写时仍有控制台警告；数据库损坏时 CLI 明确失败，不返回空账。
 
 ## 已验证的用户结果与工程门禁
@@ -149,21 +175,39 @@ pnpm smoke:model-usage
 Lint、边界门禁与构建）。真实 Runtime smoke 通过；导出的 JSON/CSV 均为 10,427 个唯一记录，
 缺失思考字段在 CSV 中为空。
 
-真人在 Studio 中的下一步验收：启动本源码版本 → 完成一个实际 GLM 任务 → 用 `report --day`
-查询该北京时间日期 → 检查调用增长、任务归属、失败/缺失与原始记录 → 重复 backfill 后总量
-不变 → 导出 CSV/JSON。**本轮未发起用户 GLM 的新付费任务；这一真人应用验收仍待完成。**
+真人验收：启动本源码版本 → 完成实际 GLM 任务 → 打开设置中的模型用量 → 检查调用增长、
+任务归属与缺失字段 → 点击日期查看并分类 → 切换排除开发 → 重复回填后总量不变 → 导出
+CSV/JSON → 关闭采集并重启检查历史。**未发起用户 GLM 新付费任务，真人 GLM 验收和连续
+一个月的实际观察仍待完成。**
+
+## 设置页阶段验证
+
+2026-11-06 设置页阶段验证：8 个受影响测试文件、109 项测试通过；类型检查、Lint 和构建
+通过。`pnpm smoke:model-usage-ui` 用实际 Claude Runtime 执行一次 Read 工具及继续推理，
+生产 Worker 记录 2 次调用，再在真实 Electron 中验收展示、日期下钻、分类联动、CSV/JSON、
+重复回填和导入、关闭后重启保留历史、拒绝非法 IPC 路径参数，全部通过。使用本地 fixture，
+**付费 API 调用为 0**；示例 Token 不是用户实际业务消耗。结果与界面截图位于
+`docs/testing/model-usage/`。
+
+2026-11-06 提交前在独立工作树复核本用量功能快照（不含并行开发的会话导航与后续消息改动）：
+完整 `pnpm verify` 通过，426 个测试文件、3,608 项测试通过、10 项跳过，
+类型检查、Lint、格式、边界检查和构建通过。随后重跑上述真实 Runtime + Electron 设置页
+烟测，六项检查全部通过，更新 `docs/testing/model-usage/` 证据。首次启动因独立工作树
+未复制 Runtime 二进制而失败；显式指定已有 Runtime 路径后通过，未修改应用逻辑。
+此前混合导航改动的工作树曾有布局恢复断言失败；本次结果仅证明本用量功能快照的工程门禁，
+不替代真实 GLM 用户任务及长期采集验收。
 
 ## 尚未覆盖及不能据此推断的事项
 
 - SDK/日志没有暴露的内部 HTTP 重试、自动压缩辅助调用、进程崩溃前未落盘请求，无法补造
   用量或次数；统计为已观察范围。SDK 事件缺失时通过同会话最终 transcript 尝试补齐。
-- 后台子代理在所属 Runtime 退出后继续产生的新记录，不保证自动归属本 Run，可再次手动
-  backfill；历史缺少 run/task/request ID、provider、耗时与重试序号时保留 null。
+- 已观测会话的晚到子代理通过增量补扫记录，无法证明所属 Run 时不强行绑定。未观测的
+  会话、被删除或轮转丢失的日志仍可能缺失；历史缺少的元数据保留 null。
 - 连接测试也采集，显式类别为 other。实验性 cclink-agent、Codex ACP、CCLink 远程 Agent、
   其他机器、独立外部 Claude 使用和图像/视频服务 Token 不在此采集链；图片/视频原账本保留。
 - GLM 的独立思考字段缺失，不能根据输出正文猜测；兼容协议的 Token 口径也不能证明套餐
   prompts、相对额度、积分与 Token 存在固定兑换比例。
-- 配置价格接口已经提供，实际账单导入、费用计算和复杂图形仪表盘未实现。
+- 价格配置接口已经提供；实际账单导入和费用计算未实现，设置页明确显示未启用。
 
 ## 修改位置
 
@@ -177,3 +221,11 @@ Lint、边界门禁与构建）。真实 Runtime smoke 通过；导出的 JSON/C
   `src/main/runtime/core-services.ts`：装配、诊断调用与旧金额估算标记。
 - `scripts/model-usage.mjs`、`scripts/model-usage-smoke.mjs`、`package.json`：直接可用命令与
   零付费真实 Runtime smoke。
+- `src/main/usage/model-usage-{engine,worker,worker-contract,ipc}.ts`：后台存储、增量恢复、
+  采集时段与设置页接口；`model-usage-engine.test.ts` 验证真实线程、SQLite 锁与恢复路径。
+- `src/shared/ipc/model-usage*.ts`、`src/preload/index.{ts,d.ts}`、IPC inventory：唯一调用契约、
+  参数校验、可信 renderer 白名单及生命周期登记。
+- `src/renderer/src/components/settings/model-usage/`、`SettingsPage.tsx`：设置入口、真实概览、
+  活跃图、柱状图、分类明细与数据操作；`usage-view.test.ts` 验证北京时间和覆盖计算。
+- `electron.vite.config.ts`：打包后台 Worker；`scripts/model-usage-ui-smoke.mjs`：实际 Runtime
+  本地 fixture → 生产 Worker → SQLite → 真实 Electron 界面验收，使用隔离 profile。

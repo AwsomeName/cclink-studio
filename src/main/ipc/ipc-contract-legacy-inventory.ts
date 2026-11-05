@@ -97,6 +97,14 @@ function expandInvokeGroup(group: InvokeInventoryGroup): IpcInvokeContractInvent
 /** P0-P4 收敛范围的现行 invoke 库存；不能用下面的 legacy allowlist 替代。 */
 export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] = [
   ...expandInvokeGroup({
+    owner: 'ModelUsage',
+    definitionFile: 'src/shared/ipc/model-usage.ts',
+    definitionName: 'modelUsageIpc',
+    definitions: modelUsageIpc,
+    handlerFiles: ['src/main/usage/model-usage-ipc.ts'],
+    preloadFiles: ['src/preload/index.ts'],
+  }),
+  ...expandInvokeGroup({
     owner: 'Settings',
     definitionFile: 'src/shared/ipc/settings.ts',
     definitionName: 'settingsIpc',
@@ -433,3 +441,4 @@ export const legacyIpcNamespaceInventory: readonly LegacyIpcNamespaceInventory[]
 export const legacyIpcEventFlowInventory: readonly LegacyIpcEventFlowInventory[] = []
 
 export const legacyIpcChannels: readonly string[] = []
+import { modelUsageIpc } from '../../shared/ipc/model-usage'

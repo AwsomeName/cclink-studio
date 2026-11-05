@@ -1,18 +1,36 @@
 // Real Claude runtime + SDK + local fixture server. No paid API or user credentials.
 import './model-usage.mjs'
 import { createServer } from 'node:http'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile, mkdir, cp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import assert from 'node:assert/strict'
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { Worker } from 'node:worker_threads'
 
 const { ModelUsageStore } = await import('../src/main/usage/model-usage-store.ts')
 const { ModelUsageCollector } = await import('../src/main/usage/model-usage-collector.ts')
+const { ModelUsageService } = await import('../src/main/usage/model-usage-service.ts')
 const { importTranscripts, transcriptFiles } =
   await import('../src/main/usage/model-usage-import.ts')
 const root = await mkdtemp(join(tmpdir(), 'cclink-model-usage-real-'))
 const store = new ModelUsageStore(join(root, 'usage.sqlite'))
+const profileIndex = process.argv.indexOf('--profile')
+const profile = profileIndex >= 0 ? resolve(process.argv[profileIndex + 1]) : null
+const background = profile
+  ? new ModelUsageService(
+      join(profile, 'model-usage'),
+      (options) => new Worker(resolve('out/main/model-usage-worker.js'), options),
+    )
+  : null
+await background?.initialize()
+const observer = background?.start({
+  runId: 'fixture-run',
+  workspace: root,
+  provider: 'local-fixture',
+  category: 'analysis',
+  transcriptRoot: join(root, 'claude-config', 'projects'),
+})
 const sample = join(root, 'sample.txt')
 await writeFile(sample, 'sanitized fixture')
 let requests = 0
@@ -126,12 +144,14 @@ try {
   })
   for await (const event of stream) {
     collector.observe(event)
+    observer?.observe(event)
     if (event.type === 'assistant')
       observed.push({ id: event.message.id, assistantOutput: event.message.usage.output_tokens })
     if (event.type === 'result')
       observed.push({ resultOutput: event.usage.output_tokens, modelUsage: event.modelUsage })
   }
   collector.finish('succeeded')
+  observer?.finish('succeeded')
   assert.equal(requests, 2, 'the runtime must continue after the real Read tool')
   const calls = store.calls()
   assert.equal(calls.length, 2)
@@ -155,6 +175,24 @@ try {
   const imported = await importTranscripts(store, [logRoot])
   assert.equal(imported.inserted, 0, 'real SDK and transcript must share deduplication identity')
   assert.equal(store.calls().length, 2)
+  if (background && profile) {
+    const snapshot = await background.snapshot({
+      from: '2020-01-01T00:00:00.000Z',
+      to: '2030-01-01T00:00:00.000Z',
+    })
+    assert.equal(snapshot.all.calls, 2)
+    assert.equal(snapshot.all.tokens.output.value, 50)
+    const history = join(
+      profile,
+      'runtime-components',
+      'claude-runtime',
+      'usage-fixture',
+      'config',
+      'projects',
+    )
+    await mkdir(history, { recursive: true })
+    await cp(logRoot, history, { recursive: true })
+  }
   console.log(
     JSON.stringify({ result: 'PASS', requests, observed, transcriptOutputs, imported }, null, 2),
   )
@@ -164,5 +202,6 @@ try {
   server.closeAllConnections()
   await new Promise((resolveClosed) => server.close(resolveClosed))
   store.close()
+  await background?.close()
   await rm(root, { recursive: true, force: true })
 }

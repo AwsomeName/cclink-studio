@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-05T17:04:30.372Z",
+  "paidApiCalls": 0,
+  "checks": [
+    "settings shows real collected usage with partial-usage explanation",
+    "heatmap drills into calls; explicit classification updates exclude-development summary",
+    "CSV / JSON export matches visible scope and preserves origin and missing fields",
+    "history backfill and repeated JSON import do not double count",
+    "disabled state and historical usage survive an actual Electron restart",
+    "production IPC rejects arbitrary renderer filesystem arguments"
+  ]
+}

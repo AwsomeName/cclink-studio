@@ -49,6 +49,7 @@ export async function importTranscripts(
     incremental?: boolean
     files?: string[]
     contextAt?: (timestamp: string) => ModelUsageContext
+    accept?: (timestamp: string, file: string) => boolean
   } = {},
 ): Promise<ImportResult> {
   const result: ImportResult = {
@@ -116,6 +117,7 @@ export async function importTranscripts(
           continue
         }
         const canonicalTime = new Date(timestamp).toISOString()
+        if (options.accept && !options.accept(canonicalTime, file)) continue
         if (
           (options.after && canonicalTime < options.after) ||
           (options.before && canonicalTime > options.before)

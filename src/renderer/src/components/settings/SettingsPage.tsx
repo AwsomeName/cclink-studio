@@ -36,6 +36,7 @@ import { Toggle } from '../common/Toggle'
 import { AgentCapabilitiesSettings } from './AgentCapabilitiesSettings'
 import { ComponentManagementSettings } from './ComponentManagementSettings'
 import { KeybindingsSettings } from './KeybindingsSettings'
+import { ModelUsageSettings } from './model-usage/ModelUsageSettings'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -47,6 +48,7 @@ type SettingsSectionId =
   | 'components'
   | 'agent'
   | 'agent-capabilities'
+  | 'model-usage'
   | 'image-generation'
   | 'browser'
   | 'editor'
@@ -66,6 +68,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'updates', label: '更新', icon: IconCloud },
   { id: 'components', label: '组件管理', icon: IconTool },
   { id: 'agent', label: 'Agent', icon: IconRobot },
+  { id: 'model-usage', label: '模型用量', icon: IconDatabase },
   { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
   { id: 'image-generation', label: '图像生成', icon: IconPaintbrush },
   { id: 'browser', label: '浏览器', icon: IconGlobe },
@@ -83,6 +86,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
   description: string
   keywords: string[]
 }> = [
+  {
+    sectionId: 'model-usage',
+    label: '模型用量',
+    description: '查看输入、输出、缓存、活跃度与调用明细，回填和导出本地统计。',
+    keywords: ['usage', 'token', '用量', '统计', '消耗', '活跃', '费用'],
+  },
   {
     sectionId: 'appearance',
     label: '主题与字号',
@@ -976,7 +985,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       </aside>
 
       <main className="settings-content">
-        {activeSection !== 'components' && (
+        {activeSection !== 'components' && activeSection !== 'model-usage' && (
           <div className="settings-header">
             <div>
               <h1>设置</h1>
@@ -1074,6 +1083,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         )}
 
         {activeSection === 'components' && <ComponentManagementSettings />}
+        {activeSection === 'model-usage' && <ModelUsageSettings />}
 
         {activeSection === 'agent' && (
           <section className="settings-section">
