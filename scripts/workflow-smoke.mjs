@@ -1433,7 +1433,9 @@ async function main() {
     await page.locator('.tab', { hasText: 'notes.md' }).first().click()
     await ensureSidebarVisible(page)
     const fileActivity = page.locator('.activity-bar-icon[title="文件"]').first()
-    await fileActivity.click()
+    if ((await fileActivity.getAttribute('aria-pressed')) !== 'true') {
+      await fileActivity.click()
+    }
     await page.waitForFunction(
       () =>
         document.querySelector('.activity-bar-icon[title="文件"]')?.classList.contains('active'),

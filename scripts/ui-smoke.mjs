@@ -2791,12 +2791,15 @@ async function main() {
       return useTabStore.getState().activeTabId
     })
     assert(activeBrowserTabId, 'saved account Browser Tab is not active')
-    const baselineCapture = readPngDimensions(
-      await page.evaluate(
-        async (tabId) => window.cclinkStudio.browser.capturePage(tabId),
-        activeBrowserTabId,
-      ),
+    // The renderer toolbar can appear before the native View paints its first frame.
+    const baselineCaptureHandle = await waitForAsyncFunction(
+      page,
+      async (tabId) => window.cclinkStudio.browser.capturePage(tabId),
+      activeBrowserTabId,
+      { timeout: 10_000 },
     )
+    const baselineCapture = readPngDimensions(await baselineCaptureHandle.jsonValue())
+    await baselineCaptureHandle.dispose()
     const baselineWorkbenchWidth = await page
       .locator('.workbench-content')
       .evaluate((element) => element.getBoundingClientRect().width)
