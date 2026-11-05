@@ -941,6 +941,15 @@ export function ComposerFrame({
           />
           <ActionBar model={model} submit={submit} />
         </div>
+        {model.allowQueueWhileRunning ? (
+          <p className="agent-composer-queue-hint">
+            {model.queue?.pauseReason
+              ? '队列已暂停，点击「继续队列」后发送。'
+              : model.submitting || model.queue?.items.length
+                ? '当前轮结束后，按顺序发送后续消息。'
+                : 'Enter 发送 · Shift+Enter 换行'}
+          </p>
+        ) : null}
       </div>
     </>
   )
@@ -967,7 +976,7 @@ export function ActionBar({
       >
         <button
           type="button"
-          className="agent-abort-btn"
+          className={`agent-abort-btn ${model.allowQueueWhileRunning ? 'agent-composer-labeled-action' : ''}`}
           data-agent-action="stop"
           onClick={() => void model.onStop?.()}
           disabled={model.stopCapability.state !== 'enabled'}
@@ -978,13 +987,14 @@ export function ActionBar({
           }
         >
           <IconStop size={15} />
+          {model.allowQueueWhileRunning ? <span>{stopLabel}</span> : null}
         </button>
       </span>
     ) : null
   const sendAction = (
     <button
       type="button"
-      className="agent-send-btn"
+      className={`agent-send-btn ${model.allowQueueWhileRunning ? 'agent-composer-labeled-action' : ''}`}
       data-agent-action="send"
       onClick={submit}
       disabled={
@@ -994,6 +1004,7 @@ export function ActionBar({
       aria-label={model.submitLabel || '发送'}
     >
       <IconSend size={17} />
+      {model.allowQueueWhileRunning ? <span>{model.submitLabel || '发送'}</span> : null}
     </button>
   )
   const primaryAction = (
@@ -1075,9 +1086,7 @@ export function ActionBar({
           <IconRobot size={13} />,
           'agent-model-btn',
         )}
-        <span className="agent-composer-send-slot" aria-disabled={!model.canSubmit}>
-          {primaryAction}
-        </span>
+        <span className="agent-composer-send-slot">{primaryAction}</span>
       </div>
     </div>
   )

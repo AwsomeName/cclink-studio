@@ -144,7 +144,7 @@ export const ipcEventFlowInventory: readonly IpcEventFlowInventory[] = [
     direction: 'main-to-renderer',
     producerFiles: ['src/main/cclink-remote/cclink-remote-ipc.ts'],
     bridgeFiles: ['src/preload/index.ts'],
-    consumerFiles: ['src/renderer/src/features/cclink-remote/remote-agent-controller.tsx'],
+    consumerFiles: ['src/renderer/src/features/cclink-remote/remote-message-queue.ts'],
     payloadBoundary: 'bounded-preload-parser',
     evidenceTerms: ['onImageUploadProgress'],
   }),

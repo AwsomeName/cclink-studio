@@ -3,7 +3,7 @@ import type { QueuedAgentMessage } from './conversation-state'
 import './queued-message-list.css'
 
 export interface QueuedMessageListModel {
-  items: QueuedAgentMessage[]
+  items: Array<Pick<QueuedAgentMessage, 'id' | 'content' | 'pendingImages' | 'missingImages'>>
   pauseReason?: string | null
   dispatchId?: string | null
   canEdit: boolean
@@ -22,7 +22,7 @@ export function QueuedMessageList({
   return (
     <section className="agent-message-queue" aria-label="待发送消息">
       <div className="agent-message-queue-heading">
-        <span role="status">
+        <span role="status" aria-live="polite">
           待发送 · {model.items.length} 条{model.pauseReason ? ' · 已暂停' : ''}
         </span>
         <button type="button" onClick={model.pauseReason ? model.onResume : model.onPause}>
@@ -35,7 +35,7 @@ export function QueuedMessageList({
           <li key={item.id}>
             <span className="agent-message-queue-number">{index + 1}</span>
             <div className="agent-message-queue-content">
-              <span title={item.content}>{item.content}</span>
+              <span title={item.content}>{item.content || '图片消息'}</span>
               {model.dispatchId === item.id ? <small>正在发送</small> : null}
               {item.pendingImages.length || item.missingImages ? (
                 <small>

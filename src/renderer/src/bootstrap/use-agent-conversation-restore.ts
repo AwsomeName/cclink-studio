@@ -4,6 +4,7 @@ import type { AgentConversationConfiguration, AgentSkillRef } from '@shared/agen
 import { DEFAULT_AGENT_RUNTIME_BINDING, type AgentRuntimeBinding } from '@shared/agent-runtime'
 import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import { installConversationMessageQueue } from '../features/agent-conversations/conversation-message-queue'
+import { installRemoteMessageQueue } from '../features/cclink-remote/remote-message-queue'
 
 export function collectRestorableAgentSessions(
   conversations: Record<string, AgentConversationState>,
@@ -39,7 +40,15 @@ export function collectRestorableAgentSessions(
 
 /** 在 WorkspaceState hydrate 后预热所有 Claude SDK 会话，不依赖某个面板是否挂载。 */
 export function useAgentConversationRestore(enabled: boolean): void {
-  useEffect(() => (enabled ? installConversationMessageQueue() : undefined), [enabled])
+  useEffect(() => {
+    if (!enabled) return
+    const disposeLocal = installConversationMessageQueue()
+    const disposeRemote = installRemoteMessageQueue()
+    return () => {
+      disposeLocal()
+      disposeRemote()
+    }
+  }, [enabled])
   const conversations = useAgentStore((state) => state.conversations)
   const conversationOrder = useAgentStore((state) => state.conversationOrder)
   const restoredSessionsRef = useRef<Map<string, string>>(new Map())

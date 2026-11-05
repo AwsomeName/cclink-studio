@@ -164,6 +164,20 @@ describe('AgentPanelView product contract', () => {
     expect(html).toContain('value="42"')
     expect(html).toContain('aria-label="取消图片上传"')
   })
+
+  it('keeps stop available with an empty draft while exposing a separately disabled queue button', () => {
+    const running = model('remote', 'running')
+    running.composer.allowQueueWhileRunning = true
+    running.composer.canSubmit = false
+    running.composer.value = ''
+    running.composer.submitLabel = '加入队列'
+    const html = renderToStaticMarkup(<AgentPanelView model={running} />)
+    expect(html).toContain('aria-label="停止等待"')
+    expect(html).toContain('aria-label="加入队列"')
+    expect(html).not.toContain('class="agent-composer-send-slot" aria-disabled')
+    expect(html.match(/<button[^>]+data-agent-action="stop"[^>]*>/u)?.[0]).not.toContain('disabled')
+    expect(html.match(/<button[^>]+data-agent-action="send"[^>]*>/u)?.[0]).toContain('disabled')
+  })
 })
 
 function model(

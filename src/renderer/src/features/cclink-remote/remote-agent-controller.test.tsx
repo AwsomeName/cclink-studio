@@ -7,9 +7,7 @@ import {
   resolveRemoteAgentVisualStatus,
   resolveRemoteStopAvailability,
   selectRemoteAgentImages,
-  submitRemoteDraft,
   toUnifiedRemoteMessage,
-  tryAcquireRemoteSubmissionLock,
 } from './remote-agent-controller'
 import { ConversationMessageRenderer } from '../../components/common/ConversationMessageRenderer'
 
@@ -112,15 +110,6 @@ describe('RemoteAgentController', () => {
     expect(resolveRemoteStopAvailability('idle')).toEqual({ state: 'hidden' })
   })
 
-  it('rejects a consecutive remote submit until the active submission releases its lock', () => {
-    const lock = { current: false }
-
-    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(true)
-    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(false)
-    lock.current = false
-    expect(tryAcquireRemoteSubmissionLock(lock)).toBe(true)
-  })
-
   it('uses the same user and assistant message surfaces as local conversations', () => {
     const userHtml = renderToStaticMarkup(
       <ConversationMessageRenderer
@@ -200,174 +189,5 @@ describe('RemoteAgentController', () => {
     expect(html).not.toContain('README.md')
     expect(html).toContain('<details')
     expect(html).not.toContain('Bashcompleted')
-  })
-
-  it('fails closed before creating or sending when the captured workspace target is stale', async () => {
-    const createSession = vi.fn()
-    const selectSession = vi.fn()
-    const sendAgentMessage = vi.fn()
-
-    await expect(
-      submitRemoteDraft({
-        target: { ref: workspaceRef, generation: 1 },
-        workspaceRef,
-        activeSession: null,
-        content: '不应发送',
-        isTargetCurrent: () => false,
-        createSession,
-        selectSession,
-        sendAgentMessage,
-      }),
-    ).resolves.toBe('stale-target')
-
-    expect(createSession).not.toHaveBeenCalled()
-    expect(selectSession).not.toHaveBeenCalled()
-    expect(sendAgentMessage).not.toHaveBeenCalled()
-  })
-
-  it('keeps a newly created idle session but does not send after the target becomes stale', async () => {
-    const session = {
-      id: 'session-created',
-      serverId: workspaceRef.endpointId,
-      workspaceId: workspaceRef.workspaceId,
-      workspacePath: workspaceRef.path,
-      name: '新远程会话',
-      status: 'idle' as const,
-      createdAt: 1,
-      updatedAt: 1,
-      messageCount: 0,
-      contextUsage: 0,
-    }
-    let validationCount = 0
-    const selectSession = vi.fn()
-    const sendAgentMessage = vi.fn()
-
-    await expect(
-      submitRemoteDraft({
-        target: { ref: workspaceRef, generation: 1 },
-        workspaceRef,
-        activeSession: null,
-        content: '切换期间不发送',
-        isTargetCurrent: () => ++validationCount === 1,
-        createSession: vi.fn().mockResolvedValue(session),
-        selectSession,
-        sendAgentMessage,
-      }),
-    ).resolves.toBe('stale-target')
-
-    expect(selectSession).not.toHaveBeenCalled()
-    expect(sendAgentMessage).not.toHaveBeenCalled()
-  })
-
-  it('submits only through the captured remote workspace and session owner', async () => {
-    const session = {
-      id: 'session-1',
-      serverId: workspaceRef.endpointId,
-      workspaceId: workspaceRef.workspaceId,
-      workspacePath: workspaceRef.path,
-      name: '远程会话',
-      status: 'idle' as const,
-      createdAt: 1,
-      updatedAt: 1,
-      messageCount: 0,
-      contextUsage: 0,
-    }
-    const selectSession = vi.fn()
-    const sendAgentMessage = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      submitRemoteDraft({
-        target: { ref: workspaceRef, generation: 4 },
-        workspaceRef,
-        activeSession: session,
-        content: '只发到远程',
-        isTargetCurrent: () => true,
-        createSession: vi.fn(),
-        selectSession,
-        sendAgentMessage,
-      }),
-    ).resolves.toBe('submitted')
-
-    expect(selectSession).toHaveBeenCalledWith(session.id)
-    expect(sendAgentMessage).toHaveBeenCalledWith(workspaceRef, session.id, '只发到远程')
-  })
-
-  it('submits an image-only draft through the captured remote session', async () => {
-    const session = {
-      id: 'session-image',
-      serverId: workspaceRef.endpointId,
-      workspaceId: workspaceRef.workspaceId,
-      workspacePath: workspaceRef.path,
-      name: '远程会话',
-      status: 'idle' as const,
-      createdAt: 1,
-      updatedAt: 1,
-      messageCount: 0,
-      contextUsage: 0,
-    }
-    const image = {
-      id: 'image-1',
-      name: 'screen.png',
-      mediaType: 'image/png' as const,
-      data: 'AQID',
-      size: 3,
-    }
-    const sendAgentMessage = vi.fn().mockResolvedValue(true)
-
-    await expect(
-      submitRemoteDraft({
-        target: { ref: workspaceRef, generation: 4 },
-        workspaceRef,
-        activeSession: session,
-        content: '',
-        images: [image],
-        imageUploadId: '6e168c6e-82d8-4c8c-8092-1a3666704368',
-        isTargetCurrent: () => true,
-        createSession: vi.fn(),
-        selectSession: vi.fn(),
-        sendAgentMessage,
-      }),
-    ).resolves.toBe('submitted')
-
-    expect(sendAgentMessage).toHaveBeenCalledWith(
-      workspaceRef,
-      session.id,
-      '',
-      [image],
-      '6e168c6e-82d8-4c8c-8092-1a3666704368',
-    )
-  })
-
-  it('never falls back to the local Agent when the remote send fails', async () => {
-    const localAgentSendMessage = vi.fn()
-    const remoteSend = vi.fn().mockRejectedValue(new Error('remote offline'))
-    const session = {
-      id: 'remote-session',
-      serverId: workspaceRef.endpointId,
-      workspaceId: workspaceRef.workspaceId,
-      workspacePath: workspaceRef.path,
-      name: '远程会话',
-      status: 'idle' as const,
-      createdAt: 1,
-      updatedAt: 1,
-      messageCount: 0,
-      contextUsage: 0,
-    }
-
-    await expect(
-      submitRemoteDraft({
-        target: { ref: workspaceRef, generation: 1 },
-        workspaceRef,
-        activeSession: session,
-        content: '只允许远程发送',
-        isTargetCurrent: () => true,
-        createSession: vi.fn(),
-        selectSession: vi.fn(),
-        sendAgentMessage: remoteSend,
-      }),
-    ).resolves.toBe('rejected')
-
-    expect(remoteSend).toHaveBeenCalledTimes(1)
-    expect(localAgentSendMessage).toHaveBeenCalledTimes(0)
   })
 })

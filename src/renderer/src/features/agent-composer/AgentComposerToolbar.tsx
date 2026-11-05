@@ -71,7 +71,6 @@ export function AgentComposerToolbar({
   canChangeRuntime,
   onRuntimeChange,
   loading,
-  canSend,
   contextUsage,
   contextCompaction,
   canCompact,
@@ -549,9 +548,7 @@ export function AgentComposerToolbar({
             </button>
           </FloatingSurface>
         </div>
-        <span className="agent-composer-send-slot" aria-disabled={!canSend}>
-          {sendButton}
-        </span>
+        <span className="agent-composer-send-slot">{sendButton}</span>
       </div>
     </div>
   )

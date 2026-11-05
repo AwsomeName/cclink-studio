@@ -4,8 +4,14 @@ import type { AuthServiceStatus, AuthSession } from '@shared/ipc/auth'
 import type { CclinkRealtimeEvent, CclinkRealtimeStatus } from '@shared/ipc/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { TransientImageAttachment } from '@shared/image-attachment'
+import {
+  createRemoteMessageQueueSlice,
+  projectRemoteQueueEvent,
+  remoteAgentComposerKey,
+  type RemoteMessageQueueSlice,
+} from '../features/cclink-remote/remote-message-queue-state'
 
-interface CclinkState {
+export interface CclinkState extends RemoteMessageQueueSlice {
   service: AuthServiceStatus | null
   session: AuthSession
   realtime: CclinkRealtimeStatus
@@ -61,7 +67,8 @@ let initializePromise: Promise<void> | null = null
 let eventsInstalled = false
 let sessionsRequestGeneration = 0
 
-export const useCclinkStore = create<CclinkState>((set, get) => ({
+export const useCclinkStore = create<CclinkState>((set, get, api) => ({
+  ...createRemoteMessageQueueSlice(set, get, api),
   service: null,
   session: { loggedIn: false, user: null },
   realtime: { state: 'idle' },
@@ -82,7 +89,14 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
     if (initializePromise) return initializePromise
     if (!eventsInstalled) {
       eventsInstalled = true
-      window.cclinkStudio.auth.onSessionChanged((session) => set({ session }))
+      window.cclinkStudio.auth.onSessionChanged((session) =>
+        set((state) => ({
+          session,
+          ...(state.session.user?.id !== session.user?.id || !session.loggedIn
+            ? { remoteMessageQueues: {}, remoteAgentDrafts: {}, remoteAgentImages: {} }
+            : {}),
+        })),
+      )
       window.cclinkStudio.cclink.onRealtimeStatus((realtime) => set({ realtime }))
       window.cclinkStudio.cclink.onRealtimeEvent((event) => get().handleRealtimeEvent(event))
     }
@@ -164,6 +178,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       messages: {},
       remoteAgentDrafts: {},
       remoteAgentImages: {},
+      remoteMessageQueues: {},
       selectedSessionId: null,
       activeSessionsRef: null,
       pendingPermissions: [],
@@ -217,6 +232,12 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   },
 
   setSessionArchived: async (sessionId, archived) => {
+    if (archived) {
+      for (const [key, queue] of Object.entries(get().remoteMessageQueues)) {
+        if (queue.sessionId === sessionId)
+          get().pauseRemoteMessageQueue(key, '会话已归档；恢复后请确认并继续队列')
+      }
+    }
     try {
       const session = await window.cclinkStudio.cclink.setSessionArchived({
         sessionId,
@@ -267,6 +288,10 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
   },
 
   stopTrackingAgentRun: async (ref, sessionId) => {
+    get().pauseRemoteMessageQueue(
+      remoteAgentComposerKey(ref, sessionId),
+      '已停止跟踪，不代表远端已取消；请确认远端状态后继续队列',
+    )
     set({ error: null })
     try {
       const result = await window.cclinkStudio.cclink.stopTrackingAgentRun({ ref, sessionId })
@@ -275,6 +300,12 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
         return false
       }
       set((state) => ({
+        remoteMessageQueues: projectRemoteQueueEvent(state.remoteMessageQueues, {
+          type: 'conversation',
+          serverId: ref.endpointId,
+          sessionId,
+          phase: 'untracked',
+        }),
         sessions: state.sessions.map((session) =>
           session.id === sessionId && session.status === 'active'
             ? { ...session, status: 'idle' as const }
@@ -398,6 +429,7 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
           : [...current.filter((item) => item.id !== event.message!.id), event.message]
         : current
       return {
+        remoteMessageQueues: projectRemoteQueueEvent(state.remoteMessageQueues, event),
         messages: event.message ? { ...state.messages, [sessionId]: nextMessages } : state.messages,
         sessions: state.sessions.map((session) =>
           session.id === sessionId
