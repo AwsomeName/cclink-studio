@@ -9,6 +9,7 @@ import {
   type ModelUsageRecord,
   type UsageConfig,
   type UsageRun,
+  type UsagePeriod,
 } from '../../shared/model-usage'
 import {
   mergeUsage,
@@ -35,6 +36,7 @@ export class ModelUsageStore {
         CREATE INDEX IF NOT EXISTS calls_timestamp ON calls(timestamp);
         CREATE INDEX IF NOT EXISTS calls_run ON calls(run_id);
         CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS recording_periods (id TEXT PRIMARY KEY, data TEXT NOT NULL);
       `)
       this.db.prepare('INSERT OR IGNORE INTO meta VALUES (?, ?)').run('originId', randomUUID())
       this.originId = String(
@@ -172,6 +174,24 @@ export class ModelUsageStore {
   }
   close(): void {
     this.db.close()
+  }
+  getMeta<T>(key: string, fallback: T): T {
+    const row = this.db.prepare('SELECT value FROM meta WHERE key=?').get(key)
+    return row ? (JSON.parse(String(row.value)) as T) : fallback
+  }
+  setMeta(key: string, value: unknown): void {
+    this.db.prepare('INSERT OR REPLACE INTO meta VALUES (?, ?)').run(key, JSON.stringify(value))
+  }
+  putPeriod(period: UsagePeriod): void {
+    this.db
+      .prepare('INSERT OR REPLACE INTO recording_periods VALUES (?, ?)')
+      .run(period.id, JSON.stringify(period))
+  }
+  periods(): UsagePeriod[] {
+    return this.db
+      .prepare('SELECT data FROM recording_periods')
+      .all()
+      .map((row) => JSON.parse(String(row.data)) as UsagePeriod)
   }
   private transaction<T>(fn: () => T): T {
     this.db.exec('BEGIN IMMEDIATE')

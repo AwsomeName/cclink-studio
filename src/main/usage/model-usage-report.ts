@@ -70,6 +70,7 @@ export function classified(record: ModelUsageRecord, config: UsageConfig): Model
   return {
     ...record,
     category:
+      (record.runId ? config.runCategories[record.runId] : undefined) ??
       (record.taskId ? config.taskCategories[record.taskId] : undefined) ??
       (record.sessionId ? config.sessionCategories[record.sessionId] : undefined) ??
       record.category,
@@ -94,17 +95,14 @@ export function summarize(records: ModelUsageRecord[]) {
     calls: records.length,
     tasks: new Set(
       records
-        .map((record) =>
-          record.taskId
-            ? `${record.originId}:task:${record.taskId}`
-            : record.runId
-              ? `${record.originId}:run:${record.runId}`
-              : null,
-        )
+        .map((record) => (record.taskId ? `${record.originId}:task:${record.taskId}` : null))
         .filter(Boolean),
     ).size,
+    executions: new Set(
+      records.map((row) => (row.runId ? `${row.originId}:${row.runId}` : null)).filter(Boolean),
+    ).size,
     taskCountBasis:
-      'explicit taskId; otherwise Studio runId (one user turn); history without either is unknown',
+      'tasks are distinct explicit task definitions; executions are distinct Studio runs (one user turn)',
     callsWithoutTask: records.filter((record) => !record.taskId && !record.runId).length,
     failed: records.filter((record) => record.status === 'failed').length,
     interrupted: records.filter((record) => record.status === 'interrupted').length,
@@ -165,11 +163,21 @@ function grouped(records: ModelUsageRecord[], key: (record: ModelUsageRecord) =>
     .sort((a, b) => b.calls - a.calls)
 }
 function scopeReport(records: ModelUsageRecord[]) {
+  const dailyModels = new Map<string, { date: string; model: string; knownTokens: number }>()
+  for (const row of records) {
+    const date = beijingDate(row.timestamp)
+    const model = `${row.provider ?? '未知服务商'} / ${row.model ?? '未知模型'}`
+    const key = JSON.stringify([date, model])
+    const value = dailyModels.get(key) ?? { date, model, knownTokens: 0 }
+    value.knownTokens += knownTokens(row)
+    dailyModels.set(key, value)
+  }
   return {
     ...summarize(records),
     byDay: grouped(records, (row) => beijingDate(row.timestamp)).sort((a, b) =>
       a.name.localeCompare(b.name),
     ),
+    byDayModel: [...dailyModels.values()],
     byWorkspace: grouped(records, (row) => row.workspace ?? '未知项目'),
     byCategory: grouped(records, (row) => categoryLabels[row.category]),
     byModel: grouped(
@@ -266,7 +274,7 @@ export function formatReport(report: ReturnType<typeof buildReport>): string {
     lines.push(
       '',
       name,
-      `调用 ${summary.calls} · 已知任务 ${summary.tasks} · 无任务归属调用 ${summary.callsWithoutTask}`,
+      `调用 ${summary.calls} · 已知任务 ${summary.tasks} · 执行 ${summary.executions} · 无任务归属调用 ${summary.callsWithoutTask}`,
       `失败 ${summary.failed} · 中断 ${summary.interrupted} · 未知/进行中 ${summary.unknownStatus} · 已观察重试调用 ${summary.retriedCalls} · 重试未知 ${summary.callsWithUnknownRetry}`,
       `usage：完整 ${summary.coverage.complete} / 部分 ${summary.coverage.partial} / 无 ${summary.coverage.none}`,
     )

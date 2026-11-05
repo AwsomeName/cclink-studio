@@ -81,8 +81,9 @@ system/custom Claude 或其他目录必须显式传 `--root /path/to/projects`�
 采用原记录 timestamp，不能精确还原请求发起时间。流式耗时是观测到 message_start 至结束
 的时间，不包含服务端排队和首 Token 等待；历史耗时为空。
 
-已知任务数按 taskId 去重；无 taskId 时按 Studio runId（一次用户 turn）计数。历史没有两者
-时列为无任务归属调用，不能把会话数当成任务数。显式分类存于用量配置，不改变原调度：
+已知任务数仅按明确的 taskId 去重；执行次数单独按 Studio runId（一次用户 turn）去重。
+历史没有两者时列为无任务归属调用，不能把会话数当成任务数。显式分类存于用量配置，
+不改变原调度：
 
 ```bash
 pnpm usage classify --task TASK_ID --category daily-report

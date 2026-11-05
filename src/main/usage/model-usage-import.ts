@@ -1,7 +1,6 @@
 import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import type { ModelUsageStore } from './model-usage-store'
 import { createCall, type ModelUsageContext } from './model-usage-collector'
 import { object, sanitizeUsage, string } from './model-usage-normalize'
@@ -43,7 +42,14 @@ export async function importTranscripts(
   store: ModelUsageStore,
   roots: string[],
   context: ModelUsageContext = {},
-  options: { sessionId?: string; after?: string; before?: string } = {},
+  options: {
+    sessionId?: string
+    after?: string
+    before?: string
+    incremental?: boolean
+    files?: string[]
+    contextAt?: (timestamp: string) => ModelUsageContext
+  } = {},
 ): Promise<ImportResult> {
   const result: ImportResult = {
     files: 0,
@@ -56,16 +62,38 @@ export async function importTranscripts(
     latest: null,
   }
   const files = new Set<string>()
-  for (const root of roots)
-    for (const file of await transcriptFiles(root, options.sessionId)) files.add(file)
+  if (options.files) for (const file of options.files) files.add(file)
+  else
+    for (const root of roots)
+      for (const file of await transcriptFiles(root, options.sessionId)) files.add(file)
   for (const file of files) {
+    const info = await stat(file)
+    const cursorKey = `transcript-cursor:${file}`
+    const cursor = options.incremental
+      ? store.getMeta(cursorKey, { inode: 0, offset: 0, mtime: 0 })
+      : null
+    const start =
+      cursor &&
+      cursor.inode === info.ino &&
+      cursor.offset <= info.size &&
+      !(cursor.offset === info.size && cursor.mtime !== info.mtimeMs)
+        ? cursor.offset
+        : 0
+    if (options.incremental && start === info.size) continue
     result.files++
     // Read line by line; content exists only while extracting metadata and is never retained.
-    const input = createReadStream(file, { encoding: 'utf8' })
-    const lines = createInterface({ input, crlfDelay: Infinity })
+    const input = createReadStream(file, { start })
+    let offset = start
+    const lines = transcriptLines(input, start, Boolean(options.incremental))
     let lastInvalid = false
     try {
-      for await (const line of lines) {
+      for await (const item of lines) {
+        const { line } = item
+        if (item.partial) {
+          result.pendingLines++
+          continue
+        }
+        offset = item.end
         if (lastInvalid) {
           result.invalidLines++
           lastInvalid = false
@@ -95,7 +123,11 @@ export async function importTranscripts(
           continue
         const synthetic = message.model === '<synthetic>' || event.isApiErrorMessage === true
         const record = createCall(
-          { ...context, workspace: string(event.cwd) ?? context.workspace },
+          {
+            ...context,
+            ...options.contextAt?.(canonicalTime),
+            workspace: string(event.cwd) ?? context.workspace,
+          },
           store.originId,
           sessionId,
           messageId,
@@ -120,10 +152,33 @@ export async function importTranscripts(
       }
       // A writer may currently be appending the final line; don't consume or silently discard it.
       if (lastInvalid) result.pendingLines++
+      if (options.incremental)
+        store.setMeta(cursorKey, { inode: info.ino, offset, mtime: info.mtimeMs })
     } finally {
-      lines.close()
       input.destroy()
     }
   }
   return result
+}
+
+async function* transcriptLines(
+  input: ReturnType<typeof createReadStream>,
+  start: number,
+  incremental: boolean,
+) {
+  let pending = Buffer.alloc(0)
+  let offset = start
+  for await (const chunk of input) {
+    pending = Buffer.concat([pending, Buffer.from(chunk)])
+    let newline: number
+    while ((newline = pending.indexOf(10)) >= 0) {
+      const line = pending.subarray(0, newline).toString('utf8').replace(/\r$/, '')
+      offset += newline + 1
+      pending = pending.subarray(newline + 1)
+      yield { line, end: offset, partial: false }
+    }
+    if (pending.length > 32 * 1024 * 1024) throw new Error('TRANSCRIPT_LINE_TOO_LARGE')
+  }
+  if (pending.length)
+    yield { line: pending.toString('utf8'), end: offset + pending.length, partial: incremental }
 }

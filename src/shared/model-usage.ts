@@ -147,7 +147,75 @@ export const usageConfigSchema = z
     enabled: z.boolean().default(true),
     taskCategories: z.record(z.string(), usageCategorySchema).default({}),
     sessionCategories: z.record(z.string(), usageCategorySchema).default({}),
+    runCategories: z.record(z.string(), usageCategorySchema).default({}),
     prices: z.array(usagePriceSchema).default([]),
   })
   .strict()
 export type UsageConfig = z.infer<typeof usageConfigSchema>
+
+export interface UsagePeriod {
+  id: string
+  originId: string
+  from: string
+  to: string
+  state: 'recording' | 'disabled' | 'degraded'
+}
+export interface UsageTotals {
+  calls: number
+  tasks: number
+  executions: number
+  callsWithoutTask: number
+  failed: number
+  interrupted: number
+  unknownStatus: number
+  retriedCalls: number
+  callsWithUnknownRetry: number
+  coverage: { complete: number; partial: number; none: number }
+  tokens: Record<(typeof tokenFields)[number], { value: number | null; missingCalls: number }>
+}
+export interface UsageGroup extends UsageTotals {
+  name: string
+}
+export interface UsagePeak {
+  from: string
+  to: string
+  knownTokens: number
+  calls: number
+}
+export interface UsageScope extends UsageTotals {
+  byDay: UsageGroup[]
+  byDayModel: { date: string; model: string; knownTokens: number }[]
+  byWorkspace: UsageGroup[]
+  byCategory: UsageGroup[]
+  byModel: UsageGroup[]
+  peak5Hours: UsagePeak | null
+  peak7Days: UsagePeak | null
+}
+export interface UsageQuery {
+  from: string
+  to: string
+  workspace?: string
+  model?: string
+  category?: UsageCategory
+}
+export interface UsageSnapshot {
+  range: { from: string; to: string }
+  all: UsageScope
+  excludingDevelopment: UsageScope
+  activity: { from: string; to: string; all: UsageGroup[]; excludingDevelopment: UsageGroup[] }
+  periods: UsagePeriod[]
+  enabled: boolean
+  environmentDisabled: boolean
+  database: string
+  originId: string
+  earliest: string | null
+  latest: string | null
+  workspaces: string[]
+  models: string[]
+  lastError: { timestamp: string; code: string } | null
+  unfinishedRuns: number
+  mismatchedRuns: number
+}
+export type UsageResult<T> =
+  | { success: true; value: T }
+  | { success: false; error: { code: string; message: string } }
