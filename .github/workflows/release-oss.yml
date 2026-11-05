@@ -291,6 +291,7 @@ jobs:
           name: studio-${{ inputs.tag }}-arm64
           path: release-assets-arm64
           if-no-files-found: error
+          retention-days: 14
 
   publish:
     if: ${{ inputs.publish_release }}

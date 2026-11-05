@@ -81,3 +81,4 @@ jobs:
           name: cclink-studio-smoke-logs-${{ matrix.id }}
           path: ${{ runner.temp }}/cclink-studio-${{ matrix.id }}
           if-no-files-found: ignore
+          retention-days: 14
