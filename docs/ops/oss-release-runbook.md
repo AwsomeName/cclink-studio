@@ -156,8 +156,16 @@ pnpm verify:update-manifest -- \
   Release 始终保留。仅当两项保留条件都不满足时，才清理 Release 及其对应的版本 Tag。
   草稿、预发布版本和没有对应正式 Release 的 Tag 不纳入这项清理。
 - 删除过期正式版本会使其安装包下载链接失效。源码提交历史保持不变；保留版本的 Tag
-  不移动，删除过的版本号不复用。此策略不自动执行历史 Release/Tag 删除，维护者执行
-  清理时须核对清单和结果。
+  不移动，删除过的版本号不复用。
+- `release-retention.yml` 在 GitHub 云端每天北京时间 04:17 执行上述 Release/Tag 清理，
+  不依赖本机在线。GitHub 调度可能延迟；公开仓库连续 60 天无活动时，定时工作流可能被平台
+  停用，维护者需在 Actions 中重新启用。手动运行默认只预览，勾选 `apply` 才执行删除。
+- 清理会完整分页读取 Release，以 `published_at` 计算 90 天和最新 10 个版本；删除前重新
+  核对保留集合、最新正式 Release 和 Tag SHA，并确认对应源码提交仍可从 `main` 到达。
+  不修改分支或源码提交，也不扫描删除孤立 Tag。
+- 每次先删除对应 Tag，再删除 Release；Release 删除失败时尝试恢复完全相同的 Tag 引用。
+  权限、数据、Tag 指向异常或恢复失败会使工作流失败，维护者据报告处理，不绕过保护规则。
+  已完成的删除不会回滚。Actions Summary 和保留 14 天的 JSON artifact 记录每项结果。
 
 ## 发布后测试
 

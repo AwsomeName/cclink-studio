@@ -1,0 +1,55 @@
+name: release-retention
+
+on:
+  schedule:
+    # 04:17 Asia/Shanghai, outside the busy start of the hour.
+    - cron: '17 20 * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Delete releases and tags outside the retention policy
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-retention
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.repository == 'AwsomeName/cclink-studio' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify retention policy and failure handling
+        run: node --test scripts/release/cleanup-releases.test.mjs
+      - name: Apply or preview retention
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPLY: ${{ github.event_name == 'schedule' || inputs.apply }}
+        run: |
+          if [ "$APPLY" = "true" ]; then
+            node scripts/release/cleanup-releases.mjs --apply
+          else
+            node scripts/release/cleanup-releases.mjs
+          fi
+      - name: Upload retention report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-retention-report
+          path: release-retention-report.json
+          if-no-files-found: ignore
+          retention-days: 14
