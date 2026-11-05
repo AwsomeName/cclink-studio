@@ -35,6 +35,8 @@ export type CclinkRemoteMessage =
         output?: string
         error?: string
         requiresApproval?: boolean
+        /** 当前 requestId 的审批已获匹配回执或被远端明确撤销；缺省不代表已处理。 */
+        approvalResolved?: boolean
         approvalReason?: string
         expiresAt?: number
         requestId?: string

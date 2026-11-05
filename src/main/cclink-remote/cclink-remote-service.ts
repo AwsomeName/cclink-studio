@@ -722,7 +722,13 @@ export class CclinkRemoteService implements RemoteProvider {
         ) {
           const failed: CclinkRemoteMessage = {
             ...pending,
-            tool: { ...pending.tool, state: 'failed', requiresApproval: false, error: reason },
+            tool: {
+              ...pending.tool,
+              state: 'failed',
+              requiresApproval: false,
+              approvalResolved: true,
+              error: reason,
+            },
           }
           this.appendMessage(input.sessionId, failed)
           this.emitRealtime({
@@ -2011,17 +2017,27 @@ export class CclinkRemoteService implements RemoteProvider {
           !previousMessage.tool.requiresApproval &&
           (event.state === 'pending' || event.state === 'executing') &&
           ((event.requires_approval === true &&
+            previousMessage.tool.approvalResolved === true &&
             previousMessage.tool.requestId !== undefined &&
             previousMessage.tool.requestId === event.request_id) ||
             ['completed', 'failed', 'denied'].includes(previousMessage.tool.state))
         ) {
-          // 重投的审批卡不能重新打开已批准/失效的请求，迟到进度不能回退终态。
+          // 只有明确处理过的审批才能去重；普通 executing 也会先于首次审批到达。
+          // 迟到进度仍不能回退终态。
           return
         }
+        const sameApprovalRequest =
+          previousMessage !== undefined &&
+          (event.request_id === undefined || event.request_id === previousMessage.tool.requestId)
         const preservesPendingApproval =
+          sameApprovalRequest &&
           (event.state === 'pending' || event.state === 'executing') &&
           event.requires_approval !== false &&
           previousMessage?.tool.requiresApproval === true
+        const approvalResolved =
+          sameApprovalRequest &&
+          (previousMessage.tool.approvalResolved === true ||
+            (previousMessage.tool.requiresApproval === true && event.requires_approval === false))
         const remoteMessage: CclinkRemoteMessage = {
           type: 'agentTool',
           id: messageId,
@@ -2034,6 +2050,7 @@ export class CclinkRemoteService implements RemoteProvider {
             output: event.output,
             error: event.error,
             requiresApproval: event.requires_approval === true || preservesPendingApproval,
+            ...(approvalResolved ? { approvalResolved: true } : {}),
             approvalReason:
               event.approval_reason ??
               (preservesPendingApproval ? previousMessage.tool.approvalReason : undefined),
@@ -2466,6 +2483,7 @@ export class CclinkRemoteService implements RemoteProvider {
                 ...message.tool,
                 state: approved ? ('executing' as const) : ('denied' as const),
                 requiresApproval: false,
+                approvalResolved: true,
               },
             }
           : message,

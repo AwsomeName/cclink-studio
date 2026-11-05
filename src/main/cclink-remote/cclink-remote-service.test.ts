@@ -1463,6 +1463,100 @@ describe('CclinkRemoteService runtime protocol', () => {
     },
   )
 
+  it.each([undefined, false])(
+    '首次 ExitPlanMode 审批不会被之前的执行中事件误判为已处理（requires_approval=%s）',
+    async (requiresApproval) => {
+      const { service, handle } = createService()
+      await service.initialize()
+      const events: Array<CclinkRemoteMessage | undefined> = []
+      service.onRealtimeEvent((event) => events.push(event.message))
+      const request = vi.spyOn(service.getRequestRouter(), 'request')
+      const event = {
+        ...createCclinkEnvelope('agent_tool', { request_id: 'plan-request' }),
+        session_id: 'session-1',
+        msg_id: 'plan-message',
+        tool: 'ExitPlanMode',
+        tool_use_id: 'plan-tool',
+        input: { plan: '先确认计划，再实施。' },
+      }
+
+      await handle({ ...event, state: 'executing', requires_approval: requiresApproval })
+      await handle({ ...event, state: 'pending', requires_approval: true })
+
+      expect(service.listMessages('session-1')).toHaveLength(1)
+      expect(events.at(-1)).toMatchObject({
+        type: 'agentTool',
+        tool: { state: 'pending', requiresApproval: true, requestId: 'plan-request' },
+      })
+      expect(service.listMessages('session-1')[0]).toEqual(events.at(-1))
+      expect(request).not.toHaveBeenCalled()
+    },
+  )
+
+  it('计划审批等待匹配 ACK，批准后进度和重启不重新打开旧卡，新请求仍可审批', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    installOnlineServer(service)
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const transport = new ReceivingTransport()
+    service.getRequestRouter().attach(transport)
+    const event = {
+      ...createCclinkEnvelope('agent_tool', { request_id: 'plan-request' }),
+      session_id: 'session-1',
+      msg_id: 'plan-message',
+      tool: 'ExitPlanMode',
+      tool_use_id: 'plan-tool',
+      state: 'pending' as const,
+      requires_approval: true,
+    }
+    await handle({ ...event, state: 'executing', requires_approval: undefined })
+    await handle(event)
+    const approval = service.resolveToolApproval({
+      ref: remoteRef,
+      sessionId: 'session-1',
+      requestId: 'plan-request',
+      toolUseId: 'plan-tool',
+      approved: true,
+    })
+    await vi.waitFor(() => expect(transport.sent).toHaveLength(1))
+    expect(service.listMessages('session-1')[0]).toMatchObject({
+      tool: { state: 'pending', requiresApproval: true },
+    })
+    transport.receive('agent-1', {
+      ...createCclinkEnvelope('tool_approval_ack', {
+        request_id: transport.sent[0].message.request_id,
+      }),
+      session_id: 'session-1',
+      tool_use_id: 'plan-tool',
+      approved: true,
+      status: 'accepted',
+    })
+    await expect(approval).resolves.toEqual({ success: true })
+    await handle({ ...event, request_id: undefined, state: 'executing', requires_approval: false })
+    await handle(event)
+    expect(service.listMessages('session-1')[0]).toMatchObject({
+      tool: { state: 'executing', requiresApproval: false, approvalResolved: true },
+    })
+
+    const restored = createService({
+      version: 1,
+      sessions: [storedSession],
+      messages: { 'session-1': service.listMessages('session-1') },
+    })
+    await restored.service.initialize()
+    await restored.handle(event)
+    expect(restored.service.listMessages('session-1')[0]).toMatchObject({
+      tool: { state: 'executing', requiresApproval: false, approvalResolved: true },
+    })
+    await restored.handle({ ...event, request_id: 'new-plan-request' })
+    const newRequest = restored.service.listMessages('session-1')[0]
+    expect(newRequest).toMatchObject({
+      tool: { state: 'pending', requiresApproval: true, requestId: 'new-plan-request' },
+    })
+    expect(newRequest.type === 'agentTool' && newRequest.tool.approvalResolved).not.toBe(true)
+    service.getRequestRouter().detach()
+  })
+
   it('执行中事件未明确撤销时保留同一工具的待审批状态', async () => {
     const { service, handle } = createService()
     await service.initialize()
@@ -1523,6 +1617,10 @@ describe('CclinkRemoteService runtime protocol', () => {
     })
     expect(explicitRevocation.service.listMessages('session-1')[0]).toMatchObject({
       type: 'agentTool',
+      tool: { state: 'executing', requiresApproval: false },
+    })
+    await explicitRevocation.handle(createPendingTool())
+    expect(explicitRevocation.service.listMessages('session-1')[0]).toMatchObject({
       tool: { state: 'executing', requiresApproval: false },
     })
 

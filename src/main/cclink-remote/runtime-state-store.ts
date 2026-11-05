@@ -221,6 +221,9 @@ function sanitizeMessage(value: unknown): CclinkRemoteMessage | null {
           : {}),
         ...(typeof tool['error'] === 'string' ? { error: redactString(tool['error']) } : {}),
         ...(tool['requiresApproval'] === true ? { requiresApproval: true } : {}),
+        ...(tool['approvalResolved'] === true && typeof tool['requestId'] === 'string'
+          ? { approvalResolved: true }
+          : {}),
         ...(typeof tool['approvalReason'] === 'string'
           ? { approvalReason: redactString(tool['approvalReason']) }
           : {}),

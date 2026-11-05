@@ -13,6 +13,43 @@ afterEach(async () => {
 })
 
 describe('CclinkRuntimeStateStore', () => {
+  it('持久化明确的审批处理事实，旧执行中消息不会被推断为已审批', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cclink-tool-approval-state-'))
+    roots.push(root)
+    const store = new CclinkRuntimeStateStore(root)
+    const messages: CclinkRemoteMessage[] = [true, undefined].map((approvalResolved, index) => ({
+      type: 'agentTool',
+      id: `tool-message-${index}`,
+      timestamp: 1,
+      tool: {
+        id: `tool-${index}`,
+        name: 'ExitPlanMode',
+        state: 'executing',
+        requestId: `request-${index}`,
+        ...(approvalResolved ? { approvalResolved: true } : {}),
+      },
+    }))
+    await store.save({
+      version: 1,
+      sessions: [
+        {
+          id: 'session-1',
+          name: '审批恢复',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'idle',
+          createdAt: 1,
+          updatedAt: 1,
+          messageCount: messages.length,
+          contextUsage: 0,
+        },
+      ],
+      messages: { 'session-1': messages },
+    })
+    expect((await new CclinkRuntimeStateStore(root).load()).messages['session-1']).toEqual(messages)
+  })
+
   it('重启保留问题过期和新回合接收状态，不把历史卡片恢复为待回答', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cclink-question-state-'))
     roots.push(root)
