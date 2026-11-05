@@ -35,15 +35,18 @@ let requests = 0
 const server = createServer((_request, response) => {
   requests++
   response.writeHead(400, { 'content-type': 'application/json' })
-  response.end(
-    JSON.stringify({
-      type: 'error',
-      error: {
-        type: 'invalid_request_error',
-        message: 'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容][local-smoke]',
-      },
-    }),
-  )
+  setTimeout(() => {
+    response.end(
+      JSON.stringify({
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message:
+            'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容][local-smoke]',
+        },
+      }),
+    )
+  }, 2_000)
 })
 await new Promise((done) => server.listen(0, '127.0.0.1', done))
 let app
@@ -84,7 +87,8 @@ try {
   await page.waitForSelector('.main-window')
   await page.locator('[title="定时任务"]').first().click()
   await page.getByRole('button', { name: '新建定时任务', exact: true }).first().click()
-  await page.getByLabel('任务名称').fill('每日日志容错验收')
+  const taskTitle = '每日日志容错验收 · 用于验证窄侧栏的长任务名称'
+  await page.getByLabel('任务名称', { exact: true }).fill(taskTitle)
   await page.getByLabel('任务内容').fill('初始化每日日志。未知事实留空，不要编造。')
   await page.getByLabel('结果保存方式').selectOption('workspace-file')
   await page.getByLabel('工作空间内目录').fill('日志')
@@ -103,7 +107,62 @@ try {
   assert(saved.success)
   const taskId = saved.tasks[0].definition.id
   assert.equal(saved.tasks[0].definition.outputPolicy.failureTemplate, template)
-  await page.getByRole('button', { name: '立即运行', exact: true }).click()
+  const row = page.locator('.scheduled-task-sidebar-row', { hasText: taskTitle })
+  const runButton = row.locator('.scheduled-task-sidebar-run')
+  await runButton.waitFor()
+  assert(!(await runButton.isDisabled()), 'a paused local task should allow a manual run')
+  await page.getByLabel('任务内容').fill('尚未保存的修改')
+  await page.waitForFunction(() => document.querySelector('.scheduled-task-sidebar-run')?.disabled)
+  assert.equal(await runButton.getAttribute('title'), '请先保存修改')
+  await page.getByLabel('任务内容').fill('初始化每日日志。未知事实留空，不要编造。')
+  await page.waitForFunction(() => !document.querySelector('.scheduled-task-sidebar-run')?.disabled)
+
+  // Keep another detail tab active while starting the saved task from its list row.
+  await page.locator('[aria-label="新建定时任务"]').click()
+  await page.getByLabel('任务名称', { exact: true }).fill('当前详情必须保持不变')
+  const activeTabBefore = await page.locator('.tab.active').innerText()
+  const tabCountBefore = await page.locator('.tab').count()
+  await runButton.evaluate((button) => {
+    button.click()
+    button.click()
+  })
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.scheduled-task-sidebar-run')
+    return button?.disabled && /启动中|排队中|运行中/.test(button.textContent)
+  })
+  assert.equal(await page.locator('.tab.active').innerText(), activeTabBefore)
+  assert.equal(await page.locator('.tab').count(), tabCountBefore)
+  assert.equal(
+    await page.getByLabel('任务名称', { exact: true }).inputValue(),
+    '当前详情必须保持不变',
+  )
+  await page.waitForFunction(() => {
+    const button = document.querySelector('.scheduled-task-sidebar-run')
+    return button?.disabled && /运行中/.test(button.textContent)
+  })
+  await runButton.evaluate((button) => button.click())
+  const runningHistory = await page.evaluate(
+    ({ workspace, taskId }) => window.cclinkStudio.scheduledTasks.listRuns(workspace, taskId),
+    { workspace, taskId },
+  )
+  assert.equal(runningHistory.runs.length, 1, 'repeated list clicks started more than one run')
+  const layout = await row.evaluate((element) => {
+    const button = element.querySelector('.scheduled-task-sidebar-run').getBoundingClientRect()
+    const title = element.querySelector('strong').getBoundingClientRect()
+    return {
+      rowRight: element.getBoundingClientRect().right,
+      buttonRight: button.right,
+      buttonLeft: button.left,
+      titleRight: title.right,
+      titleOverflow: getComputedStyle(element.querySelector('strong')).textOverflow,
+    }
+  })
+  assert(layout.buttonRight <= layout.rowRight, 'run button overflows the sidebar')
+  assert(layout.titleRight <= layout.buttonLeft, 'long title overlaps the run button')
+  assert.equal(layout.titleOverflow, 'ellipsis')
+  if (process.env.CCLINK_STUDIO_SIDEBAR_SCREENSHOT) {
+    await page.screenshot({ path: process.env.CCLINK_STUDIO_SIDEBAR_SCREENSHOT })
+  }
   const deadline = Date.now() + 90_000
   let run
   while (Date.now() < deadline) {
@@ -130,11 +189,18 @@ try {
   assert(content.startsWith(template.trim()))
   assert(content.includes('本次 AI 补充失败，仅保存预设模板'))
   assert(!content.includes('[1301]'))
+  await page.waitForFunction(() => !document.querySelector('.scheduled-task-sidebar-run')?.disabled)
+  assert.equal(await page.locator('.tab.active').innerText(), activeTabBefore)
+  assert.equal(
+    await page.getByLabel('任务名称', { exact: true }).inputValue(),
+    '当前详情必须保持不变',
+  )
+  await row.locator('.scheduled-task-sidebar-item').click()
   await page.getByText('模板已保存，AI 补充失败；可打开文件继续填写', { exact: true }).waitFor()
   await page.getByRole('button', { name: `打开 ${run.artifact.relativePath}`, exact: true }).click()
   await page.getByText('今日体重：', { exact: false }).first().waitFor()
   console.log(
-    'PASS: daily template saved via UI, local provider refusal, failed run with verified file, open file action',
+    'PASS: sidebar run preserves active tab and draft, blocks repeated clicks and unsaved changes, fits a narrow row, restores after completion; daily fallback file verified and opened',
   )
 } finally {
   if (app) await app.close()

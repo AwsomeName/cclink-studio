@@ -297,7 +297,7 @@ async function main() {
   )
 
   const taskId = saved.tasks[0].definition.id
-  await page.getByRole('button', { name: '立即运行' }).click()
+  await page.getByRole('button', { name: '立即运行', exact: true }).click()
   const run = await waitForTerminalRun(page, taskId)
   assert(
     run.status === 'completed',
