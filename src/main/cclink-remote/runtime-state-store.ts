@@ -274,6 +274,15 @@ function sanitizeMessage(value: unknown): CclinkRemoteMessage | null {
       toolUseId: message['toolUseId'],
       questions,
       ...(message['answered'] === true ? { answered: true } : {}),
+      ...(message['status'] === 'expired' ||
+      message['status'] === 'resolved' ||
+      message['status'] === 'cancelled' ||
+      message['status'] === 'ended'
+        ? { status: message['status'] }
+        : {}),
+      ...(message['resolution'] === 'original_turn' || message['resolution'] === 'new_turn'
+        ? { resolution: message['resolution'] }
+        : {}),
     }
   }
   return null

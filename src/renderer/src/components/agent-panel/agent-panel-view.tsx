@@ -130,6 +130,8 @@ export interface AgentPanelQuestionModel {
   id: string
   title: string
   answered?: boolean
+  status?: 'expired' | 'resolved' | 'cancelled' | 'ended'
+  resolution?: 'original_turn' | 'new_turn'
   submitting?: boolean
   error?: string | null
   questions: Array<{
@@ -322,7 +324,7 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
       item.kind === 'message'
         ? agentPanelMessageRevision(item.message)
         : item.kind === 'question'
-          ? `${item.id}:${item.question.title}:${item.question.questions.map((question) => question.question).join(',')}:${item.question.submitting ? 'submitting' : ''}`
+          ? `${item.id}:${item.question.title}:${item.question.questions.map((question) => question.question).join(',')}:${item.question.submitting ? 'submitting' : ''}:${item.question.answered}:${item.question.status}:${item.question.resolution}:${item.question.error ?? ''}`
           : `${item.id}:${item.label}:${item.detail ?? ''}`,
     )
     .concat(model.permissions.map((permission) => permission.id))
@@ -625,11 +627,23 @@ export function EmptyState({ model }: { model: AgentPanelEmptyModel }): ReactEle
 
 function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactElement {
   const [answers, setAnswers] = useState<Record<string, string>>({})
-  const complete = model.questions.every((question) => Boolean(answers[question.question]?.trim()))
+  const unanswered = model.questions.filter((question) => !answers[question.question]?.trim())
+  const answered = model.answered || model.status === 'resolved'
+  const ended = model.status === 'cancelled' || model.status === 'ended'
+  const disabled = answered || ended || model.submitting
   return (
     <div className="agent-message assistant agent-question-message">
       <div className="agent-question-card">
         <strong>{model.title}</strong>
+        {model.status === 'expired' && !answered ? (
+          <div className="agent-question-hint" role="status">
+            原问题等待已超时。仍可提交答案；支持续接的 Agent 会在本会话中开启新一轮处理。
+          </div>
+        ) : ended ? (
+          <div className="agent-question-hint" role="status">
+            该问题已{model.status === 'cancelled' ? '取消' : '结束'}，请在下方消息框中继续对话。
+          </div>
+        ) : null}
         {model.questions.map((question) => (
           <div key={question.id} className="agent-question-item">
             <span>{question.header || question.question}</span>
@@ -647,7 +661,7 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
                     <label key={option.label}>
                       <input
                         type="checkbox"
-                        disabled={model.answered || model.submitting}
+                        disabled={disabled}
                         checked={selected.has(option.label)}
                         onChange={(event) => {
                           const next = new Set(selected)
@@ -667,7 +681,8 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
               </span>
             ) : question.options?.length ? (
               <select
-                disabled={model.answered || model.submitting}
+                disabled={disabled}
+                aria-label={question.header || question.question}
                 value={answers[question.question] ?? ''}
                 onChange={(event) =>
                   setAnswers((current) => ({
@@ -686,7 +701,8 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
               </select>
             ) : (
               <input
-                disabled={model.answered || model.submitting}
+                disabled={disabled}
+                aria-label={question.header || question.question}
                 value={answers[question.question] ?? ''}
                 onChange={(event) =>
                   setAnswers((current) => ({
@@ -700,11 +716,27 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
         ))}
         <button
           type="button"
-          disabled={!complete || model.answered || model.submitting}
+          disabled={unanswered.length > 0 || model.questions.length === 0 || disabled}
           onClick={() => model.onSubmit(answers)}
         >
-          {model.answered ? '已回答' : model.submitting ? '等待 Agent 确认…' : '提交回答'}
+          {answered
+            ? model.resolution === 'new_turn'
+              ? '已提交为新一轮消息'
+              : '已回答'
+            : ended
+              ? '问题已结束'
+              : model.submitting
+                ? '等待 Agent 确认…'
+                : model.status === 'expired'
+                  ? '提交答案并继续'
+                  : '提交回答'}
         </button>
+        {!answered && !ended && !model.submitting && unanswered.length > 0 ? (
+          <div className="agent-question-hint" role="status">
+            请先完成：
+            {unanswered.map((question) => question.header || question.question).join('、')}
+          </div>
+        ) : null}
         {model.error ? <div className="agent-question-error">{model.error}</div> : null}
       </div>
     </div>

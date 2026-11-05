@@ -517,6 +517,8 @@ export function RemoteAgentController({
             id: message.id,
             title: 'Agent 需要你的选择',
             answered: message.answered,
+            status: message.status,
+            resolution: message.resolution,
             submitting: controlStates[message.id]?.submitting,
             error: controlStates[message.id]?.error,
             questions: message.questions,

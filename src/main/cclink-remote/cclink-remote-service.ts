@@ -15,6 +15,7 @@ import type {
   CclinkMutationResponseMessage,
   CclinkMessageType,
   CclinkProtocolMessage,
+  CclinkQuestionStatusMessage,
   CclinkRemoteMessage,
   CclinkRemoteSession,
   CclinkSessionResponseMessage,
@@ -745,11 +746,12 @@ export class CclinkRemoteService implements RemoteProvider {
     toolUseId: string
     answers: Record<string, string>
   }): Promise<{ success: boolean; error?: string }> {
+    let awaitingAnswerAck = false
     try {
       await this.requireOnline()
       await this.requireCapability(input.ref, 'agent.session')
       this.assertSessionMatches(input.ref, input.sessionId)
-      const question = this.findPendingQuestion(input.sessionId, input.toolUseId)
+      const question = this.findPendingQuestion(input.sessionId, input.toolUseId, input.requestId)
       const normalizedAnswers = Object.fromEntries(
         question.questions.map((item) => {
           const answer = input.answers[item.question] ?? input.answers[item.id]
@@ -758,6 +760,7 @@ export class CclinkRemoteService implements RemoteProvider {
         }),
       )
       const controlRequestId = randomUUID()
+      awaitingAnswerAck = true
       const response = (await this.requestRouter.request(
         input.ref.endpointId,
         {
@@ -777,18 +780,67 @@ export class CclinkRemoteService implements RemoteProvider {
         session_id?: string
         tool_use_id?: string
         status?: string
+        resolution?: string
+        new_turn_request_id?: string
       }
+      const acceptedAsNewTurn =
+        response.status === 'accepted_as_new_turn' &&
+        response.resolution === 'new_turn' &&
+        typeof response.new_turn_request_id === 'string' &&
+        response.new_turn_request_id.trim().length > 0
       if (
-        response.status !== 'accepted' ||
+        (!acceptedAsNewTurn && response.status !== 'accepted') ||
         response.session_id !== input.sessionId ||
         response.tool_use_id !== input.toolUseId
       ) {
         throw new Error('远程 Agent 返回了不匹配的问题确认')
       }
-      this.markQuestionAnswered(input.sessionId, input.toolUseId)
+      this.updateQuestionStatus(input.ref.endpointId, {
+        session_id: input.sessionId,
+        request_id: input.requestId,
+        tool_use_id: input.toolUseId,
+        status: 'resolved',
+        resolution: acceptedAsNewTurn ? 'new_turn' : 'original_turn',
+      })
       return { success: true }
     } catch (error) {
       this.recordDiagnostic('agent.question', input.ref.endpointId, error)
+      if (error instanceof CclinkRequestError) {
+        // question_status 可能先于 ACK 到达；传输超时不能推翻匹配问题的接收事实。
+        const current = (this.messages.get(input.sessionId) ?? []).find(
+          (message) =>
+            message.type === 'userQuestion' &&
+            message.toolUseId === input.toolUseId &&
+            message.requestId === input.requestId,
+        )
+        if (
+          awaitingAnswerAck &&
+          error.remoteError.layer === 'transport' &&
+          current?.type === 'userQuestion' &&
+          current.answered &&
+          this.sessions.get(input.sessionId)?.serverId === input.ref.endpointId
+        ) {
+          return { success: true }
+        }
+        const code = error.remoteError.code
+        const status =
+          code === 'QUESTION_ANSWER_EXPIRED' || code === 'QUESTION_ANSWER_TIMEOUT'
+            ? 'expired'
+            : code === 'QUESTION_CANCELLED'
+              ? 'cancelled'
+              : code === 'QUESTION_ANSWER_NOT_PENDING' || code === 'CONTROL_REQUEST_ENDED'
+                ? 'ended'
+                : null
+        if (status) {
+          this.updateQuestionStatus(input.ref.endpointId, {
+            session_id: input.sessionId,
+            request_id: input.requestId,
+            tool_use_id: input.toolUseId,
+            status,
+            reason_code: code,
+          })
+        }
+      }
       return { success: false, error: error instanceof Error ? error.message : '远程问题回答失败' }
     }
   }
@@ -1876,6 +1928,18 @@ export class CclinkRemoteService implements RemoteProvider {
           error?: string
           code?: string
         }
+        if (event.code === 'QUESTION_ANSWER_TIMEOUT' && message.request_id) {
+          for (const question of this.messages.get(event.session_id) ?? []) {
+            if (question.type !== 'userQuestion' || question.requestId !== message.request_id)
+              continue
+            this.updateQuestionStatus(serverId, {
+              session_id: event.session_id,
+              request_id: message.request_id,
+              tool_use_id: question.toolUseId,
+              status: 'expired',
+            })
+          }
+        }
         const key = `${serverId}:${event.msg_id}`
         const buffer = this.streams.get(key)
         this.streams.delete(key)
@@ -2043,6 +2107,11 @@ export class CclinkRemoteService implements RemoteProvider {
             },
           ]
         })
+        const previous = (this.messages.get(event.session_id) ?? []).find(
+          (item) => item.type === 'userQuestion' && item.toolUseId === event.tool_use_id,
+        )
+        // 同一问题重投不能擦掉已回答/过期事实或重置正在填写的卡片。
+        if (previous?.type === 'userQuestion' && previous.requestId === event.request_id) return
         const remoteMessage: CclinkRemoteMessage = {
           type: 'userQuestion',
           id: `remote-question-${event.tool_use_id || event.msg_id}`,
@@ -2059,6 +2128,17 @@ export class CclinkRemoteService implements RemoteProvider {
           phase: 'message',
           message: remoteMessage,
         })
+        return
+      }
+      case 'question_status': {
+        const event = message as CclinkQuestionStatusMessage
+        if (
+          !['expired', 'resolved', 'cancelled', 'ended'].includes(event.status) ||
+          typeof event.request_id !== 'string' ||
+          typeof event.tool_use_id !== 'string'
+        )
+          return
+        this.updateQuestionStatus(serverId, event)
         return
       }
       case 'permission_request': {
@@ -2429,28 +2509,78 @@ export class CclinkRemoteService implements RemoteProvider {
     return decision
   }
 
-  private markQuestionAnswered(sessionId: string, toolUseId: string): void {
-    const current = this.messages.get(sessionId) ?? []
+  private updateQuestionStatus(
+    serverId: string,
+    event: Pick<
+      CclinkQuestionStatusMessage,
+      'session_id' | 'request_id' | 'tool_use_id' | 'status' | 'resolution' | 'reason_code'
+    >,
+  ): void {
+    if (this.sessions.get(event.session_id)?.serverId !== serverId) return
+    const question = (this.messages.get(event.session_id) ?? []).find(
+      (message) =>
+        message.type === 'userQuestion' &&
+        message.toolUseId === event.tool_use_id &&
+        message.requestId === event.request_id,
+    )
+    if (!question || question.type !== 'userQuestion') return
+    // 迟到的超时/结束不能回退已接收的答案；结束通知不能抹掉可续接的超时事实。
+    if (question.answered || question.status === 'resolved') return
+    if (
+      (question.status === 'cancelled' || question.status === 'ended') &&
+      event.status !== 'resolved'
+    )
+      return
+    if (
+      question.status === 'expired' &&
+      event.status === 'ended' &&
+      event.reason_code !== 'QUESTION_ANSWER_NOT_PENDING' &&
+      event.reason_code !== 'CONTROL_REQUEST_ENDED'
+    )
+      return
+    const updated: CclinkRemoteMessage = {
+      ...question,
+      status: event.status,
+      ...(event.status === 'resolved' ? { answered: true } : {}),
+      ...(event.resolution === 'original_turn' || event.resolution === 'new_turn'
+        ? { resolution: event.resolution }
+        : {}),
+    }
     this.messages.set(
-      sessionId,
-      current.map((message) =>
-        message.type === 'userQuestion' && message.toolUseId === toolUseId
-          ? { ...message, answered: true }
-          : message,
+      event.session_id,
+      (this.messages.get(event.session_id) ?? []).map((message) =>
+        message.id === updated.id ? updated : message,
       ),
     )
     this.persistState()
+    this.emitRealtime({
+      type: 'conversation',
+      serverId,
+      sessionId: event.session_id,
+      phase: 'message',
+      message: updated,
+    })
   }
 
   private findPendingQuestion(
     sessionId: string,
     toolUseId: string,
+    requestId: string,
   ): Extract<CclinkRemoteMessage, { type: 'userQuestion' }> {
     const question = (this.messages.get(sessionId) ?? []).find(
       (message): message is Extract<CclinkRemoteMessage, { type: 'userQuestion' }> =>
         message.type === 'userQuestion' && message.toolUseId === toolUseId,
     )
-    if (!question || question.answered) throw new Error('该问题已经失效或已回答')
+    if (
+      !question ||
+      question.requestId !== requestId ||
+      question.answered ||
+      question.status === 'resolved' ||
+      question.status === 'cancelled' ||
+      question.status === 'ended'
+    ) {
+      throw new Error('该问题已经结束或已回答，请在消息框中继续对话')
+    }
     return question
   }
 

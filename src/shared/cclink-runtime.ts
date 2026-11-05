@@ -54,6 +54,8 @@ export type CclinkRemoteMessage =
         options?: Array<{ label: string; description?: string }>
       }>
       answered?: boolean
+      status?: 'expired' | 'resolved' | 'cancelled' | 'ended'
+      resolution?: 'original_turn' | 'new_turn'
     }
   | { type: 'system'; id: string; content: string; timestamp: number; remoteError?: RemoteError }
 
@@ -218,11 +220,23 @@ export interface CclinkQuestionAnswerMessage extends CclinkRuntimeEnvelope<'ques
   answers: Record<string, string>
 }
 
+export interface CclinkQuestionStatusMessage extends CclinkRuntimeEnvelope<'question_status'> {
+  session_id: string
+  request_id: string
+  tool_use_id: string
+  status: 'expired' | 'resolved' | 'cancelled' | 'ended'
+  reason_code?: string
+  resolution?: 'none' | 'original_turn' | 'new_turn'
+  new_turn_request_id?: string
+}
+
 export interface CclinkQuestionAnswerAckMessage extends CclinkRuntimeEnvelope<'question_answer_ack'> {
   request_id: string
   session_id: string
   tool_use_id: string
-  status: 'accepted'
+  status: 'accepted' | 'accepted_as_new_turn'
+  resolution?: 'original_turn' | 'new_turn'
+  new_turn_request_id?: string
 }
 
 export interface CclinkPermissionRequestMessage extends CclinkRuntimeEnvelope<'permission_request'> {
@@ -484,6 +498,7 @@ export type CclinkRuntimeMessage =
   | CclinkToolApprovalResponseMessage
   | CclinkToolApprovalAckMessage
   | CclinkUserQuestionMessage
+  | CclinkQuestionStatusMessage
   | CclinkQuestionAnswerMessage
   | CclinkQuestionAnswerAckMessage
   | CclinkPermissionRequestMessage

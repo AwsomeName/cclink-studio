@@ -392,7 +392,10 @@ export const useCclinkStore = create<CclinkState>((set, get) => ({
       const sessionId = event.sessionId!
       const current = state.messages[sessionId] ?? []
       const nextMessages = event.message
-        ? [...current.filter((item) => item.id !== event.message!.id), event.message]
+        ? event.message.type === 'userQuestion' &&
+          current.some((item) => item.id === event.message!.id)
+          ? current.map((item) => (item.id === event.message!.id ? event.message! : item))
+          : [...current.filter((item) => item.id !== event.message!.id), event.message]
         : current
       return {
         messages: event.message ? { ...state.messages, [sessionId]: nextMessages } : state.messages,

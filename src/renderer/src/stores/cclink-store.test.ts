@@ -30,6 +30,39 @@ afterEach(() => {
 })
 
 describe('cclink session selection ownership', () => {
+  it('updates a timed-out question in place without moving it after later conversation text', () => {
+    const question = {
+      type: 'userQuestion' as const,
+      id: 'question-1',
+      timestamp: 1,
+      requestId: 'run-1',
+      toolUseId: 'tool-1',
+      questions: [{ id: 'market', question: '哪个市场？' }],
+    }
+    useCclinkStore.setState({
+      sessions: [session('session-1')],
+      messages: {
+        'session-1': [
+          question,
+          { type: 'agentText', id: 'text-1', timestamp: 2, content: '请选择' },
+        ],
+      },
+    })
+    useCclinkStore.getState().handleRealtimeEvent({
+      type: 'conversation',
+      serverId: workspaceRef.endpointId,
+      sessionId: 'session-1',
+      phase: 'message',
+      message: { ...question, status: 'expired' },
+    })
+    expect(useCclinkStore.getState().messages['session-1'].map((item) => item.id)).toEqual([
+      'question-1',
+      'text-1',
+    ])
+    expect(useCclinkStore.getState().messages['session-1'][0]).toMatchObject({ status: 'expired' })
+    expect(useCclinkStore.getState().sessions[0].status).toBe('idle')
+  })
+
   it('restores a signed-in session without starting the realtime connection', async () => {
     const connectRealtime = vi.fn()
     vi.stubGlobal('window', {

@@ -72,6 +72,7 @@ export type CclinkMessageType =
   | 'tool_approval_response'
   | 'tool_approval_ack'
   | 'user_question'
+  | 'question_status'
   | 'question_answer'
   | 'question_answer_ack'
   | 'permission_request'
@@ -265,6 +266,7 @@ const MESSAGE_TYPES = new Set<CclinkMessageType>([
   'tool_approval_response',
   'tool_approval_ack',
   'user_question',
+  'question_status',
   'question_answer',
   'question_answer_ack',
   'permission_request',

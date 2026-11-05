@@ -7371,10 +7371,18 @@ body.is-resizing-panels .main-area > div {
   color: var(--text-secondary);
 }
 
+.agent-question-hint,
 .agent-question-error {
   margin-top: 6px;
-  color: #f87171;
   font-size: 11px;
+}
+
+.agent-question-hint {
+  color: var(--text-secondary);
+}
+
+.agent-question-error {
+  color: #f87171;
 }
 
 @media (max-width: 1100px) {

@@ -18,6 +18,47 @@ afterAll(() => {
 })
 
 describe('AgentPanelView product contract', () => {
+  it.each([
+    { status: undefined, expected: '提交回答', hint: '请先完成：市场范围' },
+    { status: 'expired' as const, expected: '提交答案并继续', hint: '原问题等待已超时' },
+    { status: 'resolved' as const, expected: '已提交为新一轮消息', hint: '' },
+    { status: 'cancelled' as const, expected: '问题已结束', hint: '该问题已取消' },
+    { status: 'ended' as const, expected: '问题已结束', hint: '该问题已结束' },
+  ])('解释问答卡的 $status 状态和下一步', ({ status, expected, hint }) => {
+    const viewModel = model('remote', 'messages')
+    viewModel.timeline = [
+      {
+        kind: 'question',
+        id: 'question-1',
+        question: {
+          id: 'question-1',
+          title: 'Agent 需要你的选择',
+          status,
+          resolution: status === 'resolved' ? 'new_turn' : undefined,
+          questions: [
+            {
+              id: 'market',
+              header: '市场范围',
+              question: '哪个市场？',
+              options: [{ label: 'A股' }],
+            },
+          ],
+          onSubmit: vi.fn(),
+        },
+      },
+    ]
+    const html = renderToStaticMarkup(<AgentPanelView model={viewModel} />)
+    expect(html).toContain(expected)
+    expect(html).toContain(hint)
+    expect(html).toContain('aria-label="市场范围"')
+    if (status === 'resolved' || status === 'cancelled' || status === 'ended') {
+      expect(html).toContain('<select disabled=""')
+      expect(html).not.toContain('请先完成')
+    } else {
+      expect(html).not.toContain('<select disabled=""')
+    }
+  })
+
   it('shows compaction cause, expandable raw error and an explicit recovery action', () => {
     const viewModel = model('local', 'error')
     viewModel.notices = [

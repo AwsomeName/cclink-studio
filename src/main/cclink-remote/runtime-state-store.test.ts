@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CclinkRuntimeStateStore } from './runtime-state-store'
+import type { CclinkRemoteMessage } from '../../shared/cclink'
 
 const roots: string[] = []
 
@@ -12,6 +13,43 @@ afterEach(async () => {
 })
 
 describe('CclinkRuntimeStateStore', () => {
+  it('重启保留问题过期和新回合接收状态，不把历史卡片恢复为待回答', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'cclink-question-state-'))
+    roots.push(root)
+    const store = new CclinkRuntimeStateStore(root)
+    const questions: CclinkRemoteMessage[] = ['expired', 'resolved', 'cancelled', 'ended'].map(
+      (status, index) => ({
+        type: 'userQuestion',
+        id: `question-${index}`,
+        timestamp: 1,
+        requestId: `request-${index}`,
+        toolUseId: `tool-${index}`,
+        questions: [{ id: 'market', question: '哪个市场？' }],
+        status: status as 'expired' | 'resolved' | 'cancelled' | 'ended',
+        ...(status === 'resolved' ? { answered: true, resolution: 'new_turn' as const } : {}),
+      }),
+    )
+    await store.save({
+      version: 1,
+      sessions: [
+        {
+          id: 'session-1',
+          name: '问答恢复',
+          workspaceId: 'workspace-1',
+          workspacePath: '/srv/project',
+          serverId: 'agent-1',
+          status: 'idle',
+          createdAt: 1,
+          updatedAt: 1,
+          messageCount: 4,
+          contextUsage: 0,
+        },
+      ],
+      messages: { 'session-1': questions },
+    })
+    expect((await store.load()).messages['session-1']).toEqual(questions)
+  })
+
   it('用权限收紧的本地文件保存会话和消息，但不写入远程身份字段', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-state-'))
     roots.push(root)

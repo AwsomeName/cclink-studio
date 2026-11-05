@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createCclinkEnvelope,
+  isCclinkMessage,
   type CclinkProtocolMessage,
   type CclinkRemoteMessage,
   type CclinkRemoteSession,
@@ -1910,6 +1911,225 @@ describe('CclinkRemoteService runtime protocol', () => {
       answered: true,
       questions: [expect.objectContaining({ multiSelect: true })],
     })
+  })
+
+  it('超时问题仍可提交，并接受远端新回合回执；迟到事件不能重开卡片', async () => {
+    const { service, handle, store } = createService()
+    await service.initialize()
+    const question = {
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      tool_use_id: 'tool-question',
+      questions: [{ id: 'market', question: '哪个市场？', options: [{ label: 'A股' }] }],
+    }
+    await handle(question)
+    const expired = {
+      ...createCclinkEnvelope('question_status', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      tool_use_id: 'tool-question',
+      status: 'expired' as const,
+    }
+    expect(isCclinkMessage(expired)).toBe(true)
+    await handle(expired)
+    await handle({ ...expired, status: 'ended' })
+    expect(service.listMessages('session-1')[0]).toMatchObject({ status: 'expired' })
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const request = vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('question_answer_ack'),
+      request_id: 'answer-request',
+      session_id: 'session-1',
+      tool_use_id: 'tool-question',
+      status: 'accepted_as_new_turn',
+      resolution: 'new_turn',
+      new_turn_request_id: 'fallback-turn',
+    })
+    const input = {
+      ref: remoteRef,
+      sessionId: 'session-1',
+      requestId: 'question-request',
+      toolUseId: 'tool-question',
+      answers: { '哪个市场？': 'A股' },
+    }
+    await expect(service.answerQuestion(input)).resolves.toEqual({ success: true })
+    await handle(expired)
+    await handle(question)
+    expect(service.listMessages('session-1')).toEqual([
+      expect.objectContaining({ answered: true, status: 'resolved', resolution: 'new_turn' }),
+    ])
+    expect(store.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: {
+          'session-1': [expect.objectContaining({ answered: true, resolution: 'new_turn' })],
+        },
+      }),
+    )
+    await expect(service.answerQuestion(input)).resolves.toMatchObject({ success: false })
+    expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('只有匹配设备、会话、问题和请求的权威状态才能关闭问答卡', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    await handle({
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      tool_use_id: 'tool-question',
+      questions: [{ id: 'market', question: '哪个市场？' }],
+    })
+    const resolved = {
+      ...createCclinkEnvelope('question_status', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      tool_use_id: 'tool-question',
+      status: 'resolved' as const,
+      resolution: 'new_turn' as const,
+    }
+    await handle({ ...resolved, request_id: 'other-request' })
+    await handle({ ...resolved, tool_use_id: 'other-tool' })
+    await handle({ ...resolved, session_id: 'other-session' })
+    await (
+      service as unknown as {
+        handleProtocolMessage(serverId: string, message: CclinkProtocolMessage): Promise<void>
+      }
+    ).handleProtocolMessage('other-agent', resolved)
+    expect(service.listMessages('session-1')[0]).not.toHaveProperty('answered')
+    await handle(resolved)
+    expect(service.listMessages('session-1')[0]).toMatchObject({
+      answered: true,
+      resolution: 'new_turn',
+    })
+  })
+
+  it('已收到匹配的 resolved 通知时，ACK 丢失不再向用户报提交失败', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    await handle({
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      tool_use_id: 'tool-question',
+      questions: [{ id: 'market', question: '哪个市场？' }],
+    })
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    vi.spyOn(service.getRequestRouter(), 'request').mockImplementation(async () => {
+      await handle({
+        ...createCclinkEnvelope('question_status', { request_id: 'question-request' }),
+        session_id: 'session-1',
+        tool_use_id: 'tool-question',
+        status: 'resolved',
+        resolution: 'new_turn',
+      })
+      throw new CclinkRequestError('等待远程设备响应超时', {
+        layer: 'transport',
+        code: 'REQUEST_TIMEOUT',
+        message: '等待远程设备响应超时',
+        retryable: true,
+      })
+    })
+    await expect(
+      service.answerQuestion({
+        ref: remoteRef,
+        sessionId: 'session-1',
+        requestId: 'question-request',
+        toolUseId: 'tool-question',
+        answers: { market: 'A股' },
+      }),
+    ).resolves.toEqual({ success: true })
+  })
+
+  it.each([
+    { status: 'accepted_as_new_turn' },
+    { status: 'accepted_as_new_turn', resolution: 'new_turn', new_turn_request_id: '' },
+    { status: 'accepted_as_new_turn', resolution: 'original_turn', new_turn_request_id: 'new' },
+    {
+      status: 'accepted_as_new_turn',
+      resolution: 'new_turn',
+      new_turn_request_id: 'new',
+      session_id: 'other',
+    },
+    { status: 'accepted', tool_use_id: 'other' },
+  ])('拒绝不完整或不匹配的新回合确认 %j', async (ack) => {
+    const { service, handle } = createService()
+    await service.initialize()
+    await handle({
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      tool_use_id: 'tool-question',
+      questions: [{ id: 'market', question: '哪个市场？' }],
+    })
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('question_answer_ack'),
+      request_id: 'answer-request',
+      session_id: 'session-1',
+      tool_use_id: 'tool-question',
+      ...ack,
+    } as CclinkProtocolMessage)
+    await expect(
+      service.answerQuestion({
+        ref: remoteRef,
+        sessionId: 'session-1',
+        requestId: 'question-request',
+        toolUseId: 'tool-question',
+        answers: { market: 'A股' },
+      }),
+    ).resolves.toMatchObject({ success: false, error: '远程 Agent 返回了不匹配的问题确认' })
+    expect(service.listMessages('session-1')[0]).not.toHaveProperty('answered')
+  })
+
+  it('兼容旧远端的超时终态；传输超时保持答案可重试而非伪装成功', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    await handle({
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      tool_use_id: 'tool-question',
+      questions: [{ id: 'market', question: '哪个市场？' }],
+    })
+    await handle({
+      ...createCclinkEnvelope('stream_end', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'question-message',
+      code: 'QUESTION_ANSWER_TIMEOUT',
+    })
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const request = vi.spyOn(service.getRequestRouter(), 'request').mockRejectedValue(
+      new CclinkRequestError('等待远程设备响应超时', {
+        layer: 'transport',
+        code: 'REQUEST_TIMEOUT',
+        message: '等待远程设备响应超时',
+        retryable: true,
+      }),
+    )
+    const input = {
+      ref: remoteRef,
+      sessionId: 'session-1',
+      requestId: 'question-request',
+      toolUseId: 'tool-question',
+      answers: { market: 'A股' },
+    }
+    await expect(service.answerQuestion(input)).resolves.toMatchObject({ success: false })
+    expect(service.listMessages('session-1')[0]).toMatchObject({ status: 'expired' })
+    expect(service.listMessages('session-1')[0]).not.toHaveProperty('answered')
+    request.mockRejectedValue(
+      new CclinkRequestError('问题已结束', {
+        layer: 'remote-agent',
+        code: 'QUESTION_ANSWER_NOT_PENDING',
+        message: '问题已结束',
+        retryable: false,
+      }),
+    )
+    await expect(service.answerQuestion(input)).resolves.toMatchObject({ success: false })
+    expect(service.listMessages('session-1')[0]).toMatchObject({ status: 'ended' })
+    await expect(service.answerQuestion(input)).resolves.toMatchObject({ success: false })
+    expect(request).toHaveBeenCalledTimes(2)
   })
 
   it('远端同步快照缺项时不删除本地导入历史', async () => {
