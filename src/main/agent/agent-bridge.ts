@@ -660,6 +660,20 @@ export class AgentBridge {
     }
   }
 
+  /** 补充只交给仍在执行的精确 Run，接收事实由后端回执确认。 */
+  async supplement(
+    conversationId: string,
+    input: import('../../shared/agent-protocol').AgentSupplementInput,
+  ): Promise<import('../../shared/agent-protocol').AgentSupplementResult> {
+    const run = this.runtimeStateStore.getRun(conversationId, input.runId)
+    if (run?.status !== 'running' || this.runtime.getStatus(conversationId).runId !== input.runId) {
+      return { status: 'rejected', error: '原任务已结束或正在停止，补充未发送' }
+    }
+    const backend = this.runtime.getBackend(conversationId)
+    if (!backend.supplement) return { status: 'rejected', error: '当前 Runtime 不支持补充当前任务' }
+    return backend.supplement(input)
+  }
+
   /** 精确取消指定 run；命令只发起取消，终态由 Runtime 结束确认后写入。 */
   async abort(conversationId: string, runId: string): Promise<AgentAbortResult> {
     const existing = this.runtimeStateStore.getRun(conversationId, runId)

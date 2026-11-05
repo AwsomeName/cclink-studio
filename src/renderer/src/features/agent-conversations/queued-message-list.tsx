@@ -3,7 +3,12 @@ import type { QueuedAgentMessage } from './conversation-state'
 import './queued-message-list.css'
 
 export interface QueuedMessageListModel {
-  items: Array<Pick<QueuedAgentMessage, 'id' | 'content' | 'pendingImages' | 'missingImages'>>
+  items: Array<
+    Pick<
+      QueuedAgentMessage,
+      'id' | 'content' | 'pendingImages' | 'missingImages' | 'afterCancellation'
+    >
+  >
   pauseReason?: string | null
   dispatchId?: string | null
   canEdit: boolean
@@ -36,6 +41,15 @@ export function QueuedMessageList({
             <span className="agent-message-queue-number">{index + 1}</span>
             <div className="agent-message-queue-content">
               <span title={item.content}>{item.content || '图片消息'}</span>
+              {item.afterCancellation ? (
+                <small>
+                  {item.afterCancellation.phase === 'waiting'
+                    ? '停止后执行 · 等待停止确认'
+                    : item.afterCancellation.phase === 'ready'
+                      ? '停止已确认 · 即将执行'
+                      : '切换未执行 · 请检查后继续'}
+                </small>
+              ) : null}
               {model.dispatchId === item.id ? <small>正在发送</small> : null}
               {item.pendingImages.length || item.missingImages ? (
                 <small>

@@ -81,6 +81,8 @@ export type ClaudeEvent =
   | ClaudeResultEvent
 
 export interface ClaudeStreamEventData {
+  supplementSupported?: boolean
+  supplementMessageId?: string
   type: string
   conversationId?: string
   runId?: string
@@ -210,6 +212,17 @@ export interface AgentCommandResult {
   success: boolean
   error?: string
   configurationReceipt?: import('./agent-role').AgentRunConfigurationReceipt
+}
+
+export interface AgentSupplementInput {
+  runId: string
+  messageId: string
+  content: string
+}
+
+export interface AgentSupplementResult {
+  status: 'received' | 'rejected' | 'unknown'
+  error?: string
 }
 
 export type AgentRuntimeRunStatus = 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
@@ -350,6 +363,7 @@ export interface AgentToolModuleStatus {
 }
 
 export interface AgentApiContract {
+  supplement(conversationId: string, input: AgentSupplementInput): Promise<AgentSupplementResult>
   sendMessage: {
     (message: string): Promise<AgentCommandResult>
     (conversationId: string, message: string): Promise<AgentCommandResult>

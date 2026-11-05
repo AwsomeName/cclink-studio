@@ -142,6 +142,7 @@ export function normalizeConversationSnapshot(
             )
             .map((item) => ({
               ...item,
+              afterCancellation: undefined,
               mountedResources: Array.isArray(item.mountedResources)
                 ? item.mountedResources.map(stripImagePreview)
                 : [],
@@ -182,6 +183,14 @@ export function normalizeConversationSnapshot(
             const derivedRawText = deriveAgentMessageRawText(message.content)
             return {
               ...message,
+              supplement:
+                message.supplement?.status === 'pending'
+                  ? {
+                      ...message.supplement,
+                      status: 'unknown' as const,
+                      error: '应用已恢复，请核对原任务是否接收；不要自动重发',
+                    }
+                  : message.supplement,
               ...(message.resources ? { resources: message.resources.map(stripImagePreview) } : {}),
               rawText:
                 typeof message.rawText === 'string' ? message.rawText : (derivedRawText ?? ''),
@@ -437,6 +446,7 @@ export function buildAgentConversationWorkspaceSnapshot(
       queuedMessageDispatchId: null,
       queuedMessages: conversation.queuedMessages?.map((item) => ({
         ...item,
+        afterCancellation: undefined,
         pendingImages: [],
         missingImages: item.missingImages || item.pendingImages.length > 0,
         mountedResources: item.mountedResources.map(stripImagePreview),

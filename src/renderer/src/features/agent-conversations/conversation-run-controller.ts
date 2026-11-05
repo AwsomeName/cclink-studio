@@ -16,6 +16,7 @@ import { buildAgentSendPayload, transientMessageResources } from './payload'
 import { useTabStore } from '../../stores/tab-store'
 import type { Tab } from '../../types'
 import { conversationQueueContextKey, type QueuedAgentMessage } from './conversation-state'
+import { followUpUnavailableReason } from './follow-up-actions'
 
 export type ConversationCommandIgnoreReason =
   | 'empty'
@@ -33,6 +34,7 @@ export type ConversationCommandResult =
   | { status: 'failed'; error: string; runId?: string }
 
 interface ConversationRunAgentApi {
+  supplement?: AgentApiContract['supplement']
   saveMessageImages: AgentApiContract['saveMessageImages']
   sendMessage: (
     conversationId: string,
@@ -46,8 +48,15 @@ interface ConversationRunAgentApi {
 }
 
 interface ConversationRunStore {
+  beginSupplement: (content: string, conversationId: string, runId: string) => string | null
+  finishSupplement: (
+    messageId: string,
+    result: import('@shared/agent-protocol').AgentSupplementResult,
+    conversationId: string,
+  ) => void
   setQueuedMessageDispatchId: (id: string | null, conversationId: string) => void
   enqueueMessage: (content: string, conversationId: string) => string | null
+  enqueueReplacement: (content: string, conversationId: string) => string | null
   removeQueuedMessage: (id: string, conversationId: string) => void
   setMessageQueuePauseReason: (reason: string | null, conversationId: string) => void
   restoreFailedMessage: (
@@ -64,7 +73,7 @@ interface ConversationRunStore {
     resources?: AgentMountedResource[],
   ) => void
   addSystemMessage: (content: string, conversationId?: string) => void
-  beginRun: (conversationId?: string) => string
+  beginRun: (conversationId?: string, supplementContextKey?: string) => string
   cancelStreaming: (
     conversationId?: string,
     reason?: AgentRunTerminalReason,
@@ -103,6 +112,8 @@ export interface ConversationRunController {
   send: (content: string) => Promise<ConversationCommandResult>
   sendQueued: (item: QueuedAgentMessage) => Promise<ConversationCommandResult>
   abort: () => Promise<ConversationCommandResult>
+  stopAndSend: (content: string) => Promise<ConversationCommandResult>
+  supplement: (content: string) => Promise<ConversationCommandResult>
   compact: (instructions: string) => Promise<ConversationCommandResult>
 }
 
@@ -156,6 +167,11 @@ export function createConversationRunController({
     if (queued && (conversation.loading || conversation.contextCompaction.status === 'compacting'))
       return { status: 'ignored', reason: 'busy' }
     if (
+      queued?.afterCancellation &&
+      (queued.afterCancellation.phase !== 'ready' || conversation.runStatus !== 'cancelled')
+    )
+      return { status: 'failed', error: '原任务停止状态已变化，新消息已保留，请核对后继续' }
+    if (
       queued &&
       (queued.missingImages || queued.contextKey !== conversationQueueContextKey(conversation))
     ) {
@@ -182,7 +198,16 @@ export function createConversationRunController({
       conversationId,
       transientMessageResources(conversation.mountedResources, images),
     )
-    const runId = store.beginRun(conversationId)
+    // A queued item owns its resource snapshot; a later draft must not become this Run's context.
+    const runId = queued
+      ? store.beginRun(
+          conversationId,
+          JSON.stringify([
+            conversationQueueContextKey(conversation),
+            conversation.mountedResources.filter((resource) => resource.kind !== 'file-range'),
+          ]),
+        )
+      : store.beginRun(conversationId)
     const consumedIds = [
       ...images.map((image) => image.id),
       ...conversation.mountedResources
@@ -271,6 +296,69 @@ export function createConversationRunController({
   return {
     send: (content) => guardedSend(content),
     sendQueued: (item) => guardedSend(item.content, item),
+    supplement: async (content) => {
+      const current = getStore().conversations[conversationId]
+      if (!current?.activeRunId || !current.loading)
+        return { status: 'ignored', reason: 'no-active-run' }
+      const latest = getStore().conversations[conversationId]
+      const reason = followUpUnavailableReason(latest, 'supplement')
+      if (reason || latest.activeRunId !== current.activeRunId)
+        return { status: 'failed', error: reason ?? '原任务已结束或切换' }
+      const text = content.trim()
+      if (!text || !agentApi.supplement)
+        return { status: 'failed', error: '补充消息为空或当前 Runtime 不支持' }
+      const runId = current.activeRunId
+      const messageId = getStore().beginSupplement(text, conversationId, runId)
+      if (!messageId) return { status: 'ignored', reason: 'busy' }
+      try {
+        const result = await agentApi.supplement(conversationId, {
+          runId,
+          messageId,
+          content: text,
+        })
+        getStore().finishSupplement(messageId, result, conversationId)
+        return result.status === 'received'
+          ? { status: 'accepted', runId }
+          : {
+              status: 'failed',
+              error: result.error ?? '补充接收未确认；消息内容保留在历史中',
+              runId,
+            }
+      } catch (cause) {
+        const error = `补充接收未确认：${errorMessage(cause)}`
+        getStore().finishSupplement(messageId, { status: 'unknown', error }, conversationId)
+        return { status: 'failed', error, runId }
+      }
+    },
+    stopAndSend: async (content) => {
+      const store = getStore()
+      const current = store.conversations[conversationId]
+      const text = content.trim() || (current?.pendingImages?.length ? '请查看我发送的图片。' : '')
+      if (!text) return { status: 'ignored', reason: 'empty' }
+      if (!current?.activeRunId) return { status: 'ignored', reason: 'no-active-run' }
+      if (pendingSends.has(conversationId)) return { status: 'ignored', reason: 'busy' }
+      const runId = current.activeRunId
+      const messageId = store.enqueueReplacement(text, conversationId)
+      if (!messageId)
+        return {
+          status: 'failed',
+          error: '当前不能停止后执行，请等待任务启动完成或处理已有待发送消息',
+        }
+      try {
+        const result = await agentApi.abort(conversationId, runId)
+        if (result.run) store.applyRuntimeRunStatus(result.run)
+        if (!result.accepted) {
+          const error = result.error ?? '停止未确认，新消息已保留，请检查后手动继续'
+          store.setMessageQueuePauseReason(error, conversationId)
+          return { status: 'failed', error, runId }
+        }
+        return { status: 'queued', messageId }
+      } catch (cause) {
+        const error = `停止未确认，新消息已保留：${errorMessage(cause)}`
+        store.setMessageQueuePauseReason(error, conversationId)
+        return { status: 'failed', error, runId }
+      }
+    },
     abort: async () => {
       const store = getStore()
       const conversation = store.conversations[conversationId]

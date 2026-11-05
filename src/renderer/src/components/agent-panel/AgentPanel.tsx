@@ -37,6 +37,11 @@ import type { BrowserActionLog, BrowserDownloadRecord, BrowserTaskRun } from '@s
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
 import type { AgentRoleSummary, AgentSkillRef } from '@shared/agent-role'
 import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
+import {
+  AGENT_FOLLOW_UP,
+  followUpUnavailableReason,
+} from '../../features/agent-conversations/follow-up-actions'
+import { useCommandStore } from '../../stores/command-store'
 import { useComposerHistory } from '../../features/agent-composer/use-composer-history'
 import { isAgentConfirmationVisible } from '../../utils/workspace-resource-visibility'
 import {
@@ -1125,7 +1130,44 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         },
         costLabel: lastCost === null ? null : `费用 $${lastCost.toFixed(4)}`,
         composer: {
+          commandTarget: {
+            conversationId: activeConversationId,
+            runId: activeConversation.activeRunId ?? null,
+            workspaceKey: workspaceRefKey(
+              activeConversation.runtime.workspaceRef ?? activeWorkspaceRef,
+            ),
+          },
           allowQueueWhileRunning: true,
+          followUps: Object.entries(AGENT_FOLLOW_UP).map(([action, definition]) => {
+            const reason = followUpUnavailableReason(
+              activeConversation,
+              action as keyof typeof AGENT_FOLLOW_UP,
+            )
+            return {
+              ...definition,
+              description:
+                action === 'supplement'
+                  ? '补充当前任务，已有队列保持不变'
+                  : '确认停止后执行这条，原队列暂停',
+              capability: reason
+                ? { state: 'disabled' as const, reason }
+                : { state: 'enabled' as const },
+              onExecute: async () => {
+                const result = await useCommandStore.getState().executeCommand(definition.id, {
+                  source: 'toolbar',
+                  target: {
+                    kind: 'thread',
+                    conversationId: activeConversationId,
+                    activeRunId: activeConversation.activeRunId,
+                    workspaceKey: workspaceRefKey(
+                      activeConversation.runtime.workspaceRef ?? activeWorkspaceRef,
+                    ),
+                  },
+                })
+                if (!result.ok) showToast(result.message ?? '操作未执行，请检查当前任务', 'error')
+              },
+            }
+          }),
           submitLabel:
             loading ||
             contextCompacting ||
@@ -1158,11 +1200,15 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
           onStop: handleAbort,
           canSubmit,
           submitting: loading || contextCompacting,
-          stopCapability: loading
-            ? { state: 'enabled' }
-            : contextCompacting
-              ? { state: 'hidden', reason: '上下文压缩期间不能停止 Agent' }
-              : { state: 'hidden' },
+          stopLabel: activeConversation.runStatus === 'cancelling' ? '正在停止' : '停止',
+          stopCapability:
+            activeConversation.runStatus === 'cancelling'
+              ? { state: 'disabled', reason: '正在等待 Runtime 确认停止' }
+              : loading
+                ? { state: 'enabled' }
+                : contextCompacting
+                  ? { state: 'hidden', reason: '上下文压缩期间不能停止 Agent' }
+                  : { state: 'hidden' },
           placeholder:
             loading || contextCompacting
               ? '继续输入，Enter 加入队列；Shift+Enter 换行'

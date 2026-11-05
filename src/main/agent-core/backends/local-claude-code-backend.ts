@@ -18,7 +18,11 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentImageAttachment } from '../../../shared/ipc/agent.js'
-import type { AgentContextUsageSnapshot } from '../../../shared/agent-protocol.js'
+import type {
+  AgentContextUsageSnapshot,
+  AgentSupplementInput,
+  AgentSupplementResult,
+} from '../../../shared/agent-protocol.js'
 import type { ContextCompactionFailureCode } from '../../../shared/agent-failure.js'
 import type { McpToolHost } from '../tools/tool-host.js'
 import type { ToolDefinition, ToolExecutionContext } from '../tools/types.js'
@@ -91,6 +95,15 @@ export interface ClaudeCodeBackendOptions {
 }
 
 export class LocalClaudeCodeBackend implements IAgentBackend {
+  private currentInput: ReturnType<typeof createSdkPrompt> | null = null
+  private supplementSupported = false
+  private unstartedSupplementIds = new Set<string>()
+  private supplementRunId: string | null = null
+  private pendingSupplement: {
+    id: string
+    finish: (result: AgentSupplementResult) => void
+  } | null = null
+  private supplementReceipts = new Map<string, Promise<AgentSupplementResult>>()
   private currentQuery: Query | null = null
   private currentQueryDone: Promise<void> | null = null
   private abortPromise: Promise<void> | null = null
@@ -631,6 +644,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         options: sdkOptions,
       })
       this.currentQuery = sdkQuery
+      this.currentInput = sdkInput
+      this.supplementRunId = options?.runId ?? null
+      this.supplementSupported = false
+      this.supplementReceipts.clear()
+      this.unstartedSupplementIds.clear()
       this.currentOperation = operation
       this.abortController = abortController
       const queryDone = this.consumeQuery(sdkQuery, operation, sdkInput.close, usage)
@@ -739,6 +757,27 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         // 这些检查仍要保留，防止传输层在 query 被替换或销毁后转发迟到事件。
         if (this.currentQuery !== sdkQuery) break
         const record = event as Record<string, unknown>
+        if (record.type === 'system' && record.subtype === 'init') {
+          this.supplementSupported =
+            Array.isArray(record.capabilities) && record.capabilities.includes('msg_lifecycle_v1')
+          record.supplementSupported = this.supplementSupported && operation === 'message'
+        }
+        if (
+          record.type === 'command_lifecycle' &&
+          typeof record.command_uuid === 'string' &&
+          record.state === 'started'
+        ) {
+          if (this.unstartedSupplementIds.delete(record.command_uuid)) {
+            // Forward late authoritative receipts through the existing run-scoped event stream.
+            this.emit('system', {
+              type: 'system',
+              subtype: 'supplement_received',
+              supplementMessageId: record.command_uuid,
+            })
+          }
+          if (record.command_uuid === this.pendingSupplement?.id)
+            this.pendingSupplement?.finish({ status: 'received' })
+        }
         try {
           usage?.observe(record)
         } catch {
@@ -756,6 +795,14 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
               isError: record.is_error === true,
             })
             continue
+          }
+          if (this.unstartedSupplementIds.size) {
+            this.pendingSupplement?.finish({
+              status: 'unknown',
+              error: '任务已结束，补充接收未确认；请核对历史后再发送',
+            })
+            // Never let a late queued input become an untracked follow-up turn.
+            sdkQuery.close()
           }
           await this.captureContextUsage(sdkQuery, true)
         }
@@ -798,6 +845,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         })
       }
     } finally {
+      this.pendingSupplement?.finish({ status: 'unknown', error: 'Runtime 已退出，补充接收未确认' })
       try {
         usage?.finish(this.aborted ? 'interrupted' : 'failed')
       } catch {
@@ -806,6 +854,9 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       closeInput()
       if (this.currentQuery === sdkQuery) {
         this.currentQuery = null
+        this.currentInput = null
+        this.supplementSupported = false
+        this.supplementRunId = null
         this.currentOperation = null
         this.abortController = null
         this.currentQueryDone = null
@@ -950,6 +1001,54 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     return trackedAbort
   }
 
+  async supplement(input: AgentSupplementInput): Promise<AgentSupplementResult> {
+    if (
+      input.runId !== this.supplementRunId ||
+      !this.currentQuery ||
+      !this.currentInput ||
+      this.aborted ||
+      this.terminalEventEmitted ||
+      this.currentOperation !== 'message'
+    ) {
+      return { status: 'rejected', error: '原任务已结束或正在停止，补充未发送' }
+    }
+    const previous = this.supplementReceipts.get(input.messageId)
+    if (previous) return previous
+    if (!this.supplementSupported)
+      return { status: 'rejected', error: '当前 Runtime 版本不支持补充接收确认' }
+    if (this.pendingSupplement || this.unstartedSupplementIds.size)
+      return { status: 'rejected', error: '上一条补充仍在等待接收' }
+    if (this.supplementReceipts.size >= 50)
+      return { status: 'rejected', error: '本轮补充次数已达上限，请等待完成' }
+    const receipt = new Promise<AgentSupplementResult>((resolve) => {
+      const timer = setTimeout(
+        () => finish({ status: 'unknown', error: '补充接收等待超时，请核对历史；不要自动重发' }),
+        120_000,
+      )
+      const finish = (result: AgentSupplementResult): void => {
+        clearTimeout(timer)
+        if (this.pendingSupplement?.id === input.messageId) this.pendingSupplement = null
+        resolve(result)
+      }
+      this.pendingSupplement = { id: input.messageId, finish }
+      this.unstartedSupplementIds.add(input.messageId)
+      try {
+        this.currentInput!.push({
+          type: 'user',
+          uuid: input.messageId as `${string}-${string}-${string}-${string}-${string}`,
+          priority: 'next',
+          message: { role: 'user', content: input.content },
+          parent_tool_use_id: null,
+        })
+      } catch {
+        this.unstartedSupplementIds.delete(input.messageId)
+        finish({ status: 'rejected', error: '当前输入通道已关闭，补充未发送' })
+      }
+    })
+    this.supplementReceipts.set(input.messageId, receipt)
+    return receipt
+  }
+
   getStatus(): AgentBackendStatus {
     return {
       connected: this.currentQuery !== null,
@@ -986,12 +1085,21 @@ function createSdkPrompt(
   message: string,
   images: AgentImageAttachment[] | undefined,
   signal: AbortSignal,
-): { prompt: AsyncIterable<SDKUserMessage>; close: () => void } {
+): {
+  prompt: AsyncIterable<SDKUserMessage>
+  close: () => void
+  push: (message: SDKUserMessage) => void
+} {
+  const additional: SDKUserMessage[] = []
+  let wake: (() => void) | undefined
+  let ended = false
   let release!: () => void
   const closed = new Promise<void>((resolve) => {
     release = resolve
   })
   const close = (): void => {
+    ended = true
+    wake?.()
     signal.removeEventListener('abort', close)
     release()
   }
@@ -1023,9 +1131,24 @@ function createSdkPrompt(
     // Both a string prompt and an exhausted generator make SDK 0.3.211 close
     // stdin on the FIRST result. Keep the bidirectional permission/hook channel
     // open until our user turn ends, or cancellation/transport failure releases it.
+    while (!ended) {
+      if (additional.length) yield additional.shift()!
+      else
+        await new Promise<void>((resolve) => {
+          wake = resolve
+        })
+    }
     await closed
   })()
-  return { prompt, close }
+  return {
+    prompt,
+    close,
+    push: (message) => {
+      if (ended) throw new Error('当前输入通道已关闭')
+      additional.push(message)
+      wake?.()
+    },
+  }
 }
 
 interface SdkFailureClassification {

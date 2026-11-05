@@ -25,6 +25,7 @@ import type { AgentSkillSummary } from '@shared/agent-skill'
 import { ConversationMessageRenderer } from '../common/ConversationMessageRenderer'
 import {
   IconCheck,
+  IconChevronDown,
   IconCircle,
   IconClipboard,
   IconError,
@@ -195,6 +196,7 @@ export interface AgentPanelComposerEnhancements {
 }
 
 export interface AgentPanelComposerModel {
+  commandTarget?: { conversationId: string; runId: string | null; workspaceKey: string | null }
   queue?: QueuedMessageListModel
   allowQueueWhileRunning?: boolean
   submitLabel?: string
@@ -210,6 +212,13 @@ export interface AgentPanelComposerModel {
   onStop?(): void | Promise<void>
   stopLabel?: string
   stopCapability: AgentPanelCapability
+  followUps?: Array<{
+    id: string
+    label: string
+    description: string
+    capability: AgentPanelCapability
+    onExecute(): void | Promise<void>
+  }>
   uploadProgress?: { label: string; percent: number }
   onKeyDownBeforeSubmit?(event: KeyboardEvent<HTMLTextAreaElement>): boolean
   onPaste?: ClipboardEventHandler<HTMLTextAreaElement>
@@ -825,6 +834,11 @@ export function ComposerFrame({
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
+      // Modified Enter belongs to the command router, including disabled capabilities.
+      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault()
+        return
+      }
       const handledBeforeSubmit = model.onKeyDownBeforeSubmit?.(event) ?? false
       const decision = resolveAgentComposerKeyDecision({
         key: event.key,
@@ -872,6 +886,9 @@ export function ComposerFrame({
         className={`agent-composer-wrap ${height === null ? '' : 'resized'}`}
         style={height === null ? undefined : { height }}
         data-agent-landmark="composer"
+        data-agent-command-conversation={model.commandTarget?.conversationId}
+        data-agent-command-run={model.commandTarget?.runId ?? undefined}
+        data-agent-command-workspace={model.commandTarget?.workspaceKey ?? undefined}
       >
         {enhancements?.resourceCandidates?.open ? (
           <ResourceCandidateMenu
@@ -963,6 +980,16 @@ export function ActionBar({
   submit(): void
 }): ReactElement {
   const remoteImageInputRef = useRef<HTMLInputElement>(null)
+  const [followUpOpen, setFollowUpOpen] = useState(false)
+  const followUpRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!followUpOpen) return
+    const close = (event: globalThis.PointerEvent): void => {
+      if (!followUpRef.current?.contains(event.target as Node)) setFollowUpOpen(false)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [followUpOpen])
   const stopLabel = model.stopLabel || '停止'
   const stopAction =
     model.submitting && model.stopCapability.state !== 'hidden' ? (
@@ -1011,6 +1038,54 @@ export function ActionBar({
     <span className="agent-composer-primary-actions">
       {stopAction}
       {!stopAction || model.allowQueueWhileRunning ? sendAction : null}
+      {model.submitting && model.followUps ? (
+        <span
+          className="agent-follow-up-anchor"
+          ref={followUpRef}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              setFollowUpOpen(false)
+              followUpRef.current
+                ?.querySelector<HTMLButtonElement>('.agent-follow-up-toggle')
+                ?.focus()
+              event.stopPropagation()
+            }
+          }}
+        >
+          <button
+            type="button"
+            className="agent-send-btn agent-follow-up-toggle"
+            aria-label="更多发送方式"
+            aria-expanded={followUpOpen}
+            onClick={() => setFollowUpOpen(!followUpOpen)}
+          >
+            <IconChevronDown size={14} />
+          </button>
+          {followUpOpen ? (
+            <div className="agent-follow-up-menu" role="group" aria-label="后续消息操作">
+              {model.followUps.map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  data-agent-action={action.id}
+                  disabled={action.capability.state !== 'enabled'}
+                  onClick={() => {
+                    setFollowUpOpen(false)
+                    void action.onExecute()
+                  }}
+                >
+                  <span>{action.label}</span>
+                  <small>
+                    {action.capability.state === 'enabled'
+                      ? action.description
+                      : action.capability.reason}
+                  </small>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </span>
+      ) : null}
     </span>
   )
 

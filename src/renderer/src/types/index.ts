@@ -322,6 +322,11 @@ export type ContentBlock =
 
 /** Agent 消息 — 支持流式和完整两种模式 */
 export interface AgentMessage {
+  supplement?: {
+    runId: string
+    status: 'pending' | 'received' | 'rejected' | 'unknown'
+    error?: string
+  }
   id: string
   role: AgentRole
   /** 结构化内容块 */

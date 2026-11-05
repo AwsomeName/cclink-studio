@@ -138,8 +138,16 @@ interface AgentState {
 
   // --- 当前/指定会话 Actions ---
   setInput: (text: string, conversationId?: string) => void
+  setSupplementSupported: (supported: boolean, conversationId?: string) => void
+  beginSupplement: (content: string, conversationId: string, runId: string) => string | null
+  finishSupplement: (
+    messageId: string,
+    result: import('@shared/agent-protocol').AgentSupplementResult,
+    conversationId: string,
+  ) => void
   setQueuedMessageDispatchId: (id: string | null, conversationId: string) => void
   enqueueMessage: (content: string, conversationId: string) => string | null
+  enqueueReplacement: (content: string, conversationId: string) => string | null
   removeQueuedMessage: (id: string, conversationId: string) => void
   editQueuedMessage: (id: string, conversationId: string) => boolean
   setMessageQueuePauseReason: (reason: string | null, conversationId: string) => void
@@ -155,7 +163,7 @@ interface AgentState {
   ) => void
   setMessageImageAssets: (conversationId: string, assets: AgentMessageImageAsset[]) => void
   addSystemMessage: (content: string, conversationId?: string) => void
-  beginRun: (conversationId?: string) => string
+  beginRun: (conversationId?: string, supplementContextKey?: string) => string
   startStreamingMessage: (messageId: string, conversationId?: string, runId?: string) => void
   stopStreamingMessage: (conversationId?: string) => void
   appendStreamDelta: (delta: string, conversationId?: string) => void
@@ -564,6 +572,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const archived = {
         ...current,
         archivedAt: now,
+        queuedMessages: current.queuedMessages?.map((item) => ({
+          ...item,
+          afterCancellation: item.afterCancellation
+            ? { ...item.afterCancellation, phase: 'paused' as const }
+            : undefined,
+        })),
         messageQueuePauseReason: current.queuedMessages?.length
           ? '会话已归档；恢复后请确认并继续队列'
           : current.messageQueuePauseReason,
@@ -827,6 +841,58 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       })),
     ),
 
+  setSupplementSupported: (supported, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        supplementSupported: supported,
+      })),
+    ),
+
+  beginSupplement: (content, conversationId, runId) => {
+    const current = get().conversations[conversationId]
+    if (
+      !current ||
+      current.activeRunId !== runId ||
+      current.runStatus === 'cancelling' ||
+      current.messages.some((message) => message.supplement?.status === 'pending')
+    )
+      return null
+    const id = crypto.randomUUID()
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        input: '',
+        messages: [
+          ...conversation.messages,
+          {
+            id,
+            role: 'user',
+            content: [{ type: 'text', text: content }],
+            rawText: content,
+            timestamp: Date.now(),
+            supplement: { runId, status: 'pending' },
+          },
+        ],
+      })),
+    )
+    return id
+  },
+
+  finishSupplement: (messageId, result, conversationId) =>
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId &&
+          message.supplement &&
+          !(message.supplement.status === 'received' && result.status !== 'received')
+            ? { ...message, supplement: { ...message.supplement, ...result, error: result.error } }
+            : message,
+        ),
+      })),
+    ),
+
   setQueuedMessageDispatchId: (id, conversationId) =>
     set((state) =>
       updateConversation(state, conversationId, (conversation) => ({
@@ -858,6 +924,54 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         mountedResources: conversation.mountedResources.filter(
           (resource) => resource.kind !== 'file-range',
         ),
+        updatedAt: Date.now(),
+      })),
+    )
+    return id
+  },
+
+  enqueueReplacement: (content, conversationId) => {
+    const current = get().conversations[conversationId]
+    if (
+      !current ||
+      current.archivedAt ||
+      !current.activeRunId ||
+      !current.loading ||
+      current.runStatus === 'starting' ||
+      current.runStatus === 'cancelling' ||
+      current.contextCompaction.status === 'compacting' ||
+      current.runtime.location !== 'local' ||
+      current.runtimeBinding?.kind === 'acp' ||
+      current.queuedMessages?.some((item) => item.afterCancellation) ||
+      (current.queuedMessages?.length ?? 0) >= 20
+    )
+      return null
+    const id = crypto.randomUUID()
+    set((state) =>
+      updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        queuedMessages: [
+          {
+            id,
+            content,
+            createdAt: Date.now(),
+            contextKey: conversationQueueContextKey(conversation),
+            mountedResources: conversation.mountedResources,
+            pendingImages: conversation.pendingImages ?? [],
+            afterCancellation: {
+              runId: current.activeRunId!,
+              phase: 'waiting',
+              deadlineAt: Date.now() + 30_000,
+            },
+          },
+          ...(conversation.queuedMessages ?? []),
+        ],
+        input: '',
+        pendingImages: [],
+        mountedResources: conversation.mountedResources.filter(
+          (resource) => resource.kind !== 'file-range',
+        ),
+        messageQueuePauseReason: '等待当前任务停止确认；原队列保持暂停',
         updatedAt: Date.now(),
       })),
     )
@@ -906,6 +1020,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       updateConversation(state, conversationId, (conversation) => ({
         ...conversation,
         messageQueuePauseReason: reason,
+        queuedMessages: conversation.queuedMessages?.map((item) => ({
+          ...item,
+          afterCancellation: item.afterCancellation
+            ? reason
+              ? { ...item.afterCancellation, phase: 'paused' as const }
+              : undefined
+            : undefined,
+        })),
         updatedAt: Date.now(),
       })),
     ),
@@ -1008,7 +1130,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       })),
     ),
 
-  beginRun: (conversationId) => {
+  beginRun: (conversationId, supplementContextKey) => {
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
     set((state) =>
@@ -1017,6 +1139,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         loading: true,
         backendState: 'connecting' as AgentBackendState,
         runStatus: 'starting',
+        supplementSupported: false,
+        activeRunSupplementContextKey:
+          supplementContextKey ??
+          JSON.stringify([
+            conversationQueueContextKey(conversation),
+            conversation.mountedResources.filter((resource) => resource.kind !== 'file-range'),
+          ]),
         contextCompaction:
           conversation.contextCompaction.status === 'failed'
             ? {
@@ -1175,6 +1304,22 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         const failed = record.status === 'failed'
         return {
           ...conversation,
+          queuedMessages: conversation.queuedMessages?.map((item) =>
+            item.afterCancellation?.runId === record.runId &&
+            item.afterCancellation.phase === 'waiting'
+              ? {
+                  ...item,
+                  afterCancellation: {
+                    ...item.afterCancellation,
+                    phase:
+                      record.status === 'cancelled' &&
+                      Date.now() < item.afterCancellation.deadlineAt
+                        ? 'ready'
+                        : 'paused',
+                  },
+                }
+              : item,
+          ),
           messages: conversation.messages.map((message) =>
             message.isStreaming ? { ...message, isStreaming: false } : message,
           ),

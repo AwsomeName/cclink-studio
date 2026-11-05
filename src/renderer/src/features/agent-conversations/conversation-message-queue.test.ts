@@ -32,6 +32,7 @@ function harness() {
       },
     })),
     abort: vi.fn().mockResolvedValue({ accepted: true }),
+    supplement: vi.fn().mockResolvedValue({ status: 'received' }),
     compactConversation: vi.fn().mockResolvedValue({ success: true }),
   }
   const createController = (conversationId: string) =>
@@ -50,6 +51,294 @@ afterEach(() => {
 })
 
 describe('conversation message queue', () => {
+  it('keeps supplement receipts on their Run without clearing a later draft or changing the queue', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    const runId = conversation().activeRunId!
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    useAgentStore.getState().setSupplementSupported(true, id)
+    await controller.send('B')
+    useAgentStore.getState().setInput('correction', id)
+    let receive!: (value: { status: string }) => void
+    api.supplement.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          receive = resolve
+        }),
+    )
+    const sending = controller.supplement('correction')
+    expect(conversation().messages.at(-1)?.supplement).toMatchObject({ runId, status: 'pending' })
+    const restored = normalizeConversationSnapshot(
+      buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), null),
+    )!
+    expect(restored.conversations[id].messages.at(-1)?.supplement?.status).toBe('unknown')
+    useAgentStore.getState().setInput('later draft', id)
+    await expect(controller.supplement('later draft')).resolves.toMatchObject({ status: 'failed' })
+    receive({ status: 'received' })
+    await expect(sending).resolves.toMatchObject({ status: 'accepted', runId })
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    expect(api.supplement).toHaveBeenCalledTimes(1)
+    expect(conversation().input).toBe('later draft')
+    expect(conversation().queuedMessages?.map((item) => item.content)).toEqual(['B'])
+    expect(conversation().messages.at(-1)?.supplement?.status).toBe('received')
+  })
+
+  it('retains an ambiguous supplement in history and refuses automatic or incompatible follow-up input', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    const runId = conversation().activeRunId!
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    useAgentStore.getState().setSupplementSupported(true, id)
+    useAgentStore.getState().setInput('correction', id)
+    useAgentStore
+      .getState()
+      .addPendingImages(
+        [{ id: 'img', name: 'image.png', mediaType: 'image/png', size: 3, data: 'AQID' }],
+        id,
+      )
+    await expect(controller.supplement('correction')).resolves.toMatchObject({ status: 'failed' })
+    expect(api.supplement).not.toHaveBeenCalled()
+    useAgentStore.getState().removePendingImage('img', id)
+    api.supplement.mockRejectedValueOnce(new Error('transport lost'))
+    await expect(controller.supplement('correction')).resolves.toMatchObject({ status: 'failed' })
+    expect(conversation().messages.at(-1)).toMatchObject({
+      rawText: 'correction',
+      supplement: { status: 'unknown' },
+    })
+    useAgentStore.getState().setInput('retry', id)
+    await expect(controller.supplement('retry')).resolves.toMatchObject({ status: 'failed' })
+    expect(api.supplement).toHaveBeenCalledTimes(1)
+    expect(conversation().input).toBe('retry')
+  })
+
+  it('does not mistake a later draft resource for the active queued Run context', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    await controller.send('B')
+    useAgentStore.setState((state) => ({
+      conversations: {
+        ...state.conversations,
+        [id]: {
+          ...conversation(),
+          mountedResources: [
+            {
+              id: 'new-file',
+              kind: 'file',
+              label: 'later.txt',
+              ref: { type: 'file', path: '/later.txt' },
+            },
+          ],
+        },
+      },
+    }))
+    useAgentStore.getState().finishStreamingMessage(id, conversation().activeRunId!)
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(2)
+    const runId = conversation().activeRunId!
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    useAgentStore.getState().setSupplementSupported(true, id)
+    useAgentStore.getState().setInput('correction', id)
+    await expect(controller.supplement('correction')).resolves.toMatchObject({
+      status: 'failed',
+      error: expect.stringContaining('上下文已变化'),
+    })
+    expect(api.supplement).not.toHaveBeenCalled()
+    expect(conversation().input).toBe('correction')
+  })
+
+  it('starts a replacement only after exact cancellation and leaves the original queue paused', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    useAgentStore.getState().setBackendState('connected', id)
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId: conversation().activeRunId!,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    const runId = conversation().activeRunId!
+    await controller.send('B')
+    await controller.send('C')
+    useAgentStore.getState().setInput('D', id)
+    await controller.stopAndSend('D')
+    useAgentStore.getState().setInput('later draft', id)
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    expect(conversation().queuedMessages?.map((item) => item.content)).toEqual(['D', 'B', 'C'])
+    const terminal = {
+      conversationId: id,
+      runId,
+      status: 'cancelled' as const,
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+    }
+    useAgentStore.getState().applyRuntimeRunStatus({ ...terminal, runId: 'different-run' })
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    useAgentStore.getState().applyRuntimeRunStatus(terminal)
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(2)
+    expect(api.sendMessage.mock.calls[1][1]).toMatchObject({ message: 'D' })
+    expect(conversation().queuedMessages?.map((item) => item.content)).toEqual(['B', 'C'])
+    expect(conversation().input).toBe('later draft')
+    expect(conversation().messageQueuePauseReason).toBeTruthy()
+    useAgentStore.getState().applyRuntimeRunStatus(terminal)
+    useAgentStore.getState().finishStreamingMessage(id, conversation().activeRunId!)
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(2)
+    useAgentStore.getState().setMessageQueuePauseReason(null, id)
+    await settle()
+    expect(api.sendMessage.mock.calls[2][1]).toMatchObject({ message: 'B' })
+  })
+
+  it('preserves a rejected replacement and never auto-resumes it after a late terminal', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    useAgentStore.getState().setBackendState('connected', id)
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId: conversation().activeRunId!,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    const runId = conversation().activeRunId!
+    api.abort.mockResolvedValueOnce({ accepted: false })
+    await expect(controller.stopAndSend('D')).resolves.toMatchObject({ status: 'failed' })
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId,
+      status: 'cancelled',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 2,
+      completedAt: 2,
+    })
+    await settle()
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    expect(conversation().queuedMessages?.[0].content).toBe('D')
+    expect(conversation().queuedMessages?.[0].afterCancellation?.phase).toBe('paused')
+    const restored = normalizeConversationSnapshot(
+      buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), null),
+    )!
+    expect(restored.conversations[id].queuedMessages?.[0].afterCancellation).toBeUndefined()
+    expect(restored.conversations[id].messageQueuePauseReason).toContain('已恢复')
+  })
+
+  it('rejects duplicate replacement clicks and keeps later queued messages isolated', async () => {
+    const { api, controller } = harness()
+    await controller.send('A')
+    useAgentStore.getState().setBackendState('connected', id)
+    useAgentStore.getState().applyRuntimeRunStatus({
+      conversationId: id,
+      runId: conversation().activeRunId!,
+      status: 'running',
+      workspaceKey: null,
+      startedAt: 1,
+      updatedAt: 1,
+      completedAt: null,
+    })
+    await controller.stopAndSend('D')
+    await expect(controller.stopAndSend('D')).resolves.toMatchObject({ status: 'failed' })
+    await controller.send('later')
+    expect(conversation().queuedMessages?.map((item) => item.content)).toEqual(['D', 'later'])
+    expect(api.abort).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['archive', 'workspace', 'timeout', 'manual pause'])(
+    'never auto-starts a replacement after %s invalidates it',
+    async (reason) => {
+      const { api, controller } = harness()
+      useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'local', path: '/original' } })
+      useAgentStore.setState((state) => ({
+        conversations: {
+          ...state.conversations,
+          [id]: {
+            ...conversation(),
+            runtime: {
+              ...conversation().runtime,
+              workspaceRef: { kind: 'local', path: '/original' },
+            },
+          },
+        },
+      }))
+      await controller.send('A')
+      const runId = conversation().activeRunId!
+      const record = {
+        conversationId: id,
+        runId,
+        status: 'running' as const,
+        workspaceKey: '/original',
+        startedAt: 1,
+        updatedAt: 1,
+        completedAt: null,
+      }
+      useAgentStore.getState().applyRuntimeRunStatus(record)
+      await controller.stopAndSend('D')
+      if (reason === 'archive') await useAgentStore.getState().archiveConversation(id)
+      if (reason === 'workspace')
+        useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'local', path: '/other' } })
+      if (reason === 'manual pause')
+        useAgentStore.getState().setMessageQueuePauseReason('pause', id)
+      if (reason === 'timeout')
+        useAgentStore.setState((state) => ({
+          conversations: {
+            ...state.conversations,
+            [id]: {
+              ...conversation(),
+              queuedMessages: conversation().queuedMessages?.map((item) => ({
+                ...item,
+                afterCancellation: { ...item.afterCancellation!, deadlineAt: 0 },
+              })),
+            },
+          },
+        }))
+      await settle()
+      useAgentStore
+        .getState()
+        .applyRuntimeRunStatus({ ...record, status: 'cancelled', updatedAt: 2, completedAt: 2 })
+      if (reason === 'archive') await useAgentStore.getState().restoreArchivedConversation(id)
+      useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'local', path: '/original' } })
+      await settle()
+      expect(api.sendMessage).toHaveBeenCalledTimes(1)
+      expect(conversation().queuedMessages?.[0]).toMatchObject({
+        content: 'D',
+        afterCancellation: { phase: 'paused' },
+      })
+    },
+  )
+
   it('waits for an outstanding acceptance even if its Runtime has already completed', async () => {
     const { api, controller } = harness()
     const original = api.sendMessage.getMockImplementation()!

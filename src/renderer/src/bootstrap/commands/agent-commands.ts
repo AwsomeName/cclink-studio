@@ -7,8 +7,62 @@ import { createConversationRuntimeForWorkspace } from '../../features/agent-conv
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { workspaceRefLabel } from '@shared/workspace-ref'
 
+import {
+  AGENT_FOLLOW_UP,
+  followUpUnavailableReason,
+} from '../../features/agent-conversations/follow-up-actions'
+import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
+
 export function createAgentCommands(): Command[] {
   return [
+    ...Object.entries(AGENT_FOLLOW_UP).map(
+      ([action, definition]): Command => ({
+        id: definition.id,
+        label: definition.label,
+        category: 'Agent',
+        contextOnly: true,
+        ...(action === 'supplement'
+          ? {
+              shortcutPolicy: {
+                scope: 'agent' as const,
+                inputPolicy: 'allow' as const,
+                defaultBindings: [{ code: 'Enter', modifiers: ['primary' as const] }],
+              },
+            }
+          : {}),
+        enabled: (context) => {
+          const target = context.target?.kind === 'thread' ? context.target : null
+          const conversation = target
+            ? useAgentStore.getState().conversations[target.conversationId]
+            : undefined
+          const reason =
+            target?.activeRunId !== conversation?.activeRunId
+              ? '原任务已结束或切换'
+              : followUpUnavailableReason(conversation, action as keyof typeof AGENT_FOLLOW_UP)
+          return { enabled: !reason && Boolean(target), reason: reason ?? undefined }
+        },
+        action: async (context) => {
+          const target = context?.target?.kind === 'thread' ? context.target : null
+          const conversation = target
+            ? useAgentStore.getState().conversations[target.conversationId]
+            : undefined
+          if (!target || !conversation || target.activeRunId !== conversation.activeRunId)
+            throw new Error('原任务已结束或切换')
+          const reason = followUpUnavailableReason(
+            conversation,
+            action as keyof typeof AGENT_FOLLOW_UP,
+          )
+          if (reason) throw new Error(reason)
+          const controller = createConversationRunController({ conversationId: conversation.id })
+          const result =
+            action === 'supplement'
+              ? await controller.supplement(conversation.input)
+              : await controller.stopAndSend(conversation.input)
+          if (result.status === 'failed') throw new Error(result.error)
+          if (result.status === 'ignored') throw new Error('目标任务或输入已变化，请重新检查')
+        },
+      }),
+    ),
     {
       id: 'agent.newConversation',
       label: '新建 Agent 会话',

@@ -10,6 +10,8 @@ import { agentFailurePresentation } from '../features/agent-conversations/agent-
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
 type AgentStreamEventPayload = {
+  supplementSupported?: boolean
+  supplementMessageId?: string
   protocol?: 'studio-agent-event-v1'
   type?: string
   subtype?: string
@@ -108,7 +110,20 @@ export function applyAgentStreamEventToStore(
 
   switch (event.type) {
     case 'system': {
+      if (
+        event.subtype === 'supplement_received' &&
+        event.supplementMessageId &&
+        event.runId &&
+        conversationId
+      ) {
+        const message = store.conversations[conversationId]?.messages.find(
+          (message) => message.id === event.supplementMessageId,
+        )
+        if (message?.supplement?.runId === event.runId)
+          store.finishSupplement(message.id, { status: 'received' }, conversationId)
+      }
       if (event.subtype === 'init' && event.session_id) {
+        store.setSupplementSupported(event.supplementSupported === true, conversationId)
         store.setSessionId(event.session_id, conversationId, event.sessionCompatibilityFingerprint)
         store.setBackendState('connected', conversationId)
       }

@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "runtimeWasStubbed": true,
+  "sourceRunDirectory": "studio-remote-queue-ilj2bo",
+  "verified": [
+    "补充当前任务禁用",
+    "停止并执行这条禁用",
+    "停止等待保留语义",
+    "原远程队列 smoke 完整通过"
+  ]
+}

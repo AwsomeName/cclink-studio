@@ -22,6 +22,7 @@ import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import { openRemoteFileFromConversation } from './remote-file-navigation'
 import { remoteAgentComposerKey } from './remote-message-queue-state'
+import { AGENT_FOLLOW_UP } from '../agent-conversations/follow-up-actions'
 
 const EMPTY_REMOTE_AGENT_IMAGES: TransientImageAttachment[] = []
 
@@ -564,6 +565,20 @@ export function RemoteAgentController({
         },
         composer: {
           allowQueueWhileRunning: true,
+          followUps: [
+            {
+              ...AGENT_FOLLOW_UP.supplement,
+              description: '',
+              capability: { state: 'disabled', reason: '此远程会话暂不支持补充当前任务' },
+              onExecute: () => {},
+            },
+            {
+              ...AGENT_FOLLOW_UP.replace,
+              description: '',
+              capability: { state: 'disabled', reason: '此远程会话无法确认取消，暂不可用' },
+              onExecute: () => {},
+            },
+          ],
           textareaRef: inputRef,
           submitLabel:
             sending ||

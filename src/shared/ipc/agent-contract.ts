@@ -98,6 +98,20 @@ export const agentIpcContracts = {
       boundedIdentifierSchema().parse(args[1]),
     )
   }),
+  supplement: bindIpcParser(agentIpc.supplement, (args) => {
+    requireArgs(args, 2, agentIpc.supplement.channel)
+    return ipcArgs(
+      agentConversationIdSchema.parse(args[0]),
+      z
+        .object({
+          runId: boundedIdentifierSchema(),
+          messageId: z.string().uuid(),
+          content: z.string().trim().min(1).max(8192),
+        })
+        .strict()
+        .parse(args[1]),
+    )
+  }),
   getStatus: bindOptionalConversation(agentIpc.getStatus),
   getRunStatus: bindIpcParser(agentIpc.getRunStatus, (args) => {
     requireArgs(args, 2, agentIpc.getRunStatus.channel)

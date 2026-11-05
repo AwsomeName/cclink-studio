@@ -104,6 +104,20 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
       )}
       {isUserImageMessage && imageList}
       <div className="agent-message-body">
+        {message.supplement ? (
+          <div className="agent-supplement-receipt" role="status">
+            补充当前任务 ·{' '}
+            {
+              {
+                pending: '待接收',
+                received: '已接收',
+                rejected: '发送失败',
+                unknown: '接收状态未确认',
+              }[message.supplement.status]
+            }
+            {message.supplement.error ? <div>{message.supplement.error}</div> : null}
+          </div>
+        ) : null}
         {units.map((unit, index) => (
           <ContentRenderUnitRenderer
             key={index}

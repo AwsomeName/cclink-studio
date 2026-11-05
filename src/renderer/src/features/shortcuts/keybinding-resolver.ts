@@ -7,6 +7,8 @@ function shortcutScopesOverlap(left: string, right: string): boolean {
   // Global commands deliberately coexist with a more specific command. The router
   // selects the specific scope first (for example Markdown bold before sidebar toggle).
   if (left === 'global' || right === 'global') return false
+  // Composer focus replaces the workbench/editor scopes in the router.
+  if (left === 'agent' || right === 'agent') return false
   if (left === 'workbench' || right === 'workbench') return true
   return (left === 'editor' && right === 'markdown') || (left === 'markdown' && right === 'editor')
 }

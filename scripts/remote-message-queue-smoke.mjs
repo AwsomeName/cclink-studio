@@ -193,6 +193,18 @@ try {
         .length === 2,
   )
   await page.screenshot({ path: join(runDir, 'remote-queue-side.png') })
+  await panel.getByRole('button', { name: '更多发送方式', exact: true }).click()
+  assert.equal(
+    await panel.getByRole('button', { name: '补充当前任务', exact: false }).isDisabled(),
+    true,
+  )
+  assert.equal(
+    await panel.getByRole('button', { name: '停止并执行这条', exact: false }).isDisabled(),
+    true,
+  )
+  await page.screenshot({ path: join(runDir, 'remote-follow-up-unavailable.png') })
+  await panel.getByRole('button', { name: '更多发送方式', exact: true }).press('Escape')
+
   if (!real) {
     await queue.getByRole('button', { name: '暂停队列', exact: true }).click()
     await app.evaluate(() => globalThis.remoteQueueSmoke.complete())

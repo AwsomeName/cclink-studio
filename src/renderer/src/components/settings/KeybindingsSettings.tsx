@@ -24,6 +24,7 @@ const SCOPE_LABELS = {
   workbench: '当前内容',
   editor: '编辑器',
   markdown: 'Markdown',
+  agent: 'Agent 输入框',
   terminal: '终端',
   browser: '浏览器',
 } as const

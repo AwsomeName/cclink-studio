@@ -41,6 +41,35 @@ describe('registerAgentIpc', () => {
     expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('validates and forwards bounded supplements to the exact conversation and Run', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+    const input = {
+      runId: 'run-1',
+      messageId: '0b43e1d8-f538-4919-9509-f201bf6c42bc',
+      content: '  correction  ',
+    }
+    const invoke = (...args: unknown[]) => mockIpcMain.handlers.get('agent:supplement')?.(...args)
+    await expect(invoke({ sender: 'trusted' }, 'conversation-1', input)).resolves.toEqual({
+      status: 'received',
+    })
+    expect(deps.agentBridge.supplement).toHaveBeenCalledWith('conversation-1', {
+      ...input,
+      content: 'correction',
+    })
+    for (const invalid of [
+      { ...input, content: ' ' },
+      { ...input, content: 'x'.repeat(8193) },
+      { ...input, runId: '' },
+      { ...input, messageId: 'bad' },
+      { ...input, attachments: [] },
+    ]) {
+      expect(() => invoke({ sender: 'trusted' }, 'conversation-1', invalid)).toThrow()
+    }
+    expect(() => invoke({ sender: 'other' }, 'conversation-1', input)).toThrow('untrusted')
+    expect(deps.agentBridge.supplement).toHaveBeenCalledTimes(1)
+  })
+
   it('forwards exact cancellation and run-status queries with both identifiers', async () => {
     const deps = createDeps()
     const run = {
@@ -478,6 +507,7 @@ function createDeps() {
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
     abort: vi.fn(),
+    supplement: vi.fn().mockResolvedValue({ status: 'received' }),
     getRunStatus: vi.fn(),
     compactConversation: vi.fn(async () => undefined),
     listRoles: vi.fn<() => AgentRoleSummary[]>(() => []),

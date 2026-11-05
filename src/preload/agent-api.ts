@@ -47,6 +47,8 @@ export const agentApi: AgentApiContract = {
   readMessageImage: (conversationId, assetId) =>
     invokeIpcContract(agentIpc.readMessageImage, conversationId, assetId),
   sendMessage,
+  supplement: (conversationId, input) =>
+    invokeIpcContract(agentIpc.supplement, conversationId, input),
   abort: (conversationId, runId) => invokeIpcContract(agentIpc.abort, conversationId, runId),
   getStatus: (conversationId) => invokeIpcContract(agentIpc.getStatus, conversationId),
   getRunStatus: (conversationId, runId) =>

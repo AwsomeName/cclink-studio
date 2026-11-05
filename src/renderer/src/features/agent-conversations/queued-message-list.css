@@ -144,6 +144,60 @@
   background: var(--bg-hover);
 }
 
+.agent-follow-up-anchor {
+  position: relative;
+  display: inline-flex;
+}
+.agent-composer-primary-actions .agent-follow-up-toggle {
+  width: 26px;
+  height: 30px;
+  border-radius: 5px;
+}
+.agent-supplement-receipt {
+  font-size: 11px;
+  margin-bottom: 5px;
+  opacity: 0.85;
+}
+.agent-follow-up-menu {
+  position: absolute;
+  bottom: 36px;
+  right: 0;
+  z-index: 30;
+  width: 280px;
+  max-width: calc(100vw - 50px);
+  padding: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  box-shadow: 0 4px 16px #0003;
+}
+.agent-follow-up-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font-size: 12px;
+}
+.agent-follow-up-menu button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.agent-follow-up-menu button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.agent-follow-up-menu small {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: normal;
+}
+
 @container agent-composer (max-width: 420px) {
   .agent-composer-primary-actions {
     gap: 4px;

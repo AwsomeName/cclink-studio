@@ -203,6 +203,160 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     queryMock.mockImplementation(() => createMockQuery())
   })
 
+  const supplementInput = {
+    runId: 'supplement-run',
+    messageId: '0b43e1d8-f538-4919-9509-f201bf6c42bc',
+    content: 'Use the corrected direction',
+  }
+  const flushEvents = async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+  }
+  async function startSupplementQuery(capabilities = ['msg_lifecycle_v1']) {
+    const deferred = createDeferredQuery()
+    queryMock.mockReturnValueOnce(deferred)
+    const backend = createBackend()
+    await backend.sendMessage('original', { runId: supplementInput.runId })
+    deferred.release({ type: 'system', subtype: 'init', session_id: 'session', capabilities })
+    await flushEvents()
+    const input = (getLastQueryParams().prompt as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+    await input.next()
+    return { backend, deferred, input }
+  }
+
+  it('requires the matching Runtime started receipt, deduplicates input, and accepts another supplement after confirmation', async () => {
+    const { backend, deferred, input } = await startSupplementQuery()
+    try {
+      let received = false
+      const first = backend.supplement(supplementInput).then((result) => {
+        received = true
+        return result
+      })
+      const duplicate = backend.supplement(supplementInput)
+      expect((await input.next()).value).toMatchObject({
+        uuid: supplementInput.messageId,
+        priority: 'next',
+        message: { content: supplementInput.content },
+      })
+      deferred.release({
+        type: 'command_lifecycle',
+        command_uuid: supplementInput.messageId,
+        state: 'queued',
+      })
+      await flushEvents()
+      expect(received).toBe(false)
+      deferred.release({
+        type: 'command_lifecycle',
+        command_uuid: 'different-id',
+        state: 'started',
+      })
+      await flushEvents()
+      expect(received).toBe(false)
+      deferred.release({
+        type: 'command_lifecycle',
+        command_uuid: supplementInput.messageId,
+        state: 'started',
+      })
+      await expect(first).resolves.toEqual({ status: 'received' })
+      await expect(duplicate).resolves.toEqual({ status: 'received' })
+      const secondId = '166e5f31-4bca-4418-af73-a93e661b0cde'
+      const second = backend.supplement({ ...supplementInput, messageId: secondId })
+      expect((await input.next()).value).toMatchObject({ uuid: secondId })
+      await backend.abort()
+      await expect(second).resolves.toMatchObject({ status: 'unknown' })
+      await expect(input.next()).resolves.toMatchObject({ done: true })
+    } finally {
+      await backend.abort()
+    }
+  })
+
+  it('rejects unsupported, stale, and concurrent supplement attempts without enqueuing them', async () => {
+    const { backend, deferred, input } = await startSupplementQuery([])
+    try {
+      await expect(backend.supplement(supplementInput)).resolves.toMatchObject({
+        status: 'rejected',
+      })
+      deferred.release({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'session',
+        capabilities: ['msg_lifecycle_v1'],
+      })
+      await flushEvents()
+      await expect(
+        backend.supplement({ ...supplementInput, runId: 'stale' }),
+      ).resolves.toMatchObject({ status: 'rejected' })
+      const receipt = backend.supplement(supplementInput)
+      expect((await input.next()).value).toMatchObject({ uuid: supplementInput.messageId })
+      await expect(
+        backend.supplement({
+          ...supplementInput,
+          messageId: '166e5f31-4bca-4418-af73-a93e661b0cde',
+        }),
+      ).resolves.toMatchObject({ status: 'rejected' })
+      await backend.abort()
+      await expect(receipt).resolves.toMatchObject({ status: 'unknown' })
+    } finally {
+      await backend.abort()
+    }
+  })
+
+  it('closes the Runtime when the original result wins the race with an unstarted supplement', async () => {
+    const { backend, deferred, input } = await startSupplementQuery()
+    try {
+      const receipt = backend.supplement(supplementInput)
+      await input.next()
+      deferred.release({ type: 'result', is_error: false, result: 'original completed' })
+      await expect(receipt).resolves.toMatchObject({ status: 'unknown' })
+      expect(deferred.close).toHaveBeenCalledTimes(1)
+      await expect(
+        backend.supplement({
+          ...supplementInput,
+          messageId: '166e5f31-4bca-4418-af73-a93e661b0cde',
+        }),
+      ).resolves.toMatchObject({ status: 'rejected' })
+    } finally {
+      await backend.abort()
+    }
+  })
+
+  it('never retries an ambiguous supplement after its receipt deadline', async () => {
+    const { backend, input, deferred } = await startSupplementQuery()
+    const onEvent = vi.fn()
+    backend.onEvent(onEvent)
+    vi.useFakeTimers()
+    try {
+      const receipt = backend.supplement(supplementInput)
+      await input.next()
+      await vi.advanceTimersByTimeAsync(120001)
+      await expect(receipt).resolves.toMatchObject({ status: 'unknown' })
+      await expect(backend.supplement(supplementInput)).resolves.toMatchObject({
+        status: 'unknown',
+      })
+      await expect(
+        backend.supplement({
+          ...supplementInput,
+          messageId: '166e5f31-4bca-4418-af73-a93e661b0cde',
+        }),
+      ).resolves.toMatchObject({ status: 'rejected' })
+      deferred.release({
+        type: 'command_lifecycle',
+        command_uuid: supplementInput.messageId,
+        state: 'started',
+      })
+      await flushEvents()
+      expect(onEvent).toHaveBeenCalledWith(
+        'system',
+        expect.objectContaining({
+          subtype: 'supplement_received',
+          supplementMessageId: supplementInput.messageId,
+        }),
+      )
+    } finally {
+      vi.useRealTimers()
+      await backend.abort()
+    }
+  })
+
   it('observes raw usage before SDK error projection and includes the bound task identity', async () => {
     const observe = vi.fn()
     const finish = vi.fn()

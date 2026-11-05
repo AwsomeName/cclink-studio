@@ -348,6 +348,13 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
   })
 
   // 获取 AI 后端状态
+  handle(agentIpc.supplement, async (_event, conversationId, input) => {
+    const bridge = requireAgentBridge()
+    if (!bridge) return { status: 'rejected' as const, error: 'Agent 后端未就绪' }
+    return bridge.supplement(conversationId, input)
+  })
+
+  // 获取 AI 后端状态
   handle(agentIpc.getStatus, (_event, ...args) => {
     const [conversationId] = args
     const agentBridge = requireAgentBridge()

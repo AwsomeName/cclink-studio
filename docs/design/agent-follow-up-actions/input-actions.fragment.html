@@ -1,0 +1,294 @@
+<style>
+#studio-followup-preview { padding: 26px 8px; }
+#studio-followup-preview .st-panel {
+  --st-bg: light-dark(#ffffff, #1e1e1e);
+  --st-surface: light-dark(#f5f5f6, #252526);
+  --st-hover: light-dark(#ebebee, #333336);
+  --st-text: light-dark(#252529, #e1e1e4);
+  --st-muted: light-dark(#64646e, #aaaab4);
+  --st-border: light-dark(#dcdce2, #3c3c43);
+  --st-blue: light-dark(#006bbb, #80bff3);
+  --st-blue-bg: light-dark(#f0f7fd, #222f3b);
+  --st-warning: light-dark(#885c14, #dfbc77);
+  --st-action: light-dark(#27272b, #e3e3e8);
+  --st-on-action: light-dark(#ffffff, #252529);
+  --st-shadow: light-dark(#25252917, #00000050);
+  box-sizing: border-box; width: 100%; max-width: 560px; margin: auto;
+  color: var(--st-text); background: var(--st-bg); border: 1px solid var(--st-border); border-radius: 10px;
+  font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  box-shadow: 0 8px 28px var(--st-shadow);
+}
+#studio-followup-preview .st-panel * { box-sizing: border-box; }
+#studio-followup-preview [hidden] { display: none !important; }
+#studio-followup-preview p { margin: 0; }
+#studio-followup-preview button, #studio-followup-preview textarea { font: inherit; }
+#studio-followup-preview button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 5px; color: inherit; background: transparent; }
+#studio-followup-preview button:hover:not(:disabled) { background: var(--st-hover); }
+#studio-followup-preview button:disabled { opacity: .45; cursor: default; }
+#studio-followup-preview svg { width: 15px; height: 15px; flex-shrink: 0; }
+#studio-followup-preview .st-header { padding: 11px 15px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--st-border); }
+#studio-followup-preview .st-title { font-weight: 500; }
+#studio-followup-preview .st-preview-label { margin-left: auto; color: var(--st-muted); font-size: 11px; }
+#studio-followup-preview .st-context { padding: 9px 15px; display: flex; align-items: center; gap: 6px; color: var(--st-muted); font-size: 12px; border-bottom: 1px solid var(--st-border); }
+#studio-followup-preview .st-location { margin-left: auto; white-space: nowrap; }
+#studio-followup-preview .st-thread { display: flex; flex-direction: column; gap: 17px; padding: 20px 17px 18px; }
+#studio-followup-preview .st-user { align-self: flex-end; max-width: 95%; background: var(--st-surface); border-radius: 9px 9px 2px 9px; padding: 9px 12px; overflow-wrap: anywhere; }
+#studio-followup-preview .st-agent-name { display: flex; align-items: center; gap: 7px; font-weight: 500; margin-bottom: 7px; }
+#studio-followup-preview .st-agent-name svg { color: var(--st-blue); }
+#studio-followup-preview .st-status { margin-top: 10px; color: var(--st-muted); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+#studio-followup-preview .st-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--st-blue); flex-shrink: 0; }
+#studio-followup-preview .st-event { padding: 9px 11px; border-left: 2px solid var(--st-blue); background: var(--st-blue-bg); border-radius: 0 5px 5px 0; overflow-wrap: anywhere; }
+#studio-followup-preview .st-event-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; margin-bottom: 4px; }
+#studio-followup-preview .st-event-receipt { color: var(--st-muted); font-size: 11px; }
+#studio-followup-preview .st-queue { margin: 0 11px 7px; padding: 8px 10px; background: var(--st-surface); border: 1px solid var(--st-border); border-radius: 8px; }
+#studio-followup-preview .st-queue-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--st-muted); }
+#studio-followup-preview .st-queue-name { display: flex; align-items: center; gap: 6px; }
+#studio-followup-preview .st-queue-head button { font-size: 11px; padding: 4px 5px; white-space: nowrap; }
+#studio-followup-preview .st-queue ol { list-style: none; margin: 3px 0 0; padding: 0; }
+#studio-followup-preview .st-queue li { display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 12px; }
+#studio-followup-preview .st-index { min-width: 12px; font-variant-numeric: tabular-nums; color: var(--st-muted); }
+#studio-followup-preview .st-queue-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#studio-followup-preview .st-row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+#studio-followup-preview .st-row-actions button { font-size: 11px; padding: 3px 4px; color: var(--st-muted); }
+#studio-followup-preview .st-pause { margin-top: 4px; color: var(--st-warning); font-size: 11px; }
+#studio-followup-preview .st-composer { position: relative; margin: 0 11px 8px; border: 1px solid var(--st-border); border-radius: 8px; background: var(--st-bg); }
+#studio-followup-preview .st-composer:focus-within { border-color: var(--st-blue); }
+#studio-followup-preview textarea { display: block; width: 100%; min-height: 178px; padding: 11px 12px; resize: vertical; border: 0; border-radius: 8px; color: var(--st-text); background: var(--st-bg); }
+#studio-followup-preview textarea::placeholder { color: var(--st-muted); }
+#studio-followup-preview .st-composer-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; }
+#studio-followup-preview .st-runtime { display: flex; align-items: center; gap: 5px; color: var(--st-muted); font-size: 11px; }
+#studio-followup-preview .st-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+#studio-followup-preview .st-stop { border: 1px solid var(--st-border); min-height: 31px; padding: 5px 9px; font-size: 12px; }
+#studio-followup-preview .st-split { display: flex; background: var(--st-action); color: var(--st-on-action); border-radius: 5px; }
+#studio-followup-preview .st-split button { color: inherit; min-height: 31px; padding: 5px 9px; font-size: 12px; }
+#studio-followup-preview .st-split button:hover:not(:disabled) { background: transparent; opacity: .8; }
+#studio-followup-preview .st-split .st-expand { padding: 5px 7px; border-left: 1px solid color-mix(in srgb, var(--st-on-action) 25%, transparent); border-radius: 0 5px 5px 0; }
+#studio-followup-preview .st-menu { position: absolute; right: 8px; bottom: 49px; z-index: 2; width: 298px; max-width: calc(100% - 16px); padding: 5px; border: 1px solid var(--st-border); border-radius: 8px; background: var(--st-bg); box-shadow: 0 6px 18px var(--st-shadow); }
+#studio-followup-preview .st-menu button { justify-content: flex-start; align-items: flex-start; width: 100%; padding: 9px 8px; gap: 9px; text-align: left; }
+#studio-followup-preview .st-menu button > svg { margin-top: 3px; }
+#studio-followup-preview .st-menu-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+#studio-followup-preview .st-menu-title { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 4px; font-size: 12px; font-weight: 500; }
+#studio-followup-preview .st-shortcut { font-size: 11px; color: var(--st-muted); font-weight: 400; }
+#studio-followup-preview .st-menu-desc { font-size: 11px; font-weight: 400; color: var(--st-muted); }
+#studio-followup-preview .st-menu-divider { height: 1px; background: var(--st-border); margin: 3px 7px; }
+#studio-followup-preview .st-hint { padding: 0 14px 12px; font-size: 11px; color: var(--st-muted); }
+#studio-followup-preview .st-notice { margin: 0 12px 9px; color: var(--st-warning); font-size: 12px; }
+@media (max-width: 420px) {
+  #studio-followup-preview { padding: 18px 0; }
+  #studio-followup-preview .st-context { flex-wrap: wrap; }
+  #studio-followup-preview .st-thread { padding: 17px 13px; }
+  #studio-followup-preview .st-runtime { width: 100%; }
+  #studio-followup-preview textarea { min-height: 198px; }
+  #studio-followup-preview .st-menu { bottom: 49px; }
+}
+@media (pointer: coarse) {
+  #studio-followup-preview button { min-height: 44px !important; min-width: 44px; }
+  #studio-followup-preview textarea { font-size: 16px; min-height: 230px; }
+  #studio-followup-preview .st-menu { bottom: 62px; }
+  #studio-followup-preview .st-row-actions { gap: 0; }
+}
+</style>
+<div id="studio-followup-preview" class="viz-dotted-background">
+  <section class="st-panel" aria-label="Agent 输入框交互方案">
+    <header class="st-header"><i data-lucide="bot" aria-hidden="true"></i><span class="st-title">Agent</span><span class="st-preview-label">交互示意</span></header>
+    <div class="st-context"><i data-lucide="folder" aria-hidden="true"></i><span>cclink-studio</span><span class="st-location" data-location>本地会话</span></div>
+    <div class="st-thread">
+      <div class="st-user" data-task>检查并优化 Agent 输入框的发送逻辑。</div>
+      <div>
+        <div class="st-agent-name"><i data-lucide="sparkles" aria-hidden="true"></i> Claude Code</div>
+        <p data-agent>我正在检查输入框和消息队列的实现。</p>
+        <div class="st-status" role="status"><span class="st-dot"></span><span data-status>正在执行 · 检查发送逻辑</span></div>
+      </div>
+      <div class="st-event" data-event hidden aria-live="polite">
+        <div class="st-event-head"><span data-event-title>补充当前任务</span><span class="st-event-receipt" data-receipt>已接收</span></div>
+        <p data-event-text></p>
+      </div>
+    </div>
+    <section class="st-queue" aria-label="待发送队列">
+      <div class="st-queue-head"><span class="st-queue-name"><i data-lucide="list-ordered" aria-hidden="true"></i><span data-count aria-live="polite">待发送 · 2 条</span></span><button type="button" class="cursor-interaction" data-pause>暂停队列</button></div>
+      <ol data-queue></ol>
+      <p class="st-pause" data-pause-reason hidden></p>
+    </section>
+    <div class="st-composer">
+      <textarea aria-label="后续消息" maxlength="240" placeholder="输入后续消息…">同时兼容 Windows 路径，保持已有行为。</textarea>
+      <div class="st-menu" id="studio-followup-menu" role="group" aria-label="发送这条消息的其他方式">
+        <button type="button" class="cursor-interaction" data-steer>
+          <i data-lucide="corner-up-right" aria-hidden="true"></i>
+          <span class="st-menu-copy"><span class="st-menu-title">补充当前任务<span class="st-shortcut" data-shortcut>⌘ Enter</span></span><span class="st-menu-desc" data-steer-desc>让当前任务接收这条补充，队列不变</span></span>
+        </button>
+        <div class="st-menu-divider"></div>
+        <button type="button" class="cursor-interaction" data-replace>
+          <i data-lucide="square-arrow-right" aria-hidden="true"></i>
+          <span class="st-menu-copy"><span class="st-menu-title">停止并执行这条</span><span class="st-menu-desc" data-replace-desc>确认停止后启动这条，原队列暂停</span></span>
+        </button>
+      </div>
+      <div class="st-composer-bar">
+        <span class="st-runtime"><i data-lucide="terminal" aria-hidden="true"></i>Claude Code</span>
+        <div class="st-actions">
+          <button type="button" class="st-stop cursor-interaction" data-stop><i data-lucide="square" aria-hidden="true"></i><span data-stop-label>停止</span></button>
+          <div class="st-split">
+            <button type="button" class="cursor-interaction" data-send><i data-lucide="arrow-up" aria-hidden="true"></i><span data-send-label>加入队列</span></button>
+            <button type="button" class="st-expand cursor-interaction" data-expand aria-label="更多发送方式" aria-expanded="true" aria-controls="studio-followup-menu"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="st-notice" data-notice role="status" hidden></p>
+    <p class="st-hint" data-hint>Enter 加入队列 · Shift+Enter 换行</p>
+  </section>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('studio-followup-preview');
+  const q = selector => root.querySelector(selector);
+  const input = q('textarea');
+  const panel = q('.st-panel');
+  const menu = q('.st-menu');
+  const design = { width: 560, capability: 'local' };
+  const defaults = () => ({
+    task: '检查并优化 Agent 输入框的发送逻辑。',
+    draft: '同时兼容 Windows 路径，保持已有行为。',
+    queue: ['为连续发送补充回归验证', '最后总结修改点和残余风险'],
+    paused: false, pauseReason: '', status: 'running', menu: true,
+    event: null, notice: '', pending: null
+  });
+  let state = defaults();
+  let transition = 0;
+  function persist() {
+    window.openai?.setWidgetState?.({
+      modelContent: { preview: 'Agent 后续消息操作方案', capability: design.capability, lastAction: state.event?.title || '', queuePaused: state.paused },
+      privateContent: { version: 2, state: { ...state, pending: null, status: state.status === 'stopping' ? 'stopped' : state.status }, design }
+    }).catch(() => {});
+  }
+  function restore(snapshot) {
+    const saved = snapshot?.privateContent;
+    if (!saved || saved.version !== 2 || !saved.state || !Array.isArray(saved.state.queue)) return;
+    const s = saved.state;
+    state = { ...defaults(), ...s, pending: null, status: ['running','stopped','untracked'].includes(s.status) ? s.status : 'stopped', queue: s.queue.filter(x => typeof x === 'string').slice(0,20), menu: Boolean(s.menu) };
+    if (saved.design?.capability === 'remote' || saved.design?.capability === 'local') design.capability = saved.design.capability;
+    if (Number.isFinite(saved.design?.width)) design.width = Math.min(640, Math.max(340, saved.design.width));
+  }
+  function render() {
+    const remote = design.capability === 'remote';
+    const busy = state.status === 'running';
+    const stopping = state.status === 'stopping';
+    const hasDraft = Boolean(state.draft.trim());
+    panel.style.maxWidth = design.width + 'px';
+    if (input.value !== state.draft) input.value = state.draft;
+    input.disabled = stopping;
+    q('[data-task]').textContent = state.task;
+    q('[data-location]').textContent = remote ? 'CCLink 远程会话' : '本地会话';
+    q('[data-agent]').textContent = stopping ? '正在等待当前任务停止，尚未启动新任务。' : state.status === 'stopped' ? '当前任务已停止，待发送消息已保留。' : state.status === 'untracked' ? '已停止等待，远程任务可能仍在执行。' : state.task === defaults().task ? '我正在检查输入框和消息队列的实现。' : '正在处理这条消息。';
+    q('[data-status]').textContent = stopping ? '正在停止…' : state.status === 'stopped' ? '已停止' : state.status === 'untracked' ? '远程执行状态未确认' : '正在执行 · ' + (state.task === defaults().task ? '检查发送逻辑' : '当前任务');
+    q('[data-count]').textContent = '待发送 · ' + state.queue.length + ' 条' + (state.paused ? ' · 已暂停' : '');
+    q('[data-pause]').textContent = state.paused ? '继续队列' : '暂停队列';
+    q('[data-pause]').disabled = stopping || !state.queue.length;
+    q('[data-pause-reason]').hidden = !state.paused;
+    q('[data-pause-reason]').textContent = state.pauseReason;
+    q('[data-stop]').hidden = !busy && !stopping;
+    q('[data-stop]').disabled = stopping;
+    q('[data-stop-label]').textContent = stopping ? '正在停止' : remote ? '停止等待' : '停止';
+    q('[data-send-label]').textContent = !busy && !stopping && !state.queue.length && !state.paused ? '发送' : '加入队列';
+    q('[data-send]').disabled = !hasDraft || stopping || state.queue.length >= 20;
+    q('[data-expand]').hidden = !busy;
+    q('[data-expand]').setAttribute('aria-expanded', String(state.menu && busy));
+    menu.hidden = !state.menu || !busy;
+    q('[data-steer]').disabled = !hasDraft || !busy || remote;
+    q('[data-replace]').disabled = !hasDraft || !busy || remote;
+    q('[data-steer-desc]').textContent = remote ? '此远程会话暂不支持补充当前任务' : '让当前任务接收这条补充，队列不变';
+    q('[data-replace-desc]').textContent = remote ? '此远程会话无法确认取消，暂不可用' : '确认停止后启动这条，原队列暂停';
+    q('[data-shortcut]').hidden = remote;
+    q('[data-hint]').textContent = remote ? 'Enter 加入队列 · 停止等待不代表远端已取消' : state.paused ? '队列已暂停 · Enter 仍可加入队列' : 'Enter ' + q('[data-send-label]').textContent + ' · Shift+Enter 换行';
+    q('[data-notice]').hidden = !state.notice;
+    q('[data-notice]').textContent = state.notice;
+    q('[data-event]').hidden = !state.event;
+    if (state.event) {
+      q('[data-event-title]').textContent = state.event.title;
+      q('[data-event-text]').textContent = state.event.text;
+      q('[data-receipt]').textContent = state.event.receipt;
+    }
+    const list = q('[data-queue]'); list.replaceChildren();
+    state.queue.forEach((text, i) => {
+      const row = document.createElement('li');
+      const number = document.createElement('span'); number.className = 'st-index'; number.textContent = i + 1;
+      const content = document.createElement('span'); content.className = 'st-queue-text'; content.textContent = text;
+      const actions = document.createElement('span'); actions.className = 'st-row-actions';
+      const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'cursor-interaction'; edit.textContent = '编辑'; edit.setAttribute('aria-label','编辑第 ' + (i+1) + ' 条'); edit.disabled = hasDraft || stopping;
+      edit.addEventListener('click', () => { state.draft = state.queue.splice(i,1)[0]; state.paused = true; state.pauseReason = '正在编辑；重新发送后排到队尾。'; state.menu = false; render(); persist(); input.focus(); });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cursor-interaction'; remove.textContent = '删除'; remove.setAttribute('aria-label','删除第 ' + (i+1) + ' 条'); remove.disabled = stopping;
+      remove.addEventListener('click', () => { state.queue.splice(i,1); render(); persist(); });
+      actions.append(edit,remove); row.append(number,content,actions); list.append(row);
+    });
+  }
+  function send() {
+    if (!state.draft.trim() || state.status === 'stopping' || state.queue.length >= 20) return;
+    const text = state.draft.trim();
+    if (state.status !== 'running' && !state.queue.length && !state.paused) { state.task = text; state.status = 'running'; }
+    else state.queue.push(text);
+    state.draft = ''; state.menu = false; state.notice = ''; render(); persist(); input.focus();
+  }
+  function steer() {
+    if (!state.draft.trim() || state.status !== 'running' || design.capability === 'remote') return;
+    const token = ++transition;
+    state.event = { title: '补充当前任务', text: state.draft.trim(), receipt: '待接收' };
+    state.draft = ''; state.menu = false; state.notice = ''; render();
+    setTimeout(() => {
+      if (token !== transition || state.status !== 'running') return;
+      state.event.receipt = '已接收'; render(); persist();
+    }, 900);
+  }
+  function stop(replace) {
+    if (state.status !== 'running' || (replace && (!state.draft.trim() || design.capability === 'remote'))) return;
+    ++transition;
+    state.menu = false; state.paused = true;
+    if (design.capability === 'remote') {
+      state.status = 'untracked'; state.pauseReason = '已停止等待；确认远程状态后再继续。'; state.notice = '远端可能仍在执行，队列已暂停。'; render(); persist(); return;
+    }
+    state.pending = replace ? state.draft.trim() : null;
+    state.status = 'stopping'; state.pauseReason = '正在停止当前任务，队列已暂停。';
+    state.notice = replace ? '等待停止确认后，优先执行输入框中的这条消息。' : '';
+    state.event = null; const token = transition; render();
+    setTimeout(() => {
+      if (token !== transition) return;
+      const pending = state.pending; state.pending = null;
+      state.status = pending ? 'running' : 'stopped';
+      state.pauseReason = pending ? '原队列已保留；检查后点击「继续队列」。' : '当前任务已停止；检查后点击「继续队列」。';
+      if (pending) {
+        state.task = pending; state.draft = '';
+        state.event = { title: '已切换任务', text: '收到原任务停止确认后，已启动这条消息。', receipt: '原队列暂停' };
+      }
+      state.notice = ''; render(); persist();
+    }, 1600);
+  }
+  q('[data-send]').addEventListener('click', send);
+  q('[data-steer]').addEventListener('click', steer);
+  q('[data-stop]').addEventListener('click', () => stop(false));
+  q('[data-replace]').addEventListener('click', () => stop(true));
+  q('[data-expand]').addEventListener('click', () => { state.menu = !state.menu; render(); persist(); });
+  q('[data-pause]').addEventListener('click', () => {
+    state.paused = !state.paused; state.pauseReason = state.paused ? '队列已暂停，当前任务继续执行。' : '';
+    if (!state.paused && state.status !== 'running' && state.queue.length) { state.task = state.queue.shift(); state.status = 'running'; state.event = null; state.notice = ''; }
+    render(); persist();
+  });
+  input.addEventListener('input', () => { state.draft = input.value; render(); });
+  input.addEventListener('change', persist);
+  input.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); e.metaKey || e.ctrlKey ? steer() : send(); }
+    if (e.key === 'Escape') { state.menu = false; render(); }
+  });
+  root.addEventListener('keydown', e => { if (e.key === 'Escape') { state.menu = false; render(); q('[data-expand]').focus(); } });
+  root.addEventListener('click', e => { if (state.menu && !menu.contains(e.target) && !q('[data-expand]').contains(e.target)) { state.menu = false; render(); } });
+  restore(window.openai?.widgetState); render();
+  window.addEventListener('openai:set_globals', e => { if (e.detail?.globals?.widgetState) { ++transition; restore(e.detail.globals.widgetState); render(); } });
+  if (globalThis.Tweak) {
+    let previousCapability = design.capability;
+    const tweak = new Tweak({ container: panel, onChange: () => {
+      if (previousCapability !== design.capability) { ++transition; state = defaults(); previousCapability = design.capability; }
+      render();
+    } });
+    tweak.addSlider(design, 'width', { label: '面板宽度', min: 340, max: 640, step: 10, unit: 'px' });
+    tweak.addSelect(design, 'capability', { label: '会话能力', options: [{ label: '本地 · 目标交互', value: 'local' }, { label: '远程 · 当前能力', value: 'remote' }] });
+  }
+})();
+</script>

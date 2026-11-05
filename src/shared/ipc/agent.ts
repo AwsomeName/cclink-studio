@@ -8,6 +8,8 @@ import type { AgentMessageImageSaveResult, AgentMessageImageReadResult } from '.
 import type {
   AgentApiContract as CoreAgentApiContract,
   AgentAbortResult,
+  AgentSupplementInput,
+  AgentSupplementResult,
   AgentCapabilityStatus,
   AgentCommandResult,
   AgentCompactConversationPayload,
@@ -190,6 +192,10 @@ export const agentIpc = {
   >('agent:readMessageImage'),
   sendMessage: defineIpcCall<AgentSendMessageArgs, AgentCommandResult>('agent:sendMessage'),
   abort: defineIpcCall<[conversationId: string, runId: string], AgentAbortResult>('agent:abort'),
+  supplement: defineIpcCall<
+    [conversationId: string, input: AgentSupplementInput],
+    AgentSupplementResult
+  >('agent:supplement'),
   getStatus: defineIpcCall<[conversationId?: string], AgentStatus>('agent:getStatus'),
   getRunStatus: defineIpcCall<
     [conversationId: string, runId: string],

@@ -14,6 +14,37 @@ beforeEach(() => {
 })
 
 describe('applyAgentStreamEventToStore', () => {
+  it('reconciles a late supplement receipt only for its original Run and never downgrades it', () => {
+    const id = useAgentStore.getState().activeConversationId
+    const runId = useAgentStore.getState().beginRun(id)
+    const messageId = useAgentStore.getState().beginSupplement('correction', id, runId)!
+    useAgentStore
+      .getState()
+      .finishSupplement(messageId, { status: 'unknown', error: 'timeout' }, id)
+    useAgentStore.getState().setInput('later draft', id)
+    const receipt = {
+      type: 'system',
+      subtype: 'supplement_received',
+      conversationId: id,
+      runId,
+      supplementMessageId: messageId,
+    }
+    applyAgentStreamEventToStore({ ...receipt, runId: 'stale' })
+    expect(useAgentStore.getState().conversations[id].messages.at(-1)?.supplement?.status).toBe(
+      'unknown',
+    )
+    applyAgentStreamEventToStore(receipt)
+    useAgentStore
+      .getState()
+      .finishSupplement(messageId, { status: 'unknown', error: 'late IPC response' }, id)
+    expect(useAgentStore.getState().conversations[id].messages.at(-1)?.supplement).toEqual({
+      runId,
+      status: 'received',
+      error: undefined,
+    })
+    expect(useAgentStore.getState().conversations[id].input).toBe('later draft')
+  })
+
   it('adopts a main-owned run before accepting its Agent stream', () => {
     const conversationId = useAgentStore.getState().createConversation({
       id: 'article-publishing-affair-1',

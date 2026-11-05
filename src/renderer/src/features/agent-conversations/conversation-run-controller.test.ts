@@ -56,8 +56,11 @@ function createConversation(updates: Partial<AgentConversationState> = {}): Agen
 function createHarness(conversation = createConversation()) {
   const store = {
     conversations: { 'agent-1': conversation },
+    beginSupplement: vi.fn(),
+    finishSupplement: vi.fn(),
     setQueuedMessageDispatchId: vi.fn(),
     enqueueMessage: vi.fn(() => 'queued-1'),
+    enqueueReplacement: vi.fn(() => 'replacement-1'),
     removeQueuedMessage: vi.fn(),
     setMessageQueuePauseReason: vi.fn(),
     restoreFailedMessage: vi.fn(),

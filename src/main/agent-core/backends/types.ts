@@ -47,6 +47,9 @@ export interface IAgentBackend {
 
   /** 发送用户消息 */
   sendMessage(message: string, options?: AgentSendOptions): Promise<void>
+  supplement?(
+    input: import('../../../shared/agent-protocol').AgentSupplementInput,
+  ): Promise<import('../../../shared/agent-protocol').AgentSupplementResult>
 
   /** 在当前 SDK session 上执行手动上下文压缩。 */
   compact?(instructions?: string, options?: AgentSendOptions): Promise<void>

@@ -57,6 +57,12 @@ export interface QueuedAgentMessage {
   pendingImages: AgentImageAttachment[]
   /** Image bodies are transient; restored entries require reattachment. */
   missingImages?: boolean
+  /** A user-requested replacement; only an exact Runtime cancellation can release it. */
+  afterCancellation?: {
+    runId: string
+    phase: 'waiting' | 'ready' | 'paused'
+    deadlineAt: number
+  }
 }
 
 export function conversationQueueContextKey(conversation: AgentConversationState): string {
@@ -84,6 +90,8 @@ export interface AgentConversationState {
   backendState: AgentBackendState
   runStatus?: AgentRunStatus
   activeRunId?: string | null
+  supplementSupported?: boolean
+  activeRunSupplementContextKey?: string
   lastRunEventAt?: number | null
   lastRunTerminalReason?: AgentRunTerminalReason | null
   sessionId: string | null

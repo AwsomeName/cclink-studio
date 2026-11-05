@@ -1,6 +1,13 @@
 export type ShortcutModifier = 'primary' | 'control' | 'alt' | 'shift'
 
-export type ShortcutScope = 'global' | 'workbench' | 'editor' | 'markdown' | 'terminal' | 'browser'
+export type ShortcutScope =
+  | 'global'
+  | 'workbench'
+  | 'editor'
+  | 'markdown'
+  | 'terminal'
+  | 'browser'
+  | 'agent'
 
 export type ShortcutInputPolicy = 'allow' | 'deny'
 

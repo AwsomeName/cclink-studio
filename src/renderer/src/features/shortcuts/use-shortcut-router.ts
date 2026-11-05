@@ -18,7 +18,9 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
   )
 }
 
-function activeShortcutScopes(): Set<string> {
+function activeShortcutScopes(target?: EventTarget | null): Set<string> {
+  if (target instanceof Element && target.closest('[data-agent-landmark="composer"]'))
+    return new Set(['global', 'agent'])
   const tab = useTabStore.getState().getActiveTab()
   const scopes = new Set<string>(['global'])
   if (!tab) return scopes
@@ -33,6 +35,7 @@ function activeShortcutScopes(): Set<string> {
 }
 
 const SCOPE_PRIORITY: Record<string, number> = {
+  agent: 70,
   markdown: 60,
   terminal: 50,
   browser: 50,
@@ -85,7 +88,12 @@ export function useShortcutRouter(): void {
       if (!chord) return
       const chordId = keyChordId(chord)
       const editing = isTextEditingTarget(event.target)
-      const binding = selectShortcutBinding(bindings, chordId, activeShortcutScopes(), editing)
+      const binding = selectShortcutBinding(
+        bindings,
+        chordId,
+        activeShortcutScopes(event.target),
+        editing,
+      )
       if (!binding) return
       const commandState = useCommandStore.getState()
       if (
@@ -102,7 +110,24 @@ export function useShortcutRouter(): void {
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
-      void executeCommand(binding.commandId, { source: 'shortcut' }).then((result) => {
+      const composer =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>('[data-agent-landmark="composer"]')
+          : null
+      const conversationId = composer?.dataset.agentCommandConversation
+      void executeCommand(binding.commandId, {
+        source: 'shortcut',
+        ...(binding.scope === 'agent' && conversationId
+          ? {
+              target: {
+                kind: 'thread' as const,
+                conversationId,
+                activeRunId: composer?.dataset.agentCommandRun ?? null,
+                workspaceKey: composer?.dataset.agentCommandWorkspace ?? null,
+              },
+            }
+          : {}),
+      }).then((result) => {
         if (result.ok) return
         recordRendererDiagnosticLog('warn', [
           '[ShortcutRouter]',
