@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-11-04。
+> 当前事实源。最后更新：2026-11-06。
 
 ## 先读这些
 
@@ -61,6 +61,9 @@
   结果未完整补录，真实在线远程及事故页专项复验仍待完成。
 - `docs/features/recent-session-switcher.md`：本地/远程工作空间统一最近会话切换器、唯一新建入口、标题策略和验收边界。
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
+- `docs/features/agent-follow-up-actions.md`：Agent 后续消息产品规则与实现边界；本地 Claude Code 已支持入队、补充当前任务和停止后执行。
+- `docs/testing/agent-follow-up-actions.md`：本地真实 Runtime 的补充与停止后执行证据、复验动作及未覆盖范围。
+- `docs/design/agent-follow-up-actions/README.md`：对应交互效果图、浅深色及停止/切换/远程能力边界截图，均为设计示意。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
 - `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
 - `docs/features/detachable-workbench-tabs.md`：方案、P0a/P0b 与 ADR 0017 已通过；Browser-only M1
