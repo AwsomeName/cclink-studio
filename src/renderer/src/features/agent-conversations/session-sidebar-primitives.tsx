@@ -74,6 +74,8 @@ export function SessionSidebarRow({
   onOpen,
   onContextMenu,
   onKeyDown,
+  conversationId,
+  onDragStart,
 }: {
   title: string
   rowTitle?: string
@@ -89,10 +91,15 @@ export function SessionSidebarRow({
   onOpen: () => void
   onContextMenu?: React.MouseEventHandler<HTMLButtonElement>
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>
+  conversationId?: string
+  onDragStart?: React.DragEventHandler<HTMLButtonElement>
 }): React.ReactElement {
   return (
     <button
       className={`session-sidebar-row ${active ? 'active' : ''} ${muted ? 'muted' : ''}`}
+      data-conversation-id={conversationId}
+      draggable={Boolean(onDragStart)}
+      onDragStart={onDragStart}
       onClick={onOpen}
       onContextMenu={onContextMenu}
       onKeyDown={onKeyDown}

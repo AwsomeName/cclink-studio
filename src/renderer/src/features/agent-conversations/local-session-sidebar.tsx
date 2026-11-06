@@ -5,6 +5,7 @@ import type { AgentConversationState } from '../../stores/agent-store'
 import { useAgentStore, useTabStore } from '../../stores'
 import { IconSearch } from '../../components/common/Icons'
 import { getConversationActivity } from './activity'
+import { writeConversationDragData } from './conversation-workbench'
 import { useContextMenuStore } from '../context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -293,6 +294,14 @@ function ConversationRow({
   return (
     <SessionSidebarRow
       title={conversation.title}
+      conversationId={conversation.id}
+      onDragStart={
+        conversation.archivedAt
+          ? undefined
+          : (event) => {
+              writeConversationDragData(event.dataTransfer, conversation.id)
+            }
+      }
       rowTitle={conversation.title}
       statusKind={status.kind}
       active={active}

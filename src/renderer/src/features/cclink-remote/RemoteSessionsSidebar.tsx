@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import { useCclinkStore, useUIStore } from '../../stores'
 import { IconRobot } from '../../components/common/Icons'
+import { writeRemoteConversationDragData } from '../agent-conversations/conversation-workbench'
 
 export function RemoteSessionsSidebar({
   workspaceRef,
@@ -67,6 +68,15 @@ export function RemoteSessionsSidebar({
             <button
               type="button"
               className={session.id === selectedSessionId ? 'active' : ''}
+              data-conversation-id={session.id}
+              draggable={session.status !== 'archived'}
+              onDragStart={(event) => {
+                if (session.status === 'archived') {
+                  event.preventDefault()
+                  return
+                }
+                writeRemoteConversationDragData(event.dataTransfer, session.id, workspaceRef)
+              }}
               onClick={() => open(session.id)}
             >
               <IconRobot size={14} />

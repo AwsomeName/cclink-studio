@@ -1611,49 +1611,65 @@ async function main() {
     return service.configured ? 'remote-only login surface' : 'unconfigured degradation surface'
   })
 
-  await runCheck('topbar switches the current project conversation and reopens Agent', async () => {
-    const switcher = page.locator('.conversation-quick-switcher')
-    await switcher.waitFor({ state: 'visible', timeout: 10_000 })
+  await runCheck('right navigation switches conversations and reopens Agent', async () => {
+    const previousLeftLayout = await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      const { activePanel, sidebarVisible, sidebarWidth } = useUIStore.getState()
+      return { activePanel, sidebarVisible, sidebarWidth }
+    })
+    assert(
+      (await page.locator('.conversation-quick-switcher').count()) === 0,
+      'retired topbar conversation switcher is still rendered',
+    )
     assert(
       (await page.locator('.status-bar-conversation-switcher').count()) === 0,
       'legacy conversation switcher is still rendered in the status bar',
     )
     assert(
-      (await switcher.evaluate((element) => getComputedStyle(element).webkitAppRegion)) ===
-        'no-drag',
-      'conversation controls are still part of the window drag region',
+      (await page.locator('.app-topbar-right .app-topbar-icon').count()) === 1,
+      'Agent panel toggle is missing',
     )
-
     const panelToggle = page.locator('.app-topbar-right .app-topbar-icon')
     if ((await panelToggle.getAttribute('title')) === '收起 Agent 面板') {
       await panelToggle.click()
-      await page.waitForFunction(
-        () => document.querySelector('.conversation-quick-switcher')?.classList.contains('compact'),
-        undefined,
-        { timeout: 10_000 },
-      )
     }
-
-    await page.locator('.conversation-quick-tab').first().click()
-    await page.waitForFunction(
-      () =>
-        document.querySelector('.conversation-quick-switcher')?.classList.contains('compact') ===
-        false,
-      undefined,
+    await clickByTitle(page, '会话')
+    const threadRow = page
+      .locator('.agent-navigation-list .session-sidebar-row[data-conversation-id]')
+      .first()
+    await threadRow.waitFor({ state: 'visible', timeout: 10_000 })
+    const conversationId = await threadRow.getAttribute('data-conversation-id')
+    assert(conversationId, 'conversation row drag identity is missing')
+    await threadRow.click()
+    await waitForAsyncFunction(
+      page,
+      async (id) => {
+        const { useAgentStore } = await import('/src/stores/agent-store.ts')
+        return useAgentStore.getState().activeConversationId === id
+      },
+      conversationId,
       { timeout: 10_000 },
     )
-    const widths = await page.evaluate(() => ({
-      panel: document.querySelector('.agent-side-shell')?.getBoundingClientRect().width ?? 0,
-      topbar: document.querySelector('.app-topbar-right')?.getBoundingClientRect().width ?? 0,
-    }))
-    assert(widths.panel > 0, 'conversation switch did not reopen the Agent panel')
+    await page.waitForFunction(() => !document.querySelector('.agent-workspace-chat')?.inert)
+    const currentLeftLayout = await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      const { activePanel, sidebarVisible, sidebarWidth } = useUIStore.getState()
+      return { activePanel, sidebarVisible, sidebarWidth }
+    })
     assert(
-      Math.abs(widths.panel - widths.topbar) < 1,
-      `topbar switcher width is not aligned with Agent panel (${widths.topbar} vs ${widths.panel})`,
+      JSON.stringify(currentLeftLayout) === JSON.stringify(previousLeftLayout),
+      'right navigation changed the left sidebar layout',
     )
-
-    const quickTab = page.locator('.conversation-quick-tab').first()
-    await quickTab.click({ button: 'right' })
+    assert(await page.locator('.agent-workspace-chat').isVisible(), 'conversation chat is hidden')
+    assert(
+      (await page
+        .locator('.agent-workspace-actions')
+        .evaluate((element) => getComputedStyle(element).webkitAppRegion)) !== 'drag',
+      'conversation controls are part of the window drag region',
+    )
+    const expandList = page.getByRole('button', { name: '展开会话列表', exact: true })
+    if (await expandList.count()) await expandList.click()
+    await threadRow.click({ button: 'right' })
     const contextMenu = page.locator('.unified-context-menu')
     await contextMenu.waitFor({ state: 'visible', timeout: 10_000 })
     assert(
@@ -1671,8 +1687,6 @@ async function main() {
     await page.keyboard.press('Escape')
     await contextMenu.waitFor({ state: 'hidden', timeout: 10_000 })
 
-    const conversationId = await quickTab.getAttribute('data-conversation-id')
-    assert(conversationId, 'quick conversation drag identity is missing')
     const beforeDrop = await page.evaluate(async (id) => {
       const { useAgentStore } = await import('/src/stores/agent-store.ts')
       const { useTabStore } = await import('/src/stores/tab-store.ts')
@@ -1689,7 +1703,7 @@ async function main() {
       }
     }, conversationId)
 
-    await quickTab.dragTo(page.locator('.tab-bar'))
+    await threadRow.dragTo(page.locator('.tab-bar'))
     await waitForAsyncFunction(
       page,
       async (id) => {
@@ -1716,7 +1730,7 @@ async function main() {
       }
     }, conversationId)
 
-    await quickTab.dragTo(page.locator('.tab-bar'))
+    await threadRow.dragTo(page.locator('.tab-bar'))
     const afterSecondDropCount = await page.evaluate(async (id) => {
       const { useTabStore } = await import('/src/stores/tab-store.ts')
       return useTabStore
@@ -1752,7 +1766,9 @@ async function main() {
         previousActiveTabId: beforeDrop.previousActiveTabId,
       },
     )
-    return 'topbar switcher, thread menu, drag-open, and Tab deduplication verified'
+    const collapseList = page.getByRole('button', { name: '收起会话列表', exact: true })
+    if (await collapseList.count()) await collapseList.click()
+    return 'right navigation, unchanged left sidebar, thread menu, drag-open, and Tab deduplication verified'
   })
 
   await runCheck('activity bar switches local panels', async () => {

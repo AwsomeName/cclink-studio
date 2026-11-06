@@ -197,7 +197,7 @@ describe('workspace-open-controller', () => {
     expect(setSection).toHaveBeenCalledWith(
       '/workspace/picked',
       'layout',
-      { ...layout, agentPanelWidth: 620 },
+      { ...layout, agentPanelWidth: 620, agentContentMode: 'chat', agentListWidth: 220 },
       'local:owner',
     )
   })

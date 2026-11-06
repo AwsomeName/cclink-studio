@@ -58,3 +58,22 @@ UIStore 的 workspace 布局分区保存内部模式 `chat | split | list`、展
 - 回归结果：草稿、阅读位置、受控后台事件、左侧统一收起和原生 Browser 缩放均通过。后台消息使用受控 IPC 注入，不构成真实模型执行或子 Agent 的验证证据。
 - 隔离运行证据：`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-workspace-layout-WcsH8r/results.json`，同目录保留并排、仅列表、抽屉和重启截图。
 - 真人验收：尚未记录。按本文验收 1–3 在日常工作空间操作；其中真实模型持续运行和在线远程会话仍需实际验证。
+
+## 正式发布门禁补齐（2026-11-06）
+
+首次发布检查发现两个过期测试入口：UI smoke 仍寻找已移除的顶栏会话切换器，
+工作空间完整 picker 用例仍未包含布局新增的 `agentContentMode` 与 `agentListWidth`。
+前者迁到真实右侧入口，继续验证原有会话菜单、打开 Workbench Tab、拖拽与重复打开去重，
+并验证左侧布局不变；后者补齐真实持久化默认字段，保留完整流程和后续用户修改的断言。
+
+同时补回新列表遗漏的既有拖拽能力：本地及远程行只委托现有
+`writeConversationDragData` / `writeRemoteConversationDragData`，归档行不可拖拽。
+没有新增运行、会话或权限 owner；拖拽继续由现有 Workbench 消费有界契约，不复制 Session。
+
+修复快照在独立工作树的完整 `pnpm verify` 通过：427 个测试文件，3,631 项通过、
+10 项跳过，类型、Lint、格式、边界和构建均通过。真实 Electron 已验证新列表切换、
+左侧布局保持、会话菜单、本地拖拽到中间 Tab 及重复拖拽去重。
+真实在线远程拖拽和真人日常会话验收仍未记录，不能由本地烟测推断通过。
+
+完整真实 Electron UI smoke 22/22 通过。证据目录：
+`/Users/apple/.cclink-navigation-release-fix-633CEx/ui`。
