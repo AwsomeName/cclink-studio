@@ -126,6 +126,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: source/pnpm-lock.yaml
       - run: pnpm --dir source install --frozen-lockfile
+      - name: Enable bounded Apple ticket network retries
+        run: |
+          adapter_dir="$GITHUB_WORKSPACE/release-tools/scripts/release/bin"
+          chmod +x "$adapter_dir/xcrun"
+          echo "$adapter_dir" >> "$GITHUB_PATH"
       - name: Prepare Apple notarization key
         env:
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}

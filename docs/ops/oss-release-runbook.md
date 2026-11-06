@@ -242,3 +242,25 @@ pnpm release -- --dispatch-only vX.Y.Z
 - 工作流已自动创建公开稳定 Release，公开 API 可见版本与四项资产。
 - 发布后的 Apple Silicon 安装与应用内更新反馈已记录；它们不阻塞公开，但发现问题必须发
   更高版本修复。
+
+## Apple 票据网络中断的有界恢复
+
+2026-11-07 补齐：v0.1.130 曾在 App 和 DMG 的票据阶段遇到 Apple CloudKit
+`NSURLErrorDomain Code=-1005`，即使公证已 Accepted，也会以 staple 错误 68 失败。
+Release runner 现在通过 `release-tools/scripts/release/bin/xcrun` 调用窄范围适配器；
+所有非 `stapler staple/validate` 命令直接委托绝对路径 `/usr/bin/xcrun`。
+
+仅当这两个票据命令同时返回 68 且输出明确包含 -1005 网络中断证据时，才按
+10、30、60 秒退避，最多执行四次；每次票据调用限时 45 秒。超时、未知票据、
+拒绝、签名错误或其他退出码立即失败，不以错误 68 单独推断可重试。
+四次仍失败则保留非零退出码并阻止公开，不重新签名或重复提交公证来掩盖失败。
+
+该适配器只进入隔离的正式发布 runner，不打进 App，也不在用户设备使用。
+App 的 electron-builder 内部 staple、DMG staple/validate 和最终校验均经过同一入口，
+Developer ID、公证提交、Gatekeeper、身份、Manifest 与资产校验全部保留。
+行为回归通过 `pnpm verify:release` 覆盖；最终有效性以真实正式工作流和公开资产为准，
+测试通过不能提前声明已发布。
+
+提交前的隔离工作树完整 `pnpm verify` 通过：69 项发布回归、427 个测试文件、
+3,631 项测试通过、10 项跳过；类型、Lint、格式、构建和工作流 YAML 解析通过。
+这些是工程验证结果；Apple 实际票据服务仍可能持续不可用，重试耗尽时继续阻止发布。

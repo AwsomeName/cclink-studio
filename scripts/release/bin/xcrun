@@ -1,0 +1,3 @@
+#!/bin/sh
+# Used only on the isolated macOS Release runner, never inside the App.
+exec node "$(dirname "$0")/../retry-xcrun.mjs" "$@"
