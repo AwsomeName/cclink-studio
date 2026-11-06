@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, chmodSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import test from 'node:test'
 
@@ -158,4 +159,15 @@ test('release runner routes both App and DMG ticket checks through the bounded a
   const shim = readFileSync(resolve('scripts/release/bin/xcrun'), 'utf8')
   assert.match(shim, /exec node/)
   assert.match(shim, /retry-xcrun\.mjs" "\$@"/)
+})
+
+test('release adapter is executable in Git and runner chmod does not change it', () => {
+  const adapter = 'scripts/release/bin/xcrun'
+  const indexed = execFileSync('git', ['ls-files', '--stage', '--', adapter], { encoding: 'utf8' })
+  assert.match(indexed, /^100755 /)
+  chmodSync(adapter, 0o755)
+  assert.equal(
+    execFileSync('git', ['diff', '--name-only', '--', adapter], { encoding: 'utf8' }),
+    '',
+  )
 })
