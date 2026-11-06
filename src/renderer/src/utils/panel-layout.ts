@@ -1,3 +1,5 @@
+import { MIN_AGENT_LIST_WIDTH, MAX_AGENT_LIST_WIDTH } from './agent-navigation-layout'
+
 export const MIN_SIDEBAR_WIDTH = 160
 export const MAX_SIDEBAR_WIDTH = 500
 export const MIN_AGENT_PANEL_WIDTH = 220
@@ -15,6 +17,7 @@ export interface PanelLayoutInput {
   sidebarWidth: number
   agentPanelWidth: number
   agentInRight: boolean
+  agentListOnly?: boolean
 }
 
 export interface PanelLayout {
@@ -25,9 +28,18 @@ export interface PanelLayout {
 }
 
 export function getPanelLayout(
-  { viewportWidth, sidebarVisible, sidebarWidth, agentPanelWidth, agentInRight }: PanelLayoutInput,
+  {
+    viewportWidth,
+    sidebarVisible,
+    sidebarWidth,
+    agentPanelWidth,
+    agentInRight,
+    agentListOnly,
+  }: PanelLayoutInput,
   retainedAgentWidth?: number,
 ): PanelLayout {
+  const agentMin = agentListOnly ? MIN_AGENT_LIST_WIDTH : MIN_AGENT_PANEL_WIDTH
+  const agentMax = agentListOnly ? MAX_AGENT_LIST_WIDTH : MAX_AGENT_PANEL_WIDTH
   const budget =
     (Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0) -
     (sidebarVisible ? ACTIVITY_BAR_WIDTH : COLLAPSED_ACTIVITY_BAR_WIDTH) -
@@ -37,24 +49,21 @@ export function getPanelLayout(
     min: MIN_SIDEBAR_WIDTH,
     max: Math.max(
       MIN_SIDEBAR_WIDTH,
-      Math.min(MAX_SIDEBAR_WIDTH, Math.floor(budget - (agentInRight ? MIN_AGENT_PANEL_WIDTH : 0))),
+      Math.min(MAX_SIDEBAR_WIDTH, Math.floor(budget - (agentInRight ? agentMin : 0))),
     ),
   }
   let effectiveSidebarWidth = sidebarVisible ? clampPanelWidth(sidebarWidth, sidebarBounds) : 0
   const agentBounds = {
-    min: MIN_AGENT_PANEL_WIDTH,
-    max: Math.max(
-      MIN_AGENT_PANEL_WIDTH,
-      Math.min(MAX_AGENT_PANEL_WIDTH, Math.floor(budget - effectiveSidebarWidth)),
-    ),
+    min: agentMin,
+    max: Math.max(agentMin, Math.min(agentMax, Math.floor(budget - effectiveSidebarWidth))),
   }
   let effectiveAgentWidth = agentInRight ? clampPanelWidth(agentPanelWidth, agentBounds) : 0
   if (agentInRight && retainedAgentWidth !== undefined && Number.isFinite(retainedAgentWidth)) {
     // A left-side toggle only redistributes the left/navigation and workbench space.
     // This is a disposable presentation value, never a new persisted width preference.
     effectiveAgentWidth = clampPanelWidth(retainedAgentWidth, {
-      min: MIN_AGENT_PANEL_WIDTH,
-      max: MAX_AGENT_PANEL_WIDTH,
+      min: agentMin,
+      max: agentMax,
     })
     sidebarBounds.max = Math.max(
       MIN_SIDEBAR_WIDTH,

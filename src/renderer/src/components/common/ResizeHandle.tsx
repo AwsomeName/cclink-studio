@@ -29,7 +29,7 @@ interface ResizeHandleProps {
   onResizeEnd?: (result: PanelResizeEnd) => void
   /** 被调整的面板位置：左侧面板向右拖变宽，右侧面板向左拖变宽 */
   side?: 'left' | 'right'
-  area: 'sidebar' | 'agent'
+  area: 'sidebar' | 'agent' | 'agent-sessions'
 }
 
 /**
@@ -52,7 +52,7 @@ export function ResizeHandle({
   const target = {
     kind: 'layout' as const,
     workspaceKey: workspaceRefKey(activeWorkspaceRef),
-    area,
+    area: area === 'agent-sessions' ? ('agent' as const) : area,
   }
 
   const handlePointerDown = useCallback(
@@ -128,7 +128,13 @@ export function ResizeHandle({
       className="resize-handle"
       role="separator"
       aria-orientation="vertical"
-      aria-label={area === 'sidebar' ? '侧栏宽度' : 'Agent 面板宽度'}
+      aria-label={
+        area === 'sidebar'
+          ? '侧栏宽度'
+          : area === 'agent-sessions'
+            ? '会话列表宽度'
+            : 'Agent 面板宽度'
+      }
       tabIndex={0}
       data-layout-area={area}
       onPointerDown={handlePointerDown}
@@ -142,6 +148,15 @@ export function ResizeHandle({
         })
       }}
       onKeyDown={(event) => {
+        if (
+          area === 'agent-sessions' &&
+          (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+        ) {
+          event.preventDefault()
+          onResizeStart?.()
+          onResizeEnd?.({ reason: 'commit', delta: event.key === 'ArrowRight' ? 10 : -10 })
+          return
+        }
         if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
         event.preventDefault()
         showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))

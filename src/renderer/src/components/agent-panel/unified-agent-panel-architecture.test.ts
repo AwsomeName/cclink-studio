@@ -23,7 +23,14 @@ describe('unified Agent Panel production boundary', () => {
     const appSource = read('../../App.tsx')
 
     expect(appSource).not.toContain('RemoteAgentPanel')
-    expect(appSource.match(/<AgentPanel variant=/gu)).toHaveLength(2)
+    expect(appSource).toContain('<AgentPanel variant="center"')
+    expect(appSource).toContain('<AgentWorkspace />')
+    const workspaceSource = read('./agent-workspace.tsx')
+    expect(workspaceSource.match(/<AgentPanel variant="side"/gu)).toHaveLength(1)
+    expect(workspaceSource).not.toContain('<textarea')
+    expect(workspaceSource).not.toMatch(
+      /agent\.(abort|resetSession|closeConversation|onStreamEvent)/u,
+    )
   })
 
   it('keeps all production layout and the textarea inside the fixed AgentPanelView', () => {

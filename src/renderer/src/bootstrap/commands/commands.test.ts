@@ -85,7 +85,7 @@ describe('bootstrap command modules', () => {
   it('新建 Agent 会话绑定当前工作空间并打开右侧输入框', async () => {
     const workspaceRef = localWorkspaceRef('/workspace/current')
     const createConversation = vi.fn(() => 'conversation-new')
-    const setAgentPanelMode = vi.fn()
+    const showAgentChat = vi.fn()
     const resetSession = vi.fn()
     const dispatchEvent = vi.fn()
 
@@ -95,7 +95,7 @@ describe('bootstrap command modules', () => {
     vi.spyOn(useAgentStore, 'getState').mockReturnValue({
       createConversation,
     } as unknown as ReturnType<typeof useAgentStore.getState>)
-    vi.spyOn(useUIStore, 'getState').mockReturnValue({ setAgentPanelMode } as unknown as ReturnType<
+    vi.spyOn(useUIStore, 'getState').mockReturnValue({ showAgentChat } as unknown as ReturnType<
       typeof useUIStore.getState
     >)
     vi.stubGlobal('window', {
@@ -121,7 +121,7 @@ describe('bootstrap command modules', () => {
         },
         activate: true,
       })
-      expect(setAgentPanelMode).toHaveBeenCalledWith('right', 'user')
+      expect(showAgentChat).toHaveBeenCalledOnce()
       expect(resetSession).toHaveBeenCalledWith('conversation-new')
       expect(dispatchEvent).toHaveBeenCalledOnce()
     } finally {
@@ -138,7 +138,7 @@ describe('bootstrap command modules', () => {
       label: 'project',
     })
     const createSession = vi.fn(async () => ({ id: 'remote-session' }))
-    const setAgentPanelMode = vi.fn()
+    const showAgentChat = vi.fn()
 
     vi.spyOn(useWorkspaceStore, 'getState').mockReturnValue({
       activeWorkspaceRef: workspaceRef,
@@ -146,7 +146,7 @@ describe('bootstrap command modules', () => {
     vi.spyOn(useCclinkStore, 'getState').mockReturnValue({
       createSession,
     } as unknown as ReturnType<typeof useCclinkStore.getState>)
-    vi.spyOn(useUIStore, 'getState').mockReturnValue({ setAgentPanelMode } as unknown as ReturnType<
+    vi.spyOn(useUIStore, 'getState').mockReturnValue({ showAgentChat } as unknown as ReturnType<
       typeof useUIStore.getState
     >)
 
@@ -156,7 +156,7 @@ describe('bootstrap command modules', () => {
         ?.action({ source: 'toolbar' })
 
       expect(createSession).toHaveBeenCalledWith(workspaceRef, '会话 · project')
-      expect(setAgentPanelMode).toHaveBeenCalledWith('right', 'user')
+      expect(showAgentChat).toHaveBeenCalledOnce()
     } finally {
       vi.restoreAllMocks()
     }

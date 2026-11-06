@@ -34,7 +34,7 @@ export function createThreadContextCommands(): Command[] {
         const id = threadId(context)
         if (!id || !currentThread(context)) throw new Error('会话已不存在')
         useAgentStore.getState().switchConversation(id)
-        useUIStore.getState().setAgentPanelMode('right', 'user')
+        useUIStore.getState().showAgentChat()
         requestAnimationFrame(focusAgentComposer)
       },
     },

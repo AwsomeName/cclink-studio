@@ -510,7 +510,7 @@ export function RemoteAgentController({
         variant,
         timelineKey: `remote:${remoteWorkspaceKey}:${activeSession?.id ?? 'pending'}`,
         header: {
-          title: 'Agent',
+          title: activeSession?.name ?? 'Agent',
           runtimeLabel: `远程 · ${workspaceRef.endpointName || workspaceRef.endpointId}`,
           status: agentVisualStatus,
           diagnostics: {

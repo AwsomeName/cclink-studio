@@ -2,11 +2,13 @@ import type { Command } from '../../stores/command-store'
 import { useAgentStore } from '../../stores/agent-store'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useUIStore } from '../../stores/ui-store'
-import { useWorkspaceStore } from '../../stores/workspace-store'
+import {
+  captureActiveWorkspaceTarget,
+  isWorkspaceTargetCurrent,
+} from '../../stores/workspace-store'
 import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { workspaceRefLabel } from '@shared/workspace-ref'
-
 import {
   AGENT_FOLLOW_UP,
   followUpUnavailableReason,
@@ -64,27 +66,36 @@ export function createAgentCommands(): Command[] {
       }),
     ),
     {
+      id: 'agent.showConversations',
+      label: '打开右侧会话列表',
+      category: 'Agent',
+      action: () => useUIStore.getState().showAgentSessions(),
+    },
+    {
       id: 'agent.newConversation',
       label: '新建 Agent 会话',
       category: 'Agent',
       action: async () => {
-        const activeWorkspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
+        const target = captureActiveWorkspaceTarget()
+        const activeWorkspaceRef = target.ref
         if (activeWorkspaceRef.kind === 'remote') {
           await useCclinkStore
             .getState()
             .createSession(activeWorkspaceRef, `会话 · ${workspaceRefLabel(activeWorkspaceRef)}`)
-          useUIStore.getState().setAgentPanelMode('right', 'user')
+          if (isWorkspaceTargetCurrent(target)) useUIStore.getState().showAgentChat()
           return
         }
         const conversationId = useAgentStore.getState().createConversation({
           runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
           activate: true,
         })
-        useUIStore.getState().setAgentPanelMode('right', 'user')
+        useUIStore.getState().showAgentChat()
         try {
           await window.cclinkStudio.agent.resetSession(conversationId)
         } finally {
-          requestAnimationFrame(focusAgentComposer)
+          requestAnimationFrame(() => {
+            if (isWorkspaceTargetCurrent(target)) focusAgentComposer()
+          })
         }
       },
     },

@@ -30,6 +30,7 @@ export function usePanelLayout(
       previous.workspaceKey === workspaceKey &&
       previous.input.viewportWidth === input.viewportWidth &&
       previous.input.agentInRight === input.agentInRight &&
+      previous.input.agentListOnly === input.agentListOnly &&
       previous.input.sidebarWidth === input.sidebarWidth
     ) {
       if (previous.input.agentPanelWidth !== input.agentPanelWidth) {

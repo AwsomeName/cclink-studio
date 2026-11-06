@@ -1052,7 +1052,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         variant,
         timelineKey: `local:${workspaceRefKey(activeWorkspaceRef)}:${activeConversationId}`,
         header: {
-          title: 'Agent',
+          title: conversations[activeConversationId]?.title ?? 'Agent',
           runtimeLabel: `本地 · ${activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}`,
           status: {
             tone:

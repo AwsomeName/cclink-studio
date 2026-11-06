@@ -106,6 +106,8 @@ const MAIN_ICON_GROUPS: Array<{
 export function ActivityBar(): React.ReactElement {
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
+  const agentPanelMode = useUIStore((s) => s.agentPanelMode)
+  const agentContentMode = useUIStore((s) => s.agentContentMode)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const hideSidebar = useUIStore((s) => s.hideSidebar)
@@ -137,6 +139,12 @@ export function ActivityBar(): React.ReactElement {
   }, [])
 
   const handleClick = (id: ActivityPanel): void => {
+    if (id === 'sessions') {
+      void useCommandStore
+        .getState()
+        .executeCommand('agent.showConversations', { source: 'toolbar' })
+      return
+    }
     if (id === 'company-workspace') {
       void useCommandStore
         .getState()
@@ -171,7 +179,7 @@ export function ActivityBar(): React.ReactElement {
               <button
                 type="button"
                 key={id}
-                className={`activity-bar-icon ${activePanel === id ? 'active' : ''}`}
+                className={`activity-bar-icon ${id === 'sessions' ? (agentPanelMode === 'right' && agentContentMode !== 'chat' ? 'active' : '') : activePanel === id ? 'active' : ''}`}
                 onClick={() => handleClick(id)}
                 onContextMenu={(event) => {
                   event.preventDefault()
@@ -193,7 +201,11 @@ export function ActivityBar(): React.ReactElement {
                   )
                 }}
                 aria-label={label}
-                aria-pressed={activePanel === id}
+                aria-pressed={
+                  id === 'sessions'
+                    ? agentPanelMode === 'right' && agentContentMode !== 'chat'
+                    : activePanel === id
+                }
                 title={label}
               >
                 <Icon size={18} />

@@ -4,6 +4,8 @@ import { normalizeWorkspaceLayout, UI_DEFAULTS, useUIStore } from './ui-store'
 beforeEach(() => {
   // 重置到默认状态
   useUIStore.setState({
+    ...UI_DEFAULTS,
+    agentDrawerOpen: false,
     activePanel: 'files',
     sidebarVisible: true,
     agentPanelVisible: true,
@@ -16,6 +18,49 @@ beforeEach(() => {
 })
 
 describe('useUIStore', () => {
+  it('收放内部列和整个面板都不改写展开宽度', () => {
+    const ui = useUIStore.getState()
+    ui.setAgentPanelWidth(700)
+    ui.setAgentListWidth(240)
+    ui.setAgentContentMode('split')
+    ui.setAgentContentMode('list')
+    ui.toggleAgentPanel()
+    ui.toggleAgentPanel()
+    expect(useUIStore.getState()).toMatchObject({
+      agentPanelWidth: 700,
+      agentListWidth: 240,
+      agentContentMode: 'list',
+    })
+    ui.showAgentChat()
+    expect(useUIStore.getState()).toMatchObject({
+      agentPanelWidth: 700,
+      agentListWidth: 240,
+      agentContentMode: 'split',
+      agentDrawerOpen: false,
+    })
+    ui.setAgentContentMode('chat')
+    ui.showAgentChat()
+    expect(useUIStore.getState().agentContentMode).toBe('chat')
+  })
+
+  it('工作空间恢复只恢复偏好，临时抽屉不跨工作空间泄漏', () => {
+    const saved = normalizeWorkspaceLayout({
+      agentPanelMode: 'right',
+      agentPanelWidth: 700,
+      agentListWidth: 250,
+      agentContentMode: 'split',
+    })
+    useUIStore.getState().showAgentSessions()
+    useUIStore.getState().hydrateFromWorkspaceState(saved)
+    expect(useUIStore.getState()).toMatchObject({ ...saved, agentDrawerOpen: false })
+    useUIStore.getState().hydrateFromWorkspaceState({})
+    expect(useUIStore.getState()).toMatchObject({
+      agentContentMode: 'chat',
+      agentListWidth: 220,
+      agentPanelWidth: 350,
+    })
+  })
+
   describe('setActivePanel', () => {
     it('点击同一面板 → 折叠侧栏', () => {
       const { setActivePanel } = useUIStore.getState()
@@ -38,10 +83,16 @@ describe('useUIStore', () => {
       expect(useUIStore.getState().activePanel).toBe('files')
     })
 
-    it('会话是可见 Activity 面板', () => {
+    it('会话入口打开右侧列表并保持左侧文件树', () => {
+      useUIStore.getState().hideSidebar()
       useUIStore.getState().setActivePanel('sessions')
-      expect(useUIStore.getState().activePanel).toBe('sessions')
-      expect(useUIStore.getState().sidebarVisible).toBe(true)
+      expect(useUIStore.getState()).toMatchObject({
+        activePanel: 'files',
+        sidebarVisible: false,
+        agentPanelMode: 'right',
+        agentContentMode: 'split',
+        agentDrawerOpen: true,
+      })
     })
 
     it('网站与账号是可见 Activity 面板', () => {

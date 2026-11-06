@@ -36,7 +36,16 @@ describe('shell context commands', () => {
     }
     await command.action(context)
     await command.action(context)
-    expect(useUIStore.getState()).toMatchObject({ activePanel: activityId, sidebarVisible: true })
+    expect(useUIStore.getState()).toMatchObject(
+      activityId === 'sessions'
+        ? {
+            activePanel: 'files',
+            sidebarVisible: true,
+            agentPanelMode: 'right',
+            agentContentMode: 'split',
+          }
+        : { activePanel: activityId, sidebarVisible: true },
+    )
     if (activityId === 'company-accounts' || activityId === 'company-workspace') {
       expect(useTabStore.getState().getActiveTab()?.type).toBe(activityId)
       expect(useTabStore.getState().tabs.filter((tab) => tab.type === activityId)).toHaveLength(1)

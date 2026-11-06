@@ -9,6 +9,7 @@ import { _electron } from 'playwright-core'
 import electronPath from 'electron'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
 import { runActivityCountSmoke } from './activity-count-smoke.mjs'
+import { runAgentNavigationSmoke } from './agent-navigation-smoke.mjs'
 
 // 所有布局和 Browser 回归都在独立 userData 与临时工作空间中运行。
 const evidenceDir = await mkdtemp(join(tmpdir(), 'cclink-workspace-layout-'))
@@ -228,6 +229,8 @@ async function setLayout(value) {
     ui.setSidebarWidth(next.sidebarWidth)
     ui.setAgentPanelWidth(next.agentPanelWidth)
     ui.setAgentPanelMode(next.agentPanelMode, 'user')
+    ui.setAgentContentMode(next.agentContentMode ?? 'chat')
+    ui.setAgentListWidth(next.agentListWidth ?? 220)
     if (!next.sidebarVisible) ui.hideSidebar()
   }, value)
   await flush()
@@ -448,6 +451,9 @@ try {
     await setLayout(layoutA)
     await measure(browserATabId, urlA, 'panels-restored')
   })
+  await check('right Agent navigation, widths, drafts and controlled background IPC', async () =>
+    runAgentNavigationSmoke({ page, electronApp, resizeWindow, evidenceDir }),
+  )
   await check('unified left toggle retains tree position, widths and right Agent', async () => {
     const measurements = []
     const geometry = () =>
@@ -935,18 +941,53 @@ try {
     await page.evaluate((id) => window.cclinkStudio.browser.goBack(id), browserATabId)
     await measure(browserATabId, urlA, 'history-back')
   })
-  await check('restart restores layouts and native Browser zoom', async () => {
-    await flush()
-    await browser.close()
-    await connect()
-    await assertLayout(a, layoutA)
-    await measure(browserATabId, urlA, 'restart-a')
-    await open(b)
-    await assertLayout(b, layoutB)
-    await open(a)
-    await assertLayout(a, layoutA)
-    await page.screenshot({ path: join(evidenceDir, 'restored-layout.png') })
-  })
+  await check(
+    'restart restores workspace-specific Agent columns, widths and native Browser zoom',
+    async () => {
+      const navigationA = {
+        ...layoutA,
+        agentPanelWidth: 700,
+        agentContentMode: 'split',
+        agentListWidth: 240,
+      }
+      const navigationB = {
+        ...layoutB,
+        agentPanelMode: 'right',
+        agentContentMode: 'list',
+        agentListWidth: 200,
+      }
+      try {
+        await open(b)
+        await setLayout(navigationB)
+        await open(a)
+        await setLayout(navigationA)
+        await flush()
+        await browser.close()
+        await connect()
+        await assertLayout(a, navigationA)
+        await page.waitForSelector('[data-agent-navigation="split"]')
+        await measure(browserATabId, urlA, 'restart-a')
+        await open(b)
+        await assertLayout(b, navigationB)
+        await page.waitForSelector('[data-agent-navigation="list"]')
+        const listOnlyWidth = await until(
+          () => page.locator('.agent-side-shell').evaluate((element) => element.clientWidth),
+          (width) => Math.abs(width - 200) < 2,
+          'B restored list width after layout transition',
+        )
+        await open(a)
+        await assertLayout(a, navigationA)
+        await page.waitForSelector('[data-agent-navigation="split"]')
+        await page.screenshot({ path: join(evidenceDir, 'restored-layout.png') })
+        return { expandedWidth: 700, listWidthA: 240, listWidthB: listOnlyWidth }
+      } finally {
+        await open(b)
+        await setLayout(layoutB)
+        await open(a)
+        await setLayout(layoutA)
+      }
+    },
+  )
   await check(
     'real window sizes, complete text, states, themes and non-default app zoom',
     async () => {

@@ -6,6 +6,7 @@ import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
 import { Workbench } from './components/workbench/Workbench'
 import { AgentPanel } from './components/agent-panel/AgentPanel'
+import { AgentWorkspace } from './components/agent-panel/agent-workspace'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { ResizeHandle, type PanelResizeEnd } from './components/common/ResizeHandle'
 import { IconFolder, IconPanelLeft, IconPanelRight } from './components/common/Icons'
@@ -32,7 +33,6 @@ import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { useAgentWebResourceLaunchRequests } from './bootstrap/use-agent-web-resource-launch-requests'
 import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
-import { ConversationQuickSwitcher } from './components/topbar/ConversationQuickSwitcher'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth } from './utils/panel-layout'
 import { usePanelLayout } from './utils/use-panel-layout'
@@ -54,6 +54,9 @@ function MainLayout(): React.ReactElement {
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)
   const agentPanelWidth = useUIStore((s) => s.agentPanelWidth)
+  const agentContentMode = useUIStore((s) => s.agentContentMode)
+  const agentListWidth = useUIStore((s) => s.agentListWidth)
+  const setAgentListWidth = useUIStore((s) => s.setAgentListWidth)
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth)
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
@@ -84,7 +87,12 @@ function MainLayout(): React.ReactElement {
     viewport: { width: number; height: number; dpr: number }
     budget: Pick<
       ReturnType<typeof useUIStore.getState>,
-      'sidebarVisible' | 'agentPanelMode' | 'sidebarWidth' | 'agentPanelWidth'
+      | 'sidebarVisible'
+      | 'agentPanelMode'
+      | 'sidebarWidth'
+      | 'agentPanelWidth'
+      | 'agentContentMode'
+      | 'agentListWidth'
     >
   } | null>(null)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
@@ -98,7 +106,14 @@ function MainLayout(): React.ReactElement {
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const panelLayout = usePanelLayout(
     workspaceRefKey(activeWorkspaceRef),
-    { viewportWidth, sidebarVisible, sidebarWidth, agentPanelWidth, agentInRight },
+    {
+      viewportWidth,
+      sidebarVisible,
+      sidebarWidth,
+      agentPanelWidth: agentContentMode === 'list' ? agentListWidth : agentPanelWidth,
+      agentInRight,
+      agentListOnly: agentContentMode === 'list',
+    },
     resizePreview,
   )
 
@@ -123,7 +138,9 @@ function MainLayout(): React.ReactElement {
           (state.sidebarVisible !== previous.sidebarVisible ||
             state.agentPanelMode !== previous.agentPanelMode ||
             state.sidebarWidth !== previous.sidebarWidth ||
-            state.agentPanelWidth !== previous.agentPanelWidth)
+            state.agentPanelWidth !== previous.agentPanelWidth ||
+            state.agentContentMode !== previous.agentContentMode ||
+            state.agentListWidth !== previous.agentListWidth)
         ) {
           cancelActivePanelResize()
         }
@@ -157,10 +174,22 @@ function MainLayout(): React.ReactElement {
     resizeStartRef.current = {
       area,
       effective: area === 'sidebar' ? panelLayout.sidebarWidth : panelLayout.agentPanelWidth,
-      saved: area === 'sidebar' ? sidebarWidth : agentPanelWidth,
+      saved:
+        area === 'sidebar'
+          ? sidebarWidth
+          : agentContentMode === 'list'
+            ? agentListWidth
+            : agentPanelWidth,
       bounds: area === 'sidebar' ? panelLayout.sidebarBounds : panelLayout.agentBounds,
       viewport: { width: viewportWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
-      budget: { sidebarVisible, agentPanelMode, sidebarWidth, agentPanelWidth },
+      budget: {
+        sidebarVisible,
+        agentPanelMode,
+        sidebarWidth,
+        agentPanelWidth,
+        agentContentMode,
+        agentListWidth,
+      },
     }
     setPanelResizing(true)
   }
@@ -190,15 +219,18 @@ function MainLayout(): React.ReactElement {
         start.budget.sidebarVisible !== current.sidebarVisible ||
         start.budget.agentPanelMode !== current.agentPanelMode ||
         start.budget.sidebarWidth !== current.sidebarWidth ||
-        start.budget.agentPanelWidth !== current.agentPanelWidth
+        start.budget.agentPanelWidth !== current.agentPanelWidth ||
+        start.budget.agentContentMode !== current.agentContentMode ||
+        start.budget.agentListWidth !== current.agentListWidth
       )
         return
       const candidate = clampPanelWidth(start.effective + delta, start.bounds)
       if (candidate === start.effective) return
       if (start.area === 'sidebar') setSidebarWidth(candidate)
+      else if (current.agentContentMode === 'list') setAgentListWidth(candidate)
       else setAgentPanelWidth(candidate)
     },
-    [setSidebarWidth, setAgentPanelWidth],
+    [setSidebarWidth, setAgentPanelWidth, setAgentListWidth],
   )
 
   const toggleUnifiedAgentPanel = useCallback(() => {
@@ -244,14 +276,7 @@ function MainLayout(): React.ReactElement {
           </button>
         </div>
         <ProjectStrip />
-        <div
-          className="app-topbar-right"
-          style={agentInRight ? { width: panelLayout.agentPanelWidth } : undefined}
-        >
-          <ConversationQuickSwitcher
-            panelMode={agentPanelMode}
-            panelWidth={panelLayout.agentPanelWidth}
-          />
+        <div className="app-topbar-right">
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
             onClick={toggleUnifiedAgentPanel}
@@ -343,6 +368,7 @@ function MainLayout(): React.ReactElement {
 
         <div
           className={`agent-side-shell ${agentInRight ? '' : 'collapsed'}`}
+          inert={!agentInRight}
           style={{
             display: 'flex',
             overflow: 'hidden',
@@ -358,7 +384,7 @@ function MainLayout(): React.ReactElement {
                 <PanelErrorFallback error={e} retry={retry} title="Agent 面板" />
               )}
             >
-              <AgentPanel variant="side" />
+              <AgentWorkspace />
             </ErrorBoundary>
           )}
         </div>

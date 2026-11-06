@@ -19,6 +19,12 @@ import {
   MAX_AGENT_PANEL_WIDTH,
 } from '../utils/panel-layout'
 import { recordRendererDiagnosticLog } from '../features/diagnostics/renderer-diagnostic-log'
+import {
+  DEFAULT_AGENT_LIST_WIDTH,
+  MIN_AGENT_LIST_WIDTH,
+  MAX_AGENT_LIST_WIDTH,
+  type AgentContentMode,
+} from '../utils/agent-navigation-layout'
 
 export type AgentPanelMode = 'center' | 'right' | 'hidden'
 type VisibleAgentPanelMode = Exclude<AgentPanelMode, 'hidden'>
@@ -43,6 +49,8 @@ export interface WorkspaceLayoutSnapshot {
   sidebarWidth: number
   /** Agent 面板宽度 (px) */
   agentPanelWidth: number
+  agentContentMode: AgentContentMode
+  agentListWidth: number
   /** Agent 面板布局：居中入口 / 右侧协作 / 隐藏 */
   agentPanelMode: AgentPanelMode
   /** 最近一次可见布局，用于快照兼容与诊断；重新展开时以当前入口指定布局为准。 */
@@ -52,6 +60,9 @@ export interface WorkspaceLayoutSnapshot {
 }
 
 interface UIState extends WorkspaceLayoutSnapshot {
+  /** Transient; narrow-window presentation must not overwrite the user's layout preference. */
+  agentDrawerOpen: boolean
+  setAgentDrawerOpen: (open: boolean) => void
   // --- Actions ---
   setActivePanel: (panel: ActivityPanel) => void
   /** 程序化展示面板；与 Activity Bar 的再次点击折叠语义分离。 */
@@ -64,6 +75,10 @@ interface UIState extends WorkspaceLayoutSnapshot {
   resetAgentLayout: () => void
   setSidebarWidth: (width: number) => void
   setAgentPanelWidth: (width: number) => void
+  setAgentListWidth: (width: number) => void
+  setAgentContentMode: (mode: AgentContentMode) => void
+  showAgentSessions: () => void
+  showAgentChat: () => void
   /** 从主进程 WorkspaceState 恢复布局状态 */
   hydrateFromWorkspaceState: (value: unknown) => void
 }
@@ -75,6 +90,8 @@ export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
   agentPanelVisible: true,
   sidebarWidth: 250,
   agentPanelWidth: 350,
+  agentContentMode: 'chat',
+  agentListWidth: DEFAULT_AGENT_LIST_WIDTH,
   agentPanelMode: 'center' as AgentPanelMode,
   agentPanelLastVisibleMode: 'center' as VisibleAgentPanelMode | null,
   agentPanelModeSource: 'system' as AgentPanelModeSource,
@@ -141,7 +158,8 @@ export function normalizeWorkspaceLayout(value: unknown): WorkspaceLayoutSnapsho
   const parsed = value as Partial<UIState>
   const mode = normalizeStoredAgentPanelMode(parsed.agentPanelMode, parsed.agentPanelVisible)
   return {
-    activePanel: normalizeActivityPanel(parsed.activePanel),
+    activePanel:
+      parsed.activePanel === 'sessions' ? 'files' : normalizeActivityPanel(parsed.activePanel),
     sidebarVisible:
       typeof parsed.sidebarVisible === 'boolean'
         ? parsed.sidebarVisible
@@ -158,6 +176,16 @@ export function normalizeWorkspaceLayout(value: unknown): WorkspaceLayoutSnapsho
       MIN_AGENT_PANEL_WIDTH,
       MAX_AGENT_PANEL_WIDTH,
       UI_DEFAULTS.agentPanelWidth,
+    ),
+    agentContentMode:
+      parsed.agentContentMode === 'split' || parsed.agentContentMode === 'list'
+        ? parsed.agentContentMode
+        : UI_DEFAULTS.agentContentMode,
+    agentListWidth: normalizeWidth(
+      parsed.agentListWidth,
+      MIN_AGENT_LIST_WIDTH,
+      MAX_AGENT_LIST_WIDTH,
+      DEFAULT_AGENT_LIST_WIDTH,
     ),
     agentPanelMode: mode,
     agentPanelLastVisibleMode: normalizeLastVisibleAgentPanelMode(parsed.agentPanelLastVisibleMode),
@@ -270,22 +298,27 @@ export function createWorkspaceLayoutRestore(): {
 
 export const useUIStore = create<UIState>((set) => ({
   ...UI_DEFAULTS,
+  agentDrawerOpen: false,
 
   setActivePanel: (panel) =>
-    set((state) => {
-      const nextPanel = normalizeActivityPanel(panel)
-      return {
-        activePanel: nextPanel,
-        // 点击已激活的面板 → 折叠侧栏；点击其他面板 → 展开侧栏
-        sidebarVisible: state.activePanel === nextPanel ? !state.sidebarVisible : true,
-      }
-    }),
+    panel === 'sessions'
+      ? useUIStore.getState().showAgentSessions()
+      : set((state) => {
+          const nextPanel = normalizeActivityPanel(panel)
+          return {
+            activePanel: nextPanel,
+            // 点击已激活的面板 → 折叠侧栏；点击其他面板 → 展开侧栏
+            sidebarVisible: state.activePanel === nextPanel ? !state.sidebarVisible : true,
+          }
+        }),
 
   showPanel: (panel) =>
-    set({
-      activePanel: normalizeActivityPanel(panel),
-      sidebarVisible: true,
-    }),
+    panel === 'sessions'
+      ? useUIStore.getState().showAgentSessions()
+      : set({
+          activePanel: normalizeActivityPanel(panel),
+          sidebarVisible: true,
+        }),
 
   toggleSidebar: () => set((state) => ({ sidebarVisible: !state.sidebarVisible })),
   hideSidebar: () => set({ sidebarVisible: false }),
@@ -344,6 +377,9 @@ export const useUIStore = create<UIState>((set) => ({
       agentPanelVisible: agentVisibleFromMode(UI_DEFAULTS.agentPanelMode),
       agentPanelModeSource: 'system',
       agentPanelWidth: UI_DEFAULTS.agentPanelWidth,
+      agentContentMode: UI_DEFAULTS.agentContentMode,
+      agentListWidth: UI_DEFAULTS.agentListWidth,
+      agentDrawerOpen: false,
     }),
   setSidebarWidth: (width) =>
     set({
@@ -364,8 +400,37 @@ export const useUIStore = create<UIState>((set) => ({
       ),
       agentPanelModeSource: 'user',
     }),
+  setAgentListWidth: (width) =>
+    set({
+      agentListWidth: normalizeWidth(
+        width,
+        MIN_AGENT_LIST_WIDTH,
+        MAX_AGENT_LIST_WIDTH,
+        DEFAULT_AGENT_LIST_WIDTH,
+      ),
+    }),
+  setAgentContentMode: (agentContentMode) => set({ agentContentMode, agentDrawerOpen: false }),
+  setAgentDrawerOpen: (agentDrawerOpen) => set({ agentDrawerOpen }),
+  showAgentSessions: () =>
+    set({
+      agentPanelMode: 'right',
+      agentPanelLastVisibleMode: 'right',
+      agentPanelVisible: true,
+      agentPanelModeSource: 'user',
+      agentContentMode: 'split',
+      agentDrawerOpen: true,
+    }),
+  showAgentChat: () =>
+    set((state) => ({
+      agentPanelMode: 'right',
+      agentPanelLastVisibleMode: 'right',
+      agentPanelVisible: true,
+      agentPanelModeSource: 'user',
+      agentContentMode: state.agentContentMode === 'list' ? 'split' : state.agentContentMode,
+      agentDrawerOpen: false,
+    })),
   hydrateFromWorkspaceState: (value) => {
-    set(normalizeWorkspaceLayout(value))
+    set({ ...normalizeWorkspaceLayout(value), agentDrawerOpen: false })
   },
 }))
 

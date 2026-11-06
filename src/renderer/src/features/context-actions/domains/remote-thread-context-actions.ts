@@ -2,7 +2,11 @@ import type { Command } from '../../../stores/command-store'
 import { useCclinkStore } from '../../../stores/cclink-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { useUIStore } from '../../../stores/ui-store'
-import { useWorkspaceStore } from '../../../stores/workspace-store'
+import {
+  captureActiveWorkspaceTarget,
+  isWorkspaceTargetCurrent,
+  useWorkspaceStore,
+} from '../../../stores/workspace-store'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { openRemoteConversationInWorkbench } from '../../agent-conversations/conversation-workbench'
 import type { CommandContext } from '../context-target'
@@ -49,9 +53,11 @@ export function createRemoteThreadContextCommands(): Command[] {
       action: async (context) => {
         const session = currentRemoteThread(context)
         if (!session || session.status === 'archived') throw new Error('远程会话已不存在')
+        if (!currentRemoteWorkspace(context)) throw new Error('工作空间已切换')
+        const workspaceTarget = captureActiveWorkspaceTarget()
         useCclinkStore.getState().selectSession(session.id)
         await useCclinkStore.getState().loadMessages(session.id)
-        useUIStore.getState().setAgentPanelMode('right', 'user')
+        if (isWorkspaceTargetCurrent(workspaceTarget)) useUIStore.getState().showAgentChat()
       },
     },
     {

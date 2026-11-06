@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { remoteWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
+import { localWorkspaceRef, remoteWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
 import type { CclinkRemoteSession } from '@shared/cclink'
 import { useCclinkStore } from '../../../stores/cclink-store'
 import { useTabStore } from '../../../stores/tab-store'
+import { useUIStore } from '../../../stores/ui-store'
 import { useWorkspaceStore } from '../../../stores/workspace-store'
 import type { CommandContext } from '../context-target'
 import { resolveContextMenu } from '../resolve-context-menu'
@@ -54,11 +55,62 @@ beforeEach(() => {
   })
   useCclinkStore.setState(useCclinkStore.getInitialState(), true)
   useTabStore.setState(useTabStore.getInitialState(), true)
+  useUIStore.setState(useUIStore.getInitialState(), true)
   useWorkspaceStore.setState(useWorkspaceStore.getInitialState(), true)
   useWorkspaceStore.getState().commitActiveWorkspace(workspaceRef)
 })
 
 describe('remote thread context actions', () => {
+  it('restores the chat and saved outer width when opening from list-only mode', async () => {
+    useCclinkStore.setState({
+      sessions: [session()],
+      selectSession: vi.fn(),
+      loadMessages: vi.fn().mockResolvedValue(undefined),
+    })
+    useUIStore.setState({ agentContentMode: 'list', agentPanelWidth: 700, agentListWidth: 220 })
+    const command = createRemoteThreadContextCommands().find(
+      (candidate) => candidate.id === 'remoteAgent.openConversation',
+    )!
+
+    await command.action(context())
+
+    expect(useUIStore.getState()).toMatchObject({
+      agentContentMode: 'split',
+      agentPanelMode: 'right',
+      agentPanelWidth: 700,
+      agentListWidth: 220,
+    })
+  })
+
+  it('does not reopen chat after a delayed load crosses workspace generations', async () => {
+    let finishLoad!: () => void
+    useCclinkStore.setState({
+      sessions: [session()],
+      selectSession: vi.fn(),
+      loadMessages: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishLoad = resolve
+          }),
+      ),
+    })
+    const command = createRemoteThreadContextCommands().find(
+      (candidate) => candidate.id === 'remoteAgent.openConversation',
+    )!
+    const opening = command.action(context())
+    useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef('/tmp/other-workspace'))
+    useWorkspaceStore.getState().commitActiveWorkspace(workspaceRef)
+    useUIStore.setState({ agentContentMode: 'list', agentPanelWidth: 600, agentListWidth: 200 })
+    finishLoad()
+    await opening
+
+    expect(useUIStore.getState()).toMatchObject({
+      agentContentMode: 'list',
+      agentPanelWidth: 600,
+      agentListWidth: 200,
+    })
+  })
+
   it('shows open, open-in-workbench, and close for an idle remote session', () => {
     useCclinkStore.setState({ sessions: [session()] })
 

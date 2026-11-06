@@ -15,7 +15,7 @@ export function RemoteSessionsSidebar({
   const selectSession = useCclinkStore((state) => state.selectSession)
   const loadMessages = useCclinkStore((state) => state.loadMessages)
   const setSessionArchived = useCclinkStore((state) => state.setSessionArchived)
-  const setAgentPanelMode = useUIStore((state) => state.setAgentPanelMode)
+  const showAgentChat = useUIStore((state) => state.showAgentChat)
   const [query, setQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
   const normalizedQuery = query.trim().toLocaleLowerCase()
@@ -44,7 +44,7 @@ export function RemoteSessionsSidebar({
   const open = (sessionId: string): void => {
     selectSession(sessionId)
     void loadMessages(sessionId)
-    setAgentPanelMode('right', 'user')
+    showAgentChat()
   }
 
   return (
