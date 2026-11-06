@@ -10266,6 +10266,11 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   font-weight: 600;
 }
 
+.agent-model-btn .agent-runtime-label {
+  color: var(--text-primary);
+  font-weight: inherit;
+}
+
 .agent-send-btn {
   width: 36px;
   height: 36px;

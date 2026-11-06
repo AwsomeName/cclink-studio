@@ -1107,293 +1107,297 @@ async function main() {
       return { ref: state.activeWorkspaceRef, generation: state.generation }
     })
 
-    const panelProjection = async (runtime) =>
-      page.locator(`[data-agent-panel-runtime="${runtime}"]`).evaluate((panel) => {
-        const box = (selector) => {
-          const rect = panel.querySelector(selector)?.getBoundingClientRect()
-          const root = panel.getBoundingClientRect()
-          return rect
-            ? {
-                x: Math.round(rect.x - root.x),
-                y: Math.round(rect.y - root.y),
-                width: Math.round(rect.width),
-                height: Math.round(rect.height),
-              }
-            : null
-        }
-        return {
-          rootWidth: Math.round(panel.getBoundingClientRect().width),
-          landmarks: [...panel.querySelectorAll('[data-agent-landmark]')].map((element) =>
-            element.getAttribute('data-agent-landmark'),
-          ),
-          actions: [...panel.querySelectorAll('[data-agent-action]')].map((element) =>
-            element.getAttribute('data-agent-action'),
-          ),
-          boxes: {
-            header: box('[data-agent-landmark="header"]'),
-            context: box('[data-agent-landmark="context"]'),
-            timeline: box('[data-agent-landmark="timeline"]'),
-            composer: box('.agent-input-card'),
-            actionBar: box('[data-agent-landmark="action-bar"]'),
-            primaryAction: box('[data-agent-action="send"], [data-agent-action="stop"]'),
-            addContextAction: box('[data-agent-action="addContext"]'),
-            roleAction: box('[data-agent-action="role"]'),
-            permissionAction: box('[data-agent-action="permissionMode"]'),
-            contextUsageAction: box('[data-agent-action="contextUsage"]'),
-            runtimeAction: box('[data-agent-action="runtime"]'),
-          },
-        }
-      })
-    const assertEquivalentPanel = (local, remote, variant) => {
-      assert(
-        JSON.stringify(local.landmarks) === JSON.stringify(remote.landmarks),
-        `${variant} local/remote landmark order differs`,
-      )
-      assert(
-        JSON.stringify(local.actions) === JSON.stringify(remote.actions),
-        `${variant} local/remote action order differs`,
-      )
-      for (const key of ['header', 'context', 'composer', 'actionBar', 'primaryAction']) {
-        const left = local.boxes[key]
-        const right = remote.boxes[key]
-        assert(left && right, `${variant} ${key} bounding box missing`)
-        for (const metric of ['height']) {
+    try {
+      const panelProjection = async (runtime) =>
+        page.locator(`[data-agent-panel-runtime="${runtime}"]`).evaluate((panel) => {
+          const box = (selector) => {
+            const rect = panel.querySelector(selector)?.getBoundingClientRect()
+            const root = panel.getBoundingClientRect()
+            return rect
+              ? {
+                  x: Math.round(rect.x - root.x),
+                  y: Math.round(rect.y - root.y),
+                  width: Math.round(rect.width),
+                  height: Math.round(rect.height),
+                }
+              : null
+          }
+          return {
+            rootWidth: Math.round(panel.getBoundingClientRect().width),
+            landmarks: [...panel.querySelectorAll('[data-agent-landmark]')].map((element) =>
+              element.getAttribute('data-agent-landmark'),
+            ),
+            actions: [...panel.querySelectorAll('[data-agent-action]')].map((element) =>
+              element.getAttribute('data-agent-action'),
+            ),
+            boxes: {
+              header: box('[data-agent-landmark="header"]'),
+              context: box('[data-agent-landmark="context"]'),
+              timeline: box('[data-agent-landmark="timeline"]'),
+              composer: box('.agent-input-card'),
+              actionBar: box('[data-agent-landmark="action-bar"]'),
+              primaryAction: box('[data-agent-action="send"], [data-agent-action="stop"]'),
+              addContextAction: box('[data-agent-action="addContext"]'),
+              roleAction: box('[data-agent-action="role"]'),
+              permissionAction: box('[data-agent-action="permissionMode"]'),
+              contextUsageAction: box('[data-agent-action="contextUsage"]'),
+              runtimeAction: box('[data-agent-action="runtime"]'),
+            },
+          }
+        })
+      const assertEquivalentPanel = (local, remote, variant) => {
+        assert(
+          JSON.stringify(local.landmarks) === JSON.stringify(remote.landmarks),
+          `${variant} local/remote landmark order differs`,
+        )
+        assert(
+          JSON.stringify(local.actions) === JSON.stringify(remote.actions),
+          `${variant} local/remote action order differs`,
+        )
+        for (const key of ['header', 'context', 'composer', 'actionBar', 'primaryAction']) {
+          const left = local.boxes[key]
+          const right = remote.boxes[key]
+          assert(left && right, `${variant} ${key} bounding box missing`)
+          for (const metric of ['height']) {
+            assert(
+              Math.abs(left[metric] - right[metric]) <= 1,
+              `${variant} ${key}.${metric} differs (${left[metric]} vs ${right[metric]})`,
+            )
+          }
+          const leftPosition =
+            key === 'primaryAction' ? local.rootWidth - left.x - left.width : left.x
+          const rightPosition =
+            key === 'primaryAction' ? remote.rootWidth - right.x - right.width : right.x
           assert(
-            Math.abs(left[metric] - right[metric]) <= 1,
-            `${variant} ${key}.${metric} differs (${left[metric]} vs ${right[metric]})`,
+            Math.abs(leftPosition - rightPosition) <= 1,
+            `${variant} ${key} position/inset differs (${leftPosition} vs ${rightPosition})`,
+          )
+          const leftWidth = key === 'primaryAction' ? left.width : local.rootWidth - left.width
+          const rightWidth = key === 'primaryAction' ? right.width : remote.rootWidth - right.width
+          assert(
+            Math.abs(leftWidth - rightWidth) <= 1,
+            `${variant} ${key} width/inset differs (${leftWidth} vs ${rightWidth})`,
           )
         }
-        const leftPosition =
-          key === 'primaryAction' ? local.rootWidth - left.x - left.width : left.x
-        const rightPosition =
-          key === 'primaryAction' ? remote.rootWidth - right.x - right.width : right.x
+        for (const key of [
+          'addContextAction',
+          'roleAction',
+          'permissionAction',
+          'contextUsageAction',
+          'runtimeAction',
+        ]) {
+          const left = local.boxes[key]
+          const right = remote.boxes[key]
+          assert(left && right, `${variant} ${key} bounding box missing`)
+          assert(
+            Math.abs(left.height - right.height) <= 1,
+            `${variant} ${key}.height differs (${left.height} vs ${right.height})`,
+          )
+        }
         assert(
-          Math.abs(leftPosition - rightPosition) <= 1,
-          `${variant} ${key} position/inset differs (${leftPosition} vs ${rightPosition})`,
-        )
-        const leftWidth = key === 'primaryAction' ? left.width : local.rootWidth - left.width
-        const rightWidth = key === 'primaryAction' ? right.width : remote.rootWidth - right.width
-        assert(
-          Math.abs(leftWidth - rightWidth) <= 1,
-          `${variant} ${key} width/inset differs (${leftWidth} vs ${rightWidth})`,
-        )
-      }
-      for (const key of [
-        'addContextAction',
-        'roleAction',
-        'permissionAction',
-        'contextUsageAction',
-        'runtimeAction',
-      ]) {
-        const left = local.boxes[key]
-        const right = remote.boxes[key]
-        assert(left && right, `${variant} ${key} bounding box missing`)
-        assert(
-          Math.abs(left.height - right.height) <= 1,
-          `${variant} ${key}.height differs (${left.height} vs ${right.height})`,
+          remote.boxes.addContextAction.width === remote.boxes.addContextAction.height,
+          `${variant} remote add-context action is not a square icon button`,
         )
       }
+
+      await page.evaluate(async () => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        useUIStore.getState().setAgentPanelMode('right', 'user')
+      })
+      const localPanel = page.locator('[data-agent-panel-runtime="local"]')
+      await localPanel.waitFor({ state: 'visible', timeout: 10_000 })
+      assert((await page.locator('.agent-panel').count()) === 1, 'expected one Agent Panel root')
+      const localComposer = localPanel.locator('textarea.agent-input, textarea.agent-start-input')
+      await localComposer.waitFor({ state: 'visible', timeout: 10_000 })
+      assert((await localComposer.count()) === 1, 'local runtime rendered more than one Composer')
+      await localComposer.fill('输入法候选')
+      await localComposer.dispatchEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 229,
+        isComposing: true,
+        bubbles: true,
+      })
+      await page.waitForTimeout(100)
       assert(
-        remote.boxes.addContextAction.width === remote.boxes.addContextAction.height,
-        `${variant} remote add-context action is not a square icon button`,
+        (await localComposer.inputValue()) === '输入法候选',
+        'IME candidate confirmation submitted or cleared the local draft',
       )
-    }
+      await localComposer.fill('/')
+      const skillCandidates = page.locator('.agent-skill-menu [role="option"]')
+      await skillCandidates.first().waitFor({ state: 'visible', timeout: 10_000 })
+      await localComposer.press('Shift+Enter')
+      assert(
+        (await localComposer.inputValue()) === '/\n',
+        'Shift+Enter selected a candidate instead of inserting a newline',
+      )
+      await localComposer.fill('')
+      const localSideProjection = await panelProjection('local')
 
-    await page.evaluate(async () => {
-      const { useUIStore } = await import('/src/stores/ui-store.ts')
-      useUIStore.getState().setAgentPanelMode('right', 'user')
-    })
-    const localPanel = page.locator('[data-agent-panel-runtime="local"]')
-    await localPanel.waitFor({ state: 'visible', timeout: 10_000 })
-    assert((await page.locator('.agent-panel').count()) === 1, 'expected one Agent Panel root')
-    const localComposer = localPanel.locator('textarea.agent-input, textarea.agent-start-input')
-    await localComposer.waitFor({ state: 'visible', timeout: 10_000 })
-    assert((await localComposer.count()) === 1, 'local runtime rendered more than one Composer')
-    await localComposer.fill('输入法候选')
-    await localComposer.dispatchEvent('keydown', {
-      key: 'Enter',
-      code: 'Enter',
-      keyCode: 229,
-      isComposing: true,
-      bubbles: true,
-    })
-    await page.waitForTimeout(100)
-    assert(
-      (await localComposer.inputValue()) === '输入法候选',
-      'IME candidate confirmation submitted or cleared the local draft',
-    )
-    await localComposer.fill('/')
-    const skillCandidates = page.locator('.agent-skill-menu [role="option"]')
-    await skillCandidates.first().waitFor({ state: 'visible', timeout: 10_000 })
-    await localComposer.press('Shift+Enter')
-    assert(
-      (await localComposer.inputValue()) === '/\n',
-      'Shift+Enter selected a candidate instead of inserting a newline',
-    )
-    await localComposer.fill('')
-    const localSideProjection = await panelProjection('local')
-
-    const publishingBindingSnapshot = await page.evaluate(async () => {
-      const { useAgentStore } = await import('/src/stores/agent-store.ts')
-      const { useBrowserTaskStore } = await import('/src/stores/browser-task-store.ts')
-      const { useTabStore } = await import('/src/stores/tab-store.ts')
-      const agent = useAgentStore.getState()
-      const tabs = useTabStore.getState()
-      const browserTasks = useBrowserTaskStore.getState()
-      const conversationId = 'article-publishing-ui-smoke'
-      const tabId = 'article-publishing-browser-ui-smoke'
-      agent.createConversation({
-        id: conversationId,
-        runtime: {
-          location: 'local',
-          transport: 'local',
-          backend: 'cclink-studio-agent',
-          workspaceRef: { kind: 'global' },
-        },
-      })
-      agent.renameConversation(conversationId, '发布文章 · UI Smoke · CSDN')
-      agent.addSystemMessage('发布执行正在上传正文图片', conversationId)
-      useBrowserTaskStore.setState({
-        tasks: {
-          ...browserTasks.tasks,
-          'article-publishing-task-ui-smoke': {
-            id: 'article-publishing-task-ui-smoke',
-            tabId,
-            goal: '发布图文 UI Smoke',
-            correlation: {
-              workspaceKey: null,
-              conversationId,
-              agentRunId: 'article-publishing-run-ui-smoke',
-              agentSessionRef: null,
-              profileId: null,
-              affairId: 'article-publishing-affair-ui-smoke',
-              affairAttemptId: 'article-publishing-attempt-ui-smoke',
-            },
-            status: 'running',
-            startedAt: Date.now(),
-            downloadIds: [],
-          },
-        },
-      })
-      useTabStore.setState({
-        tabs: [
-          ...tabs.tabs,
-          {
-            id: tabId,
-            type: 'browser',
-            title: 'CSDN 发布页',
-            icon: '🌐',
-            initialUrl: 'about:blank',
-            workspaceRef: { kind: 'global' },
-          },
-        ],
-        activeTabId: tabId,
-      })
-      return {
-        activeConversationId: agent.activeConversationId,
-        tabs: tabs.tabs,
-        activeTabId: tabs.activeTabId,
-        tasks: browserTasks.tasks,
-        actionLogs: browserTasks.actionLogs,
-      }
-    })
-    try {
-      await localPanel.getByText('发布执行正在上传正文图片').waitFor({
-        state: 'visible',
-        timeout: 10_000,
-      })
-      await localPanel.getByText('发布图文 UI Smoke').waitFor({
-        state: 'visible',
-        timeout: 10_000,
-      })
-    } finally {
-      await page.evaluate(async (snapshot) => {
+      const publishingBindingSnapshot = await page.evaluate(async () => {
         const { useAgentStore } = await import('/src/stores/agent-store.ts')
         const { useBrowserTaskStore } = await import('/src/stores/browser-task-store.ts')
         const { useTabStore } = await import('/src/stores/tab-store.ts')
-        useBrowserTaskStore.setState({ tasks: snapshot.tasks, actionLogs: snapshot.actionLogs })
-        useTabStore.setState({ tabs: snapshot.tabs, activeTabId: snapshot.activeTabId })
-        useAgentStore.getState().switchConversation(snapshot.activeConversationId)
-      }, publishingBindingSnapshot)
-    }
-
-    await page.evaluate(async () => {
-      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
-      const state = useWorkspaceStore.getState()
-      useWorkspaceStore.setState({
-        activeWorkspaceRef: {
-          kind: 'remote',
-          transport: 'cclink',
-          endpointId: 'ui-smoke-endpoint',
-          endpointName: 'UI Smoke',
-          workspaceId: 'ui-smoke-workspace',
-          path: '/ui-smoke-workspace',
-        },
-        generation: state.generation + 1,
-      })
-    })
-    const remotePanel = page.locator('[data-agent-panel-runtime="remote"]')
-    await remotePanel.waitFor({ state: 'visible', timeout: 10_000 })
-    assert(
-      (await page.locator('.agent-panel').count()) === 1,
-      'remote runtime duplicated Panel roots',
-    )
-    assert(
-      (await remotePanel.locator('textarea.agent-input').count()) === 1,
-      'remote runtime did not reuse AgentComposer',
-    )
-    assert(
-      (await page.locator('.remote-agent-panel, .remote-agent-composer').count()) === 0,
-      'legacy remote Panel or Composer is still rendered',
-    )
-    const remoteSideProjection = await panelProjection('remote')
-    assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
-
-    await page.evaluate(async () => {
-      const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
-      const sessionId = 'ui-smoke-approval-session'
-      const now = Date.now() / 1000
-      useCclinkStore.setState({
-        sessions: [
-          {
-            id: sessionId,
-            name: '审批滚动验收',
-            workspaceId: 'ui-smoke-workspace',
-            workspacePath: '/ui-smoke-workspace',
-            serverId: 'ui-smoke-endpoint',
-            status: 'active',
-            createdAt: now,
-            updatedAt: now,
-            messageCount: 10,
-            contextUsage: 0,
+        const agent = useAgentStore.getState()
+        const tabs = useTabStore.getState()
+        const browserTasks = useBrowserTaskStore.getState()
+        const conversationId = 'article-publishing-ui-smoke'
+        const tabId = 'article-publishing-browser-ui-smoke'
+        agent.createConversation({
+          id: conversationId,
+          runtime: {
+            location: 'local',
+            transport: 'local',
+            backend: 'cclink-studio-agent',
+            workspaceRef: { kind: 'global' },
           },
-        ],
-        messages: {
-          [sessionId]: [
-            { type: 'user', id: 'ui-smoke-user', content: '执行批量搜索', timestamp: now },
-            ...Array.from({ length: 9 }, (_, index) => ({
-              type: 'agentTool',
-              id: `ui-smoke-tool-message-${index}`,
-              timestamp: now + index + 1,
-              tool: {
-                id: `ui-smoke-tool-${index}`,
-                name: 'WebSearch',
-                state: 'pending',
-                input: { query: `scroll regression ${index}` },
-                requiresApproval: true,
-                requestId: 'ui-smoke-shared-run',
+        })
+        agent.renameConversation(conversationId, '发布文章 · UI Smoke · CSDN')
+        agent.addSystemMessage('发布执行正在上传正文图片', conversationId)
+        useBrowserTaskStore.setState({
+          tasks: {
+            ...browserTasks.tasks,
+            'article-publishing-task-ui-smoke': {
+              id: 'article-publishing-task-ui-smoke',
+              tabId,
+              goal: '发布图文 UI Smoke',
+              correlation: {
+                workspaceKey: null,
+                conversationId,
+                agentRunId: 'article-publishing-run-ui-smoke',
+                agentSessionRef: null,
+                profileId: null,
+                affairId: 'article-publishing-affair-ui-smoke',
+                affairAttemptId: 'article-publishing-attempt-ui-smoke',
               },
-            })),
+              status: 'running',
+              startedAt: Date.now(),
+              downloadIds: [],
+            },
+          },
+        })
+        useTabStore.setState({
+          tabs: [
+            ...tabs.tabs,
+            {
+              id: tabId,
+              type: 'browser',
+              title: 'CSDN 发布页',
+              icon: '🌐',
+              initialUrl: 'about:blank',
+              workspaceRef: { kind: 'global' },
+            },
           ],
-        },
-        selectedSessionId: sessionId,
-        loading: false,
-        error: null,
+          activeTabId: tabId,
+        })
+        return {
+          activeConversationId: agent.activeConversationId,
+          tabs: tabs.tabs,
+          activeTabId: tabs.activeTabId,
+          tasks: browserTasks.tasks,
+          actionLogs: browserTasks.actionLogs,
+        }
       })
-    })
-    const remoteTimeline = remotePanel.locator('.agent-messages')
-    const approvalCards = remoteTimeline.locator('.tool-confirmation-card')
-    try {
+      try {
+        await localPanel.getByText('发布执行正在上传正文图片').waitFor({
+          state: 'visible',
+          timeout: 10_000,
+        })
+        await localPanel.getByText('发布图文 UI Smoke').waitFor({
+          state: 'visible',
+          timeout: 10_000,
+        })
+      } finally {
+        await page.evaluate(async (snapshot) => {
+          const { useAgentStore } = await import('/src/stores/agent-store.ts')
+          const { useBrowserTaskStore } = await import('/src/stores/browser-task-store.ts')
+          const { useTabStore } = await import('/src/stores/tab-store.ts')
+          useBrowserTaskStore.setState({ tasks: snapshot.tasks, actionLogs: snapshot.actionLogs })
+          useTabStore.setState({ tabs: snapshot.tabs, activeTabId: snapshot.activeTabId })
+          useAgentStore.getState().switchConversation(snapshot.activeConversationId)
+        }, publishingBindingSnapshot)
+      }
+
+      await page.evaluate(async () => {
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const state = useWorkspaceStore.getState()
+        useWorkspaceStore.setState({
+          activeWorkspaceRef: {
+            kind: 'remote',
+            transport: 'cclink',
+            endpointId: 'ui-smoke-endpoint',
+            endpointName: 'UI Smoke',
+            workspaceId: 'ui-smoke-workspace',
+            path: '/ui-smoke-workspace',
+          },
+          generation: state.generation + 1,
+        })
+      })
+      const remotePanel = page.locator('[data-agent-panel-runtime="remote"]')
+      await remotePanel.waitFor({ state: 'visible', timeout: 10_000 })
+      assert(
+        (await page.locator('.agent-panel').count()) === 1,
+        'remote runtime duplicated Panel roots',
+      )
+      assert(
+        (await remotePanel.locator('textarea.agent-input').count()) === 1,
+        'remote runtime did not reuse AgentComposer',
+      )
+      assert(
+        (await page.locator('.remote-agent-panel, .remote-agent-composer').count()) === 0,
+        'legacy remote Panel or Composer is still rendered',
+      )
+      const remoteSideProjection = await panelProjection('remote')
+      await writeFile(
+        join(runDir, 'agent-panel-side-projections.json'),
+        JSON.stringify({ local: localSideProjection, remote: remoteSideProjection }, null, 2),
+      )
+      assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
+
+      await page.evaluate(async () => {
+        const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
+        const sessionId = 'ui-smoke-approval-session'
+        const now = Date.now() / 1000
+        useCclinkStore.setState({
+          sessions: [
+            {
+              id: sessionId,
+              name: '审批滚动验收',
+              workspaceId: 'ui-smoke-workspace',
+              workspacePath: '/ui-smoke-workspace',
+              serverId: 'ui-smoke-endpoint',
+              status: 'active',
+              createdAt: now,
+              updatedAt: now,
+              messageCount: 10,
+              contextUsage: 0,
+            },
+          ],
+          messages: {
+            [sessionId]: [
+              { type: 'user', id: 'ui-smoke-user', content: '执行批量搜索', timestamp: now },
+              ...Array.from({ length: 9 }, (_, index) => ({
+                type: 'agentTool',
+                id: `ui-smoke-tool-message-${index}`,
+                timestamp: now + index + 1,
+                tool: {
+                  id: `ui-smoke-tool-${index}`,
+                  name: 'WebSearch',
+                  state: 'pending',
+                  input: { query: `scroll regression ${index}` },
+                  requiresApproval: true,
+                  requestId: 'ui-smoke-shared-run',
+                },
+              })),
+            ],
+          },
+          selectedSessionId: sessionId,
+          loading: false,
+          error: null,
+        })
+      })
+      const remoteTimeline = remotePanel.locator('.agent-messages')
+      const approvalCards = remoteTimeline.locator('.tool-confirmation-card')
       await approvalCards.first().waitFor({ state: 'visible', timeout: 10_000 })
       assert((await approvalCards.count()) === 9, 'remote approval cards were not all rendered')
       const approvalLayout = await remoteTimeline.evaluate((timeline) => {
@@ -1464,87 +1468,88 @@ async function main() {
         await remotePanel.locator('textarea.agent-input').isVisible(),
         'remote approval overflow pushed the Composer out of view',
       )
-    } finally {
+
       await page.evaluate(async () => {
         const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
         useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
       })
+
       if (!agentPanelOnly) {
-        await page.evaluate(async (snapshot) => {
-          const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
-          const state = useWorkspaceStore.getState()
-          useWorkspaceStore.setState({
-            activeWorkspaceRef: snapshot.ref,
-            generation: Math.max(state.generation + 1, snapshot.generation + 1),
-          })
-        }, originalWorkspace)
+        return 'single fixed side view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
       }
+
+      // center 是无 Workbench Tab 的首次会话 surface；先回到本地并清空 smoke Tab 投影。
+      await page.evaluate(async () => {
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const state = useWorkspaceStore.getState()
+        useWorkspaceStore.setState({
+          activeWorkspaceRef: { kind: 'global' },
+          generation: state.generation + 1,
+        })
+      })
+      await page.locator('[data-agent-panel-runtime="local"]').waitFor({
+        state: 'visible',
+        timeout: 10_000,
+      })
+      await page.waitForTimeout(1_000)
+      await page.evaluate(async () => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        const { useTabStore } = await import('/src/stores/tab-store.ts')
+        useTabStore.setState({ tabs: [], activeTabId: null })
+        useUIStore.setState({
+          agentPanelMode: 'center',
+          agentPanelLastVisibleMode: 'center',
+          agentPanelVisible: true,
+          agentPanelModeSource: 'user',
+          sidebarVisible: false,
+          sidebarWidth: 250,
+        })
+      })
+      await page.waitForTimeout(200)
+      const localCenterPanel = page.locator(
+        '[data-agent-panel-runtime="local"][data-agent-panel-variant="center"]',
+      )
+      assert(
+        (await localCenterPanel.count()) === 1 && (await localCenterPanel.isVisible()),
+        'local center Agent Panel is missing',
+      )
+      const localCenterProjection = await panelProjection('local')
+
+      await page.evaluate(async () => {
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        const state = useWorkspaceStore.getState()
+        useWorkspaceStore.setState({
+          activeWorkspaceRef: {
+            kind: 'remote',
+            transport: 'cclink',
+            endpointId: 'ui-smoke-endpoint',
+            endpointName: 'UI Smoke',
+            workspaceId: 'ui-smoke-workspace',
+            path: '/ui-smoke-workspace',
+          },
+          generation: state.generation + 1,
+        })
+      })
+      const remoteCenterPanel = page.locator(
+        '[data-agent-panel-runtime="remote"][data-agent-panel-variant="center"]',
+      )
+      await remoteCenterPanel.waitFor({ state: 'visible', timeout: 10_000 })
+      const remoteCenterProjection = await panelProjection('remote')
+      assertEquivalentPanel(localCenterProjection, remoteCenterProjection, 'center')
+
+      return 'single fixed side/center view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
+    } finally {
+      await page.evaluate(async (snapshot) => {
+        const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
+        const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
+        useCclinkStore.setState({ sessions: [], messages: {}, selectedSessionId: null })
+        const state = useWorkspaceStore.getState()
+        useWorkspaceStore.setState({
+          activeWorkspaceRef: snapshot.ref,
+          generation: Math.max(state.generation + 1, snapshot.generation + 1),
+        })
+      }, originalWorkspace)
     }
-
-    if (!agentPanelOnly) {
-      return 'single fixed side view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
-    }
-
-    // center 是无 Workbench Tab 的首次会话 surface；先回到本地并清空 smoke Tab 投影。
-    await page.evaluate(async () => {
-      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
-      const state = useWorkspaceStore.getState()
-      useWorkspaceStore.setState({
-        activeWorkspaceRef: { kind: 'global' },
-        generation: state.generation + 1,
-      })
-    })
-    await page.locator('[data-agent-panel-runtime="local"]').waitFor({
-      state: 'visible',
-      timeout: 10_000,
-    })
-    await page.waitForTimeout(1_000)
-    await page.evaluate(async () => {
-      const { useUIStore } = await import('/src/stores/ui-store.ts')
-      const { useTabStore } = await import('/src/stores/tab-store.ts')
-      useTabStore.setState({ tabs: [], activeTabId: null })
-      useUIStore.setState({
-        agentPanelMode: 'center',
-        agentPanelLastVisibleMode: 'center',
-        agentPanelVisible: true,
-        agentPanelModeSource: 'user',
-        sidebarVisible: false,
-        sidebarWidth: 250,
-      })
-    })
-    await page.waitForTimeout(200)
-    const localCenterPanel = page.locator(
-      '[data-agent-panel-runtime="local"][data-agent-panel-variant="center"]',
-    )
-    assert(
-      (await localCenterPanel.count()) === 1 && (await localCenterPanel.isVisible()),
-      'local center Agent Panel is missing',
-    )
-    const localCenterProjection = await panelProjection('local')
-
-    await page.evaluate(async () => {
-      const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
-      const state = useWorkspaceStore.getState()
-      useWorkspaceStore.setState({
-        activeWorkspaceRef: {
-          kind: 'remote',
-          transport: 'cclink',
-          endpointId: 'ui-smoke-endpoint',
-          endpointName: 'UI Smoke',
-          workspaceId: 'ui-smoke-workspace',
-          path: '/ui-smoke-workspace',
-        },
-        generation: state.generation + 1,
-      })
-    })
-    const remoteCenterPanel = page.locator(
-      '[data-agent-panel-runtime="remote"][data-agent-panel-variant="center"]',
-    )
-    await remoteCenterPanel.waitFor({ state: 'visible', timeout: 10_000 })
-    const remoteCenterProjection = await panelProjection('remote')
-    assertEquivalentPanel(localCenterProjection, remoteCenterProjection, 'center')
-
-    return 'single fixed side/center view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
   })
 
   if (agentPanelOnly) {

@@ -436,7 +436,7 @@ export function AgentComposerToolbar({
             title="运行环境"
             onClick={() => toggleMenu('runtime')}
           >
-            {runtimeLabel}
+            <span className="agent-runtime-label">{runtimeLabel}</span>
             <span>{runtimeDetail}</span>
             <IconChevronDown size={12} />
           </button>
