@@ -47,6 +47,7 @@ export function AgentWorkspace(): React.ReactElement {
   const presentation = layout.presentation
   const listVisible = presentation !== 'chat'
   const chatVisible = presentation !== 'list'
+  const chatShown = chatVisible && presentation !== 'drawer'
 
   useLayoutEffect(() => {
     const element = rootRef.current
@@ -128,10 +129,10 @@ export function AgentWorkspace(): React.ReactElement {
           </button>
           <button
             type="button"
-            aria-label={chatVisible ? '收起聊天，仅保留会话列表' : '展开聊天'}
-            title={chatVisible ? '收起聊天，仅保留会话列表' : '展开聊天'}
-            aria-expanded={chatVisible}
-            onClick={() => (chatVisible ? setMode('list') : useUIStore.getState().showAgentChat())}
+            aria-label={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
+            title={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
+            aria-expanded={chatShown}
+            onClick={() => (chatShown ? setMode('list') : useUIStore.getState().showAgentChat())}
           >
             <IconPanelRight size={14} />
           </button>

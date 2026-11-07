@@ -23,6 +23,7 @@ import {
   DEFAULT_AGENT_LIST_WIDTH,
   MIN_AGENT_LIST_WIDTH,
   MAX_AGENT_LIST_WIDTH,
+  getExpandedAgentPanelWidth,
   type AgentContentMode,
 } from '../utils/agent-navigation-layout'
 
@@ -412,14 +413,15 @@ export const useUIStore = create<UIState>((set) => ({
   setAgentContentMode: (agentContentMode) => set({ agentContentMode, agentDrawerOpen: false }),
   setAgentDrawerOpen: (agentDrawerOpen) => set({ agentDrawerOpen }),
   showAgentSessions: () =>
-    set({
+    set((state) => ({
       agentPanelMode: 'right',
       agentPanelLastVisibleMode: 'right',
       agentPanelVisible: true,
       agentPanelModeSource: 'user',
       agentContentMode: 'split',
+      agentPanelWidth: getExpandedAgentPanelWidth(state.agentPanelWidth, state.agentListWidth),
       agentDrawerOpen: true,
-    }),
+    })),
   showAgentChat: () =>
     set((state) => ({
       agentPanelMode: 'right',
@@ -427,6 +429,10 @@ export const useUIStore = create<UIState>((set) => ({
       agentPanelVisible: true,
       agentPanelModeSource: 'user',
       agentContentMode: state.agentContentMode === 'list' ? 'split' : state.agentContentMode,
+      agentPanelWidth:
+        state.agentContentMode === 'chat'
+          ? state.agentPanelWidth
+          : getExpandedAgentPanelWidth(state.agentPanelWidth, state.agentListWidth),
       agentDrawerOpen: false,
     })),
   hydrateFromWorkspaceState: (value) => {

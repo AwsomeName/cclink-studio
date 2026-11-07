@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentNavigationLayout } from './agent-navigation-layout'
+import { getAgentNavigationLayout, getExpandedAgentPanelWidth } from './agent-navigation-layout'
 import { getPanelLayout } from './panel-layout'
 
 describe('Agent navigation geometry', () => {
+  it('opening both columns accounts for the outer border and the actual list width', () => {
+    expect(getExpandedAgentPanelWidth(584, 220)).toBe(700)
+    expect(getExpandedAgentPanelWidth(585, 220)).toBe(585)
+    expect(getExpandedAgentPanelWidth(620, 280)).toBe(700)
+    expect(getExpandedAgentPanelWidth(645, 280)).toBe(645)
+  })
   it('only splits when both columns fit; narrow-window fallback does not change the requested mode', () => {
     expect(getAgentNavigationLayout('split', 700, 220, false)).toEqual({
       presentation: 'split',

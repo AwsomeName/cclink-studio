@@ -18,6 +18,40 @@ beforeEach(() => {
 })
 
 describe('useUIStore', () => {
+  it('opening conversations expands the default single-column width so both columns can fit', () => {
+    useUIStore.getState().showAgentSessions()
+    expect(useUIStore.getState()).toMatchObject({
+      agentPanelMode: 'right',
+      agentContentMode: 'split',
+      agentPanelWidth: 700,
+      agentListWidth: 220,
+    })
+  })
+
+  it('opening conversations preserves an existing usable two-column width', () => {
+    useUIStore.setState({ agentPanelWidth: 620, agentListWidth: 240 })
+    useUIStore.getState().showAgentSessions()
+    expect(useUIStore.getState().agentPanelWidth).toBe(620)
+  })
+
+  it.each(['list', 'split'] as const)(
+    'opening chat from %s repairs a legacy narrow two-column target',
+    (agentContentMode) => {
+      useUIStore.setState({ agentContentMode, agentPanelWidth: 350, agentDrawerOpen: true })
+      useUIStore.getState().showAgentChat()
+      expect(useUIStore.getState()).toMatchObject({
+        agentContentMode: 'split',
+        agentPanelWidth: 700,
+        agentDrawerOpen: false,
+      })
+    },
+  )
+
+  it('opening chat alone does not expand its single-column width', () => {
+    useUIStore.getState().showAgentChat()
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 350 })
+  })
+
   it('收放内部列和整个面板都不改写展开宽度', () => {
     const ui = useUIStore.getState()
     ui.setAgentPanelWidth(700)

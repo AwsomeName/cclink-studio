@@ -5,6 +5,16 @@ export const MIN_AGENT_LIST_WIDTH = 180
 export const MAX_AGENT_LIST_WIDTH = 280
 export const MIN_SPLIT_CHAT_WIDTH = 360
 export const AGENT_LIST_SEPARATOR_WIDTH = 4
+const DEFAULT_SPLIT_AGENT_PANEL_WIDTH = 700
+
+/** An explicit request to show both columns must also provide a usable outer width. */
+export function getExpandedAgentPanelWidth(panelWidth: number, listWidth: number): number {
+  // The Agent workspace has a 1px outer border; its measured client width excludes it.
+  return getAgentNavigationLayout('split', panelWidth - 1, listWidth, false).presentation ===
+    'split'
+    ? panelWidth
+    : DEFAULT_SPLIT_AGENT_PANEL_WIDTH
+}
 
 /** User preference and effective geometry are separate; resizing never rewrites the preference. */
 export function getAgentNavigationLayout(

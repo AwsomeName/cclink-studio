@@ -64,7 +64,51 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     )
   try {
     await resizeWindow(1440)
-    await ui('split', 700)
+    // Start with the real default width. Pre-setting 700px hid the broken entry action.
+    await ui('chat', 350)
+    await page.evaluate(async () => {
+      const ui = (await import('/src/stores/ui-store.ts')).useUIStore.getState()
+      ui.setSidebarWidth(250)
+      ui.showPanel('files')
+    })
+    await presentation('chat')
+    await waitWidth(350)
+    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
+    await presentation('split')
+    await waitWidth(700)
+    const openedColumns = await page.evaluate(() => {
+      const rect = (selector) => {
+        const bounds = document.querySelector(selector).getBoundingClientRect()
+        return { x: bounds.x, right: bounds.right, width: bounds.width }
+      }
+      return {
+        list: rect('.agent-navigation-list'),
+        chat: rect('.agent-workspace-chat'),
+        sidebar: rect('.workspace-sidebar-shell'),
+        chatVisible: getComputedStyle(document.querySelector('.agent-workspace-chat')).visibility,
+      }
+    })
+    assert(
+      openedColumns.list.width === 220 &&
+        openedColumns.chat.width >= 360 &&
+        openedColumns.list.right <= openedColumns.chat.x &&
+        openedColumns.sidebar.width === 250 &&
+        openedColumns.chatVisible === 'visible',
+      `Default entry did not show two separate columns: ${JSON.stringify(openedColumns)}`,
+    )
+    await page.screenshot({ path: join(evidenceDir, 'agent-navigation-default-open-split.png') })
+    await page.locator('.agent-workspace').screenshot({
+      path: join(evidenceDir, 'agent-navigation-two-columns.png'),
+    })
+
+    // An existing narrow split preference must also be repairable from the drawer's chat button.
+    await ui('split', 350)
+    await waitWidth(350)
+    await page.evaluate(async () =>
+      (await import('/src/stores/ui-store.ts')).useUIStore.getState().setAgentDrawerOpen(true),
+    )
+    await presentation('drawer')
+    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
     await presentation('split')
     await waitWidth(700)
     const input = page.locator('.agent-workspace .agent-input')
@@ -180,6 +224,10 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       'Covered chat must be inert',
     )
     await page.screenshot({ path: join(evidenceDir, 'agent-navigation-drawer.png') })
+    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
+    await presentation('chat')
+    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
+    await presentation('drawer')
     await page.keyboard.press('Escape')
     await presentation('chat')
     await resizeWindow(1440)
@@ -222,6 +270,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       ids.first,
     )
     return {
+      defaultEntryColumns: openedColumns,
       expandedWidth: 700,
       listOnlyWidth: 220,
       narrowDrawer: true,
