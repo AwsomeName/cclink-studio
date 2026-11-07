@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useUIStore, useTabStore, useCommandStore } from '../../stores'
+import { useUIStore, useTabStore, useCommandStore, useFsStore } from '../../stores'
 import type { ActivityPanel } from '../../types'
 import { useToastStore } from '../common/Toast'
 import {
@@ -156,6 +156,7 @@ export function ActivityBar(): React.ReactElement {
       return
     }
     setActivePanel(id)
+    if (id === 'files') void useFsStore.getState().refreshWorkspace()
     if (id === 'browser') setAgentPanelMode('right', 'user')
     if (id === 'company-accounts') {
       openTab({ type: 'company-accounts', title: '公司账目', icon: '账' })

@@ -15,8 +15,11 @@ import {
 } from '../../features/agent-conversations/follow-up-actions'
 import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
 
+import { createConversationTerminalCommands } from '../../features/terminal/conversation-terminal-command'
+
 export function createAgentCommands(): Command[] {
   return [
+    ...createConversationTerminalCommands(),
     ...Object.entries(AGENT_FOLLOW_UP).map(
       ([action, definition]): Command => ({
         id: definition.id,

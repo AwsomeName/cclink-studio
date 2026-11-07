@@ -1,17 +1,17 @@
 import type { ReactNode } from 'react'
-import MarkdownIt from 'markdown-it'
 import type Token from 'markdown-it/lib/token.mjs'
 import { openHttpUrlInNewBrowserTab } from '../../features/browser/browser-link-navigation'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import { IconClipboard } from './Icons'
 import { useToastStore } from './Toast'
-
-const conversationMarkdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  breaks: true,
-  typographer: false,
-})
+import {
+  conversationMarkdown,
+  runnableCodeBlock,
+} from '../../features/terminal/conversation-command'
+import {
+  ConversationCodeRunButton,
+  type ConversationCodeCommandContext,
+} from '../../features/terminal/conversation-code-run-button'
 
 const containerTags = new Map<string, keyof React.JSX.IntrinsicElements>([
   ['paragraph_open', 'p'],
@@ -34,12 +34,18 @@ const containerTags = new Map<string, keyof React.JSX.IntrinsicElements>([
 export function ConversationMarkdown({
   source,
   onOpenFilePath,
+  commandContext,
 }: {
   source: string
   onOpenFilePath?: (path: string) => void
+  commandContext?: ConversationCodeCommandContext
 }): React.ReactElement {
   const tokens = conversationMarkdown.parse(source, {})
-  return <div className="conversation-markdown">{renderTokens(tokens, { onOpenFilePath })}</div>
+  return (
+    <div className="conversation-markdown">
+      {renderTokens(tokens, { onOpenFilePath, commandContext, source })}
+    </div>
+  )
 }
 
 export function markdownPreviewText(source: string): string {
@@ -59,6 +65,8 @@ function collectTokenText(token: Token): string[] {
 
 interface ConversationMarkdownRenderOptions {
   onOpenFilePath?: (path: string) => void
+  commandContext?: ConversationCodeCommandContext
+  source: string
 }
 
 function renderTokens(tokens: Token[], options: ConversationMarkdownRenderOptions): ReactNode[] {
@@ -193,7 +201,18 @@ function renderLeafToken(
     case 'fence':
     case 'code_block': {
       const language = token.info.trim().split(/\s+/, 1)[0]
-      return <ConversationCodeBlock key={key} code={token.content} language={language} />
+      return (
+        <ConversationCodeBlock
+          key={key}
+          code={token.content}
+          language={language}
+          runButton={
+            options.commandContext && runnableCodeBlock(token, options.source) ? (
+              <ConversationCodeRunButton context={options.commandContext} line={token.map![0]} />
+            ) : undefined
+          }
+        />
+      )
     }
     case 'hr':
       return <hr key={key} />
@@ -214,9 +233,11 @@ function renderLeafToken(
 function ConversationCodeBlock({
   code,
   language,
+  runButton,
 }: {
   code: string
   language: string
+  runButton?: ReactNode
 }): React.ReactElement {
   const copyLabel = language ? `复制 ${language} 代码块` : '复制代码块'
 
@@ -231,16 +252,19 @@ function ConversationCodeBlock({
 
   return (
     <div className="conversation-markdown-code-block">
-      <button
-        type="button"
-        className="conversation-markdown-code-copy"
-        onClick={() => void handleCopy()}
-        title={copyLabel}
-        aria-label={copyLabel}
-      >
-        <IconClipboard size={12} />
-        <span>复制</span>
-      </button>
+      <div className="conversation-markdown-code-actions">
+        {runButton}
+        <button
+          type="button"
+          className="conversation-markdown-code-copy"
+          onClick={() => void handleCopy()}
+          title={copyLabel}
+          aria-label={copyLabel}
+        >
+          <IconClipboard size={12} />
+          <span>复制</span>
+        </button>
+      </div>
       <pre>
         <code className={language ? `language-${safeCssName(language)}` : undefined}>{code}</code>
       </pre>

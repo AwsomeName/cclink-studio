@@ -9,6 +9,7 @@ import type {
   TerminalPermissionRisk,
   TerminalRuntimeRef,
   TerminalStatus,
+  TerminalCodeBlockSource,
 } from '../terminal'
 import { defineIpcCall } from './contract'
 
@@ -29,6 +30,7 @@ export type TerminalLifecycleAuditKind = Extract<
 >
 
 export interface TerminalLifecycleAuditInput {
+  codeBlockSource?: TerminalCodeBlockSource
   terminalSessionId: string
   workspaceKey?: string | null
   kind: TerminalLifecycleAuditKind
@@ -39,6 +41,7 @@ export interface TerminalLifecycleAuditInput {
 }
 
 export interface TerminalSessionSnapshot {
+  codeBlockSource?: TerminalCodeBlockSource
   sessionId: string
   runtime: TerminalRuntimeRef
   status: TerminalStatus

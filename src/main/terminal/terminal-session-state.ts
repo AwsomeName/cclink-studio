@@ -1,6 +1,11 @@
-import type { TerminalRuntimeRef, TerminalStatus } from '../../shared/terminal'
+import type {
+  TerminalRuntimeRef,
+  TerminalStatus,
+  TerminalCodeBlockSource,
+} from '../../shared/terminal'
 
 export interface TerminalSessionState {
+  codeBlockSource?: TerminalCodeBlockSource
   sessionId: string
   runtime: TerminalRuntimeRef
   status: TerminalStatus
@@ -13,6 +18,7 @@ export interface TerminalSessionState {
 }
 
 export interface CreateTerminalSessionStateInput {
+  codeBlockSource?: TerminalCodeBlockSource
   sessionId: string
   runtime: TerminalRuntimeRef
   now?: number
@@ -40,6 +46,7 @@ export function createTerminalSessionState(
 ): TerminalSessionState {
   const timestamp = input.now ?? Date.now()
   return {
+    codeBlockSource: input.codeBlockSource,
     sessionId: input.sessionId,
     runtime: input.runtime,
     status: 'idle',

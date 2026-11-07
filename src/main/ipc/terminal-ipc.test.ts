@@ -43,6 +43,26 @@ describe('registerTerminalIpc', () => {
     trustedRendererGuard.isTrusted.mockReturnValue(true)
   })
 
+  it('rejects oversized commands and terminal controls rather than truncating executable input', async () => {
+    const submitCommand = vi.fn()
+    registerTerminalIpc(null, undefined, undefined, { submitCommand } as never)
+    const handler = mockIpcMain.handlers.get('terminal:submitCommand')!
+    for (const command of ['echo ' + 'a'.repeat(4000), 'echo ok\u001b[2J', 'pwd\rtouch other']) {
+      await expect(
+        handler(
+          {},
+          {
+            terminalSessionId: 'code',
+            command,
+            actor: 'user',
+            permissionPolicy: { mode: 'ask-risky-command', requireConfirmationFor: [] },
+          },
+        ),
+      ).resolves.toMatchObject({ success: false, status: 'rejected' })
+    }
+    expect(submitCommand).not.toHaveBeenCalled()
+  })
+
   it('rejects an untrusted sender before resolving confirmations', () => {
     const terminalConfirmationService = {
       resolveConfirmation: vi.fn(() => true),

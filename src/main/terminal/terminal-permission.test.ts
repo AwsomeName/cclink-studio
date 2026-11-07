@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalPermissionPolicy } from '../../shared/terminal'
 import { classifyTerminalCommand, evaluateTerminalPermission } from './terminal-permission'
 
+it('requires confirmation for multiline scripts and shell substitutions', () => {
+  for (const command of [
+    'pwd\nrm file',
+    'echo $(touch file)',
+    'echo `touch file`',
+    'cat <(command)',
+  ]) {
+    expect(classifyTerminalCommand(command)).toBe('unknown')
+  }
+})
+
 const askRiskyPolicy: TerminalPermissionPolicy = {
   mode: 'ask-risky-command',
   requireConfirmationFor: ['write', 'network', 'destructive', 'privileged', 'unknown'],

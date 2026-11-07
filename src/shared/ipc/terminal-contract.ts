@@ -101,6 +101,15 @@ const terminalPermissionPolicySchema = z
   })
 const terminalLifecycleAuditInputSchema = z
   .object({
+    codeBlockSource: z
+      .object({
+        conversationId: terminalIdSchema,
+        messageId: terminalIdSchema,
+        contentIndex: z.number().int().min(0).max(100_000),
+        line: z.number().int().min(0).max(100_000),
+      })
+      .strict()
+      .optional(),
     terminalSessionId: z.string().min(1).max(256),
     workspaceKey: legacyBoundedValueSchema.optional(),
     kind: z.enum(['created', 'closed', 'terminated']),

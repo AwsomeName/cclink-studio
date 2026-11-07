@@ -1,4 +1,6 @@
 import type { IpcMainInvokeEvent, WebContents } from 'electron'
+import { stat } from 'node:fs/promises'
+import { isAbsolute, resolve } from 'node:path'
 import type {
   TerminalAuditListFilter,
   TerminalLifecycleAuditInput,
@@ -11,6 +13,7 @@ import { terminalIpcContracts as terminalIpc } from '../../shared/ipc/terminal-c
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import {
   isTerminalFinalStatus,
+  terminalCodeBlockSourceKey,
   type TerminalCommandActor,
   type TerminalExecutionEvent,
   type TerminalPermissionMode,
@@ -115,6 +118,11 @@ export function registerTerminalIpc(
     }
     const persisted = await terminalSessionStore?.getSession(input.terminalSessionId)
     const registered = terminalSessionRegistry.get(input.terminalSessionId)
+    // 消息命令只由 submitCommand 启动；视图挂载只能 attach 已启动的同一进程。
+    if (registered?.codeBlockSource && !registered.processId) {
+      return { success: false, error: '消息命令尚未获准启动，请返回消息查看执行状态' }
+    }
+    if (registered?.codeBlockSource) input = { ...input, runtime: registered.runtime }
     if (
       (registered && isTerminalFinalStatus(registered.status)) ||
       (persisted && isTerminalFinalStatus(persisted.status))
@@ -325,6 +333,9 @@ function normalizeSubmitCommandInput(
   if (!input || typeof input !== 'object') return null
   if (typeof input.terminalSessionId !== 'string' || !input.terminalSessionId.trim()) return null
   if (typeof input.command !== 'string' || !input.command.trim()) return null
+  // 不截断后执行：截断可能改变引号、管道或条件命令的含义。
+  if (input.command.trim().length > 4000 || /[\x00-\x08\x0b-\x1f\x7f]/u.test(input.command))
+    return null
   if (!TERMINAL_ACTORS.has(input.actor)) return null
 
   const permissionPolicy = normalizePermissionPolicy(input.permissionPolicy)
@@ -332,7 +343,7 @@ function normalizeSubmitCommandInput(
 
   return {
     terminalSessionId: input.terminalSessionId.trim(),
-    command: input.command.trim().slice(0, 4000),
+    command: input.command.trim(),
     actor: input.actor,
     permissionPolicy,
     workspaceKey: typeof input.workspaceKey === 'string' ? input.workspaceKey : null,
@@ -378,10 +389,48 @@ async function syncTerminalSessionRegistry(
   try {
     if (input.kind === 'created') {
       if (!isTerminalRuntimeRef(input.runtime)) return { success: true }
+      if (input.codeBlockSource) {
+        const runtime = input.runtime
+        if (
+          runtime.location !== 'local' ||
+          runtime.transport !== 'local' ||
+          runtime.backend !== 'local-shell' ||
+          runtime.workspaceRef.kind !== 'local' ||
+          !runtime.cwd ||
+          !isAbsolute(runtime.cwd) ||
+          resolve(runtime.cwd) !== resolve(runtime.workspaceRef.path) ||
+          !(await stat(runtime.cwd)).isDirectory()
+        ) {
+          return { success: false, error: '消息命令需要有效的本地工作空间目录' }
+        }
+        const sourceKey = terminalCodeBlockSourceKey(input.codeBlockSource)
+        const existing = terminalSessionRegistry
+          .list()
+          .find(
+            (item) =>
+              item.codeBlockSource &&
+              terminalCodeBlockSourceKey(item.codeBlockSource) === sourceKey,
+          )
+        if (existing && existing.sessionId !== input.terminalSessionId) {
+          return { success: false, error: '该代码块已有 Terminal，请查看原终端' }
+        }
+        const registered = terminalSessionRegistry.get(input.terminalSessionId)
+        if (registered) {
+          if (
+            !registered.codeBlockSource ||
+            terminalCodeBlockSourceKey(registered.codeBlockSource) !== sourceKey ||
+            JSON.stringify(registered.runtime) !== JSON.stringify(input.runtime)
+          ) {
+            return { success: false, error: 'Terminal 来源或工作空间不匹配' }
+          }
+          return { success: true }
+        }
+      }
       if (!terminalSessionRegistry.get(input.terminalSessionId)) {
         terminalSessionRegistry.register({
           sessionId: input.terminalSessionId,
           runtime: input.runtime,
+          codeBlockSource: input.codeBlockSource,
         })
       }
       await terminalSessionStore?.upsertSession({
@@ -390,6 +439,7 @@ async function syncTerminalSessionRegistry(
         status: 'idle',
         permissionPolicy: input.permissionPolicy,
         closePolicy: input.closePolicy,
+        codeBlockSource: input.codeBlockSource,
         attachable: false,
       })
       return { success: true }
@@ -551,6 +601,7 @@ function isTerminalRuntimeRef(runtime: unknown): runtime is TerminalRuntimeRef {
 
 function toTerminalSessionSnapshot(session: TerminalSessionSnapshot): TerminalSessionSnapshot {
   return {
+    codeBlockSource: session.codeBlockSource,
     sessionId: session.sessionId,
     runtime: session.runtime,
     status: session.status,
@@ -601,6 +652,7 @@ function mergeLiveSession(
       attachable: false,
     }),
     sessionId: live.sessionId,
+    codeBlockSource: live.codeBlockSource ?? persisted?.codeBlockSource,
     runtime: live.runtime,
     status: live.status,
     createdAt: persisted?.createdAt ?? live.createdAt,

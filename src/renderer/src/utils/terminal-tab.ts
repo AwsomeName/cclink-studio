@@ -114,6 +114,7 @@ export function buildTerminalTabDraftFromSession(
     forceNew: true,
     terminal: {
       runtime: session.runtime,
+      codeBlockSource: session.codeBlockSource,
       permissionPolicy: session.permissionPolicy ?? getTerminalPermissionPolicy(workspaceRef),
       status: session.status,
       closePolicy: session.closePolicy ?? 'terminate-process',

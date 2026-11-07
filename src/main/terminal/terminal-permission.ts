@@ -117,6 +117,8 @@ const PACKAGE_INSTALL_ARGS = new Set([
 ])
 
 export function classifyTerminalCommand(command: string): TerminalPermissionRisk {
+  // 简化分类器不能证明复合脚本、替换及多行命令只读，交给现有 unknown 确认路径。
+  if (/[\r\n`]|\$[({]|[<>]\(/u.test(command)) return 'unknown'
   const segments = splitCommandSegments(command)
   if (segments.length === 0) return 'unknown'
   return segments.map(classifyCommandSegment).reduce(highestRisk, 'read')

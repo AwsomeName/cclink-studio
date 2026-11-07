@@ -40,6 +40,18 @@ export type TerminalClosePolicy = 'close-view' | 'terminate-process' | 'keep-run
 
 export type TerminalCommandActor = 'user' | 'agent' | 'system'
 
+/** 只保存消息定位；执行事实继续由 Terminal session 拥有。 */
+export interface TerminalCodeBlockSource {
+  conversationId: string
+  messageId: string
+  contentIndex: number
+  line: number
+}
+
+export function terminalCodeBlockSourceKey(source: TerminalCodeBlockSource): string {
+  return JSON.stringify([source.conversationId, source.messageId, source.contentIndex, source.line])
+}
+
 export type TerminalPermissionDecisionAction = 'allow' | 'confirm' | 'deny'
 
 export interface TerminalRuntimeRef {
@@ -118,6 +130,7 @@ export type TerminalExecutionEvent =
     }
 
 export interface TerminalTabRef {
+  codeBlockSource?: TerminalCodeBlockSource
   runtime: TerminalRuntimeRef
   permissionPolicy: TerminalPermissionPolicy
   status: TerminalStatus

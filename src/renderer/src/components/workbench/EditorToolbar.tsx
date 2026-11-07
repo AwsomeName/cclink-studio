@@ -4,12 +4,14 @@ import { IconCheck, IconLink } from '../common/Icons'
 import { useCommandStore } from '../../stores/command-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding-resolver'
+import type { EditorPersistenceStatusView } from '../../features/markdown/EditorPersistenceStatus'
 
 interface EditorToolbarProps {
   editor: Editor | null
   filePath?: string
   dirty: boolean
   saving?: boolean
+  persistenceStatus?: EditorPersistenceStatusView | null
   diagnosticsCount: number
   onCopyDiagnostics: () => void
   onSave: () => void
@@ -30,21 +32,38 @@ interface ToolbarButton {
 
 export interface EditorSaveControl {
   kind: 'action' | 'status'
-  label: '保存' | '另存为' | '已保存'
+  label: '保存' | '另存为' | '已保存' | '等待自动保存' | '保存中…' | '重试保存' | '存在冲突'
   title: string
 }
 
 export function resolveEditorSaveControl(
   filePath: string | undefined,
   dirty: boolean,
+  persistenceStatus?: EditorPersistenceStatusView | null,
 ): EditorSaveControl {
+  if (persistenceStatus?.kind === 'saving') {
+    return { kind: 'status', label: '保存中…', title: persistenceStatus.title }
+  }
+  if (persistenceStatus?.kind === 'conflict') {
+    return { kind: 'status', label: '存在冲突', title: persistenceStatus.title }
+  }
+  if (filePath && persistenceStatus?.kind === 'error') {
+    return { kind: 'action', label: '重试保存', title: persistenceStatus.title }
+  }
+  if (filePath && persistenceStatus?.kind === 'pending') {
+    return {
+      kind: 'action',
+      label: '等待自动保存',
+      title: `${persistenceStatus.title} · 点击立即保存`,
+    }
+  }
   if (!dirty && filePath) {
     return { kind: 'status', label: '已保存', title: '所有更改均已保存' }
   }
   return {
     kind: 'action',
     label: filePath ? '保存' : '另存为',
-    title: filePath ? '保存' : '另存为',
+    title: persistenceStatus?.title ?? (filePath ? '保存' : '另存为'),
   }
 }
 
@@ -53,6 +72,7 @@ export function EditorToolbar({
   filePath,
   dirty,
   saving,
+  persistenceStatus,
   diagnosticsCount,
   onCopyDiagnostics,
   onSave,
@@ -184,7 +204,7 @@ export function EditorToolbar({
   const codeLanguage = (editor?.getAttributes('codeBlock').language as string | undefined) ?? ''
   const inTable = editor?.isActive('table') ?? false
   const imageSelected = editor?.isActive('image') ?? false
-  const saveControl = resolveEditorSaveControl(filePath, dirty)
+  const saveControl = resolveEditorSaveControl(filePath, dirty, persistenceStatus)
 
   return (
     <div className="editor-toolbar">
@@ -326,27 +346,29 @@ export function EditorToolbar({
             {diagnosticsCount} 项提示
           </button>
         )}
-        {saveControl.kind === 'status' ? (
-          <span
-            className="toolbar-save-state"
-            role="status"
-            aria-live="polite"
-            title={saveControl.title}
-          >
-            <IconCheck size={13} />
-            {saveControl.label}
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="toolbar-save-action"
-            title={titleWithShortcut(saveControl.title, 'workbench.save')}
-            onClick={onSave}
-            disabled={saving}
-          >
-            {saving ? '保存中…' : saveControl.label}
-          </button>
-        )}
+        <div
+          className={`toolbar-save-control${persistenceStatus?.kind === 'error' || persistenceStatus?.kind === 'conflict' ? ' error' : ''}`}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {saveControl.kind === 'status' ? (
+            <span className="toolbar-save-state" title={saveControl.title}>
+              {saveControl.label === '已保存' && <IconCheck size={13} />}
+              {saveControl.label}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="toolbar-save-action"
+              title={titleWithShortcut(saveControl.title, 'workbench.save')}
+              onClick={onSave}
+              disabled={saving}
+            >
+              {saving ? '保存中…' : saveControl.label}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

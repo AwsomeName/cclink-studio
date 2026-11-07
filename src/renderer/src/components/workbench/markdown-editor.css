@@ -211,6 +211,19 @@
   border-left: 1px solid var(--border-color);
 }
 
+.editor-toolbar .toolbar-save-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 104px;
+  height: 28px;
+}
+
+.editor-toolbar .toolbar-save-control.error > * {
+  color: var(--error-foreground, #f48771);
+}
+
 .editor-toolbar .toolbar-save-action {
   flex: none;
   width: auto;

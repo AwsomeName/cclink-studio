@@ -74,7 +74,7 @@ async function launch() {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '',
-      ELECTRON_RENDERER_URL: '',
+      ELECTRON_RENDERER_URL: process.env.CCLINK_AUTOSAVE_RENDERER_URL || '',
       CCLINK_STUDIO_TEST_USER_DATA_PATH: profile,
       CLAUDE_CONFIG_DIR: join(root, 'claude-config'),
     },
@@ -140,13 +140,26 @@ async function restorePermissions() {
 try {
   await launch()
   await openFile('auto.md')
+  const editorBeforeSave = await editor().boundingBox()
+  const saveControlBeforeSave = await page.locator('.toolbar-save-control').boundingBox()
   await editor().fill('AUTO-SAVE-FIRST')
+  await page.getByRole('button', { name: '等待自动保存', exact: true }).waitFor()
+  assert.equal(
+    await page.locator('.markdown-editor-wrapper > .editor-persistence-status').count(),
+    0,
+  )
+  assert.equal((await editor().boundingBox()).y, editorBeforeSave.y)
+  await page.screenshot({ path: join(evidence, 'autosave-pending.png') })
   await waitFor(
     async () => (await readFile(join(workspace, 'auto.md'), 'utf8')).includes('AUTO-SAVE-FIRST'),
     'automatic disk write',
   )
   await page.locator('.toolbar-save-state').getByText('已保存', { exact: true }).waitFor()
+  assert.equal((await editor().boundingBox()).y, editorBeforeSave.y)
+  assert.deepEqual(await page.locator('.toolbar-save-control').boundingBox(), saveControlBeforeSave)
+  await page.screenshot({ path: join(evidence, 'autosave-saved.png') })
   pass('A1 编辑后无需快捷键，1.5 秒自动落盘并显示已保存')
+  pass('A1 UI 等待与已保存共用右上角固定区域，正文不发生上下位移')
 
   await editor().fill('AUTO-SAVE-AFTER-TAB-SWITCH')
   await openFile('other.md')
@@ -202,11 +215,13 @@ try {
 
   await chmod(workspace, 0o500)
   await editor().fill('KEEP-WRITE-FAILURE')
-  await page.getByText(/文件保存失败：/).waitFor()
+  const retrySave = page.getByRole('button', { name: '重试保存', exact: true })
+  await retrySave.waitFor()
+  assert((await retrySave.getAttribute('title')).includes('文件保存失败：'))
   assert((await editor().innerText()).includes('KEEP-WRITE-FAILURE'))
   await page.screenshot({ path: join(evidence, 'file-save-failure.png') })
   await chmod(workspace, 0o700)
-  await page.getByRole('button', { name: '重试保存文件', exact: true }).click()
+  await retrySave.click()
   await waitFor(
     async () => (await readFile(join(workspace, 'auto.md'), 'utf8')).includes('KEEP-WRITE-FAILURE'),
     'retry file write',

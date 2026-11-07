@@ -58,6 +58,7 @@ export type ContextTarget =
       workspaceKey: string | null
       conversationId: string
       messageId: string
+      codeBlock?: { contentIndex: number; line: number }
     }
   | {
       kind: 'editor'

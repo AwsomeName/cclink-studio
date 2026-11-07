@@ -39,6 +39,30 @@ function createMockPty(pid = 1234) {
 }
 
 describe('PtyExecutionAdapter', () => {
+  it('passes a required cwd unchanged to the OS even if it disappeared', async () => {
+    const spawnPty = vi.fn((_input: PtySpawnInput) => {
+      throw new Error('chdir failed')
+    })
+    const adapter = new PtyExecutionAdapter({ spawnPty })
+    await expect(
+      adapter.start({
+        sessionId: 'missing-cwd',
+        runtime: { ...createRuntime(), cwd: '/missing-studio-workspace' },
+        requireCwd: true,
+      }),
+    ).rejects.toThrow('chdir failed')
+    expect(spawnPty).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/missing-studio-workspace' }),
+    )
+    await expect(
+      adapter.start({
+        sessionId: 'no-cwd',
+        runtime: { ...createRuntime(), cwd: undefined },
+        requireCwd: true,
+      }),
+    ).rejects.toThrow('缺少工作空间目录')
+    expect(spawnPty).toHaveBeenCalledTimes(1)
+  })
   it('starts a local PTY with normalized size and emits output', async () => {
     const mockPty = createMockPty()
     const spawnPty = vi.fn((_input: PtySpawnInput) => mockPty)

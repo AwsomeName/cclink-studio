@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { TerminalCommandConfirmationRequest } from '../types'
 import type { TerminalExecutionEvent } from '@shared/terminal'
+import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 
 export interface TerminalOutputLine {
   id: string
@@ -11,6 +12,9 @@ export interface TerminalOutputLine {
 }
 
 interface TerminalState {
+  /** 主进程 session 的可丢弃投影，不在 renderer 持久化执行状态。 */
+  sessions: TerminalSessionSnapshot[]
+  mergeSessions: (sessions: TerminalSessionSnapshot[]) => void
   pendingConfirmations: TerminalCommandConfirmationRequest[]
   outputBySessionId: Record<string, TerminalOutputLine[]>
   addPendingConfirmation: (request: TerminalCommandConfirmationRequest) => void
@@ -24,6 +28,18 @@ interface TerminalState {
 const MAX_OUTPUT_LINES_PER_SESSION = 1000
 
 export const useTerminalStore = create<TerminalState>((set) => ({
+  sessions: [],
+  mergeSessions: (sessions) =>
+    set((state) => {
+      return {
+        sessions: sessions
+          .filter((session) => session.codeBlockSource)
+          .map((session) => {
+            const previous = state.sessions.find((item) => item.sessionId === session.sessionId)
+            return previous && previous.updatedAt > session.updatedAt ? previous : session
+          }),
+      }
+    }),
   pendingConfirmations: [],
   outputBySessionId: {},
 
@@ -68,6 +84,38 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     }),
 
   appendExecutionEvent: (event) => {
+    if (event.kind !== 'output') {
+      set((state) => ({
+        sessions: state.sessions.map((session) => {
+          if (session.sessionId !== event.sessionId) return session
+          if (event.kind === 'started')
+            return {
+              ...session,
+              status: 'running',
+              processId: event.processId,
+              attachable: true,
+              updatedAt: event.timestamp,
+            }
+          if (event.kind === 'exit')
+            return {
+              ...session,
+              status: 'exited',
+              exitCode: event.exitCode,
+              attachable: false,
+              updatedAt: event.timestamp,
+            }
+          if (event.kind === 'error')
+            return {
+              ...session,
+              status: 'error',
+              errorMessage: event.message,
+              attachable: false,
+              updatedAt: event.timestamp,
+            }
+          return session
+        }),
+      }))
+    }
     if (event.kind === 'output') {
       useTerminalStore.getState().appendOutputLine({
         sessionId: event.sessionId,

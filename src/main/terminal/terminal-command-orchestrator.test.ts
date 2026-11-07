@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
 import type { TerminalPermissionPolicy, TerminalRuntimeRef } from '../../shared/terminal'
 import { TerminalSessionRegistry } from './terminal-session-registry'
 import { TerminalCommandOrchestrator } from './terminal-command-orchestrator'
@@ -55,6 +56,68 @@ function createOrchestrator(
 }
 
 describe('TerminalCommandOrchestrator', () => {
+  it('deduplicates code-block submissions and keeps confirmation despite a supplied trusted policy', async () => {
+    let approve!: (value: boolean) => void
+    const requestConfirmation = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          approve = resolve
+        }),
+    )
+    const adapter = {
+      start: vi.fn(async () => ({ sessionId: 'code', status: 'running' as const })),
+      write: vi.fn(async () => {}),
+    }
+    const { registry, orchestrator } = createOrchestrator({
+      requestConfirmation,
+      executionAdapter: adapter,
+    })
+    registry.register({
+      sessionId: 'code',
+      runtime: { ...runtime, cwd: tmpdir(), workspaceRef: { kind: 'local', path: tmpdir() } },
+      codeBlockSource: { conversationId: 'chat', messageId: 'msg', contentIndex: 0, line: 0 },
+    })
+    const input = {
+      terminalSessionId: 'code',
+      command: 'sudo example',
+      actor: 'user' as const,
+      permissionPolicy: { mode: 'trusted-session' as const, requireConfirmationFor: [] },
+    }
+    const first = orchestrator.submitCommand(input)
+    await expect(orchestrator.submitCommand(input)).resolves.toMatchObject({
+      success: false,
+      status: 'rejected',
+    })
+    expect(adapter.start).not.toHaveBeenCalled()
+    expect(requestConfirmation).toHaveBeenCalledTimes(1)
+    approve(true)
+    await expect(first).resolves.toMatchObject({ execution: 'started' })
+    expect(adapter.start).toHaveBeenCalledTimes(1)
+    expect(adapter.write).toHaveBeenCalledTimes(1)
+    await expect(orchestrator.submitCommand(input)).resolves.toMatchObject({ success: false })
+  })
+
+  it('does not launch a code block when its workspace disappears', async () => {
+    const adapter = { start: vi.fn(), write: vi.fn() }
+    const { registry, orchestrator } = createOrchestrator({ executionAdapter: adapter })
+    registry.register({
+      sessionId: 'missing',
+      runtime: { ...runtime, cwd: '/missing-studio-code-block-workspace' },
+      codeBlockSource: { conversationId: 'chat', messageId: 'msg', contentIndex: 0, line: 0 },
+    })
+    await expect(
+      orchestrator.submitCommand({
+        terminalSessionId: 'missing',
+        command: 'pwd',
+        actor: 'user',
+        permissionPolicy: askRiskyPolicy,
+      }),
+    ).resolves.toMatchObject({ execution: 'not-started' })
+    expect(adapter.start).not.toHaveBeenCalled()
+    expect(adapter.write).not.toHaveBeenCalled()
+    expect(registry.get('missing')?.status).toBe('error')
+  })
+
   it('accepts low-risk commands without confirmation but does not execute them', async () => {
     const { registry, requestConfirmation, recordEvent, orchestrator } = createOrchestrator()
     registry.register({ sessionId: 'terminal-1', runtime, now: 100 })
@@ -85,7 +148,7 @@ describe('TerminalCommandOrchestrator', () => {
       command: 'pwd',
       risk: 'read',
       approved: true,
-      message: 'Terminal 命令已通过权限检查；真实执行尚未接入',
+      message: 'Terminal 命令已通过权限检查，准备提交到执行后端',
     })
     expect(registry.get('terminal-1')).toMatchObject({
       status: 'idle',

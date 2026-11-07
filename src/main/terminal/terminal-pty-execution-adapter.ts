@@ -99,7 +99,8 @@ export class PtyExecutionAdapter implements TerminalExecutionAdapter {
       }
     }
 
-    const cwd = normalizeCwd(input.runtime.cwd)
+    const cwd = input.requireCwd ? input.runtime.cwd : normalizeCwd(input.runtime.cwd)
+    if (input.requireCwd && !cwd) throw new Error('消息命令缺少工作空间目录')
     const size = normalizeTerminalSize(input.size)
     const env: NodeJS.ProcessEnv = {
       ...process.env,

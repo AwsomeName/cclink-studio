@@ -13,6 +13,7 @@ import type {
   TerminalPermissionPolicy,
   TerminalRuntimeRef,
   TerminalStatus,
+  TerminalCodeBlockSource,
 } from '../../shared/terminal'
 import { workspaceRefKey } from '../../shared/workspace-ref'
 
@@ -30,6 +31,7 @@ export interface TerminalSessionStoreState {
 }
 
 export interface UpsertTerminalSessionInput {
+  codeBlockSource?: TerminalCodeBlockSource
   sessionId: string
   runtime: TerminalRuntimeRef
   status?: TerminalStatus
@@ -172,6 +174,7 @@ export class TerminalSessionStore {
       }),
       runtime: input.runtime,
       status: input.status ?? existing?.status ?? 'idle',
+      codeBlockSource: input.codeBlockSource ?? existing?.codeBlockSource,
       updatedAt: now,
       processId: input.processId ?? existing?.processId,
       workspaceKey: workspaceRefKey(input.runtime.workspaceRef),

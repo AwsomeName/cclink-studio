@@ -3,9 +3,17 @@ import { useTerminalStore } from '../stores/terminal-store'
 import { useTabStore } from '../stores/tab-store'
 import type { TerminalCommandConfirmationRequest } from '../types'
 import type { TerminalExecutionEvent, TerminalTabRef } from '@shared/terminal'
+import {
+  createConversationTerminalAttentionObserver,
+  refreshTerminalSessions,
+} from '../features/terminal/conversation-terminal-command'
 
 export function useTerminalEvents(): void {
   useEffect(() => {
+    const observeAttention = createConversationTerminalAttentionObserver()
+    void refreshTerminalSessions().catch((error) =>
+      console.warn('[Terminal] session 恢复失败:', error),
+    )
     const offConfirmation = window.cclinkStudio.terminal.onRequestCommandConfirmation(
       (request: TerminalCommandConfirmationRequest) => {
         useTerminalStore.getState().addPendingConfirmation(request)
@@ -15,6 +23,7 @@ export function useTerminalEvents(): void {
       (event: TerminalExecutionEvent) => {
         useTerminalStore.getState().appendExecutionEvent(event)
         updateTerminalTabFromExecutionEvent(event)
+        if (event.kind === 'output') observeAttention(event.sessionId, event.data)
       },
     )
 

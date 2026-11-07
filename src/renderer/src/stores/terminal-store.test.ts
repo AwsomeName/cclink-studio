@@ -32,6 +32,26 @@ beforeEach(() => {
 })
 
 describe('useTerminalStore', () => {
+  it('projects execution events without resurrecting cleared sessions from a cache', () => {
+    const store = useTerminalStore.getState()
+    const snapshot = {
+      sessionId: 'code',
+      runtime: createRequest('test').runtime,
+      status: 'idle' as const,
+      createdAt: 1,
+      updatedAt: 1,
+      codeBlockSource: { conversationId: 'chat', messageId: 'message', contentIndex: 0, line: 0 },
+    }
+    store.mergeSessions([snapshot])
+    store.appendExecutionEvent({ kind: 'started', sessionId: 'code', processId: 42, timestamp: 3 })
+    store.mergeSessions([snapshot])
+    expect(useTerminalStore.getState().sessions[0]).toMatchObject({
+      status: 'running',
+      processId: 42,
+    })
+    store.mergeSessions([])
+    expect(useTerminalStore.getState().sessions).toEqual([])
+  })
   it('adds and removes terminal confirmation requests', () => {
     const store = useTerminalStore.getState()
 

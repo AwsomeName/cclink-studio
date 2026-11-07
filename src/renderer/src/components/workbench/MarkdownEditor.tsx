@@ -75,7 +75,7 @@ import {
 } from '../../features/browser/browser-link-navigation'
 import { registerMarkdownViewStateFlusher } from '../../features/markdown/markdown-view-state-lifecycle'
 import { getWorkspaceStateKey } from '../../utils/workspace-state'
-import { EditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
+import { useEditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
 import { isMarkdownDocumentPath } from '@shared/markdown-document'
 
 const lowlight = createLowlight(common)
@@ -113,6 +113,10 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const editorTabSize = useSettingsStore((state) => state.settings.editorTabSize)
   const editorWordWrap = useSettingsStore((state) => state.settings.editorWordWrap)
   const markdownAutoSave = useSettingsStore((state) => state.settings.markdownAutoSave)
+  const persistenceStatus = useEditorPersistenceStatus(
+    fileKey,
+    Boolean(filePath && isMarkdownDocumentPath(filePath) && markdownAutoSave),
+  )
   const showToast = useToastStore((state) => state.show)
   const activeWorkspaceKey = useWorkspaceStore((state) => workspaceRefKey(state.activeWorkspaceRef))
   const dirty = fileState?.dirty ?? false
@@ -1045,6 +1049,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         filePath={filePath}
         dirty={dirty}
         saving={fileState.saving}
+        persistenceStatus={persistenceStatus}
         diagnosticsCount={diagnostics.length}
         onCopyDiagnostics={() => void handleCopyDiagnosticLog()}
         onSave={() => void handleSave()}
@@ -1053,12 +1058,6 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
         onInsertTable={handleInsertTable}
         onEditImage={handleEditImage}
       />
-      <EditorPersistenceStatus
-        fileKey={fileKey}
-        autoSave={Boolean(filePath && isMarkdownDocumentPath(filePath) && markdownAutoSave)}
-        onSave={() => void handleSave()}
-      />
-
       {findOpen && (
         <div className="markdown-find-bar" role="search" aria-label="在 Markdown 中查找">
           <input

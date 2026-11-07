@@ -1,4 +1,8 @@
-import type { TerminalRuntimeRef, TerminalStatus } from '../../shared/terminal'
+import type {
+  TerminalRuntimeRef,
+  TerminalStatus,
+  TerminalCodeBlockSource,
+} from '../../shared/terminal'
 import {
   createTerminalSessionState,
   transitionTerminalSessionState,
@@ -7,6 +11,7 @@ import {
 } from './terminal-session-state'
 
 export interface RegisterTerminalSessionInput {
+  codeBlockSource?: TerminalCodeBlockSource
   sessionId: string
   runtime: TerminalRuntimeRef
   now?: number

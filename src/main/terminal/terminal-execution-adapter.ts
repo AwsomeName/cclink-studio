@@ -17,6 +17,8 @@ export interface TerminalStartInput {
   size?: TerminalSize
   env?: Record<string, string>
   resume?: { processId?: string | number }
+  /** 消息命令必须使用原目录；目录失效时让 PTY 启动失败，禁止回退。 */
+  requireCwd?: boolean
 }
 
 export interface TerminalWriteInput {

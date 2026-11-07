@@ -267,6 +267,7 @@ function TerminalRecordView({ tab }: { tab: Tab }): React.ReactElement {
           <TerminalMeta label="工作空间" value={workspaceRefLabel(record.runtime.workspaceRef)} />
           <TerminalMeta label="来源" value={workspaceRefSourceLabel(record.runtime.workspaceRef)} />
           <TerminalMeta label="状态" value={record.status} />
+          {record.errorMessage && <TerminalMeta label="失败原因" value={record.errorMessage} />}
           <TerminalMeta label="cwd" value={record.runtime.cwd ?? '未设置'} />
           <TerminalMeta label="进程" value={record.processId ? String(record.processId) : '无'} />
           <TerminalMeta
@@ -397,7 +398,13 @@ function PtyTerminal({ tab }: { tab: Tab }): React.ReactElement {
     xtermRef.current = xterm
     fitAddonRef.current = fitAddon
 
-    const replayOutput = [...initialRecordOutput, ...outputLines].map((line) => line.text).join('')
+    const replayOutput = [...initialRecordOutput, ...outputLines]
+      .map((line) =>
+        line.kind === 'system' || line.kind === 'error'
+          ? line.text.replace(/\r?\n/g, '\r\n')
+          : line.text,
+      )
+      .join('')
     const writeInput = (data: string): void => {
       void window.cclinkStudio.terminal
         .writePty({

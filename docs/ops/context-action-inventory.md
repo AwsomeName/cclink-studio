@@ -55,6 +55,10 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 - `DataSourcesPanel.tsx`、`DataSourceQueryTab.tsx`、`HardwareProductionSection.tsx`、`AndroidDisplay.tsx` 和 `SettingsPage.tsx` 是领域 target adapter。
 - `ConversationMessageRenderer.tsx` 只解析消息 target；业务动作仍由 Agent 领域 command 拥有。
+- 本地 Claude 代码块工具栏通过消息 target 的 `codeBlock` 定位调用
+  `terminal.runConversationCodeBlock`，执行 owner 为 `features/terminal/conversation-terminal-command.ts`，
+  实际权限与进程仍由主进程 Terminal 拥有；命令由既有 Agent bootstrap 注册，
+  不放入菜单 contribution 目录，也不增加独立菜单。
 - `ResizeHandle.tsx` 只解析布局 target；不拥有 Sidebar 或 Agent 状态。
 
 ## 明确不提供菜单

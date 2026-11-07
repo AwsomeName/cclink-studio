@@ -11,6 +11,8 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { ConversationMarkdown, markdownPreviewText } from './ConversationMarkdown'
 import { MessageImagePreview } from '../../features/agent-conversations/message-image-preview'
+import { useAgentStore } from '../../stores/agent-store'
+import type { ConversationCodeCommandContext } from '../../features/terminal/conversation-code-run-button'
 
 type ToolContentBlock = Extract<ContentBlock, { type: 'tool_use' | 'tool_result' }>
 type ThinkingContentBlock = Extract<ContentBlock, { type: 'thinking' }>
@@ -31,6 +33,14 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
   workspaceKey: string | null
   onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
+  const canRunCommands = useAgentStore((state) => {
+    const conversation = state.conversations[conversationId]
+    return (
+      conversation?.runtime.location === 'local' &&
+      conversation.runtime.workspaceRef?.kind === 'local' &&
+      (conversation.runtimeBinding?.kind ?? 'claude-code') === 'claude-code'
+    )
+  })
   const copyText = getMessageCopyText(message)
   const imageResources = (message.resources ?? []).filter((resource) => resource.kind === 'image')
   const chipResources = (message.resources ?? []).filter((resource) => resource.kind !== 'image')
@@ -125,6 +135,17 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
             isStreaming={message.isStreaming === true}
             renderMarkdown={message.role === 'assistant'}
             onOpenFilePath={onOpenFilePath}
+            commandContext={
+              canRunCommands && workspaceKey && unit.type === 'block'
+                ? {
+                    conversationId,
+                    messageId: message.id,
+                    workspaceKey,
+                    contentIndex: message.content.indexOf(unit.block),
+                    isStreaming: message.isStreaming === true,
+                  }
+                : undefined
+            }
           />
         ))}
         {!isUserImageMessage && imageList}
@@ -214,11 +235,13 @@ function ContentRenderUnitRenderer({
   isStreaming,
   renderMarkdown,
   onOpenFilePath,
+  commandContext,
 }: {
   unit: ContentRenderUnit
   isStreaming: boolean
   renderMarkdown: boolean
   onOpenFilePath?: (path: string) => void
+  commandContext?: ConversationCodeCommandContext
 }): React.ReactElement {
   if (unit.type === 'tool_group') {
     return <ToolExecutionGroup blocks={unit.blocks} isStreaming={isStreaming} />
@@ -232,6 +255,7 @@ function ContentRenderUnitRenderer({
       block={unit.block}
       renderMarkdown={renderMarkdown}
       onOpenFilePath={onOpenFilePath}
+      commandContext={commandContext}
     />
   )
 }
@@ -240,15 +264,23 @@ export function ContentBlockRenderer({
   block,
   renderMarkdown = false,
   onOpenFilePath,
+  commandContext,
 }: {
   block: ContentBlock
   renderMarkdown?: boolean
   onOpenFilePath?: (path: string) => void
+  commandContext?: ConversationCodeCommandContext
 }): React.ReactElement {
   switch (block.type) {
     case 'text':
       if (renderMarkdown) {
-        return <ConversationMarkdown source={block.text} onOpenFilePath={onOpenFilePath} />
+        return (
+          <ConversationMarkdown
+            source={block.text}
+            onOpenFilePath={onOpenFilePath}
+            commandContext={commandContext}
+          />
+        )
       }
       return (
         <div className="content-text">

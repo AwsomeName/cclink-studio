@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { stat } from 'node:fs/promises'
 import type {
   TerminalExecutionErrorInfo,
   TerminalPermissionRisk,
@@ -28,6 +29,7 @@ export interface TerminalCommandOrchestratorOptions {
 const SUBMITTABLE_STATUSES = new Set<TerminalStatus>(['idle', 'running'])
 
 export class TerminalCommandOrchestrator {
+  private readonly pendingSubmissions = new Set<string>()
   private readonly sessionRegistry: Pick<TerminalSessionRegistry, 'get' | 'transition'>
   private readonly confirmationService: Pick<TerminalConfirmationService, 'requestConfirmation'>
   private readonly executionAdapter?: Pick<TerminalExecutionAdapter, 'start' | 'write'>
@@ -45,6 +47,20 @@ export class TerminalCommandOrchestrator {
   }
 
   async submitCommand(input: TerminalSubmitCommandInput): Promise<TerminalSubmitCommandResult> {
+    if (this.pendingSubmissions.has(input.terminalSessionId)) {
+      return { success: false, status: 'rejected', error: '该 Terminal 命令正在提交，请勿重复运行' }
+    }
+    this.pendingSubmissions.add(input.terminalSessionId)
+    try {
+      return await this.submitOnce(input)
+    } finally {
+      this.pendingSubmissions.delete(input.terminalSessionId)
+    }
+  }
+
+  private async submitOnce(
+    input: TerminalSubmitCommandInput,
+  ): Promise<TerminalSubmitCommandResult> {
     const session = this.sessionRegistry.get(input.terminalSessionId)
     if (!session) {
       return {
@@ -71,6 +87,26 @@ export class TerminalCommandOrchestrator {
       }
     }
 
+    if (session.codeBlockSource) {
+      if (input.actor !== 'user' || session.status !== 'idle') {
+        return {
+          success: false,
+          status: 'rejected',
+          error: '消息代码块只能由用户启动一次，请查看原终端',
+        }
+      }
+      // 不允许消息入口传入宽权限策略；沿用本地 Terminal 的风险确认边界。
+      input = {
+        ...input,
+        permissionPolicy: {
+          mode: ['read-only', 'ask-every-command'].includes(input.permissionPolicy.mode)
+            ? input.permissionPolicy.mode
+            : 'ask-risky-command',
+          requireConfirmationFor: ['write', 'network', 'destructive', 'privileged', 'unknown'],
+          denylist: input.permissionPolicy.denylist,
+        },
+      }
+    }
     const decision = evaluateTerminalPermission(input.command, input.permissionPolicy)
     if (decision.action === 'deny') {
       await this.recordCommandAudit('command-denied', input, session, decision.risk, {
@@ -121,7 +157,7 @@ export class TerminalCommandOrchestrator {
     })
     await this.recordCommandAudit('command-submitted', input, session, decision.risk, {
       approved: true,
-      message: 'Terminal 命令已通过权限检查；真实执行尚未接入',
+      message: 'Terminal 命令已通过权限检查，准备提交到执行后端',
     })
     const executionStarted = await this.dispatchToExecutionAdapter(
       input,
@@ -147,6 +183,13 @@ export class TerminalCommandOrchestrator {
 
     try {
       if (session.status === 'idle') {
+        // 用户确认期间目录也可能被移走；禁止降级到宿主进程 cwd。
+        if (
+          session.codeBlockSource &&
+          (!session.runtime.cwd || !(await stat(session.runtime.cwd)).isDirectory())
+        ) {
+          throw new Error('消息所属工作空间目录不存在，未执行命令')
+        }
         this.sessionRegistry.transition(input.terminalSessionId, 'starting', {
           lastCommand: input.command,
           now: this.now(),
@@ -154,12 +197,17 @@ export class TerminalCommandOrchestrator {
         await this.executionAdapter.start({
           sessionId: input.terminalSessionId,
           runtime: session.runtime,
+          ...(session.codeBlockSource ? { requireCwd: true } : {}),
         })
       }
 
       await this.executionAdapter.write({
         sessionId: input.terminalSessionId,
-        data: `${input.command}\n`,
+        // 多行代码作为一个 shell 输入提交，避免后续行落入前一行 read/sudo 的 stdin。
+        data:
+          session.codeBlockSource && input.command.includes('\n')
+            ? `eval '${input.command.replace(/'/g, "'\\''")}'\n`
+            : `${input.command}\n`,
         actor: input.actor,
       })
       return true
