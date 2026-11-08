@@ -11,6 +11,18 @@ export const fsPathSchema = z
 export const fsWatchIdSchema = z.string().uuid()
 export const fsTextContentSchema = z.string().max(MAX_TEXT_BYTES)
 
+export const fsRenderOptionsSchema = z
+  .object({
+    altiumShowHidden: z.boolean().optional(),
+    altiumLayer: z
+      .string()
+      .min(1)
+      .max(128)
+      .regex(/^[\w .-]+$/)
+      .optional(),
+  })
+  .strict()
+
 export const fsSearchWorkspaceSchema = z
   .object({
     workspaceKey: fsPathSchema,

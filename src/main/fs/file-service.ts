@@ -25,6 +25,7 @@ import yauzl, { type Entry, type ZipFile } from 'yauzl'
 import { XMLParser } from 'fast-xml-parser'
 import {
   imageMimeTypeForExtension,
+  isAltiumFileExtension,
   isAppleIWorkFileExtension,
   isArchiveFileExtension,
   isBinaryFileExtension,
@@ -54,6 +55,12 @@ import { isMarkdownDocumentPath, markdownAssetDirectoryName } from '../../shared
 import { MarkdownDocumentService } from './markdown-document-service'
 import { FileRelocationJournal } from './file-relocation-journal'
 import { LinkedDirectoryGrants, type LinkedDirectoryGrant } from './linked-directory-grants'
+import {
+  ALTIUM_MAX_FILE_BYTES,
+  type AltiumRenderOptions,
+  type AltiumProjectPreview,
+} from '../../shared/altium-preview'
+import { renderAltiumPreview } from '../altium/altium-preview'
 
 const MAX_INLINE_VIDEO_BYTES = 300 * 1024 * 1024
 const MAX_OFFICE_PREVIEW_BLOCKS = 400
@@ -446,7 +453,10 @@ export class FileService {
     )
   }
 
-  private async readAuthorizedFile(filePath: string): Promise<{
+  private async readAuthorizedFile(
+    filePath: string,
+    maxBytes = Infinity,
+  ): Promise<{
     path: string
     buffer: Buffer
     fileStat: Awaited<ReturnType<typeof stat>>
@@ -456,6 +466,9 @@ export class FileService {
     const handle = await open(safe, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
     try {
       const opened = await handle.stat()
+      if (!opened.isFile() || opened.size > maxBytes) {
+        throw new Error('文件不是普通文件，或超过预览大小限制（Altium 最大 32 MB）')
+      }
       if (before.dev !== opened.dev || before.ino !== opened.ino) {
         throw new Error('OUTSIDE_WORKSPACE: 文件在安全检查后被替换')
       }
@@ -464,7 +477,20 @@ export class FileService {
         throw new Error('OUTSIDE_WORKSPACE: 文件路径在打开后发生变化')
       }
       await this.validatePath(safe, 'read')
-      const buffer = await handle.readFile()
+      let buffer: Buffer
+      if (Number.isFinite(maxBytes)) {
+        // Bound the read even if another process grows the file after stat().
+        const data = Buffer.alloc(opened.size + 1)
+        let offset = 0
+        while (offset < data.length) {
+          const { bytesRead } = await handle.read(data, offset, data.length - offset, offset)
+          if (!bytesRead) break
+          offset += bytesRead
+        }
+        buffer = data.subarray(0, offset)
+      } else {
+        buffer = await handle.readFile()
+      }
       const [openedAfterRead, pathAfterRead] = await Promise.all([handle.stat(), stat(safe)])
       if (
         openedAfterRead.dev !== opened.dev ||
@@ -828,15 +854,62 @@ export class FileService {
   }
 
   async readTextDocument(filePath: string): Promise<FsTextDocumentSnapshot> {
+    assertNotAltiumText(filePath)
     const { path: safe, buffer, fileStat } = await this.readAuthorizedFile(filePath)
     return textDocumentSnapshot(safe, buffer, Number(fileStat.mtimeMs))
   }
 
   /** 渲染只读文件预览。渲染进程只消费结构化结果，不直接读取本机文件。 */
-  async renderFile(filePath: string): Promise<FsRenderResult> {
+  async renderFile(filePath: string, options?: AltiumRenderOptions): Promise<FsRenderResult> {
     const safe = await this.validatePath(filePath)
     const ext = extname(safe).toLowerCase()
     const parsed = parse(safe)
+
+    if (isAltiumFileExtension(ext)) {
+      const { buffer } = await this.readAuthorizedFile(safe, ALTIUM_MAX_FILE_BYTES)
+      const result = await renderAltiumPreview({
+        bytes: buffer,
+        path: safe,
+        fileName: parsed.base,
+        options,
+      })
+      // Parsing can outlive a workspace switch. Recheck the original access context before returning.
+      await this.validatePath(safe, 'read')
+      if (result.kind !== 'project-references') return result
+      const documents: AltiumProjectPreview['documents'] = []
+      for (const name of result.references) {
+        const normalized = name.replace(/\\/g, '/')
+        if (
+          !normalized ||
+          normalized.includes('\0') ||
+          isAbsolute(normalized) ||
+          /^[a-z]:/i.test(normalized)
+        ) {
+          documents.push({
+            name,
+            status: 'unavailable',
+            reason: '不自动打开绝对路径或无效工程引用',
+          })
+          continue
+        }
+        try {
+          const target = await this.validatePath(resolve(dirname(safe), normalized), 'read')
+          if (!(await stat(target)).isFile()) throw new Error('not a file')
+          if (!['.schdoc', '.pcbdoc'].includes(extname(target).toLowerCase())) {
+            documents.push({ name, status: 'unsupported', reason: '当前只预览原理图和 PCB 图纸' })
+          } else {
+            documents.push({ name, path: target, status: 'ready' })
+          }
+        } catch {
+          documents.push({
+            name,
+            status: 'unavailable',
+            reason: '文件缺失或不在当前工作区授权范围内',
+          })
+        }
+      }
+      return { kind: 'altium-project', fileName: parsed.base, path: safe, documents }
+    }
 
     const mimeType = imageMimeTypeForExtension(ext)
     if (isImageFileExtension(ext) && mimeType) {
@@ -960,6 +1033,7 @@ export class FileService {
 
   /** 写入文件 */
   async writeFile(filePath: string, content: string): Promise<void> {
+    assertNotAltiumText(filePath)
     await this.writeAuthorizedFile(filePath, content)
   }
 
@@ -974,6 +1048,7 @@ export class FileService {
     expectedHash?: string
     force?: boolean
   }): Promise<FsSaveTextDocumentResult> {
+    assertNotAltiumText(input.filePath)
     const safe = await this.validatePath(input.filePath, 'write')
     const diskPath = await this.authorizedWriteTarget(safe)
     await mkdir(dirname(diskPath), { recursive: true })
@@ -1523,6 +1598,12 @@ async function readTextDocumentIfExists(filePath: string): Promise<FsTextDocumen
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
     throw error
+  }
+}
+
+function assertNotAltiumText(filePath: string): void {
+  if (isAltiumFileExtension(extname(filePath))) {
+    throw new Error('ALTIUM_READ_ONLY: Altium 文件仅支持只读预览，不能通过文本编辑器读取或保存')
   }
 }
 

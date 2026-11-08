@@ -1,5 +1,6 @@
 import type { TabType } from '../types'
 import {
+  isAltiumFileExtension,
   isAppleIWorkFileExtension,
   isArchiveFileExtension,
   isImageFileExtension,
@@ -15,6 +16,7 @@ export function isModelFileExtension(extension?: string): boolean {
 export function getTabTypeForFile(extension?: string): TabType {
   const normalizedExtension = (extension ?? '').toLowerCase()
   if (
+    isAltiumFileExtension(extension) ||
     isImageFileExtension(extension) ||
     normalizedExtension === '.pdf' ||
     isOfficeFileExtension(extension) ||

@@ -54,3 +54,6 @@ Desktop.ini
 
 # Local journal shortcut is not portable to release runners.
 /研发日记
+
+# 本地开发辅助目录
+/生产/

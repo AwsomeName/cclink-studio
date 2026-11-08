@@ -38,6 +38,8 @@ export default defineConfig({
         exclude: [
           // juice 是纯 ESM 包，不可 require()，需由 rollup 内联打包
           'juice',
+          // Altium parser is ESM-only; bundle it into the bounded preview worker.
+          'altiumts',
         ],
       }),
       {
@@ -57,6 +59,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           'model-usage-worker': resolve(__dirname, 'src/main/usage/model-usage-worker.ts'),
+          'altium-preview-worker': resolve(__dirname, 'src/main/altium/altium-preview-worker.ts'),
         },
         external: [
           'playwright-core',

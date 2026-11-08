@@ -22,6 +22,12 @@ describe('model-files', () => {
     expect(getTabTypeForFile('.md')).toBe('editor')
   })
 
+  it('Altium files use read-only preview including mixed-case extensions', () => {
+    for (const extension of ['.SchDoc', '.schdoc', '.PCBDOC', '.PrjPcb']) {
+      expect(getTabTypeForFile(extension)).toBe('file-preview')
+    }
+  })
+
   it('图片、Office 安全降级、主流媒体和压缩包进入只读文件预览 Tab', () => {
     for (const extension of [
       '.png',

@@ -148,7 +148,7 @@ CCLink Studio 输出：
 
 第二优先级是嘉立创 EDA，因为它和打样链路最短，但需要确认文件格式和网页编辑能力。
 
-Altium 只做读取和外部打开，不在早期承诺自动写回。
+Altium 当前支持 `.SchDoc` 原理图、`.PcbDoc` PCB 图形与 `.PrjPcb` 工程导航的本地只读预览，并保留外部打开；不支持写回。范围与实际文件验收见 [Altium 只读预览](altium-readonly-preview.md)。
 
 修改流程必须是：
 

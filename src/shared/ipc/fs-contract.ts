@@ -12,6 +12,7 @@ import {
   fsMarkdownTrashSchema,
   fsPathPairSchema,
   fsPathSchema,
+  fsRenderOptionsSchema,
   fsSaveDocumentAssetSchema,
   fsSaveTextDocumentSchema,
   fsSearchWorkspaceSchema,
@@ -62,7 +63,12 @@ export const fsIpcContracts = {
   listPendingFileRelocations: bindPath(fsIpc.listPendingFileRelocations),
   readFile: bindPath(fsIpc.readFile),
   readTextDocument: bindPath(fsIpc.readTextDocument),
-  renderFile: bindPath(fsIpc.renderFile),
+  renderFile: bindIpcParser(fsIpc.renderFile, (args) => {
+    if (args.length !== 1 && args.length !== 2) {
+      throw new Error('IPC fs:renderFile 需要文件路径和可选预览参数')
+    }
+    return ipcArgs(fsPathSchema.parse(args[0]), fsRenderOptionsSchema.optional().parse(args[1]))
+  }),
   writeFile: bindIpcParser(fsIpc.writeFile, (args) => {
     requireArgs(args, 2, fsIpc.writeFile.channel)
     return ipcArgs(fsPathSchema.parse(args[0]), fsTextContentSchema.parse(args[1]))

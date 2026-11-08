@@ -19,6 +19,8 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { copyBase64ImageToClipboard } from '../../utils/image-clipboard'
 import { PdfPreview } from './PdfPreview'
+import { AltiumPreview } from './AltiumPreview'
+import { shouldUseLegacyReadFallback } from '../../utils/file-preview-errors'
 
 interface FilePreviewProps {
   filePath: string
@@ -37,6 +39,7 @@ export function FilePreview({
   workspaceKey,
 }: FilePreviewProps): React.ReactElement {
   const [state, setState] = useState<FilePreviewState>({ status: 'loading' })
+  const [reloadGeneration, setReloadGeneration] = useState(0)
   const executeCommand = useCommandStore((store) => store.executeCommand)
   const showToast = useToastStore((store) => store.show)
   const showContextMenu = useContextMenuStore((store) => store.show)
@@ -61,7 +64,7 @@ export function FilePreview({
     return () => {
       cancelled = true
     }
-  }, [filePath])
+  }, [filePath, reloadGeneration])
 
   const openExternal = (): void => {
     void window.cclinkStudio.fs.openPath(filePath)
@@ -106,6 +109,9 @@ export function FilePreview({
         <div className="file-preview-message">
           <div className="file-preview-message-title">无法预览文件</div>
           <div className="file-preview-message-detail">{state.message}</div>
+          <button type="button" onClick={() => setReloadGeneration((value) => value + 1)}>
+            重新加载
+          </button>
           <button type="button" onClick={openExternal}>
             用系统应用打开
           </button>
@@ -115,6 +121,10 @@ export function FilePreview({
   }
 
   const { result } = state
+
+  if (result.kind === 'altium-drawing' || result.kind === 'altium-project') {
+    return <AltiumPreview key={filePath} result={result} onOpenExternal={openExternal} />
+  }
 
   if (result.kind === 'image') {
     return (
@@ -450,11 +460,6 @@ async function renderFilePreviewFromReadFile(filePath: string): Promise<FsRender
     fileName,
     path: filePath,
   }
-}
-
-function shouldUseLegacyReadFallback(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return /renderFile is not a function|No handler registered|fs:renderFile/i.test(message)
 }
 
 function extensionFromPath(filePath: string): string {

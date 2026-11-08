@@ -1,0 +1,126 @@
+.altium-preview {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.altium-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.altium-controls select {
+  max-width: 200px;
+  padding: 4px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+.altium-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.altium-controls button,
+.altium-project-document button,
+.altium-stage-message button {
+  padding: 4px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.altium-controls output {
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.altium-counts {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.altium-stage {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  overflow: hidden;
+  background: #20242b;
+  cursor: grab;
+  touch-action: none;
+}
+.altium-stage:active {
+  cursor: grabbing;
+}
+.altium-stage:focus-visible {
+  outline: 1px solid var(--accent-color);
+  outline-offset: -2px;
+}
+.altium-stage > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  object-fit: contain;
+  transform-origin: center;
+  user-select: none;
+  pointer-events: none;
+}
+.altium-stage-message {
+  padding: 32px;
+  text-align: center;
+  cursor: default;
+  color: #eee;
+}
+.altium-footer {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-color);
+}
+.altium-warnings {
+  padding: 6px 12px;
+  font-size: 12px;
+  max-height: 150px;
+  overflow: auto;
+}
+.altium-warnings summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.altium-project-documents {
+  overflow: auto;
+  padding: 16px;
+}
+.altium-project-documents > p {
+  color: var(--text-secondary);
+}
+.altium-project-document {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-color);
+}
+.altium-project-document strong {
+  overflow-wrap: anywhere;
+}
+.altium-project-document span {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 5px;
+}
+.altium-project-document button {
+  flex-shrink: 0;
+}
+.altium-project-document button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

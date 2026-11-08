@@ -10,7 +10,13 @@ export const MODEL_FILE_EXTENSIONS = [
 
 const MODEL_FILE_EXTENSION_SET = new Set<string>(MODEL_FILE_EXTENSIONS)
 
+export function isAltiumFileExtension(extension?: string): boolean {
+  return ['.schdoc', '.pcbdoc', '.prjpcb'].includes((extension ?? '').toLowerCase())
+}
+
 export const BINARY_FILE_EXTENSIONS = [
+  '.schdoc',
+  '.pcbdoc',
   '.png',
   '.jpg',
   '.jpeg',

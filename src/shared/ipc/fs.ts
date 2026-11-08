@@ -1,4 +1,5 @@
 import { defineIpcCall } from './contract'
+import type { AltiumPreview, AltiumRenderOptions } from '../altium-preview'
 import { isBoundedIpcEventPayload, isBoundedIpcEventString } from './event-payload'
 
 export interface FsDirEntry {
@@ -164,6 +165,7 @@ export interface FsTrashMarkdownDocumentResult {
 }
 
 export type FsRenderResult =
+  | AltiumPreview
   | {
       kind: 'image'
       content: string
@@ -294,7 +296,7 @@ export interface FsApiContract {
   listPendingFileRelocations: (workspacePath: string) => Promise<FsFileRelocationJournalEntry[]>
   readFile: (filePath: string) => Promise<FsReadResult>
   readTextDocument: (filePath: string) => Promise<FsTextDocumentSnapshot>
-  renderFile: (filePath: string) => Promise<FsRenderResult>
+  renderFile: (filePath: string, options?: AltiumRenderOptions) => Promise<FsRenderResult>
   writeFile: (filePath: string, content: string) => Promise<void>
   createFile: (filePath: string) => Promise<void>
   saveTextDocument: (input: FsSaveTextDocumentInput) => Promise<FsSaveTextDocumentResult>
@@ -336,7 +338,7 @@ export const fsIpc = {
   ),
   readFile: defineIpcCall<[string], FsReadResult>('fs:readFile'),
   readTextDocument: defineIpcCall<[string], FsTextDocumentSnapshot>('fs:readTextDocument'),
-  renderFile: defineIpcCall<[string], FsRenderResult>('fs:renderFile'),
+  renderFile: defineIpcCall<[string, AltiumRenderOptions?], FsRenderResult>('fs:renderFile'),
   writeFile: defineIpcCall<[string, string], void>('fs:writeFile'),
   createFile: defineIpcCall<[string], void>('fs:createFile'),
   saveTextDocument: defineIpcCall<[FsSaveTextDocumentInput], FsSaveTextDocumentResult>(

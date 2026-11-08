@@ -16,7 +16,7 @@ export const fsApi: FsApiContract = {
     invokeIpcContract(fsIpc.listPendingFileRelocations, workspacePath),
   readFile: (filePath) => invokeIpcContract(fsIpc.readFile, filePath),
   readTextDocument: (filePath) => invokeIpcContract(fsIpc.readTextDocument, filePath),
-  renderFile: (filePath) => invokeIpcContract(fsIpc.renderFile, filePath),
+  renderFile: (filePath, options) => invokeIpcContract(fsIpc.renderFile, filePath, options),
   writeFile: (filePath, content) => invokeIpcContract(fsIpc.writeFile, filePath, content),
   createFile: (filePath) => invokeIpcContract(fsIpc.createFile, filePath),
   saveTextDocument: (input) => invokeIpcContract(fsIpc.saveTextDocument, input),

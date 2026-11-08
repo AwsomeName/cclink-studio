@@ -7,6 +7,7 @@ import { registerTrustedIpcContract } from '../ipc/trusted-renderer-guard'
 import type { IpcInvokeContract } from '../../shared/ipc/contract'
 import { fsIpcContracts as fsIpc } from '../../shared/ipc/fs-contract'
 import { fsIpcEvents, type FsWatchDirEvent } from '../../shared/ipc/fs'
+import type { AltiumRenderOptions } from '../../shared/altium-preview'
 
 /**
  * 注册文件系统相关的 IPC 处理器
@@ -89,8 +90,8 @@ export function registerFsIpc(
   })
 
   // 渲染只读文件预览
-  handle(fsIpc.renderFile, async (_event, filePath) => {
-    return fs.renderFile(filePath)
+  handle(fsIpc.renderFile, async (_event, filePath, options?: AltiumRenderOptions) => {
+    return fs.renderFile(filePath, options)
   })
 
   // 写入文件
