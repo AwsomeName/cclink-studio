@@ -5,6 +5,7 @@ import type {
   WorkbenchWindowProjection,
 } from '@shared/ipc/workbench-window'
 import './auxiliary-browser-layout.css'
+import { normalizeBrowserAddress } from '../../features/browser/browser-address'
 
 export function AuxiliaryBrowserLayout({
   api,
@@ -141,9 +142,9 @@ export function AuxiliaryBrowserLayout({
   )
 
   const navigate = (): void => {
-    const value = url.trim()
+    const value = normalizeBrowserAddress(url)
     if (!value) return
-    void runCommand('navigate', /^https?:\/\//i.test(value) ? value : `https://${value}`)
+    void runCommand('navigate', value)
   }
 
   const runFind = (findNext: boolean, forward = true, query = findQuery): void => {

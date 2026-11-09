@@ -32,6 +32,7 @@ import {
   moveBrowserTabToNewWindow,
 } from '../../utils/move-browser-tab-to-window'
 import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
+import { normalizeBrowserAddress } from '../../features/browser/browser-address'
 
 interface WorkbenchProps {
   tabCreateMenuOpen: boolean
@@ -144,11 +145,8 @@ export function Workbench({
   const handleNavigate = useCallback(
     (value: string): void => {
       if (!activeTabId) return
-      let url = value.trim()
+      const url = normalizeBrowserAddress(value)
       if (!url) return
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = 'https://' + url
-      }
       beginBrowserNavigation(activeTabId, url)
       void window.cclinkStudio.browser
         .navigate(activeTabId, url)

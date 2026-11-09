@@ -3621,7 +3621,8 @@ async function main() {
       renderedRecentUrls.includes(recentUrl),
       `new tab omitted the seeded recent address: ${JSON.stringify({ renderedRecentUrls, storedRecentUrls })}`,
     )
-    await page.locator('.url-input').fill(recentUrl)
+    // A bare local address must reach the HTTP fixture through the real address bar.
+    await page.locator('.url-input').fill(recentUrl.replace(/^http:\/\//, ''))
     await page.locator('.url-input').press('Enter')
     await waitForAsyncFunction(
       page,
