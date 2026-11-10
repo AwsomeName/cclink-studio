@@ -1259,7 +1259,19 @@ async function main() {
     const copyAll = page.locator('[data-agent-action="diagnostics"]')
     await copyAll.waitFor({ timeout: 10_000 })
     await copyAll.click()
-    const agentDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    let agentDiagnostic = ''
+    const copyDeadline = Date.now() + 10_000
+    while (Date.now() < copyDeadline) {
+      agentDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+      if (
+        agentDiagnostic.startsWith('# CCLink Studio 完整诊断日志') &&
+        agentDiagnostic.includes('## Agent 与当前会话') &&
+        agentDiagnostic.includes('# CCLink Studio 诊断日志')
+      ) {
+        break
+      }
+      await page.waitForTimeout(50)
+    }
     assert(
       agentDiagnostic.startsWith('# CCLink Studio 完整诊断日志') &&
         agentDiagnostic.includes('## Agent 与当前会话') &&
@@ -1277,7 +1289,13 @@ async function main() {
     const copyFramework = page.locator('.framework-diagnostics-status')
     await copyFramework.waitFor({ timeout: 10_000 })
     await copyFramework.click()
-    const frameworkDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+    let frameworkDiagnostic = ''
+    const frameworkCopyDeadline = Date.now() + 10_000
+    while (Date.now() < frameworkCopyDeadline) {
+      frameworkDiagnostic = await page.evaluate(() => navigator.clipboard.readText())
+      if (frameworkDiagnostic.includes('# CCLink Studio 框架诊断日志')) break
+      await page.waitForTimeout(50)
+    }
     assert(
       frameworkDiagnostic.includes('# CCLink Studio 框架诊断日志'),
       'status bar diagnostic button did not copy the framework report',

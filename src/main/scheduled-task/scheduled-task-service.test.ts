@@ -59,6 +59,7 @@ describe('ScheduledTaskService', () => {
           artifact: { relativePath: expect.any(String) },
         })
       })
+      await service.flush()
       const reloaded = createService()
       await reloaded.load()
       const history = await reloaded.listRuns(workspacePath, taskId)
