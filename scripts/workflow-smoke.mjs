@@ -1613,12 +1613,11 @@ async function main() {
 
       const message = page.locator('.agent-message').first()
       if ((await message.count()) === 0) {
-        const composer = page.locator('[data-agent-landmark="composer"] textarea').first()
-        const send = page.locator('[data-agent-action="send"]').first()
-        await composer.waitFor({ state: 'visible', timeout: 10_000 })
-        await composer.fill('Workflow smoke message context target')
-        await send.waitFor({ state: 'visible', timeout: 10_000 })
-        await send.click()
+        // This checks context-menu targets, not model authentication or message delivery.
+        await page.evaluate(async () => {
+          const { useAgentStore } = await import('/src/stores/agent-store.ts')
+          useAgentStore.getState().addUserMessage('Workflow smoke message context target')
+        })
       }
       await message.waitFor({ timeout: 10_000 })
       await message.click({ button: 'right' })
