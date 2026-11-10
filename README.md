@@ -42,11 +42,31 @@
 
 [Altium 图纸预览](docs/features/altium-readonly-preview.md)
 
+### 文章发布，看得见每一步
+
+围绕原稿、账号和目标平台组织发布任务，把执行步骤、等待原因及核验结果显示在工作台里。发布后继续检查平台页面，保留可查看的执行与结果记录。
+
+![CCLink Studio 文章发布：分步执行计划、公开页面图片核验及 Agent 执行记录](docs/images/readme/article-publishing.jpeg)
+
+*历史实测截图（v0.1.94）：一条头条发布任务的步骤与公开页面核验记录。实际发布需要对应账号和文章授权。*
+
+[发布执行与核验](docs/features/article-publishing-observable-execution-protocol.md)
+
+### 对话里的命令，接到真实终端
+
+在支持的本地会话中，直接运行代码块里的 shell 命令，再从同一代码块查看对应终端。程序需要输入时，切到 Terminal 接管，不必反复复制命令。
+
+![CCLink Studio 会话命令：右侧代码块的查看终端入口与中央交互式 Terminal](docs/images/readme/conversation-terminal.png)
+
+*真实 Electron 验收截图（v0.1.131）：演示程序等待输入，用户在 Terminal 输入后得到回显。会话内容使用测试夹具，命令在真实本地 PTY 中执行。*
+
+[会话代码块运行命令](docs/features/conversation-command-run.md)
+
 ### 还可以做什么
 
 | 场景 | 你可以做的事 |
 | --- | --- |
-| 运行命令 | 使用工作空间内的 Terminal，或从支持的本地 Agent 会话代码块运行命令；沿用现有权限确认。[会话命令](docs/features/conversation-command-run.md) |
+| 查看模型用量 | 查看已观测的调用与 Token 用量，按工作空间、类别和模型分析。[模型用量](docs/features/model-usage.md) |
 | 连接自己的设备与数据 | 连接 USB / Wi-Fi ADB Android 真机，或只读查询用户配置的数据源。[Android](docs/features/agent-device.md) · [数据源](docs/features/data-sources.md) |
 | 继续远程工作 | 按需登录 CCLink，连接已配对的远程 Agent，使用远程文件、会话和 Terminal；本地工作台独立可用。 |
 
