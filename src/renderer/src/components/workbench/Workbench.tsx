@@ -9,8 +9,6 @@ import { WorkbenchContent } from './WorkbenchContent'
 import { useBrowserEvents } from './use-browser-events'
 import { useWorkbenchBounds } from './use-workbench-bounds'
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
-import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
-import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 import { useCommandStore } from '../../stores/command-store'
 import { useToastStore } from '../common/Toast'
 import {
@@ -34,23 +32,13 @@ import {
 import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
 import { normalizeBrowserAddress } from '../../features/browser/browser-address'
 
-interface WorkbenchProps {
-  tabCreateMenuOpen: boolean
-  onTabCreateMenuOpenChange: (open: boolean) => void
-}
-
-export function Workbench({
-  tabCreateMenuOpen,
-  onTabCreateMenuOpenChange,
-}: WorkbenchProps): React.ReactElement {
+export function Workbench(): React.ReactElement {
   const allTabs = useTabStore((s) => s.tabs)
   const placements = useWorkbenchWindowStore((s) => s.placements)
   const tabs = allTabs.filter((tab) => !isDetachedFromMain(placements[tab.id]))
   const activeTabId = useTabStore((s) => s.activeTabId)
   const activateTab = useTabStore((s) => s.activateTab)
   const reorderTabs = useTabStore((s) => s.reorderTabs)
-  const openTab = useTabStore((s) => s.openTab)
-  const createConversation = useAgentStore((s) => s.createConversation)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const executeCommand = useCommandStore((s) => s.executeCommand)
@@ -166,15 +154,20 @@ export function Workbench({
     ],
   )
 
-  const openNewDocument = useCallback((): void => {
-    openTab({ type: 'editor', title: '未命名.md', icon: '📄', forceNew: true })
-  }, [openTab])
-
-  const openNewBrowser = useCallback((): void => {
-    void openDefaultBrowserTab(activeWorkspaceRef).then((result) => {
-      setAddressFocusRequestTabId(result.tabId)
-    })
-  }, [activeWorkspaceRef])
+  const createTab = useCallback(
+    async (commandId: 'browser.newTab' | 'workbench.newTab' | 'terminal.newTab'): Promise<void> => {
+      const result = await executeCommand(commandId, { source: 'toolbar' })
+      if (!result.ok) {
+        showToast(result.message ?? '新建失败，请重试', 'error')
+        return
+      }
+      if (commandId === 'browser.newTab') {
+        const active = useTabStore.getState().getActiveTab()
+        if (active?.type === 'browser') setAddressFocusRequestTabId(active.id)
+      }
+    },
+    [executeCommand, showToast],
+  )
 
   const handleAddressFocusHandled = useCallback((tabId: string): void => {
     setAddressFocusRequestTabId((requestedTabId) =>
@@ -187,40 +180,6 @@ export function Workbench({
       setAddressFocusRequestTabId(null)
     }
   }, [activeTabId, addressFocusRequestTabId])
-
-  const openNewConversation = useCallback((): void => {
-    const conversationId = createConversation({
-      surface: 'workbench-tab',
-      runtime: {
-        location: 'local',
-        transport: 'local',
-        backend: 'cclink-studio-agent',
-        workspaceRef: activeWorkspaceRef,
-      },
-      activate: false,
-    })
-    openTab({
-      type: 'conversation',
-      title: '新工作会话',
-      icon: '🤖',
-      conversation: {
-        surface: 'workbench-tab',
-        runtime: {
-          location: 'local',
-          transport: 'local',
-          backend: 'cclink-studio-agent',
-          workspaceRef: activeWorkspaceRef,
-        },
-        sessionId: conversationId,
-      },
-    })
-  }, [activeWorkspaceRef, createConversation, openTab])
-
-  const openNewTerminal = useCallback((): void => {
-    const draft = buildTerminalTabDraft(activeWorkspaceRef)
-    openTab(draft)
-    void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
-  }, [activeWorkspaceRef, openTab])
 
   const handleCloseTab = useCallback((tabId: string): void => {
     void closeTabWithDraftPolicy(tabId)
@@ -351,18 +310,16 @@ export function Workbench({
         onDetachDragStart={handleDetachDragStart}
         onDetachDragCancel={handleDetachDragCancel}
         onDetach={handleDetachTab}
-        onNewDocument={openNewDocument}
-        onNewBrowser={openNewBrowser}
-        onNewConversation={openNewConversation}
-        onNewTerminal={openNewTerminal}
+        onNewDocument={() => void createTab('workbench.newTab')}
+        onNewBrowser={() => void createTab('browser.newTab')}
+        onNewTerminal={() => void createTab('terminal.newTab')}
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
-        createMenuOpen={tabCreateMenuOpen}
-        onCreateMenuOpenChange={onTabCreateMenuOpenChange}
         conversationDropActive={conversationDropActive}
       />
 
       {isBrowserTab && activeTabId && (
         <BrowserToolbar
+          key={activeTabId}
           tabId={activeTabId}
           tab={activeTab}
           browserState={activeBrowserState}

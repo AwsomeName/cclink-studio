@@ -11,7 +11,6 @@ const dismissableSurfaceFiles = [
   '../update/UpdatePanel.tsx',
   '../workbench/BrowserToolbar.tsx',
   '../workbench/MarkdownEditor.tsx',
-  '../workbench/TabBar.tsx',
   '../../features/context-actions/ContextMenuHost.tsx',
 ] as const
 

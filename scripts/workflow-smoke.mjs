@@ -99,11 +99,12 @@ async function assertMarkdownEditorFocus(page, message) {
   assert(activeElement.insideEditor, `${message}: ${JSON.stringify(activeElement)}`)
 }
 
-async function createTabFromMenu(page, label) {
-  await page.locator('.tab-new-button').first().click()
-  const menu = page.locator('.tab-create-menu')
-  await menu.waitFor({ timeout: 10_000 })
-  await menu.locator('button', { hasText: label }).first().click()
+async function createTabFromToolbar(page, label) {
+  const name = label === 'Markdown 草稿' ? '新建 Markdown 草稿' : `新建 ${label}`
+  await page
+    .getByRole('group', { name: '新建', exact: true })
+    .getByRole('button', { name, exact: true })
+    .click()
 }
 
 async function restoreWorkspaceSettings() {
@@ -602,7 +603,7 @@ async function main() {
     )
     await page.keyboard.press('Escape')
 
-    await createTabFromMenu(page, 'Terminal')
+    await createTabFromToolbar(page, 'Terminal')
     const terminalTextarea = page.locator('.terminal-pty-surface .xterm-helper-textarea').first()
     await terminalTextarea.waitFor({ state: 'attached', timeout: 15_000 })
     await terminalTextarea.focus()
@@ -1628,7 +1629,7 @@ async function main() {
       await page.locator('[data-context-action="message.copy"]').waitFor({ timeout: 10_000 })
       await page.keyboard.press('Escape')
 
-      await createTabFromMenu(page, 'Terminal')
+      await createTabFromToolbar(page, 'Terminal')
       const terminal = page.locator('.terminal-pty-shell').first()
       await terminal.waitFor({ timeout: 15_000 })
       await terminal.click({ button: 'right' })

@@ -72,7 +72,6 @@ function MainLayout(): React.ReactElement {
     if (workspaceReady) return startMarkdownAutosave()
   }, [workspaceReady, activeWorkspaceRef])
   const contextMenuOpen = useContextMenuStore((s) => s.open)
-  const [tabCreateMenuOpen, setTabCreateMenuOpen] = useState(false)
   const [panelResizing, setPanelResizing] = useState(false)
   const [resizePreview, setResizePreview] = useState<{
     area: 'sidebar' | 'agent'
@@ -162,7 +161,7 @@ function MainLayout(): React.ReactElement {
   useBrowserOpenRequests(workspaceReady)
   useAgentWebResourceLaunchRequests(workspaceReady)
   useBrowserViewLifecycle(
-    agentInCenter || floatingSurfaceOpen || panelResizing || contextMenuOpen || tabCreateMenuOpen
+    agentInCenter || floatingSurfaceOpen || panelResizing || contextMenuOpen
       ? undefined
       : activeTab,
     tabs,
@@ -349,10 +348,7 @@ function MainLayout(): React.ReactElement {
           <ErrorBoundary
             fallback={(e, retry) => <PanelErrorFallback error={e} retry={retry} title="主区域" />}
           >
-            <Workbench
-              tabCreateMenuOpen={tabCreateMenuOpen}
-              onTabCreateMenuOpenChange={setTabCreateMenuOpen}
-            />
+            <Workbench />
           </ErrorBoundary>
         )}
 

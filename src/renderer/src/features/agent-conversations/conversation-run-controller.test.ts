@@ -148,7 +148,7 @@ describe('conversation-run-controller', () => {
 
     await expect(controller.send('打开百度站长')).resolves.toMatchObject({
       status: 'failed',
-      error: expect.stringContaining('登录完成，保存账号和登录状态'),
+      error: expect.stringContaining('保存账号'),
     })
     expect(store.addSystemMessage).toHaveBeenCalledWith(
       expect.stringContaining('Agent 不能操作'),

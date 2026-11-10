@@ -187,7 +187,7 @@ export function createConversationRunController({
     if (draftTab) {
       const error =
         `“${draftTab.title || '当前浏览器'}”还是未保存的登录草稿，Agent 不能操作。` +
-        '请先在浏览器顶部点击“登录完成，保存账号和登录状态”，保存后再发送。'
+        '请先在浏览器顶部点击“保存账号”，保存后再发送。'
       store.addSystemMessage(error, conversationId)
       return { status: 'failed', error }
     }

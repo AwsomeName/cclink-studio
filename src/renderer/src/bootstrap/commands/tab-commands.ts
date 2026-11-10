@@ -5,6 +5,8 @@ import { openDefaultBrowserTab } from '../../features/web-resources/open-default
 import { closeTabWithDraftPolicy } from '../../utils/close-tab'
 import { isDetachedFromMain, useWorkbenchWindowStore } from '../../stores/workbench-window-store'
 import { moveBrowserTabToNewWindow } from '../../utils/move-browser-tab-to-window'
+import { buildTerminalTabDraft } from '../../utils/terminal-tab'
+import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
 
 export function createTabCommands(): Command[] {
   return [
@@ -28,6 +30,16 @@ export function createTabCommands(): Command[] {
       label: '新建浏览器页',
       category: '浏览器',
       action: () => openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef),
+    },
+    {
+      id: 'terminal.newTab',
+      label: '新建 Terminal',
+      category: 'Terminal',
+      action: () => {
+        const draft = buildTerminalTabDraft(useWorkspaceStore.getState().activeWorkspaceRef)
+        useTabStore.getState().openTab(draft)
+        void recordTerminalLifecycleEvent(draft.terminal, 'created', 'Terminal Tab 已创建')
+      },
     },
     {
       id: 'workbench.closeTab',

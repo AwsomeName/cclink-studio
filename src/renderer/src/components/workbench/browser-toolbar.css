@@ -1,0 +1,345 @@
+.browser-toolbar-shell {
+  flex: 0 0 auto;
+  min-width: 0;
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.browser-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 8px;
+}
+
+.browser-toolbar-shell button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.browser-toolbar-shell button:hover {
+  color: var(--text-active);
+  background: var(--bg-hover);
+}
+
+.browser-toolbar-shell button:focus-visible {
+  outline: 1px solid var(--text-accent);
+  outline-offset: -1px;
+}
+
+.browser-toolbar-shell button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.browser-toolbar-shell button[aria-expanded='true'],
+.browser-toolbar-shell button.active {
+  background: var(--bg-active);
+  color: var(--text-active);
+}
+
+.browser-address-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+  min-width: 60px;
+  height: 30px;
+  margin: 0 4px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+}
+
+.browser-address-field > svg {
+  flex-shrink: 0;
+}
+.browser-address-field:focus-within {
+  border-color: var(--text-accent);
+}
+
+.browser-address-protocol {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 9px;
+  line-height: 14px;
+  user-select: none;
+}
+
+.browser-address-protocol.plain-http {
+  color: var(--status-warning, #cca35b);
+  background: color-mix(in srgb, var(--status-warning, #cca35b) 12%, transparent);
+}
+
+.url-input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.browser-toolbar .browser-zoom-summary {
+  min-width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+.zoom-mode-label {
+  color: var(--text-accent);
+  white-space: nowrap;
+}
+.browser-toolbar .browser-account-button {
+  border-color: var(--border-color);
+}
+.browser-account-button span {
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.browser-more-button {
+  letter-spacing: 1px;
+}
+
+.browser-toolbar-expansion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(300px, 42vh);
+  overflow: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-secondary);
+}
+
+.browser-expansion-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.browser-expansion-heading strong {
+  line-height: 24px;
+  font-weight: 600;
+}
+.browser-expansion-heading p {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.browser-resource-save-fields,
+.browser-resource-save-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.browser-resource-save-fields input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.browser-resource-save-fields input:focus {
+  border-color: var(--text-accent);
+  outline: none;
+}
+.browser-resource-save-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+.browser-resource-save-actions button {
+  border-color: var(--border-color);
+}
+.browser-toolbar-shell button.primary {
+  color: var(--button-primary-foreground, #fff);
+  background: var(--button-primary-background, #0e639c);
+}
+.browser-resource-save-error {
+  margin: 0;
+  color: var(--status-error, #f47174);
+  font-size: 12px;
+}
+
+.browser-options-controls,
+.browser-options-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+}
+.browser-options-actions {
+  gap: 8px;
+}
+.browser-control-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-right: 5px;
+}
+.browser-zoom-group,
+.browser-device-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.browser-zoom-value {
+  box-sizing: border-box;
+  width: 102px;
+  justify-content: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.browser-zoom-value:focus-within {
+  border-color: var(--text-accent);
+}
+.zoom-percent-input {
+  width: 32px;
+  border: 0;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.browser-environment-badge {
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.browser-toolbar-shell .browser-forward-compact {
+  display: none;
+}
+
+.browser-find-bar {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  height: 30px;
+  margin: 0 4px;
+  padding: 0 3px 0 8px;
+  border: 1px solid var(--text-accent);
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.browser-find-bar input {
+  flex: 1;
+  min-width: 30px;
+  width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.browser-find-count,
+.browser-find-error {
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.browser-find-error {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--status-error);
+}
+.browser-toolbar-shell .browser-find-text-button {
+  width: 22px;
+  min-width: 22px;
+  padding: 0;
+  height: 24px;
+}
+
+@container workbench (max-width: 720px) {
+  .browser-account-button span {
+    display: none;
+  }
+  .browser-toolbar .browser-zoom-summary {
+    min-width: 96px;
+    display: none;
+  }
+}
+
+@container workbench (max-width: 560px) {
+  .browser-toolbar .browser-forward-button {
+    display: none;
+  }
+  .browser-toolbar-shell .browser-forward-compact {
+    display: inline-flex;
+  }
+  .browser-toolbar {
+    gap: 3px;
+    padding: 0 6px;
+  }
+  .browser-address-field,
+  .browser-find-bar {
+    margin: 0 2px;
+  }
+  .browser-toolbar-expansion {
+    padding: 10px;
+  }
+}
+
+@container workbench (max-width: 400px) {
+  .browser-address-field > svg,
+  .browser-address-protocol {
+    display: none;
+  }
+  .browser-toolbar:has(.browser-find-bar) .browser-account-button {
+    display: none;
+  }
+}

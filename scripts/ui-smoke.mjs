@@ -7,6 +7,7 @@ import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
+import { checkBrowserToolbar } from './browser-toolbar-check.mjs'
 
 const { rootDir, runDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const workspaceFixtureRoot = join(
@@ -19,6 +20,9 @@ const webAffairsOnly = process.argv.includes('--web-affairs-only')
 const globalWebResourcesOnly = process.argv.includes('--global-web-resources-only')
 const gitOnly = process.argv.includes('--git-only')
 const dismissableOnly = process.argv.includes('--dismissable-only')
+const browserToolbarOnly = process.argv.includes('--browser-toolbar-only')
+const browserToolbarCheck =
+  'browser toolbar and creation actions remain usable with narrow panes and many tabs'
 const tabCreateOnly = process.argv.includes('--tab-create-only')
 const pdfOnly = process.argv.includes('--pdf-only')
 const settingsOnly = process.argv.includes('--settings-only')
@@ -52,7 +56,12 @@ const gitChecks = new Set([
   'Git compact commit menu executes commit and push actions',
 ])
 const dismissableChecks = new Set(['Escape closes only the topmost Studio popup'])
-const tabCreateChecks = new Set(['tab create menu opens editor, browser, and terminal tabs'])
+const tabCreateChecks = new Set(['direct create actions open editor, browser, and terminal tabs'])
+const browserToolbarChecks = new Set([
+  ...globalWebResourcesChecks,
+  ...tabCreateChecks,
+  browserToolbarCheck,
+])
 const pdfChecks = new Set([
   'main renderer enforces its CSP source boundary',
   'first screen has no login wall',
@@ -178,6 +187,7 @@ async function runCheck(name, fn, options = {}) {
   if (globalWebResourcesOnly && !globalWebResourcesChecks.has(name)) return
   if (gitOnly && !gitChecks.has(name)) return
   if (dismissableOnly && !dismissableChecks.has(name)) return
+  if (browserToolbarOnly && !browserToolbarChecks.has(name)) return
   if (tabCreateOnly && !tabCreateChecks.has(name)) return
   if (pdfOnly && !pdfChecks.has(name)) return
   if (settingsOnly && !settingsChecks.has(name)) return
@@ -262,11 +272,12 @@ async function ensureActivityPanel(page, panelId, title) {
   }
 }
 
-async function createTabFromMenu(page, label) {
-  await page.locator('.tab-new-button').first().click()
-  const menu = page.locator('.tab-create-menu')
-  await menu.waitFor({ timeout: 10_000 })
-  await menu.locator('button', { hasText: label }).first().click()
+async function createTabFromToolbar(page, label) {
+  const name = label === 'Markdown 草稿' ? '新建 Markdown 草稿' : `新建 ${label}`
+  await page
+    .getByRole('group', { name: '新建', exact: true })
+    .getByRole('button', { name, exact: true })
+    .click()
 }
 
 async function runGit(cwd, args) {
@@ -2354,11 +2365,11 @@ async function main() {
       'ordinary browser tabs did not receive independent saveable Profiles',
     )
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      (await page.locator('.browser-account-button').getAttribute('data-mode')) === 'account-draft',
       'saveable ordinary browser mode was not visible in the toolbar',
     )
     assert(
-      (await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).count()) === 1,
+      (await page.getByRole('button', { name: '保存账号和登录状态' }).count()) === 1,
       'ordinary browser did not expose the account save action',
     )
     await page.evaluate(
@@ -2441,7 +2452,7 @@ async function main() {
       { timeout: 10_000 },
     )
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      (await page.locator('.browser-account-button').getAttribute('data-mode')) === 'account-draft',
       'Agent link without an account did not use the saveable ordinary browser',
     )
     assert(
@@ -2502,7 +2513,7 @@ async function main() {
     assert(draftBrowser, 'ordinary browser did not create a saveable login session')
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
     assert(
-      (await page.locator('.browser-environment-badge').innerText()) === '普通浏览器 · 登录可保存',
+      (await page.locator('.browser-account-button').getAttribute('data-mode')) === 'account-draft',
       'ordinary saveable browser mode was not visible in the toolbar',
     )
     assert(
@@ -2592,7 +2603,7 @@ async function main() {
       'login marker cookie was not present before saving',
     )
     const saveLoginButton = page.getByRole('button', {
-      name: '登录完成，保存账号和登录状态',
+      name: '保存账号和登录状态',
     })
     await saveLoginButton.waitFor({ state: 'visible', timeout: 10_000 })
     await saveLoginButton.click()
@@ -2639,7 +2650,7 @@ async function main() {
       { timeout: 30_000 },
     )
     await page
-      .locator('.browser-environment-badge', { hasText: `账号 · ${accountLabel}` })
+      .getByRole('button', { name: `当前登录环境：账号 · ${accountLabel}`, exact: true })
       .waitFor({ state: 'visible', timeout: 10_000 })
     const runtimeAfterCommit = await page.evaluate(
       (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
@@ -2751,7 +2762,7 @@ async function main() {
         accountFixtureUrl,
         { timeout: 10_000 },
       )
-      await page.getByRole('button', { name: '登录完成，保存账号和登录状态' }).click()
+      await page.getByRole('button', { name: '保存账号和登录状态' }).click()
       const accountNameInput = page.getByLabel('账号手机号或平台用户名')
       await accountNameInput.fill('')
       await page.getByRole('button', { name: '保存', exact: true }).click()
@@ -2802,6 +2813,7 @@ async function main() {
       .locator('.web-resource-row-open')
       .evaluate((element) => element.click())
     await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await page.getByRole('button', { name: '更多浏览器操作', exact: true }).click()
     const zoomInput = page.getByLabel('浏览器缩放百分比')
     await zoomInput.waitFor({ state: 'visible', timeout: 10_000 })
     const zoomGroup = page.locator('.browser-zoom-group')
@@ -2893,7 +2905,7 @@ async function main() {
         Math.abs(manualZoomGroupBounds.width - fitZoomGroupBounds.width) <= 1,
       'zoom controls shifted horizontally when fit mode changed to manual mode',
     )
-    await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
+    await page.locator('.browser-toolbar-shell').getByRole('button', { name: '适应宽度' }).click()
     await waitForAsyncFunction(
       page,
       async () => {
@@ -2938,7 +2950,7 @@ async function main() {
       reloadTarget,
       { timeout: 10_000 },
     )
-    await page.locator('.browser-toolbar').getByRole('button', { name: '适应宽度' }).click()
+    await page.locator('.browser-toolbar-shell').getByRole('button', { name: '适应宽度' }).click()
     await waitForAsyncFunction(
       page,
       async () => {
@@ -3093,7 +3105,7 @@ async function main() {
     )
 
     const tabCountBeforeDraft = await page.locator('.tab').count()
-    await createTabFromMenu(page, 'Markdown 草稿')
+    await createTabFromToolbar(page, 'Markdown 草稿')
     await page.locator('.markdown-editor-wrapper').waitFor({ state: 'visible', timeout: 10_000 })
     const tabCountWithDraft = await page.locator('.tab').count()
     assert(tabCountWithDraft === tabCountBeforeDraft + 1, 'draft tab did not open')
@@ -3520,9 +3532,9 @@ async function main() {
     return 'settings search, truthful Agent API options, and stable/beta update track projection'
   })
 
-  await runCheck('tab create menu opens editor, browser, and terminal tabs', async () => {
+  await runCheck('direct create actions open editor, browser, and terminal tabs', async () => {
     const initialEditorCount = await page.locator('.tab-title', { hasText: '未命名.md' }).count()
-    await createTabFromMenu(page, 'Markdown 草稿')
+    await createTabFromToolbar(page, 'Markdown 草稿')
     await page.waitForFunction(
       (count) =>
         Array.from(document.querySelectorAll('.tab-title')).filter((node) =>
@@ -3724,7 +3736,7 @@ async function main() {
     )
 
     const initialTerminalCount = await page.locator('.tab-title', { hasText: 'Terminal' }).count()
-    await createTabFromMenu(page, 'Terminal')
+    await createTabFromToolbar(page, 'Terminal')
     await page.waitForFunction(
       (count) =>
         Array.from(document.querySelectorAll('.tab-title')).filter((node) =>
@@ -3790,6 +3802,10 @@ async function main() {
     )
     return 'editor/browser/terminal, recent-address new tab, one-click terminal restart, and update modal native-view occlusion'
   })
+
+  await runCheck(browserToolbarCheck, () =>
+    checkBrowserToolbar({ page, rootDir, runDir, webFixtureOrigin, waitForAsyncFunction }),
+  )
 
   await runCheck('no paid UI appears during smoke', async () => {
     const text = await page.locator('body').innerText()

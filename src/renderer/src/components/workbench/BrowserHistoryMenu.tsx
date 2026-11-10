@@ -5,10 +5,14 @@ import { FloatingSurface } from '../common/FloatingSurface'
 import { notifyBrowserHistoryChanged } from '../../features/browser/browser-history-events'
 
 interface BrowserHistoryMenuProps {
+  showLabel?: boolean
   onOpenUrl: (url: string) => void
 }
 
-export function BrowserHistoryMenu({ onOpenUrl }: BrowserHistoryMenuProps): React.ReactElement {
+export function BrowserHistoryMenu({
+  onOpenUrl,
+  showLabel = false,
+}: BrowserHistoryMenuProps): React.ReactElement {
   const [open, setOpen] = useState(false)
   const [history, setHistory] = useState<BrowserHistoryEntry[]>([])
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -35,6 +39,7 @@ export function BrowserHistoryMenu({ onOpenUrl }: BrowserHistoryMenuProps): Reac
     <div className="browser-history-menu" ref={wrapRef}>
       <button onClick={toggle} title="浏览历史">
         <IconHistory size={16} />
+        {showLabel && <span>浏览历史</span>}
       </button>
       <FloatingSurface
         anchorRef={wrapRef}

@@ -6,6 +6,10 @@ import { notifyWebResourcesChanged } from '../../features/web-resources/web-reso
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   IconArrowLeft,
+  IconChevronDown,
+  IconClose,
+  IconGlobe,
+  IconUser,
   IconArrowRight,
   IconFitWidth,
   IconMobile,
@@ -24,6 +28,7 @@ import {
 } from '../../features/browser/browser-find-controller'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { getBrowserTabMode } from '../../features/browser/browser-tab-mode'
+import './browser-toolbar.css'
 
 interface BrowserToolbarProps {
   tabId: string
@@ -103,7 +108,10 @@ export function BrowserToolbar({
   onNavigate,
   onOpenUrl,
 }: BrowserToolbarProps): React.ReactElement {
-  const [showSave, setShowSave] = useState(false)
+  const [expandedPanel, setExpandedPanel] = useState<'save' | 'options' | null>(null)
+  const panelTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const moreButtonRef = useRef<HTMLButtonElement>(null)
+  const zoomInputRef = useRef<HTMLInputElement>(null)
   const [displayName, setDisplayName] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -120,13 +128,45 @@ export function BrowserToolbar({
   const urlCompositionActiveRef = useRef(false)
   const navigateAfterCompositionRef = useRef(false)
   const cancelZoomCommitRef = useRef(false)
+  const zoomEditedRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
   const environmentLabel = getBrowserEnvironmentLabel(tab, accountLabel)
 
-  useEscapeDismiss(showSave, () => setShowSave(false))
+  const closePanel = (): void => {
+    if (saving) return
+    setExpandedPanel(null)
+    const trigger = panelTriggerRef.current
+    const visibleTrigger = trigger?.getClientRects().length ? trigger : moreButtonRef.current
+    visibleTrigger?.focus({ preventScroll: true })
+  }
+  useEscapeDismiss(expandedPanel !== null, () => {
+    // Escape dismisses the expansion before the input receives its own key event.
+    // Discard an unsubmitted percentage before restoring focus triggers blur.
+    cancelZoomCommitRef.current = true
+    setZoomDraft(String(zoomPercent))
+    setEditingZoom(false)
+    closePanel()
+  })
+
+  const toggleOptions = (trigger: HTMLButtonElement, focusZoom = false): void => {
+    if (saving) return
+    panelTriggerRef.current = trigger
+    setExpandedPanel((current) => (current === 'options' ? null : 'options'))
+    if (focusZoom && expandedPanel !== 'options') {
+      requestAnimationFrame(() => {
+        zoomInputRef.current?.focus()
+        zoomInputRef.current?.select()
+      })
+    }
+  }
+  const addressProtocol = /^https:/i.test(browserState?.url ?? '')
+    ? 'HTTPS'
+    : /^http:/i.test(browserState?.url ?? '')
+      ? 'HTTP'
+      : null
 
   useEffect(() => {
-    setShowSave(false)
+    setExpandedPanel(null)
     setDisplayName('')
     setSaveError(null)
     setDuplicateAccountId(null)
@@ -199,14 +239,15 @@ export function BrowserToolbar({
   }, [editingZoom, zoomPercent])
 
   const commitZoom = (): void => {
-    if (cancelZoomCommitRef.current) {
-      cancelZoomCommitRef.current = false
-      setEditingZoom(false)
+    const shouldCommit = zoomEditedRef.current && !cancelZoomCommitRef.current
+    zoomEditedRef.current = false
+    cancelZoomCommitRef.current = false
+    setEditingZoom(false)
+    if (!shouldCommit) {
       setZoomDraft(String(zoomPercent))
       return
     }
     const percent = normalizeBrowserZoomPercent(zoomDraft)
-    setEditingZoom(false)
     if (percent === null) {
       setZoomDraft(String(zoomPercent))
       return
@@ -258,6 +299,7 @@ export function BrowserToolbar({
         browserProfile: result.data.account.browserProfileId,
         webResourceRef: { accountId: result.data.account.id },
       })
+      setExpandedPanel(null)
       notifyWebResourcesChanged()
       showToast('已保存到全局网站与账号', 'success')
       console.info('[WebResources] 网站账号保存成功', {
@@ -278,7 +320,7 @@ export function BrowserToolbar({
     if (!draftId || tab.workspaceRef?.kind !== 'local' || tab.webResourceRef) return
     setDisplayName((current) => current || inferWebResourceDisplayName(browserState))
     setSaveError(null)
-    setShowSave(true)
+    setExpandedPanel('save')
   }
 
   const openExistingAccount = async (): Promise<void> => {
@@ -303,6 +345,7 @@ export function BrowserToolbar({
         browserProfile: launch.data.browserProfileId,
         webResourceRef: launch.data.webResourceRef,
       })
+      setExpandedPanel(null)
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -311,159 +354,254 @@ export function BrowserToolbar({
   }
 
   return (
-    <div className="browser-toolbar">
-      <button onClick={() => window.cclinkStudio.browser.goBack(tabId)} title="后退">
-        <IconArrowLeft size={16} />
-      </button>
-      <button onClick={() => window.cclinkStudio.browser.goForward(tabId)} title="前进">
-        <IconArrowRight size={16} />
-      </button>
-      <button onClick={() => window.cclinkStudio.browser.reload(tabId)} title="刷新">
-        <IconRefresh size={16} />
-      </button>
-      <BrowserHistoryMenu onOpenUrl={onOpenUrl} />
-      {findSession?.open ? (
-        <div className="browser-find-bar" role="search">
-          <input
-            ref={findInputRef}
-            value={findSession.query}
-            onChange={(event) => updateFindQuery(event.target.value)}
-            onFocus={() => void window.cclinkStudio.window.focusRenderer()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void runBrowserFind(
-                  tabId,
-                  {
-                    forward: !event.shiftKey,
-                    findNext: findSession.matches > 0,
-                  },
-                  event.currentTarget.value,
-                )
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                void closeBrowserFind(tabId)
-              }
-            }}
-            placeholder="在网页中查找"
-            aria-label="在网页中查找"
-          />
-          <span className={findSession.error ? 'browser-find-error' : 'browser-find-count'}>
-            {findSession.error
-              ? findSession.error
-              : findSession.query
-                ? `${findSession.activeMatchOrdinal}/${findSession.matches}`
-                : '0/0'}
+    <div className="browser-toolbar-shell">
+      <div className="browser-toolbar" role="toolbar" aria-label="浏览器工具栏">
+        <button
+          type="button"
+          onClick={() => window.cclinkStudio.browser.goBack(tabId)}
+          title="后退"
+          aria-label="后退"
+        >
+          <IconArrowLeft size={16} />
+        </button>
+        <button
+          type="button"
+          className="browser-forward-button"
+          onClick={() => window.cclinkStudio.browser.goForward(tabId)}
+          title="前进"
+          aria-label="前进"
+        >
+          <IconArrowRight size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={() => window.cclinkStudio.browser.reload(tabId)}
+          title="刷新"
+          aria-label="刷新"
+        >
+          <IconRefresh size={16} />
+        </button>
+        {findSession?.open ? (
+          <div className="browser-find-bar" role="search">
+            <input
+              ref={findInputRef}
+              value={findSession.query}
+              onChange={(event) => updateFindQuery(event.target.value)}
+              onFocus={() => void window.cclinkStudio.window.focusRenderer()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void runBrowserFind(
+                    tabId,
+                    {
+                      forward: !event.shiftKey,
+                      findNext: findSession.matches > 0,
+                    },
+                    event.currentTarget.value,
+                  )
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  void closeBrowserFind(tabId)
+                }
+              }}
+              placeholder="在网页中查找"
+              aria-label="在网页中查找"
+            />
+            <span className={findSession.error ? 'browser-find-error' : 'browser-find-count'}>
+              {findSession.error
+                ? findSession.error
+                : findSession.query
+                  ? `${findSession.activeMatchOrdinal}/${findSession.matches}`
+                  : '0/0'}
+            </span>
+            <button
+              type="button"
+              className="browser-find-text-button"
+              title="上一个匹配项"
+              aria-label="上一个匹配项"
+              onClick={() => void runBrowserFind(tabId, { forward: false, findNext: true })}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="browser-find-text-button"
+              title="下一个匹配项"
+              aria-label="下一个匹配项"
+              onClick={() => void runBrowserFind(tabId, { forward: true, findNext: true })}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="browser-find-text-button"
+              title="关闭查找"
+              aria-label="关闭查找"
+              onClick={() => void closeBrowserFind(tabId)}
+            >
+              ×
+            </button>
+          </div>
+        ) : (
+          <div className="browser-address-field">
+            <IconGlobe size={15} />
+            {addressProtocol && (
+              <span
+                className={`browser-address-protocol ${addressProtocol === 'HTTP' ? 'plain-http' : ''}`}
+                title={addressProtocol === 'HTTP' ? 'HTTP 连接（未加密）' : 'HTTPS 连接'}
+              >
+                {addressProtocol}
+              </span>
+            )}
+            <input
+              ref={urlInputRef}
+              className="url-input"
+              value={browserState?.urlInput ?? ''}
+              onChange={(event) => onUrlInputChange(tabId, event.target.value)}
+              onCompositionStart={() => {
+                urlCompositionActiveRef.current = true
+                navigateAfterCompositionRef.current = false
+              }}
+              onCompositionEnd={(event) => {
+                urlCompositionActiveRef.current = false
+                if (!navigateAfterCompositionRef.current) return
+                navigateAfterCompositionRef.current = false
+                onNavigate(event.currentTarget.value)
+              }}
+              onFocus={() => {
+                void window.cclinkStudio.window.focusRenderer()
+              }}
+              onKeyDown={(event) => {
+                const primaryModifier = event.metaKey || event.ctrlKey
+                const key = event.key.toLowerCase()
+
+                if (
+                  shouldQueueBrowserAddressNavigation({
+                    key: event.key,
+                    nativeIsComposing: event.nativeEvent.isComposing,
+                    compositionActive: urlCompositionActiveRef.current,
+                  })
+                ) {
+                  navigateAfterCompositionRef.current = true
+                  return
+                }
+
+                if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
+                  event.preventDefault()
+                  event.currentTarget.select()
+                  return
+                }
+
+                if (primaryModifier && !event.altKey && !event.shiftKey && key === 'c') {
+                  const input = event.currentTarget
+                  const start = input.selectionStart ?? 0
+                  const end = input.selectionEnd ?? start
+                  if (end > start) {
+                    event.preventDefault()
+                    const selectedText = input.value.slice(start, end)
+                    void copyTextToClipboard(selectedText).catch((error) => {
+                      console.error('[BrowserToolbar] 地址复制失败:', error)
+                    })
+                  }
+                  return
+                }
+
+                if (
+                  shouldNavigateBrowserAddress({
+                    key: event.key,
+                    nativeIsComposing: event.nativeEvent.isComposing,
+                    compositionActive: urlCompositionActiveRef.current,
+                  })
+                ) {
+                  event.preventDefault()
+                  onNavigate(event.currentTarget.value)
+                }
+              }}
+              placeholder="输入网址"
+              aria-label="浏览器地址"
+            />
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="browser-zoom-summary"
+          title="网页缩放与显示选项"
+          aria-label="网页缩放与显示选项"
+          aria-expanded={expandedPanel === 'options'}
+          aria-controls={`browser-options-${tabId}`}
+          onClick={(event) => toggleOptions(event.currentTarget, true)}
+        >
+          {browserState?.zoomMode === 'fit' && <span className="zoom-mode-label">自动</span>}
+          <span>{zoomPercent}%</span>
+          <IconChevronDown size={12} />
+        </button>
+        <button
+          type="button"
+          className="browser-account-button"
+          data-mode={getBrowserTabMode(tab)}
+          title={draftId ? '保存账号和登录状态' : `当前登录环境：${environmentLabel}`}
+          aria-label={draftId ? '保存账号和登录状态' : `当前登录环境：${environmentLabel}`}
+          aria-expanded={draftId ? expandedPanel === 'save' : expandedPanel === 'options'}
+          aria-controls={draftId ? `browser-save-${tabId}` : `browser-options-${tabId}`}
+          disabled={saving}
+          onClick={(event) => {
+            panelTriggerRef.current = event.currentTarget
+            if (draftId) {
+              if (expandedPanel === 'save') closePanel()
+              else prepareSave()
+            } else toggleOptions(event.currentTarget)
+          }}
+        >
+          <IconUser size={16} />
+          <span>
+            {draftId ? '保存账号' : tab.webResourceRef ? accountLabel || tab.title : '默认环境'}
           </span>
-          <button
-            type="button"
-            className="browser-find-text-button"
-            title="上一个匹配项"
-            aria-label="上一个匹配项"
-            onClick={() => void runBrowserFind(tabId, { forward: false, findNext: true })}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            className="browser-find-text-button"
-            title="下一个匹配项"
-            aria-label="下一个匹配项"
-            onClick={() => void runBrowserFind(tabId, { forward: true, findNext: true })}
-          >
-            ↓
-          </button>
-          <button
-            type="button"
-            className="browser-find-text-button"
-            title="关闭查找"
-            aria-label="关闭查找"
-            onClick={() => void closeBrowserFind(tabId)}
-          >
-            ×
-          </button>
-        </div>
-      ) : (
-        <input
-          ref={urlInputRef}
-          className="url-input"
-          value={browserState?.urlInput ?? ''}
-          onChange={(event) => onUrlInputChange(tabId, event.target.value)}
-          onCompositionStart={() => {
-            urlCompositionActiveRef.current = true
-            navigateAfterCompositionRef.current = false
-          }}
-          onCompositionEnd={(event) => {
-            urlCompositionActiveRef.current = false
-            if (!navigateAfterCompositionRef.current) return
-            navigateAfterCompositionRef.current = false
-            onNavigate(event.currentTarget.value)
-          }}
-          onFocus={() => {
-            void window.cclinkStudio.window.focusRenderer()
-          }}
-          onKeyDown={(event) => {
-            const primaryModifier = event.metaKey || event.ctrlKey
-            const key = event.key.toLowerCase()
+        </button>
+        <button
+          type="button"
+          ref={moreButtonRef}
+          className="browser-more-button"
+          title="更多浏览器操作"
+          aria-label="更多浏览器操作"
+          aria-expanded={expandedPanel === 'options'}
+          aria-controls={`browser-options-${tabId}`}
+          disabled={saving}
+          onClick={(event) => toggleOptions(event.currentTarget)}
+        >
+          <span aria-hidden="true">•••</span>
+        </button>
+      </div>
 
-            if (
-              shouldQueueBrowserAddressNavigation({
-                key: event.key,
-                nativeIsComposing: event.nativeEvent.isComposing,
-                compositionActive: urlCompositionActiveRef.current,
-              })
-            ) {
-              navigateAfterCompositionRef.current = true
-              return
-            }
-
-            if (primaryModifier && !event.altKey && !event.shiftKey && key === 'a') {
-              event.preventDefault()
-              event.currentTarget.select()
-              return
-            }
-
-            if (primaryModifier && !event.altKey && !event.shiftKey && key === 'c') {
-              const input = event.currentTarget
-              const start = input.selectionStart ?? 0
-              const end = input.selectionEnd ?? start
-              if (end > start) {
-                event.preventDefault()
-                const selectedText = input.value.slice(start, end)
-                void copyTextToClipboard(selectedText).catch((error) => {
-                  console.error('[BrowserToolbar] 地址复制失败:', error)
-                })
-              }
-              return
-            }
-
-            if (
-              shouldNavigateBrowserAddress({
-                key: event.key,
-                nativeIsComposing: event.nativeEvent.isComposing,
-                compositionActive: urlCompositionActiveRef.current,
-              })
-            ) {
-              event.preventDefault()
-              onNavigate(event.currentTarget.value)
-            }
-          }}
-          placeholder="输入 URL..."
-        />
-      )}
-
-      <span className="browser-environment-badge" title={`当前登录环境：${environmentLabel}`}>
-        {environmentLabel}
-      </span>
-
-      {draftId ? (
-        showSave ? (
-          <div className="browser-resource-save">
+      {expandedPanel === 'save' && draftId && (
+        <section
+          className="browser-toolbar-expansion browser-resource-save"
+          id={`browser-save-${tabId}`}
+          aria-label="保存当前登录环境"
+        >
+          <div className="browser-expansion-heading">
+            <div>
+              <strong>保存当前登录环境</strong>
+              <p>登录完成后，为这个账号命名。当前页面和登录状态会保留。</p>
+            </div>
+            <button
+              type="button"
+              title="关闭保存账号"
+              aria-label="关闭保存账号"
+              disabled={saving}
+              onClick={closePanel}
+            >
+              <IconClose size={14} />
+            </button>
+          </div>
+          <div className="browser-resource-save-fields">
             <input
               autoFocus
               maxLength={160}
               value={displayName}
+              disabled={saving}
+              onFocus={() => void window.cclinkStudio.window.focusRenderer()}
               onChange={(event) => {
                 setDisplayName(event.target.value)
                 if (saveError) setSaveError(null)
@@ -471,135 +609,181 @@ export function BrowserToolbar({
               aria-required="true"
               aria-invalid={Boolean(saveError)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void saveDraft()
-                if (event.key === 'Escape') setShowSave(false)
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  event.preventDefault()
+                  void saveDraft()
+                }
               }}
               placeholder="手机号或平台用户名（用于区分账号）"
               aria-label="账号手机号或平台用户名"
             />
-            {saveError ? <span title={saveError}>{saveError}</span> : null}
-            {duplicateAccountId ? (
-              <>
-                <button
-                  type="button"
-                  className="browser-resource-text-button"
-                  disabled={saving}
-                  onClick={() => void openExistingAccount()}
-                >
-                  打开已有账号
-                </button>
-                <button
-                  type="button"
-                  className="browser-resource-text-button primary"
-                  disabled={saving}
-                  onClick={() => void saveDraft('save-another')}
-                >
-                  作为另一个账号保存
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="browser-resource-text-button primary"
-                disabled={saving}
-                onClick={() => void saveDraft()}
-                title={!displayName.trim() ? '请输入账号显示名称' : '保存为全局账号'}
-              >
-                {saving ? '保存中…' : '保存'}
+            <div className="browser-resource-save-actions">
+              <button type="button" disabled={saving} onClick={closePanel}>
+                取消
               </button>
-            )}
+              {duplicateAccountId ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void openExistingAccount()}
+                  >
+                    打开已有账号
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={saving}
+                    onClick={() => void saveDraft('save-another')}
+                  >
+                    作为另一个账号保存
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={saving}
+                  onClick={() => void saveDraft()}
+                >
+                  {saving ? '保存中…' : '保存'}
+                </button>
+              )}
+            </div>
+          </div>
+          {saveError && (
+            <p className="browser-resource-save-error" role="alert">
+              {saveError}
+            </p>
+          )}
+        </section>
+      )}
+
+      {expandedPanel === 'options' && (
+        <section
+          className="browser-toolbar-expansion browser-options-panel"
+          id={`browser-options-${tabId}`}
+          aria-label="浏览器显示与操作"
+        >
+          <div className="browser-expansion-heading">
+            <strong>浏览器显示与操作</strong>
             <button
               type="button"
-              className="browser-resource-text-button"
-              disabled={saving}
-              onClick={() => setShowSave(false)}
+              title="关闭浏览器选项"
+              aria-label="关闭浏览器选项"
+              onClick={closePanel}
             >
-              返回
+              <IconClose size={14} />
             </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            className="browser-resource-text-button primary"
-            onClick={prepareSave}
-          >
-            登录完成，保存账号和登录状态
-          </button>
-        )
-      ) : null}
+          <div className="browser-options-controls">
+            <div className="browser-zoom-group" role="group" aria-label="网页缩放">
+              <span className="browser-control-label">缩放</span>
+              <button onClick={() => window.cclinkStudio.browser.zoomOut(tabId)} title="缩小">
+                <IconZoomOut size={16} />
+              </button>
+              <span
+                className="browser-zoom-value"
+                title={
+                  browserState?.zoomMode === 'fit'
+                    ? '当前为适应宽度自动缩放；输入百分比可切换为手动缩放'
+                    : '输入 30–300 之间的百分比'
+                }
+              >
+                {browserState?.zoomMode === 'fit' ? (
+                  <span className="zoom-mode-label">自动</span>
+                ) : null}
+                <input
+                  ref={zoomInputRef}
+                  className="zoom-percent-input"
+                  value={zoomDraft}
+                  inputMode="decimal"
+                  aria-label="浏览器缩放百分比"
+                  onFocus={(event) => {
+                    cancelZoomCommitRef.current = false
+                    zoomEditedRef.current = false
+                    setEditingZoom(true)
+                    event.currentTarget.select()
+                    void window.cclinkStudio.window.focusRenderer()
+                  }}
+                  onChange={(event) => {
+                    zoomEditedRef.current = true
+                    setZoomDraft(event.target.value)
+                  }}
+                  onBlur={commitZoom}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      event.currentTarget.blur()
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      cancelZoomCommitRef.current = true
+                      event.currentTarget.blur()
+                    }
+                  }}
+                />
+                <span className="zoom-percent-suffix">%</span>
+              </span>
+              <button onClick={() => window.cclinkStudio.browser.zoomIn(tabId)} title="放大">
+                <IconZoomIn size={16} />
+              </button>
+              <button
+                className={
+                  browserState?.zoomMode === 'fit' && browserState?.viewMode === 'desktop'
+                    ? 'active'
+                    : ''
+                }
+                onClick={() => window.cclinkStudio.browser.fitWidth(tabId)}
+                title="适应宽度（自动缩放以显示整页）"
+                aria-label="适应宽度"
+                aria-pressed={
+                  browserState?.zoomMode === 'fit' && browserState?.viewMode === 'desktop'
+                }
+              >
+                <IconFitWidth size={16} />
+                <span>适应宽度</span>
+              </button>
+            </div>
 
-      <div className="browser-zoom-group">
-        <button onClick={() => window.cclinkStudio.browser.zoomOut(tabId)} title="缩小">
-          <IconZoomOut size={16} />
-        </button>
-        <span
-          className="browser-zoom-value"
-          title={
-            browserState?.zoomMode === 'fit'
-              ? '当前为适应宽度自动缩放；输入百分比可切换为手动缩放'
-              : '输入 30–300 之间的百分比'
-          }
-        >
-          {browserState?.zoomMode === 'fit' ? <span className="zoom-mode-label">自动</span> : null}
-          <input
-            className="zoom-percent-input"
-            value={zoomDraft}
-            inputMode="decimal"
-            aria-label="浏览器缩放百分比"
-            onFocus={(event) => {
-              cancelZoomCommitRef.current = false
-              setEditingZoom(true)
-              event.currentTarget.select()
-              void window.cclinkStudio.window.focusRenderer()
-            }}
-            onChange={(event) => setZoomDraft(event.target.value)}
-            onBlur={commitZoom}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                event.currentTarget.blur()
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                cancelZoomCommitRef.current = true
-                event.currentTarget.blur()
-              }
-            }}
-          />
-          <span className="zoom-percent-suffix">%</span>
-        </span>
-        <button onClick={() => window.cclinkStudio.browser.zoomIn(tabId)} title="放大">
-          <IconZoomIn size={16} />
-        </button>
-        <button
-          className={
-            browserState?.zoomMode === 'fit' && browserState?.viewMode === 'desktop' ? 'active' : ''
-          }
-          onClick={() => window.cclinkStudio.browser.fitWidth(tabId)}
-          title="适应宽度（自动缩放以显示整页）"
-          aria-label="适应宽度"
-          aria-pressed={browserState?.zoomMode === 'fit' && browserState?.viewMode === 'desktop'}
-        >
-          <IconFitWidth size={16} />
-        </button>
-      </div>
-
-      <div className="browser-device-group">
-        <button
-          className={browserState?.viewMode === 'desktop' ? 'active' : ''}
-          onClick={() => window.cclinkStudio.browser.setDeviceMode(tabId, 'desktop')}
-          title="桌面版"
-        >
-          <IconMonitor size={16} />
-        </button>
-        <button
-          className={browserState?.viewMode === 'mobile' ? 'active' : ''}
-          onClick={() => window.cclinkStudio.browser.setDeviceMode(tabId, 'mobile')}
-          title="移动版"
-        >
-          <IconMobile size={16} />
-        </button>
-      </div>
+            <div className="browser-device-group" role="group" aria-label="网页设备模式">
+              <span className="browser-control-label">设备</span>
+              <button
+                className={browserState?.viewMode === 'desktop' ? 'active' : ''}
+                onClick={() => window.cclinkStudio.browser.setDeviceMode(tabId, 'desktop')}
+                title="桌面版"
+                aria-pressed={browserState?.viewMode === 'desktop'}
+              >
+                <IconMonitor size={16} />
+                <span>桌面</span>
+              </button>
+              <button
+                className={browserState?.viewMode === 'mobile' ? 'active' : ''}
+                onClick={() => window.cclinkStudio.browser.setDeviceMode(tabId, 'mobile')}
+                title="移动版"
+                aria-pressed={browserState?.viewMode === 'mobile'}
+              >
+                <IconMobile size={16} />
+                <span>移动</span>
+              </button>
+            </div>
+          </div>
+          <div className="browser-options-actions">
+            <button
+              type="button"
+              className="browser-forward-compact"
+              onClick={() => window.cclinkStudio.browser.goForward(tabId)}
+            >
+              <IconArrowRight size={15} />
+              前进
+            </button>
+            <BrowserHistoryMenu onOpenUrl={onOpenUrl} showLabel />
+            <span className="browser-environment-badge" title={`当前登录环境：${environmentLabel}`}>
+              {environmentLabel}
+            </span>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

@@ -1,19 +1,26 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
 import type { Tab } from '../../types'
-import { IconClose, IconFile, IconGlobe, IconPlus, IconRobot, IconTerminal } from '../common/Icons'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconClose,
+  IconFile,
+  IconGlobe,
+  IconTerminal,
+} from '../common/Icons'
 import { BrowserFavicon } from '../common/BrowserFavicon'
 import { useBrowserStore } from '../../stores/browser-store'
 import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
 import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detach-drag'
-import { useEscapeDismiss } from '../common/dismissable-layer'
 
 const TAB_ICONS: Record<string, string> = {
   browser: '🌐',
@@ -57,11 +64,8 @@ interface TabBarProps {
   onDetach: (tabId: string) => void
   onNewDocument: () => void
   onNewBrowser: () => void
-  onNewConversation: () => void
   onNewTerminal: () => void
   onShowMenu: (tabId: string, x: number, y: number, focusReturn: HTMLElement) => void
-  createMenuOpen: boolean
-  onCreateMenuOpenChange: (open: boolean) => void
   conversationDropActive: boolean
 }
 
@@ -77,19 +81,54 @@ export function TabBar({
   onDetach,
   onNewDocument,
   onNewBrowser,
-  onNewConversation,
   onNewTerminal,
   onShowMenu,
-  createMenuOpen,
-  onCreateMenuOpenChange,
   conversationDropActive,
 }: TabBarProps): React.ReactElement {
   const browserTabs = useBrowserStore((state) => state.tabs)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-  const [createMenuPosition, setCreateMenuPosition] = useState({ left: 0, top: 0 })
-  const createMenuRef = useRef<HTMLDivElement>(null)
-  const createButtonRef = useRef<HTMLButtonElement>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const [overflow, setOverflow] = useState({ before: false, after: false })
+  const tabOrderKey = JSON.stringify(tabs.map((tab) => tab.id))
+
+  useLayoutEffect(() => {
+    const strip = stripRef.current
+    if (!strip) return
+    const update = (): void => {
+      const before = strip.scrollLeft > 1
+      const after = strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 1
+      setOverflow((current) =>
+        current.before === before && current.after === after ? current : { before, after },
+      )
+    }
+    const revealActive = (): void => {
+      const active = Array.from(
+        strip.querySelectorAll<HTMLElement>('[data-workbench-tab-id]'),
+      ).find((element) => element.dataset.workbenchTabId === activeTabId)
+      if (active) {
+        const tabBounds = active.getBoundingClientRect()
+        const stripBounds = strip.getBoundingClientRect()
+        if (tabBounds.left < stripBounds.left) strip.scrollLeft -= stripBounds.left - tabBounds.left
+        else if (tabBounds.right > stripBounds.right)
+          strip.scrollLeft += tabBounds.right - stripBounds.right
+      }
+    }
+    revealActive()
+    update()
+    const observer = new ResizeObserver(() => {
+      revealActive()
+      update()
+    })
+    observer.observe(strip)
+    for (const child of strip.children) observer.observe(child)
+    strip.addEventListener('scroll', update, { passive: true })
+    return () => {
+      observer.disconnect()
+      strip.removeEventListener('scroll', update)
+    }
+  }, [activeTabId, tabOrderKey])
+
   const pointerDragRef = useRef<{
     tab: Tab
     pointerId: number
@@ -100,11 +139,6 @@ export function TabBar({
     captureElement: HTMLElement
   } | null>(null)
   const suppressClickTabIdRef = useRef<string | null>(null)
-
-  useEscapeDismiss(createMenuOpen, () => {
-    onCreateMenuOpenChange(false)
-    createButtonRef.current?.focus()
-  })
 
   const resetPointerDrag = useCallback((): void => {
     pointerDragRef.current = null
@@ -161,7 +195,14 @@ export function TabBar({
       const wasDragging = drag.dragging
       const cancelled = drag.cancelled || pointerCancelled
       const dropTabId = getPointerDropTabId(event.clientX, event.clientY)
-      const releasedInsideTabBar = Boolean(dropTabId)
+      const barBounds = tabBarRef.current?.getBoundingClientRect()
+      const releasedInsideTabBar = Boolean(
+        barBounds &&
+        event.clientX >= barBounds.left &&
+        event.clientX <= barBounds.right &&
+        event.clientY >= barBounds.top &&
+        event.clientY <= barBounds.bottom,
+      )
       if (wasDragging) {
         suppressClickTabIdRef.current = drag.tab.id
         if (drag.tab.type === 'browser' && (cancelled || releasedInsideTabBar)) {
@@ -185,7 +226,7 @@ export function TabBar({
       }
       resetPointerDrag()
     },
-    [onDetach, onDetachDragCancel, onReorder, resetPointerDrag],
+    [onDetach, onDetachDragCancel, onReorder, resetPointerDrag, tabBarRef],
   )
 
   useEffect(() => {
@@ -204,173 +245,160 @@ export function TabBar({
     return () => window.removeEventListener('keydown', handleDragCancel, true)
   }, [onDetachDragCancel, resetPointerDrag])
 
-  useEffect(() => {
-    if (!createMenuOpen) return
-    const handleClickOutside = (event: MouseEvent): void => {
-      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
-        onCreateMenuOpenChange(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [createMenuOpen, onCreateMenuOpenChange])
-
-  useEffect(
-    () => () => {
-      onCreateMenuOpenChange(false)
-    },
-    [onCreateMenuOpenChange],
-  )
-
-  const runCreateAction = (action: () => void): void => {
-    onCreateMenuOpenChange(false)
-    action()
-  }
-
-  const toggleCreateMenu = (): void => {
-    const rect = createButtonRef.current?.getBoundingClientRect()
-    if (rect) {
-      setCreateMenuPosition({
-        left: Math.min(rect.left, window.innerWidth - 232),
-        top: rect.bottom + 4,
-      })
-    }
-    onCreateMenuOpenChange(!createMenuOpen)
-  }
-
   return (
     <div
       ref={tabBarRef}
       className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}
     >
-      {tabs.map((tab) => {
-        const title =
-          tab.type === 'browser'
-            ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
-            : tab.title
-        const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
-        return (
-          <div
-            key={tab.id}
-            data-workbench-tab-id={tab.id}
-            className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
-            role="tab"
-            title={label}
-            aria-label={label}
-            tabIndex={activeTabId === tab.id ? 0 : -1}
-            aria-selected={activeTabId === tab.id}
-            onPointerDown={(event) => handlePointerDown(event, tab)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={(event) => finishPointerDrag(event, false)}
-            onPointerCancel={(event) => finishPointerDrag(event, true)}
-            onClick={(event) => {
-              if (suppressClickTabIdRef.current === tab.id) {
-                suppressClickTabIdRef.current = null
-                event.preventDefault()
-                return
-              }
-              onActivate(tab.id)
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
-            }}
-            onKeyDown={(event) => {
-              if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
-              event.preventDefault()
-              const rect = event.currentTarget.getBoundingClientRect()
-              onShowMenu(
-                tab.id,
-                rect.left + Math.min(24, rect.width / 2),
-                rect.top + Math.min(24, rect.height),
-                event.currentTarget,
-              )
-            }}
-          >
-            <span className="tab-icon">
-              <WorkbenchTabIcon tab={tab} />
-            </span>
-            {!tab.pinned && <span className="tab-title">{title}</span>}
-            {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
-            {!tab.pinned && (
-              <span
-                className="tab-close"
+      <div className="tab-strip-shell">
+        <div className="tab-strip" ref={stripRef} role="tablist" aria-label="工作台标签">
+          {tabs.map((tab) => {
+            const title =
+              tab.type === 'browser'
+                ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
+                : tab.title
+            const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
+            return (
+              <div
+                key={tab.id}
+                data-workbench-tab-id={tab.id}
+                className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+                role="tab"
+                title={label}
+                aria-label={label}
+                tabIndex={activeTabId === tab.id ? 0 : -1}
+                aria-selected={activeTabId === tab.id}
+                onPointerDown={(event) => handlePointerDown(event, tab)}
+                onPointerMove={handlePointerMove}
+                onPointerUp={(event) => finishPointerDrag(event, false)}
+                onPointerCancel={(event) => finishPointerDrag(event, true)}
                 onClick={(event) => {
-                  event.stopPropagation()
-                  onClose(tab.id)
+                  if (suppressClickTabIdRef.current === tab.id) {
+                    suppressClickTabIdRef.current = null
+                    event.preventDefault()
+                    return
+                  }
+                  onActivate(tab.id)
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(event.key)
+                  ) {
+                    event.preventDefault()
+                    const index = tabs.findIndex((item) => item.id === tab.id)
+                    const nextIndex =
+                      event.key === 'Home'
+                        ? 0
+                        : event.key === 'End'
+                          ? tabs.length - 1
+                          : event.key === 'ArrowLeft'
+                            ? (index - 1 + tabs.length) % tabs.length
+                            : event.key === 'ArrowRight'
+                              ? (index + 1) % tabs.length
+                              : index
+                    const next = tabs[nextIndex]
+                    if (next) {
+                      onActivate(next.id)
+                      const element = Array.from(stripRef.current?.children ?? []).find(
+                        (child) => (child as HTMLElement).dataset.workbenchTabId === next.id,
+                      )
+                      ;(element as HTMLElement | undefined)?.focus({ preventScroll: true })
+                    }
+                    return
+                  }
+                  if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+                  event.preventDefault()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  onShowMenu(
+                    tab.id,
+                    rect.left + Math.min(24, rect.width / 2),
+                    rect.top + Math.min(24, rect.height),
+                    event.currentTarget,
+                  )
                 }}
               >
-                <IconClose size={12} />
-              </span>
-            )}
-          </div>
-        )
-      })}
-
-      <div className="tab-create-menu-wrap" ref={createMenuRef}>
-        <button
-          ref={createButtonRef}
-          className="tab-new-button"
-          title="新建标签页"
-          onClick={toggleCreateMenu}
-        >
-          <IconPlus size={13} />
-        </button>
-        {createMenuOpen && (
-          <div className="tab-create-menu" style={createMenuPosition}>
-            <button onClick={() => runCreateAction(onNewDocument)}>
-              <IconFile size={13} />
-              <span className="tab-create-menu-main">
-                <span>Markdown 草稿</span>
-                <span>所见即所得编辑</span>
-              </span>
+                <span className="tab-icon">
+                  <WorkbenchTabIcon tab={tab} />
+                </span>
+                {!tab.pinned && <span className="tab-title">{title}</span>}
+                {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
+                {!tab.pinned && (
+                  <span
+                    className="tab-close"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onClose(tab.id)
+                    }}
+                  >
+                    <IconClose size={12} />
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {(overflow.before || overflow.after) && (
+          <div className="tab-scroll-actions" aria-label="滚动标签">
+            <button
+              type="button"
+              aria-label="向前滚动标签"
+              title="向前滚动标签"
+              disabled={!overflow.before}
+              onClick={() => stripRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}
+            >
+              <IconArrowLeft size={13} />
             </button>
-            <button onClick={() => runCreateAction(onNewBrowser)}>
-              <IconGlobe size={13} />
-              <span className="tab-create-menu-main">
-                <span>浏览器页</span>
-                <span>网页浏览和自动化</span>
-              </span>
-            </button>
-            <button onClick={() => runCreateAction(onNewConversation)}>
-              <IconRobot size={13} />
-              <span className="tab-create-menu-main">
-                <span>工作会话</span>
-                <span>长期任务和可恢复现场</span>
-              </span>
-            </button>
-            <button onClick={() => runCreateAction(onNewTerminal)}>
-              <IconTerminal size={13} />
-              <span className="tab-create-menu-main">
-                <span>Terminal</span>
-                <span>本地/远程命令现场</span>
-              </span>
-            </button>
-            <div className="tab-create-menu-separator" />
-            <button disabled title="规划中">
-              <IconFile size={13} />
-              <span className="tab-create-menu-main">
-                <span>Word 文档</span>
-                <span>规划中</span>
-              </span>
-            </button>
-            <button disabled title="规划中">
-              <IconFile size={13} />
-              <span className="tab-create-menu-main">
-                <span>PPT 演示</span>
-                <span>规划中</span>
-              </span>
+            <button
+              type="button"
+              aria-label="向后滚动标签"
+              title="向后滚动标签"
+              disabled={!overflow.after}
+              onClick={() => stripRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}
+            >
+              <IconArrowRight size={13} />
             </button>
           </div>
         )}
       </div>
-      <button
-        className="tab-new-button tab-new-browser-button"
-        title="新建浏览器页"
-        onClick={onNewBrowser}
-      >
-        <IconGlobe size={13} />
-      </button>
+      <div className="tab-create-actions" role="group" aria-label="新建">
+        <span className="tab-create-caption" aria-hidden="true">
+          新建
+        </span>
+        <button
+          type="button"
+          className="tab-create-button tab-new-browser-button"
+          title="新建浏览器页"
+          aria-label="新建浏览器页"
+          onClick={onNewBrowser}
+        >
+          <IconGlobe size={15} />
+          <span>浏览器</span>
+        </button>
+        <button
+          type="button"
+          className="tab-create-button"
+          title="新建 Markdown 草稿"
+          aria-label="新建 Markdown 草稿"
+          onClick={onNewDocument}
+        >
+          <IconFile size={15} />
+          <span>MD</span>
+        </button>
+        <button
+          type="button"
+          className="tab-create-button"
+          title="新建 Terminal"
+          aria-label="新建 Terminal"
+          onClick={onNewTerminal}
+        >
+          <IconTerminal size={15} />
+          <span>Terminal</span>
+        </button>
+      </div>
       {conversationDropActive && (
         <div className="conversation-tab-drop-hint" aria-hidden="true">
           松开以在中间 Tab 打开会话
