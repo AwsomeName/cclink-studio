@@ -120,6 +120,25 @@ export interface AgentConversationState {
 
 export const DEFAULT_CONVERSATION_ID = 'agent-default'
 
+/** A failed launch without a native Session can be retried with another runtime. */
+export function canChangeConversationRuntime(
+  conversation: AgentConversationState | undefined,
+): boolean {
+  if (
+    !conversation ||
+    conversation.loading ||
+    conversation.activeRunId ||
+    conversation.sessionId ||
+    conversation.streamingMessageId ||
+    conversation.queuedMessageDispatchId
+  )
+    return false
+  return (
+    !conversation.messages.some((message) => message.role === 'user') ||
+    conversation.runStatus === 'failed'
+  )
+}
+
 function createWelcomeMessage(): AgentMessage {
   return {
     id: 'welcome',

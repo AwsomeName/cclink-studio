@@ -282,6 +282,7 @@ export interface AgentStatus {
   /** 当前正在执行的运行实例。 */
   runId?: string | null
   sessionId: string | null
+  codexDiagnostic?: import('./codex-runtime').CodexRuntimeDiagnostic
   runtimeBinding?: import('./agent-runtime').AgentRuntimeBinding
   /** Runtime/API/model identity that must match before restoring sessionId. */
   sessionCompatibilityFingerprint?: string | null

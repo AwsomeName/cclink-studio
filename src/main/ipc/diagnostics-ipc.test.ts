@@ -4,6 +4,9 @@ import {
   resetMainDiagnosticLogForTest,
 } from '../diagnostics/main-diagnostic-log'
 import { registerDiagnosticsIpc } from './diagnostics-ipc'
+import { probeCodexRuntime } from '../agent/codex-runtime-diagnostics'
+
+vi.mock('../agent/codex-runtime-diagnostics', () => ({ probeCodexRuntime: vi.fn() }))
 
 const mockIpcMain = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
@@ -42,5 +45,23 @@ describe('registerDiagnosticsIpc', () => {
       droppedCount: 0,
       entries: [{ level: 'warn', source: 'main', message: 'render retry' }],
     })
+  })
+
+  it('guards the Codex probe, rejects arguments and shares an in-flight check', async () => {
+    let finish!: (value: never) => void
+    vi.mocked(probeCodexRuntime).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    registerDiagnosticsIpc(trustedRendererGuard)
+    const handler = mockIpcMain.handlers.get('diagnostics:probeCodex')!
+    expect(() => handler({}, 'unexpected')).toThrow()
+    const first = handler({})
+    const second = handler({})
+    expect(probeCodexRuntime).toHaveBeenCalledOnce()
+    finish({ state: 'not-found' } as never)
+    expect(await first).toEqual(await second)
+    expect(trustedRendererGuard.assert).toHaveBeenCalled()
   })
 })

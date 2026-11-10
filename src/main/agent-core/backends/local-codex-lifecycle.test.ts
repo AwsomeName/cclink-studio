@@ -20,6 +20,11 @@ vi.mock('./codex-app-server', () => ({
       fake.incoming = incoming
     }
     async start() {}
+    recordAccount() {}
+    markReady() {}
+    getDiagnostic() {
+      return undefined
+    }
     stop() {
       return fake.stop()
     }
@@ -105,6 +110,13 @@ beforeEach(() => {
 })
 
 describe('Codex lifecycle and authorization', () => {
+  it('does not bind an unusable native Session when tool initialization fails', async () => {
+    fake.fail = 'mcpServerStatus/list'
+    const { backend } = fixture()
+    await expect(backend.sendMessage('first run')).rejects.toThrow('fixture failure')
+    expect(backend.getSessionId()).toBeNull()
+    expect(backend.getStatus().connected).toBe(false)
+  })
   it.each([
     { accountType: 'apiKey', requiresOpenaiAuth: true, config: {} },
     { accountType: 'chatgpt', requiresOpenaiAuth: false, config: {} },

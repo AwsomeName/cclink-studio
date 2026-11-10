@@ -138,6 +138,7 @@ export interface CclinkStudioRuntimeState {
   videoGenerationService: VideoGenerationService | null
   mediaRenderService: MediaRenderService | null
   mediaProjectIpcUnsubscribe: (() => void) | null
+  diagnosticsIpcCleanup: (() => Promise<void>) | null
   trustedRendererGuard: TrustedRendererRegistry | null
   rendererWorkspaceStateFlush: RendererWorkspaceStateFlushCoordinator | null
   cclinkAuthService: CclinkAuthService | null
@@ -216,6 +217,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     videoGenerationService: null,
     mediaRenderService: null,
     mediaProjectIpcUnsubscribe: null,
+    diagnosticsIpcCleanup: null,
     trustedRendererGuard: null,
     rendererWorkspaceStateFlush: null,
     cclinkAuthService: null,

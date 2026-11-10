@@ -74,6 +74,28 @@ describe('AgentBridge main-process Claude session trust', () => {
     queryMock.mockReset()
   })
 
+  it('rebinds a failed ACP launch without a Session and locks after a real Session exists', async () => {
+    const bridge = createBridge()
+    try {
+      await expect(
+        bridge.sendMessage('first', 'retry-runtime', {
+          runtimeBinding: { kind: 'acp', implementationId: 'codex-acp' },
+        }),
+      ).rejects.toThrow('API Key')
+      expect(bridge.getStatus('retry-runtime').sessionId).toBeNull()
+      queryMock.mockImplementationOnce(() => createMockQuery('retry-session'))
+      await bridge.sendMessage('retry', 'retry-runtime', {
+        runtimeBinding: { kind: 'claude-code' },
+      })
+      expect(bridge.getStatus('retry-runtime').sessionId).toBe('retry-session')
+      await expect(
+        bridge.sendMessage('switch', 'retry-runtime', { runtimeBinding: { kind: 'codex' } }),
+      ).rejects.toThrow('不能切换')
+    } finally {
+      await bridge.destroy()
+    }
+  })
+
   it('keeps Codex session trust when Claude credentials are reconfigured', async () => {
     const stateStore = new AgentRuntimeStateStore()
     const bridge = createBridge(stateStore)

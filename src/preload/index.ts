@@ -382,6 +382,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   diagnostics: {
     getMainLogSnapshot: () => invokeIpcContract(diagnosticsIpc.getMainLogSnapshot),
+    probeCodex: () => invokeIpcContract(diagnosticsIpc.probeCodex),
   },
 
   // Agent

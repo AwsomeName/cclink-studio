@@ -150,7 +150,7 @@ export function StatusBar(): React.ReactElement {
             onClick={() =>
               void executeCommand('diagnostics.copyFrameworkLogs', { source: 'toolbar' })
             }
-            title="复制 Agent 以外的工作台框架诊断日志"
+            title="复制工作台框架和本机 Codex 启动诊断，不含会话正文"
             aria-label="框架日志"
             {...statusContextProps('framework-diagnostics')}
           >

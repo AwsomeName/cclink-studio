@@ -16,6 +16,7 @@ export type AgentEventHandler = (type: AgentEventType, data: unknown) => void
 export interface AgentBackendStatus {
   connected: boolean
   sessionId: string | null
+  codexDiagnostic?: import('../../../shared/codex-runtime').CodexRuntimeDiagnostic
   /** 由 AgentRuntime 注入；后端本身无需生成。 */
   runId?: string | null
 }

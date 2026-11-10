@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useState, useMemo } from 'react'
+import { canChangeConversationRuntime } from '../../features/agent-conversations/conversation-state'
 import {
   useAgentStore,
   useBrowserDownloadStore,
@@ -829,12 +830,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     : []
   const workspaceName = useMemo(() => workspaceRefLabel(activeWorkspaceRef), [activeWorkspaceRef])
   const activeConversation = conversations[activeConversationId]
-  const canChangeRuntime = Boolean(
-    activeConversation &&
-    !activeConversation.loading &&
-    !activeConversation.sessionId &&
-    !activeConversation.messages.some((message) => message.role === 'user'),
-  )
+  const canChangeRuntime = canChangeConversationRuntime(activeConversation)
   const mountedResources = activeConversation?.mountedResources ?? []
   const pendingImages = activeConversation?.pendingImages ?? []
   const mountedSkills = activeConversation?.mountedSkills ?? []

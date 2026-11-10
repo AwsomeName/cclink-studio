@@ -1,6 +1,7 @@
 import type { DiagnosticLogSnapshot } from '@shared/diagnostics'
 import { sanitizeDiagnosticText } from '@shared/diagnostics'
 import { APP_VERSION } from '../../app-metadata'
+import { collectCodexDiagnostic } from './codex-diagnostic-report'
 import {
   formatContextActionDiagnosticsMarkdown,
   useContextActionDiagnosticsStore,
@@ -27,7 +28,7 @@ const MAX_LOG_ENTRIES = 100
 export async function collectUnifiedDiagnosticReport(
   input: UnifiedDiagnosticReportInput,
 ): Promise<string> {
-  const [workspaceSection, credentialSection, scheduledTaskSection, mainLogSection] =
+  const [workspaceSection, credentialSection, scheduledTaskSection, mainLogSection, codexSection] =
     await Promise.all([
       collectSection('工作台状态', async () => {
         const diagnostics = await window.cclinkStudio.workspaceState.diagnostics()
@@ -61,6 +62,7 @@ export async function collectUnifiedDiagnosticReport(
       collectSection('主进程近期框架日志', async () =>
         formatLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
       ),
+      collectSection('本机 Codex 启动诊断', collectCodexDiagnostic),
     ])
 
   const contextActionSection = collectSyncSection('上下文操作', () =>
@@ -87,6 +89,7 @@ export async function collectUnifiedDiagnosticReport(
     },
     workspaceSection,
     credentialSection,
+    codexSection,
     scheduledTaskSection,
     markdownSection,
     contextActionSection,

@@ -302,7 +302,7 @@ export async function bootstrapMainProcessServices(
   registerMediaRenderIpc(runtime.mediaRenderService!, runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 宣发视频本地渲染 IPC 已注册')
 
-  registerDiagnosticsIpc(runtime.trustedRendererGuard)
+  runtime.diagnosticsIpcCleanup = registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')
 
   registerCredentialsIpc(runtime.credentialService, runtime.trustedRendererGuard)
@@ -650,6 +650,8 @@ export async function bootstrapMainProcessServices(
 export async function shutdownMainProcessServices(
   runtime: CclinkStudioRuntimeState,
 ): Promise<void> {
+  await runShutdownStep('CodexDiagnostics', () => runtime.diagnosticsIpcCleanup?.())
+  runtime.diagnosticsIpcCleanup = null
   await runShutdownStep('RendererWorkspaceStateFlush', async () => {
     const outcome = await runtime.rendererWorkspaceStateFlush?.requestFlush()
     if (outcome) console.log(`[WorkspaceStateService] renderer 退出快照: ${outcome}`)

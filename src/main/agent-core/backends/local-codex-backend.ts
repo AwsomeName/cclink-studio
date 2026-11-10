@@ -5,6 +5,8 @@ import type { ToolExecutionContext } from '../tools/types'
 import { filterToolsByScope, type AgentScope } from '../runtime/scope'
 import type { AgentEventHandler, AgentSendOptions, IAgentBackend } from './types'
 import { CodexAppServer, type CodexMessage } from './codex-app-server'
+import { assertNativeChatgptConfiguration } from './codex-runtime-policy'
+import type { CodexRuntimeDiagnostic } from '../../../shared/codex-runtime'
 import { resolveProjectedSymlinkTarget } from './claude-native-scheduling-policy'
 
 function record(value: unknown): Record<string, unknown> {
@@ -14,34 +16,6 @@ function record(value: unknown): Record<string, unknown> {
 }
 function text(value: unknown): string {
   return typeof value === 'string' ? value : ''
-}
-
-function assertNativeChatgptConfiguration(
-  account: Record<string, unknown>,
-  config: Record<string, unknown>,
-): void {
-  if (record(account.account).type !== 'chatgpt' || account.requiresOpenaiAuth !== true) {
-    throw new Error(
-      '本机 Codex 尚未登录 ChatGPT 账号（需要文件凭证）。Studio 不回退到 API Key 或其他认证方式。',
-    )
-  }
-  let officialEndpoint = true
-  if (config.chatgpt_base_url) {
-    try {
-      officialEndpoint = new URL(text(config.chatgpt_base_url)).origin === 'https://chatgpt.com'
-    } catch {
-      officialEndpoint = false
-    }
-  }
-  if (
-    (config.model_provider && config.model_provider !== 'openai') ||
-    Object.keys(record(record(config.model_providers).openai)).length > 0 ||
-    !officialEndpoint
-  ) {
-    throw new Error(
-      '默认 Codex 仅使用官方 ChatGPT 账号服务；检测到自定义提供商或认证端点，已停止运行，未修改本机配置。',
-    )
-  }
 }
 
 /** Validate both ends of a native rename, including missing destinations behind symlinks. */
@@ -89,6 +63,7 @@ export class LocalCodexBackend implements IAgentBackend {
   private currentText = ''
   private allowedStudioTools = new Set<string>()
   private runDone: Promise<void> | null = null
+  private diagnostic: CodexRuntimeDiagnostic | undefined
 
   constructor(
     private readonly toolHost: McpToolHost,
@@ -102,7 +77,7 @@ export class LocalCodexBackend implements IAgentBackend {
     this.scope = scope
   }
   getStatus() {
-    return { connected: this.active, sessionId: this.sessionId }
+    return { connected: this.active, sessionId: this.sessionId, codexDiagnostic: this.diagnostic }
   }
   getSessionId(): string | null {
     return this.sessionId
@@ -153,8 +128,12 @@ export class LocalCodexBackend implements IAgentBackend {
     try {
       await server.start(this.cwd)
       const account = await server.request('account/read', { refreshToken: false })
+      server.recordAccount(account)
+      assertNativeChatgptConfiguration(account, {})
       const loaded = await server.request('config/read', { cwd: this.cwd, includeLayers: false })
       assertNativeChatgptConfiguration(account, record(loaded.config))
+      server.markReady()
+      this.diagnostic = server.getDiagnostic()
       const config: Record<string, unknown> = {}
       const mcpServers: Record<string, unknown> = Object.fromEntries(
         Object.entries(record(record(loaded.config).mcp_servers)).map(([name, value]) => [
@@ -238,10 +217,10 @@ export class LocalCodexBackend implements IAgentBackend {
           '本机 Codex 未应用 Studio 要求的权限边界，已停止运行；请检查 Codex 版本和管理策略。',
         )
       }
-      this.sessionId = text(record(response.thread).id)
-      if (!this.sessionId) throw new Error('Codex 未返回有效会话标识')
+      const establishedSessionId = text(record(response.thread).id)
+      if (!establishedSessionId) throw new Error('Codex 未返回有效会话标识')
       const status = await server.request('mcpServerStatus/list', {
-        threadId: this.sessionId,
+        threadId: establishedSessionId,
         limit: 100,
         detail: 'toolsAndAuthOnly',
       })
@@ -256,6 +235,7 @@ export class LocalCodexBackend implements IAgentBackend {
         throw new Error('Codex 工具隔离检查失败，已停止运行')
       }
       if (this.cancelled) return
+      this.sessionId = establishedSessionId
       this.handler?.('system', { type: 'system', subtype: 'init', session_id: this.sessionId })
       this.emit({
         type: 'session',
@@ -280,7 +260,10 @@ export class LocalCodexBackend implements IAgentBackend {
       await completed
       succeeded = true
     } catch (error) {
-      if (!this.cancelled) throw error
+      if (!this.cancelled) {
+        this.diagnostic = server.getDiagnostic(error)
+        throw error
+      }
     } finally {
       this.finish = null
       await server.stop()

@@ -99,3 +99,39 @@ Codex 版本未经本轮真实验收。权限策略返回值与 MCP 隔离在每
 集成接口依据 [官方 app-server 文档](https://learn.chatgpt.com/docs/app-server)。原生补丁在
 `untrusted` 策略下请求用户授权的行为同时以真实拒绝用例和
 [官方实现](https://github.com/openai/codex/blob/main/codex-rs/core/src/safety.rs)核对。
+
+### 同日新会话 MCP HTTP 502 回归
+
+用户在 0.1.136 新建本地 Codex 会话时，`thread/start` 因 `cclink_studio` 的 initialize
+请求返回 HTTP 502 失败。Studio MCP 本身没有 502 响应路径；真实 app-server 在继承 HTTP
+代理且 `NO_PROXY/no_proxy` 未包含 loopback 时复现了相同错误。当前系统代理单独使用时未复现；
+未取得故障发生时安装版进程的环境快照，因此不能断言当时具体由哪个启动器注入代理。
+
+修复仅在 `codexEnvironment()` 返回的子进程环境中合并两种大小写的现有排除项，补齐
+`127.0.0.1,localhost,::1`，并同时设置 `NO_PROXY/no_proxy`。保留模型服务所用代理，不修改
+系统设置或全局 Codex 配置，不关闭 Studio MCP、不放宽权限，也不切换认证或 Runtime。
+
+用户功能验收：在真实 Electron 启动环境中显式设置 HTTP/HTTPS/ALL_PROXY 为本机现有代理，
+两种 `no_proxy` 均故意遗漏 loopback，执行以下步骤：
+
+1. 打开临时本地工作空间并新建 Codex 会话，让它通过 `editor_read` 读取 `marker.md`。
+   实际返回 `STUDIO_CODEX_UI_8624`，界面显示工具完成。
+2. 通过 `editor_write` 创建 `result.md`，磁盘内容包含 `CODEX_WRITE_OK`。
+3. 重启后继续询问前文，原生 thread ID 相同，正确回答上一轮写入标记。
+4. 停止正在输出的回复，再发送消息；取消状态及后续回复均正常。
+
+真实窗口 smoke 全部通过，证据目录：
+`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-codex-ui-Eovkeg`，包含截图、事件与
+`result.json`。这是源码构建的验收结果；本次未发布或替换用户已安装的 0.1.136。
+
+工程验证：6 项代理用例（其中 2 项使用真实 app-server 与 ToolHost、无模型调用）、12 项
+生命周期用例和 2 项后端单元测试通过；原有完整真实后端用例未重复执行。代理回归先在旧代码
+复现 HTTP 502，修复后完成真实握手和工具发现，故障代理收到的 loopback 请求为零。类型检查、
+构建、受影响文件 ESLint/格式检查与凭证边界检查通过。
+
+同一工作区另有并行的 Codex 诊断修改，因此以上构建和窗口验收在 `7379831c` 加本次代理修复的
+独立工作树中完成，不代表其他并行改动已通过验证。回归入口：
+
+```bash
+CCLINK_CODEX_REAL_SMOKE=1 pnpm exec vitest run src/main/agent-core/backends/codex-proxy-environment.test.ts
+```

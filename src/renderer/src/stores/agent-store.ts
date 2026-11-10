@@ -41,6 +41,7 @@ import {
 } from '../utils/workspace-state'
 import {
   createAgentConversationState,
+  canChangeConversationRuntime,
   DEFAULT_CONVERSATION_ID,
   type AgentContextCompactionState,
   type AgentConversationState,
@@ -738,11 +739,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const id = resolveConversationId(get(), conversationId)
     const conversation = get().conversations[id]
     if (!conversation) return false
-    const hasStarted =
-      conversation.loading ||
-      Boolean(conversation.sessionId) ||
-      conversation.messages.some((message) => message.role === 'user')
-    if (hasStarted) return false
+    if (!canChangeConversationRuntime(conversation)) return false
     if (
       agentRuntimeBindingsEqual(
         conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,

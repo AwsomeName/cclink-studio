@@ -1,3 +1,4 @@
+import { canChangeConversationRuntime } from '../../features/agent-conversations/conversation-state'
 import {
   useCallback,
   useEffect,
@@ -169,12 +170,7 @@ export function WorkbenchAgentConversation({
   const pendingImages = conversation?.pendingImages ?? []
   const mountedSkills = conversation?.mountedSkills ?? []
   const contextCompacting = conversation?.contextCompaction.status === 'compacting'
-  const canChangeRuntime = Boolean(
-    conversation &&
-    !conversation.loading &&
-    !conversation.sessionId &&
-    !conversation.messages.some((message) => message.role === 'user'),
-  )
+  const canChangeRuntime = canChangeConversationRuntime(conversation)
   const activeRoleAvailable = roles.some(
     (role) =>
       role.roleId === conversation?.configuration.roleRef.roleId &&

@@ -42,4 +42,22 @@ describe('Thread runtime binding', () => {
       implementationId: 'codex-acp',
     })
   })
+
+  it('allows switching after a failed launch without a Session, preserving user history', () => {
+    const store = useAgentStore.getState()
+    const id = store.createConversation()
+    store.setRuntimeBinding({ kind: 'acp', implementationId: 'codex-acp' }, id)
+    store.addUserMessage('preserve this failed request', id)
+    store.beginRun(id)
+    expect(store.setRuntimeBinding({ kind: 'codex' }, id)).toBe(false)
+    store.cancelStreaming(id, 'error')
+    expect(store.setRuntimeBinding({ kind: 'codex' }, id)).toBe(true)
+    expect(
+      useAgentStore
+        .getState()
+        .conversations[id].messages.some((m) => m.rawText === 'preserve this failed request'),
+    ).toBe(true)
+    store.setSessionId('native-session', id)
+    expect(store.setRuntimeBinding({ kind: 'claude-code' }, id)).toBe(false)
+  })
 })

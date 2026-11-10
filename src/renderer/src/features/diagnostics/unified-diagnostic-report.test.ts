@@ -31,6 +31,20 @@ describe('collectUnifiedDiagnosticReport', () => {
           }),
         },
         diagnostics: {
+          probeCodex: vi.fn().mockResolvedValue({
+            checkedAt: '2026-11-10T10:00:00.000Z',
+            state: 'not-logged-in',
+            stage: 'account',
+            code: 'CODEX_AUTH_REQUIRED',
+            message: '请完成本机文件登录',
+            executable: '/Users/alice/Applications/Codex.app/codex',
+            searchedPaths: ['/Users/alice/bin/codex'],
+            platform: 'darwin',
+            arch: 'arm64',
+            auth: 'missing',
+            exitCode: null,
+            signal: null,
+          }),
           getMainLogSnapshot: vi.fn().mockResolvedValue({
             capturedAt: '2026-07-26T10:00:00.000Z',
             entries: [
@@ -83,6 +97,10 @@ describe('collectUnifiedDiagnosticReport', () => {
       activeFilePath: '/Users/alice/project/note.md',
     })
 
+    expect(report).toContain('## 本机 Codex 启动诊断')
+    expect(report).toContain('未登录 ChatGPT')
+    expect(report).toContain('CODEX_AUTH_REQUIRED')
+    expect(report).toContain('~/Applications/Codex.app/codex')
     expect(report).toContain('# CCLink Studio 完整诊断日志')
     expect(report).toContain('## Agent 与当前会话')
     expect(report).toContain('## 工作台状态')

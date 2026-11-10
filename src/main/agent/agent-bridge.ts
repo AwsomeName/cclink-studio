@@ -396,7 +396,7 @@ export class AgentBridge {
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)
       const terminal = await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
-        code: 'run_start_failed',
+        code: this.extractErrorCode(error) ?? 'run_start_failed',
         message: this.extractErrorMessage(error),
       })
       if (terminal) this.forwardRunStatus(terminal)
@@ -776,6 +776,7 @@ export class AgentBridge {
     profilePromptCompilerVersion: number
     sessionRef: string | null
     ready: boolean
+    codexDiagnostic?: import('../../shared/codex-runtime').CodexRuntimeDiagnostic
     nativeSchedulingPolicy?: typeof CLAUDE_NATIVE_SCHEDULING_POLICY_STATUS
   } {
     const status = this.runtime.getStatus(conversationId)
@@ -1566,7 +1567,15 @@ export class AgentBridge {
     )
     const current = this.conversationRuntimeBindings.get(conversationId)
     if (current && !agentRuntimeBindingsEqual(current, binding)) {
-      throw new Error('已有 Thread 不能切换 Agent runtime，请新建 Thread')
+      const status = this.runtime.getStatus(conversationId)
+      if (
+        status.connected ||
+        status.runId ||
+        status.sessionId ||
+        this.runtimeStateStore.getSession(conversationId)
+      ) {
+        throw new Error('已有原生 Session 或运行中的会话不能切换 Agent，请新建会话')
+      }
     }
     this.runtime.bindConversationBackend(
       conversationId,

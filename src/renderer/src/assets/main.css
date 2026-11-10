@@ -9955,6 +9955,41 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   background: #22c55e;
 }
 
+.agent-runtime-menu .agent-runtime-note {
+  padding: 7px 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.agent-runtime-menu .agent-runtime-diagnostic {
+  grid-template-columns: 8px minmax(0, 1fr);
+  align-items: start;
+}
+
+.agent-runtime-menu .agent-runtime-diagnostic .agent-runtime-status-dot {
+  margin-top: 4px;
+}
+
+.agent-runtime-menu .agent-runtime-diagnostic strong,
+.agent-runtime-menu .agent-runtime-diagnostic em {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.agent-runtime-menu button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.agent-runtime-menu button:disabled:not(.selected):hover {
+  border-color: transparent;
+  background: transparent;
+}
+
 .agent-runtime-status span:nth-child(2) {
   min-width: 0;
   display: flex;

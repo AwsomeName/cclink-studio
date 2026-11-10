@@ -3,6 +3,7 @@ import type { BrowserRuntimeDiagnosticSummary } from '@shared/ipc/browser'
 import { sanitizeDiagnosticText, type DiagnosticLogSnapshot } from '@shared/diagnostics'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { APP_VERSION } from '../../app-metadata'
+import { collectCodexDiagnostic } from './codex-diagnostic-report'
 import {
   useCclinkStore,
   useFsStore,
@@ -40,6 +41,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     browserSection,
     remoteSection,
     mainLogSection,
+    codexSection,
   ] = await Promise.all([
     collectSection('工作台状态文件', async () =>
       formatFrameworkWorkspaceDiagnostics(await window.cclinkStudio.workspaceState.diagnostics()),
@@ -74,6 +76,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     collectSection('主进程近期框架日志', async () =>
       formatFrameworkLogSnapshot(await window.cclinkStudio.diagnostics.getMainLogSnapshot()),
     ),
+    collectSection('本机 Codex 启动诊断', collectCodexDiagnostic),
   ])
 
   const runtimeSection = collectSyncSection('当前工作台运行状态', formatRuntimeState)
@@ -104,6 +107,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     runtimeSection,
     workspaceSection,
     credentialSection,
+    codexSection,
     scheduledTaskSection,
     markdownSection,
     contextActionSection,
@@ -119,7 +123,7 @@ export async function collectFrameworkDiagnosticReport(): Promise<string> {
     `- 生成时间：${new Date().toISOString()}`,
     `- 应用版本：${APP_VERSION}`,
     `- 平台：${navigator.userAgent || navigator.platform || 'unknown'}`,
-    '- 范围：仅工作台框架；不包含 Agent 会话正文、思考过程、工具参数或工具结果。',
+    '- 范围：工作台框架与本机 Codex 启动检测；不包含 Agent 会话正文、思考过程、工具参数或工具结果。',
     '- 隐私：已隐藏用户主目录、凭证字段、Bearer 凭证和 URL 查询参数；各章节均有长度上限。',
     ...sections.flatMap((section) => [
       '',

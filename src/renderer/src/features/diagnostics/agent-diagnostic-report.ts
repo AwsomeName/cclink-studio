@@ -21,6 +21,8 @@ import {
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
+import { formatCodexDiagnostic } from './codex-diagnostic-report'
+import { canChangeConversationRuntime } from '../agent-conversations/conversation-state'
 
 const MAX_TIMELINE_ITEMS = 100
 const MAX_FIELD_LENGTH = 500
@@ -145,6 +147,13 @@ export function buildAgentDiagnosticMarkdown(input: AgentDiagnosticReportInput):
     `- 主进程 busy：${input.agentRuntime?.busy ?? input.agentRuntime?.connected ?? 'unknown'}`,
     `- 主进程 ready：${input.agentRuntime?.ready ?? 'unknown'}`,
     `- Agent runtime：${formatAgentRuntime(input)}`,
+    `- 允许切换 Agent：${canChangeConversationRuntime(conversation ?? undefined) ? '是（未建立原生 Session）' : '否（已有 Session、正在运行或历史状态不满足切换条件）'}`,
+    ...(input.agentRuntime?.codexDiagnostic
+      ? [
+          '- 当前会话最近 Codex 启动/运行结果：',
+          formatCodexDiagnostic(input.agentRuntime.codexDiagnostic, 'run'),
+        ]
+      : []),
     `- Claude 运行时来源：${input.agentRuntime?.runtimeProvenance?.source ?? 'unknown'}`,
     `- Agent SDK 版本：${input.agentRuntime?.runtimeProvenance?.sdkVersion ?? 'unknown'}`,
     `- Claude Code 版本：${input.agentRuntime?.runtimeProvenance?.claudeCodeVersion ?? 'unknown'}`,

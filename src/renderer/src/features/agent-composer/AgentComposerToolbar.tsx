@@ -13,6 +13,7 @@ import type { PermissionMode } from '../../types'
 import type { AgentContextCompactionState } from '../../stores/agent-store'
 import type { AgentRoleRef, AgentRoleSummary } from '@shared/agent-role'
 import type { AgentRuntimeBinding } from '@shared/agent-runtime'
+import { CODEX_DIAGNOSTIC_LABELS, type CodexRuntimeDiagnostic } from '@shared/codex-runtime'
 import {
   IconCheck,
   IconChevronDown,
@@ -85,6 +86,9 @@ export function AgentComposerToolbar({
   const [claudeStatus, setClaudeStatus] = useState<ClaudeCodeStatus | null>(null)
   const [detectingClaude, setDetectingClaude] = useState(false)
   const [claudeError, setClaudeError] = useState<string | null>(null)
+  const [codexDiagnostic, setCodexDiagnostic] = useState<CodexRuntimeDiagnostic | null>(null)
+  const [codexDetecting, setCodexDetecting] = useState(false)
+  const [codexDiagnosticError, setCodexDiagnosticError] = useState<string | null>(null)
   const addRef = useRef<HTMLDivElement>(null)
   const roleRefElement = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<HTMLDivElement>(null)
@@ -427,6 +431,11 @@ export function AgentComposerToolbar({
             onRequestClose={() => setOpenMenu(null)}
           >
             <div className="agent-composer-menu-title">运行环境</div>
+            <div className="agent-runtime-note">
+              {canChangeRuntime
+                ? '可以选择 Agent；首次启动失败且未建立模型会话时，也可重选。'
+                : '当前会话暂不能切换 Agent。已有模型会话或正在运行时，请新建会话。'}
+            </div>
             <button
               className={runtimeBinding.kind === 'codex' ? 'selected' : ''}
               disabled={!canChangeRuntime}
@@ -468,7 +477,7 @@ export function AgentComposerToolbar({
               <IconRobot size={13} />
               <span>
                 <strong>Codex ACP</strong>
-                <em>可选的平级 runtime；首条消息后锁定</em>
+                <em>旧版 API Key 方案；与本机 ChatGPT 登录独立</em>
               </span>
               {runtimeBinding.kind === 'acp' && <IconCheck size={11} />}
             </button>
@@ -536,6 +545,46 @@ export function AgentComposerToolbar({
                 <em>费用策略</em>
               </span>
             </div>
+            <button
+              disabled={codexDetecting}
+              onClick={async () => {
+                setCodexDetecting(true)
+                setCodexDiagnosticError(null)
+                try {
+                  setCodexDiagnostic(await window.cclinkStudio.diagnostics.probeCodex())
+                } catch {
+                  setCodexDiagnosticError('Codex 诊断采集失败，请复制诊断日志查看。')
+                } finally {
+                  setCodexDetecting(false)
+                }
+              }}
+            >
+              <IconRefresh size={13} />
+              <span>
+                <strong>{codexDetecting ? '正在检测本机 Codex…' : '检测本机 Codex'}</strong>
+                <em>检查安装、启动和本地登录，不发送模型请求</em>
+              </span>
+            </button>
+            {(codexDiagnostic || codexDiagnosticError) && (
+              <div
+                className={`agent-runtime-status agent-runtime-diagnostic ${codexDiagnostic?.state === 'ready' ? 'ready' : 'warning'}`}
+                role="status"
+              >
+                <span className="agent-runtime-status-dot" />
+                <span>
+                  <strong>
+                    本机 Codex：
+                    {codexDiagnosticError ??
+                      (codexDiagnostic && CODEX_DIAGNOSTIC_LABELS[codexDiagnostic.state])}
+                  </strong>
+                  {codexDiagnostic && !codexDiagnosticError && (
+                    <em>
+                      {codexDiagnostic.code} · {codexDiagnostic.message}
+                    </em>
+                  )}
+                </span>
+              </div>
+            )}
             <button
               onClick={() => {
                 setOpenMenu(null)
