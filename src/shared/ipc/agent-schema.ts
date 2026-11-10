@@ -23,6 +23,7 @@ export const nullableAgentSessionCompatibilityFingerprintSchema = z
   .nullable()
 
 export const agentRuntimeBindingSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('codex') }).strict(),
   z.object({ kind: z.literal('claude-code') }).strict(),
   z.object({ kind: z.literal('acp'), implementationId: z.literal('codex-acp') }).strict(),
 ])

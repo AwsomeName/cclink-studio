@@ -94,7 +94,7 @@ export function GitStatusBarItem({
         }}
       >
         <IconBranch size={13} />
-        <span>{branchLabel}</span>
+        <span className="status-bar-text">{branchLabel}</span>
         <span className="git-status-change-count">● {snapshot.changeCount}</span>
         {(snapshot.additions > 0 || snapshot.deletions > 0) && (
           <span className="git-status-lines" title="Git 可计算的已知增删行数">

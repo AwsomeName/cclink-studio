@@ -8,7 +8,7 @@ const original = useAgentStore.getState()
 afterEach(() => useAgentStore.setState(original, true))
 
 describe('conversation terminal command boundary', () => {
-  it('only enables a finished assistant shell block in its local Claude workspace', () => {
+  it('only enables a finished assistant shell block in its local Codex or Claude workspace', () => {
     const conversation = createAgentConversationState('chat', {
       workspaceRef: { kind: 'local', path: '/workspace/a' },
     })
@@ -47,6 +47,7 @@ describe('conversation terminal command boundary', () => {
     conversation.runtimeBinding = { kind: 'acp', implementationId: 'codex-acp' }
     expect(command.enabled?.(context)).toBe(false)
     conversation.runtimeBinding = { kind: 'claude-code' }
+    expect(command.enabled?.(context)).toBe(true)
     conversation.runtime.workspaceRef = { kind: 'global' }
     expect(command.enabled?.(context)).toBe(false)
   })

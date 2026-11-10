@@ -1,0 +1,25 @@
+# ADR 0022：本地新会话默认 Codex，保留 Claude Code
+
+- 状态：accepted（用户明确要求；真实验收结果另记）
+- 日期：2026-11-10
+- 取代 ADR 0012 中 Claude 必备启动基线、新会话默认 Claude 及禁止复用本机 Codex 文件登录的条款。
+
+## 用户验收
+
+打开本地工作空间，新建会话看到 Codex，发送消息得到真实流式回复；通过 Studio 工具读取工作空间文件；取消运行后可继续；重启可恢复会话。新建空会话可选择 Claude Code，继续仅使用 Studio 的 Claude API Key。旧会话不自动换引擎。
+
+## 决策与边界
+
+使用本机官方 `codex app-server` 的 stdio 接口，增加固定 `local-codex` backend，不扩展任意 Agent Registry。复用现有 Thread、AgentRuntime、run、权限 broker 和 MCP ToolHost；Codex thread ID 只是受主进程信任记录约束的恢复引用。旧 ACP 绑定仍可读取，不静默迁移。
+
+Codex 自己读取本机文件登录；Studio 不复制或展示 token，不修改全局配置、不执行登录/退出。强制文件凭证存储，macOS 子进程拒绝访问系统钥匙串和本机 Claude 凭证。已有 Codex 登录只存在钥匙串时明确失败，不能迁移钥匙串。外部 MCP、插件、hooks、原生浏览器和自动多 Agent 不继承到 Studio 运行；只接受当前运行的 Studio MCP 会话。权限不允许扩大为 Full Access 或持久策略批准。
+
+账号来源进一步限定为 Codex 的 ChatGPT 文件登录与官方 OpenAI 提供商：清理继承的 API Key
+和 API 端点环境变量，启动前检查实际账号类型和有效配置，不接受 API Key、免认证提供商或
+自定义认证端点。原生线程返回的提供商也必须为 OpenAI。检查失败只停止 Studio 的运行，
+不通过强制登录参数、logout 或修改配置来切换本机账号。桌面 App 当前所选账号与这份文件
+登录是否一致必须另行核对，不能仅凭 CLI 存在就声称一致。
+
+默认选择仅影响新本地交互会话。旧数据缺失绑定继续解释为 Claude Code。Claude 缺失或未配置 Key 只影响 Claude 会话；Codex 缺失/未登录只影响 Codex 会话，不静默回退消费其他账号。非 Agent 工作台保持可用。
+
+进程、请求计时器、MCP session、流监听均按 run 创建并在完成、失败、取消时销毁；重启由既有会话信任记录校验再恢复。诊断不输出环境、凭证或原始 app-server stderr。验证覆盖真实本机 Codex、真实 Electron、工具授权拒绝、取消、恢复、旧绑定和 Claude 隔离回归。发布与其他平台真实验收不在本轮范围。

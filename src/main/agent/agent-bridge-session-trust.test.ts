@@ -1,9 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { AgentBridge } from './agent-bridge'
 import { AgentRuntimeStateStore } from './agent-runtime-state-store'
+import { createDefaultAgentConversationConfiguration } from '../../shared/agent-role'
+
+const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-bridge-test-'))
+afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
 
 const queryMock = vi.hoisted(() => vi.fn())
 
@@ -56,13 +60,67 @@ function createBridge(runtimeStateStore?: AgentRuntimeStateStore): AgentBridge {
       }),
     } as never,
     null,
-    { sessionCompatibilityFingerprint: 'runtime-fingerprint', runtimeStateStore },
+    {
+      apiKey: 'test-key',
+      claudeConfigDir,
+      sessionCompatibilityFingerprint: 'runtime-fingerprint',
+      runtimeStateStore,
+    },
   )
 }
 
 describe('AgentBridge main-process Claude session trust', () => {
   beforeEach(() => {
     queryMock.mockReset()
+  })
+
+  it('keeps Codex session trust when Claude credentials are reconfigured', async () => {
+    const stateStore = new AgentRuntimeStateStore()
+    const bridge = createBridge(stateStore)
+    const configuration = createDefaultAgentConversationConfiguration()
+    const binding = { kind: 'codex' } as const
+    const conversationId = 'codex-conversation'
+    bridge.restoreConversation(conversationId, null, configuration, null, [], binding)
+    const fingerprint = bridge.getStatus(conversationId).sessionCompatibilityFingerprint!
+    await stateStore.rememberSession({
+      conversationId,
+      sessionId: 'native-codex-session',
+      compatibilityFingerprint: fingerprint,
+      workspaceKey: null,
+      runtimeBindingKey: 'codex',
+      updatedAt: Date.now(),
+    })
+    bridge.restoreConversation(
+      conversationId,
+      'native-codex-session',
+      configuration,
+      fingerprint,
+      [],
+      binding,
+    )
+
+    bridge.reconfigure({
+      apiKey: 'changed-claude-key',
+      sessionCompatibilityFingerprint: 'new-claude-fingerprint',
+    })
+
+    expect(stateStore.getSession(conversationId)?.sessionId).toBe('native-codex-session')
+    expect(bridge.getStatus(conversationId)).toMatchObject({
+      sessionId: 'native-codex-session',
+      runtimeBinding: binding,
+      sessionCompatibilityFingerprint: fingerprint,
+    })
+    expect(() =>
+      bridge.restoreConversation(
+        conversationId,
+        'native-codex-session',
+        configuration,
+        fingerprint,
+        [],
+        binding,
+      ),
+    ).not.toThrow()
+    await bridge.destroy()
   })
 
   it('rejects a renderer-paired old session and resumes only a session observed by this runtime', async () => {

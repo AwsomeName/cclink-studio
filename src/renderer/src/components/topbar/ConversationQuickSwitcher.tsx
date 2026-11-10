@@ -58,8 +58,6 @@ export function ConversationQuickSwitcher({
   const selectedRemoteSessionId = useCclinkStore((state) => state.selectedSessionId)
   const remoteLoading = useCclinkStore((state) => state.loading)
   const remoteRealtimeState = useCclinkStore((state) => state.realtime.state)
-  const connectRemote = useCclinkStore((state) => state.connectRealtime)
-  const loadRemoteSessions = useCclinkStore((state) => state.loadSessions)
   const selectRemoteSession = useCclinkStore((state) => state.selectSession)
   const loadRemoteMessages = useCclinkStore((state) => state.loadMessages)
   const setAgentPanelMode = useUIStore((state) => state.setAgentPanelMode)
@@ -105,13 +103,6 @@ export function ConversationQuickSwitcher({
   const visibleCount = quickSwitcherVisibleCount(panelMode, panelWidth)
   const { visible, overflow } = partitionQuickSwitcherThreads(recentConversations, visibleCount)
   const isRemoteWorkspace = activeWorkspaceRef.kind === 'remote'
-
-  useEffect(() => {
-    if (activeWorkspaceRef.kind !== 'remote') return
-    void connectRemote().then((connected) => {
-      if (connected) return loadRemoteSessions(activeWorkspaceRef)
-    })
-  }, [activeWorkspaceRef, connectRemote, loadRemoteSessions])
 
   useEffect(() => {
     setOverflowOpen(false)

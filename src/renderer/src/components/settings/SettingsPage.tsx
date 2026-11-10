@@ -113,7 +113,7 @@ const SETTINGS_SEARCH_INDEX: Array<{
   {
     sectionId: 'agent',
     label: 'Agent 后端',
-    description: '配置默认 Claude Code 和可选 Codex ACP。',
+    description: '使用本机 Codex，配置 Claude Code 备选。',
     keywords: ['agent', 'claude', 'codex', 'acp', 'openai', 'model', 'api', '模型'],
   },
   {
@@ -1089,10 +1089,21 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           <section className="settings-section">
             <h2>Agent</h2>
             <div className="settings-group">
+              <div className="settings-row">
+                <div className="settings-label">
+                  <span>默认 Agent：Codex</span>
+                  <span className="settings-description">
+                    新建本地会话使用本机 Codex CLI 的 ChatGPT 文件登录，模型沿用本机 Codex 配置。
+                    仅接入官方账号服务，不回退到 API Key 或自定义提供商。 严格确认模式下仅开放
+                    Studio 工具；需要原生命令时可选 Claude Code。 首条消息前可切换为 Claude
+                    Code；以下模型提供商和 API Key 配置仅用于 Claude Code。
+                  </span>
+                </div>
+              </div>
               <SettingsRow settingKey="provider" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
                   <span>模型提供商</span>
-                  <span className="settings-description">用于本地 Agent 后端。</span>
+                  <span className="settings-description">用于 Claude Code 备选后端。</span>
                 </div>
                 <div className="settings-control">
                   <select
@@ -1147,8 +1158,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     {secretStatus?.migrationBlocked
                       ? '旧版凭证待迁移，当前设置文件不会被覆盖。'
                       : secretStatus?.apiKeyConfigured
-                        ? '已配置并保存到本地凭证文件。'
-                        : '尚未配置。'}
+                        ? '已配置并保存到 Studio 本地凭证文件，不使用 Claude 订阅登录。'
+                        : '尚未配置；Claude Code 不可用，也不会借用本机 Claude 登录。Codex 不受影响。'}
                   </span>
                 </div>
                 <div className="settings-secret-control">
@@ -1247,7 +1258,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 <div className="settings-label">
                   <span>Claude Code 运行时</span>
                   <span className="settings-description">
-                    Studio 管理版本、系统安装或自定义可执行文件。切换前会先探测，不会静默回退。
+                    所有运行时均使用 Studio 独立配置和 API Key，不读取或修改本机 Claude 登录。
                   </span>
                 </div>
                 <div className="settings-control">
@@ -1350,7 +1361,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 <div className="settings-label">
                   <span>Codex ACP（可选）</span>
                   <span className="settings-description">
-                    不影响默认 Claude Code；只在 Thread 里主动选择 Codex ACP 时使用。
+                    仅用于旧版 ACP 会话；默认 Codex 直接使用本机 CLI 和已有文件登录，不需要此处的
+                    ACP 配置。
                   </span>
                 </div>
               </div>

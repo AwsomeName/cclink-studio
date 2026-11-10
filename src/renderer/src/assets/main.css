@@ -10112,15 +10112,145 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 
 .status-bar {
   position: relative;
+  container: statusbar / inline-size;
   height: var(--statusbar-height);
   min-height: var(--statusbar-height);
   background: var(--bg-statusbar);
   color: white;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   padding: 0 12px;
   font-size: 12px;
   gap: 16px;
+}
+
+.status-bar-left,
+.status-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  height: 100%;
+}
+
+.status-bar-right {
+  justify-content: flex-end;
+}
+
+.status-bar-left > *,
+.status-bar-right > * {
+  min-width: 0;
+}
+
+.status-bar-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-bar-url {
+  flex: 0 1 auto;
+  /* The URL yields space before the workspace or Git controls. */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-bar-workspace,
+.status-bar-workspace-switch {
+  flex-shrink: 0;
+  max-width: 36%;
+}
+
+.status-bar-left > .git-status-root {
+  min-width: 0;
+  max-width: 60%;
+}
+
+.status-bar-left .git-status-trigger {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.status-bar-right > .framework-diagnostics-status {
+  flex-shrink: 0;
+}
+
+.status-bar-right > .update-badge {
+  flex-shrink: 0;
+  max-width: 52%;
+}
+
+.status-bar-center {
+  position: relative;
+  min-width: 0;
+}
+
+.status-bar-clock {
+  display: block;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+  cursor: default;
+}
+
+.status-bar-clock:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+.status-bar-clock-compact {
+  display: none;
+}
+
+/* Messages temporarily replace the clock, without covering either side or
+   moving into the native browser view above the status bar. */
+.status-bar-center > .toast {
+  width: 100%;
+  max-width: 100%;
+}
+
+.status-bar-center:has(.toast) > .status-bar-clock {
+  visibility: hidden;
+}
+
+@container statusbar (max-width: 1100px) {
+  .status-bar-clock-full {
+    display: none;
+  }
+
+  .status-bar-clock-compact {
+    display: inline;
+  }
+
+  .status-bar-left,
+  .status-bar-right {
+    gap: 8px;
+  }
+
+  .status-bar-left .git-status-lines {
+    display: none;
+  }
+}
+
+@container statusbar (max-width: 760px) {
+  .status-bar-right > .status-bar-edition,
+  .framework-diagnostics-status .status-bar-text,
+  .status-bar-left > .status-bar-url {
+    display: none;
+  }
+
+  .status-bar-workspace,
+  .status-bar-workspace-switch {
+    flex-shrink: 1;
+    max-width: none;
+  }
+
+  .status-bar-right > .update-badge {
+    flex-shrink: 1;
+    max-width: calc(100% - 32px);
+  }
 }
 
 .status-bar-item {
@@ -10842,11 +10972,6 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
     border-right: 0;
     border-bottom: 1px solid var(--border-color);
   }
-}
-
-.status-bar-spacer {
-  min-width: 0;
-  flex: 1;
 }
 
 .status-bar-item.framework-diagnostics-status {

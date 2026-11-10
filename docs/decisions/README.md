@@ -67,3 +67,5 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
   默认 Runtime/控制面的路线；保留默认关闭实验和验收证据，未来若恢复则优先从“Studio 控制本地
   Agent、cclink-agent 只转发消息”的边界重新评审。
 - `0020-default-workspace-data-boundary.md`：accepted；默认本地入口、工作空间内业务资料与事务分区、全局账号及本机调度授权边界，以及移动和副本恢复的长期取舍；第一批入口已实现，事务目录化与恢复尚未实现。
+
+- `0022-codex-default-local-runtime.md`：新本地会话默认 Codex app-server；保留 Claude Code 与旧 ACP，取消 Claude 的全局启动前置条件，允许 Codex 自己使用本机文件登录，保持单一 run/权限所有者。

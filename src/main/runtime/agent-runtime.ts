@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { STUDIO_CLAUDE_AUTH_REQUIRED } from '../agent-core/runtime/claude-process-environment'
 import { createHash } from 'node:crypto'
 import { app } from 'electron'
 import { AgentBridge, type AgentBridgeOptions } from '../agent/agent-bridge'
@@ -67,41 +68,44 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
             return runtime.runtimeComponentManager.resolveManagedClaude(version)
           },
         })
-        const claudeCodePath = settings.claudeCodePath?.trim() ?? ''
-        const claudeRuntime = await runtime.claudeRuntimeManager.initialize(
-          settings.claudeRuntimeSource === 'bundled'
-            ? { source: 'bundled' }
-            : settings.claudeRuntimeSource === 'managed'
-              ? { source: 'managed', version: settings.claudeManagedVersion }
-              : settings.claudeRuntimeSource === 'custom' || claudeCodePath
-                ? { source: 'custom', customPath: claudeCodePath }
-                : { source: 'system' },
-        )
-        if (
-          (claudeRuntime.source === 'bundled' || claudeRuntime.source === 'managed') &&
-          !settings.apiKey.trim()
-        ) {
-          const failure = {
-            code: 'AUTH_REQUIRED' as const,
-            message: 'Studio 管理的 Claude Code 仅支持显式 API 凭证，不能使用 Claude 订阅登录',
+        try {
+          const claudeCodePath = settings.claudeCodePath?.trim() ?? ''
+          const claudeRuntime = await runtime.claudeRuntimeManager.initialize(
+            settings.claudeRuntimeSource === 'bundled'
+              ? { source: 'bundled' }
+              : settings.claudeRuntimeSource === 'managed'
+                ? { source: 'managed', version: settings.claudeManagedVersion }
+                : settings.claudeRuntimeSource === 'custom' || claudeCodePath
+                  ? { source: 'custom', customPath: claudeCodePath }
+                  : { source: 'system' },
+          )
+          if (!settings.apiKey?.trim()) {
+            const failure = {
+              code: 'AUTH_REQUIRED' as const,
+              message: STUDIO_CLAUDE_AUTH_REQUIRED,
+            }
+            runtime.claudeRuntimeManager.reportFailure(failure)
+            throw new ClaudeRuntimeResolutionError(failure)
           }
-          runtime.claudeRuntimeManager.reportFailure(failure)
-          throw new ClaudeRuntimeResolutionError(failure)
+          backendOptions = {
+            ...backendOptions,
+            claudeCodePath: claudeRuntime.executablePath,
+            sessionCompatibilityFingerprint: buildClaudeSessionCompatibilityFingerprint(
+              claudeRuntime.fingerprint,
+              settings,
+            ),
+            runtimeProvenance: {
+              source: claudeRuntime.source,
+              sdkVersion: claudeRuntime.sdkVersion ?? null,
+              claudeCodeVersion: claudeRuntime.claudeCodeVersion,
+            },
+          }
+          runtimeLabel = `${claudeRuntime.source}, Claude Code ${claudeRuntime.claudeCodeVersion}`
+        } catch (error) {
+          // A missing optional Claude runtime must never block local Codex conversations.
+          backendOptions.claudeRuntimeError = error instanceof Error ? error.message : String(error)
+          runtimeLabel = 'Codex 按需启动；Claude Code 未就绪'
         }
-        backendOptions = {
-          ...backendOptions,
-          claudeCodePath: claudeRuntime.executablePath,
-          sessionCompatibilityFingerprint: buildClaudeSessionCompatibilityFingerprint(
-            claudeRuntime.fingerprint,
-            settings,
-          ),
-          runtimeProvenance: {
-            source: claudeRuntime.source,
-            sdkVersion: claudeRuntime.sdkVersion ?? null,
-            claudeCodeVersion: claudeRuntime.claudeCodeVersion,
-          },
-        }
-        runtimeLabel = `${claudeRuntime.source}, Claude Code ${claudeRuntime.claudeCodeVersion}`
       }
       runtime.agentBridge = new AgentBridge(
         runtime.mainWindow,
@@ -112,6 +116,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
         runtime.adbBridge,
         {
           ...backendOptions,
+          claudeConfigDir: join(app.getPath('userData'), 'agent-runtime', 'claude-api'),
           apiFormat: settings.apiFormat,
           apiBaseUrl: settings.apiBaseUrl,
           apiKey: settings.apiKey,

@@ -77,7 +77,7 @@ function resolveCodeBlock(context?: CommandContext) {
     !conversation ||
     conversation.runtime.location !== 'local' ||
     ref?.kind !== 'local' ||
-    (conversation.runtimeBinding?.kind ?? 'claude-code') !== 'claude-code' ||
+    conversation.runtimeBinding?.kind === 'acp' ||
     workspaceRefKey(ref) !== target.workspaceKey
   )
     return null
@@ -100,7 +100,7 @@ const pending = new Map<string, Promise<void>>()
 
 async function runCodeBlock(context?: CommandContext): Promise<void> {
   const resolved = resolveCodeBlock(context)
-  if (!resolved) throw new Error('代码块未完成或本地 Claude 会话已变化')
+  if (!resolved) throw new Error('代码块未完成或本地 Agent 会话已变化')
   const key = terminalCodeBlockSourceKey(resolved.source)
   const existingPromise = pending.get(key)
   if (existingPromise) return existingPromise
@@ -121,7 +121,7 @@ async function runCodeBlock(context?: CommandContext): Promise<void> {
         closePolicy: 'keep-running',
         workspaceKey: workspaceRefKey(resolved.workspaceRef),
         codeBlockSource: resolved.source,
-        message: '用户从 Claude 消息启动命令',
+        message: '用户从 Agent 消息启动命令',
       })
       await refreshTerminalSessions()
       if (!created.success) throw new Error(created.error ?? 'Terminal 创建失败')

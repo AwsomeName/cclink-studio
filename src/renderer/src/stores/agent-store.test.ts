@@ -47,6 +47,56 @@ describe('useAgentStore', () => {
   })
 
   describe('run lifecycle', () => {
+    it.each([null, 'claude-session'])(
+      '恢复 Codex 会话时忽略临时 Claude 状态（%s）',
+      (sessionId) => {
+        const conversationId = useAgentStore.getState().activeConversationId
+        useAgentStore
+          .getState()
+          .setSessionId('persisted-codex-session', conversationId, 'a'.repeat(64))
+
+        useAgentStore.getState().reconcileRuntimeStatus(
+          {
+            connected: false,
+            ready: true,
+            sessionId,
+            runtimeBinding: { kind: 'claude-code' },
+            sessionCompatibilityFingerprint: 'b'.repeat(64),
+          },
+          conversationId,
+        )
+
+        expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+          runtimeBinding: { kind: 'codex' },
+          sessionId: 'persisted-codex-session',
+          sessionCompatibilityFingerprint: 'a'.repeat(64),
+        })
+      },
+    )
+
+    it('同一 Codex 后端指纹变更时仍然使旧会话失效', () => {
+      const conversationId = useAgentStore.getState().activeConversationId
+      useAgentStore
+        .getState()
+        .setSessionId('persisted-codex-session', conversationId, 'a'.repeat(64))
+
+      useAgentStore.getState().reconcileRuntimeStatus(
+        {
+          connected: false,
+          ready: true,
+          sessionId: null,
+          runtimeBinding: { kind: 'codex' },
+          sessionCompatibilityFingerprint: 'b'.repeat(64),
+        },
+        conversationId,
+      )
+
+      expect(useAgentStore.getState().conversations[conversationId]).toMatchObject({
+        sessionId: null,
+        sessionCompatibilityFingerprint: 'b'.repeat(64),
+      })
+    })
+
     it('发送后立即进入启动中，不等待首个流事件', () => {
       useAgentStore.getState().addUserMessage('开始执行')
       useAgentStore.getState().beginRun()

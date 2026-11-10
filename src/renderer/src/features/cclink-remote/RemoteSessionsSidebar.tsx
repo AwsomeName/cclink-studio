@@ -60,7 +60,7 @@ export function RemoteSessionsSidebar({
         {showArchived ? '返回当前会话' : '查看已归档会话'}
       </button>
       {error && <div className="project-panel-empty terminal-sidebar-error">{error}</div>}
-      {visible.length === 0 && !loading ? (
+      {visible.length === 0 && !loading && !error ? (
         <div className="project-panel-empty">当前远程项目暂无会话</div>
       ) : (
         visible.map((session) => (

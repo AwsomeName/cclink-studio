@@ -1,6 +1,6 @@
 # ADR 0012：受控的平级 ACP Runtime
 
-- 状态：accepted
+- 状态：accepted；默认后端、Claude 启动依赖及本机 Codex 登录限制已由 ADR 0022 取代
 - 日期：2026-08-14
 - 负责人：CCLink Studio Maintainers
 - 复审：ADR 0006 中“ACP Client 与外部 Agent 协议是非目标”的条款

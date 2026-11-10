@@ -1,0 +1,101 @@
+# 默认本地 Codex 验收
+
+日期：2026-11-10。实现决策见 [ADR 0022](../decisions/0022-codex-default-local-runtime.md)。
+
+## 用户功能进度
+
+本机真实 Electron + 已安装的 Codex 已验证新会话默认选择、流式对话、Studio 工具读写、同一原生
+Session 重启恢复、停止后继续发送，以及 Claude Code 备选入口。没有发布安装包，另一台电脑
+仍需安装包含这些修改的版本。浏览器、Android、数据源等完整业务流程未在本轮逐项验收。
+
+真人可执行步骤：
+
+1. 打开 Studio 的一个本地工作空间，新建会话；输入框的 Agent 选择器应显示 Codex。
+2. 在工作空间准备 `marker.md`，让 Agent 通过 Studio 工具读取，再创建 `result.md`；核对文件内容。
+3. 关闭并重启 Studio，继续询问上一轮内容；保持原会话与 Codex 绑定。
+4. 让 Agent 输出较长回答，点击停止；停止完成后发送一条新消息，应正常回复。
+5. 新建空会话，在 Agent 选择器中选择「Claude Code（备选）」。配置 Studio 的 Claude API Key
+   后可使用；缺少或无效 Key 应报错，不回退到本机 Claude 订阅。首条消息后绑定锁定，已有
+   Claude 会话不自动迁移为 Codex。
+
+实际验收使用 Playwright 操作真实 Studio 窗口、真实本机 Codex 模型调用和独立临时工作空间，
+不是 mock Agent。目录选择器返回测试文件夹，后续读写经过实际工作空间授权链路。
+
+| 场景                   | 实际结果                                                          |
+| ---------------------- | ----------------------------------------------------------------- |
+| 新建本地会话           | Codex 默认被选中；原生流式回复成功                                |
+| Studio MCP 读写        | `editor_read` 读取固定标记，`editor_write` 创建文件且磁盘内容正确 |
+| 重启恢复               | 原生 Codex thread ID 完全一致；继续回复前文标记                   |
+| 停止与后续发送         | 真实回答被取消，run 进入 cancelled，后续消息成功                  |
+| Claude 备选            | 空会话可选择；认证隔离 UI 回归另行通过                            |
+| 拒绝原生命令及补丁删除 | 请求进入 Studio 权限 broker，被拒绝后测试文件仍存在               |
+
+UI 证据目录：
+`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-codex-ui-uJC9Ly`。
+包含 `result.json`、`codex-read.png`、`claude-choice.png` 和重启前后测试事件。
+Claude 回归见 [Claude 登录隔离](claude-auth-isolation.md)。
+
+## 工程准备度
+
+- 本机验证版本：`codex-cli 0.167.0-alpha.3.2`，macOS arm64。
+- 全量单测基线：437 个文件通过，3712 项通过、12 项跳过；随后新增的恢复状态与配置隔离用例
+  按受影响范围复跑。真实 Codex smoke 额外执行，不计入默认跳过项的验证结果。
+- 真实后端验证涵盖 Studio MCP、销毁并重建 backend 后恢复、命令删除拒绝、补丁删除拒绝。
+- 生命周期用例覆盖无登录、外部 MCP、作用域收窄、过期审批、停止清理和恢复失败不换 Session。
+- 启动期间其他 Agent 的状态指纹不能清空已保存的 Codex Session；更改 Claude 凭证不能撤销
+  Codex 的主进程 Session 信任记录。同一 Runtime 的不兼容指纹仍使旧 Session 失效。
+- 类型检查、构建、ESLint、凭证边界与上下文操作边界检查通过。
+
+复跑（真实 Codex 调用会消耗当前账号额度）：
+
+```bash
+CCLINK_CODEX_REAL_SMOKE=1 pnpm exec vitest run src/main/agent-core/backends/local-codex-backend.test.ts
+pnpm build
+node scripts/codex-default-ui-smoke.mjs
+node scripts/claude-auth-isolation-ui-smoke.mjs
+```
+
+## 边界与未完成项
+
+Codex 自己使用本机文件登录和模型配置，并保存原生 Session。Studio 不复制登录 token、不修改
+全局配置、不执行登录或退出。因此它与本机 Codex 共用账号额度和原生会话目录，不承诺对其他
+同用户进程不可见。它不读取 Claude 订阅登录。只有钥匙串登录、缺少 CLI 或不兼容权限策略时
+明确失败，不静默切换 Claude，也不降低保护条件。
+
+### 同日复查
+
+- 按实际 Studio 启动代码调用 `account/read`：账号类型 `chatgpt`，凭证存储 `file`，提供商
+  `openai`，无 API Key/自定义 API 端点环境变量，无 CODEX_HOME 覆盖。没有读取或输出 token。
+- 这证明当前使用本机 Codex 的 ChatGPT 文件登录；桌面 App 的账号界面被工具访问限制阻止，
+  未直接比对当前选中的桌面账号。不能把两者无条件等同。[官方认证文档](https://learn.chatgpt.com/docs/auth)
+  区分文件、钥匙串及进程内凭证，因此其他电脑仍需按实际登录来源验收。
+- 修正认证范围：默认后端只接受 ChatGPT 登录、官方提供商与官方账号端点；继承的
+  `OPENAI_API_KEY`、`CODEX_API_KEY`、`OPENAI_BASE_URL` 被移除。API Key/自定义提供商
+  明确失败，不通过修改全局登录来纠正。
+- 修正原生补丁路径检查遗漏：同时验证源路径与重命名目标，解析符号链接，批准前再次校验。
+  工作空间外目标、符号链接逃逸和未知补丁类型均拒绝。
+- 真实后端复跑通过；删除审批用例已改用产品默认的 `auto-except-destructive` 模式。
+  同时补测替代认证拒绝、默认模式删除确认，以及真实目录和符号链接路径边界。
+- 复查后 96 项受影响测试通过，真实后端 smoke 3 项通过；真实 Electron 的默认选择、读写、
+  同一原生 Session 重启恢复、停止再发送与 Claude 备选均再次通过。窗口证据目录：
+  `/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-codex-ui-dsSnUc`。
+
+### DeepSeek 备用配置交叉验收
+
+随后在真实窗口保存 DeepSeek API Key 并切换 Claude Code，验证了连接测试、Studio 文件
+读写及相同原生 Session 重启恢复。保存和清除 Claude Key 均不改变新会话的 Codex 默认值；
+配置期间 Codex 实际读取文件成功，清除后仍正常回答。
+
+此轮发现并修复了 editor_read 错误路径参数被静默忽略导致超时的问题；真实 Codex 已验证
+即时错误提示后的参数纠正和成功读取。没有改变文件访问权限或 Claude 的认证隔离。
+完整步骤、原始事件与断言修正说明见 [真实 DeepSeek 验收](claude-auth-isolation.md#同日真实-deepseek-备用方案验收)。
+
+手动压缩和运行中补充尚未开放；原生模型的自动上下文管理仍由 Codex 负责。其他平台和不同
+Codex 版本未经本轮真实验收。权限策略返回值与 MCP 隔离在每次 run 启动时校验，失败即停止。
+严格确认模式仅开放 Studio MCP 工具，禁用会自行放行可信只读命令的 Codex 原生执行器；
+需要原生命令的严格确认任务使用 Claude Code 备选。权限模式切换须等当前运行结束，或先停止；
+不会在原生执行器仍使用旧策略时显示已应用新策略。
+
+集成接口依据 [官方 app-server 文档](https://learn.chatgpt.com/docs/app-server)。原生补丁在
+`untrusted` 策略下请求用户授权的行为同时以真实拒绝用例和
+[官方实现](https://github.com/openai/codex/blob/main/codex-rs/core/src/safety.rs)核对。

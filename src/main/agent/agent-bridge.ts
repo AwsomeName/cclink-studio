@@ -47,7 +47,6 @@ import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-bac
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import type { CclinkAgentService, CclinkAgentEndpoint } from './cclink-agent-service'
 import { AgentRuntimeStateStore, type TrustedAgentSessionRecord } from './agent-runtime-state-store'
-import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
 import {
   AGENT_PROFILE_PROMPT_COMPILER_VERSION,
   BuiltinAgentRoleRegistry,
@@ -74,6 +73,8 @@ export interface AgentBridgeOptions {
   backendType?: 'claude-code' | 'http-api'
   /** 主进程 ClaudeRuntimeManager 已探测的 Claude Code executable 绝对路径。 */
   claudeCodePath?: string
+  claudeRuntimeError?: string
+  claudeConfigDir?: string
   /** Claude Code 运行时与 provider/model 组合的会话兼容指纹。 */
   sessionCompatibilityFingerprint?: string
   /** 已解析运行时的安全诊断投影，不包含绝对路径。 */
@@ -158,6 +159,7 @@ export class AgentBridge {
     usageLedgerService?: UsageLedgerService
   }
   private readonly getWorkspacePath?: () => string
+  private readonly claudeConfigDir: string
   private readonly codexHome: string
   private configurationChangePending = false
   private sessionCompatibilityFingerprint: string | null
@@ -197,6 +199,7 @@ export class AgentBridge {
       usageLedgerService: options?.usageLedgerService,
     }
     this.getWorkspacePath = options?.getWorkspacePath
+    this.claudeConfigDir = options?.claudeConfigDir ?? ''
     this.codexHome = options?.codexHome ?? ''
     this.sessionCompatibilityFingerprint = options?.sessionCompatibilityFingerprint ?? null
     this.runtimeProvenance = options?.runtimeProvenance ?? null
@@ -248,16 +251,8 @@ export class AgentBridge {
       claudeCode: {
         createUsageObserver: this.deps.usageLedgerService?.startModelRun,
         claudeCodePath: options?.claudeCodePath,
-        env:
-          options?.runtimeProvenance?.source === 'managed'
-            ? {
-                DISABLE_UPDATES: '1',
-                CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-                ...(options.claudeCodePath
-                  ? managedClaudeIsolationEnvironment(options.claudeCodePath)
-                  : {}),
-              }
-            : undefined,
+        runtimeError: options?.claudeRuntimeError,
+        claudeConfigDir: this.claudeConfigDir,
         apiBaseUrl: options?.apiBaseUrl,
         apiKey: options?.apiKey,
         modelName: options?.modelName,
@@ -548,8 +543,8 @@ export class AgentBridge {
     conversationId: string,
     payload: AgentCompactConversationPayload,
   ): Promise<void> {
-    if (this.getConversationRuntimeBinding(conversationId).kind === 'acp') {
-      throw new Error('Codex ACP 暂不支持手动压缩上下文')
+    if (this.getConversationRuntimeBinding(conversationId).kind !== 'claude-code') {
+      throw new Error('当前 Codex 后端暂不支持手动压缩上下文')
     }
     if (this.isBusy(conversationId)) throw new Error('Agent 正在响应中，暂时不能压缩上下文')
     const binding = this.bindConversationConfiguration(conversationId, payload.configuration)
@@ -991,8 +986,11 @@ export class AgentBridge {
   /** 切换后端（使用存储的依赖） */
   switchBackend(config: BackendConfig, preserveSessions = true): void {
     if (!preserveSessions) {
-      this.trustedClaudeSessions.clear()
       for (const conversationId of this.runtime.getConversationIds()) {
+        // Changing the default Claude configuration does not reconfigure Codex
+        // backends, so their independently authenticated sessions remain valid.
+        if (this.getConversationRuntimeBinding(conversationId).kind !== 'claude-code') continue
+        this.trustedClaudeSessions.delete(conversationId)
         void this.runtimeStateStore.clearSession(conversationId)
       }
     }
@@ -1011,6 +1009,7 @@ export class AgentBridge {
       codexAcpPath?: string
       codexApiKey?: string
       codexHome?: string
+      claudeRuntimeError?: string
       sessionCompatibilityFingerprint?: string
       runtimeProvenance?: ClaudeRuntimeProvenance
     },
@@ -1025,6 +1024,7 @@ export class AgentBridge {
     const config = this.buildBackendConfig({
       agentEngine: 'local-claude-code',
       claudeCodePath: apiSettings.claudeCodePath,
+      claudeRuntimeError: apiSettings.claudeRuntimeError,
       apiBaseUrl: apiSettings.apiBaseUrl,
       apiKey: apiSettings.apiKey,
       modelName: apiSettings.modelName,
@@ -1533,7 +1533,7 @@ export class AgentBridge {
   }
 
   private async rememberTrustedClaudeSession(conversationId: string): Promise<void> {
-    if (this.getConversationRuntimeBinding(conversationId).kind !== 'claude-code') return
+    if (this.getConversationRuntimeBinding(conversationId).kind === 'acp') return
     const sessionId = this.runtime.getStatus(conversationId).sessionId?.trim()
     const compatibilityFingerprint = this.getConversationCompatibilityFingerprint(conversationId)
     if (!sessionId || !compatibilityFingerprint) return
@@ -1554,7 +1554,7 @@ export class AgentBridge {
       return 'cclink-agent:http-sse:1'
     }
     const binding = this.getConversationRuntimeBinding(conversationId)
-    return binding.kind === 'acp' ? `acp:${binding.implementationId}` : 'claude-code'
+    return binding.kind === 'acp' ? `acp:${binding.implementationId}` : binding.kind
   }
 
   private bindConversationRuntime(
@@ -1570,7 +1570,11 @@ export class AgentBridge {
     }
     this.runtime.bindConversationBackend(
       conversationId,
-      binding.kind === 'acp' ? this.acpConfig : this.buildBackendConfigFromCurrentAgent(),
+      binding.kind === 'codex'
+        ? { type: 'local-codex', codex: { getWorkspacePath: this.getWorkspacePath } }
+        : binding.kind === 'acp'
+          ? this.acpConfig
+          : this.buildBackendConfigFromCurrentAgent(),
     )
     this.conversationRuntimeBindings.set(conversationId, binding)
     return binding
@@ -1587,6 +1591,8 @@ export class AgentBridge {
   private getRuntimeCompatibilityFingerprint(conversationId: string): string | null {
     const binding = this.getConversationRuntimeBinding(conversationId)
     if (binding.kind === 'claude-code') return this.sessionCompatibilityFingerprint
+    if (binding.kind === 'codex')
+      return createHash('sha256').update('codex-app-server|studio-v1').digest('hex')
     return createHash('sha256')
       .update(`local-acp|${binding.implementationId}|${CODEX_ACP_EXPECTED_VERSION}|protocol-1`)
       .digest('hex')

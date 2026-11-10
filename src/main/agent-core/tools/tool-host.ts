@@ -85,8 +85,16 @@ export class McpToolHost {
   /** 已进入本机工具处理链的调用；取消终态必须等这些调用全部结束。 */
   private readonly activeToolCalls = new WeakMap<ToolExecutionContext, Set<Promise<unknown>>>()
 
-  constructor(permissionManager: ToolPermissionController) {
+  constructor(private readonly permissionManager: ToolPermissionController) {
     this.authorizationBroker = new AgentToolAuthorizationBroker(permissionManager)
+  }
+
+  /** Native Codex auto-runs trusted reads; disable that executor when Studio requires read confirmation. */
+  allowsUnattendedNativeReads(): boolean {
+    return !this.permissionManager.needsConfirmation('Codex 原生命令', {
+      readOnlyHint: true,
+      destructiveHint: false,
+    })
   }
 
   authorizeSdkTool(input: {

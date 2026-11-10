@@ -17,6 +17,7 @@ export class CclinkRuntimeStateStore {
   private readonly filePath: string
   private writes: Promise<void> | null = null
   private pendingSnapshot: string | null = null
+  private recoveryError: Error | null = null
 
   constructor(
     private readonly root: string,
@@ -26,29 +27,42 @@ export class CclinkRuntimeStateStore {
   }
 
   async load(): Promise<CclinkRuntimeState> {
+    this.recoveryError = null
     try {
       return await readStateFile(this.filePath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    } catch (primaryError) {
+      let recovered: CclinkRuntimeState
+      try {
+        // A missing primary can be an interrupted recovery, not necessarily a first launch.
+        recovered = await readStateFile(`${this.filePath}.bak`)
+      } catch (backupError) {
+        if (!isMissingFile(primaryError) || !isMissingFile(backupError)) {
+          this.recoveryError = new Error(
+            '远程会话历史恢复失败：cclink-runtime-state.json 及其备份无法读取。' +
+              '原文件已保留，请备份 cclink-remote 目录后恢复历史；未创建空会话状态。',
+            { cause: new AggregateError([primaryError, backupError]) },
+          )
+          console.warn('[CCLink Studio] 远程会话状态加载失败:', this.recoveryError)
+          throw this.recoveryError
+        }
         const imported = await this.readPreviousDesktopState()
         if (imported) {
           await this.save(imported)
           return imported
         }
+        return structuredClone(EMPTY_STATE)
       }
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.warn('[CCLink Studio] 远程会话状态加载失败:', error)
-        const quarantinePath = `${this.filePath}.corrupt-${Date.now()}`
-        await rename(this.filePath, quarantinePath).catch(() => undefined)
-        try {
-          const recovered = await readStateFile(`${this.filePath}.bak`)
-          await this.save(recovered)
-          return recovered
-        } catch {
-          // Backup is optional; a corrupt primary remains quarantined for manual recovery.
-        }
+
+      console.warn('[CCLink Studio] 远程会话状态从备份恢复:', primaryError)
+      if (!isMissingFile(primaryError)) {
+        // Only move the primary after validating a usable backup. Otherwise the next
+        // launch would mistake the missing file for a new installation and save empty history.
+        const quarantinePath = `${this.filePath}.corrupt-${Date.now()}-${randomUUID()}`
+        await rename(this.filePath, quarantinePath)
       }
-      return structuredClone(EMPTY_STATE)
+      // The primary is absent here, so save cannot replace the good backup with bad data.
+      await this.save(recovered)
+      return recovered
     }
   }
 
@@ -116,6 +130,7 @@ export class CclinkRuntimeStateStore {
   }
 
   save(state: CclinkRuntimeState): Promise<void> {
+    if (this.recoveryError) return Promise.reject(this.recoveryError)
     this.pendingSnapshot = JSON.stringify(sanitizeState(state), null, 2)
     this.writes ??= this.drainWrites().finally(() => {
       this.writes = null
@@ -295,8 +310,21 @@ async function readStateFile(filePath: string): Promise<CclinkRuntimeState> {
   const info = await stat(filePath)
   if (info.size > MAX_STATE_BYTES) throw new Error('远程会话状态超过安全大小限制')
   const parsed = JSON.parse(await readFile(filePath, 'utf8')) as Partial<CclinkRuntimeState>
-  if (parsed.version !== 1) return structuredClone(EMPTY_STATE)
+  if (
+    !parsed ||
+    parsed.version !== 1 ||
+    !Array.isArray(parsed.sessions) ||
+    !parsed.messages ||
+    typeof parsed.messages !== 'object' ||
+    Array.isArray(parsed.messages)
+  ) {
+    throw new Error('远程会话状态格式无效或版本不受支持')
+  }
   return sanitizeState(parsed)
+}
+
+function isMissingFile(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException)?.code === 'ENOENT'
 }
 
 function sanitizeState(state: Partial<CclinkRuntimeState>): CclinkRuntimeState {

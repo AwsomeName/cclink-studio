@@ -1,3 +1,5 @@
+import { claudeProcessCommand } from '../agent-core/runtime/claude-process-launch'
+import { withClaudeProbeEnvironment } from '../agent-core/runtime/claude-process-environment'
 import { execFile } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -783,14 +785,13 @@ async function verifyMacCodeSignature(path: string): Promise<void> {
 
 async function executeClaudeVersion(path: string): Promise<string> {
   try {
-    const { stdout, stderr } = await execFileAsync(path, ['--version'], {
-      timeout: PROBE_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
-      env: {
-        ...process.env,
-        DISABLE_UPDATES: '1',
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      },
+    const { stdout, stderr } = await withClaudeProbeEnvironment((env) => {
+      const launch = claudeProcessCommand(path, ['--version'], env)
+      return execFileAsync(launch.command, launch.args, {
+        timeout: PROBE_TIMEOUT_MS,
+        maxBuffer: 1024 * 1024,
+        env,
+      })
     })
     return `${stdout}\n${stderr}`.trim()
   } catch (error) {

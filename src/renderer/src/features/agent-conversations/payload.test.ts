@@ -41,6 +41,8 @@ describe('buildAgentSendPayload', () => {
   })
   it('defaults old conversations to Claude Code and preserves explicit Codex ACP binding', () => {
     const conversation = createAgentConversationState('runtime-thread')
+    expect(buildAgentSendPayload('hello', conversation).runtimeBinding).toEqual({ kind: 'codex' })
+    delete conversation.runtimeBinding
     expect(buildAgentSendPayload('hello', conversation).runtimeBinding).toEqual({
       kind: 'claude-code',
     })

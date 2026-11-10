@@ -1281,7 +1281,10 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
               loading: loading || contextCompacting,
               contextUsage,
               contextCompaction,
-              canCompact: Boolean(sessionId) && !loading,
+              canCompact:
+                activeConversation.runtimeBinding?.kind === 'claude-code' &&
+                Boolean(sessionId) &&
+                !loading,
               onCompactContext: handleCompactContext,
               onPermissionModeChange: handlePermissionModeChange,
               onOpenResourceMenu: () => setResourceQuery(''),

@@ -45,6 +45,7 @@ describe('ClaudeRuntimeManager', () => {
       .update(
         [
           runtimeFingerprint,
+          'studio-api-key-v1',
           `native-scheduling-policy:${CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION}`,
           settings.apiFormat,
           settings.apiBaseUrl,

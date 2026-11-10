@@ -82,6 +82,22 @@ function createService(
 }
 
 describe('CclinkRemoteService runtime protocol', () => {
+  it('reports unreadable history without disabling the remote connection or overwriting files', async () => {
+    const { service, store, handle } = createService()
+    store.load.mockRejectedValue(new Error('远程会话历史恢复失败：原文件已保留'))
+    await expect(service.initialize()).resolves.toBeUndefined()
+    installOnlineServer(service)
+    await expect(service.connect()).resolves.toEqual({ state: 'online' })
+    await expect(service.listSessions(remoteRef)).rejects.toThrow('远程会话历史恢复失败')
+    await expect(service.createSession(remoteRef)).rejects.toThrow('远程会话历史恢复失败')
+    expect(() => service.listMessages('session-1')).toThrow('远程会话历史恢复失败')
+    expect(() => service.setSessionArchived('session-1', true)).toThrow('远程会话历史恢复失败')
+
+    await handle({ ...createCclinkEnvelope('session_sync_response'), sessions: [] })
+    await service.destroy()
+    expect(store.save).not.toHaveBeenCalled()
+  })
+
   it('fully disposes a partially initialized Tencent transport when login fails', async () => {
     const unsubscribeMessage = vi.fn()
     const unsubscribeStatus = vi.fn()

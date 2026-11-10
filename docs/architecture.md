@@ -168,10 +168,10 @@ ADR 0003 已实施 Studio 本地明文凭证存储，并取代此前“必须使
 ADR 0009 已取代 ADR 0004 的“双桌面制品长期并存”前提。不可变 Tag、发布可审计和凭证不入库的要求继续有效；旧 commercial overlay 只在首阶段真实 App 验收通过前作为回滚制品。
 
 ADR 0006 已确定 Agent 产品边界：CCLink 拥有 Thread、上下文、工具循环、MCP、权限、
-角色、调度、诊断和用量事实，用户只选择受支持的模型服务、模型与本地凭证。ADR 0012 对
-“ACP 完全不进入路线”做了最小复审：Claude Code 仍是必备默认基线并直接使用 SDK，允许空
-Thread 显式选择经过验证的本地 Codex ACP Runtime；公共 Registry、任意 Agent executable 和
-远程 ACP 仍是非目标。供应商无关的 Model Adapter 与自有模型循环尚未交付，不得把 Provider
+角色、调度、诊断和用量事实。ADR 0012 引入固定的本地 ACP 备选；ADR 0022 进一步将新本地
+交互会话默认改为官方 Codex app-server，并保留 Claude Code SDK API Key 备选。Claude 安装
+或凭证不再是 Agent 核心的启动前提。已有会话绑定保持不变；公共 Registry、任意 Agent
+executable 和远程 ACP 仍是非目标。供应商无关的 Model Adapter 与自有模型循环尚未交付，不得把 Provider
 设置、HTTP 连通性、普通 Chat 或单个 Codex adapter 宣称为通用多 Runtime 平台已经完成。
 
 已关闭的稳定化阶段、修复顺序和退出证据见 `docs/stabilization.md`。后续功能按本架构宪法和 `docs/development.md` 的门禁受控推进。
@@ -375,6 +375,13 @@ Studio 内置手机号登录、Session 文件/token 刷新、CCLink 身份与设
 Studio 基础层唯一拥有 `RemoteWorkspaceRef`、Workspace、Tab、Workbench、项目条、WorkspaceState、RemoteProvider 契约、Terminal adapter 接入点、受信 IPC/schema、生命周期和诊断；CCLink 功能域只拥有账号、设备连接、远程请求和远程会话事实。
 
 远程工作空间身份由 Agent 规范化路径后生成并通过 `workspace_id` 返回。Studio 必须把该值当作不透明身份保存、校验和回传，不得按路径或设备 ID 本地重算，也不得用路径相等替代身份相等。能力探测同样以运行中 Agent 的原始 `capability_probe_response` 为事实源：只有收到可关联、协议兼容的响应且所有受支持表达均为 false/缺失时，才报告能力未声明；发送失败、超时、协议不兼容和响应类型/关联错误必须保留各自诊断语义。
+
+## 默认本地 Agent
+
+ADR 0022 将新本地交互会话默认改为本机 Codex app-server，保留 Claude Code API Key 隔离路径作为
+备选。旧会话绑定不迁移；Claude Runtime 缺失不再阻断 Codex。两者复用同一 AgentBridge、
+AgentRuntime、MCP 工具宿主和权限 broker，不引入第二状态所有者。Codex 自己管理本机文件登录，
+Studio 不复制 token，不使用系统凭证存储。Codex 故障只影响对应会话，不能自动回退消费 Claude。
 
 ## 运行时分层
 

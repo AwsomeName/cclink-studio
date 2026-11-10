@@ -57,6 +57,19 @@ describe('EditorToolModule file access', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('错误路径参数立即报错，不退回当前编辑器等待超时', async () => {
+    const { module, fileAccess, send } = createFixture()
+
+    await expect(module.execute('editor_read', { path: '/project/marker.md' })).rejects.toThrow(
+      '不是 path',
+    )
+    for (const filePath of [null, 123, '', ' ']) {
+      await expect(module.execute('editor_read', { filePath })).rejects.toThrow('非空文件路径')
+    }
+    expect(fileAccess.readFile).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('可以先列出目录，再选择真实存在的项目文件', async () => {
     const { module, fileAccess } = createFixture()
 

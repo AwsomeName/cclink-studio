@@ -1,9 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentBridge } from './agent-bridge'
 import { AgentRuntimeStateStore } from './agent-runtime-state-store'
+
+const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-bridge-test-'))
+afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
 
 const queryMock = vi.hoisted(() => vi.fn())
 const temporaryDirectories: string[] = []
@@ -92,6 +95,8 @@ function createBridge(
       { composeMcpConfig: () => ({ mcpServers: {} }) } as never,
       null,
       {
+        apiKey: 'test-key',
+        claudeConfigDir,
         sessionCompatibilityFingerprint: 'runtime-fingerprint',
         ...(runtimeStateStore ? { runtimeStateStore } : {}),
       },

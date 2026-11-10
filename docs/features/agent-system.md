@@ -1,6 +1,6 @@
 # Agent 对话系统
 
-> 当前事实源。最后更新：2026-08-22。
+> 当前事实源。最后更新：2026-11-10。
 
 ## 概述
 
@@ -8,12 +8,27 @@ CCLink Studio 的 Agent 是本地工作台里的 AI 协作入口，能够理解�
 
 > **CCLink Studio OSS 默认不提供 AI 模型服务，不代理任何官方 API 调用。**
 
-### Agent 后端：本地 Claude Code
+### Agent 后端：默认 Codex，Claude Code 备选
 
-Agent 由本地 Claude Code 驱动。运行时来源与模型服务凭证是两件事：
+新建本地交互会话默认 `{ kind: 'codex' }`，通过本机官方 `codex app-server` 的 stdio 接口运行。
+空会话可选择 Claude Code，首条消息后锁定。旧会话及缺少 runtimeBinding 的历史数据仍按
+Claude Code 读取，旧 ACP 会话保留原适配器。主进程 AgentBridge / AgentRuntime 仍统一拥有
+会话、run、授权和恢复信任记录；Claude 安装或 Key 缺失不再阻断 Codex。
 
-- 本机/自定义 Claude Code 可以使用其自身认证。
-- Studio 的内置 Runtime 使用用户在 Studio 中配置的 Provider API Key。
+Codex 自己使用本机 ChatGPT 文件登录和模型配置；默认后端只接入官方账号服务，不回退到
+API Key 或自定义提供商。Studio 不复制 token、不修改本机 Codex 配置、不使用
+系统钥匙串。它会消耗所登录 Codex 账号的额度，原生会话也保存在该 Codex 的会话目录；这不是
+与本机 Codex 的身份隔离。每次运行只接入受作用域限制的 Studio MCP，不继承外部 MCP、插件
+或 hooks；原生需审批的命令与补丁请求进入现有权限 broker，拒绝 Full Access、网络扩权和持久批准。
+Codex 会自行放行可信只读命令，因此 Studio 要求确认只读操作时（如严格模式），禁用原生执行器，
+仅开放逐次经过 Studio 授权的 MCP 工具；需要原生命令时可使用 Claude Code 备选。
+Codex 的手动压缩和运行中补充尚未开放；对话、工具、取消和恢复的验收见
+[Codex 默认本地 Agent](../testing/codex-default-local-agent.md)。
+
+Claude Code 仍直接使用 Claude Agent SDK。运行时来源与模型服务凭证是两件事：
+
+- 所有本地 Claude Runtime（系统、自定义、内置、Studio 管理版本）只使用 Studio 配置的 Provider API Key。
+- 登录、配置和会话目录统一隔离到 `userData/agent-runtime/claude-api`；缺少 Key 时拒绝请求，鉴权失败不回退到订阅登录。
 - Studio 不提供 CCLink 模型服务，不代理 Claude.ai Free/Pro/Max 登录材料。
 
 ```
@@ -24,11 +39,10 @@ Agent 由本地 Claude Code 驱动。运行时来源与模型服务凭证是两�
                                                         │
                                                         │ AI 配置
                                                         ↓
-                                                   本机 Claude 自身认证
-                                                   或 Studio 本地凭证
+                                                   Studio 独立 API 凭证
 ```
 
-**M9 当前配置层级：**
+**Claude Code 备选配置层级：**
 
 ```
 CCLink Studio 设置页（VSCode 风格，在主工作区 Tab 中打开）
@@ -42,12 +56,9 @@ CCLink Studio 设置页（VSCode 风格，在主工作区 Tab 中打开）
 
 CCLink Studio 可以保存用户主动配置的模型 API Key，并只在主进程创建 Agent backend 时使用。当前存储是 ADR 0003 定义的本地明文凭证文件，由统一 `CredentialService` 管理。
 
-本机/自定义 Claude Code 仍可以使用自身认证：
-
-```bash
-claude login
-# 或按 Claude Code 自身文档配置模型、Key、端点
-```
+Studio 不读取、迁移或退出本机 Claude 登录。用户在 Claude 桌面端及独立 CLI 的正常使用保持独立。
+macOS 下所有 Studio 启动的 Claude 进程（含版本探测与连接测试）受凭证访问限制；保护启动失败即报错，
+不会改用无保护进程。完整验收与限制见 [Claude 登录隔离](../testing/claude-auth-isolation.md)。
 
 ### 当前开发阶段
 
@@ -442,16 +453,12 @@ interface AgentContext {
 
 Agent 由本地 Claude Code 驱动。Studio 不代理模型服务，但可以保存用户配置的 Provider API Key，并在创建子进程时注入：
 
-```typescript
-// 主进程启动 Claude Code 子进程
-const claudeProcess = spawn(claudeCodePath || 'claude', ['-p', '--output-format', 'stream-json'], {
-  stdio: ['pipe', 'pipe', 'pipe'],
-})
-
-// 本机/自定义 Runtime 也可以继续使用 Claude Code 自身认证。
-// Studio 管理的 Key 只由主进程从统一 CredentialService 解析，
-// 不进入命令参数、会话快照、日志或诊断。
-```
+`LocalClaudeCodeBackend` 和模型连接测试共用 `buildClaudeProcessEnvironment`、
+`prepareClaudeConfigDirectory` 和受保护的进程启动入口。清除所有继承的 `CLAUDE_*`、
+`ANTHROPIC_*` 认证与路由值，只注入 Studio 保存的 Key、端点及独立配置目录。
+`settingSources: []` 禁止本机或项目 settings 文件覆盖认证；Studio 自己的角色、Skill 提示和 MCP
+仍走原来的显式注入链。Key 不进入命令参数、会话快照或诊断。旧共享目录中的 SDK 会话不迁移，
+兼容指纹升级后保留 Studio 可见消息，使用新的隔离 SDK 会话。
 
 CCLink Studio 设置页负责：
 
@@ -507,7 +514,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend { ... }
 
 ### 模型选择
 
-- **Claude Code 模式**：用户通过 `claude config` 或 CCLink Studio 设置页配置模型
+- **Claude Code 模式**：用户通过 CCLink Studio 设置页配置模型、API 地址和 API Key
 - **直连 API 模式**：未来独立后端，不得把普通 HTTP Chat 伪装成当前完整工具 Agent
 - 流式输出：当前 Claude Code 后端支持
 

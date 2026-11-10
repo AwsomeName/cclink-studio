@@ -1,7 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import type { Options, Query } from '@anthropic-ai/claude-agent-sdk'
 import type { ResolvedClaudeRuntime } from '../../shared/claude-runtime'
 import { testClaudeModelConnection } from './claude-model-connection-test'
+
+const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-connection-test-'))
+afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
 
 const runtime: ResolvedClaudeRuntime = {
   source: 'bundled',
@@ -44,6 +50,7 @@ describe('testClaudeModelConnection', () => {
     const result = await testClaudeModelConnection(
       {
         runtime,
+        claudeConfigDir,
         apiFormat: 'anthropic',
         apiBaseUrl: 'https://example.com/anthropic',
         apiKey: 'test-key',
@@ -90,6 +97,7 @@ describe('testClaudeModelConnection', () => {
     const result = await testClaudeModelConnection(
       {
         runtime,
+        claudeConfigDir,
         apiFormat: 'anthropic',
         apiBaseUrl: '',
         apiKey: 'secret-value',
@@ -116,6 +124,7 @@ describe('testClaudeModelConnection', () => {
     await testClaudeModelConnection(
       {
         runtime: managedRuntime,
+        claudeConfigDir,
         apiFormat: 'anthropic',
         apiBaseUrl: 'https://api.anthropic.com',
         apiKey: 'invalid-key',
@@ -126,8 +135,7 @@ describe('testClaudeModelConnection', () => {
 
     const request = createQuery.mock.calls[0]?.[0] as { options?: Options } | undefined
     expect(request?.options?.env).toMatchObject({
-      CLAUDE_CONFIG_DIR: '/user-data/runtime-components/claude-runtime/darwin-arm64/config',
-      CLAUDE_CODE_OAUTH_TOKEN: '',
+      CLAUDE_CONFIG_DIR: claudeConfigDir,
       ANTHROPIC_API_KEY: 'invalid-key',
     })
   })
@@ -138,6 +146,7 @@ describe('testClaudeModelConnection', () => {
     const result = await testClaudeModelConnection(
       {
         runtime,
+        claudeConfigDir,
         apiFormat: 'openai',
         apiBaseUrl: 'https://example.com/v1',
         apiKey: 'test-key',

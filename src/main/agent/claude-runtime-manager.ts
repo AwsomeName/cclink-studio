@@ -1,3 +1,4 @@
+import { claudeProcessCommand } from '../agent-core/runtime/claude-process-launch'
 import { execFile } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { constants, createReadStream } from 'node:fs'
@@ -24,6 +25,10 @@ import type {
   ClaudeRuntimeStatus,
   ResolvedClaudeRuntime,
 } from '../../shared/claude-runtime'
+import {
+  CLAUDE_AUTH_ISOLATION_VERSION,
+  withClaudeProbeEnvironment,
+} from '../agent-core/runtime/claude-process-environment'
 import { CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION } from '../agent-core/backends/claude-native-scheduling-policy'
 import { detectClaudeCode, type ClaudeCodeStatus } from './claude-code-detector'
 
@@ -353,6 +358,7 @@ export function buildClaudeSessionCompatibilityFingerprint(
 ): string {
   return fingerprint([
     runtimeFingerprint,
+    CLAUDE_AUTH_ISOLATION_VERSION,
     `native-scheduling-policy:${CLAUDE_NATIVE_SCHEDULING_POLICY_VERSION}`,
     settings.apiFormat?.trim() ?? '',
     settings.apiBaseUrl?.trim() ?? '',
@@ -481,10 +487,13 @@ async function sha256(path: string): Promise<string> {
 }
 
 async function defaultExecuteVersion(executablePath: string, timeoutMs: number): Promise<string> {
-  const { stdout, stderr } = await execFileAsync(executablePath, ['--version'], {
-    timeout: timeoutMs,
-    maxBuffer: 1024 * 1024,
-    env: { ...process.env, CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' },
+  const { stdout, stderr } = await withClaudeProbeEnvironment((env) => {
+    const launch = claudeProcessCommand(executablePath, ['--version'], env)
+    return execFileAsync(launch.command, launch.args, {
+      timeout: timeoutMs,
+      maxBuffer: 1024 * 1024,
+      env,
+    })
   })
   return `${stdout}\n${stderr}`.trim()
 }

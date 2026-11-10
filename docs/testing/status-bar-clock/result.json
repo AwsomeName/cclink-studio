@@ -1,0 +1,20 @@
+{
+  "checks": [
+    "width 1400: centered, 22px high, correct format, long labels contained",
+    "width 1125: centered, 22px high, correct format, long labels contained",
+    "width 1124: centered, 22px high, correct format, long labels contained",
+    "width 1100: centered, 22px high, correct format, long labels contained",
+    "width 900: centered, 22px high, correct format, long labels contained",
+    "width 785: centered, 22px high, correct format, long labels contained",
+    "width 784: centered, 22px high, correct format, long labels contained",
+    "width 760: centered, 22px high, correct format, long labels contained",
+    "width 640: centered, 22px high, correct format, long labels contained",
+    "width 480: centered, 22px high, correct format, long labels contained",
+    "Git popover and update panel remain usable",
+    "minute rollover, new year, delayed timer and focus catch-up use current wall time",
+    "timezone changes are reflected without remounting the clock",
+    "long toast replaces the clock within the center slot, then restores it"
+  ],
+  "rendererUrl": "http://localhost:5173",
+  "clockTests": "simulated time; no OS sleep or system clock changes"
+}

@@ -24,6 +24,7 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { useCommandStore } from '../../stores/command-store'
 import { GitStatusBarItem } from './GitStatusBarItem'
+import { StatusBarClock } from './StatusBarClock'
 import { GitOperationDialog } from './GitOperationDialog'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
@@ -94,70 +95,90 @@ export function StatusBar(): React.ReactElement {
   return (
     <>
       <div className="status-bar">
-        <Toast />
-        <GitStatusBarItem workspacePath={workspacePath} contextProps={statusContextProps('git')} />
+        <div className="status-bar-left">
+          <GitStatusBarItem
+            workspacePath={workspacePath}
+            contextProps={statusContextProps('git')}
+          />
 
-        {switchingPath && (
+          {switchingPath && (
+            <span
+              className="status-bar-item status-bar-workspace-switch"
+              title={switchingPath}
+              {...statusContextProps('workspace-switch')}
+            >
+              <IconProjects size={12} />
+              <span className="status-bar-text">
+                正在切换到 {switchingPath.split('/').filter(Boolean).at(-1) ?? switchingPath}...
+              </span>
+            </span>
+          )}
+
           <span
-            className="status-bar-item"
-            title={switchingPath}
-            {...statusContextProps('workspace-switch')}
+            className="status-bar-item status-bar-workspace"
+            title={workspaceKey ?? '未归档'}
+            {...statusContextProps('workspace')}
           >
-            <IconProjects size={12} />
-            正在切换到 {switchingPath.split('/').filter(Boolean).at(-1) ?? switchingPath}...
+            <span className="status-bar-text">
+              {workspaceRefSourceLabel(activeWorkspaceRef)} ·{' '}
+              {workspaceRefLabel(activeWorkspaceRef)}
+            </span>
           </span>
-        )}
 
-        <span
-          className="status-bar-item"
-          title={workspaceKey ?? '未归档'}
-          {...statusContextProps('workspace')}
-        >
-          {workspaceRefSourceLabel(activeWorkspaceRef)} · {workspaceRefLabel(activeWorkspaceRef)}
-        </span>
+          {/* 浏览器 URL（截断显示） */}
+          {activeTab?.type === 'browser' && currentUrl && (
+            <span
+              className="status-bar-item status-bar-url"
+              title={currentUrl}
+              {...statusContextProps('browser-url')}
+            >
+              <IconLink size={12} />
+              <span className="status-bar-text">{truncateUrl(currentUrl)}</span>
+            </span>
+          )}
+        </div>
 
-        {/* 浏览器 URL（截断显示） */}
-        {activeTab?.type === 'browser' && currentUrl && (
-          <span className="status-bar-item status-bar-url" {...statusContextProps('browser-url')}>
-            <IconLink size={12} />
-            {truncateUrl(currentUrl)}
+        <div className="status-bar-center">
+          <StatusBarClock />
+          <Toast />
+        </div>
+
+        <div className="status-bar-right">
+          <button
+            type="button"
+            className="status-bar-item framework-diagnostics-status"
+            onClick={() =>
+              void executeCommand('diagnostics.copyFrameworkLogs', { source: 'toolbar' })
+            }
+            title="复制 Agent 以外的工作台框架诊断日志"
+            aria-label="框架日志"
+            {...statusContextProps('framework-diagnostics')}
+          >
+            <IconClipboard size={12} />
+            <span className="status-bar-text">框架日志</span>
+          </button>
+
+          <button
+            type="button"
+            className={`status-bar-item update-badge phase-${updateSnapshot.phase}`}
+            onClick={openUpdatePanel}
+            {...statusContextProps('update')}
+            title="检查和下载 CCLink Studio 更新"
+            aria-label={getUpdateStatusLabel(updateSnapshot)}
+          >
+            <IconRefresh size={12} />
+            <span className="status-bar-text">{getUpdateStatusLabel(updateSnapshot)}</span>
+          </button>
+
+          {/* 右侧：版本 */}
+          <span
+            className="status-bar-item status-bar-edition"
+            title={`${APP_EDITION_LABEL} · 本地开源桌面工作台`}
+            {...statusContextProps('edition')}
+          >
+            <span className="status-bar-text">{APP_EDITION_LABEL}</span>
           </span>
-        )}
-
-        <span className="status-bar-spacer" aria-hidden="true" />
-
-        <button
-          type="button"
-          className="status-bar-item framework-diagnostics-status"
-          onClick={() =>
-            void executeCommand('diagnostics.copyFrameworkLogs', { source: 'toolbar' })
-          }
-          title="复制 Agent 以外的工作台框架诊断日志"
-          {...statusContextProps('framework-diagnostics')}
-        >
-          <IconClipboard size={12} />
-          框架日志
-        </button>
-
-        <button
-          type="button"
-          className={`status-bar-item update-badge phase-${updateSnapshot.phase}`}
-          onClick={openUpdatePanel}
-          {...statusContextProps('update')}
-          title="检查和下载 CCLink Studio 更新"
-        >
-          <IconRefresh size={12} />
-          {getUpdateStatusLabel(updateSnapshot)}
-        </button>
-
-        {/* 右侧：版本 */}
-        <span
-          className="status-bar-item"
-          title="本地开源桌面工作台"
-          {...statusContextProps('edition')}
-        >
-          {APP_EDITION_LABEL}
-        </span>
+        </div>
       </div>
 
       <GitOperationDialog />

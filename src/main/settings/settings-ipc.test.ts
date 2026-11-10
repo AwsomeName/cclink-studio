@@ -11,6 +11,7 @@ const mockIpcMain = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   ipcMain: mockIpcMain,
+  app: { getPath: () => '/test-user-data' },
 }))
 
 describe('registerSettingsIpc', () => {
@@ -84,6 +85,32 @@ describe('registerSettingsIpc', () => {
       permissionMode: 'strict',
       editorTabSize: 4,
     })
+  })
+
+  it('does not change or reset permission mode while a native run still owns its policy', async () => {
+    const settingsService = createSettingsService()
+    const permissionManager = createPermissionManager()
+    const bridge = createAgentBridge(false)
+    registerSettingsIpc(
+      settingsService as never,
+      createGuard('trusted') as never,
+      permissionManager as never,
+      () => bridge as never,
+    )
+    for (const [channel, payload] of [
+      ['settings:set', { permissionMode: 'strict' }],
+      ['settings:resetKey', 'permissionMode'],
+    ] as const) {
+      await expect(
+        mockIpcMain.handlers.get(channel)?.({ sender: 'trusted' }, payload),
+      ).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('RUNTIME_SWITCH_PENDING'),
+      })
+    }
+    expect(settingsService.set).not.toHaveBeenCalled()
+    expect(settingsService.resetKey).not.toHaveBeenCalled()
+    expect(permissionManager.setMode).not.toHaveBeenCalled()
   })
 
   it('applies persisted app zoom changes for set and reset paths', async () => {
@@ -331,6 +358,7 @@ describe('registerSettingsIpc', () => {
     expect(runtimeManager.probe).toHaveBeenCalledWith({ source: 'bundled' })
     expect(runConnectionTest).toHaveBeenCalledWith({
       runtime: resolvedRuntime,
+      claudeConfigDir: expect.stringContaining('claude-api'),
       apiFormat: 'anthropic',
       apiBaseUrl: 'https://example.com/anthropic',
       apiKey: 'encrypted-key',

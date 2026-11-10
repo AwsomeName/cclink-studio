@@ -1,7 +1,11 @@
 import type { AgentContextUsageSnapshot } from '@shared/agent-protocol'
 import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
-import { DEFAULT_AGENT_RUNTIME_BINDING, type AgentRuntimeBinding } from '@shared/agent-runtime'
+import {
+  DEFAULT_AGENT_RUNTIME_BINDING,
+  NEW_LOCAL_AGENT_RUNTIME_BINDING,
+  type AgentRuntimeBinding,
+} from '@shared/agent-runtime'
 import {
   createDefaultAgentConversationConfiguration,
   type AgentConversationConfiguration,
@@ -123,11 +127,11 @@ function createWelcomeMessage(): AgentMessage {
     content: [
       {
         type: 'text',
-        text: '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。',
+        text: '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新建本地会话默认使用 Codex，也可以在发送第一条消息前选择 Claude Code。',
       },
     ],
     rawText:
-      '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新 Thread 默认使用 Claude Code，也可以在发送第一条消息前选择 Codex ACP。',
+      '你好！我是 CCLink Studio 的本地 Agent。\n\n你可以用自然语言和我对话，我会帮你完成代码、文档和本地工作区任务。新建本地会话默认使用 Codex，也可以在发送第一条消息前选择 Claude Code。',
     timestamp: Date.now(),
   }
 }
@@ -157,7 +161,11 @@ export function createAgentConversationState(
     title: '新会话',
     surface: options.surface ?? 'assistant-panel',
     runtime,
-    runtimeBinding: options.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+    runtimeBinding:
+      options.runtimeBinding ??
+      (runtime.location === 'local'
+        ? NEW_LOCAL_AGENT_RUNTIME_BINDING
+        : DEFAULT_AGENT_RUNTIME_BINDING),
     configuration: createDefaultAgentConversationConfiguration(now, options.roleRef),
     configurationEvents: [],
     lastRunConfigurationReceipt: null,

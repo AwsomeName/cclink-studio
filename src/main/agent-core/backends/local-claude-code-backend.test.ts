@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { access, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -12,6 +12,10 @@ import {
   type McpConfigComposer,
   type ClaudeCodeBackendOptions,
 } from './local-claude-code-backend'
+
+const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-backend-test-'))
+afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
+afterEach(() => vi.unstubAllEnvs())
 
 const queryMock = vi.hoisted(() => vi.fn())
 
@@ -101,6 +105,7 @@ function createBackendFixture(
   externalMcp?: Record<string, unknown>,
   workspacePath = '/Users/apple/Desktop/project',
   createUsageObserver?: ClaudeCodeBackendOptions['createUsageObserver'],
+  overrides?: Partial<ClaudeCodeBackendOptions>,
 ): {
   backend: LocalClaudeCodeBackend
   createToolSession: ReturnType<typeof vi.fn>
@@ -149,6 +154,7 @@ function createBackendFixture(
     undefined as never,
     {
       claudeCodePath: '/usr/local/bin/claude',
+      claudeConfigDir,
       createUsageObserver,
       apiBaseUrl: 'https://open.bigmodel.cn/api/anthropic',
       apiKey: 'test-api-key',
@@ -159,6 +165,7 @@ function createBackendFixture(
         mcpServerName: 'cclink_studio',
         androidControllerName: 'CCLink Studio',
       },
+      ...overrides,
     },
   )
 
@@ -201,6 +208,47 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
   beforeEach(() => {
     queryMock.mockReset()
     queryMock.mockImplementation(() => createMockQuery())
+  })
+
+  it('rejects a missing Studio key before creating any SDK or MCP session', async () => {
+    vi.stubEnv('ANTHROPIC_API_KEY', 'external-key')
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'external-subscription')
+    const { backend, createToolSession } = createBackendFixture(undefined, '', undefined, {
+      apiKey: ' ',
+    })
+    const events = vi.fn()
+    backend.onEvent(events)
+    await backend.sendMessage('hello')
+    expect(queryMock).not.toHaveBeenCalled()
+    expect(createToolSession).not.toHaveBeenCalled()
+    expect(events).toHaveBeenCalledWith('error', expect.objectContaining({ code: 'AUTH_REQUIRED' }))
+  })
+
+  it('uses only Studio credentials and configuration for sends and compaction', async () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/outside/claude')
+    vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'external-subscription')
+    vi.stubEnv('CLAUDE_CODE_HOST_CREDS_FILE', '/outside/credentials')
+    vi.stubEnv('ANTHROPIC_AUTH_TOKEN', 'external-token')
+    const backend = createBackend()
+    await backend.sendMessage('hello')
+    backend.setSessionId('studio-session')
+    await backend.compact()
+    for (const [request] of queryMock.mock.calls) {
+      expect(request.options.settingSources).toEqual([])
+      expect(request.options.env).toMatchObject({
+        CLAUDE_CONFIG_DIR: claudeConfigDir,
+        ANTHROPIC_API_KEY: 'test-api-key',
+        CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
+      })
+      for (const key of [
+        'CLAUDE_CODE_OAUTH_TOKEN',
+        'CLAUDE_CODE_HOST_CREDS_FILE',
+        'ANTHROPIC_AUTH_TOKEN',
+      ])
+        expect(request.options.env[key]).toBeUndefined()
+    }
+    expect(process.env.CLAUDE_CONFIG_DIR).toBe('/outside/claude')
+    expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBe('external-subscription')
   })
 
   const supplementInput = {
@@ -457,7 +505,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(params.options.mcpServers.cclink_studio.timeout).toBe(300_000)
     expect(params.options.env.ANTHROPIC_BASE_URL).toBe('https://open.bigmodel.cn/api/anthropic')
     expect(params.options.env.ANTHROPIC_API_KEY).toBe('test-api-key')
-    expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio/0.1.1')
+    expect(params.options.env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe('cclink-studio')
     expect(params.options.tools).toBeUndefined()
     expect(params.options.disallowedTools).toEqual([
       'CronCreate',
@@ -619,7 +667,11 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       toolHost,
       { composeMcpConfig: () => ({ mcpServers: {} }) },
       undefined as never,
-      { getWorkspacePath: () => '/Users/apple/Desktop/project' },
+      {
+        apiKey: 'test-key',
+        claudeConfigDir,
+        getWorkspacePath: () => '/Users/apple/Desktop/project',
+      },
     )
 
     await backend.sendMessage('普通问答')

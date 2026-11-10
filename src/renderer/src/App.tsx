@@ -21,6 +21,7 @@ import LoadingScreen from './components/loading/LoadingScreen'
 import { useAgentWorkContext } from './bootstrap/use-agent-work-context'
 import { useAgentStreamEvents } from './bootstrap/use-agent-stream-events'
 import { useAgentConversationRestore } from './bootstrap/use-agent-conversation-restore'
+import { useRemoteConversationRestore } from './bootstrap/use-remote-conversation-restore'
 import { useAppSession } from './bootstrap/use-app-session'
 import { useShortcutRouter } from './features/shortcuts/use-shortcut-router'
 import { useMainProcessEvents } from './bootstrap/use-main-process-events'
@@ -156,6 +157,7 @@ function MainLayout(): React.ReactElement {
   useMainProcessEvents()
   useAgentStreamEvents()
   useAgentConversationRestore(workspaceReady)
+  useRemoteConversationRestore(workspaceReady)
   useTerminalEvents()
   useAgentWorkContext(workspaceReady)
   useBrowserOpenRequests(workspaceReady)

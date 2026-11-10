@@ -1,18 +1,134 @@
 import { readFileSync, statSync, writeFileSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { CclinkRuntimeStateStore } from './runtime-state-store'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CclinkRuntimeStateStore, type CclinkRuntimeState } from './runtime-state-store'
 import type { CclinkRemoteMessage } from '../../shared/cclink'
 
 const roots: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
+function recoveryState(): CclinkRuntimeState {
+  return {
+    version: 1,
+    sessions: [
+      {
+        id: 'session-recovery',
+        name: '崩溃前的会话',
+        workspaceId: 'workspace-recovery',
+        workspacePath: '/srv/recovery',
+        serverId: 'agent-recovery',
+        status: 'idle',
+        createdAt: 1,
+        updatedAt: 2,
+        messageCount: 1,
+        contextUsage: 0,
+      },
+    ],
+    messages: {
+      'session-recovery': [
+        { type: 'agentText', id: 'message-recovery', content: '需要保留的回复', timestamp: 2 },
+      ],
+    },
+  }
+}
+
 describe('CclinkRuntimeStateStore', () => {
+  it('主文件缺失时先恢复备份，不导入更旧的桌面状态', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-recovery-'))
+    roots.push(root)
+    const expected = recoveryState()
+    const path = join(root, 'cclink-runtime-state.json')
+    const legacyPath = join(root, 'cclink-state.json')
+    writeFileSync(`${path}.bak`, JSON.stringify(expected))
+    writeFileSync(
+      legacyPath,
+      JSON.stringify({ ...expected, sessions: [{ ...expected.sessions[0], name: '旧桌面会话' }] }),
+    )
+
+    expect(await new CclinkRuntimeStateStore(root, [legacyPath]).load()).toEqual(expected)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(expected)
+    expect(JSON.parse(readFileSync(`${path}.bak`, 'utf8'))).toEqual(expected)
+  })
+
+  it.each(['{"version":1,"sessions":', '{"version":9}', '{"version":1}'])(
+    '格式异常不能作为空会话覆盖有效备份：%s',
+    async (invalidPrimary) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-recovery-'))
+      roots.push(root)
+      const path = join(root, 'cclink-runtime-state.json')
+      const expected = recoveryState()
+      writeFileSync(path, invalidPrimary)
+      writeFileSync(`${path}.bak`, JSON.stringify(expected))
+
+      expect(await new CclinkRuntimeStateStore(root).load()).toEqual(expected)
+      expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual(expected)
+      expect(JSON.parse(readFileSync(`${path}.bak`, 'utf8'))).toEqual(expected)
+    },
+  )
+
+  it('没有可读快照时报告恢复失败，保留主文件和备份供恢复', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-recovery-'))
+    roots.push(root)
+    const path = join(root, 'cclink-runtime-state.json')
+    writeFileSync(path, '{"version":1,"sessions":')
+    writeFileSync(`${path}.bak`, 'incomplete backup')
+
+    const store = new CclinkRuntimeStateStore(root)
+    await expect(store.load()).rejects.toThrow('远程会话历史恢复失败')
+    await expect(store.save({ version: 1, sessions: [], messages: {} })).rejects.toThrow(
+      '远程会话历史恢复失败',
+    )
+    expect(readFileSync(path, 'utf8')).toBe('{"version":1,"sessions":')
+    expect(readFileSync(`${path}.bak`, 'utf8')).toBe('incomplete backup')
+  })
+
+  it('超限历史不被隔离成缺失状态，连续启动都保留原数据并报告失败', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-recovery-'))
+    roots.push(root)
+    const path = join(root, 'cclink-runtime-state.json')
+    const state = recoveryState()
+    state.messages['session-recovery'] = [
+      {
+        type: 'agentText',
+        id: 'large-message',
+        content: 'x'.repeat(16 * 1024 * 1024),
+        timestamp: 2,
+      },
+    ]
+    const raw = JSON.stringify(state)
+    writeFileSync(path, raw)
+    writeFileSync(`${path}.bak`, raw)
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(new CclinkRuntimeStateStore(root).load()).rejects.toThrow('远程会话历史恢复失败')
+      expect(statSync(path).size).toBe(Buffer.byteLength(raw))
+      expect(statSync(`${path}.bak`).size).toBe(Buffer.byteLength(raw))
+    }
+  })
+
+  it('首次启动没有主文件和备份时仍可创建会话并在重启后加载', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const root = await mkdtemp(join(tmpdir(), 'cclink-runtime-recovery-'))
+    roots.push(root)
+    const store = new CclinkRuntimeStateStore(root)
+    expect(await store.load()).toEqual({ version: 1, sessions: [], messages: {} })
+    await store.save(recoveryState())
+    expect(await new CclinkRuntimeStateStore(root).load()).toEqual(recoveryState())
+    await store.save(recoveryState())
+    await unlink(join(root, 'cclink-runtime-state.json'))
+    expect(await new CclinkRuntimeStateStore(root).load()).toEqual(recoveryState())
+  })
+
   it('持久化明确的审批处理事实，旧执行中消息不会被推断为已审批', async () => {
     const root = await mkdtemp(join(tmpdir(), 'cclink-tool-approval-state-'))
     roots.push(root)

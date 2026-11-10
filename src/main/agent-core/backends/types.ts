@@ -119,6 +119,7 @@ export interface AgentSendOptions {
 
 /** 后端配置 */
 export type BackendConfig =
+  | { type: 'local-codex'; codex: { getWorkspacePath?: () => string } }
   | {
       type: 'local-claude-code'
       /** Claude Code 配置 */
@@ -126,8 +127,9 @@ export type BackendConfig =
         createUsageObserver?: import('../../../shared/model-usage').CreateModelUsageObserver
         /** Claude Code executable 绝对路径；为空时按 PATH 解析。 */
         claudeCodePath?: string
-        /** 注入到子进程的环境变量。第一版默认交给 Claude Code 自身管理模型登录。 */
-        env?: Record<string, string>
+        runtimeError?: string
+        /** Host-owned isolated Claude auth/session directory. */
+        claudeConfigDir?: string
         /** Anthropic-compatible API base URL for the SDK subprocess. */
         apiBaseUrl?: string
         /** Anthropic-compatible API key for the SDK subprocess. */

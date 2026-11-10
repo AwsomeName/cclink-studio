@@ -11,6 +11,7 @@ import {
   type McpConfigComposer,
 } from './local-claude-code-backend.js'
 import { LocalAcpBackend } from './local-acp-backend.js'
+import { LocalCodexBackend } from './local-codex-backend.js'
 import { CclinkAgentBackend } from './cclink-agent-backend.js'
 
 export interface BackendFactoryDeps {
@@ -29,6 +30,8 @@ export interface BackendFactoryDeps {
  */
 export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): IAgentBackend {
   switch (config.type) {
+    case 'local-codex':
+      return new LocalCodexBackend(deps.toolHost, config.codex.getWorkspacePath)
     case 'local-claude-code':
       return new LocalClaudeCodeBackend(
         deps.playwrightBridge,
@@ -37,8 +40,9 @@ export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): 
         deps.adbBridge,
         {
           claudeCodePath: config.claudeCode?.claudeCodePath,
+          runtimeError: config.claudeCode?.runtimeError,
           createUsageObserver: config.claudeCode?.createUsageObserver,
-          env: config.claudeCode?.env,
+          claudeConfigDir: config.claudeCode?.claudeConfigDir,
           apiBaseUrl: config.claudeCode?.apiBaseUrl,
           apiKey: config.claudeCode?.apiKey,
           modelName: config.claudeCode?.modelName,

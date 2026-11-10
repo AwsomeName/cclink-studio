@@ -530,7 +530,11 @@ export function WorkbenchAgentConversation({
                 }
                 contextUsage={conversation.contextUsage}
                 contextCompaction={conversation.contextCompaction}
-                canCompact={Boolean(conversation.sessionId) && !conversation.loading}
+                canCompact={
+                  conversation.runtimeBinding?.kind === 'claude-code' &&
+                  Boolean(conversation.sessionId) &&
+                  !conversation.loading
+                }
                 onCompactContext={handleCompactContext}
                 onPermissionModeChange={handlePermissionModeChange}
                 onOpenResourceMenu={() => setResourceQuery('')}

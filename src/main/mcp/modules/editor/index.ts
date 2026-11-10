@@ -267,6 +267,15 @@ export class EditorToolModule implements ToolModule {
    * 请求读取编辑器内容（renderer → main 返回内容）
    */
   private async requestRead(params: Record<string, unknown>): Promise<unknown> {
+    if (Object.keys(params).some((key) => key !== 'filePath')) {
+      throw new Error('editor_read 只接受 filePath 参数；读取磁盘文件请传入 filePath，不是 path。')
+    }
+    if (
+      params.filePath !== undefined &&
+      (typeof params.filePath !== 'string' || !params.filePath.trim())
+    ) {
+      throw new Error('editor_read 的 filePath 必须是非空文件路径；读取当前编辑器请省略该参数。')
+    }
     const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
     if (filePath) {
       const result = await this.fileAccess.readFile(filePath)

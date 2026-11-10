@@ -69,7 +69,7 @@ export function useAgentConversationRestore(enabled: boolean): void {
       const runtimeKey =
         session.runtimeBinding.kind === 'acp'
           ? `acp:${session.runtimeBinding.implementationId}`
-          : 'claude-code'
+          : session.runtimeBinding.kind
       const workspaceKey = session.workspaceRef ? workspaceRefKey(session.workspaceRef) : 'unbound'
       const restoreKey = `${session.sessionId}:${session.sessionCompatibilityFingerprint}:${session.configuration.roleRef.roleId}@${session.configuration.roleRef.version}:${session.configuration.revision}:${skillKey}:${runtimeKey}:${workspaceKey}`
       if (restoredSessionsRef.current.get(session.conversationId) === restoreKey) continue

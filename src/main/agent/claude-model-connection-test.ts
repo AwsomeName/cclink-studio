@@ -1,3 +1,4 @@
+import { spawnClaudeProcess } from '../agent-core/runtime/claude-process-launch'
 import { tmpdir } from 'os'
 import { query, type Query, type SDKAssistantMessageError } from '@anthropic-ai/claude-agent-sdk'
 import type { ResolvedClaudeRuntime } from '../../shared/claude-runtime'
@@ -6,7 +7,10 @@ import type {
   ClaudeModelConnectionErrorCode,
   ClaudeModelConnectionTestResult,
 } from '../../shared/ipc/settings'
-import { managedClaudeIsolationEnvironment } from './managed-claude-environment'
+import {
+  buildClaudeProcessEnvironment,
+  prepareClaudeConfigDirectory,
+} from '../agent-core/runtime/claude-process-environment'
 import type { CreateModelUsageObserver, ModelUsageObserver } from '../../shared/model-usage'
 import { providerFromBaseUrl } from '../usage/model-usage-normalize'
 
@@ -15,6 +19,7 @@ const DEFAULT_TIMEOUT_MS = 45_000
 
 export interface ClaudeModelConnectionTestInput {
   runtime: ResolvedClaudeRuntime
+  claudeConfigDir: string
   apiFormat: ApiFormat
   apiBaseUrl: string
   apiKey: string
@@ -79,13 +84,20 @@ export async function testClaudeModelConnection(
   }
 
   try {
+    await prepareClaudeConfigDirectory(input.claudeConfigDir)
     sdkQuery = dependencies.createQuery({
       prompt: `Reply with exactly ${CONNECTION_TEST_MARKER}. Do not use tools.`,
       options: {
         abortController,
         cwd: tmpdir(),
         pathToClaudeCodeExecutable: input.runtime.executablePath,
-        env: buildConnectionTestEnvironment(input.runtime, apiKey, input.apiBaseUrl),
+        env: buildClaudeProcessEnvironment({
+          configDir: input.claudeConfigDir,
+          apiKey,
+          apiBaseUrl: input.apiBaseUrl,
+        }),
+        settingSources: [],
+        spawnClaudeCodeProcess: spawnClaudeProcess,
         tools: [],
         allowedTools: [],
         maxTurns: 1,
@@ -142,42 +154,6 @@ export async function testClaudeModelConnection(
     }
     clearTimeout(timeout)
     sdkQuery?.close()
-  }
-}
-
-function buildConnectionTestEnvironment(
-  runtime: ResolvedClaudeRuntime,
-  apiKey: string,
-  apiBaseUrl: string,
-): Record<string, string | undefined> {
-  const env = { ...process.env }
-  for (const key of Object.keys(env)) {
-    if (
-      key === 'ANTHROPIC_API_KEY' ||
-      key === 'ANTHROPIC_AUTH_TOKEN' ||
-      key === 'ANTHROPIC_BASE_URL' ||
-      key === 'CLAUDE_CODE_OAUTH_TOKEN' ||
-      key === 'CLAUDE_CODE_USE_BEDROCK' ||
-      key === 'CLAUDE_CODE_USE_VERTEX' ||
-      key === 'CLAUDE_CODE_USE_FOUNDRY' ||
-      key.startsWith('ANTHROPIC_DEFAULT_') ||
-      key.startsWith('ANTHROPIC_MODEL') ||
-      key.startsWith('ANTHROPIC_SMALL_FAST_MODEL') ||
-      /^CLAUDE_CODE_.*MODEL$/.test(key)
-    ) {
-      delete env[key]
-    }
-  }
-
-  return {
-    ...env,
-    ...(runtime.source === 'managed'
-      ? managedClaudeIsolationEnvironment(runtime.executablePath)
-      : {}),
-    ANTHROPIC_API_KEY: apiKey,
-    ...(apiBaseUrl.trim() ? { ANTHROPIC_BASE_URL: apiBaseUrl.trim() } : {}),
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-    CLAUDE_AGENT_SDK_CLIENT_APP: 'cclink-studio/0.1.1-connection-test',
   }
 }
 

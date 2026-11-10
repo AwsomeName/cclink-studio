@@ -113,16 +113,6 @@ export function registerSettingsIpc(
         const status = await settingsService.clearSecret(key)
         return { success: true, status }
       }
-      if (
-        key === 'apiKey' &&
-        ['bundled', 'managed'].includes(settingsService.getAll().claudeRuntimeSource)
-      ) {
-        return {
-          success: false,
-          error:
-            'AUTH_REQUIRED: 使用 Studio 管理的 Claude Code 时必须保留 API 凭证，请先切换运行时',
-        }
-      }
       releaseAgentLock = acquireAgentConfigurationLock(getAgentBridge())
       if (!releaseAgentLock) return runtimeSwitchPendingSecretResult()
       const status = await settingsService.clearSecret(key)
@@ -159,7 +149,9 @@ export function registerSettingsIpc(
       const changesAgentSettings = Object.keys(normalizedPartial).some((key) =>
         AGENT_SETTING_KEYS.has(key),
       )
-      if (changesAgentSettings) {
+      // Native executors capture their permission policy at run start. Serialize
+      // mode changes with runs rather than displaying a policy not yet enforced.
+      if (changesAgentSettings || 'permissionMode' in normalizedPartial) {
         releaseAgentLock = acquireAgentConfigurationLock(getAgentBridge())
         if (!releaseAgentLock) return runtimeSwitchPendingSettingsResult()
       }
@@ -276,7 +268,7 @@ export function registerSettingsIpc(
   registerTrustedIpcContract(settingsIpc.resetKey, trustedRendererGuard, async (_event, key) => {
     let releaseAgentLock: (() => void) | null = null
     try {
-      if (AGENT_SETTING_KEYS.has(key)) {
+      if (AGENT_SETTING_KEYS.has(key) || key === 'permissionMode') {
         releaseAgentLock = acquireAgentConfigurationLock(getAgentBridge())
         if (!releaseAgentLock) return runtimeSwitchPendingSettingsResult()
       }
@@ -450,6 +442,7 @@ export function registerSettingsIpc(
           success: true,
           result: await runClaudeModelConnectionTest({
             runtime: runtimeProbe.runtime,
+            claudeConfigDir: join(app.getPath('userData'), 'agent-runtime', 'claude-api'),
             apiFormat: settings.apiFormat,
             apiBaseUrl: settings.apiBaseUrl,
             apiKey: settings.apiKey,
@@ -507,6 +500,9 @@ function reconfigureAgent(
       {
         ...runtimeSettings,
         claudeCodePath: activeRuntime?.executablePath ?? runtimeSettings.claudeCodePath,
+        claudeRuntimeError: activeRuntime
+          ? undefined
+          : runtimeManager?.getStatus().failure?.message,
         sessionCompatibilityFingerprint: activeRuntime
           ? buildClaudeSessionCompatibilityFingerprint(activeRuntime.fingerprint, runtimeSettings)
           : undefined,

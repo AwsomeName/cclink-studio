@@ -226,7 +226,9 @@ function formatNativeSchedulingPolicy(status: AgentStatus | null | undefined): s
 
 function formatAgentRuntime(input: AgentDiagnosticReportInput): string {
   const binding = input.agentRuntime?.runtimeBinding ?? input.conversation?.runtimeBinding
-  return binding?.kind === 'acp' ? `acp/${binding.implementationId}` : 'claude-code'
+  return binding?.kind === 'acp'
+    ? `acp/${binding.implementationId}`
+    : (binding?.kind ?? 'claude-code')
 }
 
 function formatSessionCompatibilityFingerprint(value: string | null | undefined): string {

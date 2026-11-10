@@ -98,9 +98,18 @@ export function AgentComposerToolbar({
     roles.find((role) => role.roleId === roleRef?.roleId && role.version === roleRef.version) ??
     null
   const selectedPermission = getPermissionModeOption(permissionMode)
-  const runtimeLabel = runtimeBinding.kind === 'acp' ? 'Codex ACP' : getRuntimeLabel(settings)
+  const runtimeLabel =
+    runtimeBinding.kind === 'codex'
+      ? 'Codex'
+      : runtimeBinding.kind === 'acp'
+        ? 'Codex ACP'
+        : getRuntimeLabel(settings)
   const runtimeDetail =
-    runtimeBinding.kind === 'acp' ? 'ACP · 本机进程' : getRuntimeDetail(settings)
+    runtimeBinding.kind === 'codex'
+      ? '本机 Codex'
+      : runtimeBinding.kind === 'acp'
+        ? 'ACP · 本机进程'
+        : getRuntimeDetail(settings)
   const claudeStatusLabel = getClaudeCodeStatusLabel(claudeStatus)
   const claudeStatusDetail = getClaudeCodeStatusDetail(claudeStatus)
   const contextPercent = Math.round(contextUsage?.percentage ?? 0)
@@ -422,7 +431,13 @@ export function AgentComposerToolbar({
                   <strong>
                     {contextCompaction.status === 'compacting' ? '正在压缩' : '压缩上下文'}
                   </strong>
-                  <em>{canCompact ? '保留当前会话并生成摘要' : '会话启动后可用'}</em>
+                  <em>
+                    {canCompact
+                      ? '保留当前会话并生成摘要'
+                      : runtimeBinding.kind === 'claude-code'
+                        ? '会话启动后可用'
+                        : '当前 Agent 暂不支持手动压缩'}
+                  </em>
                 </span>
               </button>
             </div>
@@ -449,6 +464,21 @@ export function AgentComposerToolbar({
           >
             <div className="agent-composer-menu-title">运行环境</div>
             <button
+              className={runtimeBinding.kind === 'codex' ? 'selected' : ''}
+              disabled={!canChangeRuntime}
+              onClick={() => {
+                onRuntimeChange({ kind: 'codex' })
+                setOpenMenu(null)
+              }}
+            >
+              <IconRobot size={13} />
+              <span>
+                <strong>Codex（默认）</strong>
+                <em>使用本机 Codex 的 ChatGPT 登录</em>
+              </span>
+              {runtimeBinding.kind === 'codex' && <IconCheck size={11} />}
+            </button>
+            <button
               className={runtimeBinding.kind === 'claude-code' ? 'selected' : ''}
               disabled={!canChangeRuntime}
               onClick={() => {
@@ -458,8 +488,8 @@ export function AgentComposerToolbar({
             >
               <IconRobot size={13} />
               <span>
-                <strong>Claude Code（默认）</strong>
-                <em>Studio 直接支持的默认 runtime</em>
+                <strong>Claude Code（备选）</strong>
+                <em>使用 Studio 配置的 API Key</em>
               </span>
               {runtimeBinding.kind === 'claude-code' && <IconCheck size={11} />}
             </button>
@@ -483,9 +513,11 @@ export function AgentComposerToolbar({
               <span>
                 <strong>{runtimeLabel}</strong>
                 <em>
-                  {runtimeBinding.kind === 'acp'
-                    ? '使用设置中独立保存的 Codex API Key'
-                    : '模型、登录和 API Key 由本机 Claude Code 管理'}
+                  {runtimeBinding.kind === 'codex'
+                    ? '使用本机 Codex 的 ChatGPT 文件登录，不回退到 API Key'
+                    : runtimeBinding.kind === 'acp'
+                      ? '使用设置中独立保存的 Codex API Key'
+                      : '仅使用 Studio 配置的 API Key，与本机 Claude 登录隔离'}
                 </em>
               </span>
             </div>
@@ -514,18 +546,24 @@ export function AgentComposerToolbar({
                 <span className="agent-runtime-status-dot" />
                 <span>
                   <strong>按需启动</strong>
-                  <em>{settings.codexAcpPath.trim() || '从系统 PATH 查找 codex-acp'}</em>
+                  <em>
+                    {runtimeBinding.kind === 'codex'
+                      ? '自动查找本机 Codex CLI 或桌面端附带的 CLI'
+                      : settings.codexAcpPath.trim() || '从系统 PATH 查找 codex-acp'}
+                  </em>
                 </span>
               </div>
             )}
             <div className="agent-runtime-facts">
               <span>
                 <strong>
-                  {runtimeBinding.kind === 'acp'
-                    ? settings.codexAcpPath.trim()
-                      ? '自定义路径'
-                      : '系统 PATH'
-                    : getClaudeCodeSourceLabel(claudeStatus?.source ?? null)}
+                  {runtimeBinding.kind === 'codex'
+                    ? '本机安装'
+                    : runtimeBinding.kind === 'acp'
+                      ? settings.codexAcpPath.trim()
+                        ? '自定义路径'
+                        : '系统 PATH'
+                      : getClaudeCodeSourceLabel(claudeStatus?.source ?? null)}
                 </strong>
                 <em>来源</em>
               </span>
@@ -543,7 +581,7 @@ export function AgentComposerToolbar({
               <IconSettings size={13} />
               <span>
                 <strong>打开 Agent 设置</strong>
-                <em>Claude Code、Codex ACP、权限和凭证</em>
+                <em>Codex、Claude Code、权限和凭证</em>
               </span>
             </button>
           </FloatingSurface>

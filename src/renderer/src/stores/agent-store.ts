@@ -232,6 +232,21 @@ function resolveRuntimeSession(
   conversation: AgentConversationState,
   status: AgentStatus,
 ): Pick<AgentConversationState, 'sessionId' | 'sessionCompatibilityFingerprint'> {
+  // Before the first send after startup, the main process may still report its
+  // legacy default backend. Its session and fingerprint cannot validate a
+  // different runtime's persisted session.
+  if (
+    status.runtimeBinding &&
+    !agentRuntimeBindingsEqual(
+      conversation.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING,
+      status.runtimeBinding,
+    )
+  ) {
+    return {
+      sessionId: conversation.sessionId,
+      sessionCompatibilityFingerprint: conversation.sessionCompatibilityFingerprint ?? null,
+    }
+  }
   const statusFingerprint = status.sessionCompatibilityFingerprint
   if (status.sessionId) {
     return {

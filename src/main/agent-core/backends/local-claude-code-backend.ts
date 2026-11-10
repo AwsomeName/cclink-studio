@@ -1,3 +1,4 @@
+import { spawnClaudeProcess } from '../runtime/claude-process-launch'
 /**
  * LocalClaudeCodeBackend — 本机 Claude Agent SDK 后端
  *
@@ -5,7 +6,12 @@
  * 实现 IAgentBackend 接口。
  */
 
-import { homedir, tmpdir } from 'os'
+import { tmpdir } from 'os'
+import {
+  buildClaudeProcessEnvironment,
+  prepareClaudeConfigDirectory,
+  STUDIO_CLAUDE_AUTH_REQUIRED,
+} from '../runtime/claude-process-environment'
 import type { CreateModelUsageObserver, ModelUsageObserver } from '../../../shared/model-usage'
 import { lstat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'path'
@@ -78,8 +84,9 @@ export interface ClaudeCodeBackendOptions {
   createUsageObserver?: CreateModelUsageObserver
   /** Claude Code executable path；产品运行时应传入主进程已探测的绝对路径。 */
   claudeCodePath?: string
-  /** 注入到子进程的环境变量（如 ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY） */
-  env?: Record<string, string>
+  runtimeError?: string
+  /** Host-owned auth/session directory, never the user Claude directory. */
+  claudeConfigDir?: string
   /** Anthropic-compatible API base URL. */
   apiBaseUrl?: string
   /** Anthropic-compatible API key. */
@@ -121,8 +128,9 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   /** 当前 Claude Code 进程使用的 MCP 会话 token（进程退出时释放） */
   private mcpSessionToken: string | null = null
   private readonly claudeCodePath?: string
+  private readonly runtimeError?: string
   private readonly createUsageObserver?: CreateModelUsageObserver
-  private readonly extraEnv: Record<string, string>
+  private readonly claudeConfigDir: string
   private readonly apiBaseUrl?: string
   private readonly apiKey?: string
   private readonly modelName?: string
@@ -149,8 +157,9 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     this.mcpClientMgr = mcpClientMgr
     this.adbBridge = adbBridge
     this.claudeCodePath = options?.claudeCodePath?.trim() || undefined
+    this.runtimeError = options?.runtimeError
     this.createUsageObserver = options?.createUsageObserver
-    this.extraEnv = options?.env ?? {}
+    this.claudeConfigDir = options?.claudeConfigDir ?? ''
     this.apiBaseUrl = options?.apiBaseUrl?.trim() || undefined
     this.apiKey = options?.apiKey?.trim() || undefined
     this.modelName = options?.modelName?.trim() || undefined
@@ -187,29 +196,11 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
   }
 
   private buildProcessEnv(): Record<string, string | undefined> {
-    const env = { ...process.env }
-    for (const key of Object.keys(env)) {
-      if (
-        key === 'ANTHROPIC_API_KEY' ||
-        key === 'ANTHROPIC_AUTH_TOKEN' ||
-        key === 'ANTHROPIC_BASE_URL'
-      ) {
-        delete env[key]
-      } else if (key.startsWith('ANTHROPIC_DEFAULT_') || key.startsWith('ANTHROPIC_MODEL')) {
-        delete env[key]
-      } else if (key.startsWith('ANTHROPIC_SMALL_FAST_MODEL')) {
-        delete env[key]
-      } else if (/^CLAUDE_CODE_.*MODEL$/.test(key)) {
-        delete env[key]
-      }
-    }
-    return {
-      ...env,
-      ...this.extraEnv,
-      ...(this.apiBaseUrl ? { ANTHROPIC_BASE_URL: this.apiBaseUrl } : {}),
-      ...(this.apiKey ? { ANTHROPIC_API_KEY: this.apiKey } : {}),
-      CLAUDE_AGENT_SDK_CLIENT_APP: 'cclink-studio/0.1.1',
-    }
+    return buildClaudeProcessEnvironment({
+      configDir: this.claudeConfigDir,
+      apiKey: this.apiKey,
+      apiBaseUrl: this.apiBaseUrl,
+    })
   }
 
   private rememberStderr(chunk: string): void {
@@ -453,6 +444,18 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       return
     }
 
+    if (!this.apiKey) {
+      this.emit('error', {
+        type: 'error',
+        operation,
+        code: 'AUTH_REQUIRED',
+        message: STUDIO_CLAUDE_AUTH_REQUIRED,
+      })
+      return
+    }
+    await prepareClaudeConfigDirectory(this.claudeConfigDir)
+    if (this.runtimeError) throw new Error(this.runtimeError)
+
     const workspacePath = options?.workspacePath?.trim() || this.getWorkspacePath?.() || ''
     if (workspacePath) {
       try {
@@ -546,6 +549,12 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
       cwd: workspacePath || tmpdir(),
       additionalDirectories: workspacePath ? [workspacePath] : [],
       env: this.buildProcessEnv(),
+      settingSources: [],
+      spawnClaudeCodeProcess: (options) =>
+        spawnClaudeProcess(options, (data) => {
+          this.rememberStderr(data)
+          console.error('[ClaudeCodeBackend] stderr:', data)
+        }),
       includePartialMessages: true,
       mcpServers,
       strictMcpConfig: true,
@@ -585,10 +594,6 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
               toolUseID: permissionOptions.toolUseID,
             }
       },
-      stderr: (data) => {
-        this.rememberStderr(data)
-        console.error('[ClaudeCodeBackend] stderr:', data)
-      },
       systemPrompt: {
         type: 'preset',
         preset: 'claude_code',
@@ -623,10 +628,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         sessionId: this.sessionId,
         taskId: options?.scheduledTaskPolicy?.taskId ?? options?.articlePublishingPolicy?.affairId,
         provider,
-        transcriptRoot: join(
-          sdkOptions.env?.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'),
-          'projects',
-        ),
+        transcriptRoot: join(this.claudeConfigDir, 'projects'),
       })
     } catch {
       console.warn('[ModelUsage] observer unavailable; Agent continues')

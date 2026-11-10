@@ -135,6 +135,7 @@ export class CclinkRemoteService implements RemoteProvider {
   private servers = new Map<string, CclinkServer>()
   private sessions = new Map<string, CclinkRemoteSession>()
   private messages = new Map<string, CclinkRemoteMessage[]>()
+  private historyRecoveryError: Error | null = null
   private streams = new Map<string, StreamBuffer>()
   private capabilityProbes = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
   private capabilityProbeFailures = new Map<string, CapabilityProbeResult & { expiresAt: number }>()
@@ -161,7 +162,14 @@ export class CclinkRemoteService implements RemoteProvider {
 
   async initialize(): Promise<void> {
     if (!this.runtimeStateStore) return
-    const state = await this.runtimeStateStore.load()
+    const state = await this.runtimeStateStore.load().catch((error: unknown) => {
+      this.historyRecoveryError = error instanceof Error ? error : new Error('远程会话历史恢复失败')
+      return null
+    })
+    // Keep file access, capability probing and the connection available. Only history
+    // operations fail until recovery, and shutdown must not persist an empty snapshot.
+    if (!state) return
+    this.historyRecoveryError = null
     this.messages = new Map(Object.entries(state.messages))
     let stateChanged = false
     this.sessions = new Map(
@@ -356,6 +364,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async listSessions(ref: RemoteWorkspaceRef): Promise<CclinkRemoteSession[]> {
+    this.assertHistoryRecovered(ref.endpointId)
     const status = await this.connect()
     if (status.state === 'online') {
       await this.syncSessions(ref.endpointId).catch((error: unknown) => {
@@ -370,6 +379,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   setSessionArchived(sessionId: string, archived: boolean): CclinkRemoteSession {
+    this.assertHistoryRecovered()
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('远程会话不存在')
     const next: CclinkRemoteSession = {
@@ -384,6 +394,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async createSession(ref: RemoteWorkspaceRef, name?: string): Promise<CclinkRemoteSession> {
+    this.assertHistoryRecovered(ref.endpointId)
     await this.requireOnline()
     await this.requireCapability(ref, 'agent.session')
     const validation = this.validateWorkspace(ref, ref.path)
@@ -433,6 +444,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   listMessages(sessionId: string): CclinkRemoteMessage[] {
+    this.assertHistoryRecovered()
     return [...(this.messages.get(sessionId) ?? [])]
   }
 
@@ -2297,6 +2309,10 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   private applySessionSync(serverId: string, response: CclinkSessionSyncResponseMessage): void {
+    if (this.historyRecoveryError) {
+      this.recordDiagnostic('session.restore', serverId, this.historyRecoveryError)
+      return
+    }
     for (const item of response.sessions) {
       if (item.project_mode && item.project_mode !== 'remote_workspace') continue
       if (!item.workspace_id) {
@@ -2425,12 +2441,18 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   private saveState(): Promise<void> {
-    if (!this.runtimeStateStore) return Promise.resolve()
+    if (!this.runtimeStateStore || this.historyRecoveryError) return Promise.resolve()
     return this.runtimeStateStore.save({
       version: 1,
       sessions: [...this.sessions.values()],
       messages: Object.fromEntries(this.messages),
     })
+  }
+
+  private assertHistoryRecovered(endpointId?: string): void {
+    if (!this.historyRecoveryError) return
+    if (endpointId) this.recordDiagnostic('session.restore', endpointId, this.historyRecoveryError)
+    throw this.historyRecoveryError
   }
 
   private emitRealtime(event: CclinkRealtimeEvent): void {
