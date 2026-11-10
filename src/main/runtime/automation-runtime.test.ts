@@ -105,8 +105,11 @@ describe('bootstrapAutomationRuntime', () => {
 
   it('keeps MCP and Editor ready when Playwright initialization fails', async () => {
     const runtime = createAutomationRuntime()
+    const bindAuthorization = vi.fn()
+    runtime.cclinkRemoteService = { setToolAuthorizationHost: bindAuthorization } as never
 
     await expect(bootstrapAutomationRuntime(runtime)).resolves.toBeUndefined()
+    expect(bindAuthorization).toHaveBeenCalledWith(runtime.toolHost)
 
     expect(runtime.capabilities.get('browser')).toMatchObject({
       state: 'failed',

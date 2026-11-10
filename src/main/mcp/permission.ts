@@ -57,6 +57,7 @@ export class PermissionManager {
   private pending: Map<string, PendingConfirmation> = new Map()
   /** 用户选择了"始终允许"的工具集合 */
   private alwaysAllowed: Set<string> = new Set()
+  private readonly modeListeners = new Set<() => void>()
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -69,6 +70,12 @@ export class PermissionManager {
     console.log(`[PermissionManager] 权限模式切换为: ${mode}`)
     if (!changed) return
     this.invalidatePendingConfirmations('权限模式已切换，等待中的确认已失效并按拒绝处理')
+    for (const listener of this.modeListeners) listener()
+  }
+
+  onModeChanged(listener: () => void): () => void {
+    this.modeListeners.add(listener)
+    return () => this.modeListeners.delete(listener)
   }
 
   /** 撤销等待中的确认：工具不执行、不重复执行；渲染进程收到事件后移除确认卡。 */
@@ -99,9 +106,13 @@ export class PermissionManager {
    * @param annotations - 工具注解（readOnlyHint / destructiveHint）
    * @returns true = 需要确认
    */
-  needsConfirmation(toolName: string, annotations: ToolAnnotations | undefined): boolean {
+  needsConfirmation(
+    toolName: string,
+    annotations: ToolAnnotations | undefined,
+    options?: { useRememberedDecision?: boolean },
+  ): boolean {
     // 已被"始终允许"的工具不需要确认
-    if (this.alwaysAllowed.has(toolName)) {
+    if (options?.useRememberedDecision !== false && this.alwaysAllowed.has(toolName)) {
       return false
     }
 
@@ -251,5 +262,6 @@ export class PermissionManager {
     }
     this.pending.clear()
     this.mainWindow = null
+    this.modeListeners.clear()
   }
 }

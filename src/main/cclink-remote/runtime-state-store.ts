@@ -242,6 +242,9 @@ function sanitizeMessage(value: unknown): CclinkRemoteMessage | null {
         ...(typeof tool['approvalReason'] === 'string'
           ? { approvalReason: redactString(tool['approvalReason']) }
           : {}),
+        ...(typeof tool['policyReason'] === 'string'
+          ? { policyReason: redactString(tool['policyReason']).slice(0, 512) }
+          : {}),
         ...(typeof tool['expiresAt'] === 'number' ? { expiresAt: tool['expiresAt'] } : {}),
         ...(typeof tool['requestId'] === 'string' ? { requestId: tool['requestId'] } : {}),
       },

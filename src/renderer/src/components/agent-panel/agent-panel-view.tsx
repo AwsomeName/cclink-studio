@@ -51,6 +51,8 @@ import {
 } from '../../features/agent-composer/AgentComposerToolbar'
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 import { AGENT_IMAGE_ACCEPT } from '../../features/agent-conversations/image-attachments'
+import { AgentPermissionModeMenu } from '../../features/agent-composer/agent-permission-mode-menu'
+import type { PermissionMode } from '../../types'
 import {
   QueuedMessageList,
   type QueuedMessageListModel,
@@ -233,6 +235,8 @@ export interface AgentPanelComposerModel {
     | {
         kind: 'remote'
         runtimeLabel: string
+        permissionMode?: PermissionMode
+        onPermissionModeChange?(mode: PermissionMode): void
         onAddImages?: (files: File[]) => void
         capabilities: {
           addContext: AgentPanelCapability
@@ -1151,7 +1155,15 @@ export function ActionBar({
           () => remoteImageInputRef.current?.click(),
         )}
         {capabilityButton('role', '角色', <IconRobot size={13} />)}
-        {capabilityButton('permissionMode', '权限', <IconCircle size={8} />)}
+        {remote.permissionMode && remote.onPermissionModeChange ? (
+          <AgentPermissionModeMenu
+            mode={remote.permissionMode}
+            onChange={remote.onPermissionModeChange}
+            disabled={remote.capabilities.permissionMode.state !== 'enabled'}
+          />
+        ) : (
+          capabilityButton('permissionMode', '权限', <IconCircle size={8} />)
+        )}
       </div>
       <div className="agent-composer-tools">
         {capabilityButton('contextUsage', '–', <span>–</span>, 'agent-context-usage-btn', false)}

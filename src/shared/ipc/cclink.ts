@@ -286,6 +286,7 @@ function isCclinkRemoteTool(value: unknown): boolean {
   if (!isOptionalEventString(value.output, 1_000_000)) return false
   if (!isOptionalEventString(value.error, 32_768)) return false
   if (!isOptionalEventString(value.approvalReason, 32_768)) return false
+  if (!isOptionalEventString(value.policyReason, 512)) return false
   if (value.requiresApproval !== undefined && typeof value.requiresApproval !== 'boolean')
     return false
   if (value.expiresAt !== undefined && !isNonNegativeNumber(value.expiresAt)) return false

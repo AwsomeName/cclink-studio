@@ -23,6 +23,8 @@ import type { TransientImageAttachment } from '@shared/image-attachment'
 import { openRemoteFileFromConversation } from './remote-file-navigation'
 import { remoteAgentComposerKey } from './remote-message-queue-state'
 import { AGENT_FOLLOW_UP } from '../agent-conversations/follow-up-actions'
+import { useSettingsStore } from '../../stores/settings-store'
+import type { PermissionMode } from '../../types'
 
 const EMPTY_REMOTE_AGENT_IMAGES: TransientImageAttachment[] = []
 
@@ -121,6 +123,21 @@ export function RemoteAgentController({
   const addRemoteAgentImages = useCclinkStore((state) => state.addRemoteAgentImages)
   const removeRemoteAgentImage = useCclinkStore((state) => state.removeRemoteAgentImage)
   const showToast = useToastStore((state) => state.show)
+  const permissionMode = useSettingsStore((state) => state.settings.permissionMode)
+  const settingsLoading = useSettingsStore((state) => state.loading)
+  const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const [savingPermission, setSavingPermission] = useState(false)
+  const changePermissionMode = async (mode: PermissionMode): Promise<void> => {
+    if (savingPermission || mode === permissionMode) return
+    setSavingPermission(true)
+    try {
+      if (!(await updateSettings({ permissionMode: mode }))) {
+        showToast(useSettingsStore.getState().error || '权限模式保存失败，已保持原模式', 'error')
+      }
+    } finally {
+      setSavingPermission(false)
+    }
+  }
   const [stopping, setStopping] = useState(false)
   const [copyingDiagnostics, setCopyingDiagnostics] = useState(false)
   const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
@@ -454,6 +471,9 @@ export function RemoteAgentController({
           ...(message.tool.approvalReason
             ? [{ label: '原因', value: message.tool.approvalReason }]
             : []),
+          ...(message.tool.policyReason
+            ? [{ label: 'Studio 策略', value: message.tool.policyReason }]
+            : []),
           ...(state?.error ? [{ label: '错误', value: state.error, tone: 'danger' as const }] : []),
         ],
         actions: [
@@ -671,13 +691,18 @@ export function RemoteAgentController({
           actionBar: {
             kind: 'remote',
             runtimeLabel: 'CCLink Agent',
+            permissionMode,
+            onPermissionModeChange: (mode) => void changePermissionMode(mode),
             onAddImages: (files) => void addImages(files),
             capabilities: {
               addContext: imageInputAvailable
                 ? { state: 'enabled' }
                 : unsupported('当前远程 Agent 未声明图片输入能力'),
               role: unsupported('远程 Agent 暂不支持切换角色'),
-              permissionMode: unsupported('远程权限由远程 Agent 和当前确认卡管理'),
+              permissionMode:
+                settingsLoading || savingPermission
+                  ? unsupported('正在同步 Studio 权限模式')
+                  : { state: 'enabled' },
               contextUsage: unsupported('远程上下文详情暂不可用'),
               runtime: unsupported('远程 Runtime 由已配对设备管理'),
             },

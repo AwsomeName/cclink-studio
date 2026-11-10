@@ -38,6 +38,8 @@ export type CclinkRemoteMessage =
         /** 当前 requestId 的审批已获匹配回执或被远端明确撤销；缺省不代表已处理。 */
         approvalResolved?: boolean
         approvalReason?: string
+        /** Studio broker's reason; separate from the remote Runtime's explanation. */
+        policyReason?: string
         expiresAt?: number
         requestId?: string
       }
@@ -183,6 +185,10 @@ export interface CclinkAgentToolMessage extends CclinkRuntimeEnvelope<'agent_too
   requires_approval?: boolean
   approval_reason?: string
   expires_at?: number
+  tool_kind?: string
+  requires_explicit_approval?: boolean
+  risk_level?: string
+  payload_truncated?: boolean
 }
 
 export interface CclinkToolApprovalResponseMessage extends CclinkRuntimeEnvelope<'tool_approval_response'> {
@@ -190,7 +196,7 @@ export interface CclinkToolApprovalResponseMessage extends CclinkRuntimeEnvelope
   session_id: string
   tool_use_id: string
   approved: boolean
-  explicit_user_decision: true
+  explicit_user_decision: boolean
 }
 
 export interface CclinkToolApprovalAckMessage extends CclinkRuntimeEnvelope<'tool_approval_ack'> {

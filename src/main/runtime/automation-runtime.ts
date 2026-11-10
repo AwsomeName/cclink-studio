@@ -48,6 +48,7 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
 
   try {
     runtime.toolHost = new McpToolHost(runtime.permissionManager)
+    runtime.cclinkRemoteService?.setToolAuthorizationHost(runtime.toolHost)
   } catch (error) {
     runtime.toolHost = null
     runtime.capabilities.failed('mcp', error)
@@ -257,6 +258,7 @@ export async function shutdownAutomationRuntime(runtime: CclinkStudioRuntimeStat
   unregisterBrowserCdpRecoverySmoke(runtime)
   await runShutdownStep('EditorModule', () => runtime.editorModule?.destroy())
   await runShutdownStep('AgentDeviceManager', () => runtime.agentDeviceManager?.destroy())
+  runtime.cclinkRemoteService?.setToolAuthorizationHost(null)
   await runShutdownStep('McpToolHost', () => runtime.toolHost?.stop())
   await runShutdownStep('CadModificationService', () => runtime.cadModificationService?.destroy())
   await runShutdownStep('PlaywrightBridge', () => runtime.playwrightBridge?.disconnect())

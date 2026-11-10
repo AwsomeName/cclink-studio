@@ -25,6 +25,8 @@ import {
   AgentToolAuthorizationBroker,
   type ToolPermissionController,
   type ToolAuthorizationResult,
+  type RemoteToolAuthorizationInput,
+  type RemoteToolAuthorizationPlan,
 } from './agent-tool-authorization-broker.js'
 
 export type {
@@ -87,6 +89,14 @@ export class McpToolHost {
 
   constructor(private readonly permissionManager: ToolPermissionController) {
     this.authorizationBroker = new AgentToolAuthorizationBroker(permissionManager)
+  }
+
+  planRemoteToolAuthorization(input: RemoteToolAuthorizationInput): RemoteToolAuthorizationPlan {
+    return this.authorizationBroker.planRemoteTool(input)
+  }
+
+  onPermissionModeChanged(listener: () => void): () => void {
+    return this.permissionManager.onModeChanged?.(listener) ?? (() => {})
   }
 
   /** Native Codex auto-runs trusted reads; disable that executor when Studio requires read confirmation. */

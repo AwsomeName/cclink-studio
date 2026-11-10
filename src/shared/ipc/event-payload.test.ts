@@ -340,4 +340,29 @@ describe('preload event payload parsers', () => {
     expect(parseCclinkRealtimeEvent({ ...sessions, sessions: [{}] })).toBeNull()
     expect(parseCclinkRealtimeEvent({ ...sessions, sessions: [1] })).toBeNull()
   })
+
+  it('bounds the Studio authorization explanation on remote confirmation cards', () => {
+    const tool = {
+      id: 'tool',
+      name: 'Bash',
+      state: 'pending',
+      requiresApproval: true,
+      policyReason: '删除操作需要确认',
+    }
+    const event = {
+      type: 'conversation',
+      serverId: 'server',
+      sessionId: 'session',
+      message: { type: 'agentTool', id: 'message', timestamp: 1, tool },
+    }
+    expect(parseCclinkRealtimeEvent(event)).toBe(event)
+    for (const policyReason of [true, 'x'.repeat(513)]) {
+      expect(
+        parseCclinkRealtimeEvent({
+          ...event,
+          message: { ...event.message, tool: { ...tool, policyReason } },
+        }),
+      ).toBeNull()
+    }
+  })
 })

@@ -5,6 +5,7 @@ import type {
   ToolExecutionPolicy,
 } from './types.js'
 import { deleteKillReasonFor } from './delete-kill-policy.js'
+import { remoteToolConfirmationReason } from './remote-tool-authorization-input.js'
 
 export interface ToolConfirmationInput {
   conversationId?: string
@@ -20,10 +21,15 @@ export interface ToolConfirmationInput {
 }
 
 export interface ToolPermissionController {
-  needsConfirmation(toolName: string, annotations: ToolAnnotations | undefined): boolean
+  needsConfirmation(
+    toolName: string,
+    annotations: ToolAnnotations | undefined,
+    options?: { useRememberedDecision?: boolean },
+  ): boolean
   requestConfirmation(request: ToolConfirmationInput): Promise<boolean>
   /** 当前权限模式；真实控制器（PermissionManager）始终提供。缺失时按旧模式语义处理。 */
   getMode?(): PermissionMode
+  onModeChanged?(listener: () => void): () => void
   cancelForRun?(conversationId: string, runId: string): void
 }
 
@@ -31,6 +37,21 @@ export interface ToolAuthorizationResult {
   behavior: 'allow' | 'deny'
   reason?: string
   confirmationGranted?: boolean
+}
+
+export interface RemoteToolAuthorizationInput {
+  toolName: string
+  params: Record<string, unknown>
+  workspacePath: string
+  toolKind?: string
+  requiresExplicitApproval?: boolean
+  inputTruncated?: boolean
+  riskLevel?: string
+}
+
+export interface RemoteToolAuthorizationPlan {
+  behavior: 'allow' | 'confirm' | 'deny'
+  reason?: string
 }
 
 interface InternalToolAuthorizationRequest {
@@ -124,6 +145,32 @@ export class AgentToolAuthorizationBroker {
   /** 当前权限模式；控制器未提供时按旧三模式语义处理。 */
   private currentMode(): PermissionMode | undefined {
     return this.permissionController.getMode?.()
+  }
+
+  /** Remote transport owns the pending request/card; the same broker owns the decision. */
+  planRemoteTool(request: RemoteToolAuthorizationInput): RemoteToolAuthorizationPlan {
+    const humanExclusiveReason = humanExclusiveReasonFor(request.toolName)
+    if (humanExclusiveReason) return { behavior: 'deny', reason: humanExclusiveReason }
+    const guard = remoteToolConfirmationReason(request)
+    if (guard) return { behavior: 'confirm', reason: guard }
+    const annotations = sdkToolAnnotations(
+      request.toolName,
+      deleteKillReasonFor(request.toolName, request.params),
+    )
+    // Remote tools cannot use the local loopback MCP exemption or trust an unknown name.
+    if (!annotations)
+      return { behavior: 'confirm', reason: '远程工具尚未登记安全分类，需要本次确认' }
+    if (request.toolName === 'WebFetch') return { behavior: 'allow' }
+    const plan = this.planConfirmation({
+      toolName: request.toolName,
+      params: request.params,
+      annotations,
+      executionPolicy: null,
+      useRememberedDecision: false,
+    })
+    return plan.allowed
+      ? { behavior: 'allow' }
+      : { behavior: 'confirm', reason: plan.reason ?? '当前 Studio 权限模式要求确认此操作' }
   }
 
   cancelForRun(conversationId: string, runId: string): void {
@@ -301,6 +348,7 @@ export class AgentToolAuthorizationBroker {
     annotations: ToolAnnotations
     executionPolicy: ToolExecutionPolicy | null | undefined
     fallbackReason?: string
+    useRememberedDecision?: boolean
   }): ConfirmationPlan {
     const guardedMode = this.currentMode() === 'auto-except-destructive'
     const deleteKillReason = deleteKillReasonFor(input.toolName, input.params)
@@ -316,7 +364,9 @@ export class AgentToolAuthorizationBroker {
       destructiveFloor || input.executionPolicy?.requireConfirmation === true
     const modeConfirmation = guardedMode
       ? false
-      : this.permissionController.needsConfirmation(input.toolName, input.annotations)
+      : this.permissionController.needsConfirmation(input.toolName, input.annotations, {
+          useRememberedDecision: input.useRememberedDecision,
+        })
     if (!mandatoryConfirmation && !modeConfirmation) {
       return { allowed: true, riskLevel }
     }

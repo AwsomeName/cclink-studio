@@ -16,7 +16,6 @@ import type { AgentRuntimeBinding } from '@shared/agent-runtime'
 import {
   IconCheck,
   IconChevronDown,
-  IconCircle,
   IconFile,
   IconPlus,
   IconRefresh,
@@ -29,12 +28,11 @@ import {
   getClaudeCodeSourceLabel,
   getClaudeCodeStatusDetail,
   getClaudeCodeStatusLabel,
-  getPermissionModeOption,
   getRuntimeDetail,
   getRuntimeLabel,
-  PERMISSION_MODE_OPTIONS,
 } from './composer-view-model'
 import { AgentRoleIcon } from '../agent-roles/agent-role-presentation'
+import { AgentPermissionModeMenu } from './agent-permission-mode-menu'
 
 export interface AgentComposerToolbarProps {
   roleRef?: AgentRoleRef
@@ -89,7 +87,6 @@ export function AgentComposerToolbar({
   const [claudeError, setClaudeError] = useState<string | null>(null)
   const addRef = useRef<HTMLDivElement>(null)
   const roleRefElement = useRef<HTMLDivElement>(null)
-  const permissionRef = useRef<HTMLDivElement>(null)
   const runtimeRef = useRef<HTMLDivElement>(null)
   const contextRef = useRef<HTMLDivElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
@@ -97,7 +94,6 @@ export function AgentComposerToolbar({
   const selectedRole =
     roles.find((role) => role.roleId === roleRef?.roleId && role.version === roleRef.version) ??
     null
-  const selectedPermission = getPermissionModeOption(permissionMode)
   const runtimeLabel =
     runtimeBinding.kind === 'codex'
       ? 'Codex'
@@ -281,45 +277,13 @@ export function AgentComposerToolbar({
           </div>
         )}
 
-        <div className="agent-composer-menu-wrap" ref={permissionRef}>
-          <button
-            className="agent-mode-btn"
-            data-agent-action="permissionMode"
-            onClick={() => toggleMenu('permission')}
-            title={`权限模式: ${selectedPermission.label}`}
-            disabled={loading}
-          >
-            <IconCircle size={8} filled color={selectedPermission.color} />
-            {selectedPermission.label}
-            <IconChevronDown size={12} />
-          </button>
-          <FloatingSurface
-            anchorRef={permissionRef}
-            open={openMenu === 'permission'}
-            placement="top-start"
-            className="agent-composer-menu"
-            onRequestClose={() => setOpenMenu(null)}
-          >
-            <div className="agent-composer-menu-title">权限模式</div>
-            {PERMISSION_MODE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                className={option.value === permissionMode ? 'selected' : ''}
-                onClick={() => {
-                  setOpenMenu(null)
-                  onPermissionModeChange(option.value)
-                }}
-              >
-                <IconCircle size={8} filled color={option.color} />
-                <span>
-                  <strong>{option.label}</strong>
-                  <em>{option.description}</em>
-                </span>
-                {option.value === permissionMode && <IconCheck size={11} />}
-              </button>
-            ))}
-          </FloatingSurface>
-        </div>
+        <AgentPermissionModeMenu
+          mode={permissionMode}
+          disabled={loading}
+          onChange={onPermissionModeChange}
+          open={openMenu === 'permission'}
+          onOpenChange={(open) => setOpenMenu(open ? 'permission' : null)}
+        />
       </div>
 
       <div className="agent-composer-tools">

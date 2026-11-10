@@ -17,6 +17,7 @@ import {
   type ImageUploadOptions,
 } from './request-router'
 import { TimTransport, type TimAdapter } from './tim-transport'
+import { AgentToolAuthorizationBroker } from '../agent-core/tools/agent-tool-authorization-broker'
 
 class ReceivingTransport implements CclinkTransport {
   readonly sent: Array<{ serverId: string; message: CclinkProtocolMessage }> = []
@@ -79,6 +80,26 @@ function createService(
       }
     ).handleProtocolMessage('agent-1', message)
   return { service, store, handle }
+}
+
+function bindAutomaticPolicy(service: CclinkRemoteService, runId: string): void {
+  const broker = new AgentToolAuthorizationBroker({
+    getMode: () => 'auto',
+    needsConfirmation: () => false,
+    requestConfirmation: async () => {
+      throw new Error('Remote cards belong to the remote service')
+    },
+  })
+  service.setToolAuthorizationHost({
+    planRemoteToolAuthorization: (input) => broker.planRemoteTool(input),
+    onPermissionModeChanged: () => () => {},
+  })
+  const state = service as unknown as {
+    activeAgentRequests: Map<string, string>
+    sessions: Map<string, CclinkRemoteSession>
+  }
+  state.activeAgentRequests.set('session-1', runId)
+  state.sessions.set('session-1', { ...state.sessions.get('session-1')!, status: 'active' })
 }
 
 describe('CclinkRemoteService runtime protocol', () => {
@@ -1214,6 +1235,7 @@ describe('CclinkRemoteService runtime protocol', () => {
   it.each(['WebSearch', 'WebFetch'])('自动批准 %s 且不向 UI 暴露待确认卡片', async (toolName) => {
     const { service, handle } = createService()
     await service.initialize()
+    bindAutomaticPolicy(service, 'search-request')
     vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
     vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
     const request = vi
@@ -1254,7 +1276,7 @@ describe('CclinkRemoteService runtime protocol', () => {
         session_id: 'session-1',
         tool_use_id: 'search-tool',
         approved: true,
-        explicit_user_decision: true,
+        explicit_user_decision: false,
       }),
       ['tool_approval_ack'],
       15_000,
@@ -1272,6 +1294,7 @@ describe('CclinkRemoteService runtime protocol', () => {
   it('WebFetch 的重复待审批事件不会重复批准或重新打开已批准的确认卡', async () => {
     const { service, handle } = createService()
     await service.initialize()
+    bindAutomaticPolicy(service, 'fetch-request')
     vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
     vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
     const request = vi
@@ -1314,6 +1337,7 @@ describe('CclinkRemoteService runtime protocol', () => {
   it('远端明确表示权限请求已失效后关闭旧卡，重复事件和再次点击均不重发或刷屏', async () => {
     const { service, handle } = createService()
     await service.initialize()
+    bindAutomaticPolicy(service, 'fetch-request')
     installOnlineServer(service)
     vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
     const transport = new ReceivingTransport()
@@ -1372,6 +1396,7 @@ describe('CclinkRemoteService runtime protocol', () => {
   it.each(['WebSearch', 'WebFetch'])('%s 自动批准网络超时时保留未确认状态', async (toolName) => {
     const { service, handle } = createService()
     await service.initialize()
+    bindAutomaticPolicy(service, 'search-request')
     vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
     vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
     vi.spyOn(service.getRequestRouter(), 'request').mockRejectedValue(

@@ -18,7 +18,7 @@ export const PERMISSION_MODE_OPTIONS: PermissionModeOption[] = [
   {
     value: 'auto-except-destructive',
     label: '除删除/终止外自动',
-    description: '仅删除与终止进程类操作逐次确认；其余自动放行',
+    description: '常规操作自动放行；删除、终止及额外风险仍需确认',
     color: '#f97316',
   },
   {

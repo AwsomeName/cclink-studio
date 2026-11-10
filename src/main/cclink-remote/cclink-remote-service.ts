@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import type {
   CclinkFileReadResponseMessage,
+  CclinkAgentToolMessage,
   CclinkCapabilityProbeResponseMessage,
   CclinkFileCreateRequestMessage,
   CclinkFileDeleteRequestMessage,
@@ -72,6 +73,24 @@ import {
   RemoteDiagnosticLog,
 } from '../remote/remote-diagnostic-log'
 import { buildRemoteDiagnosticReport } from '../remote/remote-diagnostics'
+import type { McpToolHost } from '../agent-core/tools/tool-host'
+import type { RemoteToolAuthorizationPlan } from '../agent-core/tools/agent-tool-authorization-broker'
+
+type RemoteToolAuthorizationHost = Pick<
+  McpToolHost,
+  'planRemoteToolAuthorization' | 'onPermissionModeChanged'
+>
+interface LiveToolApproval {
+  serverId: string
+  event: CclinkAgentToolMessage
+  workspaceId: string
+  workspacePath: string
+  runId?: string
+  generation: number
+  attempted: boolean
+  decision?: Promise<{ success: boolean; error?: string }>
+  decisionApproved?: boolean
+}
 
 interface PairedAgentResponse {
   agent_id?: string
@@ -106,7 +125,6 @@ const CHUNK_SEND_CONCURRENCY = 8
 const REMOTE_SESSION_DIAGNOSTIC_MESSAGE_LIMIT = 100
 const REMOTE_FILE_READ_PAGE_LINES = 100
 const MAX_REMOTE_FILE_READ_ATTEMPTS = 4096
-const AUTO_APPROVED_REMOTE_AGENT_TOOLS = new Set(['WebSearch', 'WebFetch'])
 const ENDED_TOOL_APPROVAL_CODES = new Set([
   'CONTROL_NOT_PENDING',
   'CONTROL_REQUEST_ENDED',
@@ -144,7 +162,10 @@ export class CclinkRemoteService implements RemoteProvider {
   private readonly submittingAgentSessions = new Set<string>()
   private readonly stoppedAgentRequestIds = new Map<string, string[]>()
   private readonly stoppedAgentSessionsWithoutRequest = new Set<string>()
-  private readonly automaticToolApprovals = new Map<string, Promise<boolean>>()
+  private readonly liveToolApprovals = new Map<string, LiveToolApproval>()
+  private authorizationHost: RemoteToolAuthorizationHost | null = null
+  private authorizationUnsubscribe: (() => void) | null = null
+  private approvalGeneration = 0
   private connecting: Promise<CclinkRealtimeStatus> | null = null
   private readonly diagnosticLog = new RemoteDiagnosticLog()
 
@@ -158,6 +179,18 @@ export class CclinkRemoteService implements RemoteProvider {
     this.requestRouter.onProtocolEvent((event) => {
       void this.handleProtocolMessage(event.serverId, event.message)
     })
+  }
+
+  setToolAuthorizationHost(host: RemoteToolAuthorizationHost | null): void {
+    this.authorizationUnsubscribe?.()
+    this.authorizationHost = host
+    this.authorizationUnsubscribe =
+      host?.onPermissionModeChanged(() => {
+        for (const pending of this.liveToolApprovals.values()) {
+          pending.attempted = false
+          void this.applyToolAuthorization(pending)
+        }
+      }) ?? null
   }
 
   async initialize(): Promise<void> {
@@ -382,6 +415,7 @@ export class CclinkRemoteService implements RemoteProvider {
     this.assertHistoryRecovered()
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('远程会话不存在')
+    if (archived) this.clearToolApprovals(sessionId)
     const next: CclinkRemoteSession = {
       ...session,
       status: archived ? 'archived' : 'idle',
@@ -635,6 +669,7 @@ export class CclinkRemoteService implements RemoteProvider {
       this.stoppedAgentSessionsWithoutRequest.add(sessionId)
     }
     this.activeAgentRequests.delete(sessionId)
+    this.clearToolApprovals(sessionId)
     for (const [key, stream] of this.streams) {
       if (stream.sessionId === sessionId && stream.serverId === ref.endpointId)
         this.streams.delete(key)
@@ -659,17 +694,60 @@ export class CclinkRemoteService implements RemoteProvider {
     return { success: true }
   }
 
-  async resolveToolApproval(input: {
-    ref: RemoteWorkspaceRef
-    sessionId: string
-    requestId: string
-    toolUseId: string
-    approved: boolean
-  }): Promise<{ success: boolean; error?: string }> {
+  async resolveToolApproval(
+    input: {
+      ref: RemoteWorkspaceRef
+      sessionId: string
+      requestId: string
+      toolUseId: string
+      approved: boolean
+    },
+    origin: 'user' | 'policy' = 'user',
+  ): Promise<{ success: boolean; error?: string }> {
+    const key = this.toolApprovalKey(input.ref.endpointId, input.sessionId, input.toolUseId)
+    const live = this.liveToolApprovals.get(key)
+    if (!live || live.event.request_id !== input.requestId) {
+      return { success: false, error: '该操作已完成审批或权限请求已失效，请等待新的请求。' }
+    }
+    if (live.decision)
+      return live.decisionApproved === input.approved
+        ? live.decision
+        : { success: false, error: '该操作的审批正在提交，不能同时提交相反决定。' }
+    const decision = this.sendToolApproval(input, origin, live)
+    if (live?.event.request_id === input.requestId) {
+      live.decision = decision
+      live.decisionApproved = input.approved
+      void decision.finally(() => {
+        if (live.decision === decision) live.decision = undefined
+      })
+    }
+    return decision
+  }
+
+  private async sendToolApproval(
+    input: {
+      ref: RemoteWorkspaceRef
+      sessionId: string
+      requestId: string
+      toolUseId: string
+      approved: boolean
+    },
+    origin: 'user' | 'policy',
+    live?: LiveToolApproval,
+  ): Promise<{ success: boolean; error?: string }> {
+    const generation = this.approvalGeneration
     try {
       await this.requireOnline()
       await this.requireCapability(input.ref, 'agent.session')
-      this.assertSessionMatches(input.ref, input.sessionId)
+      const session = this.assertSessionMatches(input.ref, input.sessionId)
+      if (
+        generation !== this.approvalGeneration ||
+        session.status === 'archived' ||
+        session.workspacePath !== input.ref.path ||
+        (live && !this.isLiveToolApproval(live))
+      ) {
+        return { success: false, error: '远程审批上下文已变化，请等待新的权限请求。' }
+      }
       const pending = (this.messages.get(input.sessionId) ?? []).find(
         (message) => message.type === 'agentTool' && message.tool.id === input.toolUseId,
       )
@@ -680,6 +758,20 @@ export class CclinkRemoteService implements RemoteProvider {
         (pending.tool.state !== 'pending' && pending.tool.state !== 'executing')
       ) {
         return { success: false, error: '该操作已完成审批或权限请求已失效，请重新发起任务。' }
+      }
+      if (pending.tool.expiresAt && normalizeTimestamp(pending.tool.expiresAt) <= nowSeconds()) {
+        return { success: false, error: '远程权限请求已过期，请重新发起任务。' }
+      }
+      if (origin === 'policy') {
+        if (!live || !this.canAutomaticallyDecide(live)) {
+          return { success: false, error: '远程运行归属不明确，已保留人工确认。' }
+        }
+        const plan = this.planToolAuthorization(live)
+        if (plan.behavior !== (input.approved ? 'allow' : 'deny')) {
+          return { success: false, error: '权限策略已变化，已保留确认请求。' }
+        }
+      } else if (input.approved && live && this.planToolAuthorization(live).behavior === 'deny') {
+        return { success: false, error: this.planToolAuthorization(live).reason }
       }
       const controlRequestId = randomUUID()
       const response = (await this.requestRouter.request(
@@ -693,7 +785,7 @@ export class CclinkRemoteService implements RemoteProvider {
           session_id: input.sessionId,
           tool_use_id: input.toolUseId,
           approved: input.approved,
-          explicit_user_decision: true,
+          explicit_user_decision: origin === 'user',
         },
         ['tool_approval_ack'],
         15_000,
@@ -713,6 +805,19 @@ export class CclinkRemoteService implements RemoteProvider {
         throw new Error('远程 Agent 返回了不匹配的审批确认')
       }
       this.updateToolApproval(input.sessionId, input.toolUseId, input.requestId, input.approved)
+      this.recordSessionProtocolEvent(
+        input.ref.endpointId,
+        {
+          ...createCclinkEnvelope('tool_approval_response', {
+            request_id: controlRequestId,
+            trace_id: input.requestId,
+          }),
+          session_id: input.sessionId,
+          tool_use_id: input.toolUseId,
+          status: input.approved ? `${origin}_allowed` : `${origin}_denied`,
+        } as CclinkProtocolMessage,
+        'outbound',
+      )
       return { success: true }
     } catch (error) {
       this.recordDiagnostic('agent.approval', input.ref.endpointId, error)
@@ -1588,6 +1693,7 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async destroy(): Promise<void> {
+    this.setToolAuthorizationHost(null)
     await this.saveState()
     await this.disconnect()
     this.servers.clear()
@@ -1602,6 +1708,8 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   async disconnect(): Promise<void> {
+    this.approvalGeneration += 1
+    this.liveToolApprovals.clear()
     for (const controller of this.imageUploads.values()) controller.abort()
     this.imageUploads.clear()
     this.timStatusUnsubscribe?.()
@@ -2005,20 +2113,10 @@ export class CclinkRemoteService implements RemoteProvider {
         return
       }
       case 'agent_tool': {
-        const event = message as unknown as {
-          session_id: string
-          msg_id: string
-          tool: string
-          tool_use_id: string
-          state: 'pending' | 'executing' | 'completed' | 'failed' | 'denied'
-          input?: Record<string, unknown>
-          output?: string
-          error?: string
-          requires_approval?: boolean
-          approval_reason?: string
-          expires_at?: number
-          request_id?: string
-        }
+        const event = message as CclinkAgentToolMessage
+        const session = this.sessions.get(event.session_id)
+        if (!session || session.serverId !== serverId || !event.tool_use_id) return
+        const approvalKey = this.toolApprovalKey(serverId, event.session_id, event.tool_use_id)
         const messageId = `remote-tool-${event.tool_use_id || event.msg_id}`
         const previousMessage = (this.messages.get(event.session_id) ?? []).find(
           (item): item is Extract<CclinkRemoteMessage, { type: 'agentTool' }> =>
@@ -2058,7 +2156,8 @@ export class CclinkRemoteService implements RemoteProvider {
             id: event.tool_use_id,
             name: event.tool,
             state: event.state,
-            input: event.input,
+            input:
+              event.input ?? (preservesPendingApproval ? previousMessage?.tool.input : undefined),
             output: event.output,
             error: event.error,
             requiresApproval: event.requires_approval === true || preservesPendingApproval,
@@ -2070,21 +2169,31 @@ export class CclinkRemoteService implements RemoteProvider {
               event.expires_at ??
               (preservesPendingApproval ? previousMessage.tool.expiresAt : undefined),
             requestId: event.request_id ?? previousMessage?.tool.requestId,
+            ...(preservesPendingApproval && previousMessage?.tool.policyReason
+              ? { policyReason: previousMessage.tool.policyReason }
+              : {}),
           },
         }
         this.appendMessage(event.session_id, remoteMessage)
         if (
           event.requires_approval === true &&
           (event.state === 'pending' || event.state === 'executing') &&
-          AUTO_APPROVED_REMOTE_AGENT_TOOLS.has(event.tool) &&
           event.request_id
         ) {
-          await this.autoApproveRemoteTool({
-            serverId,
-            sessionId: event.session_id,
-            requestId: event.request_id,
-            toolUseId: event.tool_use_id,
-          })
+          let pending = this.liveToolApprovals.get(approvalKey)
+          if (!pending || pending.event.request_id !== event.request_id) {
+            pending = {
+              serverId,
+              event,
+              workspaceId: session.workspaceId,
+              workspacePath: session.workspacePath,
+              runId: this.activeAgentRequests.get(event.session_id),
+              generation: this.approvalGeneration,
+              attempted: false,
+            }
+            this.liveToolApprovals.set(approvalKey, pending)
+          }
+          await this.applyToolAuthorization(pending)
           const latestMessage = (this.messages.get(event.session_id) ?? []).find(
             (item) => item.id === messageId,
           )
@@ -2095,6 +2204,13 @@ export class CclinkRemoteService implements RemoteProvider {
             phase: 'message',
             message: latestMessage ?? remoteMessage,
           })
+          return
+        }
+        if (!remoteMessage.tool.requiresApproval) this.liveToolApprovals.delete(approvalKey)
+        const deciding = this.liveToolApprovals.get(approvalKey)
+        if (preservesPendingApproval && deciding?.attempted && deciding.decision) {
+          await deciding.decision
+          this.emitToolApproval(deciding)
           return
         }
         this.emitRealtime({
@@ -2287,12 +2403,16 @@ export class CclinkRemoteService implements RemoteProvider {
 
   private settleAgentRequest(sessionId: string, message: CclinkProtocolMessage): void {
     const active = this.activeAgentRequests.get(sessionId)
-    if (!active) return
+    if (!active) {
+      this.clearToolApprovals(sessionId)
+      return
+    }
     const payload = message as unknown as Record<string, unknown>
     const requestId = typeof payload['request_id'] === 'string' ? payload['request_id'] : null
     const traceId = typeof payload['trace_id'] === 'string' ? payload['trace_id'] : null
     if ((!requestId && !traceId) || requestId === active || traceId === active) {
       this.activeAgentRequests.delete(sessionId)
+      this.clearToolApprovals(sessionId)
     }
   }
 
@@ -2514,39 +2634,131 @@ export class CclinkRemoteService implements RemoteProvider {
     this.persistState()
   }
 
-  private autoApproveRemoteTool(input: {
-    serverId: string
-    sessionId: string
-    requestId: string
-    toolUseId: string
-  }): Promise<boolean> {
-    const key = `${input.serverId}\u0000${input.sessionId}\u0000${input.toolUseId}`
-    const existing = this.automaticToolApprovals.get(key)
-    if (existing) return existing
+  private toolApprovalKey(serverId: string, sessionId: string, toolUseId: string): string {
+    return `${serverId}\u0000${sessionId}\u0000${toolUseId}`
+  }
 
-    const session = this.sessions.get(input.sessionId)
-    if (!session || session.serverId !== input.serverId) return Promise.resolve(false)
-    const decision = this.resolveToolApproval({
-      ref: {
-        kind: 'remote',
-        transport: 'cclink',
-        endpointId: session.serverId,
-        workspaceId: session.workspaceId,
-        path: session.workspacePath,
+  private isLiveToolApproval(pending: LiveToolApproval): boolean {
+    const { event, serverId } = pending
+    const session = this.sessions.get(event.session_id)
+    return (
+      this.liveToolApprovals.get(
+        this.toolApprovalKey(serverId, event.session_id, event.tool_use_id),
+      ) === pending &&
+      pending.generation === this.approvalGeneration &&
+      session?.serverId === serverId &&
+      session.status !== 'archived' &&
+      session.workspaceId === pending.workspaceId &&
+      session.workspacePath === pending.workspacePath &&
+      (!event.expires_at || normalizeTimestamp(event.expires_at) > nowSeconds())
+    )
+  }
+
+  private canAutomaticallyDecide(pending: LiveToolApproval): boolean {
+    const { event, runId } = pending
+    return (
+      this.isLiveToolApproval(pending) &&
+      Boolean(runId) &&
+      this.activeAgentRequests.get(event.session_id) === runId &&
+      this.sessions.get(event.session_id)?.status === 'active' &&
+      (event.request_id === runId || event.trace_id === runId)
+    )
+  }
+
+  private planToolAuthorization(pending: LiveToolApproval): RemoteToolAuthorizationPlan {
+    const { event } = pending
+    try {
+      return (
+        this.authorizationHost?.planRemoteToolAuthorization({
+          toolName: event.tool,
+          params: event.input ?? {},
+          workspacePath: pending.workspacePath,
+          toolKind: event.tool_kind,
+          requiresExplicitApproval: event.requires_explicit_approval,
+          inputTruncated: event.payload_truncated,
+          riskLevel: event.risk_level,
+        }) ?? { behavior: 'confirm', reason: 'Studio 权限策略暂不可用，保留本次人工确认' }
+      )
+    } catch (error) {
+      this.recordDiagnostic('agent.authorization', pending.serverId, error)
+      return { behavior: 'confirm', reason: 'Studio 权限判断失败，保留本次人工确认' }
+    }
+  }
+
+  private async applyToolAuthorization(pending: LiveToolApproval): Promise<void> {
+    const { event, serverId } = pending
+    if (!this.isLiveToolApproval(pending)) return
+    const plan = this.planToolAuthorization(pending)
+    this.setToolPolicyReason(pending, plan.reason)
+    if (pending.decision) {
+      await pending.decision
+      return
+    }
+    if (plan.behavior === 'confirm' || pending.attempted) {
+      this.emitToolApproval(pending)
+      return
+    }
+    if (!this.canAutomaticallyDecide(pending)) {
+      this.setToolPolicyReason(pending, '无法确认请求属于当前 Studio 运行，保留本次人工确认')
+      this.emitToolApproval(pending)
+      return
+    }
+    pending.attempted = true
+    const result = await this.resolveToolApproval(
+      {
+        ref: {
+          kind: 'remote',
+          transport: 'cclink',
+          endpointId: serverId,
+          workspaceId: pending.workspaceId,
+          path: pending.workspacePath,
+        },
+        sessionId: event.session_id,
+        requestId: event.request_id!,
+        toolUseId: event.tool_use_id,
+        approved: plan.behavior === 'allow',
       },
-      sessionId: input.sessionId,
-      requestId: input.requestId,
-      toolUseId: input.toolUseId,
-      approved: true,
-    })
-      .then((result) => result.success)
-      .finally(() => {
-        if (this.automaticToolApprovals.get(key) === decision) {
-          this.automaticToolApprovals.delete(key)
-        }
+      'policy',
+    )
+    if (!result.success && this.isLiveToolApproval(pending)) {
+      this.setToolPolicyReason(pending, result.error ?? '自动审批未获远端确认，请重试本次操作')
+    }
+    this.emitToolApproval(pending)
+  }
+
+  private emitToolApproval(pending: LiveToolApproval): void {
+    const { event, serverId } = pending
+    const message = this.messages
+      .get(event.session_id)
+      ?.find((item) => item.type === 'agentTool' && item.tool.id === event.tool_use_id)
+    if (message)
+      this.emitRealtime({
+        type: 'conversation',
+        serverId,
+        sessionId: event.session_id,
+        phase: 'message',
+        message,
       })
-    this.automaticToolApprovals.set(key, decision)
-    return decision
+  }
+
+  private setToolPolicyReason(pending: LiveToolApproval, reason?: string): void {
+    const message = this.messages
+      .get(pending.event.session_id)
+      ?.find((item) => item.type === 'agentTool' && item.tool.id === pending.event.tool_use_id)
+    if (
+      message?.type !== 'agentTool' ||
+      !message.tool.requiresApproval ||
+      message.tool.requestId !== pending.event.request_id
+    )
+      return
+    message.tool.policyReason = reason?.slice(0, 512)
+    this.persistState()
+  }
+
+  private clearToolApprovals(sessionId: string): void {
+    for (const [key, pending] of this.liveToolApprovals) {
+      if (pending.event.session_id === sessionId) this.liveToolApprovals.delete(key)
+    }
   }
 
   private updateQuestionStatus(
@@ -2732,6 +2944,10 @@ export class CclinkRemoteService implements RemoteProvider {
   }
 
   private updateStatus(status: CclinkRealtimeStatus): void {
+    if (this.status.state === 'online' && status.state !== 'online') {
+      this.approvalGeneration += 1
+      this.liveToolApprovals.clear()
+    }
     this.status = status
     console.log(
       `[CCLink Studio] CCLink realtime state=${status.state}${status.error ? ' error=present' : ''}`,

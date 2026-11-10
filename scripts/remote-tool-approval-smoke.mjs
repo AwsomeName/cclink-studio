@@ -24,6 +24,8 @@ await symlink(join(rootDir, 'node_modules'), join(runDir, 'node_modules'), 'dir'
 await writeFile(
   entryPath,
   `export { CclinkRemoteService } from ${JSON.stringify(join(rootDir, 'src/main/cclink-remote/cclink-remote-service.ts'))};
+export { PermissionManager } from ${JSON.stringify(join(rootDir, 'src/main/mcp/permission.ts'))};
+export { AgentToolAuthorizationBroker } from ${JSON.stringify(join(rootDir, 'src/main/agent-core/tools/agent-tool-authorization-broker.ts'))};
 export { createCclinkEnvelope } from ${JSON.stringify(join(rootDir, 'src/shared/cclink.ts'))};`,
 )
 await build({
@@ -61,7 +63,12 @@ try {
   page.setDefaultTimeout(15_000)
   await page.waitForSelector('.main-window', { timeout: 30_000 })
   const fixture = await app.evaluate(async ({ ipcMain, BrowserWindow }) => {
-    const { CclinkRemoteService, createCclinkEnvelope } = globalThis.toolApprovalModule
+    const {
+      CclinkRemoteService,
+      createCclinkEnvelope,
+      PermissionManager,
+      AgentToolAuthorizationBroker,
+    } = globalThis.toolApprovalModule
     const ref = {
       kind: 'remote',
       transport: 'cclink',
@@ -86,6 +93,19 @@ try {
       save: async () => {},
     })
     await service.initialize()
+    const permissions = new PermissionManager(BrowserWindow.getAllWindows()[0])
+    const broker = new AgentToolAuthorizationBroker(permissions)
+    service.setToolAuthorizationHost({
+      planRemoteToolAuthorization: (input) => broker.planRemoteTool(input),
+      onPermissionModeChanged: (listener) => permissions.onModeChanged(listener),
+    })
+    const originalSettingsSet = ipcMain._invokeHandlers.get('settings:set')
+    ipcMain.removeHandler('settings:set')
+    ipcMain.handle('settings:set', async (event, input) => {
+      const result = await originalSettingsSet(event, input)
+      if (result.success) permissions.setMode(result.settings.permissionMode)
+      return result
+    })
     service.connect = async () => ({ state: 'online' })
     service.getStatus = async () => ({
       ref,
@@ -98,10 +118,27 @@ try {
         agent: { session: true, stream: true },
       },
     })
+    let automaticAck = false
     const sent = []
     const listeners = new Set()
     service.getRequestRouter().attach({
-      sendMessage: async (serverId, message) => sent.push({ serverId, message }),
+      sendMessage: async (serverId, message) => {
+        sent.push({ serverId, message })
+        if (automaticAck)
+          queueMicrotask(() => {
+            for (const listener of listeners)
+              listener({
+                serverId,
+                message: {
+                  ...createCclinkEnvelope('tool_approval_ack', { request_id: message.request_id }),
+                  session_id: message.session_id,
+                  tool_use_id: message.tool_use_id,
+                  approved: message.approved,
+                  status: 'accepted',
+                },
+              })
+          })
+      },
       onMessage: (listener) => {
         listeners.add(listener)
         return () => listeners.delete(listener)
@@ -133,6 +170,7 @@ try {
     globalThis.toolApprovalSmoke = {
       sent,
       async requestApproval() {
+        service.activeAgentRequests.set(session.id, 'plan-request')
         await emit({ ...event, cc_type: 'stream_start' })
         await emit({ ...event, state: 'executing', requires_approval: undefined })
         await emit(event)
@@ -167,6 +205,26 @@ try {
           final_text: 'APPROVAL_SMOKE_COMPLETED',
         })
       },
+      async regularTools() {
+        automaticAck = true
+        service.activeAgentRequests.set(session.id, 'policy-run')
+        service.setSessionStatus(session.id, 'active')
+        for (const [id, tool, input] of [
+          ['read', 'Read', { file_path: '/approval-fixture/a.ts' }],
+          ['write', 'Write', { file_path: '/approval-fixture/a.ts', content: 'export {}' }],
+          ['build', 'Bash', { command: 'pnpm build', cwd: ref.path }],
+        ])
+          await emit({ ...event, request_id: 'policy-run', tool_use_id: id, tool, input })
+      },
+      async deleteTool() {
+        await emit({
+          ...event,
+          request_id: 'policy-run',
+          tool_use_id: 'delete',
+          tool: 'Bash',
+          input: { command: 'rm canary' },
+        })
+      },
       snapshot: () => service.listMessages(session.id),
     }
     return { ref, session }
@@ -179,6 +237,10 @@ try {
     const { useCclinkStore } = await import(storeUrl)
     const { useWorkspaceStore } = await import('/src/stores/workspace-store.ts')
     const { useUIStore } = await import('/src/stores/ui-store.ts')
+    const { useSettingsStore } = await import('/src/stores/settings-store.ts')
+    if (!(await useSettingsStore.getState().updateSettings({ permissionMode: 'strict' }))) {
+      throw new Error('Could not set the initial strict policy')
+    }
     await useCclinkStore.getState().initialize()
     useCclinkStore.setState({
       initialized: true,
@@ -215,9 +277,71 @@ try {
   await page.screenshot({ path: join(runDir, 'approval-completed.png') })
   const messages = await app.evaluate(() => globalThis.toolApprovalSmoke.snapshot())
   assert.equal(messages.find((message) => message.type === 'agentTool').tool.state, 'completed')
+  // The actual shared menu persists through settings:set; the fixture only replaces the remote transport.
+  await panel.locator('[data-agent-action="permissionMode"]').click()
+  await page.getByRole('button', { name: '严格 所有工具操作都先确认', exact: true }).click()
+  await panel.locator('[data-agent-action="permissionMode"]').filter({ hasText: '严格' }).waitFor()
+  await app.evaluate(() => globalThis.toolApprovalSmoke.regularTools())
+  await approve.nth(2).waitFor()
+  assert.equal(await approve.count(), 3)
+  assert.equal(await app.evaluate(() => globalThis.toolApprovalSmoke.sent.length), 1)
+  await page.screenshot({ path: join(runDir, 'strict-three-confirmations.png') })
+  await panel.locator('[data-agent-action="permissionMode"]').click()
+  await page
+    .getByRole('button')
+    .filter({ has: page.locator('strong', { hasText: '除删除/终止外自动' }) })
+    .click()
+  await page.waitForFunction(
+    () =>
+      !Array.from(document.querySelectorAll('button')).some(
+        (button) => button.textContent === '允许本次操作',
+      ),
+  )
+  assert.equal(await app.evaluate(() => globalThis.toolApprovalSmoke.sent.length), 4)
+  const decisions = await app.evaluate(() =>
+    globalThis.toolApprovalSmoke.sent.slice(1).map((item) => item.message),
+  )
+  assert(decisions.every((item) => item.approved && item.explicit_user_decision === false))
+  await page.screenshot({ path: join(runDir, 'automatic-regular-tools.png') })
+  await app.evaluate(() => globalThis.toolApprovalSmoke.deleteTool())
+  await approve.waitFor()
+  await panel.getByText('删除类操作（rm）需要逐次确认', { exact: true }).waitFor()
+  assert.equal(await app.evaluate(() => globalThis.toolApprovalSmoke.sent.length), 4)
+  await page.screenshot({ path: join(runDir, 'delete-still-confirmed.png') })
+  await panel.getByRole('button', { name: '拒绝', exact: true }).click()
+  await approve.waitFor({ state: 'hidden' })
+  const rejection = await app.evaluate(() => globalThis.toolApprovalSmoke.sent.at(-1).message)
+  assert.equal(rejection.approved, false)
+  assert.equal(rejection.explicit_user_decision, true)
+  assert.equal(
+    await page.evaluate(async () => (await window.cclinkStudio.settings.getAll()).permissionMode),
+    'auto-except-destructive',
+  )
+  await page.reload()
+  assert.equal(
+    await page.evaluate(async () => (await window.cclinkStudio.settings.getAll()).permissionMode),
+    'auto-except-destructive',
+  )
   await writeFile(
     join(runDir, 'result.json'),
-    JSON.stringify({ ok: true, remoteTransportStubbed: true, messages }, null, 2),
+    JSON.stringify(
+      {
+        ok: true,
+        remoteTransportStubbed: true,
+        messages,
+        checks: [
+          'manual ACK and replay',
+          'strict mode',
+          'mode change rechecks pending tools',
+          'continuous read/write/build',
+          'delete refusal',
+          'settings persisted',
+        ],
+        decisions,
+      },
+      null,
+      2,
+    ),
   )
   console.log(JSON.stringify({ ok: true, remoteTransportStubbed: true, runDir }))
 } catch (error) {
