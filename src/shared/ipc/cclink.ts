@@ -46,6 +46,14 @@ export interface CclinkApiContract {
     imageUploadId?: string
   }): Promise<{ success: boolean; error?: string }>
   cancelAgentImageUpload(input: { uploadId: string }): Promise<{ success: boolean }>
+  stopAgentRun(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+  }): Promise<{ success: boolean; error?: string }>
+  deleteSession(input: {
+    ref: RemoteWorkspaceRef
+    sessionId: string
+  }): Promise<{ success: boolean; error?: string }>
   stopTrackingAgentRun(input: {
     ref: RemoteWorkspaceRef
     sessionId: string
@@ -361,6 +369,14 @@ export const cclinkIpc = {
   cancelAgentImageUpload: defineIpcCall<[input: { uploadId: string }], { success: boolean }>(
     'cclink:cancelAgentImageUpload',
   ),
+  stopAgentRun: defineIpcCall<
+    [input: { ref: RemoteWorkspaceRef; sessionId: string }],
+    { success: boolean; error?: string }
+  >('cclink:stopAgentRun'),
+  deleteSession: defineIpcCall<
+    [input: { ref: RemoteWorkspaceRef; sessionId: string }],
+    { success: boolean; error?: string }
+  >('cclink:deleteSession'),
   stopTrackingAgentRun: defineIpcCall<
     [input: { ref: RemoteWorkspaceRef; sessionId: string }],
     { success: boolean; error?: string }

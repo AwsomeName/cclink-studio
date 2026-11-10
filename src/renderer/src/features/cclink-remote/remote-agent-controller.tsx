@@ -22,6 +22,10 @@ import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import { openRemoteFileFromConversation } from './remote-file-navigation'
 import { remoteAgentComposerKey } from './remote-message-queue-state'
+import {
+  findReplyableRemoteQuestion,
+  type RemoteQuestionAnswerSource,
+} from './remote-question-state'
 import { AGENT_FOLLOW_UP } from '../agent-conversations/follow-up-actions'
 import { useSettingsStore } from '../../stores/settings-store'
 import type { PermissionMode } from '../../types'
@@ -116,7 +120,7 @@ export function RemoteAgentController({
   const connectRealtime = useCclinkStore((state) => state.connectRealtime)
   const selectSession = useCclinkStore((state) => state.selectSession)
   const loadMessages = useCclinkStore((state) => state.loadMessages)
-  const stopTrackingAgentRun = useCclinkStore((state) => state.stopTrackingAgentRun)
+  const stopAgentRun = useCclinkStore((state) => state.stopAgentRun)
   const pendingPermissions = useCclinkStore((state) => state.pendingPermissions)
   const respondPermission = useCclinkStore((state) => state.respondPermission)
   const setRemoteAgentDraft = useCclinkStore((state) => state.setRemoteAgentDraft)
@@ -174,11 +178,22 @@ export function RemoteAgentController({
     selectRemoteAgentImages(state.remoteAgentImages, remoteWorkspaceKey),
   )
   const queue = useCclinkStore((state) => state.remoteMessageQueues[remoteWorkspaceKey])
+  const questionControl = useCclinkStore(
+    (state) => state.remoteQuestionControls[remoteWorkspaceKey],
+  )
+  const latestQuestion = findReplyableRemoteQuestion(activeMessages)
+  const pendingQuestion =
+    activeSession?.status === 'active' || latestQuestion?.status === 'expired'
+      ? latestQuestion
+      : null
+  const replying = Boolean(questionControl?.submitting)
   const sending = Boolean(queue?.dispatchId)
+  const running = activeSession?.status === 'active' || Boolean(queue?.awaitingCompletion)
   const imageUploadProgress = queue?.uploadProgress ?? null
   const imageUploadId =
     queue?.dispatchId &&
-    queue.items.find((item) => item.id === queue.dispatchId)?.pendingImages.length
+    (queue.directSubmission ?? queue.items.find((item) => item.id === queue.dispatchId))
+      ?.pendingImages.length
       ? queue.dispatchId
       : null
 
@@ -272,8 +287,12 @@ export function RemoteAgentController({
       (pendingImages.length > 0 && !imageInputAvailable)
     )
       return
-    if (!useCclinkStore.getState().enqueueRemoteAgentDraft(workspaceRef, activeSessionId)) {
-      showToast(useCclinkStore.getState().error || '当前会话无法加入队列', 'error')
+    if (pendingQuestion) {
+      void answerQuestion(pendingQuestion, { kind: 'draft' })
+      return
+    }
+    if (!useCclinkStore.getState().submitRemoteAgentDraft(workspaceRef, activeSessionId)) {
+      showToast(useCclinkStore.getState().error || '当前会话无法发送消息', 'error')
     }
   }
 
@@ -306,15 +325,15 @@ export function RemoteAgentController({
     ],
   )
 
-  const stopTracking = async (): Promise<void> => {
+  const stopRemoteRun = async (): Promise<void> => {
     if (!activeSession || activeSession.status !== 'active' || stopping) return
     setStopping(true)
     try {
-      const stopped = await stopTrackingAgentRun(workspaceRef, activeSession.id)
+      const stopped = await stopAgentRun(workspaceRef, activeSession.id)
       showToast(
         stopped
-          ? '已停止在 Studio 中跟踪；这不代表远端已取消'
-          : useCclinkStore.getState().error || '停止跟踪远程任务失败',
+          ? '远端已接受停止请求，等待任务结束'
+          : useCclinkStore.getState().error || '停止远程任务失败',
         stopped ? 'success' : 'error',
       )
     } finally {
@@ -396,26 +415,14 @@ export function RemoteAgentController({
 
   const answerQuestion = async (
     message: Extract<CclinkRemoteMessage, { type: 'userQuestion' }>,
-    answers: Record<string, string>,
+    source: RemoteQuestionAnswerSource,
   ): Promise<void> => {
-    if (!activeSession || controlStates[message.id]?.submitting) return
-    updateControlState(message.id, { submitting: true, error: null })
-    try {
-      const result = await window.cclinkStudio.cclink.answerQuestion({
-        ref: workspaceRef,
-        sessionId: activeSession.id,
-        requestId: message.requestId,
-        toolUseId: message.toolUseId,
-        answers,
-      })
-      if (!result.success) throw new Error(result.error || '远程问题回答失败')
-      await loadMessages(activeSession.id)
-      updateControlState(message.id, { submitting: false, error: null })
-    } catch (failure) {
-      updateControlState(message.id, {
-        submitting: false,
-        error: failure instanceof Error ? failure.message : String(failure),
-      })
+    if (!activeSession || replying) return
+    const accepted = await useCclinkStore
+      .getState()
+      .answerRemoteQuestion(workspaceRef, activeSession.id, message.id, source)
+    if (!accepted) {
+      showToast(useCclinkStore.getState().error || '远程问题回答失败，原内容已保留', 'error')
     }
   }
 
@@ -432,10 +439,15 @@ export function RemoteAgentController({
             answered: message.answered,
             status: message.status,
             resolution: message.resolution,
-            submitting: controlStates[message.id]?.submitting,
-            error: controlStates[message.id]?.error,
+            submitting: replying,
+            error: questionControl?.questionId === message.id ? questionControl.error : null,
+            replyText: questionControl?.replyTexts[message.id],
+            onReplyInComposer:
+              pendingQuestion?.id === message.id && agentAvailable
+                ? () => inputRef.current?.focus()
+                : undefined,
             questions: message.questions,
-            onSubmit: (answers) => void answerQuestion(message, answers),
+            onSubmit: (answers) => void answerQuestion(message, { kind: 'answers', answers }),
           },
         },
       ]
@@ -600,18 +612,45 @@ export function RemoteAgentController({
             },
           ],
           textareaRef: inputRef,
-          submitLabel:
-            sending ||
-            activeSession?.status === 'active' ||
-            queue?.items.length ||
-            queue?.pauseReason
-              ? '加入队列'
-              : '发送',
+          submitLabel: replying
+            ? '等待确认'
+            : pendingQuestion
+              ? '直接回复'
+              : queue?.directSubmission && !draft.trim() && !pendingImages.length
+                ? '发送中…'
+                : sending || running || queue?.items.length
+                  ? '加入队列'
+                  : '发送',
+          hint: replying
+            ? '正在等待 Agent 确认回复，原内容会在确认后移除。'
+            : pendingQuestion
+              ? pendingImages.length
+                ? '当前问题只接收文字回复，请先处理图片附件。'
+                : '可直接用文字回复当前提问，无需逐项选择；这条回复不会进入待发送队列。'
+              : queue?.directSubmission
+                ? '正在发送当前消息…'
+                : undefined,
           queue: {
             items: queue?.items ?? [],
-            pauseReason: queue?.pauseReason,
-            dispatchId: queue?.dispatchId,
+            pauseReason: queue?.items.length ? queue.pauseReason : null,
+            dispatchId: queue?.dispatchId || (replying ? questionControl?.queuedMessageId : null),
             canEdit: !draft.trim() && !pendingImages.length,
+            reply: pendingQuestion
+              ? {
+                  canReply: (id) => {
+                    const item = queue?.items.find((item) => item.id === id)
+                    return Boolean(
+                      agentAvailable &&
+                      !replying &&
+                      item?.content.trim() &&
+                      item.content.trim().length <= 4096 &&
+                      !item.pendingImages.length &&
+                      queue?.dispatchId !== id,
+                    )
+                  },
+                  onReply: (id) => void answerQuestion(pendingQuestion, { kind: 'queued', id }),
+                }
+              : undefined,
             onEdit: (id) => {
               if (useCclinkStore.getState().editRemoteQueuedMessage(remoteWorkspaceKey, id))
                 inputRef.current?.focus()
@@ -626,24 +665,27 @@ export function RemoteAgentController({
               useCclinkStore.getState().pauseRemoteMessageQueue(remoteWorkspaceKey, null),
           },
           value: draft,
-          maxLength: 8192,
+          maxLength: pendingQuestion ? 4096 : 8192,
           disabled: !agentAvailable,
           onChange: (content) => setRemoteAgentDraft(remoteWorkspaceKey, content),
           onSubmit: submit,
-          onStop: imageUploadId ? cancelImageUpload : stopTracking,
-          stopLabel: imageUploadId ? '取消图片上传' : '停止等待',
+          onStop: imageUploadId ? cancelImageUpload : stopRemoteRun,
+          stopLabel: imageUploadId ? '取消图片上传' : '停止',
           canSubmit:
             (Boolean(draft.trim()) || pendingImages.length > 0) &&
             agentAvailable &&
+            !replying &&
             (pendingImages.length === 0 || imageInputAvailable) &&
-            (queue?.items.length ?? 0) < 20,
-          submitting: sending || activeSession?.status === 'active',
+            (pendingQuestion
+              ? pendingImages.length === 0 && draft.trim().length <= 4096
+              : (queue?.items.length ?? 0) < 20),
+          submitting: sending || running,
           stopCapability: imageUploadId
             ? imageUploadProgress?.phase === 'sending'
               ? { state: 'disabled', reason: '图片已上传，正在发送消息' }
               : { state: 'enabled' }
             : stopping && stopAvailability.state === 'enabled'
-              ? { state: 'disabled', reason: '正在停止跟踪' }
+              ? { state: 'disabled', reason: '正在请求远端停止' }
               : stopAvailability,
           uploadProgress: imageUploadProgress
             ? {
@@ -655,11 +697,13 @@ export function RemoteAgentController({
               }
             : undefined,
           placeholder: agentAvailable
-            ? sending || activeSession?.status === 'active'
-              ? '继续输入，Enter 加入队列；Shift+Enter 换行'
-              : imageInputAvailable
-                ? '输入消息或粘贴图片，Enter 发送，Shift+Enter 换行'
-                : '输入消息，Enter 发送，Shift+Enter 换行'
+            ? pendingQuestion
+              ? '直接输入你的回复，Enter 发送，无需逐项选择'
+              : sending || running
+                ? '继续输入，Enter 加入队列；Shift+Enter 换行'
+                : imageInputAvailable
+                  ? '输入消息或粘贴图片，Enter 发送，Shift+Enter 换行'
+                  : '输入消息，Enter 发送，Shift+Enter 换行'
             : agentVisualStatus.detail,
           onPaste: (event) => {
             const files = Array.from(event.clipboardData.files).filter((file) =>

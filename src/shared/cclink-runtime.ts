@@ -125,7 +125,23 @@ export interface CclinkSessionSyncResponseMessage extends CclinkRuntimeEnvelope<
     updated_at?: number
     message_count?: number
     context_usage?: number
+    active_turn?: { request_id: string; status?: string } | null
   }>
+}
+
+export interface CclinkCancelGenerationMessage extends CclinkRuntimeEnvelope<'cancel_generation'> {
+  session_id: string
+  target_request_id: string
+}
+
+export interface CclinkCancelGenerationAckMessage extends CclinkRuntimeEnvelope<'cancel_generation_ack'> {
+  session_id: string
+  target_request_id: string
+  status: string
+}
+
+export interface CclinkSessionDeleteMessage extends CclinkRuntimeEnvelope<'session_delete'> {
+  session_id: string
 }
 
 export interface CclinkUserTextMessage extends CclinkRuntimeEnvelope<'user_text'> {
@@ -497,6 +513,9 @@ export type CclinkRuntimeMessage =
   | CclinkSessionResponseMessage
   | CclinkSessionSyncResponseMessage
   | CclinkUserTextMessage
+  | CclinkCancelGenerationMessage
+  | CclinkCancelGenerationAckMessage
+  | CclinkSessionDeleteMessage
   | CclinkStreamStartMessage
   | CclinkStreamChunkMessage
   | CclinkStreamEndMessage

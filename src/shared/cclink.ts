@@ -62,6 +62,9 @@ export const CCLINK_PROTOCOL_VERSION = 2
 export const CCLINK_MIN_PROTOCOL_VERSION = 2
 
 export type CclinkMessageType =
+  | 'cancel_generation'
+  | 'cancel_generation_ack'
+  | 'session_delete'
   | 'user_text'
   | 'stream_start'
   | 'stream_chunk'
@@ -256,6 +259,9 @@ export type CclinkProtocolMessage =
   | CclinkRuntimeMessage
 
 const MESSAGE_TYPES = new Set<CclinkMessageType>([
+  'cancel_generation',
+  'cancel_generation_ack',
+  'session_delete',
   'user_text',
   'stream_start',
   'stream_chunk',

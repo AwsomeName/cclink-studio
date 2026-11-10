@@ -10,8 +10,12 @@ import {
   remoteAgentComposerKey,
   type RemoteMessageQueueSlice,
 } from '../features/cclink-remote/remote-message-queue-state'
+import {
+  createRemoteQuestionSlice,
+  type RemoteQuestionSlice,
+} from '../features/cclink-remote/remote-question-state'
 
-export interface CclinkState extends RemoteMessageQueueSlice {
+export interface CclinkState extends RemoteMessageQueueSlice, RemoteQuestionSlice {
   service: AuthServiceStatus | null
   session: AuthSession
   realtime: CclinkRealtimeStatus
@@ -53,6 +57,8 @@ export interface CclinkState extends RemoteMessageQueueSlice {
     images?: TransientImageAttachment[],
     imageUploadId?: string,
   ): Promise<boolean>
+  stopAgentRun(ref: RemoteWorkspaceRef, sessionId: string): Promise<boolean>
+  deleteSession(ref: RemoteWorkspaceRef, sessionId: string): Promise<boolean>
   stopTrackingAgentRun(ref: RemoteWorkspaceRef, sessionId: string): Promise<boolean>
   setRemoteAgentDraft(workspaceKey: string, content: string): void
   clearRemoteAgentDraft(workspaceKey: string, submittedContent?: string): void
@@ -69,6 +75,7 @@ let sessionsRequestGeneration = 0
 
 export const useCclinkStore = create<CclinkState>((set, get, api) => ({
   ...createRemoteMessageQueueSlice(set, get, api),
+  ...createRemoteQuestionSlice(set, get, api),
   service: null,
   session: { loggedIn: false, user: null },
   realtime: { state: 'idle' },
@@ -93,7 +100,12 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
         set((state) => ({
           session,
           ...(state.session.user?.id !== session.user?.id || !session.loggedIn
-            ? { remoteMessageQueues: {}, remoteAgentDrafts: {}, remoteAgentImages: {} }
+            ? {
+                remoteMessageQueues: {},
+                remoteAgentDrafts: {},
+                remoteAgentImages: {},
+                remoteQuestionControls: {},
+              }
             : {}),
         })),
       )
@@ -179,6 +191,7 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
       remoteAgentDrafts: {},
       remoteAgentImages: {},
       remoteMessageQueues: {},
+      remoteQuestionControls: {},
       selectedSessionId: null,
       activeSessionsRef: null,
       pendingPermissions: [],
@@ -244,6 +257,7 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
         archived,
       })
       set((state) => ({
+        error: null,
         sessions: state.sessions.map((item) => (item.id === sessionId ? session : item)),
         selectedSessionId:
           archived && state.selectedSessionId === sessionId ? null : state.selectedSessionId,
@@ -280,6 +294,64 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
         set({ error: result.error || '远程消息发送失败' })
         return false
       }
+      return true
+    } catch (error) {
+      set({ error: message(error) })
+      return false
+    }
+  },
+
+  stopAgentRun: async (ref, sessionId) => {
+    get().pauseRemoteMessageQueue(
+      remoteAgentComposerKey(ref, sessionId),
+      '已请求停止任务；队列已暂停，请确认后继续',
+    )
+    set({ error: null })
+    try {
+      const result = await window.cclinkStudio.cclink.stopAgentRun({ ref, sessionId })
+      if (!result.success) set({ error: result.error || '远程任务停止失败' })
+      return result.success
+    } catch (error) {
+      set({ error: message(error) })
+      return false
+    }
+  },
+
+  deleteSession: async (ref, sessionId) => {
+    const key = remoteAgentComposerKey(ref, sessionId)
+    get().pauseRemoteMessageQueue(key, '正在删除会话，队列已暂停')
+    set({ error: null })
+    try {
+      const result = await window.cclinkStudio.cclink.deleteSession({ ref, sessionId })
+      if (!result.success) {
+        set({ error: result.error || '远程会话删除失败' })
+        return false
+      }
+      set((state) => {
+        const sessions = state.sessions.filter((session) => session.id !== sessionId)
+        const messages = { ...state.messages }
+        const remoteMessageQueues = { ...state.remoteMessageQueues }
+        const remoteAgentDrafts = { ...state.remoteAgentDrafts }
+        const remoteAgentImages = { ...state.remoteAgentImages }
+        const remoteQuestionControls = { ...state.remoteQuestionControls }
+        delete messages[sessionId]
+        delete remoteMessageQueues[key]
+        delete remoteAgentDrafts[key]
+        delete remoteAgentImages[key]
+        delete remoteQuestionControls[key]
+        return {
+          sessions,
+          messages,
+          remoteMessageQueues,
+          remoteAgentDrafts,
+          remoteAgentImages,
+          remoteQuestionControls,
+          selectedSessionId:
+            state.selectedSessionId === sessionId
+              ? (sessions.find((session) => session.status !== 'archived')?.id ?? null)
+              : state.selectedSessionId,
+        }
+      })
       return true
     } catch (error) {
       set({ error: message(error) })

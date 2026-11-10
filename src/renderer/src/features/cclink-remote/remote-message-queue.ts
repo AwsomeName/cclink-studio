@@ -13,7 +13,7 @@ export function installRemoteMessageQueue(): () => void {
       scheduled = false
       if (disposed) return
       for (const key of Object.keys(useCclinkStore.getState().remoteMessageQueues)) {
-        void useCclinkStore.getState().dispatchRemoteQueuedMessage(key, lifecycle.signal)
+        void useCclinkStore.getState().dispatchRemoteMessage(key, lifecycle.signal)
       }
     })
   }

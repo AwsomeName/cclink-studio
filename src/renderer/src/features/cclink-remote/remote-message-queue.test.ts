@@ -47,6 +47,10 @@ function enqueue(text: string, sessionId: string | null = 'session-1'): boolean 
   store().setRemoteAgentDraft(remoteAgentComposerKey(ref, sessionId), text)
   return store().enqueueRemoteAgentDraft(ref, sessionId)
 }
+function submit(text: string, sessionId: string | null = 'session-1'): boolean {
+  store().setRemoteAgentDraft(remoteAgentComposerKey(ref, sessionId), text)
+  return store().submitRemoteAgentDraft(ref, sessionId)
+}
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {
@@ -100,6 +104,157 @@ afterEach(() => {
 })
 
 describe('remote conversation message queue', () => {
+  it('sends an idle first message directly without ever creating a queued item or relying on the queue subscription', async () => {
+    dispose?.()
+    dispose = undefined
+    const accepted = deferred<{ success: boolean }>()
+    api.sendAgentMessage.mockReturnValueOnce(accepted.promise)
+    const lengths: number[] = []
+    const unsubscribe = useCclinkStore.subscribe((state) => {
+      lengths.push(state.remoteMessageQueues[key]?.items.length ?? 0)
+    })
+    expect(submit('first')).toBe(true)
+    expect(api.getStatus).toHaveBeenCalledTimes(1)
+    expect(queue().items).toEqual([])
+    expect(queue().directSubmission?.content).toBe('first')
+    expect(store().remoteAgentDrafts[key]).toBeUndefined()
+    await settle()
+    expect(api.sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({ content: 'first' }))
+    expect(queue().items).toEqual([])
+    accepted.resolve({ success: true })
+    await settle()
+    expect(queue().directSubmission).toBeUndefined()
+    expect(queue().dispatchId).toBeNull()
+    expect(lengths.every((length) => length === 0)).toBe(true)
+    unsubscribe()
+  })
+
+  it('queues only later messages during a direct submission and waits for both completion and the receipt', async () => {
+    const accepted = deferred<{ success: boolean }>()
+    api.sendAgentMessage.mockReturnValueOnce(accepted.promise)
+    submit('one')
+    submit('two')
+    submit('three')
+    await settle()
+    expect(queue().items.map((item) => item.content)).toEqual(['two', 'three'])
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+    event('started')
+    event('completed')
+    await settle()
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+    accepted.resolve({ success: true })
+    await settle()
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(2)
+    expect(queue().items.map((item) => item.content)).toEqual(['three'])
+  })
+
+  it('restores a rejected direct submission and its images to the composer without leaving a paused empty queue', async () => {
+    const image = {
+      id: 'image-1',
+      name: 'one.png',
+      mediaType: 'image/png' as const,
+      data: 'AQID',
+      size: 3,
+    }
+    store().addRemoteAgentImages(key, [image])
+    api.sendAgentMessage.mockResolvedValueOnce({ success: false })
+    submit('first')
+    await settle()
+    expect(store().remoteAgentDrafts[key]).toBe('first')
+    expect(store().remoteAgentImages[key]).toEqual([image])
+    expect(queue()).toMatchObject({ items: [], pauseReason: null, dispatchId: null })
+    expect(submit('retry')).toBe(true)
+    await settle()
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(2)
+    expect(queue().items).toEqual([])
+  })
+
+  it('preserves a later draft and retains a failed direct message in the paused backlog when restoring would overwrite it', async () => {
+    const accepted = deferred<{ success: boolean }>()
+    api.sendAgentMessage.mockReturnValueOnce(accepted.promise)
+    submit('first')
+    await settle()
+    store().setRemoteAgentDraft(key, 'later')
+    accepted.resolve({ success: false })
+    await settle()
+    expect(store().remoteAgentDrafts[key]).toBe('later')
+    expect(queue().items.map((item) => item.content)).toEqual(['first'])
+    expect(queue().pauseReason).toBeTruthy()
+    expect(queue().directSubmission).toBeUndefined()
+  })
+
+  it('creates a new session once while keeping its first direct submission out of the waiting list', async () => {
+    useCclinkStore.setState({ sessions: [], selectedSessionId: null })
+    const created = deferred<CclinkRemoteSession>()
+    api.createSession.mockReturnValueOnce(created.promise)
+    submit('first', null)
+    await settle()
+    const temporary = store().remoteMessageQueues[remoteAgentComposerKey(ref, null)]
+    expect(temporary.items).toEqual([])
+    expect(temporary.directSubmission?.content).toBe('first')
+    submit('second', null)
+    created.resolve(session())
+    await settle()
+    expect(api.createSession).toHaveBeenCalledTimes(1)
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+    expect(queue().items.map((item) => item.content)).toEqual(['second'])
+    expect(store().selectedSessionId).toBe('session-1')
+  })
+
+  it('keeps a rejected direct message ahead of already queued follow-ups', async () => {
+    const accepted = deferred<{ success: boolean }>()
+    api.sendAgentMessage.mockReturnValueOnce(accepted.promise)
+    submit('first')
+    submit('second')
+    await settle()
+    accepted.resolve({ success: false })
+    await settle()
+    expect(queue().items.map((item) => item.content)).toEqual(['first', 'second'])
+    expect(queue().pauseReason).toBeTruthy()
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a fresh direct command when only an empty old queue pause remains', async () => {
+    enqueue('old')
+    await settle()
+    event('completed')
+    store().pauseRemoteMessageQueue(key, '旧队列已暂停')
+    expect(queue().items).toEqual([])
+    submit('new')
+    await settle()
+    expect(queue().pauseReason).toBeNull()
+    expect(queue().items).toEqual([])
+    expect(api.sendAgentMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'new' }),
+    )
+  })
+
+  it('restores the direct draft after an async workspace switch, and never clears an offline draft', async () => {
+    const checked = deferred<typeof status>()
+    api.getStatus.mockReturnValueOnce(checked.promise)
+    submit('first')
+    useWorkspaceStore.getState().commitActiveWorkspace({ kind: 'local', path: '/other' })
+    checked.resolve(status)
+    await settle()
+    expect(api.sendAgentMessage).not.toHaveBeenCalled()
+    expect(store().remoteAgentDrafts[key]).toBe('first')
+    expect(queue().items).toEqual([])
+    useWorkspaceStore.getState().commitActiveWorkspace(ref)
+    useCclinkStore.setState({ realtime: { state: 'offline' } })
+    expect(submit('offline')).toBe(false)
+    expect(store().remoteAgentDrafts[key]).toBe('offline')
+    expect(queue().items).toEqual([])
+  })
+
+  it('still queues when a real run is active even with zero waiting items', async () => {
+    useCclinkStore.setState({ sessions: [{ ...session(), status: 'active' }] })
+    submit('follow-up')
+    await settle()
+    expect(queue().directSubmission).toBeUndefined()
+    expect(queue().items.map((item) => item.content)).toEqual(['follow-up'])
+    expect(api.sendAgentMessage).not.toHaveBeenCalled()
+  })
+
   it('dispatches FIFO only after real terminal events, not IPC acceptance, message text or session refresh', async () => {
     enqueue('one')
     enqueue('two')
@@ -217,6 +372,56 @@ describe('remote conversation message queue', () => {
     expect(api.sendAgentMessage).toHaveBeenCalledTimes(2)
     expect(queue().items.map((item) => item.content)).toEqual(['two'])
   })
+
+  it('allows a new manual send after a failed run with no pending messages', async () => {
+    enqueue('one')
+    await settle()
+    event('error')
+    await settle()
+    expect(queue().items).toEqual([])
+    expect(queue().awaitingCompletion).toBe(false)
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+
+    enqueue('retry')
+    await settle()
+    expect(api.sendAgentMessage).toHaveBeenCalledTimes(2)
+    expect(api.sendAgentMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ content: 'retry' }),
+    )
+    expect(queue().pauseReason).toBeNull()
+    expect(queue().items).toEqual([])
+  })
+
+  it.each([false, true])(
+    'handles failure before the send receipt with pending follow-ups = %s',
+    async (hasFollowUp) => {
+      const accepted = deferred<{ success: boolean }>()
+      api.sendAgentMessage.mockImplementationOnce(() => accepted.promise)
+      enqueue('one')
+      if (hasFollowUp) enqueue('two')
+      await settle()
+      event('started')
+      event('error')
+      await settle()
+      expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+      accepted.resolve({ success: true })
+      await settle()
+      expect(queue().items.map((item) => item.content)).toEqual(hasFollowUp ? ['two'] : [])
+      expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+
+      enqueue('new manual message')
+      await settle()
+      if (hasFollowUp) {
+        expect(queue().pauseReason).toContain('失败')
+        expect(api.sendAgentMessage).toHaveBeenCalledTimes(1)
+        expect(queue().items.map((item) => item.content)).toEqual(['two', 'new manual message'])
+      } else {
+        expect(queue().pauseReason).toBeNull()
+        expect(api.sendAgentMessage).toHaveBeenCalledTimes(2)
+        expect(queue().items).toEqual([])
+      }
+    },
+  )
 
   it('pauses on failure, untracking and disconnection without resuming on reconnect', async () => {
     enqueue('one')

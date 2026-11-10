@@ -1,0 +1,113 @@
+.remote-sessions-sidebar {
+  min-width: 0;
+}
+.remote-sessions-sidebar .session-sidebar-search {
+  margin: 0 0 6px;
+}
+.remote-sessions-filter {
+  display: block;
+  margin: 0 0 8px;
+  padding: 4px 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.remote-sessions-error {
+  padding: 6px;
+  color: var(--text-error, #f48771);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.remote-session-row {
+  min-width: 0;
+  margin-bottom: 4px;
+  padding: 7px 8px;
+  border-left: 2px solid transparent;
+  border-radius: 5px;
+}
+.remote-session-row:hover {
+  background: var(--bg-hover);
+}
+.remote-session-row.active {
+  border-left-color: var(--text-accent);
+  background: var(--bg-active);
+}
+.remote-session-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.remote-session-title {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.remote-session-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.remote-session-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.remote-session-actions {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.remote-session-actions button {
+  padding: 3px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.remote-session-actions button:hover:not(:disabled),
+.remote-sessions-filter:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.remote-session-actions button.danger:not(:disabled) {
+  color: var(--text-error, #f48771);
+}
+.remote-session-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.remote-sessions-sidebar button:focus-visible {
+  outline: 1px solid var(--text-accent);
+  outline-offset: 1px;
+}
+.remote-session-confirm {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+}
+.remote-session-confirm p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

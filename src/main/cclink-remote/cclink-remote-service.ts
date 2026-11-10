@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import type {
+  CclinkCancelGenerationAckMessage,
   CclinkFileReadResponseMessage,
   CclinkAgentToolMessage,
   CclinkCapabilityProbeResponseMessage,
@@ -137,6 +138,7 @@ export class CclinkRemoteService implements RemoteProvider {
       this.activeAgentRequests.size > 0 ||
       this.requestRouter.hasPendingRequests() ||
       this.submittingAgentSessions.size > 0 ||
+      this.sessionControls.size > 0 ||
       this.imageUploads.size > 0 ||
       this.openWorkspaceOperations.size > 0
     )
@@ -160,6 +162,9 @@ export class CclinkRemoteService implements RemoteProvider {
   private readonly openWorkspaceOperations = new Map<string, { cancelled: boolean }>()
   private readonly activeAgentRequests = new Map<string, string>()
   private readonly submittingAgentSessions = new Set<string>()
+  private readonly pendingSessionSyncs = new Set<string>()
+  private readonly sessionControls = new Set<string>()
+  private readonly deletedSessionIds = new Set<string>()
   private readonly stoppedAgentRequestIds = new Map<string, string[]>()
   private readonly stoppedAgentSessionsWithoutRequest = new Set<string>()
   private readonly liveToolApprovals = new Map<string, LiveToolApproval>()
@@ -415,6 +420,10 @@ export class CclinkRemoteService implements RemoteProvider {
     this.assertHistoryRecovered()
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('远程会话不存在')
+    if (this.sessionControls.has(sessionId) || this.submittingAgentSessions.has(sessionId))
+      throw new Error('会话操作正在提交，请稍后重试')
+    if (archived && (session.status === 'active' || this.activeAgentRequests.has(sessionId)))
+      throw new Error('请先停止任务后再归档会话')
     if (archived) this.clearToolApprovals(sessionId)
     const next: CclinkRemoteSession = {
       ...session,
@@ -502,6 +511,7 @@ export class CclinkRemoteService implements RemoteProvider {
       }
       if (
         session.status === 'active' ||
+        this.sessionControls.has(sessionId) ||
         this.activeAgentRequests.has(sessionId) ||
         this.submittingAgentSessions.has(sessionId)
       ) {
@@ -648,6 +658,105 @@ export class CclinkRemoteService implements RemoteProvider {
       if (imageUploadId && this.imageUploads.get(imageUploadId) === uploadController) {
         this.imageUploads.delete(imageUploadId)
       }
+    }
+  }
+
+  async stopAgentRun(
+    ref: RemoteWorkspaceRef,
+    sessionId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    let locked = false
+    try {
+      this.assertHistoryRecovered(ref.endpointId)
+      this.assertSessionMatches(ref, sessionId)
+      if (this.sessionControls.has(sessionId) || this.submittingAgentSessions.has(sessionId))
+        throw new Error('会话操作正在提交，请稍后重试')
+      this.sessionControls.add(sessionId)
+      locked = true
+      await this.requireOnline()
+      // Restored sessions can be running on another Studio instance. Resolve the exact turn
+      // from the existing Agent sync protocol instead of cancelling whichever turn is current.
+      if (!this.activeAgentRequests.has(sessionId)) await this.syncSessions(ref.endpointId)
+      const targetRequestId = this.activeAgentRequests.get(sessionId)
+      if (!targetRequestId) throw new Error('远端未提供可停止的任务标识，请刷新会话后重试')
+      const request = {
+        ...createCclinkEnvelope('cancel_generation'),
+        session_id: sessionId,
+        target_request_id: targetRequestId,
+      }
+      this.recordSessionProtocolEvent(ref.endpointId, request, 'outbound')
+      const response = (await this.requestRouter.request(ref.endpointId, request, [
+        'cancel_generation_ack',
+      ])) as CclinkCancelGenerationAckMessage
+      if (
+        response.session_id !== sessionId ||
+        response.target_request_id !== targetRequestId ||
+        !['accepted', 'already_stopping', 'already_terminal'].includes(response.status)
+      )
+        throw new Error('停止回执与当前任务不匹配，尚未确认停止')
+      // An acknowledgement means accepted, not terminated. Only a terminal event or a
+      // subsequent authoritative sync is allowed to make the conversation idle.
+      return { success: true }
+    } catch (error) {
+      this.recordDiagnostic('agent.stop', ref.endpointId, error)
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      if (locked) this.sessionControls.delete(sessionId)
+    }
+  }
+
+  async deleteSession(
+    ref: RemoteWorkspaceRef,
+    sessionId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    let locked = false
+    try {
+      this.assertHistoryRecovered(ref.endpointId)
+      this.assertSessionMatches(ref, sessionId)
+      if (this.sessionControls.has(sessionId) || this.submittingAgentSessions.has(sessionId))
+        throw new Error('会话操作正在提交，请稍后重试')
+      this.sessionControls.add(sessionId)
+      locked = true
+      await this.requireOnline()
+      const before = await this.syncSessions(ref.endpointId)
+      const remoteSession = before.sessions.find((item) => item.session_id === sessionId)
+      if (remoteSession?.active_turn || this.activeAgentRequests.has(sessionId))
+        throw new Error('请先停止任务，等待远端确认结束后再删除会话')
+      if (remoteSession) {
+        const request = { ...createCclinkEnvelope('session_delete'), session_id: sessionId }
+        this.recordSessionProtocolEvent(ref.endpointId, request, 'outbound')
+        await this.requestRouter.send(ref.endpointId, request)
+        // session_delete has no acknowledgement. A fresh sync must prove removal before
+        // local history is discarded; timeout/rejection keeps the user's history intact.
+        let removed = false
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, attempt * 300))
+          const after = await this.syncSessions(ref.endpointId)
+          if (!after.sessions.some((item) => item.session_id === sessionId)) {
+            removed = true
+            break
+          }
+        }
+        if (!removed) throw new Error('远端尚未确认删除，会话历史已保留，请稍后重试')
+      }
+      this.deletedSessionIds.add(sessionId)
+      this.clearToolApprovals(sessionId)
+      this.activeAgentRequests.delete(sessionId)
+      this.stoppedAgentRequestIds.delete(sessionId)
+      this.stoppedAgentSessionsWithoutRequest.delete(sessionId)
+      for (const [key, stream] of this.streams) {
+        if (stream.sessionId === sessionId) this.streams.delete(key)
+      }
+      this.sessions.delete(sessionId)
+      this.messages.delete(sessionId)
+      await this.saveState()
+      this.emitRealtime({ type: 'sessions', serverId: ref.endpointId, sessionId })
+      return { success: true }
+    } catch (error) {
+      this.recordDiagnostic('session.delete', ref.endpointId, error)
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    } finally {
+      if (locked) this.sessionControls.delete(sessionId)
     }
   }
 
@@ -1703,6 +1812,9 @@ export class CclinkRemoteService implements RemoteProvider {
     this.sessions.clear()
     this.messages.clear()
     this.streams.clear()
+    this.pendingSessionSyncs.clear()
+    this.sessionControls.clear()
+    this.deletedSessionIds.clear()
     this.capabilityProbes.clear()
     this.capabilityProbeFailures.clear()
   }
@@ -1883,24 +1995,36 @@ export class CclinkRemoteService implements RemoteProvider {
     }
   }
 
-  private async syncSessions(serverId: string): Promise<void> {
-    const response = (await this.requestRouter.request(
-      serverId,
-      createCclinkEnvelope('session_sync_request'),
-      ['session_sync_response'],
-      15_000,
-    )) as CclinkSessionSyncResponseMessage
-    this.applySessionSync(serverId, response)
+  private async syncSessions(serverId: string): Promise<CclinkSessionSyncResponseMessage> {
+    const requestId = randomUUID()
+    const trackedAtStart = new Map(this.activeAgentRequests)
+    this.pendingSessionSyncs.add(requestId)
+    try {
+      const response = (await this.requestRouter.request(
+        serverId,
+        createCclinkEnvelope('session_sync_request', { request_id: requestId }),
+        ['session_sync_response'],
+        15_000,
+      )) as CclinkSessionSyncResponseMessage
+      if (!Array.isArray(response.sessions)) throw new Error('远端会话同步结果无效')
+      this.applySessionSync(serverId, response, trackedAtStart)
+      return response
+    } finally {
+      this.pendingSessionSyncs.delete(requestId)
+    }
   }
 
   private async handleProtocolMessage(
     serverId: string,
     message: CclinkProtocolMessage,
   ): Promise<void> {
+    const incomingSessionId = (message as { session_id?: string }).session_id
+    if (incomingSessionId && this.deletedSessionIds.has(incomingSessionId)) return
     this.recordSessionProtocolEvent(serverId, message, 'inbound')
     if (this.shouldIgnoreStoppedAgentEvent(message)) return
     switch (message.cc_type) {
       case 'session_sync_response':
+        if (message.request_id && this.pendingSessionSyncs.has(message.request_id)) return
         this.applySessionSync(serverId, message as CclinkSessionSyncResponseMessage)
         return
       case 'session_update': {
@@ -1972,7 +2096,9 @@ export class CclinkRemoteService implements RemoteProvider {
           code?: string
           message?: string
         }
-        const active = !['idle', 'completed', 'failed', 'error'].includes(event.status)
+        const active = !['idle', 'completed', 'failed', 'error', 'cancelled', 'stopped'].includes(
+          event.status,
+        )
         const terminalBelongsToTrackedRequest =
           active || this.terminalBelongsToTrackedRequest(event.session_id, message)
         if (active) this.setSessionStatus(event.session_id, 'active')
@@ -2335,7 +2461,8 @@ export class CclinkRemoteService implements RemoteProvider {
         }
         // 审批回执由 requestRouter 交还 resolveToolApproval，错误只属于对应工具。
         // 每次控制请求都生成一个 ID，若追加为普通消息，重试就会让同一错误刷屏。
-        if (event.type === 'tool_approval_failed') return
+        if (event.type === 'tool_approval_failed' || event.type === 'cancel_generation_failed')
+          return
         if (!event.session_id) return
         const remoteMessage: CclinkRemoteMessage = {
           type: 'system',
@@ -2428,12 +2555,18 @@ export class CclinkRemoteService implements RemoteProvider {
     return (!requestId && !traceId) || requestId === active || traceId === active
   }
 
-  private applySessionSync(serverId: string, response: CclinkSessionSyncResponseMessage): void {
+  private applySessionSync(
+    serverId: string,
+    response: CclinkSessionSyncResponseMessage,
+    trackedAtStart?: Map<string, string>,
+  ): void {
     if (this.historyRecoveryError) {
       this.recordDiagnostic('session.restore', serverId, this.historyRecoveryError)
       return
     }
+    if (!Array.isArray(response.sessions)) return
     for (const item of response.sessions) {
+      if (this.deletedSessionIds.has(item.session_id)) continue
       if (item.project_mode && item.project_mode !== 'remote_workspace') continue
       if (!item.workspace_id) {
         this.diagnosticLog.record(
@@ -2451,6 +2584,18 @@ export class CclinkRemoteService implements RemoteProvider {
       const createdAt = normalizeTimestamp(item.created_at ?? item.updated_at)
       const updatedAt = normalizeTimestamp(item.last_active_at ?? item.updated_at ?? createdAt)
       const current = this.sessions.get(item.session_id)
+      const trackedRequest = this.activeAgentRequests.get(item.session_id)
+      // A turn started/ended while this snapshot was in flight. Preserve the newer fact.
+      const activeTurn =
+        trackedAtStart && trackedAtStart.get(item.session_id) !== trackedRequest
+          ? undefined
+          : item.active_turn
+      if (activeTurn?.request_id) {
+        this.activeAgentRequests.set(item.session_id, activeTurn.request_id)
+        this.stoppedAgentSessionsWithoutRequest.delete(item.session_id)
+      } else if (activeTurn === null && trackedRequest) {
+        this.activeAgentRequests.delete(item.session_id)
+      }
       const session: CclinkRemoteSession = {
         id: item.session_id,
         name: resolveRemoteSessionTitle({
@@ -2461,7 +2606,14 @@ export class CclinkRemoteService implements RemoteProvider {
         workspaceId: item.workspace_id,
         workspacePath: item.workspace_path,
         serverId,
-        status: current?.status ?? 'idle',
+        status:
+          current?.status === 'archived'
+            ? 'archived'
+            : activeTurn?.request_id
+              ? 'active'
+              : activeTurn === null
+                ? 'idle'
+                : (current?.status ?? 'idle'),
         createdAt,
         updatedAt,
         messageCount: item.message_count ?? this.messages.get(item.session_id)?.length ?? 0,

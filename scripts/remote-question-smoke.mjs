@@ -181,7 +181,10 @@ try {
   await card.getByRole('checkbox', { name: '估值与历史位置' }).check()
   await card.getByLabel('产出形式').selectOption('深度报告+图表')
   assert(await submit.isDisabled())
-  assert.equal(await card.locator('.agent-question-hint').innerText(), '请先完成：市场范围')
+  assert.equal(
+    await card.locator('.agent-question-hint').innerText(),
+    '按选项回答时，请先完成：市场范围',
+  )
   await card.getByLabel('市场范围').selectOption('A股')
   assert(await submit.isEnabled())
   await page.evaluate(() => window.questionSmoke.patch({ status: 'expired' }))

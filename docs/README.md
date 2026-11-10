@@ -59,6 +59,7 @@
   与现有切换守卫。2026-10-16 用户初步确认本地可用并要求收尾，未扩张为跨域事务重构。
 - `docs/testing/workspace-layout-memory.md`：布局工程门禁、真实 Electron 回归与用户收尾反馈；本地逐项
   结果未完整补录，真实在线远程及事故页专项复验仍待完成。
+- `docs/testing/remote-session-controls.md`：远程会话列表紧凑排版、真实停止、确认删除及失败保留的验收边界。
 - `docs/features/recent-session-switcher.md`：本地/远程工作空间统一最近会话切换器、唯一新建入口、标题策略和验收边界。
 - `docs/features/unified-agent-panel.md`：本地/远程 Agent Panel 统一方案；UAP-1 必须原子切换为单一 Panel/Composer 并删除远程重复 UI，不以独立 IME 补丁代替统一；UAP-2 再按契约强化远程事务生命周期。
 - `docs/features/agent-follow-up-actions.md`：Agent 后续消息产品规则与实现边界；本地 Claude Code 已支持入队、补充当前任务和停止后执行。

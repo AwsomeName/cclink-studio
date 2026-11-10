@@ -20,6 +20,8 @@ export interface RemoteMessageQueue {
   items: RemoteQueuedMessage[]
   pauseReason: string | null
   dispatchId: string | null
+  /** Current manual submission is never a waiting queue item. */
+  directSubmission?: RemoteQueuedMessage
   /** A projection of the existing main-process conversation lifecycle, never a timer. */
   awaitingCompletion: boolean
   uploadProgress?: CclinkImageUploadProgress
@@ -31,11 +33,16 @@ export function remoteAgentComposerKey(ref: RemoteWorkspaceRef, sessionId: strin
 
 export interface RemoteMessageQueueSlice {
   remoteMessageQueues: Record<string, RemoteMessageQueue>
+  submitRemoteAgentDraft(
+    ref: RemoteWorkspaceRef,
+    sessionId: string | null,
+    forceQueue?: boolean,
+  ): boolean
   enqueueRemoteAgentDraft(ref: RemoteWorkspaceRef, sessionId: string | null): boolean
   editRemoteQueuedMessage(key: string, id: string): boolean
   removeRemoteQueuedMessage(key: string, id: string): void
   pauseRemoteMessageQueue(key: string, reason: string | null): void
-  dispatchRemoteQueuedMessage(key: string, signal?: AbortSignal): Promise<void>
+  dispatchRemoteMessage(key: string, signal?: AbortSignal): Promise<void>
 }
 
 export function projectRemoteQueueEvent(
@@ -51,13 +58,16 @@ export function projectRemoteQueueEvent(
   const active = event.phase === 'started' || event.phase === 'streaming'
   const terminal = ['completed', 'error', 'untracked'].includes(event.phase ?? '')
   if (!active && !terminal) return queues
+  // The current item can still await its send receipt after the run has failed.
+  // Only queued follow-ups need pausing; an empty queue must allow a fresh manual send.
+  const hasPendingMessages = queue.items.some((item) => item.id !== queue.dispatchId)
   return {
     ...queues,
     [key]: {
       ...queue,
       awaitingCompletion: active,
       pauseReason:
-        event.phase === 'error'
+        event.phase === 'error' && hasPendingMessages
           ? '上一轮远程任务失败，请检查消息和诊断后继续队列'
           : event.phase === 'untracked'
             ? '已停止跟踪，不代表远端已取消；请确认远端状态后继续队列'
@@ -73,7 +83,8 @@ export const createRemoteMessageQueueSlice: StateCreator<
   RemoteMessageQueueSlice
 > = (set, get) => ({
   remoteMessageQueues: {},
-  enqueueRemoteAgentDraft: (ref, sessionId) => {
+  enqueueRemoteAgentDraft: (ref, sessionId) => get().submitRemoteAgentDraft(ref, sessionId, true),
+  submitRemoteAgentDraft: (ref, sessionId, forceQueue = false) => {
     const key = remoteAgentComposerKey(ref, sessionId)
     const state = get()
     const content = (state.remoteAgentDrafts[key] ?? '').trim()
@@ -91,6 +102,18 @@ export const createRemoteMessageQueueSlice: StateCreator<
     )
       return false
     const current = state.remoteMessageQueues[key]
+    const mustQueue = Boolean(
+      forceQueue ||
+      current?.dispatchId ||
+      current?.awaitingCompletion ||
+      current?.items.length ||
+      session?.status === 'active' ||
+      state.remoteQuestionControls[key]?.submitting,
+    )
+    if (!mustQueue && state.realtime.state !== 'online') {
+      set({ error: '远程连接不可用，请恢复连接后发送' })
+      return false
+    }
     if ((current?.items.length ?? 0) >= 20) {
       set({ error: '待发送队列已满（最多 20 条）' })
       return false
@@ -103,6 +126,7 @@ export const createRemoteMessageQueueSlice: StateCreator<
     const images = { ...state.remoteAgentImages }
     delete drafts[key]
     delete images[key]
+    const item = { id: crypto.randomUUID(), content, pendingImages }
     set({
       error: null,
       remoteAgentDrafts: drafts,
@@ -118,10 +142,13 @@ export const createRemoteMessageQueueSlice: StateCreator<
             dispatchId: null,
             awaitingCompletion: session?.status === 'active',
           }),
-          items: [...(current?.items ?? []), { id: crypto.randomUUID(), content, pendingImages }],
+          items: mustQueue ? [...(current?.items ?? []), item] : [],
+          ...(!mustQueue ? { directSubmission: item, pauseReason: null } : {}),
         },
       },
     })
+    // Start this user command immediately. The queue subscription only handles follow-ups.
+    if (!mustQueue) void get().dispatchRemoteMessage(key)
     return true
   },
   editRemoteQueuedMessage: (key, id) => {
@@ -131,6 +158,8 @@ export const createRemoteMessageQueueSlice: StateCreator<
     if (
       !item ||
       queue.dispatchId === id ||
+      (state.remoteQuestionControls[key]?.submitting &&
+        state.remoteQuestionControls[key]?.queuedMessageId === id) ||
       state.remoteAgentDrafts[key]?.trim() ||
       state.remoteAgentImages[key]?.length
     )
@@ -152,7 +181,13 @@ export const createRemoteMessageQueueSlice: StateCreator<
   removeRemoteQueuedMessage: (key, id) =>
     set((state) => {
       const queue = state.remoteMessageQueues[key]
-      if (!queue || queue.dispatchId === id) return state
+      if (
+        !queue ||
+        queue.dispatchId === id ||
+        (state.remoteQuestionControls[key]?.submitting &&
+          state.remoteQuestionControls[key]?.queuedMessageId === id)
+      )
+        return state
       return {
         remoteMessageQueues: {
           ...state.remoteMessageQueues,
@@ -168,10 +203,11 @@ export const createRemoteMessageQueueSlice: StateCreator<
         remoteMessageQueues: { ...state.remoteMessageQueues, [key]: { ...queue, pauseReason } },
       }
     }),
-  dispatchRemoteQueuedMessage: async (initialKey, signal) => {
+  dispatchRemoteMessage: async (initialKey, signal) => {
     let key = initialKey
     const queue = get().remoteMessageQueues[key]
-    const item = queue?.items[0]
+    const item = queue?.directSubmission ?? queue?.items[0]
+    const direct = Boolean(queue?.directSubmission)
     const target = captureActiveWorkspaceTarget()
     if (
       signal?.aborted ||
@@ -179,6 +215,7 @@ export const createRemoteMessageQueueSlice: StateCreator<
       queue.dispatchId ||
       queue.awaitingCompletion ||
       queue.pauseReason ||
+      get().remoteQuestionControls[key]?.submitting ||
       !get().session.loggedIn ||
       get().realtime.state !== 'online' ||
       workspaceRefKey(target.ref) !== workspaceRefKey(queue.ref)
@@ -201,6 +238,37 @@ export const createRemoteMessageQueueSlice: StateCreator<
           [key]: { ...state.remoteMessageQueues[key], ...patch },
         },
       }))
+    }
+    const fail = (reason: string): void => {
+      if (!ownsDispatch()) return
+      set((state) => {
+        const current = state.remoteMessageQueues[key]
+        const restoreDraft =
+          direct &&
+          !current.items.length &&
+          !state.remoteAgentDrafts[key]?.trim() &&
+          !state.remoteAgentImages[key]?.length
+        const items = direct && !restoreDraft ? [item, ...current.items] : current.items
+        return {
+          error: reason,
+          ...(restoreDraft
+            ? {
+                remoteAgentDrafts: { ...state.remoteAgentDrafts, [key]: item.content },
+                remoteAgentImages: { ...state.remoteAgentImages, [key]: item.pendingImages },
+              }
+            : {}),
+          remoteMessageQueues: {
+            ...state.remoteMessageQueues,
+            [key]: {
+              ...current,
+              items,
+              directSubmission: undefined,
+              awaitingCompletion: false,
+              pauseReason: items.length ? reason : null,
+            },
+          },
+        }
+      })
     }
     set((state) => ({
       remoteMessageQueues: {
@@ -264,7 +332,14 @@ export const createRemoteMessageQueueSlice: StateCreator<
       if (!isWorkspaceTargetCurrent(target))
         throw new Error('工作空间已切换，请返回原会话后继续队列')
       if (signal?.aborted) throw new Error('队列调度已停止，请确认后继续队列')
-      if (get().remoteMessageQueues[key].pauseReason || get().realtime.state !== 'online') return
+      if (
+        get().remoteMessageQueues[key].pauseReason ||
+        get().remoteQuestionControls[key]?.submitting ||
+        get().realtime.state !== 'online'
+      )
+        throw new Error(
+          get().remoteMessageQueues[key].pauseReason || '当前远程会话不可发送，请检查后重试',
+        )
       const session = get().sessions.find((entry) => entry.id === sessionId)
       if (
         !session ||
@@ -285,19 +360,16 @@ export const createRemoteMessageQueueSlice: StateCreator<
       )
       if (!ownsDispatch()) return
       if (!sent) {
-        update({
-          awaitingCompletion: false,
-          pauseReason: get().error || '发送结果未确认，请核对消息历史后继续队列',
-        })
+        fail(get().error || '发送结果未确认，请核对消息历史后重试')
         return
       }
       update({
         items: get().remoteMessageQueues[key].items.filter((entry) => entry.id !== item.id),
       })
     } catch (error) {
-      update({ pauseReason: error instanceof Error ? error.message : String(error) })
+      fail(error instanceof Error ? error.message : String(error))
     } finally {
-      update({ dispatchId: null, uploadProgress: undefined })
+      update({ dispatchId: null, directSubmission: undefined, uploadProgress: undefined })
     }
   },
 })

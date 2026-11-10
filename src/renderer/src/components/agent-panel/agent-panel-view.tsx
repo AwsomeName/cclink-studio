@@ -137,6 +137,8 @@ export interface AgentPanelQuestionModel {
   resolution?: 'original_turn' | 'new_turn'
   submitting?: boolean
   error?: string | null
+  replyText?: string
+  onReplyInComposer?(): void
   questions: Array<{
     id: string
     header?: string
@@ -202,6 +204,7 @@ export interface AgentPanelComposerModel {
   queue?: QueuedMessageListModel
   allowQueueWhileRunning?: boolean
   submitLabel?: string
+  hint?: string
   value: string
   placeholder: string
   canSubmit: boolean
@@ -746,9 +749,17 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
         </button>
         {!answered && !ended && !model.submitting && unanswered.length > 0 ? (
           <div className="agent-question-hint" role="status">
-            请先完成：
+            按选项回答时，请先完成：
             {unanswered.map((question) => question.header || question.question).join('、')}
           </div>
+        ) : null}
+        {model.onReplyInComposer && !answered && !ended ? (
+          <button type="button" disabled={model.submitting} onClick={model.onReplyInComposer}>
+            直接用文字回复
+          </button>
+        ) : null}
+        {model.replyText ? (
+          <p className="agent-question-hint">文字回复：{model.replyText}</p>
         ) : null}
         {model.error ? <div className="agent-question-error">{model.error}</div> : null}
       </div>
@@ -964,11 +975,12 @@ export function ComposerFrame({
         </div>
         {model.allowQueueWhileRunning ? (
           <p className="agent-composer-queue-hint">
-            {model.queue?.pauseReason
-              ? '队列已暂停，点击「继续队列」后发送。'
-              : model.submitting || model.queue?.items.length
-                ? '当前轮结束后，按顺序发送后续消息。'
-                : 'Enter 发送 · Shift+Enter 换行'}
+            {model.hint ||
+              (model.queue?.pauseReason
+                ? '队列已暂停，点击「继续队列」后发送。'
+                : model.submitting || model.queue?.items.length
+                  ? '当前轮结束后，按顺序发送后续消息。'
+                  : 'Enter 发送 · Shift+Enter 换行')}
           </p>
         ) : null}
       </div>

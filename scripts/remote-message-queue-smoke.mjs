@@ -68,8 +68,23 @@ try {
       }
       const messages = []
       const sent = []
+      const answers = []
+      let holdSend = false
+      let releaseSendReceipt
+      let pendingAnswer
+      let answerReady
+      let signalAnswerReady
+      const prepareAnswer = () => {
+        answerReady = new Promise((resolve) => {
+          signalAnswerReady = resolve
+        })
+      }
       const emit = (phase, message) => {
-        if (message) messages.push(message)
+        if (message) {
+          const index = messages.findIndex((item) => item.id === message.id)
+          if (index >= 0) messages[index] = message
+          else messages.push(message)
+        }
         for (const window of BrowserWindow.getAllWindows())
           window.webContents.send('cclink:realtimeEvent', {
             type: 'conversation',
@@ -95,7 +110,15 @@ try {
         },
       }))
       handle('cclink:listMessages', () => messages)
+      handle('cclink:listSessions', () => [session])
       handle('cclink:createSession', () => session)
+      handle('cclink:answerQuestion', (input) => {
+        answers.push(input)
+        return new Promise((resolve) => {
+          pendingAnswer = { input, resolve }
+          signalAnswerReady()
+        })
+      })
       handle('cclink:sendAgentMessage', (input) => {
         assertIdle()
         sent.push(input.content)
@@ -106,6 +129,12 @@ try {
           timestamp: sent.length,
           content: input.content,
         })
+        if (holdSend) {
+          holdSend = false
+          return new Promise((resolve) => {
+            releaseSendReceipt = resolve
+          })
+        }
         return { success: true }
       })
       function assertIdle() {
@@ -116,9 +145,69 @@ try {
         emit('untracked')
         return { success: true }
       })
+      handle('cclink:stopAgentRun', () => {
+        session.status = 'idle'
+        emit('completed')
+        return { success: true }
+      })
       globalThis.remoteQueueSmoke = {
         sent,
+        answers,
         session,
+        holdNextSend() {
+          holdSend = true
+        },
+        acceptSend() {
+          if (!releaseSendReceipt) throw new Error('No pending send receipt')
+          const resolve = releaseSendReceipt
+          releaseSendReceipt = null
+          resolve({ success: true })
+        },
+        ask() {
+          prepareAnswer()
+          emit('message', {
+            type: 'userQuestion',
+            id: `question-${sent.length}`,
+            timestamp: sent.length + 1,
+            requestId: `question-request-${sent.length}`,
+            toolUseId: `question-tool-${sent.length}`,
+            questions: [
+              {
+                id: 'market',
+                header: '大盘链',
+                question: '恢复大盘研判链？',
+                options: [{ label: '恢复' }, { label: '暂停' }],
+              },
+              {
+                id: 'breadth',
+                header: '宽度数据',
+                question: '保留宽度数据？',
+                options: [{ label: '保留' }, { label: '停掉' }],
+              },
+            ],
+          })
+        },
+        async confirmAnswer(success) {
+          await answerReady
+          const pending = pendingAnswer
+          pendingAnswer = null
+          prepareAnswer()
+          if (success) {
+            const question = messages.find(
+              (message) =>
+                message.type === 'userQuestion' && message.toolUseId === pending.input.toolUseId,
+            )
+            emit('message', {
+              ...question,
+              answered: true,
+              status: 'resolved',
+              resolution: 'original_turn',
+            })
+          }
+          pending.resolve(
+            success ? { success: true } : { success: false, error: '夹具：回复未确认，请重试' },
+          )
+        },
         complete() {
           session.status = 'idle'
           emit('completed', {
@@ -181,12 +270,35 @@ try {
   )
   const panel = page.locator('[data-agent-panel-runtime="remote"]').first()
   const input = panel.locator('textarea')
+  const queue = panel.getByRole('region', { name: '待发送消息' })
+  const sendDirect = async (text, screenshotName) => {
+    if (!real) await app.evaluate(() => globalThis.remoteQueueSmoke.holdNextSend())
+    await input.fill(text)
+    await input.press('Enter')
+    if (!real) {
+      await panel.getByRole('button', { name: '发送中…', exact: true }).waitFor()
+      assert.equal(
+        await queue.count(),
+        0,
+        'The current direct submission must never be a waiting item',
+      )
+      assert.equal(
+        await panel.locator('.agent-composer-queue-hint').innerText(),
+        '正在发送当前消息…',
+      )
+      await page.screenshot({ path: join(runDir, screenshotName) })
+      await app.evaluate(() => globalThis.remoteQueueSmoke.acceptSend())
+    }
+  }
   await input.waitFor({ state: 'visible' })
   for (const number of [1, 2, 3]) {
-    await input.fill(`请只回复 REMOTE_QUEUE_${number}，不要调用工具。`)
-    await input.press('Enter')
+    const text = `请只回复 REMOTE_QUEUE_${number}，不要调用工具。`
+    if (number === 1) await sendDirect(text, 'remote-first-direct.png')
+    else {
+      await input.fill(text)
+      await input.press('Enter')
+    }
   }
-  const queue = panel.getByRole('region', { name: '待发送消息' })
   await page.waitForFunction(
     () =>
       document.querySelectorAll('[data-agent-panel-runtime="remote"] .agent-message-queue li')
@@ -252,6 +364,129 @@ try {
     }
   })
   if (!real) {
+    for (const mode of ['right', 'center']) {
+      await page.evaluate(async (mode) => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        useUIStore.getState().setAgentPanelMode(mode, 'user')
+      }, mode)
+      const sentBeforeFailure = await app.evaluate(() => globalThis.remoteQueueSmoke.sent.length)
+      await sendDirect(`FAIL_THEN_RETRY_${mode}`, `remote-direct-${mode}.png`)
+      await panel.getByRole('button', { name: '停止', exact: true }).waitFor()
+      await page.waitForFunction(
+        () => document.querySelectorAll('.agent-message-queue li').length === 0,
+      )
+      await app.evaluate(() => globalThis.remoteQueueSmoke.fail())
+      await panel.getByRole('button', { name: '发送', exact: true }).waitFor()
+      assert.equal(await queue.count(), 0, 'A failed single message must not leave a paused queue')
+      assert.equal(
+        await panel.locator('.agent-composer-queue-hint').innerText(),
+        'Enter 发送 · Shift+Enter 换行',
+      )
+      assert.equal(
+        await app.evaluate(() => globalThis.remoteQueueSmoke.sent.length),
+        sentBeforeFailure + 1,
+        'A failure must not retry automatically',
+      )
+      await page.screenshot({ path: join(runDir, `remote-failure-ready-${mode}.png`) })
+      await input.fill(`MANUAL_RETRY_${mode}`)
+      if (mode === 'right') await input.press('Enter')
+      else await panel.getByRole('button', { name: '发送', exact: true }).click()
+      await panel.getByRole('button', { name: '停止', exact: true }).waitFor()
+      await page.waitForFunction(
+        () => document.querySelectorAll('.agent-message-queue li').length === 0,
+      )
+      assert.equal(
+        await app.evaluate(() => globalThis.remoteQueueSmoke.sent.length),
+        sentBeforeFailure + 2,
+      )
+      assert.equal(
+        await app.evaluate(() => globalThis.remoteQueueSmoke.sent.at(-1)),
+        `MANUAL_RETRY_${mode}`,
+      )
+      await page.screenshot({ path: join(runDir, `remote-failure-retry-${mode}.png`) })
+      await app.evaluate(() => globalThis.remoteQueueSmoke.complete())
+      await panel.getByRole('button', { name: '发送', exact: true }).waitFor()
+    }
+    for (const mode of ['right', 'center']) {
+      await page.evaluate(async (mode) => {
+        const { useUIStore } = await import('/src/stores/ui-store.ts')
+        useUIStore.getState().setAgentPanelMode(mode, 'user')
+      }, mode)
+      await input.fill(`QUESTION_${mode}`)
+      await input.press('Enter')
+      await panel.getByRole('button', { name: '停止', exact: true }).waitFor()
+      await page.waitForFunction(
+        () => document.querySelectorAll('.agent-message-queue li').length === 0,
+      )
+      const sentBeforeReply = await app.evaluate(() => globalThis.remoteQueueSmoke.sent.length)
+      const text = '先全部停掉，后面需要恢复哪个我再说。'
+      if (mode === 'center') {
+        await input.fill(text)
+        await input.press('Enter')
+        await queue.waitFor()
+      }
+      await app.evaluate(() => globalThis.remoteQueueSmoke.ask())
+      const card = panel.locator('.agent-question-card').last()
+      await card.getByRole('button', { name: '直接用文字回复', exact: true }).waitFor()
+      assert.equal(
+        await card.getByRole('button', { name: '提交回答', exact: true }).isDisabled(),
+        true,
+      )
+      if (mode === 'right') {
+        await card.getByRole('button', { name: '直接用文字回复', exact: true }).click()
+        assert.equal(await input.evaluate((element) => element === document.activeElement), true)
+        await input.fill(text)
+        await input.press('Enter')
+      } else {
+        await queue.getByRole('button', { name: '用此消息回复', exact: true }).click()
+      }
+      await panel.getByRole('button', { name: '等待确认', exact: true }).waitFor()
+      assert.equal(
+        await card.getByRole('button', { name: '等待 Agent 确认…', exact: true }).isDisabled(),
+        true,
+      )
+      if (mode === 'right') {
+        assert.equal(await input.inputValue(), text)
+        await app.evaluate(() => globalThis.remoteQueueSmoke.confirmAnswer(false))
+        await card.getByText('夹具：回复未确认，请重试', { exact: true }).waitFor()
+        assert.equal(await input.inputValue(), text)
+        await panel.getByRole('button', { name: '直接回复', exact: true }).click()
+      } else {
+        assert.equal(await queue.locator('li').count(), 1)
+        assert.equal(
+          await queue.getByRole('button', { name: '删除', exact: true }).isDisabled(),
+          true,
+        )
+        await app.evaluate(() => globalThis.remoteQueueSmoke.confirmAnswer(false))
+        await card.getByText('夹具：回复未确认，请重试', { exact: true }).waitFor()
+        assert.equal(await queue.locator('li').count(), 1)
+        await queue.getByRole('button', { name: '用此消息回复', exact: true }).click()
+      }
+      await page.screenshot({ path: join(runDir, `remote-question-reply-pending-${mode}.png`) })
+      await app.evaluate(() => globalThis.remoteQueueSmoke.confirmAnswer(true))
+      await card.getByRole('button', { name: '已回答', exact: true }).waitFor()
+      await page.waitForFunction(
+        () => document.querySelectorAll('.agent-message-queue li').length === 0,
+      )
+      assert.equal(await input.inputValue(), '')
+      assert.equal(
+        await app.evaluate(() => globalThis.remoteQueueSmoke.sent.length),
+        sentBeforeReply,
+      )
+      assert.deepEqual(
+        await app.evaluate(() => globalThis.remoteQueueSmoke.answers.at(-1).answers),
+        { market: text, breadth: text },
+      )
+      assert.equal(await card.getByLabel('大盘链').inputValue(), '')
+      assert.equal(await card.getByLabel('宽度数据').inputValue(), '')
+      await page.screenshot({ path: join(runDir, `remote-question-replied-${mode}.png`) })
+      await app.evaluate(() => globalThis.remoteQueueSmoke.complete())
+      await panel.getByRole('button', { name: '发送', exact: true }).waitFor()
+    }
+    await page.evaluate(async () => {
+      const { useUIStore } = await import('/src/stores/ui-store.ts')
+      useUIStore.getState().setAgentPanelMode('right', 'user')
+    })
     await input.fill('第四条测试消息')
     await input.press('Enter')
     await input.fill('第五条待修改')
@@ -260,9 +495,9 @@ try {
     assert.equal(await input.inputValue(), '第五条待修改')
     await input.fill('第五条修改后')
     await input.press('Enter')
-    await panel.getByRole('button', { name: '停止等待', exact: true }).click()
+    await panel.getByRole('button', { name: '停止', exact: true }).click()
     await page.waitForFunction(() =>
-      document.querySelector('.agent-message-queue')?.textContent.includes('不代表远端已取消'),
+      document.querySelector('.agent-message-queue')?.textContent.includes('已请求停止任务'),
     )
     await page.evaluate(async () => {
       const { useUIStore } = await import('/src/stores/ui-store.ts')
@@ -277,7 +512,36 @@ try {
   }
   await writeFile(
     join(runDir, 'result.json'),
-    JSON.stringify({ ok: true, runtimeWasStubbed: !real, ...result }, null, 2),
+    JSON.stringify(
+      {
+        ok: true,
+        runtimeWasStubbed: !real,
+        ...result,
+        ...(!real
+          ? {
+              failureRetryVerified: ['right-enter', 'center-button'],
+              directSendVerified: [
+                'first-message-no-queue',
+                'right-no-queue-during-receipt',
+                'center-no-queue-during-receipt',
+                'only-follow-ups-queued',
+              ],
+              questionReplyVerified: [
+                'right-enter',
+                'rejection-preserves-draft',
+                'button-retry',
+                'center-queued-reply',
+                'queued-reply-retry-clears-empty-pause',
+                'ack-before-removal',
+                'no-option-selected',
+                'no-duplicate-normal-message',
+              ],
+            }
+          : {}),
+      },
+      null,
+      2,
+    ),
   )
   console.log(JSON.stringify({ ok: true, runtimeWasStubbed: !real, runDir }))
 } catch (error) {

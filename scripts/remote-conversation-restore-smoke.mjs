@@ -205,7 +205,7 @@ try {
       .getState()
       .commitActiveWorkspace({ ...ref, workspaceId: 'unreadable-history' })
   }, ref)
-  await page.locator('.agent-navigation-list .terminal-sidebar-error').waitFor({ state: 'visible' })
+  await page.locator('.agent-navigation-list').getByRole('alert').waitFor({ state: 'visible' })
   assert.equal(await page.getByText('当前远程项目暂无会话', { exact: true }).count(), 0)
   console.log(
     JSON.stringify(

@@ -2052,6 +2052,45 @@ describe('CclinkRemoteService runtime protocol', () => {
     })
   })
 
+  it('接受整组问题的原文回复，不要求答案匹配预设选项', async () => {
+    const { service, handle } = createService()
+    await service.initialize()
+    await handle({
+      ...createCclinkEnvelope('user_question', { request_id: 'question-request' }),
+      session_id: 'session-1',
+      msg_id: 'message-question',
+      tool_use_id: 'tool-question',
+      questions: [
+        { id: 'market', question: '恢复大盘链？', options: [{ label: '恢复' }] },
+        { id: 'breadth', question: '保留宽度数据？', options: [{ label: '保留' }] },
+      ],
+    })
+    vi.spyOn(service, 'connect').mockResolvedValue({ state: 'online' })
+    vi.spyOn(service, 'getStatus').mockResolvedValue(onlineStatus)
+    const request = vi.spyOn(service.getRequestRouter(), 'request').mockResolvedValue({
+      ...createCclinkEnvelope('question_answer_ack'),
+      session_id: 'session-1',
+      tool_use_id: 'tool-question',
+      status: 'accepted',
+    })
+    const reply = '先全部停掉，后面需要恢复哪个我再说。'
+    await expect(
+      service.answerQuestion({
+        ref: remoteRef,
+        sessionId: 'session-1',
+        requestId: 'question-request',
+        toolUseId: 'tool-question',
+        answers: { market: reply, breadth: reply },
+      }),
+    ).resolves.toEqual({ success: true })
+    expect(request).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({ answers: { '恢复大盘链？': reply, '保留宽度数据？': reply } }),
+      ['question_answer_ack'],
+      15_000,
+    )
+  })
+
   it('超时问题仍可提交，并接受远端新回合回执；迟到事件不能重开卡片', async () => {
     const { service, handle, store } = createService()
     await service.initialize()

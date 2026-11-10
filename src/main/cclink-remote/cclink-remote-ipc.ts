@@ -291,6 +291,20 @@ export function registerCclinkRemoteIpc(
     guard,
     (_event, input) => service.stopTrackingAgentRun(input.ref, input.sessionId),
   )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.stopAgentRun, (args) =>
+      z.tuple([cclinkStopTrackingAgentRunInputSchema]).parse(args),
+    ),
+    guard,
+    (_event, input) => service.stopAgentRun(input.ref, input.sessionId),
+  )
+  registerTrustedIpcContract(
+    bindIpcParser(cclinkIpc.deleteSession, (args) =>
+      z.tuple([cclinkStopTrackingAgentRunInputSchema]).parse(args),
+    ),
+    guard,
+    (_event, input) => service.deleteSession(input.ref, input.sessionId),
+  )
   const controlBase = {
     ref: cclinkRemoteRefSchema,
     sessionId: idSchema,

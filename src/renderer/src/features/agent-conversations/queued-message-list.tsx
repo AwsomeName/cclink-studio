@@ -12,6 +12,7 @@ export interface QueuedMessageListModel {
   pauseReason?: string | null
   dispatchId?: string | null
   canEdit: boolean
+  reply?: { canReply(id: string): boolean; onReply(id: string): void }
   onEdit(id: string): void
   onRemove(id: string): void
   onResume(): void
@@ -57,6 +58,16 @@ export function QueuedMessageList({
                 </small>
               ) : null}
             </div>
+            {model.reply ? (
+              <button
+                type="button"
+                disabled={model.dispatchId === item.id || !model.reply.canReply(item.id)}
+                onClick={() => model.reply?.onReply(item.id)}
+                title="将这条文字作为当前提问的回复，收到确认后移出队列"
+              >
+                用此消息回复
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={model.dispatchId === item.id || !model.canEdit}
