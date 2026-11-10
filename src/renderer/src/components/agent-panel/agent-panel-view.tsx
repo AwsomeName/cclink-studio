@@ -1154,7 +1154,12 @@ export function ActionBar({
           false,
           () => remoteImageInputRef.current?.click(),
         )}
-        {capabilityButton('role', '角色', <IconRobot size={13} />)}
+        {capabilityButton(
+          'role',
+          '角色',
+          <IconRobot size={13} />,
+          'agent-mode-btn agent-profile-btn',
+        )}
         {remote.permissionMode && remote.onPermissionModeChange ? (
           <AgentPermissionModeMenu
             mode={remote.permissionMode}

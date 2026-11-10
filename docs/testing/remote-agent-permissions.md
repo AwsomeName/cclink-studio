@@ -42,3 +42,11 @@
 `/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-tool-approval-3WZGNy`。
 其中 `result.json`、`strict-three-confirmations.png`、`automatic-regular-tools.png`、
 `delete-still-confirmed.png` 分别记录检查结果、严格模式、自动放行及保留删除确认。
+
+## 正式发布前的侧栏布局回归
+
+2026-11-10 远端 UI smoke 发现：349px 侧栏中，本地角色按钮已收为 28px 图标，远程角色按钮仍保留文字、宽 61px。统一权限菜单增加后，远程工具栏因此换行至 78px，输入卡片增至 156px；本地仍分别为 42px 和 120px。
+
+修复仅让远程角色按钮复用既有 `agent-profile-btn` 紧凑样式，不改变权限策略或布局断言容差。新增侧栏角色按钮宽度一致断言。隔离配置的真实 Electron `--agent-panel-only` smoke 4/4 通过；本地与远程角色按钮均为 28px、工具栏均为 42px、输入卡片均为 120px，侧栏与中央面板的既有断言保持通过。
+
+本机证据：`/tmp/cclink-composer-release-136/agent-panel-side-projections.json`。这项布局验证不替代真实在线设备权限验收。

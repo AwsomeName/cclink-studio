@@ -1364,6 +1364,12 @@ async function main() {
         JSON.stringify({ local: localSideProjection, remote: remoteSideProjection }, null, 2),
       )
       assertEquivalentPanel(localSideProjection, remoteSideProjection, 'side')
+      assert(
+        Math.abs(
+          localSideProjection.boxes.roleAction.width - remoteSideProjection.boxes.roleAction.width,
+        ) <= 1,
+        'side local/remote role buttons must use the same compact width',
+      )
 
       await page.evaluate(async () => {
         const { useCclinkStore } = await import('/src/stores/cclink-store.ts')
