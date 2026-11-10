@@ -1,10 +1,57 @@
 # CCLink Studio
 
-**CCLink 的单一开源桌面工作台：本地能力免费免登录，远程入口按需登录 CCLink。**
+**把文件、网页、文档和 Agent 放在同一个桌面工作空间。**
 
 [![GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey)](https://github.com/AwsomeName/cclink-studio)
 [![Electron](https://img.shields.io/badge/Electron-43.1-47848F)](https://www.electronjs.org/)
+
+[下载 macOS Apple Silicon 版](https://github.com/AwsomeName/cclink-studio/releases/latest) · [从源码启动](#快速开始) · [功能文档](#文档)
+
+打开本地目录，边看资料、边写文档，与 Agent 协作处理手头的工作。本地工作台免费，免 CCLink 登录；模型使用你自己的账号或 API，远程服务按需登录。
+
+![CCLink Studio：多项目工作空间、本地文件树、内嵌浏览器和右侧 Agent 会话列表](docs/images/readme/browser-workspace.jpg)
+
+*真实工作台（v0.1.134）：顶部切换项目，左侧管理文件，中央阅读网页，右侧保留会话。点击图片可查看完整界面。*
+
+## 在一个工作空间里完成工作
+
+### 文档就在手边，Agent 共享工作上下文
+
+从本地文件树打开 Markdown，直接编辑并保存。把当前文档、文件或任务资源提供给 Agent，让讨论围绕实际材料展开。新建本地会话默认使用 Codex，也可选择 Claude Code；文件访问与工具操作沿用 Studio 的授权边界。
+
+![CCLink Studio Markdown 编辑器：本地文件、文档与 Agent 协作](docs/images/readme/workspace-writing.jpg)
+
+*文档演示截图（v0.1.118）：本地 Markdown 与待发送的 Agent 指令。*
+
+[文档编辑](docs/features/document-editor.md) · [Agent 系统](docs/features/agent-system.md)
+
+### 查资料与写作，不必离开工作台
+
+浏览器与文档作为标签页并排管理。打开参考网页、切回草稿，或把网页作为 Agent 的操作目标；需要自动化时，在用户监视与权限约束下使用 Playwright。
+
+[浏览器自动化](docs/features/browser-automation.md)
+
+### 打开 PCB，图纸与讨论并排看
+
+直接查看 Altium 原理图、PCB 与工程引用，无需离开工作空间。支持缩放、平移和 PCB 图层切换；在同一界面里对照图纸与 Agent 的分析，梳理元件、连接和项目资料。
+
+![CCLink Studio Altium PCB 只读预览：板图、尺寸标注和右侧 Agent 项目解读](docs/images/readme/pcb-agent.jpg)
+
+*真实工作台（v0.1.134）：PCB 预览与 Agent 解读并排展示。图纸只读，不包含电路编辑、规则检查或制造校验。*
+
+[Altium 图纸预览](docs/features/altium-readonly-preview.md)
+
+### 还可以做什么
+
+| 场景 | 你可以做的事 |
+| --- | --- |
+| 运行命令 | 使用工作空间内的 Terminal，或从支持的本地 Agent 会话代码块运行命令；沿用现有权限确认。[会话命令](docs/features/conversation-command-run.md) |
+| 连接自己的设备与数据 | 连接 USB / Wi-Fi ADB Android 真机，或只读查询用户配置的数据源。[Android](docs/features/agent-device.md) · [数据源](docs/features/data-sources.md) |
+| 继续远程工作 | 按需登录 CCLink，连接已配对的远程 Agent，使用远程文件、会话和 Terminal；本地工作台独立可用。 |
+
+<details>
+<summary>项目定位与完整能力边界</summary>
 
 CCLink Studio 是 CCLink 唯一桌面 App。这个仓库承载可以从源码直接运行的本地工作台，以及可选的 CCLink 远程客户端配套。本地工作空间、Agent、浏览器、Markdown 编辑、Terminal、数据源和 Android 始终免费且不要求登录。
 
@@ -16,7 +63,7 @@ CCLink 云服务和远程 Agent runtime 仍由各自既有部署与 NPM 发布�
 | -------------------------------------- | ------------ | --------------------------------------------------------------------------- |
 | 内嵌浏览器 + Playwright 自动化         | 保留         | Electron 内嵌 Chromium，Agent 可在用户监视下操作网页。                      |
 | Markdown 编辑器                        | 保留         | Tiptap/ProseMirror，本地文件读写。                                          |
-| 本地 Agent 面板                        | 保留         | 面向本机 Claude Code / 用户自配 API 的桌面壳能力。                          |
+| 本地 Agent 面板                        | 保留         | 新本地会话默认 Codex；Claude Code 作为用户自配 API 的备选。                 |
 | 本地文件和工作空间                     | 保留         | 本地目录浏览、文件读写、workspace state 恢复。                              |
 | 统一上下文操作                         | 保留         | 右键、键盘和命令入口复用同一命令事实源，按对象贡献操作并提供脱敏诊断。      |
 | Terminal                               | 本地与远程   | 本地 shell 免登录；远程 PTY 只通过绑定工作空间的 CCLink adapter 接入。      |
@@ -26,6 +73,8 @@ CCLink 云服务和远程 Agent runtime 仍由各自既有部署与 NPM 发布�
 | 远程工作空间、文件和 Agent 会话        | 可选内置域   | 支持文件读写与远程 Agent；复用统一 Workspace、Tab 和 Terminal 生命周期。    |
 | 订阅、配额和付费安全边界               | 云服务负责   | 客户端只能显示提示；当前付费门禁尚未经服务端闭环验证。                      |
 | 桌面支付、WebDAV、托管设备服务         | 不迁移       | 云端部署与远程 Agent NPM 独立；签名、公证只在受保护的 Release runner 执行。 |
+
+</details>
 
 ## 快速开始
 
@@ -86,22 +135,24 @@ Android 能力只面向用户自有 USB 或 Wi-Fi ADB 真机。CCLink Studio 不
 
 ### Agent
 
-CCLink Studio 不提供模型服务。Studio 可以连接用户本机或用户自有的 Agent 后端；
-当前默认 Runtime 来源是 `system`，优先使用用户本机安装的 Claude Code：
+CCLink Studio 不提供模型服务。新建本地会话默认连接本机 Codex，使用 Codex 自己的
+ChatGPT 文件登录与账号额度；需要本机已安装兼容版本并完成登录。缺少 CLI 或不支持的
+认证方式会明确报错，不自动切换到其他后端。已有 Claude 会话保留原绑定。
 
-```bash
-npm install -g @anthropic-ai/claude-code
-claude login
-```
-
-在 `设置 > Agent` 中可以选择 `system`、`custom` 或 `managed` Runtime，并配置
-模型提供商、API 地址和 API Key。API Key 由主进程 `CredentialService` 保存到
+Claude Code 作为备选，在首条消息前从 Agent 选择器切换。需要在 `设置 > Agent` 配置
+模型提供商、API 地址和 API Key；Studio 的 Claude 子进程不复用本机 Claude 订阅登录。
+可以选择 `system`、`custom` 或 `managed` Claude Runtime 来源。
+API Key 由主进程 `CredentialService` 保存到
 Electron `userData/credentials/credentials.json`，不会写入工作空间、普通设置或
 诊断日志。
 
 构建链目前会把固定版本 Runtime 放入本地安装包，但新安装默认仍使用 `system`。
 bundled Runtime 的公开再分发尚未批准，公开发布前必须完成
 [`ADR 0002`](docs/decisions/0002-bundled-claude-code-runtime.md) 的许可门禁。
+
+当前默认后端与认证边界见 [ADR 0022](docs/decisions/0022-codex-default-local-runtime.md)；
+实测范围见 [Codex 验收](docs/testing/codex-default-local-agent.md) 与
+[Claude 认证隔离](docs/testing/claude-auth-isolation.md)。
 
 ## 仓库结构
 
