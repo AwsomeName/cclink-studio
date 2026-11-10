@@ -51,6 +51,52 @@ afterEach(() => {
 })
 
 describe('conversation message queue', () => {
+  it('sends the preserved draft immediately after switching away from a failed ACP launch', async () => {
+    const { api, controller } = harness()
+    useAgentStore.getState().setRuntimeBinding({ kind: 'acp', implementationId: 'codex-acp' }, id)
+    api.sendMessage.mockRejectedValueOnce(new Error('Codex ACP requires its own API Key'))
+    await expect(controller.send('preserve this request')).resolves.toMatchObject({
+      status: 'failed',
+    })
+    expect(conversation().input).toBe('preserve this request')
+    expect(conversation().messageQueuePauseReason).toBeTruthy()
+    expect(conversation().queuedMessages ?? []).toEqual([])
+
+    expect(useAgentStore.getState().setRuntimeBinding({ kind: 'codex' }, id)).toBe(true)
+    expect(conversation().messageQueuePauseReason).toBeNull()
+    expect(conversation().input).toBe('preserve this request')
+    await expect(controller.send(conversation().input)).resolves.toMatchObject({
+      status: 'accepted',
+    })
+    expect(api.sendMessage).toHaveBeenCalledTimes(2)
+    expect(api.sendMessage.mock.calls[1][1]).toMatchObject({ runtimeBinding: { kind: 'codex' } })
+    expect(conversation().queuedMessages ?? []).toEqual([])
+  })
+
+  it('keeps existing queued messages paused with their original runtime after switching a failed launch', async () => {
+    const { api, controller } = harness()
+    useAgentStore.getState().setRuntimeBinding({ kind: 'acp', implementationId: 'codex-acp' }, id)
+    let reject!: (error: Error) => void
+    api.sendMessage.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, fail) => {
+          reject = fail
+        }),
+    )
+    const sending = controller.send('first request')
+    await settle()
+    await expect(controller.send('queued request')).resolves.toMatchObject({ status: 'queued' })
+    const original = conversation().queuedMessages![0]
+    reject(new Error('Codex ACP requires its own API Key'))
+    await expect(sending).resolves.toMatchObject({ status: 'failed' })
+
+    expect(useAgentStore.getState().setRuntimeBinding({ kind: 'codex' }, id)).toBe(true)
+    await settle()
+    expect(conversation().queuedMessages).toEqual([original])
+    expect(conversation().messageQueuePauseReason).toBeTruthy()
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps supplement receipts on their Run without clearing a later draft or changing the queue', async () => {
     const { api, controller } = harness()
     await controller.send('A')

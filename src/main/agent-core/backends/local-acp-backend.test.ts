@@ -19,6 +19,18 @@ afterEach(async () => {
 })
 
 describe('Codex ACP runtime boundary', () => {
+  it('explains how to use native Codex when the separate ACP key is missing, without switching automatically', async () => {
+    const backend = new LocalAcpBackend({
+      executablePath: '/must-not-start',
+      codexHome: '/must-not-create',
+      requestPermission: async () => false,
+    })
+    await expect(backend.sendMessage('hello')).rejects.toThrow('选择「Codex（默认）」后重新发送')
+    expect(backend.getSessionId()).toBeNull()
+    expect(backend.getStatus().connected).toBe(false)
+    await backend.destroy()
+  })
+
   it('only injects the dedicated Codex key and isolated home', () => {
     const environment = buildCodexAcpEnvironment({
       apiKey: 'codex-only-secret',

@@ -754,6 +754,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         sessionId: null,
         sessionCompatibilityFingerprint: null,
         contextUsage: null,
+        // An explicit runtime change resolves a failed launch's empty queue pause.
+        // Existing queued messages keep their original context and require review.
+        messageQueuePauseReason: current.queuedMessages?.length
+          ? '运行环境已变化，请检查待发送消息后继续队列'
+          : null,
         updatedAt: Date.now(),
       })),
     )

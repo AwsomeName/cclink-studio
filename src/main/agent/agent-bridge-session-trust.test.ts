@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { AgentBridge } from './agent-bridge'
 import { AgentRuntimeStateStore } from './agent-runtime-state-store'
 import { createDefaultAgentConversationConfiguration } from '../../shared/agent-role'
+import { LocalCodexBackend } from '../agent-core/backends/local-codex-backend'
 
 const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-bridge-test-'))
 afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
@@ -74,6 +75,50 @@ describe('AgentBridge main-process Claude session trust', () => {
     queryMock.mockReset()
   })
 
+  it.each(['send', 'restore'] as const)(
+    'keeps the requested native Codex backend when a stale ACP %s overlaps startup',
+    async (action) => {
+      const bridge = createBridge()
+      const nativeSend = vi.spyOn(LocalCodexBackend.prototype, 'sendMessage').mockResolvedValue()
+      try {
+        const first = bridge.sendMessage('native request', 'overlapping-start', {
+          runtimeBinding: { kind: 'codex' },
+        })
+        // Attach rejection handling immediately: the regression fails the first request
+        // with the ACP key error despite its explicit native Codex binding.
+        const firstResult = first.then(
+          () => 'accepted',
+          (error: Error) => error.message,
+        )
+        expect(bridge.beginConfigurationChange()).toBe(false)
+        if (action === 'send') {
+          await expect(
+            bridge.sendMessage('stale request', 'overlapping-start', {
+              runtimeBinding: { kind: 'acp', implementationId: 'codex-acp' },
+            }),
+          ).rejects.toThrow(/已有活动任务|正在启动|不能切换/)
+        } else {
+          expect(() =>
+            bridge.restoreConversation(
+              'overlapping-start',
+              null,
+              createDefaultAgentConversationConfiguration(),
+              null,
+              [],
+              { kind: 'acp', implementationId: 'codex-acp' },
+            ),
+          ).toThrow('不能切换')
+        }
+        expect(await firstResult).toBe('accepted')
+        expect(nativeSend).toHaveBeenCalledOnce()
+        expect(bridge.getStatus('overlapping-start').runtimeBinding).toEqual({ kind: 'codex' })
+      } finally {
+        nativeSend.mockRestore()
+        await bridge.destroy()
+      }
+    },
+  )
+
   it('rebinds a failed ACP launch without a Session and locks after a real Session exists', async () => {
     const bridge = createBridge()
     try {
@@ -90,7 +135,7 @@ describe('AgentBridge main-process Claude session trust', () => {
       expect(bridge.getStatus('retry-runtime').sessionId).toBe('retry-session')
       await expect(
         bridge.sendMessage('switch', 'retry-runtime', { runtimeBinding: { kind: 'codex' } }),
-      ).rejects.toThrow('不能切换')
+      ).rejects.toThrow(/不能切换|已有活动任务/)
     } finally {
       await bridge.destroy()
     }

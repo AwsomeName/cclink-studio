@@ -12,6 +12,11 @@
 
 使用本机官方 `codex app-server` 的 stdio 接口，增加固定 `local-codex` backend，不扩展任意 Agent Registry。复用现有 Thread、AgentRuntime、run、权限 broker 和 MCP ToolHost；Codex thread ID 只是受主进程信任记录约束的恢复引用。旧 ACP 绑定仍可读取，不静默迁移。
 
+新会话的选择器只提供 Codex（默认）与 Claude Code（备选），不再提供 Codex ACP。
+历史 ACP 会话仍显示真实绑定；尚未建立原生 Session 的失败会话可主动切换为 Codex。
+从主进程接受发送、开始准备运行起，既有 run 所有权即禁止重叠发送或恢复请求替换后端，
+不能等到后端进程连接后才锁定。
+
 Codex 自己读取本机文件登录；Studio 不复制或展示 token，不修改全局配置、不执行登录/退出。强制文件凭证存储，macOS 子进程拒绝访问系统钥匙串和本机 Claude 凭证。已有 Codex 登录只存在钥匙串时明确失败，不能迁移钥匙串。外部 MCP、插件、hooks、原生浏览器和自动多 Agent 不继承到 Studio 运行；只接受当前运行的 Studio MCP 会话。权限不允许扩大为 Full Access 或持久策略批准。
 
 账号来源进一步限定为 Codex 的 ChatGPT 文件登录与官方 OpenAI 提供商：清理继承的 API Key

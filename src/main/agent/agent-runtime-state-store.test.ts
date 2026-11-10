@@ -18,6 +18,8 @@ describe('AgentRuntimeStateStore', () => {
   it('atomically admits only one non-terminal run per conversation, including cancelling runs', async () => {
     const store = new AgentRuntimeStateStore()
     await store.beginRun({ conversationId: 'conversation-1', runId: 'run-1', workspaceKey: null })
+    expect(store.hasActiveRuns('conversation-1')).toBe(true)
+    expect(store.hasActiveRuns('conversation-2')).toBe(false)
 
     await expect(
       store.beginRun({ conversationId: 'conversation-1', runId: 'run-2', workspaceKey: null }),
@@ -29,6 +31,7 @@ describe('AgentRuntimeStateStore', () => {
     ).rejects.toThrow('run-1')
 
     await store.finishRun('conversation-1', 'run-1', 'cancelled')
+    expect(store.hasActiveRuns('conversation-1')).toBe(false)
     await expect(
       store.beginRun({ conversationId: 'conversation-1', runId: 'run-4', workspaceKey: null }),
     ).resolves.toMatchObject({ status: 'running', runId: 'run-4' })

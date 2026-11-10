@@ -90,9 +90,7 @@ export class AgentRuntimeStateStore {
     this.assertLoaded()
     const key = runKey(input.conversationId, input.runId)
     if (this.runs.has(key)) throw new Error(`Agent runId 已存在: ${input.runId}`)
-    const active = [...this.runs.values()].find(
-      (record) => record.conversationId === input.conversationId && !isTerminal(record.status),
-    )
+    const active = this.getActiveRun(input.conversationId)
     if (active) {
       throw new Error(`Agent 当前 Thread 已有活动任务: ${active.runId}`)
     }
@@ -162,8 +160,19 @@ export class AgentRuntimeStateStore {
     return record ? structuredClone(record) : null
   }
 
-  hasActiveRuns(): boolean {
-    return [...this.runs.values()].some((record) => !isTerminal(record.status))
+  hasActiveRuns(conversationId?: string): boolean {
+    return [...this.runs.values()].some(
+      (record) =>
+        (conversationId === undefined || record.conversationId === conversationId) &&
+        !isTerminal(record.status),
+    )
+  }
+
+  getActiveRun(conversationId: string): AgentRuntimeRunRecord | null {
+    const active = [...this.runs.values()].find(
+      (record) => record.conversationId === conversationId && !isTerminal(record.status),
+    )
+    return active ? structuredClone(active) : null
   }
 
   rememberSession(record: TrustedAgentSessionRecord): Promise<void> {

@@ -23,6 +23,11 @@ const execFileAsync = promisify(execFile)
 export const CODEX_ACP_IMPLEMENTATION_ID = 'codex-acp'
 export const CODEX_ACP_EXPECTED_VERSION = '1.3.0'
 
+const CODEX_ACP_KEY_REQUIRED =
+  '当前会话使用旧版 Codex ACP，尚未配置其独立的 OpenAI API Key。' +
+  '要使用本机 ChatGPT 登录，请在输入框右下角的运行环境中选择「Codex（默认）」后重新发送；' +
+  '已有模型会话时请新建会话。继续使用 ACP 则需到设置配置专用 API Key。'
+
 export interface AcpPermissionDecisionRequest {
   conversationId?: string
   runId?: string
@@ -123,7 +128,7 @@ export class LocalAcpBackend implements IAgentBackend {
       throw new Error('Codex ACP 最小版本暂不支持图片附件，请改用文字或 Claude Code')
     }
     if (!this.options.apiKey?.trim()) {
-      throw new Error('Codex ACP 尚未配置 OpenAI API Key，请先到设置中填写')
+      throw new Error(CODEX_ACP_KEY_REQUIRED)
     }
     this.currentOptions = options ?? null
     const turnRevision = ++this.turnRevision
@@ -234,7 +239,7 @@ export class LocalAcpBackend implements IAgentBackend {
 
   private async startProcess(): Promise<void> {
     const apiKey = this.options.apiKey?.trim()
-    if (!apiKey) throw new Error('Codex ACP 尚未配置 OpenAI API Key，请先到设置中填写')
+    if (!apiKey) throw new Error(CODEX_ACP_KEY_REQUIRED)
     const probe = await probeCodexAcpExecutable({
       executablePath: this.options.executablePath,
       codexHome: this.options.codexHome,

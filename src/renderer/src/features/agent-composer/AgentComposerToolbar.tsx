@@ -108,7 +108,7 @@ export function AgentComposerToolbar({
     runtimeBinding.kind === 'codex'
       ? '本机 Codex'
       : runtimeBinding.kind === 'acp'
-        ? 'ACP · 本机进程'
+        ? '独立 API Key'
         : getRuntimeDetail(settings)
   const claudeStatusLabel = getClaudeCodeStatusLabel(claudeStatus)
   const claudeStatusDetail = getClaudeCodeStatusDetail(claudeStatus)
@@ -465,21 +465,6 @@ export function AgentComposerToolbar({
                 <em>使用 Studio 配置的 API Key</em>
               </span>
               {runtimeBinding.kind === 'claude-code' && <IconCheck size={11} />}
-            </button>
-            <button
-              className={runtimeBinding.kind === 'acp' ? 'selected' : ''}
-              disabled={!canChangeRuntime}
-              onClick={() => {
-                onRuntimeChange({ kind: 'acp', implementationId: 'codex-acp' })
-                setOpenMenu(null)
-              }}
-            >
-              <IconRobot size={13} />
-              <span>
-                <strong>Codex ACP</strong>
-                <em>旧版 API Key 方案；与本机 ChatGPT 登录独立</em>
-              </span>
-              {runtimeBinding.kind === 'acp' && <IconCheck size={11} />}
             </button>
             <div className="agent-runtime-card">
               <IconRobot size={14} />

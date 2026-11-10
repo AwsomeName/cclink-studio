@@ -135,3 +135,43 @@ Codex 版本未经本轮真实验收。权限策略返回值与 MCP 隔离在每
 ```bash
 CCLINK_CODEX_REAL_SMOKE=1 pnpm exec vitest run src/main/agent-core/backends/codex-proxy-environment.test.ts
 ```
+
+### 同日 0.1.137 本机 Codex 与 ACP 路由不一致回归
+
+用户反馈输入框显示「Codex／本机 Codex」，但 13:06:17 的框架日志明确在
+`LocalAcpBackend.sendMessage` 报缺少 OpenAI API Key。本机 Codex 只读登录探测通过不能证明
+该次消息走了本机 Codex；这份日志也不包含失败消息的会话 ID、发送绑定和重叠事件，不能据此
+归因于用户选错。前一轮只处理 HTTP 502，未关闭这个独立的 ACP 错误。
+
+已用主进程回归用例复现：明确指定 `codex` 的发送进入 `beginRun` 异步准备期后，重叠的旧 ACP
+发送可以先替换后端，再因重复运行被拒绝；最初的 Codex 请求随后进入 ACP 并报缺少 Key。
+旧恢复请求也能在这个窗口更换绑定。这证明代码存在可产生相同症状的缺陷，尚不能证明用户
+当时具体由哪一个重叠事件触发。
+
+修复复用 `AgentRuntimeStateStore` 的运行所有权，在修改绑定前拒绝重复发送，并阻止准备期
+切换后端或整体配置。新会话菜单移除 ACP，只保留本机 Codex 和 Claude Code 备选；历史绑定
+保持可读。失败且没有 Session 的旧 ACP 会话，主动切换后清理空队列的暂停状态，可直接重发；
+已有排队消息仍需检查，已有原生 Session 仍禁止换引擎。
+
+用户功能验收（真实 Electron、实际本机 Codex 调用，隔离临时数据）：
+
+1. 新建本地会话，打开运行环境菜单：Codex 默认选中，没有 Codex ACP 选项。
+2. 发送「只回复 NATIVE_DEFAULT_OK，不使用工具。」：收到真实回复，主进程绑定为 `codex`。
+3. 加载保存的旧 ACP 绑定，未配置其 Key 时发送失败且没有建立 Session；选择「Codex（默认）」
+   后立即重发读取 `marker.md` 的请求：同一会话实际调用 `editor_read` 并返回文件标记。
+
+以上在 `593dbdf0` 加本轮源码修复的独立工作树中通过。证据目录：
+`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-codex-routing-SIkZBu`，
+包含 `result.json`、`native-default.png`、`acp-failed.png` 和 `acp-recovered.png`。
+未发布新版本，未替换用户安装的 0.1.137，不能宣称其安装版已修复。
+
+提交前全量回归还检查了取消期间的重复发送：提前拒绝仍返回占用中的真实 Run ID，保持原有取消与工具排空诊断；运行准备期和 `beginRun` 复用同一状态所有者查询活动运行。
+
+工程验证：运行绑定、主进程所有权、会话信任、ACP 失败恢复、消息队列和发送参数共 61 项用例
+通过；IPC 与更新生命周期相关回归另有 23 项通过。类型检查、构建、受影响文件 ESLint、
+凭证边界检查通过。真实窗口验收入口（会消耗当前本机 Codex 账号额度）：
+
+```bash
+pnpm build
+node scripts/codex-runtime-routing-ui-smoke.mjs
+```

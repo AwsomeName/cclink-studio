@@ -304,6 +304,12 @@ export class AgentBridge {
     if (this.configurationChangePending) {
       throw new Error('Agent 配置正在切换，请稍后重试')
     }
+    // beginRun reserves ownership before its persistence await. Check that owner
+    // before touching bindings: a rejected duplicate must not change the first run.
+    const activeRun = this.runtimeStateStore.getActiveRun(conversationId)
+    if (activeRun) {
+      throw new Error(`Agent 当前 Thread 已有活动任务: ${activeRun.runId}`)
+    }
     this.bindConversationRuntime(conversationId, context?.runtimeBinding)
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
     const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
@@ -808,6 +814,7 @@ export class AgentBridge {
   beginConfigurationChange(): boolean {
     if (
       this.configurationChangePending ||
+      this.runtimeStateStore.hasActiveRuns() ||
       this.runtime
         .getConversationIds()
         .some((conversationId) => this.runtime.isBusy(conversationId))
@@ -1569,6 +1576,7 @@ export class AgentBridge {
     if (current && !agentRuntimeBindingsEqual(current, binding)) {
       const status = this.runtime.getStatus(conversationId)
       if (
+        this.runtimeStateStore.hasActiveRuns(conversationId) ||
         status.connected ||
         status.runId ||
         status.sessionId ||
