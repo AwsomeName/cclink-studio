@@ -1,3 +1,4 @@
+import { imageImportBlockReason } from './image-import-jobs'
 import type {
   AgentAbortResult,
   AgentCommandResult,
@@ -146,6 +147,13 @@ export function createConversationRunController({
         : current
     if (!conversation) return { status: 'ignored', reason: 'missing' }
     const images = conversation.pendingImages ?? []
+    const imageBlock = !queued ? imageImportBlockReason(`local:${conversationId}`, images) : null
+    if (imageBlock) return { status: 'failed', error: imageBlock }
+    if (images.length && conversation.runtimeBinding?.kind === 'acp')
+      return {
+        status: 'failed',
+        error: '当前 ACP 运行时暂不支持图片，请使用 Claude Code 或 Codex 会话',
+      }
     const text = content.trim() || (images.length > 0 ? '请查看我发送的图片。' : '')
     if (!text) return { status: 'ignored', reason: 'empty' }
     if (conversation.archivedAt) return { status: 'ignored', reason: 'archived' }
@@ -263,6 +271,10 @@ export function createConversationRunController({
         }
         return { status: 'failed', error, runId }
       }
+      if (images.length && getStore().conversations[conversationId]?.runStatus === 'failed') {
+        store.setMessageQueuePauseReason('图片消息发送失败，请检查后重试', conversationId)
+        return { status: 'failed', error: '图片消息发送失败，草稿已保留', runId }
+      }
       if (queued) {
         store.setQueuedMessageDispatchId(null, conversationId)
         store.removeQueuedMessage(queued.id, conversationId)
@@ -333,6 +345,11 @@ export function createConversationRunController({
     stopAndSend: async (content) => {
       const store = getStore()
       const current = store.conversations[conversationId]
+      const imageBlock = imageImportBlockReason(
+        `local:${conversationId}`,
+        current?.pendingImages ?? [],
+      )
+      if (imageBlock) return { status: 'failed', error: imageBlock }
       const text = content.trim() || (current?.pendingImages?.length ? '请查看我发送的图片。' : '')
       if (!text) return { status: 'ignored', reason: 'empty' }
       if (!current?.activeRunId) return { status: 'ignored', reason: 'no-active-run' }

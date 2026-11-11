@@ -1,3 +1,5 @@
+import { recoverFailedImageDraft } from '../features/agent-conversations/image-retry-draft'
+import { MAX_AGENT_IMAGES } from '@shared/agent-image-limits'
 import { create } from 'zustand'
 import type {
   AgentMessage,
@@ -134,6 +136,11 @@ interface AgentState {
   renameConversation: (id: string, title: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
   setRuntimeBinding: (binding: AgentRuntimeBinding, conversationId?: string) => boolean
+  applyRunRuntimeBinding: (
+    binding: AgentRuntimeBinding,
+    conversationId: string,
+    runId: string,
+  ) => void
   applyRoleToConversation: (roleRef: AgentRoleRef, conversationId?: string) => Promise<boolean>
   setRunConfigurationReceipt: (receipt: AgentRunConfigurationReceipt) => boolean
 
@@ -735,6 +742,22 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       }
     }),
 
+  applyRunRuntimeBinding: (binding, conversationId, runId) => {
+    const conversation = get().conversations[conversationId]
+    if (
+      !conversation ||
+      conversation.activeRunId !== runId ||
+      conversation.runtime.location !== 'local'
+    )
+      return
+    set((state) =>
+      updateConversation(state, conversationId, (current) => ({
+        ...current,
+        runtimeBinding: binding,
+      })),
+    )
+  },
+
   setRuntimeBinding: (binding, conversationId) => {
     const id = resolveConversationId(get(), conversationId)
     const conversation = get().conversations[id]
@@ -1054,9 +1077,19 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     if (!current) return
     set((state) =>
       updateConversation(state, conversationId, (conversation) => {
+        const imageIds = new Set(snapshot.pendingImages?.map((image) => image.id))
+        if (
+          imageIds.size &&
+          (conversation.pendingImages?.some((image) => imageIds.has(image.id)) ||
+            conversation.queuedMessages?.some((item) =>
+              item.pendingImages.some((image) => imageIds.has(image.id)),
+            ))
+        )
+          return { ...conversation, activeImageDraft: undefined }
         const draftEmpty = !conversation.input.trim() && !conversation.pendingImages?.length
         return {
           ...conversation,
+          activeImageDraft: undefined,
           ...(draftEmpty
             ? {
                 input: content,
@@ -1173,6 +1206,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
               }
             : conversation.contextCompaction,
         activeRunId: runId,
+        activeImageDraft:
+          conversation.messages.at(-1)?.role === 'user' &&
+          conversation.messages.at(-1)?.resources?.some((resource) => resource.kind === 'image')
+            ? {
+                runId,
+                messageId: conversation.messages.at(-1)!.id,
+                contextKey: conversationQueueContextKey(conversation),
+              }
+            : undefined,
         lastRunEventAt: now,
         lastRunTerminalReason: null,
         updatedAt: now,
@@ -1271,6 +1313,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           backendState: 'connected' as AgentBackendState,
           runStatus: 'completed',
           activeRunId: null,
+          activeImageDraft: undefined,
           lastRunEventAt: now,
           lastRunTerminalReason: 'completed',
           updatedAt: now,
@@ -1319,6 +1362,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }
         }
         const failed = record.status === 'failed'
+        if (failed) conversation = recoverFailedImageDraft(conversation, record.runId)
         return {
           ...conversation,
           queuedMessages: conversation.queuedMessages?.map((item) =>
@@ -1350,6 +1394,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                 ? 'cancelled'
                 : 'failed',
           activeRunId: null,
+          activeImageDraft: undefined,
           lastRunEventAt: now,
           lastRunTerminalReason:
             record.status === 'succeeded'
@@ -1376,6 +1421,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           return conversation
         }
         const failed = reason === 'error' || reason === 'stream-ended'
+        if (failed)
+          conversation = recoverFailedImageDraft(conversation, runId ?? conversation.activeRunId)
         const now = Date.now()
         return {
           ...conversation,
@@ -1387,6 +1434,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           backendState: failed ? 'error' : ('connected' as AgentBackendState),
           runStatus: failed ? 'failed' : 'cancelled',
           activeRunId: null,
+          activeImageDraft: undefined,
           lastRunEventAt: now,
           lastRunTerminalReason: reason,
           updatedAt: now,
@@ -1650,7 +1698,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         for (const image of images) {
           const existingIndex = next.findIndex((item) => item.id === image.id)
           if (existingIndex >= 0) next[existingIndex] = image
-          else if (next.length < 5) next.push(image)
+          else if (next.length < MAX_AGENT_IMAGES) next.push(image)
         }
         return {
           ...conversation,

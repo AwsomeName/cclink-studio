@@ -10,6 +10,8 @@ import type { AgentSkillRef } from '../../shared/agent-role'
 import type { AgentRuntimeBinding } from '../../shared/agent-runtime'
 
 export interface AgentSendMessageContext {
+  /** Studio-owned task only. Never accepted from renderer IPC. */
+  automaticRuntime?: boolean
   runtimeBinding?: AgentRuntimeBinding
   resources?: AgentSendResource[]
   skills?: AgentSkillRef[]

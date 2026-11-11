@@ -29,6 +29,23 @@ macOS LaunchAgent、Windows Task Scheduler、Linux cron/systemd timer、登录�
 
 ## 当前实现快照
 
+### 定时任务使用默认 Codex（2026-11-11）
+
+每次“立即运行”、到点触发或补执行均创建独立 Agent 会话，启动前优先检测 Codex；Codex
+不可用时自动选用已配置 Studio API Key 且运行时可用的 Claude Code（ADR 0023）。此前仅聊天入口接入新默认，定时任务仍落入 Claude 后端，导致没有 Studio
+Claude API Key 时在启动阶段失败；此入口现已补齐。任务无需重新保存或重建，历史失败
+不会自动重跑，当前聊天 Tab 的 Agent 选择也不会改变后台任务。
+
+Codex 沿用本机 ChatGPT 文件登录；检测不发送任务内容，选择结果和原因进入诊断。两者均不可用时
+显示两者原因；模型请求开始后不换 Agent 重跑。权限保持只读 `editor_read/list`、绑定资源路径校验和禁用原生工具；Markdown
+仍由 Studio 按 create-only 写入并核验。配置了失败模板时继续保存模板，运行仍记为失败。
+
+验收：在没有 Claude Key、已有 Codex 文件登录的 Studio 中，创建读取工作空间文件的任务，
+点击“立即运行”并打开产物；再启用一个几分钟后的单次任务，确认到点成功且可打开新产物。
+自动验收入口：`node scripts/scheduled-task-codex-smoke.mjs`（先构建，调用真实 Codex 两次）；
+证据和限制见 `docs/testing/scheduled-task-codex.md`。
+自动选用备选及其他自主任务的审计见 `docs/testing/automatic-task-agent-selection.md`。
+
 ### AI 失败时保留模板（2026-09-22）
 
 任务编辑页的“失败时保留内容”可保存可选 Markdown 模板，并提供“填入每日日志模板”
@@ -56,8 +73,8 @@ Agent 正常完成时保存生成正文；Agent 返回失败、拒绝、空结�
    对同名已有日志再次运行，确认内容不被覆盖。
 
 本机自动化入口：`node scripts/scheduled-task-fallback-smoke.mjs`（先构建）。该 smoke 使用
-隔离的 Electron 数据目录和本地拒绝响应端点验证 UI→执行→文件→打开链路，不替代目标
-设备的真实资料和正常生成验收。
+隔离的 Electron 数据目录和返回拒绝事件的 Codex 协议 fixture 验证 UI→执行→文件→打开链路，
+不使用真实模型凭证，不替代目标设备的真实资料和正常生成验收。
 
 截至 2026-08-31，当前 `main` 加工作树增量已形成 M8.1–M8.2 的首版纵向闭环，并完成定时任务
 通过 Git 随工作空间共享的自动化验收：

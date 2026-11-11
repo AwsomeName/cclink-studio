@@ -25,7 +25,13 @@ Codex 自己读取本机文件登录；Studio 不复制或展示 token，不修�
 不通过强制登录参数、logout 或修改配置来切换本机账号。桌面 App 当前所选账号与这份文件
 登录是否一致必须另行核对，不能仅凭 CLI 存在就声称一致。
 
-默认选择仅影响新本地交互会话。旧数据缺失绑定继续解释为 Claude Code。Claude 缺失或未配置 Key 只影响 Claude 会话；Codex 缺失/未登录只影响 Codex 会话，不静默回退消费其他账号。非 Agent 工作台保持可用。
+默认选择影响新本地交互会话，以及每次创建独立会话的本地定时任务运行（2026-11-11 补齐）。
+定时任务复用 `NEW_LOCAL_AGENT_RUNTIME_BINDING`，不继承当前聊天 Tab 的引擎，不修改任务定义、
+revision、digest 或历史运行。旧聊天数据缺失绑定继续解释为 Claude Code。Claude 缺失或未配置
+Key 只影响 Claude 会话；显式选择 Codex 的聊天不自动切换账号。用户随后授权自主任务自动
+选择可用 Agent；定时任务和其他 main-owned 新任务按 [ADR 0023](0023-automatic-task-agent-selection.md)
+在执行前选择 Codex 或已配置的 Claude，并记录选择原因。非 Agent 工作台保持可用。定时任务仍禁用原生工具，只开放受资源路径校验的
+`editor_read/list`，产物由 Studio 创建和核验；调度和启用状态仍由 `ScheduledTaskService` 拥有。
 
 首次启动失败且尚未建立原生 Session 的会话允许用户主动重选 Agent，保留失败消息和历史。
 UI 与主进程分别验证可切换条件，已有 Session 或活动运行仍禁止迁移。安装与登录诊断复用

@@ -39,6 +39,7 @@ import { SessionDiagnosticReferenceStore } from './session-diagnostic-reference-
 import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
 import {
   DEFAULT_AGENT_RUNTIME_BINDING,
+  NEW_LOCAL_AGENT_RUNTIME_BINDING,
   agentRuntimeBindingsEqual,
   normalizeAgentRuntimeBinding,
   type AgentRuntimeBinding,
@@ -65,6 +66,14 @@ import {
   type AgentSkillRef,
 } from '../../shared/agent-role'
 import { SUPPORTED_AGENT_API_FORMATS } from '../../shared/settings-constants'
+import { selectAutomaticTaskAgent } from './automatic-agent-selection'
+
+interface AgentRunPreparation {
+  runId: string
+  controller: AbortController
+  done: Promise<void>
+  finish: () => void
+}
 
 export interface AgentBridgeOptions {
   /** 主进程角色定义唯一事实源；包含内置与 userData 本地不可变版本。 */
@@ -172,6 +181,8 @@ export class AgentBridge {
   private readonly runtimeStateStore: AgentRuntimeStateStore
   private readonly conversationWorkspaceKeys = new Map<string, string | null>()
   private readonly cancellingRuns = new Map<string, Promise<void>>()
+  /** Probe resources only; execution status remains owned by runtimeStateStore. */
+  private readonly preparingRuns = new Map<string, AgentRunPreparation>()
   private readonly runtimeEpoch = Date.now()
   constructor(
     mainWindow: BrowserWindow,
@@ -310,24 +321,37 @@ export class AgentBridge {
     if (activeRun) {
       throw new Error(`Agent 当前 Thread 已有活动任务: ${activeRun.runId}`)
     }
-    this.bindConversationRuntime(conversationId, context?.runtimeBinding)
+    this.bindConversationRuntime(
+      conversationId,
+      context?.automaticRuntime
+        ? this.automaticTaskBinding(conversationId)
+        : context?.runtimeBinding,
+    )
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
     const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
     const runId = context?.runId?.trim() || `run-${randomUUID()}`
     const workspaceKey = context?.workspaceRef ? workspaceRefKey(context.workspaceRef) : null
     this.conversationWorkspaceKeys.set(conversationId, workspaceKey)
     let runtimeSessionMode: AgentRunConfigurationReceipt['runtimeSessionMode'] = 'new'
-    const startedRun = await this.runtimeStateStore.beginRun({
-      conversationId,
-      runId,
-      workspaceKey,
-    })
-    // Some product-owned runs (for example article publishing) start in main instead of
-    // going through the renderer conversation controller. Publish the canonical run identity
-    // before any stream event so the Agent panel can bind to it instead of discarding the
-    // entire execution as a stale run.
-    this.forwardRunStatus(startedRun)
+    const preparation = context?.automaticRuntime
+      ? this.createRunPreparation(conversationId, runId)
+      : null
     try {
+      const startedRun = await this.runtimeStateStore.beginRun({
+        conversationId,
+        runId,
+        workspaceKey,
+      })
+      // Publish canonical ownership before probing or streaming.
+      this.forwardRunStatus(startedRun)
+      if (preparation) {
+        await this.prepareTaskRuntime(
+          conversationId,
+          preparation,
+          context?.workspaceRef?.kind === 'local' ? context.workspaceRef.path : undefined,
+          context?.sessionId === null,
+        )
+      }
       if (this.runtime.isBusy(conversationId)) {
         throw new Error('Agent 当前 Thread 已有活动任务，请等待完成或取消后重试')
       }
@@ -355,10 +379,17 @@ export class AgentBridge {
         scope: this.runtime.getScope(conversationId),
         browserTabId: sendPlan.browserTabId,
         context,
-        browserManager: this.deps.browserManager,
-        playwrightBridge: this.deps.playwrightBridge,
+        browserManager:
+          context?.disableBuiltinTools && context.allowedTools?.length === 0
+            ? undefined
+            : this.deps.browserManager,
+        playwrightBridge:
+          context?.disableBuiltinTools && context.allowedTools?.length === 0
+            ? undefined
+            : this.deps.playwrightBridge,
         settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
       })
+      preparation?.controller.signal.throwIfAborted()
       const browserTask = this.startBrowserTaskIfNeeded(
         conversationId,
         message,
@@ -373,6 +404,7 @@ export class AgentBridge {
         runId,
         browserTaskRunId: browserTask?.id ?? null,
       })
+      this.finishRunPreparation(conversationId, preparation, true)
       await this.runtime.sendMessage(
         buildAgentMessageWithContext(message, {
           resources: context?.resources,
@@ -401,12 +433,19 @@ export class AgentBridge {
       )
     } catch (error) {
       this.failActiveBrowserTask(conversationId, error)
-      const terminal = await this.runtimeStateStore.finishRun(conversationId, runId, 'failed', {
-        code: this.extractErrorCode(error) ?? 'run_start_failed',
-        message: this.extractErrorMessage(error),
-      })
+      const terminal = await this.runtimeStateStore.finishRun(
+        conversationId,
+        runId,
+        preparation?.controller.signal.aborted ? 'cancelled' : 'failed',
+        {
+          code: this.extractErrorCode(error) ?? 'run_start_failed',
+          message: this.extractErrorMessage(error),
+        },
+      )
       if (terminal) this.forwardRunStatus(terminal)
       throw error
+    } finally {
+      this.finishRunPreparation(conversationId, preparation)
     }
     return {
       conversationId,
@@ -431,15 +470,24 @@ export class AgentBridge {
     taskRevision: number
     readRoots: string[]
   }): Promise<void> {
+    if (this.configurationChangePending) {
+      throw new Error('Agent 配置正在切换，请稍后重试')
+    }
+    const activeRun = this.runtimeStateStore.getActiveRun(input.conversationId)
+    if (activeRun) throw new Error(`Agent 当前 Thread 已有活动任务: ${activeRun.runId}`)
+    this.bindConversationRuntime(input.conversationId, NEW_LOCAL_AGENT_RUNTIME_BINDING)
     const workspaceKey = workspaceRefKey({ kind: 'local', path: input.workspacePath })
     this.conversationWorkspaceKeys.set(input.conversationId, workspaceKey)
-    const startedRun = await this.runtimeStateStore.beginRun({
-      conversationId: input.conversationId,
-      runId: input.runId,
-      workspaceKey,
-    })
-    this.forwardRunStatus(startedRun)
+    const preparation = this.createRunPreparation(input.conversationId, input.runId)
     try {
+      const startedRun = await this.runtimeStateStore.beginRun({
+        conversationId: input.conversationId,
+        runId: input.runId,
+        workspaceKey,
+      })
+      this.forwardRunStatus(startedRun)
+      await this.prepareTaskRuntime(input.conversationId, preparation, input.workspacePath)
+      this.finishRunPreparation(input.conversationId, preparation, true)
       await this.runtime.sendMessage(input.message, input.conversationId, {
         runId: input.runId,
         workspacePath: input.workspacePath,
@@ -459,7 +507,7 @@ export class AgentBridge {
       const terminal = await this.runtimeStateStore.finishRun(
         input.conversationId,
         input.runId,
-        'failed',
+        preparation.controller.signal.aborted ? 'cancelled' : 'failed',
         {
           code: 'run_start_failed',
           message: this.extractErrorMessage(error),
@@ -467,6 +515,8 @@ export class AgentBridge {
       )
       if (terminal) this.forwardRunStatus(terminal)
       throw error
+    } finally {
+      this.finishRunPreparation(input.conversationId, preparation)
     }
   }
 
@@ -509,6 +559,10 @@ export class AgentBridge {
               event.data && typeof event.data === 'object'
                 ? (event.data as { result?: unknown }).result
                 : null
+            if (this.isErrorResult(event.data)) {
+              finish(() => reject(new Error(this.extractErrorMessage(event.data))))
+              return
+            }
             if (typeof text !== 'string' || !text.trim()) {
               finish(() => reject(new Error('Agent 未返回可解析的文本结果')))
               return
@@ -519,22 +573,29 @@ export class AgentBridge {
           }
         })
         timer = setTimeout(() => {
-          void this.runtime.abort(conversationId, runId).catch(() => undefined)
+          void this.abort(conversationId, runId).catch(() => undefined)
           finish(() => reject(new Error('Agent 生成超时，请稍后重试')))
         }, timeoutMs)
       })
 
-      await this.runtime.sendMessage(input.prompt, conversationId, {
+      // Observe rejection immediately even when a backend holds sendMessage until completion.
+      void result.catch(() => undefined)
+      const sending = this.sendMessage(input.prompt, conversationId, {
+        automaticRuntime: true,
         runId,
-        workspacePath: input.workspacePath,
+        workspaceRef: input.workspacePath
+          ? { kind: 'local', path: input.workspacePath }
+          : { kind: 'global' },
         allowedTools: [],
         disableBuiltinTools: true,
       })
-      return await result
+      const text = await Promise.race([sending.then(() => result), result])
+      await sending
+      return text
     } finally {
       if (timer) clearTimeout(timer)
       unsubscribe()
-      await this.runtime.closeConversation(conversationId).catch(() => undefined)
+      await this.closeConversation(conversationId).catch(() => undefined)
       this.rendererSuppressedConversationIds.delete(conversationId)
     }
   }
@@ -690,6 +751,27 @@ export class AgentBridge {
     if (existing.status === 'cancelling' && this.cancellingRuns.has(key)) {
       return { accepted: true, run: existing }
     }
+    const preparation = this.preparingRuns.get(conversationId)
+    if (preparation?.runId === runId) {
+      // Stop before awaiting persistence so a completed probe cannot launch a model turn.
+      preparation.controller.abort(new Error('Agent 启动准备已取消'))
+      const cancelling = await this.runtimeStateStore.markCancelling(conversationId, runId)
+      if (cancelling) this.forwardRunStatus(cancelling)
+      const cancellation = preparation.done
+        .then(async () => {
+          const terminal = await this.runtimeStateStore.finishRun(
+            conversationId,
+            runId,
+            'cancelled',
+          )
+          if (terminal) this.forwardRunStatus(terminal)
+        })
+        .finally(() => {
+          if (this.cancellingRuns.get(key) === cancellation) this.cancellingRuns.delete(key)
+        })
+      this.cancellingRuns.set(key, cancellation)
+      return { accepted: true, run: cancelling }
+    }
     if (this.runtime.getStatus(conversationId).runId !== runId) {
       return { accepted: false, run: existing, error: '目标 run 当前不由该 Runtime 执行' }
     }
@@ -789,7 +871,8 @@ export class AgentBridge {
     const conversationConfiguration = this.getConversationConfiguration(conversationId)
     return {
       ...status,
-      busy: this.runtime.isBusy(conversationId),
+      busy: this.isBusy(conversationId),
+      runId: status.runId ?? this.preparingRuns.get(conversationId)?.runId ?? null,
       runtimeBinding: this.getConversationRuntimeBinding(conversationId),
       sessionCompatibilityFingerprint: this.getConversationCompatibilityFingerprint(conversationId),
       conversationConfiguration,
@@ -808,7 +891,7 @@ export class AgentBridge {
 
   /** 后端是否正在处理一条消息（响应进行中） */
   isBusy(conversationId = DEFAULT_CONVERSATION_ID): boolean {
-    return this.runtime.isBusy(conversationId)
+    return this.preparingRuns.has(conversationId) || this.runtime.isBusy(conversationId)
   }
 
   beginConfigurationChange(): boolean {
@@ -848,6 +931,8 @@ export class AgentBridge {
     runtimeBinding?: AgentRuntimeBinding,
     workspaceKey: string | null = null,
   ): void {
+    if (this.preparingRuns.has(conversationId))
+      throw new Error('Agent 正在启动，不能恢复或切换会话')
     this.bindConversationRuntime(conversationId, runtimeBinding)
     this.bindConversationConfiguration(conversationId, configuration)
     this.bindConversationSkills(conversationId, skills)
@@ -879,12 +964,13 @@ export class AgentBridge {
   /** 销毁一个会话 backend（关闭历史会话时释放资源） */
   async closeConversation(conversationId = DEFAULT_CONVERSATION_ID): Promise<void> {
     const status = this.runtime.getStatus(conversationId)
-    if (status.runId) {
-      const aborted = await this.abort(conversationId, status.runId)
+    const activeRunId = this.preparingRuns.get(conversationId)?.runId ?? status.runId
+    if (activeRunId) {
+      const aborted = await this.abort(conversationId, activeRunId)
       if (!aborted.accepted) {
         throw new Error(aborted.error ?? '活动 Agent run 无法安全取消')
       }
-      const cancellation = this.cancellingRuns.get(`${conversationId}\0${status.runId}`)
+      const cancellation = this.cancellingRuns.get(`${conversationId}\0${activeRunId}`)
       if (cancellation) await cancellation
     }
     this.cancelActiveBrowserTask(conversationId)
@@ -1055,6 +1141,11 @@ export class AgentBridge {
   /** 销毁资源；普通调用严格等待，只有 App 明确退出时允许脱离未完成 run。 */
   async destroy(options: AgentBridgeDestroyOptions = {}): Promise<void> {
     this.mainWindow = null
+    const preparations = [...this.preparingRuns.values()]
+    for (const preparation of preparations)
+      preparation.controller.abort(new Error('Studio 正在退出'))
+    if (options.waitForActiveRuns !== false)
+      await Promise.all(preparations.map((preparation) => preparation.done))
     if (options.waitForActiveRuns === false) {
       // 先持久化 running/cancelling。Runtime 与工具若无法结束，下次启动会对账为
       // runtime_owner_lost；这里仍发出停止信号，但不能让 will-quit 无限等待。
@@ -1466,6 +1557,13 @@ export class AgentBridge {
     if (typeof error === 'object' && error !== null && 'message' in error) {
       return String((error as { message?: unknown }).message)
     }
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'result' in error &&
+      typeof error.result === 'string'
+    )
+      return error.result
     return String(error)
   }
 
@@ -1490,6 +1588,7 @@ export class AgentBridge {
             ...(data as Record<string, unknown>),
             conversationId,
             runId,
+            runtimeBinding: this.getConversationRuntimeBinding(conversationId),
             sessionCompatibilityFingerprint:
               this.getConversationCompatibilityFingerprint(conversationId),
             conversationConfiguration: this.getConversationConfiguration(conversationId),
@@ -1498,6 +1597,7 @@ export class AgentBridge {
             value: data,
             conversationId,
             runId,
+            runtimeBinding: this.getConversationRuntimeBinding(conversationId),
             sessionCompatibilityFingerprint:
               this.getConversationCompatibilityFingerprint(conversationId),
             conversationConfiguration: this.getConversationConfiguration(conversationId),
@@ -1568,6 +1668,7 @@ export class AgentBridge {
   private bindConversationRuntime(
     conversationId: string,
     requestedBinding?: AgentRuntimeBinding,
+    preparationRunId?: string,
   ): AgentRuntimeBinding {
     const binding = normalizeAgentRuntimeBinding(
       requestedBinding ?? this.conversationRuntimeBindings.get(conversationId),
@@ -1575,8 +1676,16 @@ export class AgentBridge {
     const current = this.conversationRuntimeBindings.get(conversationId)
     if (current && !agentRuntimeBindingsEqual(current, binding)) {
       const status = this.runtime.getStatus(conversationId)
+      const preparation = this.preparingRuns.get(conversationId)
+      const active = this.runtimeStateStore.getActiveRun(conversationId)
+      const ownsPreparation =
+        preparationRunId !== undefined &&
+        preparation?.runId === preparationRunId &&
+        !preparation.controller.signal.aborted &&
+        active?.runId === preparationRunId &&
+        active.status === 'running'
       if (
-        this.runtimeStateStore.hasActiveRuns(conversationId) ||
+        (this.runtimeStateStore.hasActiveRuns(conversationId) && !ownsPreparation) ||
         status.connected ||
         status.runId ||
         status.sessionId ||
@@ -1595,6 +1704,80 @@ export class AgentBridge {
     )
     this.conversationRuntimeBindings.set(conversationId, binding)
     return binding
+  }
+
+  private createRunPreparation(conversationId: string, runId: string): AgentRunPreparation {
+    let finish!: () => void
+    const done = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    const preparation = { runId, controller: new AbortController(), done, finish }
+    this.preparingRuns.set(conversationId, preparation)
+    return preparation
+  }
+
+  private automaticTaskBinding(conversationId: string): AgentRuntimeBinding {
+    const current = this.conversationRuntimeBindings.get(conversationId)
+    if (current) return current
+    const key = this.runtimeStateStore.getSession(conversationId)?.runtimeBindingKey
+    return key === 'claude-code' || key === 'codex'
+      ? { kind: key }
+      : NEW_LOCAL_AGENT_RUNTIME_BINDING
+  }
+
+  private finishRunPreparation(
+    conversationId: string,
+    preparation: AgentRunPreparation | null,
+    beforeSend = false,
+  ): void {
+    if (!preparation) return
+    if (beforeSend) preparation.controller.signal.throwIfAborted()
+    if (this.preparingRuns.get(conversationId) === preparation)
+      this.preparingRuns.delete(conversationId)
+    preparation.finish()
+  }
+
+  private async prepareTaskRuntime(
+    conversationId: string,
+    preparation: AgentRunPreparation,
+    workspacePath?: string,
+    freshSession = false,
+  ): Promise<void> {
+    preparation.controller.signal.throwIfAborted()
+    // A product-owned new operation explicitly starts a fresh session; this is
+    // not a continuation or migration of the previous native session.
+    if (freshSession) {
+      this.runtime.resetSession(conversationId)
+      this.trustedClaudeSessions.delete(conversationId)
+      await this.runtimeStateStore.clearSession(conversationId)
+      preparation.controller.signal.throwIfAborted()
+    }
+    if (
+      this.runtime.getStatus(conversationId).sessionId ||
+      this.runtimeStateStore.getSession(conversationId)
+    )
+      return
+    const selected = await selectAutomaticTaskAgent({
+      workspacePath: workspacePath || this.getWorkspacePath?.() || undefined,
+      claudeConfig: this.defaultAgentConfig,
+      signal: preparation.controller.signal,
+    })
+    preparation.controller.signal.throwIfAborted()
+    this.bindConversationRuntime(conversationId, selected.binding, preparation.runId)
+    console.info(
+      `[AgentBridge] 自动选择 Agent conversation=${conversationId} run=${preparation.runId} selected=${selected.binding.kind} reason=${selected.reason}`,
+    )
+    this.deliverRuntimeEvent({
+      conversationId,
+      runId: preparation.runId,
+      type: 'system',
+      data: {
+        type: 'system',
+        subtype: 'runtime-selected',
+        runtimeBinding: selected.binding,
+        message: `任务已自动选择 ${selected.binding.kind === 'codex' ? 'Codex' : 'Claude Code'}`,
+      },
+    })
   }
 
   private buildBackendConfigFromCurrentAgent(): BackendConfig {

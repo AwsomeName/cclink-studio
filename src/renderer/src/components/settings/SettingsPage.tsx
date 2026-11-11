@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DEFAULT_SETTINGS, PROVIDER_PRESETS, getPresetBaseUrl } from '@shared/ipc/settings'
-import type { AppSettings, CadBackend, Provider } from '@shared/ipc/settings'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { DEFAULT_SETTINGS } from '@shared/ipc/settings'
+import type { AppSettings, CadBackend } from '@shared/ipc/settings'
 import type { SettingsSecretStatus } from '@shared/ipc/settings'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
   MANAGED_CLAUDE_RUNTIME_VERSION,
-  SUPPORTED_AGENT_PROVIDERS,
 } from '@shared/settings-constants'
 import type {
   ClaudeRuntimeSelection,
@@ -14,7 +13,6 @@ import type {
   ClaudeRuntimeStatus,
 } from '@shared/claude-runtime'
 import type { CadBackendStatus, CadCacheStatus } from '@shared/ipc/cad'
-import type { GitBackupAccountStatus } from '@shared/ipc/git-backup'
 import type { CredentialMetadata, CredentialServiceStatus } from '@shared/ipc/credentials'
 import { useSettingsStore } from '../../stores'
 import { useThemeStore, type Theme } from '../../stores/theme-store'
@@ -37,6 +35,9 @@ import { AgentCapabilitiesSettings } from './AgentCapabilitiesSettings'
 import { ComponentManagementSettings } from './ComponentManagementSettings'
 import { KeybindingsSettings } from './KeybindingsSettings'
 import { ModelUsageSettings } from './model-usage/ModelUsageSettings'
+import { ApiConnectionsSettings, connectionServiceFromSection } from './api-connections-settings'
+import type { ConnectionServiceId } from './api-connections-settings'
+import './api-connections-settings.css'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -46,13 +47,11 @@ type SettingsSectionId =
   | 'appearance'
   | 'updates'
   | 'components'
-  | 'agent'
+  | 'connections'
   | 'agent-capabilities'
   | 'model-usage'
-  | 'image-generation'
   | 'browser'
   | 'editor'
-  | 'credentials'
   | 'git-backup'
   | 'cad'
   | 'shortcuts'
@@ -62,22 +61,21 @@ type AppSettingKey = Extract<keyof AppSettings, string>
 const SETTINGS_SECTIONS: Array<{
   id: SettingsSectionId
   label: string
+  group: string
   icon: (props: { size?: number }) => React.ReactElement
 }> = [
-  { id: 'appearance', label: '外观', icon: IconPaintbrush },
-  { id: 'updates', label: '更新', icon: IconCloud },
-  { id: 'components', label: '组件管理', icon: IconTool },
-  { id: 'agent', label: 'Agent', icon: IconRobot },
-  { id: 'model-usage', label: '模型用量', icon: IconDatabase },
-  { id: 'agent-capabilities', label: 'Agent 能力', icon: IconTool },
-  { id: 'image-generation', label: '图像生成', icon: IconPaintbrush },
-  { id: 'browser', label: '浏览器', icon: IconGlobe },
-  { id: 'editor', label: '编辑器', icon: IconFile },
-  { id: 'credentials', label: '本地凭证', icon: IconDatabase },
-  { id: 'git-backup', label: 'Git 备份', icon: IconLink },
-  { id: 'cad', label: '硬件与 CAD', icon: IconMonitor },
-  { id: 'shortcuts', label: '快捷键', icon: IconKeyboard },
-  { id: 'about', label: '关于', icon: IconSettings },
+  { id: 'appearance', label: '外观', group: '通用', icon: IconPaintbrush },
+  { id: 'editor', label: '编辑器', group: '通用', icon: IconFile },
+  { id: 'shortcuts', label: '快捷键', group: '通用', icon: IconKeyboard },
+  { id: 'connections', label: 'API Key 与连接', group: 'AI 与服务', icon: IconLink },
+  { id: 'agent-capabilities', label: 'Agent 行为与工具', group: 'AI 与服务', icon: IconRobot },
+  { id: 'model-usage', label: '模型用量', group: 'AI 与服务', icon: IconDatabase },
+  { id: 'components', label: '组件管理', group: 'AI 与服务', icon: IconTool },
+  { id: 'browser', label: '浏览器', group: '工作台', icon: IconGlobe },
+  { id: 'git-backup', label: 'Git 备份', group: '工作台', icon: IconLink },
+  { id: 'cad', label: '硬件与 CAD', group: '工作台', icon: IconMonitor },
+  { id: 'updates', label: '更新', group: '应用', icon: IconCloud },
+  { id: 'about', label: '关于', group: '应用', icon: IconSettings },
 ]
 
 const SETTINGS_SEARCH_INDEX: Array<{
@@ -85,6 +83,7 @@ const SETTINGS_SEARCH_INDEX: Array<{
   label: string
   description: string
   keywords: string[]
+  service?: ConnectionServiceId
 }> = [
   {
     sectionId: 'model-usage',
@@ -111,7 +110,7 @@ const SETTINGS_SEARCH_INDEX: Array<{
     keywords: ['component', 'runtime', 'plugin', 'npm', '组件', '插件', '版本', '更新'],
   },
   {
-    sectionId: 'agent',
+    sectionId: 'connections',
     label: 'Agent 后端',
     description: '使用本机 Codex，配置 Claude Code 备选。',
     keywords: ['agent', 'claude', 'codex', 'acp', 'openai', 'model', 'api', '模型'],
@@ -123,10 +122,32 @@ const SETTINGS_SEARCH_INDEX: Array<{
     keywords: ['agent', 'tool', 'mcp', 'permission', '工具', '能力', '权限'],
   },
   {
-    sectionId: 'image-generation',
-    label: '图像生成',
-    description: '配置 Markdown 自动配图使用的 Meshy 或即梦凭证。',
-    keywords: ['image', 'meshy', 'jimeng', '即梦', 'illustration', '图片', '插图', '配图'],
+    sectionId: 'connections',
+    service: 'meshy',
+    label: 'Meshy 3D 生成',
+    description: '配置 Meshy API Key。',
+    keywords: ['meshy', '3d', 'key', '模型生成'],
+  },
+  {
+    sectionId: 'connections',
+    service: 'jimeng',
+    label: '即梦图像生成',
+    description: '配置火山引擎 AK/SK。',
+    keywords: ['jimeng', '即梦', 'image', '图片', '图像生成', '配图'],
+  },
+  {
+    sectionId: 'connections',
+    service: 'pexels',
+    label: 'Pexels 素材搜索',
+    description: '配置图片与视频素材搜索 Key。',
+    keywords: ['pexels', '素材', '图片', '视频', 'key'],
+  },
+  {
+    sectionId: 'connections',
+    service: 'github',
+    label: 'GitHub 账号与 Token',
+    description: '保存并验证 GitHub 认证。',
+    keywords: ['github', 'token', 'git', '账号'],
   },
   {
     sectionId: 'browser',
@@ -153,8 +174,8 @@ const SETTINGS_SEARCH_INDEX: Array<{
     keywords: ['cad', 'freecad', 'step', 'stp', 'hardware', '结构件', '硬件', '预览'],
   },
   {
-    sectionId: 'credentials',
-    label: '本地凭证',
+    sectionId: 'connections',
+    label: 'API Key 与连接',
     description: '管理 Agent、Git、数据源和扩展使用的本机凭证文件。',
     keywords: ['credential', 'secret', 'token', 'key', '凭证', '密钥'],
   },
@@ -173,6 +194,12 @@ const SETTINGS_SEARCH_INDEX: Array<{
 ]
 
 function normalizeSection(section?: string): SettingsSectionId {
+  if (
+    !section ||
+    ['agent', 'credentials', 'image-generation'].includes(section) ||
+    section.startsWith('connections')
+  )
+    return 'connections'
   return SETTINGS_SECTIONS.some((item) => item.id === section)
     ? (section as SettingsSectionId)
     : 'appearance'
@@ -276,43 +303,26 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(
     normalizeSection(initialSection),
   )
+  const [connectionService, setConnectionService] = useState<ConnectionServiceId>(
+    connectionServiceFromSection(initialSection),
+  )
   const [searchQuery, setSearchQuery] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [apiKeyInput, setApiKeyInput] = useState('')
   const [showCodexApiKey, setShowCodexApiKey] = useState(false)
   const [codexApiKeyInput, setCodexApiKeyInput] = useState('')
   const [codexProbeBusy, setCodexProbeBusy] = useState(false)
   const [codexMessage, setCodexMessage] = useState<string | null>(null)
-  const [showMeshyApiKey, setShowMeshyApiKey] = useState(false)
-  const [meshyApiKeyInput, setMeshyApiKeyInput] = useState('')
-  const [jimengAccessKeyIdInput, setJimengAccessKeyIdInput] = useState('')
-  const [jimengSecretAccessKeyInput, setJimengSecretAccessKeyInput] = useState('')
-  const [showJimengSecretAccessKey, setShowJimengSecretAccessKey] = useState(false)
-  const [pexelsApiKeyInput, setPexelsApiKeyInput] = useState('')
-  const [showPexelsApiKey, setShowPexelsApiKey] = useState(false)
   const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
   const [secretBusy, setSecretBusy] = useState(false)
-  const [secretMessage, setSecretMessage] = useState<string | null>(null)
   const [claudeRuntimeStatus, setClaudeRuntimeStatus] = useState<ClaudeRuntimeStatus | null>(null)
   const [claudeRuntimeSource, setClaudeRuntimeSource] = useState<ClaudeRuntimeSource>('system')
   const [claudeRuntimePath, setClaudeRuntimePath] = useState('')
   const [claudeManagedVersion, setClaudeManagedVersion] = useState('')
   const [claudeRuntimeBusy, setClaudeRuntimeBusy] = useState(false)
   const [claudeRuntimeMessage, setClaudeRuntimeMessage] = useState<string | null>(null)
-  const [claudeConnectionBusy, setClaudeConnectionBusy] = useState(false)
-  const [claudeConnectionResult, setClaudeConnectionResult] = useState<{
-    success: boolean
-    message: string
-  } | null>(null)
   const [cadStatus, setCadStatus] = useState<CadBackendStatus | null>(null)
   const [cadCacheStatus, setCadCacheStatus] = useState<CadCacheStatus | null>(null)
   const [cadChecking, setCadChecking] = useState(false)
   const [cadActionError, setCadActionError] = useState<string | null>(null)
-  const [gitUsername, setGitUsername] = useState('')
-  const [gitToken, setGitToken] = useState('')
-  const [gitStatus, setGitStatus] = useState<GitBackupAccountStatus | null>(null)
-  const [gitBusy, setGitBusy] = useState(false)
-  const [gitMessage, setGitMessage] = useState<string | null>(null)
   const [credentialStatus, setCredentialStatus] = useState<CredentialServiceStatus | null>(null)
   const [credentialMetadata, setCredentialMetadata] = useState<CredentialMetadata[]>([])
   const [credentialBusy, setCredentialBusy] = useState(false)
@@ -330,20 +340,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const theme = useThemeStore((state) => state.theme)
   const setTheme = useThemeStore((state) => state.setTheme)
 
-  const refreshGitStatus = useCallback(async (): Promise<void> => {
-    try {
-      const status = await window.cclinkStudio.gitBackup.getAccountStatus()
-      setGitStatus(status)
-    } catch (nextError: unknown) {
-      setGitMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    }
-  }, [])
-
   const refreshSecretStatus = useCallback(async (): Promise<void> => {
     try {
       setSecretStatus(await window.cclinkStudio.settings.getSecretStatus())
     } catch (nextError: unknown) {
-      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
+      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
     }
   }, [])
 
@@ -357,6 +358,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
     }
   }, [])
+
+  const refreshConnections = useCallback(async (): Promise<void> => {
+    await Promise.all([refreshCredentialStatus(), refreshSecretStatus(), loadSettings()])
+  }, [refreshCredentialStatus, refreshSecretStatus, loadSettings])
 
   const refreshClaudeRuntimeStatus = useCallback(async (): Promise<void> => {
     try {
@@ -376,25 +381,20 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }, [loadSettings])
 
   useEffect(() => {
-    if (initialSection) setActiveSection(normalizeSection(initialSection))
+    if (initialSection) {
+      setActiveSection(normalizeSection(initialSection))
+      setConnectionService(connectionServiceFromSection(initialSection))
+    }
   }, [initialSection])
 
   useEffect(() => {
-    setGitUsername(settings.gitBackupUsername)
-  }, [settings.gitBackupUsername])
-
-  useEffect(() => {
-    if (activeSection === 'git-backup') void refreshGitStatus()
-  }, [activeSection, refreshGitStatus])
-
-  useEffect(() => {
-    if (activeSection === 'agent' || activeSection === 'image-generation') {
+    if (activeSection === 'connections') {
       void refreshSecretStatus()
     }
   }, [activeSection, refreshSecretStatus])
 
   useEffect(() => {
-    if (activeSection === 'credentials' || activeSection === 'image-generation') {
+    if (activeSection === 'connections') {
       void refreshCredentialStatus()
     } else {
       setRevealedCredentialFields({})
@@ -408,7 +408,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }, [settings.claudeCodePath, settings.claudeManagedVersion, settings.claudeRuntimeSource])
 
   useEffect(() => {
-    if (activeSection === 'agent') void refreshClaudeRuntimeStatus()
+    if (activeSection === 'connections') void refreshClaudeRuntimeStatus()
+    else {
+      setCodexApiKeyInput('')
+      setShowCodexApiKey(false)
+    }
   }, [activeSection, refreshClaudeRuntimeStatus])
 
   const searchResults = useMemo(() => {
@@ -427,19 +431,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   }
 
   const resetOne = (key: AppSettingKey): void => {
-    setClaudeConnectionResult(null)
     void resetSetting(key)
-  }
-
-  const handleProviderChange = (provider: Provider): void => {
-    setClaudeConnectionResult(null)
-    const preset = PROVIDER_PRESETS[provider]
-    const apiBaseUrl = getPresetBaseUrl(provider, settings.apiFormat)
-    update({
-      provider,
-      apiBaseUrl,
-      modelName: provider === 'custom' ? settings.modelName : preset.defaultModel,
-    })
   }
 
   const runtimeSelectionDraft = (): ClaudeRuntimeSelection =>
@@ -470,46 +462,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setClaudeRuntimeMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
       setClaudeRuntimeBusy(false)
-    }
-  }
-
-  const testClaudeConnection = async (): Promise<void> => {
-    setClaudeConnectionBusy(true)
-    setClaudeConnectionResult(null)
-    try {
-      const response =
-        await window.cclinkStudio.settings.testClaudeModelConnection(runtimeSelectionDraft())
-      if (!response.success || !response.result) {
-        setClaudeConnectionResult({
-          success: false,
-          message: response.error ?? '模型连接测试失败',
-        })
-        return
-      }
-
-      if (!response.result.success) {
-        setClaudeConnectionResult({
-          success: false,
-          message: `${response.result.code}: ${response.result.message}`,
-        })
-        return
-      }
-
-      const cost =
-        typeof response.result.totalCostUsd === 'number'
-          ? ` · $${response.result.totalCostUsd.toFixed(4)}`
-          : ''
-      setClaudeConnectionResult({
-        success: true,
-        message: `${response.result.message} · ${response.result.model} · ${response.result.durationMs}ms${cost}`,
-      })
-    } catch (nextError: unknown) {
-      setClaudeConnectionResult({
-        success: false,
-        message: nextError instanceof Error ? nextError.message : String(nextError),
-      })
-    } finally {
-      setClaudeConnectionBusy(false)
     }
   }
 
@@ -564,105 +516,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         setCadActionError(nextError instanceof Error ? nextError.message : String(nextError))
       })
       .finally(() => setCadChecking(false))
-  }
-
-  const saveGitAccount = async (): Promise<void> => {
-    setGitBusy(true)
-    setGitMessage(null)
-    try {
-      const result = await window.cclinkStudio.gitBackup.saveAccount({
-        username: gitUsername,
-        token: gitToken || undefined,
-      })
-      if (!result.success) {
-        setGitMessage(result.error ?? 'Git 备份账号保存失败')
-        return
-      }
-      setGitToken('')
-      setGitStatus(result.account ?? null)
-      setGitMessage(result.message ?? 'Git 备份账号已保存')
-      await loadSettings()
-    } catch (nextError: unknown) {
-      setGitMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setGitBusy(false)
-    }
-  }
-
-  const testGitAccount = async (): Promise<void> => {
-    setGitBusy(true)
-    setGitMessage(null)
-    try {
-      const result = await window.cclinkStudio.gitBackup.testAccount({
-        username: gitUsername,
-        token: gitToken || undefined,
-      })
-      setGitMessage(result.message ?? result.error ?? 'GitHub 连接测试失败')
-      if (result.account) setGitStatus(result.account)
-    } catch (nextError: unknown) {
-      setGitMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setGitBusy(false)
-    }
-  }
-
-  const clearGitAccount = async (): Promise<void> => {
-    setGitBusy(true)
-    setGitMessage(null)
-    try {
-      const result = await window.cclinkStudio.gitBackup.clearAccount()
-      setGitToken('')
-      setGitUsername('')
-      setGitStatus(result.account ?? null)
-      setGitMessage(result.message ?? result.error ?? 'Git 备份账号已清除')
-      await loadSettings()
-    } catch (nextError: unknown) {
-      setGitMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setGitBusy(false)
-    }
-  }
-
-  const saveApiKey = async (): Promise<void> => {
-    if (!apiKeyInput.trim()) return
-    setSecretBusy(true)
-    setSecretMessage(null)
-    try {
-      const result = await window.cclinkStudio.settings.setSecret('apiKey', apiKeyInput)
-      if (!result.success || !result.status) {
-        setSecretMessage(result.error ?? 'API Key 保存失败')
-        return
-      }
-      setApiKeyInput('')
-      setShowApiKey(false)
-      setSecretStatus(result.status)
-      setSecretMessage('API Key 已保存到本地凭证文件')
-      setClaudeConnectionResult(null)
-    } catch (nextError: unknown) {
-      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setSecretBusy(false)
-    }
-  }
-
-  const clearApiKey = async (): Promise<void> => {
-    setSecretBusy(true)
-    setSecretMessage(null)
-    try {
-      const result = await window.cclinkStudio.settings.clearSecret('apiKey')
-      if (!result.success || !result.status) {
-        setSecretMessage(result.error ?? 'API Key 清除失败')
-        return
-      }
-      setApiKeyInput('')
-      setSecretStatus(result.status)
-      setSecretMessage('API Key 已清除')
-      setClaudeConnectionResult(null)
-    } catch (nextError: unknown) {
-      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setSecretBusy(false)
-    }
   }
 
   const saveCodexApiKey = async (): Promise<void> => {
@@ -722,139 +575,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     }
   }
 
-  const saveMeshyApiKey = async (): Promise<void> => {
-    if (!meshyApiKeyInput.trim()) return
-    setSecretBusy(true)
-    setSecretMessage(null)
-    try {
-      const result = await window.cclinkStudio.settings.setSecret('meshyApiKey', meshyApiKeyInput)
-      if (!result.success || !result.status) {
-        setSecretMessage(result.error ?? 'Meshy API Key 保存失败')
-        return
-      }
-      setMeshyApiKeyInput('')
-      setShowMeshyApiKey(false)
-      setSecretStatus(result.status)
-      setSecretMessage('Meshy API Key 已保存到本地凭证文件')
-    } catch (nextError: unknown) {
-      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setSecretBusy(false)
-    }
-  }
-
-  const clearMeshyApiKey = async (): Promise<void> => {
-    setSecretBusy(true)
-    setSecretMessage(null)
-    try {
-      const result = await window.cclinkStudio.settings.clearSecret('meshyApiKey')
-      if (!result.success || !result.status) {
-        setSecretMessage(result.error ?? 'Meshy API Key 清除失败')
-        return
-      }
-      setMeshyApiKeyInput('')
-      setSecretStatus(result.status)
-      setSecretMessage('Meshy API Key 已清除')
-    } catch (nextError: unknown) {
-      setSecretMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setSecretBusy(false)
-    }
-  }
-
-  const saveJimengCredentials = async (): Promise<void> => {
-    const accessKeyId = jimengAccessKeyIdInput.trim()
-    const secretAccessKey = jimengSecretAccessKeyInput.trim()
-    if (!accessKeyId || !secretAccessKey) return
-    setCredentialBusy(true)
-    setCredentialMessage(null)
-    try {
-      const result = await window.cclinkStudio.credentials.set({
-        id: 'extension:jimeng:default',
-        kind: 'generic',
-        fields: { accessKeyId, secretAccessKey },
-      })
-      if (!result.success) {
-        setCredentialMessage(result.error ?? '即梦 AK/SK 保存失败')
-        return
-      }
-      setJimengAccessKeyIdInput('')
-      setJimengSecretAccessKeyInput('')
-      setShowJimengSecretAccessKey(false)
-      setCredentialMessage('即梦 AK/SK 已保存到本地凭证文件')
-      await refreshCredentialStatus()
-    } catch (nextError: unknown) {
-      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setCredentialBusy(false)
-    }
-  }
-
-  const clearJimengCredentials = async (): Promise<void> => {
-    setCredentialBusy(true)
-    setCredentialMessage(null)
-    try {
-      const result = await window.cclinkStudio.credentials.remove('extension:jimeng:default')
-      if (!result.success) {
-        setCredentialMessage(result.error ?? '即梦 AK/SK 清除失败')
-        return
-      }
-      setJimengAccessKeyIdInput('')
-      setJimengSecretAccessKeyInput('')
-      setCredentialMessage('即梦 AK/SK 已清除')
-      await refreshCredentialStatus()
-    } catch (nextError: unknown) {
-      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setCredentialBusy(false)
-    }
-  }
-
-  const savePexelsApiKey = async (): Promise<void> => {
-    const apiKey = pexelsApiKeyInput.trim()
-    if (!apiKey) return
-    setCredentialBusy(true)
-    setCredentialMessage(null)
-    try {
-      const result = await window.cclinkStudio.credentials.set({
-        id: 'extension:pexels:default',
-        kind: 'api-key',
-        fields: { apiKey },
-      })
-      if (!result.success) {
-        setCredentialMessage(result.error ?? 'Pexels API Key 保存失败')
-        return
-      }
-      setPexelsApiKeyInput('')
-      setShowPexelsApiKey(false)
-      setCredentialMessage('Pexels API Key 已保存到本地凭证文件')
-      await refreshCredentialStatus()
-    } catch (nextError: unknown) {
-      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setCredentialBusy(false)
-    }
-  }
-
-  const clearPexelsApiKey = async (): Promise<void> => {
-    setCredentialBusy(true)
-    setCredentialMessage(null)
-    try {
-      const result = await window.cclinkStudio.credentials.remove('extension:pexels:default')
-      if (!result.success) {
-        setCredentialMessage(result.error ?? 'Pexels API Key 清除失败')
-        return
-      }
-      setPexelsApiKeyInput('')
-      setCredentialMessage('Pexels API Key 已清除')
-      await refreshCredentialStatus()
-    } catch (nextError: unknown) {
-      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setCredentialBusy(false)
-    }
-  }
-
   const runCredentialAction = async (
     action: () => Promise<{ success: boolean; error?: string }>,
     successMessage: string,
@@ -865,9 +585,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       const result = await action()
       setCredentialMessage(result.success ? successMessage : (result.error ?? '凭证操作失败'))
       setRevealedCredentialFields({})
-      await refreshCredentialStatus()
-      await refreshSecretStatus()
-      await refreshGitStatus()
+      await refreshConnections()
     } catch (nextError: unknown) {
       setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
@@ -909,30 +627,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
   const resetAll = async (): Promise<void> => {
     await resetSettings()
-    setApiKeyInput('')
-    setMeshyApiKeyInput('')
-    setJimengAccessKeyIdInput('')
-    setJimengSecretAccessKeyInput('')
-    setPexelsApiKeyInput('')
-    setClaudeConnectionResult(null)
+
     await refreshSecretStatus()
     await refreshCredentialStatus()
   }
-
-  const jimengCredentialConfigured = credentialMetadata.some(
-    (credential) =>
-      credential.id === 'extension:jimeng:default' &&
-      credential.fieldNames.includes('accessKeyId') &&
-      credential.fieldNames.includes('secretAccessKey'),
-  )
-  const pexelsCredentialConfigured = credentialMetadata.some(
-    (credential) =>
-      credential.id === 'extension:pexels:default' && credential.fieldNames.includes('apiKey'),
-  )
-  const credentialStorageAvailable =
-    credentialStatus === null ||
-    credentialStatus.status === 'ready' ||
-    credentialStatus.status === 'conflict'
 
   return (
     <div className="settings-page">
@@ -955,6 +653,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 type="button"
                 className="settings-search-result"
                 onClick={() => {
+                  setConnectionService(result.service ?? 'claude')
                   setActiveSection(result.sectionId)
                   setSearchQuery('')
                 }}
@@ -966,18 +665,22 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           </div>
         ) : (
           <nav className="settings-nav">
-            {SETTINGS_SECTIONS.map((section) => {
+            {SETTINGS_SECTIONS.map((section, index) => {
               const Icon = section.icon
               return (
-                <button
-                  key={section.id}
-                  type="button"
-                  className={`settings-nav-item ${activeSection === section.id ? 'active' : ''}`}
-                  onClick={() => setActiveSection(section.id)}
-                >
-                  <Icon size={16} />
-                  <span>{section.label}</span>
-                </button>
+                <Fragment key={section.id}>
+                  {(index === 0 || SETTINGS_SECTIONS[index - 1].group !== section.group) && (
+                    <div className="settings-nav-group">{section.group}</div>
+                  )}
+                  <button
+                    type="button"
+                    className={`settings-nav-item ${activeSection === section.id ? 'active' : ''}`}
+                    onClick={() => setActiveSection(section.id)}
+                  >
+                    <Icon size={16} />
+                    <span>{section.label}</span>
+                  </button>
+                </Fragment>
               )
             })}
           </nav>
@@ -985,11 +688,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       </aside>
 
       <main className="settings-content">
-        {activeSection !== 'components' && activeSection !== 'model-usage' && (
+        {!['components', 'model-usage', 'connections'].includes(activeSection) && (
           <div className="settings-header">
             <div>
               <h1>设置</h1>
-              <p>CCLink Studio 开源桌面壳仅保留本地工作台配置。</p>
+              <p>管理本机工作台的外观、工具和使用偏好。</p>
             </div>
             <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>
               恢复默认
@@ -1085,581 +788,423 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'components' && <ComponentManagementSettings />}
         {activeSection === 'model-usage' && <ModelUsageSettings />}
 
-        {activeSection === 'agent' && (
-          <section className="settings-section">
-            <h2>Agent</h2>
-            <div className="settings-group">
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>默认 Agent：Codex</span>
-                  <span className="settings-description">
-                    新建本地会话使用本机 Codex CLI 的 ChatGPT 文件登录，模型沿用本机 Codex 配置。
-                    仅接入官方账号服务，不回退到 API Key 或自定义提供商。 严格确认模式下仅开放
-                    Studio 工具；需要原生命令时可选 Claude Code。 首条消息前可切换为 Claude
-                    Code；以下模型提供商和 API Key 配置仅用于 Claude Code。
-                  </span>
-                </div>
-              </div>
-              <SettingsRow settingKey="provider" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>模型提供商</span>
-                  <span className="settings-description">用于 Claude Code 备选后端。</span>
-                </div>
-                <div className="settings-control">
-                  <select
-                    className="settings-select"
-                    value={settings.provider}
-                    onChange={(event) => handleProviderChange(event.target.value as Provider)}
-                  >
-                    {SUPPORTED_AGENT_PROVIDERS.map((key) => (
-                      <option key={key} value={key}>
-                        {PROVIDER_PRESETS[key].label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </SettingsRow>
-
-              <SettingsRow settingKey="apiFormat" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>API 格式</span>
-                  <span className="settings-description">
-                    当前本地 Claude Code 后端仅支持 Anthropic 兼容格式。
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <select className="settings-select" value="anthropic" disabled>
-                    <option value="anthropic">Anthropic</option>
-                  </select>
-                </div>
-              </SettingsRow>
-
-              <SettingsRow settingKey="apiBaseUrl" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>API 地址</span>
-                  <span className="settings-description">留空时由提供商预设决定。</span>
-                </div>
-                <div className="settings-control">
-                  <input
-                    className="settings-input"
-                    value={settings.apiBaseUrl}
-                    onChange={(event) => {
-                      setClaudeConnectionResult(null)
-                      update({ apiBaseUrl: event.target.value })
-                    }}
-                  />
-                </div>
-              </SettingsRow>
-
-              <div className="settings-row settings-secret-row">
-                <div className="settings-label">
-                  <span>API Key</span>
-                  <span className="settings-description">
-                    {secretStatus?.migrationBlocked
-                      ? '旧版凭证待迁移，当前设置文件不会被覆盖。'
-                      : secretStatus?.apiKeyConfigured
-                        ? '已配置并保存到 Studio 本地凭证文件，不使用 Claude 订阅登录。'
-                        : '尚未配置；Claude Code 不可用，也不会借用本机 Claude 登录。Codex 不受影响。'}
-                  </span>
-                </div>
-                <div className="settings-secret-control">
-                  <div className="settings-control settings-control-inline">
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type={showApiKey ? 'text' : 'password'}
-                      value={apiKeyInput}
-                      placeholder={
-                        secretStatus?.apiKeyConfigured ? '输入新 Key 以替换' : '输入 API Key'
-                      }
-                      autoComplete="off"
-                      disabled={secretBusy || secretStatus?.storageAvailable === false}
-                      onChange={(event) => setApiKeyInput(event.target.value)}
-                    />
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy}
-                      onClick={() => setShowApiKey((value) => !value)}
-                    >
-                      {showApiKey ? '隐藏' : '显示'}
-                    </button>
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy || !apiKeyInput.trim()}
-                      onClick={() => void saveApiKey()}
-                    >
-                      保存
-                    </button>
-                    {secretStatus?.apiKeyConfigured && (
-                      <button
-                        className="settings-danger-btn"
-                        type="button"
-                        disabled={secretBusy}
-                        onClick={() => void clearApiKey()}
-                      >
-                        清除
-                      </button>
-                    )}
-                  </div>
-                  {secretStatus?.storageAvailable === false && (
-                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
-                  )}
-                  {secretMessage && <span className="settings-description">{secretMessage}</span>}
-                </div>
-              </div>
-
-              <SettingsRow settingKey="modelName" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>模型名称</span>
-                  <span className="settings-description">发送给后端的模型标识。</span>
-                </div>
-                <div className="settings-control">
-                  <input
-                    className="settings-input"
-                    value={settings.modelName}
-                    onChange={(event) => {
-                      setClaudeConnectionResult(null)
-                      update({ modelName: event.target.value })
-                    }}
-                  />
-                </div>
-              </SettingsRow>
-
-              <div className="settings-row settings-connection-test-row">
-                <div className="settings-label">
-                  <span>连接测试</span>
-                  <span className="settings-description">
-                    使用当前运行时、已保存的 Key 和模型发送一次无工具最小请求，可能产生少量费用。
-                  </span>
-                </div>
-                <div className="settings-connection-test-control">
-                  <button
-                    className="settings-secondary-btn"
-                    type="button"
-                    disabled={claudeConnectionBusy || claudeRuntimeBusy}
-                    onClick={() => void testClaudeConnection()}
-                  >
-                    {claudeConnectionBusy ? '测试中...' : '测试连接'}
-                  </button>
-                  {claudeConnectionResult && (
-                    <span
-                      className={`settings-connection-result ${
-                        claudeConnectionResult.success ? 'success' : 'error'
-                      }`}
-                    >
-                      {claudeConnectionResult.message}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <SettingsRow settingKey="claudeRuntimeSource" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>Claude Code 运行时</span>
-                  <span className="settings-description">
-                    所有运行时均使用 Studio 独立配置和 API Key，不读取或修改本机 Claude 登录。
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <select
-                    className="settings-select"
-                    value={claudeRuntimeSource}
-                    onChange={(event) => {
-                      setClaudeConnectionResult(null)
-                      const source = event.target.value as ClaudeRuntimeSource
-                      setClaudeRuntimeSource(source)
-                      if (source === 'managed' && !claudeManagedVersion) {
-                        setClaudeManagedVersion(MANAGED_CLAUDE_RUNTIME_VERSION)
-                      }
-                    }}
-                  >
-                    <option value="managed">Studio 管理版本</option>
-                    <option value="system">系统安装</option>
-                    <option value="custom">自定义路径</option>
-                  </select>
-                  <button
-                    className="settings-secondary-btn"
-                    type="button"
-                    disabled={claudeRuntimeBusy}
-                    onClick={() => void probeClaudeRuntime()}
-                  >
-                    检测
-                  </button>
-                  <button
-                    className="settings-secondary-btn"
-                    type="button"
-                    disabled={claudeRuntimeBusy}
-                    onClick={() => void applyClaudeRuntime()}
-                  >
-                    应用
-                  </button>
-                </div>
-              </SettingsRow>
-
-              {claudeRuntimeSource === 'custom' && (
-                <SettingsRow settingKey="claudeCodePath" settings={settings} onReset={resetOne}>
-                  <div className="settings-label">
-                    <span>自定义可执行文件</span>
-                    <span className="settings-description">必须是可执行文件的绝对路径。</span>
-                  </div>
-                  <div className="settings-control">
-                    <input
-                      className="settings-input"
-                      value={claudeRuntimePath}
-                      onChange={(event) => {
-                        setClaudeConnectionResult(null)
-                        setClaudeRuntimePath(event.target.value)
-                      }}
-                    />
-                  </div>
-                </SettingsRow>
-              )}
-
-              {claudeRuntimeSource === 'managed' && (
+        {activeSection === 'connections' && (
+          <ApiConnectionsSettings
+            initialService={connectionService}
+            settings={settings}
+            metadata={credentialMetadata}
+            storageStatus={credentialStatus}
+            onRefresh={refreshConnections}
+            onComponents={() => setActiveSection('components')}
+            runtimeSettings={
+              <div className="settings-group">
+                {' '}
                 <SettingsRow
-                  settingKey="claudeManagedVersion"
+                  settingKey="claudeRuntimeSource"
                   settings={settings}
                   onReset={resetOne}
                 >
                   <div className="settings-label">
-                    <span>Managed Runtime 版本</span>
+                    <span>Claude Code 运行时</span>
                     <span className="settings-description">
-                      先在“组件管理”安装允许的版本，再在这里启用。
+                      所有运行时均使用 Studio 独立配置和 API Key，不读取或修改本机 Claude 登录。
                     </span>
                   </div>
                   <div className="settings-control">
-                    <input
-                      className="settings-input"
-                      value={claudeManagedVersion}
-                      onChange={(event) => setClaudeManagedVersion(event.target.value)}
-                      placeholder={MANAGED_CLAUDE_RUNTIME_VERSION}
-                    />
+                    <select
+                      className="settings-select"
+                      value={claudeRuntimeSource}
+                      onChange={(event) => {
+                        const source = event.target.value as ClaudeRuntimeSource
+                        setClaudeRuntimeSource(source)
+                        if (source === 'managed' && !claudeManagedVersion) {
+                          setClaudeManagedVersion(MANAGED_CLAUDE_RUNTIME_VERSION)
+                        }
+                      }}
+                    >
+                      <option value="managed">Studio 管理版本</option>
+                      <option value="system">系统安装</option>
+                      <option value="custom">自定义路径</option>
+                    </select>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={claudeRuntimeBusy}
+                      onClick={() => void probeClaudeRuntime()}
+                    >
+                      检测
+                    </button>
+                    <button
+                      className="settings-secondary-btn"
+                      type="button"
+                      disabled={claudeRuntimeBusy}
+                      onClick={() => void applyClaudeRuntime()}
+                    >
+                      应用
+                    </button>
                   </div>
                 </SettingsRow>
-              )}
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>当前状态</span>
-                  <span className="settings-description">
-                    {claudeRuntimeStatus?.failure
-                      ? `${claudeRuntimeStatus.state} · ${claudeRuntimeStatus.failure.code}: ${claudeRuntimeStatus.failure.message}`
-                      : claudeRuntimeStatus?.active
-                        ? `${claudeRuntimeStatus.state} · ${claudeRuntimeStatus.active.source} · Claude Code ${claudeRuntimeStatus.active.claudeCodeVersion}`
-                        : '尚未激活 Claude Code 运行时'}
-                  </span>
-                </div>
-                {claudeRuntimeMessage && (
-                  <div className="settings-control">
-                    <span className="settings-description">{claudeRuntimeMessage}</span>
-                  </div>
+                {claudeRuntimeSource === 'custom' && (
+                  <SettingsRow settingKey="claudeCodePath" settings={settings} onReset={resetOne}>
+                    <div className="settings-label">
+                      <span>自定义可执行文件</span>
+                      <span className="settings-description">必须是可执行文件的绝对路径。</span>
+                    </div>
+                    <div className="settings-control">
+                      <input
+                        className="settings-input"
+                        value={claudeRuntimePath}
+                        onChange={(event) => {
+                          setClaudeRuntimePath(event.target.value)
+                        }}
+                      />
+                    </div>
+                  </SettingsRow>
                 )}
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>Codex ACP（可选）</span>
-                  <span className="settings-description">
-                    仅用于旧版 ACP 会话；默认 Codex 直接使用本机 CLI 和已有文件登录，不需要此处的
-                    ACP 配置。
-                  </span>
-                </div>
-              </div>
-
-              <SettingsRow settingKey="codexAcpPath" settings={settings} onReset={resetOne}>
-                <div className="settings-label">
-                  <span>Codex ACP 可执行文件</span>
-                  <span className="settings-description">
-                    留空时从系统 PATH 查找；请自行安装
-                    @agentclientprotocol/codex-acp@1.3.0，当前只接受该版本。
-                  </span>
-                </div>
-                <div className="settings-control settings-control-inline">
-                  <input
-                    className="settings-input"
-                    value={settings.codexAcpPath}
-                    placeholder="codex-acp"
-                    onChange={(event) => {
-                      setCodexMessage(null)
-                      update({ codexAcpPath: event.target.value })
-                    }}
-                  />
-                  <button
-                    className="settings-secondary-btn"
-                    type="button"
-                    disabled={codexProbeBusy}
-                    onClick={() => void probeCodexAcp()}
+                {claudeRuntimeSource === 'managed' && (
+                  <SettingsRow
+                    settingKey="claudeManagedVersion"
+                    settings={settings}
+                    onReset={resetOne}
                   >
-                    {codexProbeBusy ? '检测中...' : '检测'}
-                  </button>
-                </div>
-              </SettingsRow>
-
-              <div className="settings-row settings-secret-row">
-                <div className="settings-label">
-                  <span>Codex API Key</span>
-                  <span className="settings-description">
-                    {secretStatus?.codexApiKeyConfigured
-                      ? '已独立保存到本地凭证文件。'
-                      : '尚未配置；不会读取 Claude 的 Key 或 Codex 登录状态。'}
-                  </span>
-                </div>
-                <div className="settings-secret-control">
-                  <div className="settings-control settings-control-inline">
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type={showCodexApiKey ? 'text' : 'password'}
-                      value={codexApiKeyInput}
-                      placeholder={
-                        secretStatus?.codexApiKeyConfigured
-                          ? '输入新 Key 以替换'
-                          : '输入 OpenAI API Key'
-                      }
-                      autoComplete="off"
-                      disabled={secretBusy || secretStatus?.storageAvailable === false}
-                      onChange={(event) => setCodexApiKeyInput(event.target.value)}
-                    />
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy}
-                      onClick={() => setShowCodexApiKey((value) => !value)}
-                    >
-                      {showCodexApiKey ? '隐藏' : '显示'}
-                    </button>
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy || !codexApiKeyInput.trim()}
-                      onClick={() => void saveCodexApiKey()}
-                    >
-                      保存
-                    </button>
-                    {secretStatus?.codexApiKeyConfigured && (
-                      <button
-                        className="settings-danger-btn"
-                        type="button"
-                        disabled={secretBusy}
-                        onClick={() => void clearCodexApiKey()}
-                      >
-                        清除
-                      </button>
-                    )}
+                    <div className="settings-label">
+                      <span>Managed Runtime 版本</span>
+                      <span className="settings-description">
+                        先在“组件管理”安装允许的版本，再在这里启用。
+                      </span>
+                    </div>
+                    <div className="settings-control">
+                      <input
+                        className="settings-input"
+                        value={claudeManagedVersion}
+                        onChange={(event) => setClaudeManagedVersion(event.target.value)}
+                        placeholder={MANAGED_CLAUDE_RUNTIME_VERSION}
+                      />
+                    </div>
+                  </SettingsRow>
+                )}
+                <div className="settings-row">
+                  <div className="settings-label">
+                    <span>当前状态</span>
+                    <span className="settings-description">
+                      {claudeRuntimeStatus?.failure
+                        ? `${claudeRuntimeStatus.state} · ${claudeRuntimeStatus.failure.code}: ${claudeRuntimeStatus.failure.message}`
+                        : claudeRuntimeStatus?.active
+                          ? `${claudeRuntimeStatus.state} · ${claudeRuntimeStatus.active.source} · Claude Code ${claudeRuntimeStatus.active.claudeCodeVersion}`
+                          : '尚未激活 Claude Code 运行时'}
+                    </span>
                   </div>
-                  {codexMessage && <span className="settings-description">{codexMessage}</span>}
+                  {claudeRuntimeMessage && (
+                    <div className="settings-control">
+                      <span className="settings-description">{claudeRuntimeMessage}</span>
+                    </div>
+                  )}
                 </div>
+                <details>
+                  <summary>旧版 Codex ACP（兼容设置）</summary>{' '}
+                  <div className="settings-row">
+                    <div className="settings-label">
+                      <span>Codex ACP（可选）</span>
+                      <span className="settings-description">
+                        仅用于旧版 ACP 会话；默认 Codex 直接使用本机 CLI
+                        和已有文件登录，不需要此处的 ACP 配置。
+                      </span>
+                    </div>
+                  </div>
+                  <SettingsRow settingKey="codexAcpPath" settings={settings} onReset={resetOne}>
+                    <div className="settings-label">
+                      <span>Codex ACP 可执行文件</span>
+                      <span className="settings-description">
+                        留空时从系统 PATH 查找；请自行安装
+                        @agentclientprotocol/codex-acp@1.3.0，当前只接受该版本。
+                      </span>
+                    </div>
+                    <div className="settings-control settings-control-inline">
+                      <input
+                        className="settings-input"
+                        value={settings.codexAcpPath}
+                        placeholder="codex-acp"
+                        onChange={(event) => {
+                          setCodexMessage(null)
+                          update({ codexAcpPath: event.target.value })
+                        }}
+                      />
+                      <button
+                        className="settings-secondary-btn"
+                        type="button"
+                        disabled={codexProbeBusy}
+                        onClick={() => void probeCodexAcp()}
+                      >
+                        {codexProbeBusy ? '检测中...' : '检测'}
+                      </button>
+                    </div>
+                  </SettingsRow>
+                  <div className="settings-row settings-secret-row">
+                    <div className="settings-label">
+                      <span>Codex API Key</span>
+                      <span className="settings-description">
+                        {secretStatus?.codexApiKeyConfigured
+                          ? '已独立保存到本地凭证文件。'
+                          : '尚未配置；不会读取 Claude 的 Key 或 Codex 登录状态。'}
+                      </span>
+                    </div>
+                    <div className="settings-secret-control">
+                      <div className="settings-control settings-control-inline">
+                        <input
+                          className="settings-input settings-input-apikey"
+                          type={showCodexApiKey ? 'text' : 'password'}
+                          value={codexApiKeyInput}
+                          placeholder={
+                            secretStatus?.codexApiKeyConfigured
+                              ? '输入新 Key 以替换'
+                              : '输入 OpenAI API Key'
+                          }
+                          autoComplete="off"
+                          disabled={secretBusy || secretStatus?.storageAvailable === false}
+                          onChange={(event) => setCodexApiKeyInput(event.target.value)}
+                        />
+                        <button
+                          className="settings-secondary-btn"
+                          type="button"
+                          disabled={secretBusy}
+                          onClick={() => setShowCodexApiKey((value) => !value)}
+                        >
+                          {showCodexApiKey ? '隐藏' : '显示'}
+                        </button>
+                        <button
+                          className="settings-secondary-btn"
+                          type="button"
+                          disabled={secretBusy || !codexApiKeyInput.trim()}
+                          onClick={() => void saveCodexApiKey()}
+                        >
+                          保存
+                        </button>
+                        {secretStatus?.codexApiKeyConfigured && (
+                          <button
+                            className="settings-danger-btn"
+                            type="button"
+                            disabled={secretBusy}
+                            onClick={() => void clearCodexApiKey()}
+                          >
+                            清除
+                          </button>
+                        )}
+                      </div>
+                      {codexMessage && <span className="settings-description">{codexMessage}</span>}
+                    </div>
+                  </div>
+                </details>
               </div>
-            </div>
-          </section>
+            }
+            storageSettings={
+              <section className="settings-section">
+                <h2>本地凭证</h2>
+                <div className="settings-group">
+                  <div className="settings-row">
+                    <div className="settings-label">
+                      <span>凭证文件</span>
+                      <span className="settings-description">
+                        {credentialStatus?.filePath ?? '正在读取…'}
+                      </span>
+                      <span className="settings-description">
+                        状态：{credentialStatus?.status ?? 'unknown'} · 已配置{' '}
+                        {credentialStatus?.configuredCount ?? 0} 项
+                      </span>
+                      <span className="settings-description">
+                        凭证以明文保存在本机，拥有当前系统用户权限的程序可以读取。
+                      </span>
+                    </div>
+                    <div className="settings-control settings-control-inline">
+                      <button
+                        type="button"
+                        disabled={credentialBusy}
+                        onClick={() =>
+                          void runCredentialAction(
+                            () => window.cclinkStudio.credentials.openDirectory(),
+                            '已打开凭证目录',
+                          )
+                        }
+                      >
+                        打开目录
+                      </button>
+                      <button
+                        type="button"
+                        disabled={credentialBusy}
+                        onClick={() =>
+                          void runCredentialAction(
+                            () => window.cclinkStudio.credentials.reload(),
+                            '已重新加载磁盘版本',
+                          )
+                        }
+                      >
+                        重新加载
+                      </button>
+                    </div>
+                  </div>
+
+                  {credentialStatus?.message && (
+                    <div className="settings-row">
+                      <div className="settings-label">
+                        <span>状态提示</span>
+                        <span className="settings-description">{credentialStatus.message}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {credentialStatus && credentialStatus.legacyEncryptedFiles.length > 0 && (
+                    <div className="settings-row">
+                      <div className="settings-label">
+                        <span>旧版加密文件</span>
+                        <span className="settings-description">
+                          无法在不访问系统钥匙串的情况下迁移，请重新输入对应凭证。
+                        </span>
+                        {credentialStatus.legacyEncryptedFiles.map((filePath) => (
+                          <span key={filePath} className="settings-description">
+                            {filePath}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="settings-control">
+                        <button
+                          type="button"
+                          disabled={credentialBusy}
+                          onClick={() => {
+                            if (!window.confirm('确认删除检测到的全部旧版加密凭证文件？')) return
+                            void runCredentialAction(
+                              () => window.cclinkStudio.credentials.removeLegacyFiles(),
+                              '旧版加密凭证文件已删除',
+                            )
+                          }}
+                        >
+                          删除旧文件
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {credentialMetadata.map((credential) => (
+                    <div key={credential.id} className="settings-row">
+                      <div className="settings-label">
+                        <span>{credential.id}</span>
+                        <span className="settings-description">
+                          {credential.kind} · {credential.consumers.join('、') || '暂无消费者'} ·
+                          更新于 {credential.updatedAt ?? '未知'}
+                        </span>
+                        {credential.fieldNames.map((field) => {
+                          const key = `${credential.id}:${field}`
+                          const revealed = revealedCredentialFields[key]
+                          return (
+                            <span key={field} className="settings-description">
+                              {field}: {revealed ?? '••••••••'}
+                            </span>
+                          )
+                        })}
+                      </div>
+                      <div className="settings-control settings-control-inline">
+                        {credential.fieldNames.map((field) => {
+                          const key = `${credential.id}:${field}`
+                          return (
+                            <span key={field} className="settings-control settings-control-inline">
+                              <button
+                                type="button"
+                                disabled={credentialBusy}
+                                onClick={() => void revealCredentialField(credential.id, field)}
+                              >
+                                {revealedCredentialFields[key] === undefined ? '显示' : '隐藏'}{' '}
+                                {field}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={credentialBusy}
+                                onClick={() =>
+                                  void runCredentialAction(
+                                    () =>
+                                      window.cclinkStudio.credentials.copyField(
+                                        credential.id,
+                                        field,
+                                      ),
+                                    `已复制 ${credential.id}.${field}`,
+                                  )
+                                }
+                              >
+                                复制
+                              </button>
+                            </span>
+                          )
+                        })}
+                        <button
+                          type="button"
+                          disabled={credentialBusy}
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `确认清除 ${credential.consumers.join('、') || credential.id} 的凭证？相关功能将需要重新配置。`,
+                              )
+                            )
+                              return
+                            void runCredentialAction(
+                              () => window.cclinkStudio.credentials.remove(credential.id),
+                              `已清除 ${credential.id}`,
+                            )
+                          }}
+                        >
+                          清除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {credentialMetadata.length === 0 && (
+                    <div className="settings-row">
+                      <div className="settings-label">
+                        <span>尚未保存凭证</span>
+                        <span className="settings-description">
+                          从上方选择服务并填写密钥；数据源按连接管理。
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="settings-row">
+                    <div className="settings-label">
+                      <span>清除全部</span>
+                      <span className="settings-description">
+                        只清除 CCLink Studio 管理的第三方凭证，不删除项目配置。
+                      </span>
+                    </div>
+                    <div className="settings-control">
+                      <button
+                        type="button"
+                        disabled={credentialBusy || credentialMetadata.length === 0}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `确认清除 ${credentialMetadata.length} 项凭证？受影响功能：${credentialMetadata.flatMap((item) => item.consumers).join('、')}。此操作不可撤销。`,
+                            )
+                          )
+                            return
+                          void runCredentialAction(
+                            () => window.cclinkStudio.credentials.clearAll(),
+                            '全部本地凭证已清除',
+                          )
+                        }}
+                      >
+                        清除全部
+                      </button>
+                    </div>
+                  </div>
+
+                  {credentialMessage && (
+                    <div className="settings-description">{credentialMessage}</div>
+                  )}
+                </div>
+              </section>
+            }
+          />
         )}
 
         {activeSection === 'agent-capabilities' && (
           <AgentCapabilitiesSettings settings={settings} updateSettings={update} />
-        )}
-
-        {activeSection === 'image-generation' && (
-          <section className="settings-section">
-            <h2>图像生成</h2>
-            <div className="settings-group">
-              <div className="settings-row settings-secret-row">
-                <div className="settings-label">
-                  <span>Meshy API Key</span>
-                  <span className="settings-description">
-                    {secretStatus?.meshyApiKeyConfigured
-                      ? '已配置并保存到本地凭证文件。'
-                      : '尚未配置。'}
-                  </span>
-                </div>
-                <div className="settings-secret-control">
-                  <div className="settings-control settings-control-inline">
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type={showMeshyApiKey ? 'text' : 'password'}
-                      value={meshyApiKeyInput}
-                      placeholder={
-                        secretStatus?.meshyApiKeyConfigured
-                          ? '输入新 Key 以替换'
-                          : '输入 Meshy API Key'
-                      }
-                      autoComplete="off"
-                      disabled={secretBusy || secretStatus?.storageAvailable === false}
-                      onChange={(event) => setMeshyApiKeyInput(event.target.value)}
-                    />
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy}
-                      onClick={() => setShowMeshyApiKey((value) => !value)}
-                    >
-                      {showMeshyApiKey ? '隐藏' : '显示'}
-                    </button>
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={secretBusy || !meshyApiKeyInput.trim()}
-                      onClick={() => void saveMeshyApiKey()}
-                    >
-                      保存
-                    </button>
-                    {secretStatus?.meshyApiKeyConfigured && (
-                      <button
-                        className="settings-danger-btn"
-                        type="button"
-                        disabled={secretBusy}
-                        onClick={() => void clearMeshyApiKey()}
-                      >
-                        清除
-                      </button>
-                    )}
-                  </div>
-                  {secretStatus?.storageAvailable === false && (
-                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
-                  )}
-                  {secretMessage && <span className="settings-description">{secretMessage}</span>}
-                </div>
-              </div>
-
-              <div className="settings-row settings-secret-row">
-                <div className="settings-label">
-                  <span>即梦 AK/SK</span>
-                  <span className="settings-description">
-                    {jimengCredentialConfigured
-                      ? '已配置并保存到本地凭证文件。'
-                      : '需要火山引擎 Access Key ID 和 Secret Access Key。'}
-                  </span>
-                </div>
-                <div className="settings-secret-control">
-                  <div className="settings-control settings-control-inline">
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type="text"
-                      value={jimengAccessKeyIdInput}
-                      placeholder={
-                        jimengCredentialConfigured ? '输入新 Access Key ID' : 'Access Key ID'
-                      }
-                      autoComplete="off"
-                      disabled={credentialBusy || !credentialStorageAvailable}
-                      onChange={(event) => setJimengAccessKeyIdInput(event.target.value)}
-                    />
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type={showJimengSecretAccessKey ? 'text' : 'password'}
-                      value={jimengSecretAccessKeyInput}
-                      placeholder={
-                        jimengCredentialConfigured
-                          ? '输入新 Secret Access Key'
-                          : 'Secret Access Key'
-                      }
-                      autoComplete="off"
-                      disabled={credentialBusy || !credentialStorageAvailable}
-                      onChange={(event) => setJimengSecretAccessKeyInput(event.target.value)}
-                    />
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={credentialBusy}
-                      onClick={() => setShowJimengSecretAccessKey((value) => !value)}
-                    >
-                      {showJimengSecretAccessKey ? '隐藏' : '显示'}
-                    </button>
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={
-                        credentialBusy ||
-                        !jimengAccessKeyIdInput.trim() ||
-                        !jimengSecretAccessKeyInput.trim()
-                      }
-                      onClick={() => void saveJimengCredentials()}
-                    >
-                      保存
-                    </button>
-                    {jimengCredentialConfigured && (
-                      <button
-                        className="settings-danger-btn"
-                        type="button"
-                        disabled={credentialBusy}
-                        onClick={() => void clearJimengCredentials()}
-                      >
-                        清除
-                      </button>
-                    )}
-                  </div>
-                  {!credentialStorageAvailable && (
-                    <span className="settings-inline-error">本地凭证文件不可用，已禁止写入。</span>
-                  )}
-                  {credentialMessage && (
-                    <span className="settings-description">{credentialMessage}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="settings-row settings-secret-row">
-                <div className="settings-label">
-                  <span>Pexels 素材搜索 Key</span>
-                  <span className="settings-description">
-                    {pexelsCredentialConfigured
-                      ? '已配置；搜索结果会显示 Pexels 链接与作者署名。'
-                      : '可选。用于在宣发视频工程中搜索带来源记录的图片和视频。'}
-                  </span>
-                </div>
-                <div className="settings-secret-control">
-                  <div className="settings-control settings-control-inline">
-                    <input
-                      className="settings-input settings-input-apikey"
-                      type={showPexelsApiKey ? 'text' : 'password'}
-                      value={pexelsApiKeyInput}
-                      placeholder={
-                        pexelsCredentialConfigured ? '输入新 Key 以替换' : 'Pexels API Key'
-                      }
-                      autoComplete="off"
-                      disabled={credentialBusy || !credentialStorageAvailable}
-                      onChange={(event) => setPexelsApiKeyInput(event.target.value)}
-                    />
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={credentialBusy}
-                      onClick={() => setShowPexelsApiKey((value) => !value)}
-                    >
-                      {showPexelsApiKey ? '隐藏' : '显示'}
-                    </button>
-                    <button
-                      className="settings-secondary-btn"
-                      type="button"
-                      disabled={credentialBusy || !pexelsApiKeyInput.trim()}
-                      onClick={() => void savePexelsApiKey()}
-                    >
-                      保存
-                    </button>
-                    {pexelsCredentialConfigured && (
-                      <button
-                        className="settings-danger-btn"
-                        type="button"
-                        disabled={credentialBusy}
-                        onClick={() => void clearPexelsApiKey()}
-                      >
-                        清除
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>费用策略</span>
-                  <span className="settings-description">
-                    图片调用只记录服务商、模型、图片数和返回的 credits。
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <span>仅统计</span>
-                </div>
-              </div>
-            </div>
-          </section>
         )}
 
         {activeSection === 'browser' && (
@@ -1793,276 +1338,19 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'git-backup' && (
           <section className="settings-section">
             <h2>Git 备份</h2>
-            <div className="settings-group">
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>本机 Git</span>
-                  <span className="settings-description">
-                    {gitStatus?.gitAvailable
-                      ? gitStatus.gitVersion || 'Git 已安装'
-                      : gitStatus
-                        ? '未检测到 Git，请先安装 Git。'
-                        : '正在检测…'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>GitHub 账号</span>
-                  <span className="settings-description">
-                    只用于按项目名创建私人仓库和 HTTPS Push。
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <input
-                    className="settings-input"
-                    value={gitUsername}
-                    maxLength={39}
-                    placeholder="GitHub 用户名"
-                    onChange={(event) => setGitUsername(event.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>访问 Token</span>
-                  <span className="settings-description">
-                    {gitStatus?.tokenConfigured
-                      ? '已保存到本地凭证文件；留空表示继续使用现有 Token。'
-                      : 'Token 保存在本机可见的统一凭证文件中。'}
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <input
-                    className="settings-input"
-                    type="password"
-                    value={gitToken}
-                    maxLength={2048}
-                    placeholder={gitStatus?.tokenConfigured ? '已配置' : 'GitHub Token'}
-                    autoComplete="off"
-                    onChange={(event) => setGitToken(event.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>连接状态</span>
-                  <span className="settings-description">
-                    {gitMessage ??
-                      (gitStatus?.connected
-                        ? `已连接 ${gitStatus.connectedLogin}`
-                        : gitStatus?.tokenConfigured
-                          ? '账号已配置，可测试连接。'
-                          : '尚未配置账号。')}
-                  </span>
-                </div>
-                <div className="settings-control settings-control-inline">
-                  <button type="button" disabled={gitBusy} onClick={() => void testGitAccount()}>
-                    {gitBusy ? '处理中…' : '测试连接'}
-                  </button>
-                  <button type="button" disabled={gitBusy} onClick={() => void saveGitAccount()}>
-                    保存
-                  </button>
-                  {gitStatus?.tokenConfigured && (
-                    <button type="button" disabled={gitBusy} onClick={() => void clearGitAccount()}>
-                      清除
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {activeSection === 'credentials' && (
-          <section className="settings-section">
-            <h2>本地凭证</h2>
-            <div className="settings-group">
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>凭证文件</span>
-                  <span className="settings-description">
-                    {credentialStatus?.filePath ?? '正在读取…'}
-                  </span>
-                  <span className="settings-description">
-                    状态：{credentialStatus?.status ?? 'unknown'} · 已配置{' '}
-                    {credentialStatus?.configuredCount ?? 0} 项
-                  </span>
-                  <span className="settings-description">
-                    凭证以明文保存在本机，拥有当前系统用户权限的程序可以读取。
-                  </span>
-                </div>
-                <div className="settings-control settings-control-inline">
-                  <button
-                    type="button"
-                    disabled={credentialBusy}
-                    onClick={() =>
-                      void runCredentialAction(
-                        () => window.cclinkStudio.credentials.openDirectory(),
-                        '已打开凭证目录',
-                      )
-                    }
-                  >
-                    打开目录
-                  </button>
-                  <button
-                    type="button"
-                    disabled={credentialBusy}
-                    onClick={() =>
-                      void runCredentialAction(
-                        () => window.cclinkStudio.credentials.reload(),
-                        '已重新加载磁盘版本',
-                      )
-                    }
-                  >
-                    重新加载
-                  </button>
-                </div>
-              </div>
-
-              {credentialStatus?.message && (
-                <div className="settings-row">
-                  <div className="settings-label">
-                    <span>状态提示</span>
-                    <span className="settings-description">{credentialStatus.message}</span>
-                  </div>
-                </div>
-              )}
-
-              {credentialStatus && credentialStatus.legacyEncryptedFiles.length > 0 && (
-                <div className="settings-row">
-                  <div className="settings-label">
-                    <span>旧版加密文件</span>
-                    <span className="settings-description">
-                      无法在不访问系统钥匙串的情况下迁移，请重新输入对应凭证。
-                    </span>
-                    {credentialStatus.legacyEncryptedFiles.map((filePath) => (
-                      <span key={filePath} className="settings-description">
-                        {filePath}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="settings-control">
-                    <button
-                      type="button"
-                      disabled={credentialBusy}
-                      onClick={() => {
-                        if (!window.confirm('确认删除检测到的全部旧版加密凭证文件？')) return
-                        void runCredentialAction(
-                          () => window.cclinkStudio.credentials.removeLegacyFiles(),
-                          '旧版加密凭证文件已删除',
-                        )
-                      }}
-                    >
-                      删除旧文件
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {credentialMetadata.map((credential) => (
-                <div key={credential.id} className="settings-row">
-                  <div className="settings-label">
-                    <span>{credential.id}</span>
-                    <span className="settings-description">
-                      {credential.kind} · {credential.consumers.join('、') || '暂无消费者'} · 更新于{' '}
-                      {credential.updatedAt ?? '未知'}
-                    </span>
-                    {credential.fieldNames.map((field) => {
-                      const key = `${credential.id}:${field}`
-                      const revealed = revealedCredentialFields[key]
-                      return (
-                        <span key={field} className="settings-description">
-                          {field}: {revealed ?? '••••••••'}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <div className="settings-control settings-control-inline">
-                    {credential.fieldNames.map((field) => {
-                      const key = `${credential.id}:${field}`
-                      return (
-                        <span key={field} className="settings-control settings-control-inline">
-                          <button
-                            type="button"
-                            disabled={credentialBusy}
-                            onClick={() => void revealCredentialField(credential.id, field)}
-                          >
-                            {revealedCredentialFields[key] === undefined ? '显示' : '隐藏'} {field}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={credentialBusy}
-                            onClick={() =>
-                              void runCredentialAction(
-                                () =>
-                                  window.cclinkStudio.credentials.copyField(credential.id, field),
-                                `已复制 ${credential.id}.${field}`,
-                              )
-                            }
-                          >
-                            复制
-                          </button>
-                        </span>
-                      )
-                    })}
-                    <button
-                      type="button"
-                      disabled={credentialBusy}
-                      onClick={() => {
-                        if (!window.confirm(`确认清除 ${credential.id}？`)) return
-                        void runCredentialAction(
-                          () => window.cclinkStudio.credentials.remove(credential.id),
-                          `已清除 ${credential.id}`,
-                        )
-                      }}
-                    >
-                      清除
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {credentialMetadata.length === 0 && (
-                <div className="settings-row">
-                  <div className="settings-label">
-                    <span>尚未保存凭证</span>
-                    <span className="settings-description">
-                      请在 Agent、Git 备份或数据源设置中输入凭证。
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div className="settings-row">
-                <div className="settings-label">
-                  <span>清除全部</span>
-                  <span className="settings-description">
-                    只清除 CCLink Studio 管理的第三方凭证，不删除项目配置。
-                  </span>
-                </div>
-                <div className="settings-control">
-                  <button
-                    type="button"
-                    disabled={credentialBusy || credentialMetadata.length === 0}
-                    onClick={() => {
-                      if (!window.confirm('确认清除全部本地凭证？此操作不可撤销。')) return
-                      void runCredentialAction(
-                        () => window.cclinkStudio.credentials.clearAll(),
-                        '全部本地凭证已清除',
-                      )
-                    }}
-                  >
-                    清除全部
-                  </button>
-                </div>
-              </div>
-
-              {credentialMessage && <div className="settings-description">{credentialMessage}</div>}
-            </div>
+            <p className="settings-description">
+              GitHub 账号与 Token 统一在“API Key 与连接”管理。现有仓库绑定和备份配置保留。
+            </p>
+            <button
+              type="button"
+              className="settings-secondary-btn"
+              onClick={() => {
+                setConnectionService('github')
+                setActiveSection('connections')
+              }}
+            >
+              配置 GitHub 连接
+            </button>
           </section>
         )}
 

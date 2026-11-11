@@ -34,6 +34,103 @@ describe('registerSettingsIpc', () => {
     expect(settingsService.getAll).not.toHaveBeenCalled()
   })
 
+  it('bounds connection saves and rejects a busy Agent before changing credentials', async () => {
+    const service = {
+      ...createSettingsService(),
+      saveClaudeConnection: vi.fn(async () => DEFAULT_SETTINGS),
+    }
+    const bridge = createAgentBridge(false)
+    registerSettingsIpc(
+      service as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => bridge as never,
+    )
+    const handler = mockIpcMain.handlers.get('settings:saveClaudeConnection')!
+    const input = {
+      provider: 'custom',
+      apiBaseUrl: 'https://models.example',
+      modelName: 'test',
+      apiKey: 'secret',
+    }
+    await expect(
+      handler({ sender: 'trusted' }, { ...input, permissionMode: 'auto' }),
+    ).resolves.toMatchObject({ success: false })
+    await expect(
+      handler({ sender: 'trusted' }, { ...input, apiBaseUrl: 'file:///tmp/key' }),
+    ).resolves.toMatchObject({ success: false })
+    await expect(handler({ sender: 'trusted' }, input)).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('RUNTIME_SWITCH_PENDING'),
+    })
+    expect(service.saveClaudeConnection).not.toHaveBeenCalled()
+  })
+
+  it('reports a saved connection separately from runtime activation failure', async () => {
+    const service = {
+      ...createSettingsService(),
+      saveClaudeConnection: vi.fn(async () => ({ ...DEFAULT_SETTINGS, modelName: 'test' })),
+    }
+    registerSettingsIpc(
+      service as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => null,
+      () => null,
+      () => null,
+      async () => {
+        throw new Error('runtime missing')
+      },
+    )
+    const handler = mockIpcMain.handlers.get('settings:saveClaudeConnection')!
+    await expect(
+      handler(
+        { sender: 'trusted' },
+        {
+          provider: 'custom',
+          apiBaseUrl: 'https://models.example',
+          modelName: 'test',
+          apiKey: 'secret',
+        },
+      ),
+    ).resolves.toMatchObject({
+      success: true,
+      runtimeWarning: expect.stringContaining('运行环境尚未就绪'),
+    })
+  })
+
+  it('does not hide a live backend reconfiguration failure behind a successful save', async () => {
+    const service = {
+      ...createSettingsService(),
+      saveClaudeConnection: vi.fn(async () => DEFAULT_SETTINGS),
+    }
+    const bridge = createAgentBridge()
+    bridge.reconfigure.mockImplementation(() => {
+      throw new Error('backend unavailable')
+    })
+    registerSettingsIpc(
+      service as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => bridge as never,
+    )
+    await expect(
+      mockIpcMain.handlers.get('settings:saveClaudeConnection')?.(
+        { sender: 'trusted' },
+        {
+          provider: 'custom',
+          apiBaseUrl: 'https://models.example',
+          modelName: 'test',
+          apiKey: 'secret',
+        },
+      ),
+    ).resolves.toMatchObject({
+      success: true,
+      runtimeWarning: expect.stringContaining('运行环境尚未就绪'),
+    })
+    expect(bridge.endConfigurationChange).toHaveBeenCalledOnce()
+  })
+
   it('rejects invalid settings before persistence', async () => {
     const settingsService = createSettingsService()
     registerSettingsIpc(

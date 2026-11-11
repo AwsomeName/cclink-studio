@@ -1,3 +1,4 @@
+import { MAX_AGENT_IMAGES } from '@shared/agent-image-limits'
 import { create } from 'zustand'
 import type { CclinkRemoteMessage, CclinkRemoteSession, CclinkServer } from '@shared/cclink'
 import type { AuthServiceStatus, AuthSession } from '@shared/ipc/auth'
@@ -417,7 +418,7 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
       for (const image of images) {
         const existingIndex = next.findIndex((item) => item.id === image.id)
         if (existingIndex >= 0) next[existingIndex] = image
-        else if (next.length < 5) next.push(image)
+        else if (next.length < MAX_AGENT_IMAGES) next.push(image)
       }
       return {
         remoteAgentImages: { ...state.remoteAgentImages, [workspaceKey]: next },

@@ -12,6 +12,7 @@ import {
   cclinkStopTrackingAgentRunInputSchema,
 } from './cclink-remote-ipc'
 import { createRemoteMutationIdentity } from '../../shared/remote-mutation-identity'
+import { MAX_AGENT_IMAGE_BYTES } from '../../shared/agent-image-limits'
 
 describe('CCLink remote IPC schema', () => {
   it('接受有界的 CCLink RemoteWorkspaceRef', () => {
@@ -79,6 +80,17 @@ describe('CCLink remote IPC schema', () => {
     }
 
     expect(cclinkSendAgentMessageInputSchema.parse(input)).toEqual(input)
+    expect(
+      cclinkSendAgentMessageInputSchema.safeParse({
+        ...input,
+        images: Array.from({ length: 5 }, (_, index) => ({
+          ...image,
+          id: `image-${index}`,
+          size: MAX_AGENT_IMAGE_BYTES,
+          data: Buffer.alloc(MAX_AGENT_IMAGE_BYTES).toString('base64'),
+        })),
+      }).success,
+    ).toBe(true)
     expect(() =>
       cclinkSendAgentMessageInputSchema.parse({
         ...input,

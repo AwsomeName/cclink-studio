@@ -1,6 +1,7 @@
 import { app, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { agentImagesSchema } from '../../shared/ipc/image-attachment-schema'
 import { authIpc, authIpcEvents } from '../../shared/ipc/auth'
 import { cclinkIpc, cclinkIpcEvents } from '../../shared/ipc/cclink'
 import { remoteIpc } from '../../shared/ipc/remote'
@@ -26,20 +27,6 @@ const phoneSchema = z.string().regex(/^1[3-9]\d{9}$/u, '请输入有效的手机
 const codeSchema = z.string().regex(/^\d{4,8}$/u, '请输入有效的短信验证码')
 const idSchema = z.string().trim().min(1).max(256)
 const uploadIdSchema = z.string().uuid()
-const maxRemoteImageBytes = 5 * 1024 * 1024
-const remoteImageSchema = z
-  .object({
-    id: idSchema,
-    name: z.string().trim().min(1).max(512),
-    mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
-    data: z
-      .string()
-      .min(1)
-      .max(Math.ceil(maxRemoteImageBytes / 3) * 4)
-      .regex(/^[A-Za-z0-9+/]+={0,2}$/u, '图片数据不是有效 Base64'),
-    size: z.number().int().positive().max(maxRemoteImageBytes),
-  })
-  .strict()
 export const cclinkRemotePathSchema = remoteWorkspacePathSchema
 export const cclinkBrowseDirectoryPathSchema = z.union([cclinkRemotePathSchema, z.literal('~')])
 export const cclinkRemoteRefSchema = remoteWorkspaceRefSchema
@@ -48,7 +35,7 @@ export const cclinkSendAgentMessageInputSchema = z
     ref: cclinkRemoteRefSchema,
     sessionId: idSchema,
     content: z.string().trim().max(8_192),
-    images: z.array(remoteImageSchema).max(5).optional(),
+    images: agentImagesSchema.optional(),
     imageUploadId: uploadIdSchema.optional(),
   })
   .strict()

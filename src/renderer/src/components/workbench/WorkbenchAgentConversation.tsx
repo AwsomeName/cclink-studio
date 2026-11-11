@@ -60,10 +60,7 @@ import {
 import { useConversationScroll } from '../../features/agent-conversations/use-conversation-scroll'
 import { useToastStore } from '../common/Toast'
 import { ImageAttachmentStrip } from '../../features/agent-conversations/image-attachment-strip'
-import {
-  importAgentImageFiles,
-  MAX_AGENT_IMAGES,
-} from '../../features/agent-conversations/image-attachments'
+import { useImageImport } from '../../features/agent-conversations/use-image-import'
 import { useAgentRoles } from '../../features/agent-profiles/use-agent-profiles'
 import { useAgentSkills } from '../../features/agent-skills/use-agent-skills'
 import type { AgentRoleSummary } from '@shared/agent-role'
@@ -264,15 +261,23 @@ export function WorkbenchAgentConversation({
     },
     [conversationId, removeMountedResource],
   )
-  const handleAddImages = useCallback(
-    async (files: File[]) => {
-      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
-      if (result.attachments.length > 0) addPendingImages(result.attachments, conversationId)
-      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
-      requestAnimationFrame(() => inputRef.current?.focus())
+  const imageUnavailableReason =
+    conversation?.runtimeBinding?.kind === 'acp'
+      ? '当前 ACP 运行时暂不支持图片，请新建 Claude Code 或 Codex 会话'
+      : undefined
+  const imageImport = useImageImport(
+    `local:${conversationId}`,
+    pendingImages,
+    (images) => {
+      if (useAgentStore.getState().conversations[conversationId])
+        addPendingImages(images, conversationId)
     },
-    [addPendingImages, conversationId, pendingImages.length, showToast],
+    imageUnavailableReason,
   )
+  const handleAddImages = (files: File[]): void => {
+    if (imageUnavailableReason) showToast(imageUnavailableReason, 'error')
+    else imageImport.add(files)
+  }
   const handleRemovePendingImage = useCallback(
     (imageId: string) => removePendingImage(imageId, conversationId),
     [conversationId, removePendingImage],
@@ -480,7 +485,12 @@ export function WorkbenchAgentConversation({
               onRemove={handleRemoveMountedSkill}
             />
             <div className="conversation-input-card">
-              <ImageAttachmentStrip images={pendingImages} onRemove={handleRemovePendingImage} />
+              <ImageAttachmentStrip
+                images={pendingImages}
+                onRemove={handleRemovePendingImage}
+                onApprove={(image) => addPendingImages([image], conversationId)}
+                preparation={imageImport}
+              />
               <textarea
                 ref={inputRef}
                 value={conversation.input}
@@ -522,6 +532,8 @@ export function WorkbenchAgentConversation({
                 canSend={
                   (Boolean(conversation.input.trim()) || pendingImages.length > 0) &&
                   !contextCompacting &&
+                  !imageImport.blocked &&
+                  !(pendingImages.length && imageUnavailableReason) &&
                   activeRoleAvailable
                 }
                 contextUsage={conversation.contextUsage}
@@ -547,6 +559,8 @@ export function WorkbenchAgentConversation({
                       disabled={
                         (!conversation.input.trim() && pendingImages.length === 0) ||
                         contextCompacting ||
+                        imageImport.blocked ||
+                        Boolean(pendingImages.length && imageUnavailableReason) ||
                         !activeRoleAvailable
                       }
                       onClick={() => {

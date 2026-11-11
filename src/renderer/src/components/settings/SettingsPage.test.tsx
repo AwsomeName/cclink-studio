@@ -28,26 +28,24 @@ describe('SettingsPage secrets', () => {
     expect(markup).not.toContain('renderer-must-not-render-this')
     expect(markup).toContain('type="password"')
     expect(markup).toContain('value=""')
-    expect(markup).toContain('测试连接')
+    expect(markup).toContain('保存并验证')
     expect(markup).toContain('Studio 管理版本')
     expect(markup).not.toContain('内置固定版本')
-    expect(markup).toContain('当前本地 Claude Code 后端仅支持 Anthropic 兼容格式')
+    expect(markup).toContain('当前 Claude Code 仅支持 Anthropic 兼容接口')
     expect(markup).not.toContain('value="openai"')
     expect(markup).not.toContain('OpenAI Compatible</option>')
   })
 
-  it('renders separate Meshy and Jimeng credential inputs for image generation', () => {
-    useSettingsStore.setState({
-      settings: { ...DEFAULT_SETTINGS },
-      loading: false,
-    })
-
+  it('routes legacy image settings into the same service-specific connection form', () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, loading: false })
     const markup = renderToStaticMarkup(<SettingsPage initialSection="image-generation" />)
-
-    expect(markup).toContain('Meshy API Key')
-    expect(markup).toContain('即梦 AK/SK')
-    expect(markup).toContain('Access Key ID')
-    expect(markup).toContain('Secret Access Key')
+    expect(markup).toContain('API Key 与连接')
+    expect(markup).toContain('Meshy')
+    expect(markup).toContain('当前无独立连接测试')
+    expect(markup).not.toContain('保存并验证')
+    const jimeng = renderToStaticMarkup(<SettingsPage initialSection="connections:jimeng" />)
+    expect(jimeng).toContain('Access Key ID')
+    expect(jimeng).toContain('Secret Access Key')
   })
 
   it('renders the component inventory with installation and update columns', () => {

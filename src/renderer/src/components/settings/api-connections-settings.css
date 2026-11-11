@@ -1,0 +1,383 @@
+/* Settings navigation and the connection form share the workbench theme. */
+.settings-page .settings-sidebar {
+  width: 212px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+.settings-page .settings-nav {
+  width: auto;
+  border-right: 0;
+}
+.settings-page .settings-content {
+  min-width: 0;
+}
+.settings-page .settings-nav-item {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  border-radius: 4px;
+  min-height: 35px;
+}
+.settings-page .settings-nav-item.active {
+  background: color-mix(in srgb, var(--accent) 17%, transparent);
+  color: var(--accent);
+}
+.settings-page .settings-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+.settings-page .settings-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  outline: none;
+}
+.settings-page .settings-search-result {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 5px;
+  padding: 10px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+}
+.settings-page .settings-search-result small {
+  color: var(--text-secondary);
+}
+.api-connections {
+  max-width: 980px;
+  width: 100%;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.connections-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.connections-header h1 {
+  font-size: 26px;
+  margin: 0 0 7px;
+}
+.connections-header p,
+.connections-header > span,
+.connections-description {
+  color: var(--text-secondary);
+}
+.connections-header p {
+  margin: 0;
+}
+.connections-header > span {
+  font-size: 12px;
+  white-space: nowrap;
+  padding-top: 9px;
+}
+.connections-account {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 23px 0;
+  margin-bottom: 24px;
+}
+.connections-account > div {
+  flex: 1;
+  min-width: 0;
+}
+.connections-account > svg {
+  flex-shrink: 0;
+}
+.connections-account p {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.connections-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.connections-badge {
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.connections-layout {
+  display: grid;
+  grid-template-columns: 145px minmax(0, 1fr);
+  gap: 24px;
+}
+.connections-services {
+  border-right: 1px solid var(--border-color);
+  padding-right: 14px;
+}
+.connections-service-group {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 20px 8px 6px;
+}
+.connections-services > div:first-child .connections-service-group {
+  margin-top: 0;
+}
+.connections-services button {
+  width: 100%;
+  display: block;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  padding: 10px;
+  text-align: left;
+  border-radius: 4px;
+  margin: 3px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.connections-services button.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.connections-services small {
+  display: block;
+  font-size: 11px;
+  margin-top: 3px;
+  color: var(--text-secondary);
+}
+.connections-detail {
+  min-width: 0;
+}
+.connections-detail-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.connections-detail-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.connections-status {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.connections-description {
+  font-size: 12px;
+  margin: 6px 0 20px;
+}
+.connections-form {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.connections-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.connections-form input,
+.connections-form select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  min-height: 35px;
+  padding: 7px 10px;
+}
+.api-connections input:focus-visible,
+.api-connections select:focus-visible,
+.api-connections button:focus-visible,
+.api-connections summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.connections-secret-input {
+  display: flex;
+  gap: 8px;
+}
+.connections-secret-input input {
+  flex: 1;
+}
+.connections-field-note {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.connections-form .connections-field-note {
+  margin: -8px 0 0;
+}
+.connections-usage {
+  border-left: 2px solid var(--accent);
+  padding: 10px 12px;
+  background: var(--bg-sidebar);
+  font-size: 12px;
+  margin: 20px 0;
+}
+.connections-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+.connections-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 7px 13px;
+  font: inherit;
+  cursor: pointer;
+}
+.connections-delete {
+  border: 0;
+  background: transparent;
+  color: var(--error, #d76060);
+  padding: 7px;
+  font: inherit;
+  cursor: pointer;
+}
+.api-connections button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.connections-feedback,
+.connections-remove-confirm {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--text-secondary);
+  border-radius: 4px;
+  background: var(--bg-sidebar);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.connections-feedback p,
+.connections-remove-confirm p {
+  margin: 5px 0 10px;
+}
+.connections-feedback.success {
+  border-left-color: var(--success, #48945b);
+}
+.connections-status.success {
+  color: var(--success, #48945b);
+}
+.connections-feedback.error {
+  border-left-color: var(--error, #d76060);
+}
+.connections-advanced {
+  margin-top: 22px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 13px;
+  font-size: 12px;
+}
+.connections-advanced summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.connections-advanced > .settings-group,
+.connections-advanced > .settings-section {
+  padding-top: 18px;
+}
+.connections-advanced .settings-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+}
+.connections-advanced .settings-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.connections-advanced .settings-control {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.connections-advanced .settings-input {
+  min-width: 0;
+  max-width: 100%;
+}
+.connections-storage-note {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  padding-top: 16px;
+  margin-top: 26px;
+  border-top: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.connections-storage-note svg {
+  flex-shrink: 0;
+}
+.settings-content:has(.api-connections) {
+  container-type: inline-size;
+}
+@container (max-width: 560px) {
+  .connections-layout {
+    display: block;
+  }
+  .connections-services {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 0 12px;
+    margin-bottom: 20px;
+  }
+  .connections-service-group,
+  .connections-services small {
+    display: none;
+  }
+  .connections-services button {
+    width: auto;
+  }
+  .connections-account {
+    flex-wrap: wrap;
+  }
+  .connections-header > span {
+    display: none;
+  }
+}
+
+.connections-storage-controls {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.settings-nav-group {
+  padding: 18px 12px 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.settings-nav-group:first-child {
+  padding-top: 6px;
+}
+
+.api-connections .connections-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
+  color: #fff;
+}

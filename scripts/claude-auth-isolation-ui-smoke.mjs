@@ -73,14 +73,17 @@ async function launch() {
   return page
 }
 async function openAgentSettings(page) {
-  if (!(await page.locator('.settings-page').count()))
+  if (!(await page.locator('.settings-page').isVisible()))
     await page.locator('.activity-bar-icon[title="设置"]').click()
-  await page.locator('.settings-nav').getByRole('button', { name: 'Agent', exact: true }).click()
   await page
-    .getByText('所有运行时均使用 Studio 独立配置和 API Key，不读取或修改本机 Claude 登录。', {
-      exact: true,
-    })
-    .waitFor()
+    .locator('.settings-nav')
+    .getByRole('button', { name: 'API Key 与连接', exact: true })
+    .click()
+  await page
+    .locator('.connections-services')
+    .getByRole('button', { name: /^Claude Code/ })
+    .click()
+  await page.locator('.connections-form').waitFor()
 }
 async function send(page, conversationId) {
   return page.evaluate(async (id) => {
@@ -101,7 +104,10 @@ async function send(page, conversationId) {
         resolve(result)
       }
       api
-        .sendMessage(id, 'Reply exactly CCLINK_CONNECTION_OK. Do not use tools.')
+        .sendMessage(id, {
+          message: 'Reply exactly CCLINK_CONNECTION_OK. Do not use tools.',
+          runtimeBinding: { kind: 'claude-code' },
+        })
         .then((result) => {
           if (!result.success) finish({ kind: 'rejected', result })
         })
@@ -160,14 +166,45 @@ try {
   assert.equal(configured.success, true)
   await page.reload()
   await openAgentSettings(page)
-  const keyRow = page
-    .locator('.settings-secret-row')
-    .filter({ has: page.getByText('API Key', { exact: true }) })
-  await keyRow.locator('input').fill('studio-ui-test-key')
-  await keyRow.getByRole('button', { name: '保存', exact: true }).click()
-  await page.getByText('API Key 已保存到本地凭证文件', { exact: true }).waitFor()
-  await page.getByRole('button', { name: '测试连接', exact: true }).click()
-  await page.locator('.settings-connection-result.success').waitFor({ timeout: 30000 })
+  const keyInput = page.locator('.connections-form input[type="password"]').first()
+  const form = page.locator('.connections-detail')
+  await form.getByLabel('模型服务商').selectOption('custom')
+  await form.getByLabel('API 地址').fill(apiBaseUrl)
+  await form.getByLabel('模型名称').fill('claude-sonnet-4-6')
+  await keyInput.fill('studio-ui-test-key')
+  await form.getByRole('button', { name: '仅保存', exact: true }).click()
+  await form
+    .getByText('已保存到本机，尚未验证。保存成功不代表服务认证、余额或模型权限已通过。', {
+      exact: true,
+    })
+    .waitFor()
+  assert.equal(await keyInput.inputValue(), '')
+  assert.equal(requests.length, 0)
+  await form.getByRole('button', { name: '验证连接', exact: true }).click()
+  await page.locator('.connections-feedback.success').waitFor({ timeout: 30000 })
+  await page.locator('.settings-content').evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await page.screenshot({ path: join(runDir, 'connections-verified.png'), fullPage: true })
+  // The settings CTA creates a real Claude-bound conversation; the first UI message must reach the fixture.
+  await form.getByRole('button', { name: '新建 Claude Code 会话', exact: true }).click()
+  await page
+    .locator('.agent-runtime-label')
+    .filter({ hasText: 'Claude Code' })
+    .first()
+    .waitFor({ state: 'attached' })
+  const composer = page.locator('textarea.agent-input:visible').first()
+  await composer.fill('Reply exactly CCLINK_CONNECTION_OK. Do not use tools.')
+  await composer.press('Enter')
+  await page
+    .locator('.agent-message.assistant')
+    .filter({ hasText: 'CCLINK_CONNECTION_OK' })
+    .first()
+    .waitFor({ timeout: 30000 })
+  await page.screenshot({ path: join(runDir, 'claude-conversation.png'), fullPage: true })
+  // Wait until the UI run has released the configuration lock before continuing the isolation checks.
+  await page.waitForFunction(async () => !(await window.cclinkStudio.agent.getStatus()).busy)
+  await openAgentSettings(page)
   assert.equal((await send(page, 'auth-ui-success')).kind, 'complete')
   const session = await page.evaluate(() => window.cclinkStudio.agent.getStatus('auth-ui-success'))
   assert.ok(session.sessionId)
@@ -187,23 +224,86 @@ try {
   assert.equal(continued.sessionId, session.sessionId)
   await page.screenshot({ path: join(runDir, 'configured.png'), fullPage: true })
 
-  await keyRow.locator('input').fill('invalid-studio-key')
-  await keyRow.getByRole('button', { name: '保存', exact: true }).click()
+  await keyInput.fill('invalid-studio-key')
+  await form.getByRole('button', { name: '保存并验证', exact: true }).click()
   await page.waitForFunction(
-    () => document.querySelector('.settings-secret-row input')?.value === '',
+    () => document.querySelector('.connections-form input[type=password]')?.value === '',
+  )
+  await page.locator('.connections-feedback.error').waitFor({ timeout: 30000 })
+  assert.match(
+    await page.locator('.connections-feedback.error').innerText(),
+    /401|认证|AUTHENTICATION_FAILED/,
   )
   const invalid = await send(page, 'auth-ui-invalid')
   assert.equal(invalid.kind, 'error')
   assert.match(invalid.message, /401|认证|鉴权|authenticate/i)
 
-  await keyRow.getByRole('button', { name: '清除', exact: true }).click()
-  await page.getByText('API Key 已清除', { exact: true }).waitFor()
+  await form.getByRole('button', { name: '删除密钥', exact: true }).click()
+  await form.getByRole('button', { name: '确认删除', exact: true }).click()
+  await page
+    .getByText('密钥已删除，相关功能需要重新配置；非敏感连接设置保留。', { exact: true })
+    .waitFor()
   const countBefore = requests.length
   const cleared = await send(page, 'auth-ui-cleared')
   assert.equal(cleared.kind, 'error')
   assert.equal(cleared.code, 'AUTH_REQUIRED')
   assert.equal(requests.length, countBefore)
   await page.screenshot({ path: join(runDir, 'cleared.png'), fullPage: true })
+  // All service forms use the same credential owner; unsupported tests must stay absent.
+  const serviceNav = page.locator('.connections-services')
+  for (const name of ['Meshy', 'Pexels']) {
+    await serviceNav.getByRole('button', { name: new RegExp('^' + name) }).click()
+    await form
+      .locator('input[type="password"]')
+      .first()
+      .fill('fixture-' + name)
+    await form.getByRole('button', { name: '保存密钥', exact: true }).click()
+    await form
+      .getByText('已保存到本机，尚未验证。保存成功不代表服务认证、余额或模型权限已通过。', {
+        exact: true,
+      })
+      .waitFor()
+    assert.equal(await form.getByRole('button', { name: /验证连接|保存并验证/ }).count(), 0)
+    assert.equal(await form.locator('input[type="password"]').first().inputValue(), '')
+  }
+  await page.getByPlaceholder('搜索设置', { exact: true }).fill('即梦')
+  await page.locator('.settings-search-result').filter({ hasText: '即梦图像生成' }).click()
+  await form.getByRole('heading', { name: '即梦', exact: true }).waitFor()
+  await form.locator('input[type="password"]').nth(0).fill('fixture-ak')
+  assert.equal(await form.getByRole('button', { name: '保存密钥', exact: true }).isDisabled(), true)
+  await form.locator('input[type="password"]').nth(1).fill('fixture-sk')
+  await form.getByRole('button', { name: '保存密钥', exact: true }).click()
+  await form
+    .getByText('已保存到本机，尚未验证。保存成功不代表服务认证、余额或模型权限已通过。', {
+      exact: true,
+    })
+    .waitFor()
+  await serviceNav.getByRole('button', { name: /^GitHub/ }).click()
+  await form.getByLabel('GitHub 用户名').fill('studio-fixture')
+  await form.locator('input[type="password"]').fill('fixture-github-token')
+  await form.getByRole('button', { name: '仅保存', exact: true }).click()
+  await form
+    .getByText('已保存到本机，尚未验证。保存成功不代表服务认证、余额或模型权限已通过。', {
+      exact: true,
+    })
+    .waitFor()
+  await serviceNav.getByRole('button', { name: /^Pexels/ }).click()
+  await form.locator('input[type="password"]').fill('unsaved-fixture')
+  page.once('dialog', (dialog) => dialog.accept())
+  await serviceNav.getByRole('button', { name: /^Meshy/ }).click()
+  await serviceNav.getByRole('button', { name: /^Pexels/ }).click()
+  assert.equal(await form.locator('input[type="password"]').inputValue(), '')
+  const savedServices = await page.evaluate(async () =>
+    (await window.cclinkStudio.credentials.listMetadata()).metadata.map((item) => item.id),
+  )
+  for (const id of [
+    'extension:meshy:default',
+    'extension:pexels:default',
+    'extension:jimeng:default',
+    'git:github',
+  ])
+    assert.ok(savedServices.includes(id))
+  assert.equal(requests.length, countBefore)
   await app.close()
   app = null
   page = await launch()
@@ -226,9 +326,12 @@ try {
     runtime: 'real Electron + Claude',
     api: 'local fixture, no paid calls',
     missingKey: 'blocked',
-    configuredKey: 'connection test and conversation passed',
+    configuredKey:
+      'unified settings save, real connection test, Claude CTA and first UI conversation passed',
     invalidKey: '401, no subscription fallback',
     clearedKey: 'blocked immediately and after restart',
+    serviceForms:
+      'Meshy, Pexels, Jimeng paired fields, GitHub local save, search routing and unsaved-secret disposal passed',
     sessionStorage: {
       directory: 'userData/agent-runtime/claude-api/projects',
       privateTranscript: 'real session listed and read from the Studio directory',
@@ -246,7 +349,7 @@ try {
 } catch (error) {
   console.error(
     'UI failure:',
-    await activePage?.locator('.settings-connection-result, .settings-error').allTextContents(),
+    await activePage?.locator('.connections-feedback, .settings-error').allTextContents(),
   )
   await activePage
     ?.screenshot({ path: join(runDir, 'failure.png'), fullPage: true })

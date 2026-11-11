@@ -121,6 +121,36 @@ export function parseSettingsSecretValue(value: unknown): string {
   return settingsSecretValueSchema.parse(value)
 }
 
+export function parseClaudeConnectionInput(value: unknown) {
+  return z
+    .object({
+      provider: settingsUpdateSchema.shape.provider.unwrap(),
+      apiBaseUrl: z
+        .string()
+        .trim()
+        .min(1)
+        .max(2048)
+        .refine((value) => {
+          try {
+            const url = new URL(value)
+            return (
+              ['http:', 'https:'].includes(url.protocol) &&
+              !url.username &&
+              !url.password &&
+              !url.search &&
+              !url.hash
+            )
+          } catch {
+            return false
+          }
+        }, '请输入不含凭证、查询参数和片段的 HTTP(S) API 地址'),
+      modelName: z.string().trim().min(1).max(256),
+      apiKey: z.string().trim().min(1).max(8192).optional(),
+    })
+    .strict()
+    .parse(value)
+}
+
 export function parseSettingsKey(value: unknown): keyof AppSettings {
   return settingsKeySchema.parse(value)
 }

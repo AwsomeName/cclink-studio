@@ -77,6 +77,40 @@ export function registerSettingsIpc(
   })
 
   registerTrustedIpcContract(
+    settingsIpc.saveClaudeConnection,
+    trustedRendererGuard,
+    async (_event, input) => {
+      const release = acquireAgentConfigurationLock(getAgentBridge())
+      if (!release) return runtimeSwitchPendingSettingsResult()
+      try {
+        const settings = await settingsService.saveClaudeConnection(input)
+        let runtimeWarning: string | undefined
+        try {
+          await applyAgentConfiguration(
+            getAgentBridge(),
+            settingsService,
+            getClaudeRuntimeManager(),
+            recoverAgentRuntime,
+            true,
+          )
+        } catch {
+          runtimeWarning = '配置已保存，但运行环境尚未就绪。请检查运行环境后验证连接。'
+        }
+        return {
+          success: true,
+          settings,
+          status: settingsService.getSecretStatus(),
+          runtimeWarning,
+        }
+      } catch (error) {
+        return { success: false, error: settingsIpcError(error) }
+      } finally {
+        release()
+      }
+    },
+  )
+
+  registerTrustedIpcContract(
     settingsIpc.setSecret,
     trustedRendererGuard,
     async (_event, key, value) => {
@@ -382,6 +416,8 @@ export function registerSettingsIpc(
       if (modelConnectionTestPending) {
         return { success: false, error: '模型连接测试正在进行，请等待当前测试完成' }
       }
+      const release = acquireAgentConfigurationLock(getAgentBridge())
+      if (!release) return runtimeSwitchPendingSettingsResult()
       modelConnectionTestPending = true
       try {
         const runtimeManager = getClaudeRuntimeManager()
@@ -453,6 +489,7 @@ export function registerSettingsIpc(
         return { success: false, error: settingsIpcError(err) }
       } finally {
         modelConnectionTestPending = false
+        release()
       }
     },
   )
@@ -491,8 +528,8 @@ function reconfigureAgent(
   settingsService: SettingsService,
   runtimeManager: ClaudeRuntimeManager | null,
   forceResetSessions = false,
-): void {
-  if (!agentBridge) return
+): boolean {
+  if (!agentBridge) return false
   try {
     const runtimeSettings = settingsService.getRuntimeSettings()
     const activeRuntime = runtimeManager?.getStatus().active ?? null
@@ -516,8 +553,10 @@ function reconfigureAgent(
       },
       { forceResetSessions },
     )
+    return true
   } catch (err) {
     console.warn('[SettingsIPC] 后端热重载失败（下次启动生效）:', err)
+    return false
   }
 }
 
@@ -529,7 +568,9 @@ async function applyAgentConfiguration(
   forceResetSessions = false,
 ): Promise<void> {
   if (agentBridge) {
-    reconfigureAgent(agentBridge, settingsService, runtimeManager, forceResetSessions)
+    if (!reconfigureAgent(agentBridge, settingsService, runtimeManager, forceResetSessions)) {
+      throw new Error('配置已保存，但 Agent 未能应用新配置。请重新检查运行环境。')
+    }
     return
   }
   await recoverAgentRuntime()

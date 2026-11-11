@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkRemoteSession } from '@shared/cclink'
 import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { RemoteStatus } from '@shared/remote-protocol'
@@ -18,7 +18,7 @@ import {
 } from '../../components/agent-panel/agent-panel-view'
 import { isWorkspaceTargetCurrent, type WorkspaceTarget } from '../../stores/workspace-store'
 import type { AgentMessage } from '../../types'
-import { importAgentImageFiles, MAX_AGENT_IMAGES } from '../agent-conversations/image-attachments'
+import { useImageImport } from '../agent-conversations/use-image-import'
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import { openRemoteFileFromConversation } from './remote-file-navigation'
 import { remoteAgentComposerKey } from './remote-message-queue-state'
@@ -281,6 +281,7 @@ export function RemoteAgentController({
   }, [activeSessionId, loadMessages, selectSession, selectedSessionId, sessionId])
 
   const submit = (): void => {
+    if (imageImport.blocked) return
     if (
       !agentAvailable ||
       !isWorkspaceTargetCurrent(workspaceTarget) ||
@@ -304,26 +305,19 @@ export function RemoteAgentController({
     await window.cclinkStudio.cclink.cancelAgentImageUpload({ uploadId: imageUploadId })
   }
 
-  const addImages = useCallback(
-    async (files: File[]) => {
-      if (!imageInputAvailable) {
-        showToast('当前远程 Agent 未声明图片输入能力', 'error')
-        return
-      }
-      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
-      if (result.attachments.length > 0) {
-        addRemoteAgentImages(remoteWorkspaceKey, result.attachments)
-      }
-      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
+  const imageImport = useImageImport(
+    `remote:${remoteWorkspaceKey}`,
+    pendingImages,
+    (images) => {
+      if (isWorkspaceTargetCurrent(workspaceTarget))
+        addRemoteAgentImages(remoteWorkspaceKey, images)
     },
-    [
-      addRemoteAgentImages,
-      imageInputAvailable,
-      pendingImages.length,
-      remoteWorkspaceKey,
-      showToast,
-    ],
+    imageInputAvailable ? undefined : '当前远程 Agent 未声明图片输入能力',
   )
+  const addImages = (files: File[]): void => {
+    if (!imageInputAvailable) showToast('当前远程 Agent 未声明图片输入能力', 'error')
+    else imageImport.add(files)
+  }
 
   const stopRemoteRun = async (): Promise<void> => {
     if (!activeSession || activeSession.status !== 'active' || stopping) return
@@ -673,6 +667,7 @@ export function RemoteAgentController({
           stopLabel: imageUploadId ? '取消图片上传' : '停止',
           canSubmit:
             (Boolean(draft.trim()) || pendingImages.length > 0) &&
+            !imageImport.blocked &&
             agentAvailable &&
             !replying &&
             (pendingImages.length === 0 || imageInputAvailable) &&
@@ -729,6 +724,8 @@ export function RemoteAgentController({
           enhancements: {
             images: {
               items: pendingImages,
+              preparation: imageImport,
+              onApprove: (image) => addRemoteAgentImages(remoteWorkspaceKey, [image]),
               onRemove: (imageId) => removeRemoteAgentImage(remoteWorkspaceKey, imageId),
             },
           },

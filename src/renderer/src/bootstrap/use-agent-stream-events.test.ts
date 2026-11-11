@@ -14,6 +14,27 @@ beforeEach(() => {
 })
 
 describe('applyAgentStreamEventToStore', () => {
+  it('projects the actual Agent chosen by main only for the matching active run', () => {
+    const id = useAgentStore.getState().activeConversationId
+    useAgentStore.getState().setSessionId('old-product-session', id)
+    const runId = useAgentStore.getState().beginRun(id)
+    const event = {
+      type: 'system',
+      subtype: 'runtime-selected',
+      conversationId: id,
+      runId,
+      runtimeBinding: { kind: 'claude-code' as const },
+    }
+    applyAgentStreamEventToStore(event)
+    expect(useAgentStore.getState().conversations[id].sessionId).toBeNull()
+    expect(useAgentStore.getState().conversations[id].runtimeBinding).toEqual({
+      kind: 'claude-code',
+    })
+    applyAgentStreamEventToStore({ ...event, runId: 'stale', runtimeBinding: { kind: 'codex' } })
+    expect(useAgentStore.getState().conversations[id].runtimeBinding).toEqual({
+      kind: 'claude-code',
+    })
+  })
   it('reconciles a late supplement receipt only for its original Run and never downgrades it', () => {
     const id = useAgentStore.getState().activeConversationId
     const runId = useAgentStore.getState().beginRun(id)

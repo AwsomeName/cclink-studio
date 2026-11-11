@@ -10,6 +10,7 @@ import { agentFailurePresentation } from '../features/agent-conversations/agent-
 type AgentStoreSnapshot = ReturnType<typeof useAgentStore.getState>
 
 type AgentStreamEventPayload = {
+  runtimeBinding?: import('@shared/agent-runtime').AgentRuntimeBinding
   supplementSupported?: boolean
   supplementMessageId?: string
   protocol?: 'studio-agent-event-v1'
@@ -102,6 +103,9 @@ export function applyAgentStreamEventToStore(
 ): void {
   const conversationId = event.conversationId
   if (!acceptsRunEvent(store, conversationId, event.runId)) return
+  if (event.runtimeBinding && conversationId && event.runId) {
+    store.applyRunRuntimeBinding(event.runtimeBinding, conversationId, event.runId)
+  }
 
   if (event.protocol === 'studio-agent-event-v1') {
     applyStudioAgentEvent(event, store)
@@ -110,6 +114,9 @@ export function applyAgentStreamEventToStore(
 
   switch (event.type) {
     case 'system': {
+      if (event.subtype === 'runtime-selected' && conversationId && event.runId) {
+        store.setSessionId(null, conversationId, event.sessionCompatibilityFingerprint)
+      }
       if (
         event.subtype === 'supplement_received' &&
         event.supplementMessageId &&

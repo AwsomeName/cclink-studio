@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentConversationState } from '../../stores/agent-store'
 import { createConversationRunController } from './conversation-run-controller'
+import { cancelImageImport, startImageImport } from './image-import-jobs'
 
 const SESSION_COMPATIBILITY_FINGERPRINT = 'a'.repeat(64)
 
@@ -119,6 +120,32 @@ function createHarness(conversation = createConversation()) {
 }
 
 describe('conversation-run-controller', () => {
+  it('blocks send, supplement and replacement during image preparation without clearing text', async () => {
+    const { controller, store, agentApi } = createHarness(
+      createConversation({ loading: true, activeRunId: 'run-active' }),
+    )
+    startImageImport(
+      'local:agent-1',
+      [],
+      [],
+      () => {},
+      () => new Promise(() => {}),
+    )
+    try {
+      for (const action of [controller.send, controller.supplement, controller.stopAndSend]) {
+        await expect(action('保留文字')).resolves.toMatchObject({
+          status: 'failed',
+          error: expect.stringContaining('图片正在处理'),
+        })
+      }
+      expect(store.setInput).not.toHaveBeenCalled()
+      expect(store.enqueueMessage).not.toHaveBeenCalled()
+      expect(store.enqueueReplacement).not.toHaveBeenCalled()
+      expect(agentApi.sendMessage).not.toHaveBeenCalled()
+    } finally {
+      cancelImageImport('local:agent-1')
+    }
+  })
   it('未保存的登录草稿被挂载时在启动 Agent 前给出明确保存指引', async () => {
     const conversation = createConversation({
       mountedResources: [

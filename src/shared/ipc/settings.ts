@@ -29,6 +29,19 @@ export interface SettingsOperationResult {
   settings?: AppSettings
 }
 
+/** One explicit save for the Claude connection; secrets never enter AppSettings snapshots. */
+export interface ClaudeConnectionInput {
+  provider: AppSettings['provider']
+  apiBaseUrl: string
+  modelName: string
+  apiKey?: string
+}
+
+export interface ClaudeConnectionSaveResult extends SettingsOperationResult {
+  status?: SettingsSecretStatus
+  runtimeWarning?: string
+}
+
 export type SettingsSecretKey = 'apiKey' | 'codexApiKey' | 'meshyApiKey'
 
 export interface SettingsSecretStatus {
@@ -117,6 +130,7 @@ export interface SettingsApiContract {
   getSecretStatus(): Promise<SettingsSecretStatus>
   set(updates: Partial<AppSettings>): Promise<SettingsOperationResult>
   setSecret(key: SettingsSecretKey, value: string): Promise<SettingsSecretOperationResult>
+  saveClaudeConnection(input: ClaudeConnectionInput): Promise<ClaudeConnectionSaveResult>
   clearSecret(key: SettingsSecretKey): Promise<SettingsSecretOperationResult>
   reset(): Promise<SettingsOperationResult>
   resetKey(key: keyof AppSettings): Promise<SettingsOperationResult>
@@ -133,6 +147,9 @@ export const settingsIpc = {
   getAll: defineIpcCall<[], AppSettings>('settings:getAll'),
   getSecretStatus: defineIpcCall<[], SettingsSecretStatus>('settings:getSecretStatus'),
   set: defineIpcCall<[Partial<AppSettings>], SettingsOperationResult>('settings:set'),
+  saveClaudeConnection: defineIpcCall<[ClaudeConnectionInput], ClaudeConnectionSaveResult>(
+    'settings:saveClaudeConnection',
+  ),
   setSecret: defineIpcCall<[SettingsSecretKey, string], SettingsSecretOperationResult>(
     'settings:setSecret',
   ),

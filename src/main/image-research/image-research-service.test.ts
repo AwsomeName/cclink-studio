@@ -85,6 +85,7 @@ describe('ImageResearchService', () => {
       success: true,
     })
     expect(launchOptions).toMatchObject({
+      automaticRuntime: true,
       disableBuiltinTools: true,
       imageResearchPolicy: {
         affairId: affair.id,

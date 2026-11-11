@@ -196,6 +196,8 @@ export interface AgentPanelComposerEnhancements {
   images?: {
     items: AgentImageAttachment[]
     onRemove(id: string): void
+    onApprove?: (image: AgentImageAttachment) => void
+    preparation?: { busy: boolean; error?: string; cancel(): void }
   }
 }
 
@@ -944,6 +946,8 @@ export function ComposerFrame({
             <ImageAttachmentStrip
               images={enhancements.images.items}
               onRemove={enhancements.images.onRemove}
+              onApprove={enhancements.images.onApprove}
+              preparation={enhancements.images.preparation}
             />
           ) : null}
           {model.uploadProgress ? (

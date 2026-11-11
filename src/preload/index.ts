@@ -95,6 +95,7 @@ const settingsApi: SettingsApiContract = {
   getSecretStatus: () => invokeIpcContract(settingsIpc.getSecretStatus),
   set: (updates) => invokeIpcContract(settingsIpc.set, updates),
   setSecret: (key, value) => invokeIpcContract(settingsIpc.setSecret, key, value),
+  saveClaudeConnection: (input) => invokeIpcContract(settingsIpc.saveClaudeConnection, input),
   clearSecret: (key) => invokeIpcContract(settingsIpc.clearSecret, key),
   reset: () => invokeIpcContract(settingsIpc.reset),
   resetKey: (key) => invokeIpcContract(settingsIpc.resetKey, key),

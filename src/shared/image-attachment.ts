@@ -11,6 +11,16 @@ export interface TransientImageAttachment {
   /** Raw base64 without a data URL prefix. */
   data: string
   size: number
+  preparation?: {
+    originalSize: number
+    originalWidth: number
+    originalHeight: number
+    width: number
+    height: number
+    firstFrameOnly: boolean
+    /** Significant resizing needs a user preview before this draft is submitted. */
+    requiresReview: boolean
+  }
 }
 
 /** Stable reference to image bytes owned by the main process, outside workspace snapshots. */

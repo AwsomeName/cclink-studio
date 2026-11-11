@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { MAX_STORED_AGENT_IMAGE_BYTES as MAX_IMAGE_BYTES } from '../agent-image-limits'
+import { agentImagesSchema } from './image-attachment-schema'
+export { agentImagesSchema } from './image-attachment-schema'
 import {
   boundedIdentifierSchema,
   boundedJsonValueSchema,
@@ -10,9 +13,6 @@ import { workspaceRefSchema } from './workspace-ref-schema'
 
 const MAX_MESSAGE_LENGTH = 1024 * 1024
 const MAX_RESOURCE_PAYLOAD_BYTES = 5 * 1024 * 1024
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_IMAGE_BASE64_LENGTH = Math.ceil(MAX_IMAGE_BYTES / 3) * 4
-const MAX_IMAGE_PAYLOAD_BYTES = 26 * 1024 * 1024
 
 export const agentConversationIdSchema = boundedIdentifierSchema()
 export const optionalAgentConversationIdSchema = agentConversationIdSchema.optional()
@@ -192,25 +192,6 @@ const resourcesSchema = z
   .and(boundedJsonValueSchema(MAX_RESOURCE_PAYLOAD_BYTES, 'Agent 资源'))
 
 const skillsSchema = agentSkillRefsSchema
-
-export const agentImagesSchema = z
-  .array(
-    z
-      .object({
-        id: boundedIdentifierSchema(),
-        name: boundedTextSchema(512).trim().min(1),
-        mediaType: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
-        data: z
-          .string()
-          .min(1)
-          .max(MAX_IMAGE_BASE64_LENGTH)
-          .regex(/^[A-Za-z0-9+/]+={0,2}$/, '图片数据不是有效 Base64'),
-        size: z.number().int().positive().max(MAX_IMAGE_BYTES),
-      })
-      .strict(),
-  )
-  .max(5)
-  .and(boundedJsonValueSchema(MAX_IMAGE_PAYLOAD_BYTES, 'Agent 图片附件'))
 
 export const agentSendMessageInputSchema = z.union([
   boundedTextSchema(MAX_MESSAGE_LENGTH).trim().min(1),

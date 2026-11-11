@@ -11,6 +11,12 @@ const claudeConfigDir = await mkdtemp(join(tmpdir(), 'studio-claude-bridge-test-
 afterAll(() => rm(claudeConfigDir, { recursive: true, force: true }))
 
 const queryMock = vi.hoisted(() => vi.fn())
+vi.mock('./automatic-agent-selection', () => ({
+  selectAutomaticTaskAgent: vi.fn(async () => ({
+    binding: { kind: 'codex' },
+    reason: 'CODEX_READY',
+  })),
+}))
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: queryMock,
@@ -38,7 +44,10 @@ function createMockQuery(
   }
 }
 
-function createBridge(runtimeStateStore?: AgentRuntimeStateStore): AgentBridge {
+function createBridge(
+  runtimeStateStore?: AgentRuntimeStateStore,
+  apiKey = 'test-key',
+): AgentBridge {
   return new AgentBridge(
     {
       isDestroyed: () => false,
@@ -62,7 +71,7 @@ function createBridge(runtimeStateStore?: AgentRuntimeStateStore): AgentBridge {
     } as never,
     null,
     {
-      apiKey: 'test-key',
+      apiKey,
       claudeConfigDir,
       sessionCompatibilityFingerprint: 'runtime-fingerprint',
       runtimeStateStore,
@@ -73,6 +82,76 @@ function createBridge(runtimeStateStore?: AgentRuntimeStateStore): AgentBridge {
 describe('AgentBridge main-process Claude session trust', () => {
   beforeEach(() => {
     queryMock.mockReset()
+  })
+
+  it('runs scheduled tasks with the new local default without a Claude key and preserves the read-only policy', async () => {
+    const bridge = createBridge(undefined, '')
+    const nativeSend = vi.spyOn(LocalCodexBackend.prototype, 'sendMessage').mockResolvedValue()
+    const input = {
+      message: 'Generate Markdown from the bound file',
+      conversationId: 'scheduled-task:run-1',
+      runId: 'run-1',
+      workspacePath: '/workspace/report',
+      taskId: 'task-1',
+      taskRevision: 25,
+      readRoots: ['/workspace/report/source.md'],
+    }
+    try {
+      const first = bridge.sendScheduledTaskMessage(input)
+      await expect(
+        bridge.sendScheduledTaskMessage({ ...input, runId: 'overlapping-run' }),
+      ).rejects.toThrow('run-1')
+      await first
+      expect(nativeSend).toHaveBeenCalledExactlyOnceWith(input.message, {
+        conversationId: input.conversationId,
+        runId: input.runId,
+        workspacePath: input.workspacePath,
+        allowedTools: ['mcp__cclink_studio__editor_read', 'mcp__cclink_studio__editor_list'],
+        disableBuiltinTools: true,
+        scheduledTaskPolicy: {
+          origin: 'scheduled-task',
+          taskId: input.taskId,
+          taskRevision: input.taskRevision,
+          runId: input.runId,
+          workspaceRoot: input.workspacePath,
+          readRoots: input.readRoots,
+          allowedTools: ['editor_read', 'editor_list'],
+        },
+      })
+      expect(bridge.getStatus(input.conversationId).runtimeBinding).toEqual({ kind: 'codex' })
+      expect(queryMock).not.toHaveBeenCalled()
+    } finally {
+      nativeSend.mockRestore()
+      await bridge.destroy()
+    }
+  })
+
+  it('keeps a selected scheduled runtime fixed if its launch fails after readiness selection', async () => {
+    const bridge = createBridge()
+    const nativeSend = vi
+      .spyOn(LocalCodexBackend.prototype, 'sendMessage')
+      .mockRejectedValue(new Error('Codex 未登录'))
+    try {
+      await expect(
+        bridge.sendScheduledTaskMessage({
+          message: 'Generate Markdown',
+          conversationId: 'scheduled-task:failed-run',
+          runId: 'failed-run',
+          workspacePath: '/workspace/report',
+          taskId: 'task-1',
+          taskRevision: 25,
+          readRoots: ['/workspace/report'],
+        }),
+      ).rejects.toThrow('Codex 未登录')
+      expect(bridge.getRunStatus('scheduled-task:failed-run', 'failed-run')).toMatchObject({
+        status: 'failed',
+        errorMessage: 'Codex 未登录',
+      })
+      expect(queryMock).not.toHaveBeenCalled()
+    } finally {
+      nativeSend.mockRestore()
+      await bridge.destroy()
+    }
   })
 
   it.each(['send', 'restore'] as const)(

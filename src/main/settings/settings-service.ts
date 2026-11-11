@@ -18,6 +18,8 @@ import {
 import { PERMISSION_MODES } from '../../shared/settings-constants'
 import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
+import type { ClaudeConnectionInput } from '../../shared/ipc/settings'
+import { parseClaudeConnectionInput } from '../../shared/ipc/settings-schema'
 import { CredentialService } from '../credentials/credential-service'
 import type { AgentRoleRef } from '../../shared/agent-role'
 import { normalizeKeybindingOverrides } from '../../shared/keybindings'
@@ -248,6 +250,53 @@ export class SettingsService {
       this.migrationBlocked = false
       await this.saveState()
       return this.getSecretStatus()
+    })
+  }
+
+  async saveClaudeConnection(input: ClaudeConnectionInput): Promise<AppSettings> {
+    const { apiKey, ...connection } = parseClaudeConnectionInput(input)
+    return this.enqueueMutation(async () => {
+      const previousKey = this.getResolvedSecrets().apiKey
+      if (!apiKey && !previousKey) throw new Error('请填写 API Key')
+      if (
+        !apiKey &&
+        (connection.provider !== this.store.provider ||
+          connection.apiBaseUrl !== this.store.apiBaseUrl)
+      ) {
+        throw new Error('服务商或 API 地址已变更，请重新填写对应的 API Key')
+      }
+      const nextStore = { ...this.store, ...connection, apiFormat: 'anthropic' as const }
+      if (apiKey) {
+        await this.credentialService.setCredential({
+          id: AGENT_CREDENTIAL_ID,
+          kind: 'api-key',
+          fields: { apiKey },
+        })
+      }
+      try {
+        await this.saveState(nextStore)
+      } catch {
+        if (apiKey) {
+          try {
+            if (previousKey) {
+              await this.credentialService.setCredential({
+                id: AGENT_CREDENTIAL_ID,
+                kind: 'api-key',
+                fields: { apiKey: previousKey },
+              })
+            } else {
+              await this.credentialService.removeCredential(AGENT_CREDENTIAL_ID)
+            }
+          } catch {
+            throw new Error(
+              '连接设置保存失败，密钥恢复也失败。请重新加载本地凭证并核对配置；尚未验证连接。',
+            )
+          }
+        }
+        throw new Error('连接设置保存失败，原配置已保留。请检查设置文件的写入权限。')
+      }
+      this.store = nextStore
+      return this.getAll()
     })
   }
 

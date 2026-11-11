@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Real Electron UI + local rejecting model endpoint; no live model credentials required.
+// Real Electron UI + a rejecting Codex protocol fixture; no live model credentials required.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
@@ -9,10 +9,34 @@ import { createRequire } from 'node:module'
 import { _electron as electron } from 'playwright-core'
 
 const require = createRequire(import.meta.url)
+const claudeFallback = process.argv.includes('--claude-fallback')
+let requests = 0
+const provider = claudeFallback
+  ? createServer((_request, response) => {
+      requests++
+      response.writeHead(400, { 'content-type': 'application/json' })
+      setTimeout(
+        () =>
+          response.end(
+            JSON.stringify({
+              type: 'error',
+              error: {
+                type: 'invalid_request_error',
+                message:
+                  'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容][local-smoke]',
+              },
+            }),
+          ),
+        2000,
+      )
+    })
+  : null
+if (provider) await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve))
 const root = await mkdtemp(join(homedir(), '.cclink-studio-fallback-smoke-'))
 const workspace = join(root, 'workspace')
 await mkdir(workspace)
-await mkdir(join(root, 'claude-config'))
+await mkdir(join(root, 'bin'))
+await mkdir(join(root, 'codex-home'))
 await mkdir(join(root, 'user-data'))
 await writeFile(
   join(root, 'user-data/workspace-state.json'),
@@ -31,24 +55,42 @@ await writeFile(
     },
   }),
 )
-let requests = 0
-const server = createServer((_request, response) => {
-  requests++
-  response.writeHead(400, { 'content-type': 'application/json' })
-  setTimeout(() => {
-    response.end(
-      JSON.stringify({
-        type: 'error',
-        error: {
-          type: 'invalid_request_error',
-          message:
-            'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容][local-smoke]',
-        },
-      }),
-    )
-  }, 2_000)
+await writeFile(
+  join(root, 'bin/codex'),
+  `#!${process.execPath}
+const { createInterface } = require('node:readline')
+const { writeFileSync } = require('node:fs')
+const { join } = require('node:path')
+const emit = (value) => process.stdout.write(JSON.stringify(value) + '\\n')
+createInterface({ input: process.stdin }).on('line', (line) => {
+  const { id, method, params } = JSON.parse(line)
+  if (id === undefined) return
+  let result = {}
+  if (method === 'account/read') result = { account: { type: 'chatgpt' }, requiresOpenaiAuth: true }
+  if (method === 'config/read') result = { config: {} }
+  if (method === 'thread/start') {
+    if (params.sandbox !== 'read-only' || params.config['features.shell_tool'] !== false)
+      throw new Error('Scheduled tools were not restricted')
+    result = {
+      thread: { id: 'fallback-fixture' }, modelProvider: 'openai',
+      approvalPolicy: 'untrusted', approvalsReviewer: 'user',
+      sandbox: { type: 'readOnly', networkAccess: false }
+    }
+  }
+  if (method === 'mcpServerStatus/list') result = { data: [{ name: 'cclink_studio' }] }
+  if (method === 'turn/start') {
+    writeFileSync(join(process.env.CODEX_HOME, 'turn-started'), 'yes')
+    result = { turn: { id: 'fallback-turn' } }
+    setTimeout(() => emit({ method: 'turn/completed', params: {
+      threadId: 'fallback-fixture', turn: { id: 'fallback-turn', status: 'failed',
+        error: { message: 'API Error: [1301][系统检测到输入或生成内容可能包含不安全或敏感内容][local-smoke]' } }
+    } }), 2000)
+  }
+  emit({ id, result })
 })
-await new Promise((done) => server.listen(0, '127.0.0.1', done))
+`,
+  { mode: 0o700 },
+)
 let app
 try {
   app = await electron.launch({
@@ -58,31 +100,37 @@ try {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '',
       CCLINK_STUDIO_TEST_USER_DATA_PATH: join(root, 'user-data'),
-      CLAUDE_CONFIG_DIR: join(root, 'claude-config'),
+      CODEX_HOME: join(root, 'codex-home'),
+      PATH: claudeFallback ? process.env.PATH : `${join(root, 'bin')}:${process.env.PATH ?? ''}`,
     },
     timeout: 60_000,
   })
   const page = await app.firstWindow()
   page.setDefaultTimeout(15_000)
   await page.waitForSelector('.main-window', { timeout: 30_000 })
-  const configured = await page.evaluate(
-    async ({ workspace, apiBaseUrl }) => {
-      await window.cclinkStudio.workspaceState.listLocalWorkspaces()
-      const resolved = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(workspace)
-      const active = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(workspace)
-      if (!resolved.valid || !active.success)
-        throw new Error(`Workspace setup failed: ${JSON.stringify({ resolved, active })}`)
-      await window.cclinkStudio.settings.setSecret('apiKey', 'local-smoke-placeholder')
-      return window.cclinkStudio.settings.set({
-        recentWorkspacePaths: [workspace],
-        apiBaseUrl,
-        modelName: 'claude-sonnet-4-6',
-      })
-    },
-    { workspace, apiBaseUrl: `http://127.0.0.1:${server.address().port}` },
-  )
+  const configured = await page.evaluate(async (workspace) => {
+    await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+    const resolved = await window.cclinkStudio.workspaceState.resolveLocalWorkspace(workspace)
+    const active = await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(workspace)
+    if (!resolved.valid || !active.success)
+      throw new Error(`Workspace setup failed: ${JSON.stringify({ resolved, active })}`)
+    return window.cclinkStudio.settings.set({
+      recentWorkspacePaths: [workspace],
+    })
+  }, workspace)
   assert(configured.success, configured.error)
-  console.log('Configured isolated workspace and local provider')
+  if (provider) {
+    const configuredClaude = await page.evaluate(async (apiBaseUrl) => {
+      await window.cclinkStudio.settings.setSecret('apiKey', 'local-smoke-placeholder')
+      return window.cclinkStudio.settings.set({ apiBaseUrl, modelName: 'claude-sonnet-4-6' })
+    }, `http://127.0.0.1:${provider.address().port}`)
+    assert(configuredClaude.success, JSON.stringify(configuredClaude.error))
+  }
+  console.log(
+    claudeFallback
+      ? 'Configured empty native Codex login + Claude local provider'
+      : 'Configured isolated workspace and rejecting Codex fixture',
+  )
   await page.reload()
   await page.waitForSelector('.main-window')
   await page.locator('[title="定时任务"]').first().click()
@@ -174,7 +222,7 @@ try {
     if (run && !['queued', 'running'].includes(run.status)) break
     await page.waitForTimeout(300)
   }
-  console.log('Terminal:', JSON.stringify({ requests, status: run?.status, error: run?.error }))
+  console.log('Terminal:', JSON.stringify({ status: run?.status, error: run?.error }))
   if (run?.artifact && run.status !== 'failed') {
     console.log(
       'Unexpected artifact:',
@@ -184,7 +232,15 @@ try {
   assert.equal(run?.status, 'failed')
   assert(run.artifact, JSON.stringify(run.error))
   assert.equal(run.error.code, 'SCHEDULED_TASK_CONTENT_REJECTED')
-  assert(requests > 0, 'local provider was not called')
+  if (claudeFallback)
+    assert(requests > 0, 'Configured Claude provider must receive the fallback request')
+  else assert.equal(await readFile(join(root, 'codex-home/turn-started'), 'utf8'), 'yes')
+  const status = await page.evaluate(
+    (id) => window.cclinkStudio.agent.getStatus(id),
+    run.conversationId,
+  )
+  assert.equal(status.runtimeBinding.kind, claudeFallback ? 'claude-code' : 'codex')
+  console.log(`PASS actual selected Agent: ${status.runtimeBinding.kind}`)
   const content = await readFile(join(workspace, run.artifact.relativePath), 'utf8')
   assert(content.startsWith(template.trim()))
   assert(content.includes('本次 AI 补充失败，仅保存预设模板'))
@@ -204,6 +260,6 @@ try {
   )
 } finally {
   if (app) await app.close()
-  await new Promise((done) => server.close(done))
+  if (provider) await new Promise((resolve) => provider.close(resolve))
   await rm(root, { recursive: true, force: true })
 }

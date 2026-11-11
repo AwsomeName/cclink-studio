@@ -1,4 +1,5 @@
 import { conversationQueueContextKey, type AgentConversationState } from './conversation-state'
+import { imageImportBlockReason } from './image-import-jobs'
 
 export const AGENT_FOLLOW_UP = {
   supplement: { id: 'agent.supplementCurrentRun', label: '补充当前任务' },
@@ -12,6 +13,11 @@ export function followUpUnavailableReason(
   action: FollowUpAction,
 ): string | null {
   if (!conversation || conversation.archivedAt) return '会话已不存在或已归档'
+  const imageBlock = imageImportBlockReason(
+    `local:${conversation.id}`,
+    conversation.pendingImages ?? [],
+  )
+  if (imageBlock) return imageBlock
   if (conversation.runtime.location !== 'local') return '此远程会话暂不支持此操作'
   if (conversation.runtimeBinding?.kind === 'acp')
     return '此 Codex ACP 会话尚未提供已验证的补充和停止确认能力'

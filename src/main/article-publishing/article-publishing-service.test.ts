@@ -253,10 +253,12 @@ describe('ArticlePublishingService', () => {
     }
     const agentBridge = {
       onRuntimeEvent: vi.fn(() => () => undefined),
-      getRuntimeIdentity: vi.fn(() => ({
-        agentRuntimeBindingKey: 'agent-binding-a',
-        agentRuntimeEpoch: 7,
-      })),
+      getRuntimeIdentity: vi
+        .fn(() => ({
+          agentRuntimeBindingKey: 'codex',
+          agentRuntimeEpoch: 7,
+        }))
+        .mockReturnValueOnce({ agentRuntimeBindingKey: 'claude-code', agentRuntimeEpoch: 7 }),
       sendMessage: vi.fn(async (_message, conversationId, context) => {
         await context?.onRunPrepared?.({
           conversationId,
@@ -332,6 +334,7 @@ describe('ArticlePublishingService', () => {
       expect.any(String),
       `article-publishing-${affairId}`,
       expect.objectContaining({
+        automaticRuntime: true,
         disableBuiltinTools: true,
         allowedTools: expect.arrayContaining([
           'mcp__cclink_studio__browser_click',
@@ -367,7 +370,11 @@ describe('ArticlePublishingService', () => {
       1,
       launchOperationId,
       expect.arrayContaining([
-        expect.objectContaining({ kind: 'agent-run', agentRuntimeEpoch: 7 }),
+        expect.objectContaining({
+          kind: 'agent-run',
+          agentRuntimeEpoch: 7,
+          agentRuntimeBindingKey: 'codex',
+        }),
         expect.objectContaining({ kind: 'browser-tab', webContentsId: 20 }),
         expect.objectContaining({ kind: 'browser-task', browserTaskRunId }),
       ]),

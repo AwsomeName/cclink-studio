@@ -53,6 +53,84 @@ describe('SettingsService workspace startup', () => {
 })
 
 describe('SettingsService secrets', () => {
+  it('saves a Claude connection without putting its key in settings or public snapshots', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    const result = await service.saveClaudeConnection({
+      provider: 'custom',
+      apiBaseUrl: 'https://models.example/anthropic',
+      modelName: 'test-model',
+      apiKey: 'test-connection-key',
+    })
+    expect(result).toMatchObject({ provider: 'custom', modelName: 'test-model', apiKey: '' })
+    expect(await readFile(join(tempDir, 'settings.json'), 'utf8')).not.toContain(
+      'test-connection-key',
+    )
+    expect(service.getRuntimeSettings().apiKey).toBe('test-connection-key')
+    await expect(
+      service.saveClaudeConnection({
+        provider: 'custom',
+        apiBaseUrl: 'https://another.example',
+        modelName: 'test-model',
+      }),
+    ).rejects.toThrow('重新填写')
+    expect(service.getAll().apiBaseUrl).toBe('https://models.example/anthropic')
+  })
+
+  it('restores the old key when the connection settings file cannot be replaced', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.saveClaudeConnection({
+      provider: 'custom',
+      apiBaseUrl: 'https://old.example',
+      modelName: 'old-model',
+      apiKey: 'old-key',
+    })
+    await rm(join(tempDir, 'settings.json'))
+    await mkdir(join(tempDir, 'settings.json'))
+    await expect(
+      service.saveClaudeConnection({
+        provider: 'custom',
+        apiBaseUrl: 'https://new.example',
+        modelName: 'new-model',
+        apiKey: 'new-key',
+      }),
+    ).rejects.toThrow('原配置已保留')
+    expect(service.getRuntimeSettings()).toMatchObject({
+      apiBaseUrl: 'https://old.example',
+      modelName: 'old-model',
+      apiKey: 'old-key',
+    })
+    const credentials = JSON.parse(
+      await readFile(join(tempDir, 'credentials/credentials.json'), 'utf8'),
+    )
+    expect(credentials.records['agent:default'].fields.apiKey).toBe('old-key')
+  })
+
+  it('leaves settings unchanged when the credential file has an external conflict', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.saveClaudeConnection({
+      provider: 'custom',
+      apiBaseUrl: 'https://old.example',
+      modelName: 'old-model',
+      apiKey: 'old-key',
+    })
+    const before = await readFile(join(tempDir, 'settings.json'), 'utf8')
+    await writeFile(
+      join(tempDir, 'credentials/credentials.json'),
+      '{"schemaVersion":1,"records":{}}',
+    )
+    await expect(
+      service.saveClaudeConnection({
+        provider: 'custom',
+        apiBaseUrl: 'https://new.example',
+        modelName: 'new-model',
+        apiKey: 'new-key',
+      }),
+    ).rejects.toThrow()
+    expect(await readFile(join(tempDir, 'settings.json'), 'utf8')).toBe(before)
+  })
   it('migrates legacy plaintext secrets without exposing them to the renderer', async () => {
     await writeFile(
       join(tempDir, 'settings.json'),

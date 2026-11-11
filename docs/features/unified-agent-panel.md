@@ -87,7 +87,7 @@ target；架构回归测试同时断言远程路径不引用本地 `agent.sendMe
 
 2026-08-28 远程图片输入候选实现：远程 controller 复用统一 Composer 的粘贴、拖放、文件选择和
 缩略图区域，图片草稿按远程工作空间仅驻留 renderer 内存；main IPC 严格限制 PNG/JPEG/GIF/WebP、
-单张 5 MiB、最多 5 张。remote service 只在实时能力探测包含 `image_input` 时发送，先通过腾讯
+单张发送副本 3 MiB、最多 5 张（2026-11-11：导入原图上限 20 MiB，复用后台图片处理与发送预览；本地和远程使用同一图片 Schema，总预算由五张的 Base64 长度和元数据推导）。remote service 只在实时能力探测包含 `image_input` 时发送，先通过腾讯
 IM 图片消息上传到 COS，拿到 HTTPS URL 后再一次性发送 `user_text.images`；任一图片上传失败时
 不发送 `user_text`，renderer 保留原草稿供人工重试。base64 图片、UserSig 与 COS 签名上传 URL
 不进入 session 历史或诊断；图片 URL 也不写入 Studio 本地消息投影。该候选已覆盖 IPC、能力映射、

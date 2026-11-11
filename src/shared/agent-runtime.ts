@@ -4,7 +4,7 @@ export type AgentRuntimeBinding =
   | { kind: 'acp'; implementationId: 'codex-acp' }
 
 export const DEFAULT_AGENT_RUNTIME_BINDING: AgentRuntimeBinding = { kind: 'claude-code' }
-/** Only newly created local interactive conversations use this default. Legacy data remains Claude. */
+/** Default for new local chats and the preferred engine of automatic tasks. Legacy data remains Claude. */
 export const NEW_LOCAL_AGENT_RUNTIME_BINDING: AgentRuntimeBinding = { kind: 'codex' }
 
 export function normalizeAgentRuntimeBinding(value: unknown): AgentRuntimeBinding {

@@ -1,3 +1,4 @@
+import { imageImportBlockReason } from '../agent-conversations/image-import-jobs'
 import type { StateCreator } from 'zustand'
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import type { CclinkRealtimeEvent, CclinkImageUploadProgress } from '@shared/ipc/cclink'
@@ -89,6 +90,11 @@ export const createRemoteMessageQueueSlice: StateCreator<
     const state = get()
     const content = (state.remoteAgentDrafts[key] ?? '').trim()
     const pendingImages = [...(state.remoteAgentImages[key] ?? [])]
+    const imageBlock = imageImportBlockReason(`remote:${key}`, pendingImages)
+    if (imageBlock) {
+      set({ error: imageBlock })
+      return false
+    }
     const session = state.sessions.find((item) => item.id === sessionId)
     if (
       (!content && !pendingImages.length) ||

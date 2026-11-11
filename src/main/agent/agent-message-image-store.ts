@@ -8,7 +8,10 @@ import type {
   TransientImageAttachment,
 } from '../../shared/image-attachment'
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+import {
+  MAX_STORED_AGENT_IMAGE_BYTES as MAX_IMAGE_BYTES,
+  MAX_AGENT_IMAGES,
+} from '../../shared/agent-image-limits'
 const MEDIA_TYPES: Record<string, ImageAttachmentMediaType> = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -24,7 +27,7 @@ export class AgentMessageImageStore {
     conversationId: string,
     images: TransientImageAttachment[],
   ): Promise<AgentMessageImageAsset[]> {
-    if (images.length > 5) throw new Error('每次最多保存 5 张图片')
+    if (images.length > MAX_AGENT_IMAGES) throw new Error('每次最多保存 5 张图片')
     const directory = this.directory(conversationId)
     await mkdir(directory, { recursive: true, mode: 0o700 })
     await this.assertDirectory(directory)

@@ -12,10 +12,7 @@ import {
 } from '../../stores'
 import { useEditorFileStatus } from '../../features/agent-conversations/use-editor-file-status'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
-import {
-  importAgentImageFiles,
-  MAX_AGENT_IMAGES,
-} from '../../features/agent-conversations/image-attachments'
+import { useImageImport } from '../../features/agent-conversations/use-image-import'
 import {
   stripTrailingMentionToken,
   toMountedResource,
@@ -838,17 +835,23 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const activeRole = roles.find(
     (role) => role.roleId === activeRoleRef?.roleId && role.version === activeRoleRef.version,
   )
-  const handleAddImages = useCallback(
-    async (files: File[]) => {
-      const result = await importAgentImageFiles(files, MAX_AGENT_IMAGES - pendingImages.length)
-      if (result.attachments.length > 0) {
-        addPendingImages(result.attachments, activeConversationId)
-      }
-      if (result.errors.length > 0) showToast(result.errors.join('\n'), 'error')
-      requestAnimationFrame(() => inputRef.current?.focus())
+  const imageUnavailableReason =
+    activeConversation?.runtimeBinding?.kind === 'acp'
+      ? '当前 ACP 运行时暂不支持图片，请新建 Claude Code 或 Codex 会话'
+      : undefined
+  const imageImport = useImageImport(
+    `local:${activeConversationId}`,
+    pendingImages,
+    (images) => {
+      if (useAgentStore.getState().conversations[activeConversationId])
+        addPendingImages(images, activeConversationId)
     },
-    [activeConversationId, addPendingImages, pendingImages.length, showToast],
+    imageUnavailableReason,
   )
+  const handleAddImages = (files: File[]): void => {
+    if (imageUnavailableReason) showToast(imageUnavailableReason, 'error')
+    else imageImport.add(files)
+  }
   const handleRemovePendingImage = useCallback(
     (imageId: string) => removePendingImage(imageId, activeConversationId),
     [activeConversationId, removePendingImage],
@@ -1039,7 +1042,11 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     tabs,
     editorFiles,
   })
-  const canSubmit = (Boolean(input.trim()) || pendingImages.length > 0) && Boolean(activeRole)
+  const canSubmit =
+    (Boolean(input.trim()) || pendingImages.length > 0) &&
+    Boolean(activeRole) &&
+    !imageImport.blocked &&
+    !(pendingImages.length && imageUnavailableReason)
 
   return (
     <AgentPanelView
@@ -1261,6 +1268,8 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
             images: {
               items: pendingImages,
               onRemove: handleRemovePendingImage,
+              onApprove: (image) => addPendingImages([image], activeConversationId),
+              preparation: imageImport,
             },
           },
           actionBar: {

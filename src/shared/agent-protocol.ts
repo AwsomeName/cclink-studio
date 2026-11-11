@@ -81,6 +81,8 @@ export type ClaudeEvent =
   | ClaudeResultEvent
 
 export interface ClaudeStreamEventData {
+  /** Actual main-owned binding for this exact run, including automatic task selection. */
+  runtimeBinding?: import('./agent-runtime').AgentRuntimeBinding
   supplementSupported?: boolean
   supplementMessageId?: string
   type: string

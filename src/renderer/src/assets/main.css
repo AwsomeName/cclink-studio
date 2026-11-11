@@ -7432,7 +7432,7 @@ body.is-resizing-panels .main-area > div {
   object-fit: contain;
 }
 
-.agent-image-attachment > button {
+.agent-image-attachment > .agent-image-remove {
   position: absolute;
   top: 3px;
   right: 3px;
@@ -7449,11 +7449,11 @@ body.is-resizing-panels .main-area > div {
   cursor: pointer;
 }
 
-.agent-image-attachment > button:hover {
+.agent-image-attachment > .agent-image-remove:hover {
   background: rgba(52, 52, 52, 0.96);
 }
 
-.agent-image-attachment > button:focus-visible {
+.agent-image-attachment > .agent-image-remove:focus-visible {
   outline: 2px solid var(--text-accent);
   outline-offset: 2px;
 }
@@ -15416,4 +15416,75 @@ h6.file-preview-office-heading {
 
 .remote-tree-row.active {
   background: var(--bg-active);
+}
+
+.agent-image-preview-button {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.agent-image-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(24, 24, 24, 0.85);
+  color: #fff;
+  font-size: 10px;
+  line-height: 20px;
+}
+.agent-image-preparation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.agent-image-preparation span {
+  flex: 1;
+}
+.agent-image-preparation button,
+.agent-image-preview button {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: var(--bg-workbench);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.agent-image-preview {
+  width: min(720px, 90vw);
+  padding: 12px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  display: grid;
+  gap: 8px;
+}
+.agent-image-preview-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.agent-image-preview-scroll {
+  max-height: 55vh;
+  overflow: auto;
+  background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 / 16px 16px;
+}
+.agent-image-preview-scroll img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.agent-image-preview-scroll img.actual-size {
+  max-width: none;
 }

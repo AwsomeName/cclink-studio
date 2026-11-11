@@ -14,6 +14,7 @@ import {
   parseSettingsUpdate,
   parseClaudeRuntimeSelection,
   parseCodexAcpPath,
+  parseClaudeConnectionInput,
 } from './settings-schema'
 
 const invalidSettingsResult = async (): Promise<SettingsOperationResult> => ({
@@ -60,6 +61,14 @@ export const settingsIpcContracts = {
       return ipcArgs(parseSettingsSecretKey(args[0]), parseSettingsSecretValue(args[1]))
     },
     invalidSecretResult,
+  ),
+  saveClaudeConnection: bindIpcParser(
+    settingsIpc.saveClaudeConnection,
+    (args) => {
+      requireArgs(args, 1, settingsIpc.saveClaudeConnection.channel)
+      return ipcArgs(parseClaudeConnectionInput(args[0]))
+    },
+    invalidSettingsResult,
   ),
   clearSecret: bindIpcParser(
     settingsIpc.clearSecret,

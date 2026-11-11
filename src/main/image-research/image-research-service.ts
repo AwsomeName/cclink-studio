@@ -423,6 +423,7 @@ export class ImageResearchService {
       const agentRunId = `run-${attempt.launchOperationId}`
       const prompt = buildPrompt(affair)
       await agentBridge.sendMessage(prompt, conversationId, {
+        automaticRuntime: true,
         runId: agentRunId,
         sessionId: null,
         workspaceRef: affair.workspaceRef,

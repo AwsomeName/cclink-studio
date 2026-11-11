@@ -1,7 +1,12 @@
 import type { AgentImageAttachment, AgentImageMediaType } from '@shared/ipc/agent'
+import {
+  MAX_AGENT_IMAGES,
+  MAX_AGENT_IMAGE_BYTES,
+  MAX_AGENT_SOURCE_IMAGE_BYTES,
+} from '@shared/agent-image-limits'
+import type { PreparedAgentImage } from './prepare-agent-image'
 
-export const MAX_AGENT_IMAGES = 5
-export const MAX_AGENT_IMAGE_BYTES = 5 * 1024 * 1024
+export { MAX_AGENT_IMAGES, MAX_AGENT_IMAGE_BYTES } from '@shared/agent-image-limits'
 export const AGENT_IMAGE_ACCEPT = 'image/png,image/jpeg,image/gif,image/webp'
 
 const SUPPORTED_MEDIA_TYPES = new Set<AgentImageMediaType>([
@@ -19,33 +24,95 @@ export interface ImageAttachmentImportResult {
 export async function importAgentImageFiles(
   files: Iterable<File>,
   availableSlots = MAX_AGENT_IMAGES,
+  options: { signal?: AbortSignal; prepare?: typeof prepareInWorker } = {},
 ): Promise<ImageAttachmentImportResult> {
   const attachments: AgentImageAttachment[] = []
   const errors: string[] = []
 
   for (const file of files) {
+    options.signal?.throwIfAborted()
     if (attachments.length >= availableSlots) {
       errors.push(`每次最多发送 ${MAX_AGENT_IMAGES} 张图片`)
       break
     }
-    if (!SUPPORTED_MEDIA_TYPES.has(file.type as AgentImageMediaType)) {
+    if (file.type && !SUPPORTED_MEDIA_TYPES.has(file.type as AgentImageMediaType)) {
       errors.push(`${file.name || '图片'}：仅支持 PNG、JPEG、GIF 和 WebP`)
       continue
     }
-    if (file.size <= 0 || file.size > MAX_AGENT_IMAGE_BYTES) {
-      errors.push(`${file.name || '图片'}：单张图片不能超过 5MB`)
+    if (file.size <= 0 || file.size > MAX_AGENT_SOURCE_IMAGE_BYTES) {
+      errors.push(`${file.name || '图片'}：单张原图不能超过 20MB，且不能为空`)
       continue
     }
-    attachments.push({
-      id: `image-${crypto.randomUUID()}`,
-      name: file.name || `pasted-${Date.now()}.${extensionForMediaType(file.type)}`,
-      mediaType: file.type as AgentImageMediaType,
-      data: arrayBufferToBase64(await file.arrayBuffer()),
-      size: file.size,
-    })
+    try {
+      const { blob, preparation } = await (options.prepare ?? prepareInWorker)(file, options.signal)
+      options.signal?.throwIfAborted()
+      if (
+        !SUPPORTED_MEDIA_TYPES.has(blob.type as AgentImageMediaType) ||
+        blob.size <= 0 ||
+        blob.size > MAX_AGENT_IMAGE_BYTES
+      ) {
+        throw new Error('图片处理结果超出发送预算')
+      }
+      const data = arrayBufferToBase64(await blob.arrayBuffer())
+      options.signal?.throwIfAborted()
+      attachments.push({
+        id: `image-${crypto.randomUUID()}`,
+        name: (file.name || `pasted-${Date.now()}.${extensionForMediaType(blob.type)}`).slice(
+          0,
+          512,
+        ),
+        mediaType: blob.type as AgentImageMediaType,
+        data,
+        size: blob.size,
+        ...(preparation ? { preparation } : {}),
+      })
+    } catch (error) {
+      options.signal?.throwIfAborted()
+      errors.push(
+        `${file.name || '图片'}：${error instanceof Error ? error.message : '图片处理失败'}`,
+      )
+    }
   }
 
   return { attachments, errors: [...new Set(errors)] }
+}
+
+// One decoder at a time across composer surfaces. Only bounded prepared bytes become Base64.
+let preparationTail: Promise<unknown> = Promise.resolve()
+function prepareInWorker(file: File, signal?: AbortSignal): Promise<PreparedAgentImage> {
+  const task = preparationTail.then(() => {
+    signal?.throwIfAborted()
+    return new Promise<PreparedAgentImage>((resolve, reject) => {
+      const worker = new Worker(new URL('./agent-image-worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      const finish = (result?: PreparedAgentImage, error?: Error): void => {
+        clearTimeout(timeout)
+        signal?.removeEventListener('abort', abort)
+        worker.terminate()
+        if (error) reject(error)
+        else resolve(result!)
+      }
+      const abort = (): void => finish(undefined, new DOMException('图片处理已取消', 'AbortError'))
+      const timeout = setTimeout(
+        () => finish(undefined, new Error('图片处理超时，请重试或截取重点')),
+        30_000,
+      )
+      signal?.addEventListener('abort', abort, { once: true })
+      worker.onmessage = (event: MessageEvent<{ result?: PreparedAgentImage; error?: string }>) => {
+        if (event.data.error || !event.data.result)
+          finish(undefined, new Error(event.data.error || '图片处理失败'))
+        else finish(event.data.result)
+      }
+      worker.onerror = () => finish(undefined, new Error('图片处理失败，请检查图片后重试'))
+      worker.postMessage(file)
+    })
+  })
+  preparationTail = task.then(
+    () => undefined,
+    () => undefined,
+  )
+  return task
 }
 
 export function imageAttachmentDataUrl(image: AgentImageAttachment): string {

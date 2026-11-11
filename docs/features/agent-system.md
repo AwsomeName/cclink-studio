@@ -554,20 +554,20 @@ interface Message {
 
 ## 当前能力矩阵
 
-| 能力                                  | 状态   | 边界                                            |
-| ------------------------------------- | ------ | ----------------------------------------------- |
-| Agent Panel、消息和流式事件           | 已实现 | 同一 Thread 可在右侧和 Workbench 展示           |
-| Claude Code backend                   | 已实现 | 当前完整工具 Agent 的唯一主线 backend           |
-| Runtime 来源                          | 已实现 | `system` / `custom` / `bundled`，默认 `system`  |
-| Provider 与 API Key                   | 已实现 | Key 由主进程 `CredentialService` 保存           |
-| 工具调用与权限确认                    | 已实现 | 修改性和高风险操作按权限模型确认                |
-| Browser、Editor、FS、Terminal 工具    | 已实现 | 通过主进程和 MCP 边界调用                       |
-| 工作空间 Thread 持久化                 | 已实现 | 可见消息可恢复；Runtime Session 按主进程信任严格恢复 |
-| 取消、错误状态和诊断复制              | 已实现 | 精确取消、`cancelling` 和近期持久终态；真实 Runtime 待验收 |
-| 图片输入                              | 已实现 | PNG/JPEG/GIF/WebP；单条最多 5 张、单张最多 5 MB |
-| HTTP/OpenAI Compatible 完整工具 Agent | 未实现 | 不与普通 Chat Completion 混为一谈               |
-| ACP / 用户自带 Agent                  | 非目标 | CCLink 提供 Agent Runtime，用户只选择模型服务   |
-| 多 Agent、跨会话记忆、操作回放        | 未实现 | 需要单独产品规格和架构评审                      |
+| 能力                                  | 状态   | 边界                                                                                                |
+| ------------------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| Agent Panel、消息和流式事件           | 已实现 | 同一 Thread 可在右侧和 Workbench 展示                                                               |
+| Claude Code backend                   | 已实现 | 当前完整工具 Agent 的唯一主线 backend                                                               |
+| Runtime 来源                          | 已实现 | `system` / `custom` / `bundled`，默认 `system`                                                      |
+| Provider 与 API Key                   | 已实现 | Key 由主进程 `CredentialService` 保存                                                               |
+| 工具调用与权限确认                    | 已实现 | 修改性和高风险操作按权限模型确认                                                                    |
+| Browser、Editor、FS、Terminal 工具    | 已实现 | 通过主进程和 MCP 边界调用                                                                           |
+| 工作空间 Thread 持久化                | 已实现 | 可见消息可恢复；Runtime Session 按主进程信任严格恢复                                                |
+| 取消、错误状态和诊断复制              | 已实现 | 精确取消、`cancelling` 和近期持久终态；真实 Runtime 待验收                                          |
+| 图片输入                              | 已实现 | PNG/JPEG/GIF/WebP；单条最多 5 张、原图最多 20MiB，自动处理为单张最多 3MiB；支持发送预览与清晰度确认 |
+| HTTP/OpenAI Compatible 完整工具 Agent | 未实现 | 不与普通 Chat Completion 混为一谈                                                                   |
+| ACP / 用户自带 Agent                  | 非目标 | CCLink 提供 Agent Runtime，用户只选择模型服务                                                       |
+| 多 Agent、跨会话记忆、操作回放        | 未实现 | 需要单独产品规格和架构评审                                                                          |
 
 图片可以通过文件选择、粘贴或拖放加入 Composer。图片正文只进入当前待发送消息，
 发送成功后从 Composer 清除，不写入工作空间或 conversation 持久化快照。当前本地

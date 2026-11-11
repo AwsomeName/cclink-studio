@@ -1042,7 +1042,7 @@ export class ArticlePublishingService {
 
       const conversationId = `article-publishing-${input.affair.id}`
       const runId = `run-${attempt.launchOperationId}`
-      const terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
+      let terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
       let bound = false
       let boundAffair: WebAffair | null = null
       let launchedRunId: string | null = null
@@ -1106,6 +1106,7 @@ export class ArticlePublishingService {
             ? `${input.prompt}\nmain 已锁定平台草稿：draftUrl=${draftAnchor.url}；任何写入前必须确认当前页仍是该草稿，禁止切换到新稿或其他文章。`
             : input.prompt
         const runPromise = agentBridge.sendMessage(agentPrompt, conversationId, {
+          automaticRuntime: true,
           runId,
           sessionId: null,
           workspaceRef: { kind: 'local', path: input.workspacePath },
@@ -1152,6 +1153,7 @@ export class ArticlePublishingService {
           ],
           onRunPrepared: async (prepared) => {
             if (disposed) throw new Error('文章发布启动已经超时或取消')
+            terminalIdentity = agentBridge.getRuntimeIdentity(conversationId)
             if (prepared.runId !== runId || !prepared.browserTaskRunId) {
               throw new Error('Agent 启动前没有创建绑定账号页的 BrowserTask')
             }

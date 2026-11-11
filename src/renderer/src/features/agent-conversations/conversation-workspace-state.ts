@@ -129,6 +129,7 @@ export function normalizeConversationSnapshot(
         ? conversation.mountedResources.map(stripImagePreview)
         : [],
       pendingImages: [],
+      activeImageDraft: undefined,
       queuedMessageDispatchId: null,
       queuedMessages: Array.isArray(conversation.queuedMessages)
         ? conversation.queuedMessages
@@ -443,6 +444,7 @@ export function buildAgentConversationWorkspaceSnapshot(
       streamingMessageId: null,
       input: '',
       pendingImages: [],
+      activeImageDraft: undefined,
       queuedMessageDispatchId: null,
       queuedMessages: conversation.queuedMessages?.map((item) => ({
         ...item,
