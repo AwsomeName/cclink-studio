@@ -365,9 +365,6 @@ export function TabBar({
         )}
       </div>
       <div className="tab-create-actions" role="group" aria-label="新建">
-        <span className="tab-create-caption" aria-hidden="true">
-          新建
-        </span>
         <button
           type="button"
           className="tab-create-button tab-new-browser-button"

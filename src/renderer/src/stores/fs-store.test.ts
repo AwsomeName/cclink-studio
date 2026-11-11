@@ -9,6 +9,12 @@ import { useTabStore } from './tab-store'
 import { useWorkspaceStore } from './workspace-store'
 import { setWorkspaceStateOwnerKey, setWorkspaceStatePath } from '../utils/workspace-state'
 import { toLocalFileUrl } from '../utils/html-files'
+import {
+  createWorkspaceBootstrapDeps,
+  restoreWorkspaceState,
+} from '../bootstrap/use-workspace-bootstrap'
+import { buildAgentConversationWorkspaceSnapshot } from '../features/agent-conversations/conversation-workspace-state'
+import { createAgentConversationState } from '../features/agent-conversations/conversation-state'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -712,7 +718,73 @@ describe('fs-store workspace switching', () => {
     })
   })
 
-  it('clears stale project runtime when the last workspace path no longer opens', async () => {
+  it.each(['unfiled', 'missing-directory', 'activation-error'] as const)(
+    'does not accumulate empty conversations across %s cold starts',
+    async (scenario) => {
+      vi.mocked(window.cclinkStudio.settings.getAll).mockResolvedValue({
+        lastWorkspacePath: scenario === 'missing-directory' ? '/Users/apple/missing-project' : '',
+        startupWorkspaceTarget: scenario === 'missing-directory' ? 'resume' : 'unfiled',
+        recentWorkspacePaths: [],
+      } as any)
+      if (scenario === 'missing-directory') {
+        vi.mocked(window.cclinkStudio.fs.readDir).mockRejectedValue(new Error('ENOENT'))
+      }
+      let persisted = snapshot(null, {})
+      let expectedIds: string[] | undefined
+      vi.mocked(window.cclinkStudio.workspaceState.get).mockImplementation(async () => persisted)
+
+      for (let boot = 0; boot < 3; boot += 1) {
+        useAgentStore.setState(useAgentStore.getInitialState(), true)
+        if (scenario === 'activation-error') {
+          vi.mocked(
+            window.cclinkStudio.workspaceState.setActiveLocalWorkspace,
+          ).mockRejectedValueOnce(new Error('activation unavailable'))
+        }
+        const result = await restoreWorkspaceState(createWorkspaceBootstrapDeps())
+        expect(result).toEqual({ workspacePath: null, canPersistRuntime: true })
+        const restored = buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), null)
+        expect(restored.conversationOrder).toHaveLength(1)
+        expectedIds ??= restored.conversationOrder
+        expect(restored.conversationOrder).toEqual(expectedIds)
+        expect(restored.activeConversationId).toBe(expectedIds[0])
+        persisted = snapshot(null, { agentConversations: restored })
+      }
+    },
+  )
+
+  it('restores unfiled conversation history without merging a startup placeholder', async () => {
+    vi.mocked(window.cclinkStudio.settings.getAll).mockResolvedValue({
+      lastWorkspacePath: '',
+      startupWorkspaceTarget: 'unfiled',
+      recentWorkspacePaths: [],
+    } as any)
+    const conversation = createAgentConversationState('existing-unfiled', {
+      workspaceRef: { kind: 'global' },
+    })
+    conversation.messages.push({
+      id: 'user-history',
+      role: 'user',
+      content: [{ type: 'text', text: '保留已有对话' }],
+      rawText: '保留已有对话',
+      timestamp: 1,
+    })
+    vi.mocked(window.cclinkStudio.workspaceState.get).mockResolvedValue(
+      snapshot(null, {
+        agentConversations: {
+          conversations: { [conversation.id]: conversation },
+          conversationOrder: [conversation.id],
+          activeConversationId: conversation.id,
+        },
+      }),
+    )
+
+    await restoreWorkspaceState(createWorkspaceBootstrapDeps())
+
+    expect(useAgentStore.getState().conversationOrder).toEqual([conversation.id])
+    expect(useAgentStore.getState().messages).toMatchObject(conversation.messages)
+  })
+
+  it('startup clears stale project runtime when the last workspace path no longer opens', async () => {
     const missingWorkspacePath = '/Users/apple/missing-project'
     useWorkspaceStore
       .getState()
@@ -760,7 +832,7 @@ describe('fs-store workspace switching', () => {
       )
     })
 
-    await useFsStore.getState().initWorkspace()
+    await restoreWorkspaceState(createWorkspaceBootstrapDeps())
 
     expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual({ kind: 'global' })
     expect(useFsStore.getState().workspacePath).toBeNull()

@@ -108,6 +108,7 @@ export function ActivityBar(): React.ReactElement {
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
   const agentContentMode = useUIStore((s) => s.agentContentMode)
+  const sessionsActive = agentPanelMode === 'right' && agentContentMode !== 'chat'
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
   const hideSidebar = useUIStore((s) => s.hideSidebar)
@@ -142,7 +143,9 @@ export function ActivityBar(): React.ReactElement {
     if (id === 'sessions') {
       void useCommandStore
         .getState()
-        .executeCommand('agent.showConversations', { source: 'toolbar' })
+        .executeCommand(sessionsActive ? 'workbench.toggleAgentPanel' : 'agent.showConversations', {
+          source: 'toolbar',
+        })
       return
     }
     if (id === 'company-workspace') {
@@ -180,7 +183,7 @@ export function ActivityBar(): React.ReactElement {
               <button
                 type="button"
                 key={id}
-                className={`activity-bar-icon ${id === 'sessions' ? (agentPanelMode === 'right' && agentContentMode !== 'chat' ? 'active' : '') : activePanel === id ? 'active' : ''}`}
+                className={`activity-bar-icon ${(id === 'sessions' ? sessionsActive : activePanel === id) ? 'active' : ''}`}
                 onClick={() => handleClick(id)}
                 onContextMenu={(event) => {
                   event.preventDefault()
@@ -202,11 +205,7 @@ export function ActivityBar(): React.ReactElement {
                   )
                 }}
                 aria-label={label}
-                aria-pressed={
-                  id === 'sessions'
-                    ? agentPanelMode === 'right' && agentContentMode !== 'chat'
-                    : activePanel === id
-                }
+                aria-pressed={id === 'sessions' ? sessionsActive : activePanel === id}
                 title={label}
               >
                 <Icon size={18} />

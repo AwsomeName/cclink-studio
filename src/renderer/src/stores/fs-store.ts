@@ -18,7 +18,6 @@ import {
   isWorkspaceRuntimeTransitionCurrent,
   prepareWorkspaceRuntimeTransition,
 } from '../utils/workspace-transition'
-import { hydrateRuntimeSections } from '../utils/workspace-runtime'
 import {
   filterExistingWorkspacePaths,
   getRecentWorkspacePaths,
@@ -372,7 +371,7 @@ interface FsState {
       commitGuard?: () => boolean
     },
   ) => Promise<boolean>
-  /** 启动时从设置恢复上次工作区（目录失效则静默清空记录） */
+  /** 启动时确认工作空间；运行态统一由 WorkspaceBootstrap 读取快照后恢复。 */
   initWorkspace: (
     workspacePath?: string | null,
     settings?: AppSettings | null,
@@ -524,7 +523,8 @@ export const useFsStore = create<FsState>((set, get) => ({
       if (!last) {
         await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null, 'restore')
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
-        hydrateRuntimeSections(null)
+        // Bootstrap restores the persisted snapshot next. Hydrating an empty snapshot here
+        // would create a new conversation and merge it into history on every cold start.
         set({
           workspacePath: null,
           tree: [],
@@ -543,7 +543,6 @@ export const useFsStore = create<FsState>((set, get) => ({
       if (!ok) {
         await window.cclinkStudio.workspaceState.setActiveLocalWorkspace(null, 'restore')
         useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
-        hydrateRuntimeSections(null)
         setWorkspaceStatePath(null)
         return null
       }
@@ -562,7 +561,6 @@ export const useFsStore = create<FsState>((set, get) => ({
     } catch (error) {
       console.warn('[FsStore] 工作区与最近项目恢复失败:', error)
       useWorkspaceStore.getState().commitActiveWorkspace(globalWorkspaceRef())
-      hydrateRuntimeSections(null)
       return null
     }
   },

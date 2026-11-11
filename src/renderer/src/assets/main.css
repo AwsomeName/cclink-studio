@@ -5790,13 +5790,6 @@ body.is-resizing-panels .main-area > div {
   background: var(--bg-tab);
 }
 
-.tab-create-caption {
-  margin-right: 3px;
-  color: var(--text-muted);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
 .tab-create-button {
   display: inline-flex;
   align-items: center;
@@ -5824,7 +5817,6 @@ body.is-resizing-panels .main-area > div {
 }
 
 @container workbench (max-width: 760px) {
-  .tab-create-caption,
   .tab-create-button span {
     display: none;
   }
