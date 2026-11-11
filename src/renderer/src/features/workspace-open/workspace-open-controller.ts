@@ -1,4 +1,4 @@
-import type { RemoteWorkspaceRef, WorkspaceRef } from '@shared/workspace-ref'
+import type { LocalWorkspaceRef, RemoteWorkspaceRef, WorkspaceRef } from '@shared/workspace-ref'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
@@ -28,13 +28,15 @@ export async function pickLocalWorkspace(): Promise<boolean> {
   return true
 }
 
-export async function openDefaultWorkspace(): Promise<void> {
+export async function openDefaultWorkspace(): Promise<LocalWorkspaceRef | null> {
   const generation = beginWorkspaceRuntimeTransition()
   const result = await window.cclinkStudio.workspaceState.ensureDefaultWorkspace()
-  if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
+  if (!isWorkspaceRuntimeTransitionCurrent(generation)) return null
   if (!result.success || !result.workspacePath)
     throw new Error(result.error || '默认工作空间不可用')
-  await openWorkspaceRef({ kind: 'local', path: result.workspacePath })
+  const ref: LocalWorkspaceRef = { kind: 'local', path: result.workspacePath }
+  await openWorkspaceRef(ref)
+  return ref
 }
 
 export async function setCurrentWorkspaceAsDefault(): Promise<void> {

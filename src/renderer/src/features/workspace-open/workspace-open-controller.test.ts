@@ -19,7 +19,11 @@ import {
   setWorkspaceStatePath,
 } from '../../utils/workspace-state'
 import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
-import { openWorkspaceRef, pickLocalWorkspace } from './workspace-open-controller'
+import {
+  openDefaultWorkspace,
+  openWorkspaceRef,
+  pickLocalWorkspace,
+} from './workspace-open-controller'
 
 function snapshot(
   workspaceKey: string,
@@ -54,6 +58,10 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: {
+        ensureDefaultWorkspace: vi.fn(async () => ({
+          success: true,
+          workspacePath: '/workspace/default',
+        })),
         get: vi.fn(async (workspaceKey: string) =>
           snapshot(workspaceKey, {
             tabs: { tabs: [], activeTabId: null },
@@ -108,6 +116,24 @@ afterEach(() => {
 })
 
 describe('workspace-open-controller', () => {
+  it('returns the activated default identity for commands that continue after the transition', async () => {
+    const ref = await openDefaultWorkspace()
+    expect(ref).toEqual(localWorkspaceRef('/workspace/default'))
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(ref)
+  })
+
+  it('returns no target when a later workspace transition cancels default initialization', async () => {
+    vi.mocked(window.cclinkStudio.workspaceState.ensureDefaultWorkspace).mockImplementation(
+      async () => {
+        beginWorkspaceRuntimeTransition()
+        return { success: true, workspacePath: '/workspace/default' }
+      },
+    )
+    await expect(openDefaultWorkspace()).resolves.toBeNull()
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(localRef)
+    expect(window.cclinkStudio.workspaceState.setActiveLocalWorkspace).not.toHaveBeenCalled()
+  })
+
   it('keeps the latest width when the picker reopens the current workspace during a pending layout write', async () => {
     await flushPendingWorkspaceStateWrites()
     let savedLayout = normalizeWorkspaceLayout({ sidebarWidth: 200, agentPanelModeSource: 'user' })

@@ -2,6 +2,7 @@ import type { Command } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
+import { openDefaultWorkspace } from '../workspace-open/workspace-open-controller'
 export type CompanySection = 'overview' | 'projects' | 'finance' | 'operations' | 'knowledge'
 export const companySections: Array<{ id: CompanySection; label: string }> = [
   { id: 'overview', label: '公司总览' },
@@ -45,6 +46,18 @@ export function openCompanyWorkspace(
     })
   }
 }
+/** 公司入口为未归档提供默认资料归属，页内导航仍使用当前工作空间。 */
+export async function enterCompanyWorkspace(section: CompanySection = 'overview'): Promise<void> {
+  if (useWorkspaceStore.getState().activeWorkspaceRef.kind === 'global') {
+    const opened = await openDefaultWorkspace()
+    const active = useWorkspaceStore.getState().activeWorkspaceRef
+    if (!opened || active.kind !== 'local' || active.path !== opened.path) {
+      throw new Error('工作空间已发生变化，请重新打开公司经营')
+    }
+  }
+  openCompanyWorkspace(section)
+}
+
 export function createCompanyWorkspaceCommands(): Command[] {
   return companySections.map((section) => ({
     id: 'company.' + section.id,
@@ -52,9 +65,9 @@ export function createCompanyWorkspaceCommands(): Command[] {
     category: '公司',
     risk: 'read',
     enabled: () => ({
-      enabled: useWorkspaceStore.getState().activeWorkspaceRef.kind === 'local',
+      enabled: useWorkspaceStore.getState().activeWorkspaceRef.kind !== 'remote',
       reason: '公司视图仅支持本地工作空间',
     }),
-    action: () => openCompanyWorkspace(section.id),
+    action: () => enterCompanyWorkspace(section.id),
   }))
 }
