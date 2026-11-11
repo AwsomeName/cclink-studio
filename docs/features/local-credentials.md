@@ -236,6 +236,15 @@ interface CredentialMetadata {
 - Renderer 和 Agent 工具不得取得 Authorization Header 或原始凭证。
 - 删除数据源时，由产品确认决定是否同时删除凭证；第一版默认删除专属凭证，复用凭证必须阻止误删。
 
+### 浏览器 HTTP Basic 认证
+
+用户在隔离认证窗口勾选“记住账号密码”后，BrowserAuthProcessService 通过本服务保存
+`browser-http-auth:<sha256>` 记录。ID 绑定 Browser Profile、完整 origin 和原始 realm；
+用户名及密码保留原始空格，允许空密码。公网 HTTP 的后续自动发送必须另有明确授权。
+恢复只发生在主进程，密码不进入网页、工作空间或账号资源快照。用户可在“本地凭证”设置
+按站点识别并清除记录；当前 Chromium 内存认证缓存可能继续有效，重启后不再恢复。
+详细验收见 [HTTP Basic 记住账号密码](../testing/browser-http-auth-remember.md)。
+
 ### 扩展服务
 
 - 只有已启用且有真实消费者的扩展才能注册凭证类型。

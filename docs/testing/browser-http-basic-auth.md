@@ -10,7 +10,9 @@
 ## 用户现在能做什么、还不能做什么
 
 代码修复后，用户在 Studio Browser Tab 打开受保护地址时会看到独立的用户名/密码窗口；正确提交
-后原 Tab 继续加载。公网明文 HTTP 必须先勾选风险确认，凭证只用于当前挑战，不保存。
+后原 Tab 继续加载。默认只进行单次认证；勾选“记住账号密码”后由统一凭证服务保存，
+重启后在同一 Browser Profile、origin 和 realm 自动认证。公网 HTTP 需要明确确认后续
+自动发送授权。实现边界与新验收动作见 [记住账号密码](browser-http-auth-remember.md)。
 
 受控的真实 Electron `WebContentsView` 已验证“错误密码再次挑战 → 正确密码进入受保护页面”。
 用户真实 FRP 地址尚未在本次开发中输入真实凭证，因此在完成本文第 9 项前仍不能把缺陷标为 Closed。
@@ -33,8 +35,8 @@
    移动 Tab 或销毁 WebContents 时，旧 challenge 必须取消，不能把凭证提交给已经失效的页面。
 6. 打开公网明文 `http://` Basic Auth 地址时，Studio 必须在输入前显示高风险警告，并默认聚焦
    “取消”；只有用户明确选择一次性继续后才允许提交。`localhost`/loopback 测试地址可显示较轻提示。
-7. 重启 Studio 后不会从工作区状态、账号资源、日志、诊断或系统钥匙串恢复用户名和密码；首版
-   不提供“记住密码”。
+7. 未勾选记住时，重启后不恢复密码；勾选后只从 CredentialService 恢复。密码不得进入
+   工作区状态、账号资源、日志、诊断或系统钥匙串。
 8. 复制框架诊断时能看到 challenge 的时间、Tab、owner、规范化 origin、scheme、realm、尝试次数
    和取消/提交/拒绝结果，但不能包含用户名、密码、Authorization header 或可反推凭证的值。
 9. 在用户真实 FRP 面板上完成一次正确登录；如果仍使用公网 HTTP，验收者必须先看到并确认明文
@@ -101,7 +103,7 @@ FRP 返回 401 + WWW-Authenticate: Basic
 | iframe、图片等子资源 challenge      | 默认拒绝，避免页面用子资源伪造登录请求         |
 | 代理 `407` / `authInfo.isProxy`     | 不支持并明确取消                               |
 | Digest、NTLM、Negotiate、客户端证书 | 不在本缺陷首版范围                             |
-| 保存/自动填充密码                   | 不支持；如未来需要，另做产品确认和凭证边界设计 |
+| 保存/自动认证密码                   | 用户勾选后按 Profile、origin、原始 realm 隔离保存；HTTP 需额外持久授权 |
 | Agent 自动提供或读取凭证            | 禁止；必须由真人在隔离对话框输入               |
 
 Basic Auth 只用 Base64 编码凭证，不提供传输加密。RFC 7617 明确要求敏感场景结合 TLS；参见
@@ -117,6 +119,7 @@ HTTP 变安全，也不能替代服务器 HTTPS 配置。
 | Browser View、Session、URL、owner window  | `BrowserManager`                         | 跟随 Browser Tab/WebContents       |
 | 一次性 challenge callback、尝试次数、超时 | `BrowserAuthProcessService` 的 HTTP 模式 | 单次 challenge；关闭/失效/超时取消 |
 | 凭证输入草稿                              | 隔离认证子进程的页面局部状态             | 窗口关闭即销毁                     |
+| 用户选择保存的凭证                       | `CredentialService`                    | 重启恢复，在本地凭证设置中清除     |
 | Cookie/Chromium 进程内认证缓存            | Electron Session                         | 不复制到资源或工作区状态           |
 | 安全诊断摘要                              | `BrowserManager` 诊断投影                | 有界数量、完全脱敏                 |
 
@@ -135,7 +138,7 @@ callback；它不会成为第二个 Browser/Profile/Session owner。
 3. 拒绝代理、非 `basic`、没有活动顶层导航代次，以及 challenge host/port 与目标 origin 不一致的请求；
 4. 生成随机 `requestId`，把 callback 交给 `BrowserAuthProcessService`，不把 callback 或凭证交给
    renderer Store；
-5. 服务沿用 V2EX 登录的独立子进程模式，打开一个应用自有认证窗口；提交时再次验证窗口 sender、
+5. 有匹配且授权的已保存凭证时由主进程自动提交一次；否则沿用独立子进程模式打开认证窗口。提交时再次验证窗口 sender、
    request ID、Tab generation 和 origin；
 6. 校验通过后只调用一次 `callback(username, password)`；取消、超时、Tab 移动、导航代次变化、
    WebContents/owner window 销毁时调用无参数 callback 并释放；
@@ -156,7 +159,7 @@ callback；它不会成为第二个 Browser/Profile/Session owner。
 - 主进程按精确的 prompt `WebContents`、main frame URL 和 `challengeId` 校验 IPC sender；
 - 页面只显示规范化 origin、realm、是否明文 HTTP 和尝试失败状态；realm 去除控制字符、限制长度并
   按纯文本渲染；
-- 用户名和密码只保存在组件局部内存，不进入 Zustand、localStorage、表单自动完成、剪贴板、
+- 输入草稿只保存在页面局部内存；用户选择记住时由主进程写入 CredentialService，不进入 Zustand、localStorage、表单自动完成、剪贴板、
   错误对象、遥测或日志；密码输入框默认禁止显示明文；
 - 使用临时 `userData` 目录和非持久 Session；窗口/子进程退出后清理，网页 `WebContentsView` 不能
   覆盖该顶层窗口。
@@ -229,7 +232,7 @@ Agent runtime。
 | 用 Playwright 处理登录框                | Basic Auth 在 DOM/Page 之前发生；当前 Page claim 失败时更不能依赖自动化         |
 | 全局 `app.on('login')` 自动填固定凭证   | 会扩大到代理、UtilityProcess 和非 Browser 内容，无法证明作用域正确              |
 | 直接把 Basic Auth 塞进 V2EX Cookie 契约 | 两者结束条件不同；本实现只复用进程/窗口基础设施，使用独立 child mode 和消息契约 |
-| 默认保存到 CredentialService            | 超出最小闭环，引入 host/realm/profile 绑定、轮换、删除和跨工作空间授权问题      |
+| 无需勾选即默认保存到 CredentialService  | 缺少用户保存授权；现行实现必须由用户勾选并绑定 Profile/origin/realm             |
 | 对公网 HTTP 静默提交                    | Basic Auth 不加密密码，违背最小权限与明确风险确认原则                           |
 
 ## 关闭条件

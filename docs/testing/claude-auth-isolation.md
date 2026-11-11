@@ -104,3 +104,39 @@ Codex 默认接入后的真实 Electron 回归再次通过：有效 Key 对话�
 
 限制：本次真实进程与 UI 验证在 macOS arm64 上执行；其他系统未做真人验收。macOS 依赖系统
 提供的受保护进程启动能力；不可用时必须明确失败，不能降低凭证保护条件。
+
+## 2026-11-11：Studio 默认目录内的会话存储
+
+用户确认的目标是：Studio 的 Claude 会话留在 Studio 默认数据目录，不进入本机 Claude
+默认会话目录；不要求阻止同一系统用户主动指定 Studio 路径后读取文件。
+
+现有实现已满足路径约束，无需改变运行时或默认 Agent：
+
+- macOS 正常启动的配置根为
+  `~/Library/Application Support/CCLink Studio/agent-runtime/claude-api`，会话位于其
+  `projects/<encoded-workspace>/<session-id>.jsonl` 下。
+- 普通对话和设置中的连接测试均由主进程传入上述路径，只改变子进程环境，不修改
+  全局 `CLAUDE_CONFIG_DIR`、本机 `~/.claude`、`~/.claude.json` 或桌面端索引。
+- macOS 受保护启动入口禁止子进程读写本机 Claude 默认配置目录；独立目录不可用时
+  报错，不回退默认目录。会话持久化和继续会话仍保留。
+
+真人验收动作：在设置中保存自己的服务端点和 Key，选择 Claude Code 发送消息；确认
+Studio 数据目录内新增原生会话文件，继续同一会话、重启后检查文件仍保留。检查桌面端的
+侧边栏和 `/resume` 属于另一项针对其具体版本的验收，不能由本节 SDK 检查替代。
+
+本轮扩展 `scripts/claude-auth-isolation-ui-smoke.mjs`，使用真实 Electron、真实 Claude
+2.1.211 和本机模拟 API，先通过设置界面保存 Key、测试连接，再通过 renderer IPC 发送
+消息。所有配置与会话均在临时 userData，未读取真实聊天、未调用付费模型。
+
+| 检查                         | 结果                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------- |
+| 真实会话落盘                 | 从临时 `userData/agent-runtime/claude-api/projects` 列出并读取成功     |
+| 外部配置目录发现同一会话     | 独立 SDK 进程使用另一个配置根，列表不可见，按 ID 读取为空              |
+| 继承的外部配置路径           | 被 Studio 私有路径覆盖；连接测试、正常会话、401 和重启后外部目录均为空 |
+| 继续会话                     | 新 Claude 进程继续同一个原生 Session ID                                |
+| 重启后存储                   | Studio 私有目录中的原生会话仍可读取                                    |
+| 默认 Claude 配置目录读写保护 | 5 项隔离 smoke 全通过，包含真实 macOS 拒绝外部凭证读写                 |
+
+结果文件：
+`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-auth-ui-UJeqfV/result.json`。
+本轮仅补回归验证和记录，没有更改生产存储路径、桌面端配置、登录或历史会话。

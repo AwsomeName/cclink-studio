@@ -32,6 +32,22 @@ afterEach(async () => {
 })
 
 describe('CredentialService', () => {
+  it('round-trips exact Basic passwords, including empty ones, and removes them', async () => {
+    const id = `browser-http-auth:${'a'.repeat(64)}`
+    const service = createService()
+    await service.load()
+    for (const password of [' secret with spaces ', '']) {
+      await service.setCredential({ id, kind: 'basic', fields: { username: ' user ', password } })
+      const reloaded = createService()
+      await reloaded.load()
+      expect(reloaded.resolveCredential(id)).toEqual({ username: ' user ', password })
+      expect(JSON.stringify(reloaded.listMetadata())).not.toContain(' secret with spaces ')
+    }
+    await service.removeCredential(id)
+    const reloaded = createService()
+    await reloaded.load()
+    expect(reloaded.resolveCredential(id)).toBeNull()
+  })
   it('persists a visible plaintext file and reloads all consumers from one store', async () => {
     const service = createService()
     await service.load()

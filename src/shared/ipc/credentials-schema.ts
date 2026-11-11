@@ -1,7 +1,7 @@
 import type { CredentialKind, SetCredentialInput } from './credentials'
 
 const CREDENTIAL_ID_PATTERN =
-  /^(agent|git|data-source|extension|mcp):[A-Za-z0-9][A-Za-z0-9._:-]{0,126}$/
+  /^(?:(agent|git|data-source|extension|mcp):[A-Za-z0-9][A-Za-z0-9._:-]{0,126}|browser-http-auth:[a-f0-9]{64})$/
 const FIELD_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/
 const CREDENTIAL_KINDS = new Set<CredentialKind>(['api-key', 'token', 'basic', 'bearer', 'generic'])
 const MAX_FIELD_LENGTH = 65_536
@@ -42,8 +42,13 @@ export function parseSetCredentialInput(value: unknown): SetCredentialInput {
   for (const [field, rawValue] of entries) {
     const fieldName = parseCredentialFieldName(field)
     if (typeof rawValue !== 'string') throw new Error('凭证字段值必须是字符串')
-    const normalized = rawValue.trim()
-    if (!normalized || normalized.length > MAX_FIELD_LENGTH) {
+    const exactBasicField =
+      id.startsWith('browser-http-auth:') && ['username', 'password'].includes(fieldName)
+    const normalized = exactBasicField ? rawValue : rawValue.trim()
+    if (
+      (!normalized && !(exactBasicField && fieldName === 'password')) ||
+      normalized.length > MAX_FIELD_LENGTH
+    ) {
       throw new Error('凭证字段值为空或超过长度限制')
     }
     fields[fieldName] = normalized

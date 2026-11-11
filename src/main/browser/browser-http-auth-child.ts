@@ -25,7 +25,7 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
   const window = new BrowserWindow({
     title: `登录 ${options.origin}`,
     width: 500,
-    height: options.transport === 'insecure-http' ? 500 : 430,
+    height: options.transport === 'insecure-http' ? 660 : 560,
     minWidth: 440,
     minHeight: options.transport === 'insecure-http' ? 460 : 390,
     show: false,
@@ -46,6 +46,7 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
 
   let completed = false
   let acknowledgementTimer: ReturnType<typeof setTimeout> | null = null
+  let acknowledge: ((message: BrowserHttpAuthAcknowledgement) => void) | null = null
   const send = (message: BrowserHttpAuthChildMessage): void => {
     if (typeof process.send === 'function') process.send(message)
   }
@@ -81,19 +82,43 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
     if (options.transport === 'insecure-http' && !response.allowInsecure) {
       throw new Error('必须明确确认明文 HTTP 风险')
     }
+    if (response.remember && !options.canRemember) throw new Error('凭证存储不可用')
+    if (
+      options.transport === 'insecure-http' &&
+      response.remember &&
+      !response.allowInsecureAutoLogin
+    ) {
+      throw new Error('必须确认以后自动发送凭证')
+    }
 
     completed = true
-    send({
-      type: 'browser-http-auth-submitted',
-      requestId: options.requestId,
-      tabId: options.tabId,
-      runtimeGeneration: options.runtimeGeneration,
-      username: response.username,
-      password: response.password,
-    })
-    acknowledgementTimer = setTimeout(() => {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        acknowledge = (message) =>
+          message.error ? reject(new Error('credential-save-failed')) : resolve()
+        acknowledgementTimer = setTimeout(() => reject(new Error('ack-timeout')), 10_000)
+        send({
+          type: 'browser-http-auth-submitted',
+          requestId: options.requestId,
+          tabId: options.tabId,
+          runtimeGeneration: options.runtimeGeneration,
+          username: response.username,
+          password: response.password,
+          remember: response.remember,
+          allowInsecure: response.allowInsecure,
+          allowInsecureAutoLogin: response.allowInsecureAutoLogin,
+        })
+      })
       if (!window.isDestroyed()) window.close()
-    }, 10_000)
+    } catch {
+      completed = false
+      throw new Error(
+        '凭证保存或提交失败；可取消记住后单次登录，或在设置 → 本地凭证中检查存储状态。',
+      )
+    } finally {
+      if (acknowledgementTimer) clearTimeout(acknowledgementTimer)
+      acknowledge = null
+    }
   }
 
   ipcMain.handle(BROWSER_HTTP_AUTH_RESPONSE_CHANNEL, handleResponse)
@@ -111,8 +136,7 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
     if (message?.type !== 'browser-http-auth-ack' || message.requestId !== options.requestId) {
       return
     }
-    if (acknowledgementTimer) clearTimeout(acknowledgementTimer)
-    if (!window.isDestroyed()) window.close()
+    acknowledge?.(message)
   })
   process.once('disconnect', () => {
     if (!window.isDestroyed()) window.close()
@@ -132,7 +156,7 @@ function buildBrowserHttpAuthPage(options: BrowserHttpAuthChildOptions): string 
     ? `<section class="warning" role="alert">
         <strong>此连接不安全</strong>
         <p>这个地址使用明文 HTTP，用户名和密码可能被同一网络中的其他人看到。推荐先配置 HTTPS。</p>
-        <label><input id="allow-insecure" type="checkbox"> 我了解风险，仍然只提交这一次</label>
+        <label><input id="allow-insecure" type="checkbox"> <span id="insecure-label">我了解风险，仍然只提交这一次</span></label>
       </section>`
     : loopback
       ? `<p class="notice">这是本机 HTTP 地址，凭证仍未经过 TLS 加密。</p>`
@@ -146,15 +170,15 @@ function buildBrowserHttpAuthPage(options: BrowserHttpAuthChildOptions): string 
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>登录受保护页面</title>
     <style>
-      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      :root { color-scheme: light dark; font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       * { box-sizing: border-box; }
-      body { margin: 0; padding: 28px; color: #202124; background: #f6f8fa; }
-      main { max-width: 444px; margin: 0 auto; padding: 26px; background: #fff; border: 1px solid #d8dee4; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+      body { margin: 0; padding: 20px; color: #202124; background: #f6f8fa; }
+      main { max-width: 444px; margin: 0 auto; padding: 20px; background: #fff; border: 1px solid #d8dee4; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
       h1 { margin: 0 0 8px; font-size: 22px; }
       .origin { margin: 0 0 4px; overflow-wrap: anywhere; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: #0969da; }
-      .realm { margin: 0 0 18px; color: #57606a; }
-      label { display: block; margin: 12px 0 5px; font-size: 13px; font-weight: 600; }
-      input[type="text"], input[type="password"] { width: 100%; padding: 10px 11px; border: 1px solid #afb8c1; border-radius: 6px; font: inherit; background: #fff; color: #202124; }
+      .realm { margin: 0 0 12px; color: #57606a; }
+      label { display: block; margin: 10px 0 4px; font-size: 13px; font-weight: 600; }
+      input[type="text"], input[type="password"] { width: 100%; padding: 8px 10px; border: 1px solid #afb8c1; border-radius: 6px; font: inherit; background: #fff; color: #202124; }
       input:focus { border-color: #0969da; outline: 2px solid rgba(9,105,218,.2); }
       .notice, .error, .warning { margin: 14px 0; padding: 10px 12px; border-radius: 6px; font-size: 13px; line-height: 1.45; }
       .notice { background: #ddf4ff; color: #0550ae; }
@@ -164,7 +188,7 @@ function buildBrowserHttpAuthPage(options: BrowserHttpAuthChildOptions): string 
       .warning p { margin: 6px 0 10px; }
       .warning label { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-weight: 500; }
       .warning input { margin-top: 3px; }
-      .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+      .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
       button { padding: 9px 16px; border: 1px solid #afb8c1; border-radius: 6px; background: #f6f8fa; color: #24292f; font: inherit; cursor: pointer; }
       button.primary { border-color: #0969da; background: #0969da; color: #fff; }
       button:disabled { cursor: default; opacity: .55; }
@@ -190,6 +214,12 @@ function buildBrowserHttpAuthPage(options: BrowserHttpAuthChildOptions): string 
         <input id="username" type="text" autocomplete="off" maxlength="512" required>
         <label for="password">密码</label>
         <input id="password" type="password" autocomplete="new-password" maxlength="4096">
+        <label><input id="remember" type="checkbox" ${options.canRemember ? '' : 'disabled'}> 记住账号密码，重启后自动登录</label>
+        <p class="notice">${
+          options.canRemember
+            ? '仅用于此浏览器账号和此站点。凭证以明文保存在本机，可在“设置 → 本地凭证”中清除。'
+            : '本地凭证存储不可用，本次仍可登录。'
+        }</p>
         <div class="actions">
           <button id="cancel" type="button">取消</button>
           <button id="submit" class="primary" type="submit">登录</button>

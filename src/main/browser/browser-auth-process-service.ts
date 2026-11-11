@@ -4,6 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserManager } from './browser-manager'
+import type { CredentialService } from '../credentials/credential-service'
+import { resolveBrowserHttpAuthCredential } from './browser-http-auth-credentials'
 import {
   CLEAN_BROWSER_CHILD_ARGUMENT,
   encodeCleanBrowserChildOptions,
@@ -37,6 +39,7 @@ interface ActiveHttpAuthChild {
   userDataPath: string
   timeout: ReturnType<typeof setTimeout>
   settled: boolean
+  processing?: boolean
 }
 
 interface HttpAuthAttemptState {
@@ -56,10 +59,12 @@ export class BrowserAuthProcessService {
   private activeAuthRequest: BrowserAuthRequest | null = null
   private readonly activeHttpAuthChildren = new Map<string, ActiveHttpAuthChild>()
   private readonly httpAuthAttempts = new Map<string, HttpAuthAttemptState>()
+  private readonly attemptedSavedCredentials = new Map<string, Set<string>>()
 
   constructor(
     private readonly mainWindow: BrowserWindow,
     private readonly browserManager: BrowserManager,
+    private readonly credentialService: CredentialService | null = null,
   ) {}
 
   open(request: BrowserAuthRequest): void {
@@ -194,6 +199,10 @@ export class BrowserAuthProcessService {
 
   openHttpBasic(request: BrowserHttpAuthRequest, callback: BrowserHttpAuthCallback): void {
     this.stopHttpAuthChild(request.tabId)
+    if (!this.browserManager.isBrowserHttpAuthCurrent(request)) {
+      callback()
+      return
+    }
     const attempt = this.resolveHttpAuthAttempt(request)
     if (attempt > HTTP_AUTH_MAX_ATTEMPTS) {
       this.browserManager.recordHttpAuthOutcome(
@@ -206,11 +215,37 @@ export class BrowserAuthProcessService {
       return
     }
 
+    const key = `${request.runtimeGeneration}:${request.credentialId ?? ''}`
+    const attempted = this.attemptedSavedCredentials.get(request.tabId) ?? new Set<string>()
+    this.attemptedSavedCredentials.set(request.tabId, attempted)
+    if (request.credentialId && !attempted.has(key)) {
+      attempted.add(key)
+      try {
+        const saved = resolveBrowserHttpAuthCredential(this.credentialService, request)
+        if (saved) {
+          this.rememberSubmittedAttempt({ request, attempt })
+          this.browserManager.recordHttpAuthOutcome(
+            request,
+            'submitted',
+            attempt,
+            'saved-credential',
+          )
+          callback(saved.username, saved.password)
+          return
+        }
+      } catch {
+        // Credential storage failure must not prevent one-time manual authentication.
+      }
+    }
+
     const userDataPath = mkdtempSync(join(tmpdir(), 'cclink-http-auth-'))
     const encodedOptions = encodeBrowserHttpAuthChildOptions({
       ...request,
       attempt,
       userDataPath,
+      canRemember: Boolean(
+        request.credentialId && this.credentialService?.getStatus().status === 'ready',
+      ),
     })
     const childArguments = [`${BROWSER_HTTP_AUTH_CHILD_ARGUMENT}${encodedOptions}`]
     if (!app.isPackaged) childArguments.unshift(app.getAppPath())
@@ -259,7 +294,7 @@ export class BrowserAuthProcessService {
       const text = String(chunk).trim()
       if (text) console.warn(`[BrowserHttpAuth] ${text}`)
     })
-    child.on('message', (message: unknown) => this.handleHttpAuthChildMessage(entry, message))
+    child.on('message', (message: unknown) => void this.handleHttpAuthChildMessage(entry, message))
     child.on('exit', () => {
       if (!entry.settled) this.settleHttpAuthEntry(entry)
       this.releaseHttpAuthEntry(entry)
@@ -278,6 +313,7 @@ export class BrowserAuthProcessService {
   cancelHttpBasicForTab(tabId: string): void {
     this.stopHttpAuthChild(tabId, 'tab-closed')
     this.clearHttpAuthAttempt(tabId)
+    this.attemptedSavedCredentials.delete(tabId)
   }
 
   cancelForTab(tabId: string): void {
@@ -291,6 +327,7 @@ export class BrowserAuthProcessService {
       this.stopHttpAuthChild(tabId, 'shutdown')
     }
     for (const tabId of [...this.httpAuthAttempts.keys()]) this.clearHttpAuthAttempt(tabId)
+    this.attemptedSavedCredentials.clear()
   }
 
   private async handleChildMessage(
@@ -334,15 +371,24 @@ export class BrowserAuthProcessService {
     child.kill('SIGTERM')
   }
 
-  private handleHttpAuthChildMessage(entry: ActiveHttpAuthChild, message: unknown): void {
+  private async handleHttpAuthChildMessage(
+    entry: ActiveHttpAuthChild,
+    message: unknown,
+  ): Promise<void> {
     if (
       entry.settled ||
+      entry.processing ||
       this.activeHttpAuthChildren.get(entry.request.tabId) !== entry ||
       !isBrowserHttpAuthChildMessage(message) ||
       message.requestId !== entry.request.requestId ||
       message.tabId !== entry.request.tabId ||
       message.runtimeGeneration !== entry.request.runtimeGeneration
     ) {
+      return
+    }
+
+    if (!this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
+      this.stopHttpAuthChild(entry.request.tabId, 'stale-request')
       return
     }
 
@@ -357,6 +403,49 @@ export class BrowserAuthProcessService {
       return
     }
 
+    if (
+      entry.request.transport === 'insecure-http' &&
+      (!message.allowInsecure || (message.remember && !message.allowInsecureAutoLogin))
+    )
+      return
+
+    entry.processing = true
+    if (message.remember) {
+      try {
+        if (!this.credentialService || !entry.request.credentialId) throw new Error('unavailable')
+        await this.credentialService.setCredential({
+          id: entry.request.credentialId,
+          kind: 'basic',
+          fields: {
+            username: message.username,
+            password: message.password,
+            origin: entry.request.origin,
+            allowInsecureAutoLogin: String(
+              entry.request.transport === 'insecure-http' && message.allowInsecureAutoLogin,
+            ),
+          },
+        })
+      } catch {
+        entry.processing = false
+        if (!entry.settled)
+          entry.child.send?.({
+            type: 'browser-http-auth-ack',
+            requestId: entry.request.requestId,
+            error: 'credential-save-failed',
+          } satisfies BrowserHttpAuthAcknowledgement)
+        this.browserManager.recordHttpAuthOutcome(
+          entry.request,
+          'prompted',
+          entry.attempt,
+          'credential-save-failed',
+        )
+        return
+      }
+    }
+    if (entry.settled || !this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
+      this.stopHttpAuthChild(entry.request.tabId, 'stale-request')
+      return
+    }
     this.rememberSubmittedAttempt(entry)
     this.browserManager.recordHttpAuthOutcome(entry.request, 'submitted', entry.attempt)
     this.settleHttpAuthEntry(entry, message.username, message.password)
@@ -409,7 +498,7 @@ export class BrowserAuthProcessService {
     return state.attempt + 1
   }
 
-  private rememberSubmittedAttempt(entry: ActiveHttpAuthChild): void {
+  private rememberSubmittedAttempt(entry: Pick<ActiveHttpAuthChild, 'request' | 'attempt'>): void {
     this.clearHttpAuthAttempt(entry.request.tabId)
     const key = `${entry.request.runtimeGeneration}\u0000${entry.request.origin}\u0000${entry.request.realm}`
     const expiryTimer = setTimeout(

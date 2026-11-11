@@ -85,7 +85,9 @@ export class CredentialService {
         configured: Object.values(record.fields).some((value) => value.length > 0),
         fieldNames: Object.keys(record.fields).sort(),
         updatedAt: record.updatedAt,
-        consumers: consumersFor(id),
+        consumers: id.startsWith('browser-http-auth:')
+          ? ['浏览器 HTTP Basic 认证', record.fields.origin ?? '']
+          : consumersFor(id),
       }))
       .sort((left, right) => left.id.localeCompare(right.id))
   }

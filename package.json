@@ -69,6 +69,7 @@
     "smoke:scheduled-task-git-sharing": "node scripts/scheduled-task-git-sharing-smoke.mjs",
     "smoke:auth-window": "node scripts/auth-window-smoke.cjs",
     "smoke:browser-http-auth": "node scripts/browser-http-auth-smoke.cjs",
+    "smoke:browser-http-auth-remember": "node scripts/browser-http-auth-remember-smoke.cjs",
     "smoke:browser-cookie-security": "node scripts/browser-cookie-security-smoke.cjs",
     "smoke:browser-cdp-recovery": "pnpm build && node scripts/browser-cdp-recovery-smoke.cjs",
     "smoke:detachable-tabs-p0a": "node scripts/detachable-tabs-p0.cjs --controller-phase=p0a",

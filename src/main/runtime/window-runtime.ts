@@ -216,6 +216,7 @@ function bootstrapBrowserWindowCapability(runtime: CclinkStudioRuntimeState): vo
   runtime.browserAuthProcessService = new BrowserAuthProcessService(
     mainWindow,
     runtime.browserManager,
+    runtime.credentialService,
   )
   runtime.browserManager.attachBrowserAuthRequestHandler((request) =>
     runtime.browserAuthProcessService?.open(request),

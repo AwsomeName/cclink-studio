@@ -37,6 +37,7 @@ import {
   type BrowserAuthRequest,
 } from './browser-auth-contract'
 import { BrowserSessionDiagnostics } from './browser-session-diagnostics'
+import { browserHttpAuthCredentialId } from './browser-http-auth-credentials'
 import {
   resolveDraftAdoptionProfileId,
   shouldDestroyBrowserViewDuringReconcile,
@@ -229,6 +230,7 @@ interface ViewEntry {
   fitWidthMeasurement: FitWidthMeasurement | null
   /** 当前顶层导航允许响应的 HTTP auth origin；页面稳定后立即清空。 */
   httpAuthNavigationOrigin: string | null
+  httpAuthRequestId?: string
   fitDocumentGeneration: number
   fitRetryCount: number
   fitRetryTimer: ReturnType<typeof setTimeout> | null
@@ -660,6 +662,16 @@ export class BrowserManager {
     this.browserHttpAuthRequestHandler = handler
   }
 
+  isBrowserHttpAuthCurrent(request: BrowserHttpAuthRequest): boolean {
+    const entry = this.views.get(request.tabId)
+    return Boolean(
+      entry &&
+      entry.runtimeGeneration === request.runtimeGeneration &&
+      entry.httpAuthNavigationOrigin === request.origin &&
+      entry.httpAuthRequestId === request.requestId,
+    )
+  }
+
   /**
    * 把某 view 的 webContents claim 为 Playwright Page，绑定到 tabId。
    * 期望在页面加载完成后调用（URL 匹配更稳）。失败抛错由调用方处理。
@@ -987,6 +999,12 @@ export class BrowserManager {
       }
 
       event.preventDefault()
+      request.credentialId = browserHttpAuthCredentialId(
+        entry.profileId,
+        request.origin,
+        authInfo.realm,
+      )
+      entry.httpAuthRequestId = request.requestId
       let settled = false
       const complete = (username?: string, password?: string): void => {
         if (settled) return
@@ -995,7 +1013,8 @@ export class BrowserManager {
         if (
           current !== entry ||
           current.runtimeGeneration !== request.runtimeGeneration ||
-          current.httpAuthNavigationOrigin !== request.origin
+          current.httpAuthNavigationOrigin !== request.origin ||
+          current.httpAuthRequestId !== request.requestId
         ) {
           callback()
           return
@@ -1037,6 +1056,7 @@ export class BrowserManager {
     wc.on('did-start-navigation', (_event, url, isInPlace, isMainFrame) => {
       if (!isMainFrame || isInPlace) return
       entry.httpAuthNavigationOrigin = resolveBrowserHttpAuthOrigin(url)
+      entry.httpAuthRequestId = undefined
       this.beginFitNavigation(tabId, entry)
     })
     wc.on('did-navigate', (_event, url) => {

@@ -29,11 +29,14 @@ export interface BrowserHttpAuthRequest {
   origin: string
   realm: string
   transport: BrowserHttpAuthTransport
+  /** Main-process derived Profile + exact origin + raw realm identity. Never a secret. */
+  credentialId?: string
 }
 
 export interface BrowserHttpAuthChildOptions extends BrowserHttpAuthRequest {
   attempt: number
   userDataPath: string
+  canRemember?: boolean
 }
 
 export type BrowserHttpAuthRendererResponse =
@@ -43,6 +46,8 @@ export type BrowserHttpAuthRendererResponse =
       username: string
       password: string
       allowInsecure: boolean
+      remember: boolean
+      allowInsecureAutoLogin: boolean
     }
   | { action: 'cancel'; requestId: string }
 
@@ -54,6 +59,9 @@ export type BrowserHttpAuthChildMessage =
       runtimeGeneration: number
       username: string
       password: string
+      remember: boolean
+      allowInsecure: boolean
+      allowInsecureAutoLogin: boolean
     }
   | {
       type: 'browser-http-auth-cancelled'
@@ -65,6 +73,7 @@ export type BrowserHttpAuthChildMessage =
 export interface BrowserHttpAuthAcknowledgement {
   type: 'browser-http-auth-ack'
   requestId: string
+  error?: 'credential-save-failed'
 }
 
 export function encodeBrowserHttpAuthChildOptions(options: BrowserHttpAuthChildOptions): string {
@@ -98,7 +107,10 @@ export function parseBrowserHttpAuthChildOptions(
       value.attempt! > 3 ||
       typeof value.userDataPath !== 'string' ||
       value.userDataPath.length < 1 ||
-      value.userDataPath.length > 4_096
+      value.userDataPath.length > 4_096 ||
+      (value.canRemember !== undefined && typeof value.canRemember !== 'boolean') ||
+      (value.credentialId !== undefined &&
+        !/^browser-http-auth:[a-f0-9]{64}$/.test(value.credentialId))
     ) {
       return null
     }
@@ -191,7 +203,9 @@ export function parseBrowserHttpAuthRendererResponse(
     typeof candidate.password !== 'string' ||
     candidate.password.length > 4_096 ||
     /[\u0000\r\n]/.test(candidate.password) ||
-    typeof candidate.allowInsecure !== 'boolean'
+    typeof candidate.allowInsecure !== 'boolean' ||
+    typeof candidate.remember !== 'boolean' ||
+    typeof candidate.allowInsecureAutoLogin !== 'boolean'
   ) {
     return null
   }
@@ -201,6 +215,8 @@ export function parseBrowserHttpAuthRendererResponse(
     username: candidate.username,
     password: candidate.password,
     allowInsecure: candidate.allowInsecure,
+    remember: candidate.remember,
+    allowInsecureAutoLogin: candidate.allowInsecureAutoLogin,
   }
 }
 
@@ -226,7 +242,10 @@ export function isBrowserHttpAuthChildMessage(
     !/[:\u0000\r\n]/.test(candidate.username) &&
     typeof candidate.password === 'string' &&
     candidate.password.length <= 4_096 &&
-    !/[\u0000\r\n]/.test(candidate.password)
+    !/[\u0000\r\n]/.test(candidate.password) &&
+    typeof candidate.remember === 'boolean' &&
+    typeof candidate.allowInsecure === 'boolean' &&
+    typeof candidate.allowInsecureAutoLogin === 'boolean'
   )
 }
 

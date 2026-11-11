@@ -12,6 +12,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const username = document.querySelector<HTMLInputElement>('#username')
   const password = document.querySelector<HTMLInputElement>('#password')
   const insecureConfirmation = document.querySelector<HTMLInputElement>('#allow-insecure')
+  const remember = document.querySelector<HTMLInputElement>('#remember')
+  const insecureLabel = document.querySelector<HTMLElement>('#insecure-label')
+  const canRemember = Boolean(remember && !remember.disabled)
   const submit = document.querySelector<HTMLButtonElement>('#submit')
   const cancel = document.querySelector<HTMLButtonElement>('#cancel')
   const status = document.querySelector<HTMLElement>('#status')
@@ -27,6 +30,7 @@ window.addEventListener('DOMContentLoaded', () => {
     updateSubmitState()
     username.disabled = true
     password.disabled = true
+    if (remember) remember.disabled = true
     cancel.disabled = true
     status.textContent = response.action === 'submit' ? '正在验证凭证…' : '正在取消…'
     try {
@@ -35,13 +39,24 @@ window.addEventListener('DOMContentLoaded', () => {
       settled = false
       username.disabled = false
       password.disabled = false
+      if (remember) remember.disabled = !canRemember
       cancel.disabled = false
-      status.textContent = '无法提交，请关闭窗口后重试。'
+      status.textContent =
+        '凭证保存或提交失败。可取消“记住”后单次登录，或在设置 → 本地凭证中检查存储状态。'
       updateSubmitState()
     }
   }
 
   insecureConfirmation?.addEventListener('change', updateSubmitState)
+  remember?.addEventListener('change', () => {
+    if (insecureConfirmation && insecureLabel) {
+      insecureConfirmation.checked = false
+      insecureLabel.textContent = remember.checked
+        ? '我了解明文 HTTP 风险，允许此地址以后自动发送已保存的凭证'
+        : '我了解风险，仍然只提交这一次'
+    }
+    updateSubmitState()
+  })
   form.addEventListener('submit', (event) => {
     event.preventDefault()
     if (!username.value || submit.disabled) return
@@ -51,6 +66,8 @@ window.addEventListener('DOMContentLoaded', () => {
       username: username.value,
       password: password.value,
       allowInsecure: insecureConfirmation?.checked ?? false,
+      remember: remember?.checked ?? false,
+      allowInsecureAutoLogin: Boolean(remember?.checked && insecureConfirmation?.checked),
     })
   })
   cancel.addEventListener('click', () => {

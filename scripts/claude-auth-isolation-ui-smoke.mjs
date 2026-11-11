@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
 // Real Electron + real Claude, with only a loopback API and disposable credentials.
 const runDir = await mkdtemp(join(tmpdir(), 'studio-auth-ui-'))
+const userData = join(runDir, 'user-data')
+const privateConfig = join(userData, 'agent-runtime', 'claude-api')
+const foreignConfig = join(runDir, 'external-claude-config')
+await mkdir(foreignConfig)
 const requests = []
 const server = createServer((req, res) => {
   req.resume()
@@ -53,7 +58,8 @@ let activePage
 async function launch() {
   const env = {
     ...process.env,
-    CCLINK_STUDIO_TEST_USER_DATA_PATH: join(runDir, 'user-data'),
+    CCLINK_STUDIO_TEST_USER_DATA_PATH: userData,
+    CLAUDE_CONFIG_DIR: foreignConfig,
     ANTHROPIC_API_KEY: 'external-key-must-not-be-used',
     CLAUDE_CODE_OAUTH_TOKEN: 'external-subscription-must-not-be-used',
   }
@@ -103,6 +109,36 @@ async function send(page, conversationId) {
     })
   }, conversationId)
 }
+function inspectStoredSession(configDir, sessionId) {
+  // Each reader has its own configuration root. Never enumerate the user's real
+  // ~/.claude directory or read their existing conversations.
+  return JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `const { listSessions, getSessionMessages } = await import(process.argv[1]);
+        const id = process.argv[2];
+        console.log(JSON.stringify({
+          listed: (await listSessions()).some(session => session.sessionId === id),
+          messageCount: (await getSessionMessages(id)).length,
+        }));`,
+        import.meta.resolve('@anthropic-ai/claude-agent-sdk'),
+        sessionId,
+      ],
+      {
+        env: {
+          PATH: process.env.PATH,
+          CLAUDE_CONFIG_DIR: configDir,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+        encoding: 'utf8',
+        timeout: 10000,
+      },
+    ),
+  )
+}
 try {
   let page = await launch()
   await openAgentSettings(page)
@@ -133,6 +169,22 @@ try {
   await page.getByRole('button', { name: '测试连接', exact: true }).click()
   await page.locator('.settings-connection-result.success').waitFor({ timeout: 30000 })
   assert.equal((await send(page, 'auth-ui-success')).kind, 'complete')
+  const session = await page.evaluate(() => window.cclinkStudio.agent.getStatus('auth-ui-success'))
+  assert.ok(session.sessionId)
+  const stored = inspectStoredSession(privateConfig, session.sessionId)
+  assert.equal(stored.listed, true)
+  assert.ok(stored.messageCount >= 2)
+  assert.deepEqual(inspectStoredSession(foreignConfig, session.sessionId), {
+    listed: false,
+    messageCount: 0,
+  })
+  assert.deepEqual(await readdir(foreignConfig), [])
+  // The next turn starts a new Claude process and resumes the private transcript.
+  assert.equal((await send(page, 'auth-ui-success')).kind, 'complete')
+  const continued = await page.evaluate(() =>
+    window.cclinkStudio.agent.getStatus('auth-ui-success'),
+  )
+  assert.equal(continued.sessionId, session.sessionId)
   await page.screenshot({ path: join(runDir, 'configured.png'), fullPage: true })
 
   await keyRow.locator('input').fill('invalid-studio-key')
@@ -159,6 +211,12 @@ try {
   assert.equal(restarted.ready, true)
   assert.equal((await send(page, 'auth-ui-restarted')).code, 'AUTH_REQUIRED')
   assert.equal(requests.length, countBefore)
+  assert.equal(inspectStoredSession(privateConfig, session.sessionId).listed, true)
+  assert.deepEqual(inspectStoredSession(foreignConfig, session.sessionId), {
+    listed: false,
+    messageCount: 0,
+  })
+  assert.deepEqual(await readdir(foreignConfig), [])
   for (const request of requests) {
     assert.ok(['studio-ui-test-key', 'invalid-studio-key'].includes(request.key))
     assert.equal(request.authorization, undefined)
@@ -171,6 +229,15 @@ try {
     configuredKey: 'connection test and conversation passed',
     invalidKey: '401, no subscription fallback',
     clearedKey: 'blocked immediately and after restart',
+    sessionStorage: {
+      directory: 'userData/agent-runtime/claude-api/projects',
+      privateTranscript: 'real session listed and read from the Studio directory',
+      externalDiscovery: 'not listed or readable by ID from a different configuration root',
+      externalDirectory: 'unchanged after connection test, conversation, 401 and restart',
+      continuation: 'new Claude process resumed the same private session',
+      restart: 'private transcript retained',
+      desktopUi: 'not tested; this verifies storage and SDK discovery boundaries',
+    },
     requests: requests.length,
     runDir,
   }

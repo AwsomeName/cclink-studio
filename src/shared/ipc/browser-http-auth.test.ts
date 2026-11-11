@@ -100,6 +100,8 @@ describe('browser HTTP auth contract', () => {
         username: 'admin',
         password: 'secret:value',
         allowInsecure: true,
+        remember: true,
+        allowInsecureAutoLogin: true,
       }),
     ).toEqual({
       action: 'submit',
@@ -107,6 +109,8 @@ describe('browser HTTP auth contract', () => {
       username: 'admin',
       password: 'secret:value',
       allowInsecure: true,
+      remember: true,
+      allowInsecureAutoLogin: true,
     })
     expect(
       parseBrowserHttpAuthRendererResponse({
@@ -115,6 +119,8 @@ describe('browser HTTP auth contract', () => {
         username: 'admin:other',
         password: 'secret',
         allowInsecure: true,
+        remember: true,
+        allowInsecureAutoLogin: true,
       }),
     ).toBeNull()
     expect(
@@ -125,6 +131,9 @@ describe('browser HTTP auth contract', () => {
         runtimeGeneration: 3,
         username: 'admin',
         password: 'secret',
+        remember: false,
+        allowInsecure: false,
+        allowInsecureAutoLogin: false,
       }),
     ).toBe(true)
   })

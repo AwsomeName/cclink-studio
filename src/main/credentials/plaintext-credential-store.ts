@@ -220,7 +220,7 @@ function validateCredentialState(state: CredentialFileState): CredentialFileStat
       }
       if (
         typeof rawValue !== 'string' ||
-        rawValue.length === 0 ||
+        (rawValue.length === 0 && !(id.startsWith('browser-http-auth:') && field === 'password')) ||
         rawValue.length > MAX_FIELD_LENGTH
       ) {
         throw new CredentialStoreError('INVALID_FILE', `本地凭证字段值无效: ${id}.${field}`)
