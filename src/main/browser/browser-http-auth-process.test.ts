@@ -221,4 +221,87 @@ describe('remembered HTTP Basic credentials', () => {
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback).toHaveBeenCalledWith(undefined, undefined)
   })
+
+  it('does not cancel a newer dialog when an old disk write completes late', async () => {
+    const { service, children, credentials } = setup()
+    let finish!: () => void
+    credentials.setCredential.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const first = vi.fn()
+    const second = vi.fn()
+    service.openHttpBasic(request, first)
+    children[0].emit('message', submitted)
+    service.openHttpBasic({ ...request, requestId: 'r2' }, second)
+    finish()
+    await settle()
+    expect(first).toHaveBeenCalledExactlyOnceWith(undefined, undefined)
+    expect(second).not.toHaveBeenCalled()
+    expect(children[1].kill).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite a newer dialog diagnostic when an old save fails', async () => {
+    const { service, children, credentials, manager } = setup()
+    let fail!: (error: Error) => void
+    credentials.setCredential.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject
+        }),
+    )
+    service.openHttpBasic(request, vi.fn())
+    children[0].emit('message', submitted)
+    service.openHttpBasic({ ...request, requestId: 'r2' }, vi.fn())
+    manager.recordHttpAuthOutcome.mockClear()
+    fail(new Error('old write failed'))
+    await settle()
+    expect(manager.recordHttpAuthOutcome).not.toHaveBeenCalled()
+  })
+
+  it('honors cancellation while saving and never forwards credentials afterwards', async () => {
+    const { service, children, credentials } = setup()
+    let finish!: () => void
+    credentials.setCredential.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const callback = vi.fn()
+    service.openHttpBasic(request, callback)
+    children[0].emit('message', submitted)
+    children[0].emit('message', {
+      type: 'browser-http-auth-cancelled',
+      requestId: 'r1',
+      tabId: 'tab1',
+      runtimeGeneration: 1,
+    })
+    await settle()
+    expect(callback).toHaveBeenCalledExactlyOnceWith(undefined, undefined)
+    finish()
+    await settle()
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts attempts by exact protection space instead of the display realm', async () => {
+    const { service, children } = setup()
+    service.openHttpBasic(request, vi.fn())
+    children[0].emit('message', { ...submitted, remember: false })
+    await settle()
+    service.openHttpBasic(
+      {
+        ...request,
+        requestId: 'r2',
+        credentialId: browserHttpAuthCredentialId('profile-a', origin, ' Restricted '),
+      },
+      vi.fn(),
+    )
+    const options = JSON.parse(
+      Buffer.from(mocks.spawn.mock.calls[1][1][0].split('=')[1], 'base64url').toString(),
+    )
+    expect(options.attempt).toBe(1)
+  })
 })

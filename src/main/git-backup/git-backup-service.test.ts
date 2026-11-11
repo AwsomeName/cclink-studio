@@ -25,6 +25,7 @@ import { GitBackupService } from './git-backup-service'
 import { GitBackupError } from './git-backup-error'
 import { GitClient } from './git-client'
 import { GitExecutor } from './git-executor'
+import type { GitHubClient } from './github-client'
 
 let tempDir = ''
 
@@ -40,6 +41,66 @@ afterEach(async () => {
 })
 
 describe('GitBackupService', () => {
+  async function accountFixture(verifyAccount = async (username: string) => username) {
+    const credentials = createCredentialService()
+    const settings = new SettingsService(credentials)
+    await settings.loadState()
+    const service = new GitBackupService(settings, {} as WorkspaceStateService, credentials, {
+      gitClient: { detect: async () => ({ available: true, version: 'test' }) } as GitClient,
+      githubClientFactory: () => ({ verifyAccount }) as GitHubClient,
+    })
+    return { credentials, settings, service }
+  }
+
+  it('invalidates verified account status when advanced management replaces or removes the Token', async () => {
+    const { credentials, service } = await accountFixture()
+    expect((await service.saveAccount({ username: 'old-user', token: 'old-token' })).success).toBe(
+      true,
+    )
+    expect((await service.testAccount()).account?.connected).toBe(true)
+    await credentials.setCredential({
+      id: 'git:github',
+      kind: 'token',
+      fields: { token: 'new-token' },
+    })
+    expect(await service.getAccountStatus()).toMatchObject({
+      tokenConfigured: true,
+      connected: false,
+    })
+    expect((await service.testAccount()).account?.connected).toBe(true)
+    await credentials.removeCredential('git:github')
+    expect(await service.getAccountStatus()).toMatchObject({
+      tokenConfigured: false,
+      connected: false,
+    })
+  })
+
+  it('does not apply an in-flight verification to a subsequently removed Token', async () => {
+    let finish!: (login: string) => void
+    const { credentials, service } = await accountFixture(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    await service.saveAccount({ username: 'user', token: 'token' })
+    const pending = service.testAccount()
+    await credentials.removeCredential('git:github')
+    finish('user')
+    expect((await pending).account?.connected).toBe(false)
+  })
+
+  it('restores the previous Token when saving the new account settings fails', async () => {
+    const { credentials, settings, service } = await accountFixture()
+    await service.saveAccount({ username: 'old-user', token: 'old-token' })
+    await rm(join(mockPaths.userData, 'settings.json'))
+    await mkdir(join(mockPaths.userData, 'settings.json'))
+    expect(await service.saveAccount({ username: 'new-user', token: 'new-token' })).toMatchObject({
+      success: false,
+    })
+    expect(settings.getAll().gitBackupUsername).toBe('old-user')
+    expect(credentials.resolveCredential('git:github')?.token).toBe('old-token')
+  })
   it('backs up manually without force operations and blocks tracked secrets', async () => {
     const workspacePath = join(tempDir, 'project')
     const remotePath = join(tempDir, 'backup.git')

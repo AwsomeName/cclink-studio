@@ -1367,7 +1367,7 @@ describe('BrowserManager popup adoption', () => {
     complete?.('admin', 'secret')
     expect(electronCallback).toHaveBeenCalledWith('admin', 'secret')
 
-    source.emit('did-navigate', {}, 'http://frp.example:7500/dashboard')
+    source.emit('did-navigate', {}, 'http://frp.example:7500/dashboard', 200, 'OK')
     await expect(manager.getRuntimeDiagnostics('source-tab')).resolves.toMatchObject({
       httpAuth: {
         origin: 'http://frp.example:7500',
@@ -1377,6 +1377,31 @@ describe('BrowserManager popup adoption', () => {
     })
     manager.destroy()
   })
+
+  it.each([401, 403, 500, -1])(
+    'does not label HTTP %s navigation authenticated',
+    async (status) => {
+      const { manager, source } = await createSource()
+      const url = 'https://frp.example/dashboard'
+      manager.attachBrowserHttpAuthRequestHandler((request, callback) => {
+        manager.recordHttpAuthOutcome(request, 'submitted', 1)
+        callback('user', 'fixture-secret')
+      })
+      source.emit('did-start-navigation', {}, url, false, true)
+      source.emit(
+        'login',
+        { preventDefault: vi.fn() },
+        { url },
+        { scheme: 'basic', isProxy: false, realm: 'Restricted' },
+        vi.fn(),
+      )
+      source.emit('did-navigate', {}, url, status, '')
+      expect((await manager.getRuntimeDiagnostics('source-tab')).httpAuth?.outcome).not.toBe(
+        'authenticated',
+      )
+      manager.destroy()
+    },
+  )
 
   it('does not intercept proxy, unsupported, or cross-origin authentication challenges', async () => {
     const { manager, source } = await createSource()

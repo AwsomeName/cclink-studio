@@ -72,7 +72,10 @@ describe('registerCredentialsIpc', () => {
       legacyEncryptedFiles: [],
       message: '本地凭证文件不是有效 JSON',
     })
-    registerCredentialsIpc(service as never, createGuard('trusted') as never)
+    registerCredentialsIpc(service as never, createGuard('trusted') as never, async (run) => ({
+      success: true,
+      status: await run(),
+    }))
 
     await expect(
       mockIpcMain.handlers.get('credentials:reload')?.({ sender: 'trusted' }),

@@ -1,4 +1,7 @@
-import { recoverFailedImageDraft } from '../features/agent-conversations/image-retry-draft'
+import {
+  recoverFailedImageDraft,
+  restoreFailedDraft,
+} from '../features/agent-conversations/image-retry-draft'
 import { MAX_AGENT_IMAGES } from '@shared/agent-image-limits'
 import { create } from 'zustand'
 import type {
@@ -171,7 +174,11 @@ interface AgentState {
   ) => void
   setMessageImageAssets: (conversationId: string, assets: AgentMessageImageAsset[]) => void
   addSystemMessage: (content: string, conversationId?: string) => void
-  beginRun: (conversationId?: string, supplementContextKey?: string) => string
+  beginRun: (
+    conversationId?: string,
+    supplementContextKey?: string,
+    imageDraftResources?: AgentMountedResource[],
+  ) => string
   startStreamingMessage: (messageId: string, conversationId?: string, runId?: string) => void
   stopStreamingMessage: (conversationId?: string) => void
   appendStreamDelta: (delta: string, conversationId?: string) => void
@@ -1076,43 +1083,16 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const current = get().conversations[conversationId]
     if (!current) return
     set((state) =>
-      updateConversation(state, conversationId, (conversation) => {
-        const imageIds = new Set(snapshot.pendingImages?.map((image) => image.id))
-        if (
-          imageIds.size &&
-          (conversation.pendingImages?.some((image) => imageIds.has(image.id)) ||
-            conversation.queuedMessages?.some((item) =>
-              item.pendingImages.some((image) => imageIds.has(image.id)),
-            ))
-        )
-          return { ...conversation, activeImageDraft: undefined }
-        const draftEmpty = !conversation.input.trim() && !conversation.pendingImages?.length
-        return {
-          ...conversation,
-          activeImageDraft: undefined,
-          ...(draftEmpty
-            ? {
-                input: content,
-                pendingImages: snapshot.pendingImages,
-                mountedResources: snapshot.mountedResources,
-              }
-            : {
-                queuedMessages: [
-                  {
-                    id: crypto.randomUUID(),
-                    content,
-                    createdAt: Date.now(),
-                    contextKey: conversationQueueContextKey(snapshot),
-                    mountedResources: snapshot.mountedResources,
-                    pendingImages: snapshot.pendingImages ?? [],
-                  },
-                  ...(conversation.queuedMessages ?? []),
-                ],
-              }),
-          messageQueuePauseReason: '发送失败，请检查后重试',
-          updatedAt: Date.now(),
-        }
-      }),
+      updateConversation(state, conversationId, (conversation) => ({
+        ...restoreFailedDraft(
+          conversation,
+          content,
+          snapshot.pendingImages ?? [],
+          snapshot.mountedResources,
+          conversationQueueContextKey(snapshot),
+        ),
+        updatedAt: Date.now(),
+      })),
     )
   },
 
@@ -1180,7 +1160,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       })),
     ),
 
-  beginRun: (conversationId, supplementContextKey) => {
+  beginRun: (conversationId, supplementContextKey, imageDraftResources) => {
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const now = Date.now()
     set((state) =>
@@ -1213,6 +1193,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                 runId,
                 messageId: conversation.messages.at(-1)!.id,
                 contextKey: conversationQueueContextKey(conversation),
+                mountedResources: imageDraftResources ?? conversation.mountedResources,
               }
             : undefined,
         lastRunEventAt: now,

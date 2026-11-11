@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_SETTINGS } from '@shared/ipc/settings'
 import type { AppSettings, CadBackend } from '@shared/ipc/settings'
 import type { SettingsSecretStatus } from '@shared/ipc/settings'
@@ -306,6 +306,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [connectionService, setConnectionService] = useState<ConnectionServiceId>(
     connectionServiceFromSection(initialSection),
   )
+  const [connectionBusy, setConnectionBusy] = useState(false)
+  const [connectionDirty, setConnectionDirty] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showCodexApiKey, setShowCodexApiKey] = useState(false)
   const [codexApiKeyInput, setCodexApiKeyInput] = useState('')
@@ -330,6 +332,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   const [revealedCredentialFields, setRevealedCredentialFields] = useState<Record<string, string>>(
     {},
   )
+  const revealGeneration = useRef(0)
+  const revealTimers = useRef(new Set<ReturnType<typeof setTimeout>>())
   const settings = useSettingsStore((state) => state.settings)
   const loading = useSettingsStore((state) => state.loading)
   const error = useSettingsStore((state) => state.error)
@@ -355,7 +359,16 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       setCredentialMetadata(result.metadata ?? [])
       if (!result.success) setCredentialMessage(result.error ?? '无法读取本地凭证状态')
     } catch (nextError: unknown) {
-      setCredentialMessage(nextError instanceof Error ? nextError.message : String(nextError))
+      const message = nextError instanceof Error ? nextError.message : String(nextError)
+      setCredentialMessage(message)
+      setCredentialMetadata([])
+      setCredentialStatus({
+        status: 'failed',
+        filePath: '',
+        configuredCount: 0,
+        legacyEncryptedFiles: [],
+        message,
+      })
     }
   }, [])
 
@@ -382,8 +395,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
   useEffect(() => {
     if (initialSection) {
-      setActiveSection(normalizeSection(initialSection))
-      setConnectionService(connectionServiceFromSection(initialSection))
+      navigateRef.current(
+        normalizeSection(initialSection),
+        connectionServiceFromSection(initialSection),
+      )
     }
   }, [initialSection])
 
@@ -398,6 +413,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       void refreshCredentialStatus()
     } else {
       setRevealedCredentialFields({})
+    }
+    return () => {
+      revealGeneration.current += 1
+      for (const timer of revealTimers.current) clearTimeout(timer)
+      revealTimers.current.clear()
     }
   }, [activeSection, refreshCredentialStatus])
 
@@ -579,6 +599,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     action: () => Promise<{ success: boolean; error?: string }>,
     successMessage: string,
   ): Promise<void> => {
+    revealGeneration.current += 1
     setCredentialBusy(true)
     setCredentialMessage(null)
     try {
@@ -595,6 +616,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
   const revealCredentialField = async (id: string, field: string): Promise<void> => {
     const key = `${id}:${field}`
+    const generation = revealGeneration.current
     if (revealedCredentialFields[key] !== undefined) {
       setRevealedCredentialFields((current) => {
         const next = { ...current }
@@ -607,12 +629,14 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     setCredentialMessage(null)
     try {
       const result = await window.cclinkStudio.credentials.revealField(id, field)
+      if (generation !== revealGeneration.current) return
       if (!result.success || result.value === undefined) {
         setCredentialMessage(result.error ?? '无法显示凭证字段')
         return
       }
       setRevealedCredentialFields((current) => ({ ...current, [key]: result.value! }))
-      window.setTimeout(() => {
+      const timer = setTimeout(() => {
+        revealTimers.current.delete(timer)
         setRevealedCredentialFields((current) => {
           if (current[key] === undefined) return current
           const next = { ...current }
@@ -620,6 +644,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           return next
         })
       }, 30_000)
+      revealTimers.current.add(timer)
+    } catch {
+      if (generation === revealGeneration.current)
+        setCredentialMessage('无法显示凭证字段，请重试。')
     } finally {
       setCredentialBusy(false)
     }
@@ -631,6 +659,27 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
     await refreshSecretStatus()
     await refreshCredentialStatus()
   }
+
+  const connectionsBusy =
+    connectionBusy || credentialBusy || secretBusy || claudeRuntimeBusy || codexProbeBusy
+  const navigateSettings = (section: SettingsSectionId, service = connectionService): boolean => {
+    if (section === activeSection && (section !== 'connections' || service === connectionService))
+      return true
+    if (activeSection === 'connections') {
+      if (connectionsBusy) return false
+      if (
+        connectionDirty &&
+        !window.confirm('放弃尚未保存的输入并切换页面？已保存的配置保持不变。')
+      )
+        return false
+    }
+    setConnectionDirty(false)
+    setConnectionService(service)
+    setActiveSection(section)
+    return true
+  }
+  const navigateRef = useRef(navigateSettings)
+  navigateRef.current = navigateSettings
 
   return (
     <div className="settings-page">
@@ -652,10 +701,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                 key={`${result.sectionId}:${result.label}`}
                 type="button"
                 className="settings-search-result"
+                disabled={activeSection === 'connections' && connectionsBusy}
                 onClick={() => {
-                  setConnectionService(result.service ?? 'claude')
-                  setActiveSection(result.sectionId)
-                  setSearchQuery('')
+                  if (navigateSettings(result.sectionId, result.service ?? 'claude'))
+                    setSearchQuery('')
                 }}
               >
                 <span>{result.label}</span>
@@ -675,7 +724,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   <button
                     type="button"
                     className={`settings-nav-item ${activeSection === section.id ? 'active' : ''}`}
-                    onClick={() => setActiveSection(section.id)}
+                    disabled={activeSection === 'connections' && connectionsBusy}
+                    onClick={() => navigateSettings(section.id)}
                   >
                     <Icon size={16} />
                     <span>{section.label}</span>
@@ -790,12 +840,16 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
         {activeSection === 'connections' && (
           <ApiConnectionsSettings
-            initialService={connectionService}
+            service={connectionService}
+            busy={connectionsBusy}
+            onSelectService={(service) => navigateSettings('connections', service)}
+            onBusyChange={setConnectionBusy}
+            onDirtyChange={setConnectionDirty}
             settings={settings}
             metadata={credentialMetadata}
             storageStatus={credentialStatus}
             onRefresh={refreshConnections}
-            onComponents={() => setActiveSection('components')}
+            onComponents={() => navigateSettings('components')}
             runtimeSettings={
               <div className="settings-group">
                 {' '}
@@ -1345,8 +1399,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
               type="button"
               className="settings-secondary-btn"
               onClick={() => {
-                setConnectionService('github')
-                setActiveSection('connections')
+                navigateSettings('connections', 'github')
               }}
             >
               配置 GitHub 连接

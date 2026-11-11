@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
@@ -249,6 +249,49 @@ try {
   assert.equal(cleared.code, 'AUTH_REQUIRED')
   assert.equal(requests.length, countBefore)
   await page.screenshot({ path: join(runDir, 'cleared.png'), fullPage: true })
+  // Advanced management must invalidate the same live runtime, not only the disk record.
+  const advanced = page
+    .locator('details')
+    .filter({ has: page.locator('summary', { hasText: '存储与高级管理' }) })
+  for (const action of ['remove', 'clearAll', 'reload']) {
+    await keyInput.fill('studio-ui-test-key')
+    await form.getByRole('button', { name: '仅保存', exact: true }).click()
+    await form
+      .getByText('已保存到本机，尚未验证。保存成功不代表服务认证、余额或模型权限已通过。', {
+        exact: true,
+      })
+      .waitFor()
+    if (!(await advanced.getAttribute('open'))) {
+      // An open boolean attribute has an empty-string value.
+      if (!(await advanced.evaluate((element) => element.open)))
+        await advanced.locator('summary').click()
+    }
+    if (action === 'remove') {
+      page.once('dialog', (dialog) => dialog.accept())
+      await advanced
+        .locator('.settings-row')
+        .filter({ has: page.getByText('agent:default', { exact: true }) })
+        .getByRole('button', { name: '清除', exact: true })
+        .click()
+    } else if (action === 'clearAll') {
+      page.once('dialog', (dialog) => dialog.accept())
+      await advanced.getByRole('button', { name: '清除全部', exact: true }).click()
+    } else {
+      const credentialPath = join(userData, 'credentials', 'credentials.json')
+      const disk = JSON.parse(await readFile(credentialPath, 'utf8'))
+      delete disk.records['agent:default']
+      await writeFile(credentialPath, JSON.stringify(disk), { mode: 0o600 })
+      await advanced.getByRole('button', { name: '重新加载', exact: true }).click()
+    }
+    await page.waitForFunction(
+      async () => !(await window.cclinkStudio.settings.getSecretStatus()).apiKeyConfigured,
+    )
+    await page.waitForFunction(
+      () => !document.querySelector('.connections-services button')?.disabled,
+    )
+    assert.equal((await send(page, `auth-ui-advanced-${action}`)).code, 'AUTH_REQUIRED')
+    assert.equal(requests.length, countBefore)
+  }
   // All service forms use the same credential owner; unsupported tests must stay absent.
   const serviceNav = page.locator('.connections-services')
   for (const name of ['Meshy', 'Pexels']) {
@@ -288,6 +331,27 @@ try {
     })
     .waitFor()
   await serviceNav.getByRole('button', { name: /^Pexels/ }).click()
+  // Search navigation and the settings sidebar must preserve a draft when cancelled.
+  await form.locator('input[type="password"]').fill('draft-to-preserve')
+  await page.getByPlaceholder('搜索设置', { exact: true }).fill('Meshy')
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.locator('.settings-search-result').filter({ hasText: 'Meshy' }).first().click()
+  assert.equal(await form.locator('input[type="password"]').inputValue(), 'draft-to-preserve')
+  await form.getByRole('heading', { name: 'Pexels', exact: true }).waitFor()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.locator('.settings-search-result').filter({ hasText: 'Meshy' }).first().click()
+  await form.getByRole('heading', { name: 'Meshy', exact: true }).waitFor()
+  await serviceNav.getByRole('button', { name: /^Pexels/ }).click()
+  assert.equal(await form.locator('input[type="password"]').inputValue(), '')
+  await form.locator('input[type="password"]').fill('sidebar-draft')
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await page.locator('.settings-nav').getByRole('button', { name: '外观', exact: true }).click()
+  assert.equal(await form.locator('input[type="password"]').inputValue(), 'sidebar-draft')
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.locator('.settings-nav').getByRole('button', { name: '外观', exact: true }).click()
+  await openAgentSettings(page)
+  await serviceNav.getByRole('button', { name: /^Pexels/ }).click()
+  assert.equal(await form.locator('input[type="password"]').inputValue(), '')
   await form.locator('input[type="password"]').fill('unsaved-fixture')
   page.once('dialog', (dialog) => dialog.accept())
   await serviceNav.getByRole('button', { name: /^Meshy/ }).click()
@@ -330,8 +394,10 @@ try {
       'unified settings save, real connection test, Claude CTA and first UI conversation passed',
     invalidKey: '401, no subscription fallback',
     clearedKey: 'blocked immediately and after restart',
+    advancedCredentials:
+      'remove, clear all and reload revoke the live Claude key without sending a request',
     serviceForms:
-      'Meshy, Pexels, Jimeng paired fields, GitHub local save, search routing and unsaved-secret disposal passed',
+      'Meshy, Pexels, Jimeng paired fields, GitHub local save, search/sidebar cancel preserves drafts and confirmed navigation disposes secrets',
     sessionStorage: {
       directory: 'userData/agent-runtime/claude-api/projects',
       privateTranscript: 'real session listed and read from the Studio directory',

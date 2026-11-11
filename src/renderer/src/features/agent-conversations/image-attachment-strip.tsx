@@ -28,7 +28,12 @@ export function ImageAttachmentStrip({
       {(preparation?.busy || preparation?.error) && (
         <div className="agent-image-preparation" role={preparation.error ? 'alert' : 'status'}>
           <span>
-            {preparation.busy ? '正在处理图片…（单张原图最多 20MB，每次 5 张）' : preparation.error}
+            {[
+              preparation.busy && '正在处理图片…（单张原图最多 20MB，每次 5 张）',
+              preparation.error,
+            ]
+              .filter(Boolean)
+              .join('\n')}
           </span>
           <button type="button" onClick={preparation.cancel}>
             {preparation.busy ? '取消处理' : '保留已添加图片'}

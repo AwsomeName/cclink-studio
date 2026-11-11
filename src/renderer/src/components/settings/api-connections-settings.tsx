@@ -104,7 +104,11 @@ function runtimeSelection(settings: AppSettings): ClaudeRuntimeSelection {
 }
 
 interface Props {
-  initialService: ConnectionServiceId
+  service: ConnectionServiceId
+  busy: boolean
+  onSelectService: (service: ConnectionServiceId) => void
+  onBusyChange: (busy: boolean) => void
+  onDirtyChange: (dirty: boolean) => void
   settings: AppSettings
   metadata: CredentialMetadata[]
   storageStatus: CredentialServiceStatus | null
@@ -115,16 +119,11 @@ interface Props {
 }
 
 export function ApiConnectionsSettings(props: Props): React.ReactElement {
-  const [service, setService] = useState(props.initialService)
-  const [busy, setBusy] = useState(false)
-  const [dirty, setDirty] = useState(false)
+  const { service, busy } = props
   const [codexBusy, setCodexBusy] = useState(false)
   const [codexMessage, setCodexMessage] = useState(
     '使用本机 Codex 的 ChatGPT 登录；无需填写 API Key。',
   )
-  useEffect(() => {
-    setService(props.initialService)
-  }, [props.initialService])
   useEffect(() => {
     const refresh = (): void => {
       if (!busy) void props.onRefresh()
@@ -132,13 +131,6 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
   }, [busy, props.onRefresh])
-
-  const select = (next: ConnectionServiceId): void => {
-    if (next === service || busy) return
-    if (dirty && !window.confirm('放弃尚未保存的输入并切换服务？已保存的配置保持不变。')) return
-    setDirty(false)
-    setService(next)
-  }
 
   return (
     <section className="api-connections" aria-label="API Key 与连接">
@@ -190,7 +182,7 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
                 disabled={busy}
                 aria-pressed={service === item.id}
                 className={service === item.id ? 'active' : ''}
-                onClick={() => select(item.id)}
+                onClick={() => props.onSelectService(item.id)}
               >
                 {item.name}
                 <small>
@@ -198,11 +190,13 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
                     ? '按连接管理'
                     : props.storageStatus === null
                       ? '正在读取…'
-                      : props.metadata.some(
-                            (record) => record.id === item.credential && record.configured,
-                          )
-                        ? '已保存'
-                        : '未配置'}
+                      : props.storageStatus.status !== 'ready'
+                        ? '凭证不可用'
+                        : props.metadata.some(
+                              (record) => record.id === item.credential && record.configured,
+                            )
+                          ? '已保存'
+                          : '未配置'}
                 </small>
               </button>
             </div>
@@ -212,8 +206,8 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
           key={service}
           {...props}
           service={service}
-          setBusy={setBusy}
-          setDirty={setDirty}
+          setBusy={props.onBusyChange}
+          setDirty={props.onDirtyChange}
         />
       </div>
       <p className="connections-storage-note">
@@ -239,6 +233,7 @@ type Feedback = {
 
 function ConnectionForm({
   service,
+  busy: controlsBusy,
   settings,
   metadata,
   storageStatus,
@@ -286,6 +281,8 @@ function ConnectionForm({
     service === 'claude' &&
     (provider !== settings.provider ||
       url !== (settings.apiBaseUrl || getPresetBaseUrl(settings.provider, 'anthropic')))
+  const githubAccountChanged =
+    service === 'github' && username.trim() !== settings.gitBackupUsername
   const dirty = Boolean(
     secret ||
     secondSecret ||
@@ -296,6 +293,7 @@ function ConnectionForm({
   const valid =
     (configured || Boolean(secret.trim())) &&
     (!targetChanged || Boolean(secret.trim())) &&
+    (!githubAccountChanged || Boolean(secret.trim())) &&
     (service !== 'jimeng' || (Boolean(secret.trim()) && Boolean(secondSecret.trim()))) &&
     (service !== 'github' || Boolean(username.trim())) &&
     (service !== 'claude' || Boolean(url.trim() && model.trim()))
@@ -381,10 +379,11 @@ function ConnectionForm({
         } else if (service === 'github') {
           checked(
             await window.cclinkStudio.gitBackup.saveAccount({
-              username,
+              username: username.trim(),
               ...(secret.trim() ? { token: secret.trim() } : {}),
             }),
           )
+          setUsername(username.trim())
         } else {
           checked(
             await window.cclinkStudio.credentials.set({
@@ -453,16 +452,18 @@ function ConnectionForm({
               message: result.error || result.message || 'GitHub 认证失败，请检查 Token 和网络。',
             }
       }
-      await onRefresh()
       notify(verification)
     } catch (error) {
       notify({
         kind: 'error',
         message: `${saved ? '配置已保存，但后续操作未完成。' : ''}${error instanceof Error ? error.message : '操作失败，请检查存储和连接状态。'}`,
       })
-      await onRefresh()
     } finally {
-      if (mounted.current) busyState(false)
+      try {
+        await onRefresh()
+      } finally {
+        if (mounted.current) busyState(false)
+      }
     }
   }
 
@@ -480,9 +481,12 @@ function ConnectionForm({
         setVisible(false)
         setConfirmRemove(false)
         edited.current = false
+        setProvider(settings.provider)
+        setUrl(settings.apiBaseUrl || getPresetBaseUrl(settings.provider, 'anthropic'))
+        setModel(settings.modelName)
+        setUsername(settings.gitBackupUsername)
         setFeedback(null)
       }
-      await onRefresh()
       notify({ kind: 'deleted', message: '密钥已删除，相关功能需要重新配置；非敏感连接设置保留。' })
     } catch (error) {
       notify({
@@ -490,7 +494,12 @@ function ConnectionForm({
         message: error instanceof Error ? error.message : '删除失败，请重试。',
       })
     } finally {
-      if (mounted.current) busyState(false)
+      // Persistence may have succeeded even when applying it to the runtime failed.
+      try {
+        await onRefresh()
+      } finally {
+        if (mounted.current) busyState(false)
+      }
     }
   }
 
@@ -534,7 +543,7 @@ function ConnectionForm({
         </>
       ) : (
         <>
-          <fieldset className="connections-form" disabled={busy || !writable}>
+          <fieldset className="connections-form" disabled={busy || controlsBusy || !writable}>
             {service === 'claude' && (
               <label>
                 模型服务商
@@ -612,7 +621,9 @@ function ConnectionForm({
             <p className="connections-field-note">
               {targetChanged
                 ? '服务商或地址已变更，请重新填写对应的 Key。保存成功前保留原配置。'
-                : '只用于当前服务；保存成功后清空明文输入。'}
+                : githubAccountChanged
+                  ? 'GitHub 用户名已变更，请同时填写该账号的 Token。'
+                  : '只用于当前服务；保存成功后清空明文输入。'}
             </p>
             {service === 'claude' && (
               <>
@@ -659,7 +670,7 @@ function ConnectionForm({
               <button
                 type="button"
                 className="connections-primary"
-                disabled={busy || !writable || !valid}
+                disabled={busy || controlsBusy || !writable || !valid}
                 onClick={() => void perform(true)}
               >
                 {busy ? '处理中…' : dirty || !configured ? '保存并验证' : '验证连接'}
@@ -668,7 +679,7 @@ function ConnectionForm({
             <button
               type="button"
               className={canTest ? 'settings-secondary-btn' : 'connections-primary'}
-              disabled={busy || !writable || !valid || !dirty}
+              disabled={busy || controlsBusy || !writable || !valid || !dirty}
               onClick={() => void perform(false)}
             >
               {canTest ? '仅保存' : '保存密钥'}
@@ -677,7 +688,7 @@ function ConnectionForm({
               <button
                 type="button"
                 className="connections-delete"
-                disabled={busy || !writable}
+                disabled={busy || controlsBusy || !writable}
                 onClick={() => setConfirmRemove(true)}
               >
                 删除密钥
@@ -732,7 +743,7 @@ function ConnectionForm({
                 <button
                   type="button"
                   className="settings-danger-btn"
-                  disabled={busy}
+                  disabled={busy || controlsBusy}
                   onClick={() => void remove()}
                 >
                   确认删除
@@ -740,7 +751,7 @@ function ConnectionForm({
                 <button
                   type="button"
                   className="settings-secondary-btn"
-                  disabled={busy}
+                  disabled={busy || controlsBusy}
                   onClick={() => setConfirmRemove(false)}
                 >
                   取消
@@ -751,7 +762,7 @@ function ConnectionForm({
           {service === 'claude' && (
             <details className="connections-advanced">
               <summary>运行环境与兼容设置</summary>
-              <fieldset className="connections-storage-controls" disabled={busy}>
+              <fieldset className="connections-storage-controls" disabled={busy || controlsBusy}>
                 {runtimeSettings}
               </fieldset>
               <button type="button" className="settings-secondary-btn" onClick={onComponents}>

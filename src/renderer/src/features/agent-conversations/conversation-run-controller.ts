@@ -74,7 +74,11 @@ interface ConversationRunStore {
     resources?: AgentMountedResource[],
   ) => void
   addSystemMessage: (content: string, conversationId?: string) => void
-  beginRun: (conversationId?: string, supplementContextKey?: string) => string
+  beginRun: (
+    conversationId?: string,
+    supplementContextKey?: string,
+    imageDraftResources?: AgentMountedResource[],
+  ) => string
   cancelStreaming: (
     conversationId?: string,
     reason?: AgentRunTerminalReason,
@@ -214,6 +218,7 @@ export function createConversationRunController({
             conversationQueueContextKey(conversation),
             conversation.mountedResources.filter((resource) => resource.kind !== 'file-range'),
           ]),
+          conversation.mountedResources,
         )
       : store.beginRun(conversationId)
     const consumedIds = [

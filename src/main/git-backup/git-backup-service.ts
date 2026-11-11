@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   GitBackupAccountStatus,
   GitBackupOperationResult,
@@ -34,6 +35,8 @@ export class GitBackupService {
   private readonly now: () => Date
   private readonly activeBackups = new Set<string>()
   private connectedLogin: string | null = null
+  private connectedIdentity: string | null = null
+  private accountChangePending = false
   private credentialLoadError: GitBackupError | null = null
 
   constructor(
@@ -77,13 +80,17 @@ export class GitBackupService {
       }
     }
     try {
+      const connected =
+        Boolean(this.connectedLogin) &&
+        this.connectedIdentity !== null &&
+        this.connectedIdentity === this.accountIdentity()
       return {
         gitAvailable: git.available,
         gitVersion: git.version,
         username: this.settingsService.getAll().gitBackupUsername,
         tokenConfigured: this.hasToken(),
-        connected: Boolean(this.connectedLogin),
-        connectedLogin: this.connectedLogin ?? undefined,
+        connected,
+        connectedLogin: connected ? this.connectedLogin! : undefined,
       }
     } catch (error: unknown) {
       const failure = toGitBackupError(error)
@@ -100,6 +107,9 @@ export class GitBackupService {
   }
 
   async saveAccount(input: GitBackupSaveAccountInput): Promise<GitBackupOperationResult> {
+    if (this.accountChangePending)
+      return operationFailure(new Error('GitHub 账号配置正在保存，请稍后重试'))
+    this.accountChangePending = true
     try {
       if (
         !input ||
@@ -110,6 +120,7 @@ export class GitBackupService {
       }
       const username = normalizeGitHubUsername(input.username)
       const currentUsername = this.settingsService.getAll().gitBackupUsername
+      const previousToken = this.getToken()
       if (!input.token?.trim() && username !== currentUsername && this.hasToken()) {
         throw new GitBackupError('INVALID_INPUT', '修改 GitHub 账号时请同时填写对应 Token')
       }
@@ -123,7 +134,26 @@ export class GitBackupService {
       if (!this.hasToken()) {
         throw new GitBackupError('INVALID_INPUT', '请输入 GitHub Token')
       }
-      await this.settingsService.set({ gitBackupUsername: username })
+      try {
+        await this.settingsService.set({ gitBackupUsername: username })
+      } catch {
+        if (input.token?.trim()) {
+          try {
+            if (previousToken) {
+              await this.credentialService.setCredential({
+                id: 'git:github',
+                kind: 'token',
+                fields: { token: previousToken },
+              })
+            } else {
+              await this.credentialService.removeCredential('git:github')
+            }
+          } catch {
+            throw new Error('GitHub 账号保存失败，Token 恢复也失败。请重新加载凭证并核对账号。')
+          }
+        }
+        throw new Error('GitHub 账号保存失败，原账号和 Token 已保留。请检查设置文件的写入权限。')
+      }
       this.credentialLoadError = null
       this.connectedLogin = null
       return {
@@ -133,10 +163,15 @@ export class GitBackupService {
       }
     } catch (error: unknown) {
       return operationFailure(error)
+    } finally {
+      this.accountChangePending = false
     }
   }
 
   async clearAccount(): Promise<GitBackupOperationResult> {
+    if (this.accountChangePending)
+      return operationFailure(new Error('GitHub 账号配置正在保存，请稍后重试'))
+    this.accountChangePending = true
     try {
       await this.credentialService.removeCredential('git:github')
       await this.settingsService.set({ gitBackupUsername: '' })
@@ -149,6 +184,8 @@ export class GitBackupService {
       }
     } catch (error: unknown) {
       return operationFailure(error)
+    } finally {
+      this.accountChangePending = false
     }
   }
 
@@ -166,8 +203,10 @@ export class GitBackupService {
       )
       const token = input.token?.trim() || this.getToken()
       if (!token) throw new GitBackupError('ACCOUNT_NOT_CONFIGURED', '请先填写 GitHub Token')
+      const identity = this.accountIdentity(username, token)
       const login = await this.githubClientFactory(token).verifyAccount(username)
       this.connectedLogin = login
+      this.connectedIdentity = identity
       return {
         success: true,
         message: `已连接 GitHub 账号 ${login}`,
@@ -419,6 +458,15 @@ export class GitBackupService {
 
   private hasToken(): boolean {
     return Boolean(this.getToken())
+  }
+
+  private accountIdentity(
+    username = this.settingsService.getAll().gitBackupUsername,
+    token = this.getToken(),
+  ): string | null {
+    if (!token || this.credentialService.getStatus().status !== 'ready') return null
+    // An ephemeral result fingerprint, never persisted or sent to the renderer.
+    return createHash('sha256').update(`${username}\0${token}`).digest('hex')
   }
 
   private async resolveWorkspace(workspacePath: string): Promise<string> {

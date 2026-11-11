@@ -1,6 +1,10 @@
 import { app, BrowserWindow, webContents } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { CredentialService } from '../../src/main/credentials/credential-service'
+import {
+  PlaintextCredentialStore,
+  type CredentialFileState,
+} from '../../src/main/credentials/plaintext-credential-store'
 import { BrowserManager } from '../../src/main/browser/browser-manager'
 import { BrowserAuthProcessService } from '../../src/main/browser/browser-auth-process-service'
 import {
@@ -35,13 +39,20 @@ if (childOptions) {
         document.querySelector('#username').value = 'smoke-user';
         document.querySelector('#password').value = ${JSON.stringify(password)};
         const remember = document.querySelector('#remember');
-        if (${JSON.stringify(['save', 'replace'].includes(phase))}) remember.click();
+        if (${JSON.stringify(['save', 'replace', 'slow-save', 'cancel-save'].includes(phase))}) remember.click();
         const consent = document.querySelector('#allow-insecure');
         if (consent) consent.click();
         if (document.querySelector('#submit').getBoundingClientRect().bottom > innerHeight) throw new Error('Login button outside visible window');
         if (document.querySelector('#submit').disabled) throw new Error('Submit unexpectedly disabled');
         document.querySelector('#submit').click();
       `)
+          if (phase === 'cancel-save') {
+            await new Promise((resolve) => setTimeout(resolve, 200))
+            await window.webContents.executeJavaScript(`
+              if (document.querySelector('#cancel').disabled) throw new Error('Cancel disabled during save');
+              document.querySelector('#cancel').click();
+            `)
+          }
         })().catch((error) => {
           process.stderr.write(`${error.message}\n`)
           app.exit(1)
@@ -63,9 +74,22 @@ if (childOptions) {
 }
 
 async function run(): Promise<void> {
-  const credentials = new CredentialService()
+  let pendingWrite = Promise.resolve()
+  class DelayedCredentialStore extends PlaintextCredentialStore {
+    override save(state: CredentialFileState): Promise<void> {
+      pendingWrite = (async () => {
+        if (Object.keys(state.records).length > 0) {
+          if (phase === 'slow-save') await new Promise((resolve) => setTimeout(resolve, 11_000))
+          if (phase === 'cancel-save') await new Promise((resolve) => setTimeout(resolve, 1_000))
+        }
+        await super.save(state)
+      })()
+      return pendingWrite
+    }
+  }
+  const credentials = new CredentialService(new DelayedCredentialStore())
   await credentials.load()
-  if (phase === 'clear') {
+  if (['clear', 'slow-save', 'cancel-save'].includes(phase)) {
     for (const metadata of credentials.listMetadata())
       await credentials.removeCredential(metadata.id)
   }
@@ -84,18 +108,22 @@ async function run(): Promise<void> {
     activeTabId: 'basic',
   })
   await manager.createView('basic', undefined, { profileId, workspaceKey: '/fixture' })
-  await manager.navigate('basic', process.env.CCLINK_BASIC_SMOKE_URL!)
+  await manager.navigate('basic', process.env.CCLINK_BASIC_SMOKE_URL!).catch((error) => {
+    if (phase !== 'cancel-save') throw error
+  })
+  await pendingWrite
   const page = webContents
     .getAllWebContents()
     .find((content) => content.getURL() === process.env.CCLINK_BASIC_SMOKE_URL)
   if (
-    !page ||
-    (await page.executeJavaScript("document.querySelector('main')?.textContent")) !==
-      'Authenticated'
+    phase !== 'cancel-save' &&
+    (!page ||
+      (await page.executeJavaScript("document.querySelector('main')?.textContent")) !==
+        'Authenticated')
   )
     throw new Error('Protected content was not reached')
   const diagnostic = await manager.getRuntimeDiagnostics('basic')
-  if (diagnostic.httpAuth?.outcome !== 'authenticated')
+  if (diagnostic.httpAuth?.outcome !== (phase === 'cancel-save' ? 'cancelled' : 'authenticated'))
     throw new Error(`Navigation not authenticated: ${JSON.stringify(diagnostic.httpAuth)}`)
   const expected = phase === 'replace' ? 2 : 1
   if (challenges !== expected) throw new Error(`Expected ${expected} challenges, got ${challenges}`)

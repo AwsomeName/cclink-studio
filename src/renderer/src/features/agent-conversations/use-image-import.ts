@@ -10,6 +10,7 @@ import {
 export function useImageImport(
   scope: string,
   images: AgentImageAttachment[],
+  getImages: () => AgentImageAttachment[],
   accept: (images: AgentImageAttachment[]) => void,
   unavailableReason?: string,
 ) {
@@ -25,9 +26,9 @@ export function useImageImport(
   const add = useCallback(
     (files: File[]) => {
       if (unavailableReason) return
-      ownedJob.current = startImageImport(scope, files, images, accept) ?? ownedJob.current
+      ownedJob.current = startImageImport(scope, files, getImages, accept) ?? ownedJob.current
     },
-    [scope, unavailableReason, images, accept],
+    [scope, unavailableReason, getImages, accept],
   )
   return {
     add,

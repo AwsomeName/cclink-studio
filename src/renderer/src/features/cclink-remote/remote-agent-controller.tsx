@@ -308,6 +308,7 @@ export function RemoteAgentController({
   const imageImport = useImageImport(
     `remote:${remoteWorkspaceKey}`,
     pendingImages,
+    () => useCclinkStore.getState().remoteAgentImages[remoteWorkspaceKey] ?? [],
     (images) => {
       if (isWorkspaceTargetCurrent(workspaceTarget))
         addRemoteAgentImages(remoteWorkspaceKey, images)

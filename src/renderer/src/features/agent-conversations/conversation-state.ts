@@ -110,7 +110,12 @@ export interface AgentConversationState {
   /** Full image data is transient and is removed before workspace persistence. */
   pendingImages?: AgentImageAttachment[]
   /** Transient reference to this Run's original user message, for explicit retry on failure. */
-  activeImageDraft?: { runId: string; messageId: string; contextKey: string }
+  activeImageDraft?: {
+    runId: string
+    messageId: string
+    contextKey: string
+    mountedResources: AgentMountedResource[]
+  }
   queuedMessages?: QueuedAgentMessage[]
   queuedMessageDispatchId?: string | null
   messageQueuePauseReason?: string | null

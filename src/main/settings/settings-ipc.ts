@@ -8,6 +8,7 @@
  */
 
 import type { SettingsService } from './settings-service'
+import type { AgentCredentialMutation } from '../credentials/credentials-ipc'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type { PermissionManager } from '../mcp/permission'
@@ -64,7 +65,7 @@ export function registerSettingsIpc(
     input: ClaudeModelConnectionTestInput,
   ) => ReturnType<typeof testClaudeModelConnection> = testClaudeModelConnection,
   applyUpdateTrack: (track: 'stable' | 'beta') => Promise<void> = async () => undefined,
-): void {
+): AgentCredentialMutation {
   let modelConnectionTestPending = false
 
   /** 获取所有设置 */
@@ -513,6 +514,33 @@ export function registerSettingsIpc(
   )
 
   console.log('[SettingsIPC] 设置 IPC 已注册')
+  // Advanced credential management must use the same lock and runtime update as
+  // the service form. Reload also applies an empty configuration on damaged files.
+  return async (run) => {
+    const bridge = getAgentBridge()
+    const release = acquireAgentConfigurationLock(bridge)
+    if (!release) return runtimeSwitchPendingSettingsResult()
+    let status: Awaited<ReturnType<typeof run>> | undefined
+    try {
+      status = await run()
+      // With no live backend there is no cached key to invalidate. The next
+      // startup reads CredentialService; deleting a key must not start a runtime.
+      if (bridge) {
+        await applyAgentConfiguration(
+          bridge,
+          settingsService,
+          getClaudeRuntimeManager(),
+          recoverAgentRuntime,
+          true,
+        )
+      }
+      return { success: true, status }
+    } catch (error) {
+      return { success: false, status, error: settingsIpcError(error) }
+    } finally {
+      release()
+    }
+  }
 }
 
 function applyToolModuleSettings(toolHost: McpToolHost | null, disabledModules: string[]): void {

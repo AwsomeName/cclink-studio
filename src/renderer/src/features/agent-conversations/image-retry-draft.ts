@@ -1,5 +1,54 @@
 import type { AgentImageAttachment } from '@shared/ipc/agent'
-import type { AgentConversationState } from './conversation-state'
+import { conversationQueueContextKey, type AgentConversationState } from './conversation-state'
+import type { AgentMountedResource } from '../../types'
+
+/** Both IPC rejection and a later Runtime error restore through the same draft rules. */
+export function restoreFailedDraft(
+  conversation: AgentConversationState,
+  content: string,
+  images: AgentImageAttachment[],
+  mountedResources: AgentMountedResource[],
+  contextKey: string,
+): AgentConversationState {
+  const cleared = { ...conversation, activeImageDraft: undefined }
+  const containsDraft = (text: string, attachments: AgentImageAttachment[]): boolean =>
+    text.trim() === content.trim() &&
+    images.length > 0 &&
+    images.every((image) => attachments.some((attachment) => attachment.id === image.id))
+  if (
+    containsDraft(conversation.input, conversation.pendingImages ?? []) ||
+    conversation.queuedMessages?.some((item) => containsDraft(item.content, item.pendingImages))
+  )
+    return { ...cleared, messageQueuePauseReason: '图片消息发送失败，请检查后重试' }
+
+  // Persistent mounts stay in the composer after sending. They are safe to restore
+  // only if unchanged; a newly mounted file/browser is also a newer draft.
+  const draftEmpty =
+    !conversation.input.trim() &&
+    !conversation.pendingImages?.length &&
+    conversationQueueContextKey(conversation) === contextKey &&
+    JSON.stringify(conversation.mountedResources) ===
+      JSON.stringify(mountedResources.filter((resource) => resource.kind !== 'file-range'))
+  return {
+    ...cleared,
+    ...(draftEmpty
+      ? { input: content, pendingImages: images, mountedResources }
+      : {
+          queuedMessages: [
+            {
+              id: crypto.randomUUID(),
+              content,
+              createdAt: Date.now(),
+              contextKey,
+              mountedResources,
+              pendingImages: images,
+            },
+            ...(conversation.queuedMessages ?? []),
+          ],
+        }),
+    messageQueuePauseReason: '发送失败，请检查后重试',
+  }
+}
 
 /** Recover once, using the original message preview bytes; never overwrite a newer draft. */
 export function recoverFailedImageDraft(
@@ -26,42 +75,11 @@ export function recoverFailedImageDraft(
     })
   }
   if (!message || !images.length) return cleared
-  const ids = new Set(images.map((image) => image.id))
-  const alreadyPresent =
-    conversation.pendingImages?.some((image) => ids.has(image.id)) ||
-    conversation.queuedMessages?.some((item) =>
-      item.pendingImages.some((image) => ids.has(image.id)),
-    )
-  if (alreadyPresent)
-    return { ...cleared, messageQueuePauseReason: '图片消息发送失败，请检查后重试' }
   const content =
     message.rawText ??
     message.content
       .filter((block) => block.type === 'text')
       .map((block) => block.text)
       .join('\n')
-  const mountedResources = (message.resources ?? []).filter((resource) => resource.kind !== 'image')
-  return {
-    ...cleared,
-    ...(!conversation.input.trim() && !conversation.pendingImages?.length
-      ? {
-          input: content,
-          pendingImages: images,
-          mountedResources,
-        }
-      : {
-          queuedMessages: [
-            {
-              id: crypto.randomUUID(),
-              content,
-              createdAt: Date.now(),
-              contextKey: retry.contextKey,
-              mountedResources,
-              pendingImages: images,
-            },
-            ...(conversation.queuedMessages ?? []),
-          ],
-        }),
-    messageQueuePauseReason: '图片消息发送失败，请检查后重试',
-  }
+  return restoreFailedDraft(cleared, content, images, retry.mountedResources, retry.contextKey)
 }

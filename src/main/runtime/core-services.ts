@@ -305,9 +305,6 @@ export async function bootstrapMainProcessServices(
   runtime.diagnosticsIpcCleanup = registerDiagnosticsIpc(runtime.trustedRendererGuard)
   console.log('[CCLink Studio] 诊断日志 IPC 已注册')
 
-  registerCredentialsIpc(runtime.credentialService, runtime.trustedRendererGuard)
-  console.log('[CCLink Studio] 本地凭证 IPC 已注册')
-
   registerRuntimeComponentsIpc(runtime.runtimeComponentManager!, runtime.trustedRendererGuard, {
     beginManagedClaudeMutation: () => {
       const agentBridge = runtime.agentBridge
@@ -555,7 +552,7 @@ export async function bootstrapMainProcessServices(
     },
   })
 
-  registerSettingsIpc(
+  const mutateAgentCredentials = registerSettingsIpc(
     runtime.settingsService,
     runtime.trustedRendererGuard,
     runtime.permissionManager,
@@ -577,6 +574,12 @@ export async function bootstrapMainProcessServices(
     },
   )
   console.log('[CCLink Studio] 设置 IPC 已注册')
+  registerCredentialsIpc(
+    runtime.credentialService,
+    runtime.trustedRendererGuard,
+    mutateAgentCredentials,
+  )
+  console.log('[CCLink Studio] 本地凭证 IPC 已注册')
 
   const architecture = process.arch === 'arm64' ? 'arm64' : null
   const provider =

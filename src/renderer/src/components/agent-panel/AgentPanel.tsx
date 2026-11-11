@@ -842,6 +842,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
   const imageImport = useImageImport(
     `local:${activeConversationId}`,
     pendingImages,
+    () => useAgentStore.getState().conversations[activeConversationId]?.pendingImages ?? [],
     (images) => {
       if (useAgentStore.getState().conversations[activeConversationId])
         addPendingImages(images, activeConversationId)

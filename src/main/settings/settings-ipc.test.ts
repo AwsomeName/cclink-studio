@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from './types'
 import { registerSettingsIpc } from './settings-ipc'
+import { registerCredentialsIpc } from '../credentials/credentials-ipc'
 
 const mockIpcMain = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
@@ -19,6 +20,86 @@ describe('registerSettingsIpc', () => {
     mockIpcMain.handlers.clear()
     mockIpcMain.handle.mockClear()
   })
+
+  it('blocks advanced Agent credential mutations while a run owns the configuration', async () => {
+    const bridge = createAgentBridge(false)
+    const mutate = registerSettingsIpc(
+      createSettingsService() as never,
+      createGuard('trusted') as never,
+      createPermissionManager() as never,
+      () => bridge as never,
+    )
+    const credentials = {
+      setCredential: vi.fn(),
+      removeCredential: vi.fn(),
+      clearAll: vi.fn(),
+      reload: vi.fn(),
+    }
+    registerCredentialsIpc(credentials as never, createGuard('trusted') as never, mutate)
+    for (const [channel, ...args] of [
+      ['credentials:remove', 'agent:default'],
+      ['credentials:remove', 'agent:acp:codex'],
+      [
+        'credentials:set',
+        { id: 'agent:default', kind: 'api-key', fields: { apiKey: 'replacement' } },
+      ],
+      ['credentials:clearAll'],
+      ['credentials:reload'],
+    ]) {
+      await expect(
+        mockIpcMain.handlers.get(channel as string)!({ sender: 'trusted' }, ...args),
+      ).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('RUNTIME_SWITCH_PENDING'),
+      })
+    }
+    for (const mutation of Object.values(credentials)) expect(mutation).not.toHaveBeenCalled()
+    await mockIpcMain.handlers.get('credentials:remove')!(
+      { sender: 'trusted' },
+      'extension:meshy:default',
+    )
+    expect(credentials.removeCredential).toHaveBeenCalledWith('extension:meshy:default')
+  })
+
+  it.each(['credentials:remove', 'credentials:clearAll', 'credentials:reload'])(
+    'invalidates the live backend after %s, including a damaged reload',
+    async (channel) => {
+      let key = 'previous-key'
+      const service = createSettingsService()
+      service.getRuntimeSettings.mockImplementation(() => ({ ...DEFAULT_SETTINGS, apiKey: key }))
+      const bridge = createAgentBridge()
+      const mutate = registerSettingsIpc(
+        service as never,
+        createGuard('trusted') as never,
+        createPermissionManager() as never,
+        () => bridge as never,
+      )
+      const change = vi.fn(async () => {
+        key = ''
+        return {
+          status: channel === 'credentials:reload' ? 'degraded' : 'ready',
+          configuredCount: 0,
+          filePath: '/test/credentials.json',
+          legacyEncryptedFiles: [],
+          message: 'damaged file',
+        }
+      })
+      registerCredentialsIpc(
+        { removeCredential: change, clearAll: change, reload: change } as never,
+        createGuard('trusted') as never,
+        mutate,
+      )
+      const result = await mockIpcMain.handlers.get(channel)!(
+        { sender: 'trusted' },
+        ...(channel === 'credentials:remove' ? ['agent:default'] : []),
+      )
+      expect(result.success).toBe(channel !== 'credentials:reload')
+      expect(bridge.reconfigure).toHaveBeenCalledWith(expect.objectContaining({ apiKey: '' }), {
+        forceResetSessions: true,
+      })
+      expect(bridge.endConfigurationChange).toHaveBeenCalledOnce()
+    },
+  )
 
   it('rejects an untrusted sender before settings are read', () => {
     const settingsService = createSettingsService()

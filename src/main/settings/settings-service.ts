@@ -246,9 +246,11 @@ export class SettingsService {
 
   async clearSecret(key: SettingsSecretKey): Promise<SettingsSecretStatus> {
     return this.enqueueMutation(async () => {
-      await this.credentialService.removeCredential(credentialIdFor(key))
       this.migrationBlocked = false
       await this.saveState()
+      // A settings write failure must not leave a removed key cached by the
+      // live Agent: callers only reconfigure after this operation succeeds.
+      await this.credentialService.removeCredential(credentialIdFor(key))
       return this.getSecretStatus()
     })
   }

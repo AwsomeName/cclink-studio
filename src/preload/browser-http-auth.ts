@@ -21,26 +21,36 @@ window.addEventListener('DOMContentLoaded', () => {
   if (!requestId || !form || !username || !password || !submit || !cancel || !status) return
 
   let settled = false
+  let cancelling = false
   const updateSubmitState = (): void => {
     submit.disabled = settled || Boolean(insecureConfirmation && !insecureConfirmation.checked)
   }
   const respond = async (response: BrowserHttpAuthRendererResponse): Promise<void> => {
-    if (settled) return
+    if (cancelling || (settled && response.action !== 'cancel')) return
+    cancelling = response.action === 'cancel'
     settled = true
     updateSubmitState()
     username.disabled = true
     password.disabled = true
     if (remember) remember.disabled = true
-    cancel.disabled = true
-    status.textContent = response.action === 'submit' ? '正在验证凭证…' : '正在取消…'
+    cancel.disabled = cancelling
+    cancel.textContent = '取消登录'
+    status.textContent = cancelling
+      ? '正在取消…'
+      : response.action === 'submit' && response.remember
+        ? '正在保存并提交凭证，可随时取消登录…'
+        : '正在提交凭证，可随时取消登录…'
     try {
       await ipcRenderer.invoke(BROWSER_HTTP_AUTH_RESPONSE_CHANNEL, response)
     } catch {
+      if (cancelling && response.action === 'submit') return
+      cancelling = false
       settled = false
       username.disabled = false
       password.disabled = false
       if (remember) remember.disabled = !canRemember
       cancel.disabled = false
+      cancel.textContent = '取消'
       status.textContent =
         '凭证保存或提交失败。可取消“记住”后单次登录，或在设置 → 本地凭证中检查存储状态。'
       updateSubmitState()

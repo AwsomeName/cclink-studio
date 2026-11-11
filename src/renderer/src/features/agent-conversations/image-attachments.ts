@@ -57,10 +57,9 @@ export async function importAgentImageFiles(
       options.signal?.throwIfAborted()
       attachments.push({
         id: `image-${crypto.randomUUID()}`,
-        name: (file.name || `pasted-${Date.now()}.${extensionForMediaType(blob.type)}`).slice(
-          0,
-          512,
-        ),
+        name: (file.name.trim() || `pasted-${Date.now()}.${extensionForMediaType(blob.type)}`)
+          .slice(0, 512)
+          .trim(),
         mediaType: blob.type as AgentImageMediaType,
         data,
         size: blob.size,
@@ -86,9 +85,13 @@ function prepareInWorker(file: File, signal?: AbortSignal): Promise<PreparedAgen
       const worker = new Worker(new URL('./agent-image-worker.ts', import.meta.url), {
         type: 'module',
       })
+      let settled = false
       const finish = (result?: PreparedAgentImage, error?: Error): void => {
+        if (settled) return
+        settled = true
         clearTimeout(timeout)
         signal?.removeEventListener('abort', abort)
+        worker.onmessage = worker.onerror = worker.onmessageerror = null
         worker.terminate()
         if (error) reject(error)
         else resolve(result!)
@@ -105,7 +108,12 @@ function prepareInWorker(file: File, signal?: AbortSignal): Promise<PreparedAgen
         else finish(event.data.result)
       }
       worker.onerror = () => finish(undefined, new Error('图片处理失败，请检查图片后重试'))
-      worker.postMessage(file)
+      worker.onmessageerror = () => finish(undefined, new Error('无法读取图片处理结果，请重试'))
+      try {
+        worker.postMessage(file)
+      } catch (error) {
+        finish(undefined, error instanceof Error ? error : new Error('无法启动图片处理'))
+      }
     })
   })
   preparationTail = task.then(

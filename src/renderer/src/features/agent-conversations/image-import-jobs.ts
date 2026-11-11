@@ -17,12 +17,12 @@ export const useImageImportJobs = create<{ jobs: Record<string, ImageImportJob> 
 export function cancelImageImport(scope: string, id?: string): void {
   const job = useImageImportJobs.getState().jobs[scope]
   if (!job || (id && job.id !== id)) return
-  job.controller.abort()
   useImageImportJobs.setState(({ jobs }) => {
     const next = { ...jobs }
     delete next[scope]
     return { jobs: next }
   })
+  job.controller.abort()
 }
 
 export function imageImportBlockReason(
@@ -40,26 +40,60 @@ export function imageImportBlockReason(
 export function startImageImport(
   scope: string,
   files: File[],
-  images: AgentImageAttachment[],
+  getImages: () => AgentImageAttachment[],
   accept: (images: AgentImageAttachment[]) => void,
   importer = importAgentImageFiles,
 ): string | null {
-  if (useImageImportJobs.getState().jobs[scope]?.busy) return null
+  const previous = useImageImportJobs.getState().jobs[scope]
+  if (previous?.busy) {
+    useImageImportJobs.setState(({ jobs }) => ({
+      jobs: {
+        ...jobs,
+        [scope]: {
+          ...previous,
+          error: joinErrors(
+            previous.error,
+            '图片仍在处理，本次新选图片未添加，请处理完成后重新添加',
+          ),
+        },
+      },
+    }))
+    return null
+  }
   cancelImageImport(scope)
   const job: ImageImportJob = {
     id: crypto.randomUUID(),
     busy: true,
+    error: previous?.error,
     controller: new AbortController(),
   }
   useImageImportJobs.setState(({ jobs }) => ({ jobs: { ...jobs, [scope]: job } }))
-  void importer(files, MAX_AGENT_IMAGES - images.length, { signal: job.controller.signal })
+  void Promise.resolve()
+    .then(() => {
+      job.controller.signal.throwIfAborted()
+      return importer(files, Math.max(0, MAX_AGENT_IMAGES - getImages().length), {
+        signal: job.controller.signal,
+      })
+    })
     .then((result) => {
       if (job.controller.signal.aborted || useImageImportJobs.getState().jobs[scope]?.id !== job.id)
         return
-      accept(result.attachments)
-      if (result.errors.length) {
+      // Another event (for example a failed Run restoring its draft) can fill slots
+      // while the Worker is decoding. Re-read the attachment owner's current state.
+      const available = Math.max(0, MAX_AGENT_IMAGES - getImages().length)
+      const errors = [
+        ...result.errors,
+        ...result.attachments
+          .slice(available)
+          .map((image) => `${image.name}：当前附件已满（最多 ${MAX_AGENT_IMAGES} 张），请重新添加`),
+      ]
+      accept(result.attachments.slice(0, available))
+      const current = useImageImportJobs.getState().jobs[scope]
+      if (job.controller.signal.aborted || current?.id !== job.id) return
+      const error = joinErrors(current.error, ...errors)
+      if (error) {
         useImageImportJobs.setState(({ jobs }) => ({
-          jobs: { ...jobs, [scope]: { ...job, busy: false, error: result.errors.join('\n') } },
+          jobs: { ...jobs, [scope]: { ...current, busy: false, error } },
         }))
       } else cancelImageImport(scope, job.id)
     })
@@ -72,10 +106,20 @@ export function startImageImport(
           [scope]: {
             ...job,
             busy: false,
-            error: error instanceof Error ? error.message : '图片处理失败，请重试',
+            error: joinErrors(
+              jobs[scope]?.error,
+              error instanceof Error ? error.message : '图片处理失败，请重试',
+            ),
           },
         },
       }))
     })
   return job.id
+}
+
+function joinErrors(...errors: (string | undefined)[]): string | undefined {
+  return (
+    [...new Set(errors.flatMap((error) => (error ? error.split('\n') : [])))].join('\n') ||
+    undefined
+  )
 }

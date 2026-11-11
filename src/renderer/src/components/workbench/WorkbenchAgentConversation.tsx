@@ -268,6 +268,7 @@ export function WorkbenchAgentConversation({
   const imageImport = useImageImport(
     `local:${conversationId}`,
     pendingImages,
+    () => useAgentStore.getState().conversations[conversationId]?.pendingImages ?? [],
     (images) => {
       if (useAgentStore.getState().conversations[conversationId])
         addPendingImages(images, conversationId)

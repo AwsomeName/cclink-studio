@@ -1059,10 +1059,10 @@ export class BrowserManager {
       entry.httpAuthRequestId = undefined
       this.beginFitNavigation(tabId, entry)
     })
-    wc.on('did-navigate', (_event, url) => {
+    wc.on('did-navigate', (_event, url, httpResponseCode) => {
       const completedOrigin = resolveBrowserHttpAuthOrigin(url)
       entry.httpAuthNavigationOrigin = null
-      this.markHttpAuthAuthenticated(tabId, entry, completedOrigin)
+      this.markHttpAuthAuthenticated(tabId, entry, completedOrigin, httpResponseCode)
       this.onNavigate(tabId, url)
     })
     wc.on('did-navigate-in-page', (_event, url, isMainFrame) => {
@@ -2808,13 +2808,16 @@ export class BrowserManager {
     tabId: string,
     entry: ViewEntry,
     completedOrigin: string | null,
+    httpResponseCode: number,
   ): void {
     const diagnostic = this.lastHttpAuthByTab.get(tabId)
     if (
       !diagnostic ||
       diagnostic.outcome !== 'submitted' ||
       diagnostic.runtimeGeneration !== entry.runtimeGeneration ||
-      diagnostic.origin !== completedOrigin
+      diagnostic.origin !== completedOrigin ||
+      !entry.httpAuthRequestId ||
+      !(httpResponseCode >= 200 && httpResponseCode < 400)
     ) {
       return
     }

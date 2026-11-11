@@ -272,10 +272,7 @@ export class BrowserAuthProcessService {
       request,
       attempt,
       userDataPath,
-      timeout: setTimeout(
-        () => this.stopHttpAuthChild(request.tabId, 'timed-out'),
-        HTTP_AUTH_TIMEOUT_MS,
-      ),
+      timeout: setTimeout(() => this.stopHttpAuthEntry(entry, 'timed-out'), HTTP_AUTH_TIMEOUT_MS),
       settled: false,
     }
     this.activeHttpAuthChildren.set(request.tabId, entry)
@@ -298,7 +295,7 @@ export class BrowserAuthProcessService {
     child.on('exit', () => {
       if (!entry.settled) this.settleHttpAuthEntry(entry)
       this.releaseHttpAuthEntry(entry)
-      this.focusBrowserOwner(request.tabId)
+      if (!this.activeHttpAuthChildren.has(request.tabId)) this.focusBrowserOwner(request.tabId)
     })
     child.on('error', (error) => {
       if (!entry.settled) {
@@ -377,7 +374,6 @@ export class BrowserAuthProcessService {
   ): Promise<void> {
     if (
       entry.settled ||
-      entry.processing ||
       this.activeHttpAuthChildren.get(entry.request.tabId) !== entry ||
       !isBrowserHttpAuthChildMessage(message) ||
       message.requestId !== entry.request.requestId ||
@@ -388,7 +384,7 @@ export class BrowserAuthProcessService {
     }
 
     if (!this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
-      this.stopHttpAuthChild(entry.request.tabId, 'stale-request')
+      this.stopHttpAuthEntry(entry, 'stale-request')
       return
     }
 
@@ -403,6 +399,7 @@ export class BrowserAuthProcessService {
       return
     }
 
+    if (entry.processing) return
     if (
       entry.request.transport === 'insecure-http' &&
       (!message.allowInsecure || (message.remember && !message.allowInsecureAutoLogin))
@@ -426,13 +423,17 @@ export class BrowserAuthProcessService {
           },
         })
       } catch {
+        if (!this.isHttpAuthEntryActive(entry)) return
+        if (!this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
+          this.stopHttpAuthEntry(entry, 'stale-request')
+          return
+        }
         entry.processing = false
-        if (!entry.settled)
-          entry.child.send?.({
-            type: 'browser-http-auth-ack',
-            requestId: entry.request.requestId,
-            error: 'credential-save-failed',
-          } satisfies BrowserHttpAuthAcknowledgement)
+        entry.child.send?.({
+          type: 'browser-http-auth-ack',
+          requestId: entry.request.requestId,
+          error: 'credential-save-failed',
+        } satisfies BrowserHttpAuthAcknowledgement)
         this.browserManager.recordHttpAuthOutcome(
           entry.request,
           'prompted',
@@ -442,8 +443,9 @@ export class BrowserAuthProcessService {
         return
       }
     }
-    if (entry.settled || !this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
-      this.stopHttpAuthChild(entry.request.tabId, 'stale-request')
+    if (!this.isHttpAuthEntryActive(entry)) return
+    if (!this.browserManager.isBrowserHttpAuthCurrent(entry.request)) {
+      this.stopHttpAuthEntry(entry, 'stale-request')
       return
     }
     this.rememberSubmittedAttempt(entry)
@@ -481,16 +483,31 @@ export class BrowserAuthProcessService {
   private stopHttpAuthChild(tabId: string, reason = 'superseded'): void {
     const entry = this.activeHttpAuthChildren.get(tabId)
     if (!entry) return
-    this.browserManager.recordHttpAuthOutcome(entry.request, 'cancelled', entry.attempt, reason)
+    this.stopHttpAuthEntry(entry, reason)
+  }
+
+  private isHttpAuthEntryActive(entry: ActiveHttpAuthChild): boolean {
+    return !entry.settled && this.activeHttpAuthChildren.get(entry.request.tabId) === entry
+  }
+
+  private stopHttpAuthEntry(entry: ActiveHttpAuthChild, reason: string): void {
+    if (
+      this.isHttpAuthEntryActive(entry) &&
+      this.browserManager.isBrowserHttpAuthCurrent(entry.request)
+    ) {
+      this.browserManager.recordHttpAuthOutcome(entry.request, 'cancelled', entry.attempt, reason)
+    }
     this.settleHttpAuthEntry(entry)
-    this.activeHttpAuthChildren.delete(tabId)
+    if (this.activeHttpAuthChildren.get(entry.request.tabId) === entry) {
+      this.activeHttpAuthChildren.delete(entry.request.tabId)
+    }
     clearTimeout(entry.timeout)
     entry.child.kill('SIGTERM')
   }
 
   private resolveHttpAuthAttempt(request: BrowserHttpAuthRequest): number {
     const state = this.httpAuthAttempts.get(request.tabId)
-    const key = `${request.runtimeGeneration}\u0000${request.origin}\u0000${request.realm}`
+    const key = httpAuthAttemptKey(request)
     if (!state || state.key !== key || Date.now() - state.submittedAt > HTTP_AUTH_RETRY_WINDOW_MS) {
       this.clearHttpAuthAttempt(request.tabId)
       return 1
@@ -500,7 +517,7 @@ export class BrowserAuthProcessService {
 
   private rememberSubmittedAttempt(entry: Pick<ActiveHttpAuthChild, 'request' | 'attempt'>): void {
     this.clearHttpAuthAttempt(entry.request.tabId)
-    const key = `${entry.request.runtimeGeneration}\u0000${entry.request.origin}\u0000${entry.request.realm}`
+    const key = httpAuthAttemptKey(entry.request)
     const expiryTimer = setTimeout(
       () => this.clearHttpAuthAttempt(entry.request.tabId),
       HTTP_AUTH_RETRY_WINDOW_MS,
@@ -527,4 +544,11 @@ export class BrowserAuthProcessService {
       this.mainWindow.focus()
     }
   }
+}
+
+function httpAuthAttemptKey(request: BrowserHttpAuthRequest): string {
+  return JSON.stringify([
+    request.runtimeGeneration,
+    request.credentialId ?? [request.origin, request.realm],
+  ])
 }

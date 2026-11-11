@@ -1,8 +1,53 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { importAgentImageFiles } from './image-attachments'
 import { MAX_AGENT_IMAGE_BYTES, MAX_AGENT_SOURCE_IMAGE_BYTES } from '@shared/agent-image-limits'
+import { agentImagesSchema } from '@shared/ipc/image-attachment-schema'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
 describe('importAgentImageFiles', () => {
+  it.each(['   ', '  screenshot.png  '])(
+    'normalizes a filename for the send schema: %j',
+    async (name) => {
+      const result = await importAgentImageFiles(
+        [new File(['png'], name, { type: 'image/png' })],
+        5,
+        {
+          prepare: async (file) => ({ blob: file }),
+        },
+      )
+      expect(() => agentImagesSchema.parse(result.attachments)).not.toThrow()
+      expect(result.attachments[0].name.trim()).not.toBe('')
+      expect(result.attachments[0].name).toBe(result.attachments[0].name.trim())
+    },
+  )
+
+  it('releases the Worker and timeout when posting a file throws, then allows another image', async () => {
+    vi.useFakeTimers()
+    const terminate = vi.fn()
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage: ((event: { data: { result: { blob: Blob } } }) => void) | null = null
+        terminate = terminate
+        postMessage(file: File) {
+          if (file.name === 'bad.png') throw new Error('DataCloneError')
+          this.onmessage?.({ data: { result: { blob: file } } })
+        }
+      },
+    )
+    const result = await importAgentImageFiles(
+      ['bad.png', 'good.png'].map((name) => new File(['png'], name, { type: 'image/png' })),
+    )
+    expect(result.errors).toEqual([expect.stringContaining('DataCloneError')])
+    expect(result.attachments.map((image) => image.name)).toEqual(['good.png'])
+    expect(terminate).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('prepares five 20MB sources and only encodes the bounded sending copies', async () => {
     const source = new File([new Uint8Array(MAX_AGENT_SOURCE_IMAGE_BYTES)], 'large.png', {
       type: 'image/png',

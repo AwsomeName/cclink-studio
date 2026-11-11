@@ -127,7 +127,7 @@ describe('conversation-run-controller', () => {
     startImageImport(
       'local:agent-1',
       [],
-      [],
+      () => [],
       () => {},
       () => new Promise(() => {}),
     )

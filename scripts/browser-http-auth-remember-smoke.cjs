@@ -16,12 +16,14 @@ async function run() {
   const fixtureApp = path.join(temporary, 'app')
   const userData = path.join(temporary, 'user-data')
   let expectedPassword = ' smoke-password '
+  let authorizedRequests = 0
   const server = http.createServer((request, response) => {
     const expected = `Basic ${Buffer.from(`smoke-user:${expectedPassword}`).toString('base64')}`
     if (request.headers.authorization !== expected) {
       response.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Remember Smoke"' })
       response.end('Unauthorized')
     } else {
+      authorizedRequests++
       response.writeHead(200, { 'Content-Type': 'text/html' })
       response.end('<title>Remembered Basic Auth</title><main>Authenticated</main>')
     }
@@ -61,9 +63,15 @@ async function run() {
       'isolated',
       'isolated-again',
       'clear',
+      'slow-save',
+      'cancel-save',
     ]) {
       if (phase === 'replace') expectedPassword = ' changed-password '
+      const beforeAuthorized = authorizedRequests
       results.push(await launch(fixtureApp, userData, url, phase))
+      if (phase === 'cancel-save' && authorizedRequests !== beforeAuthorized) {
+        throw new Error('Cancelled save still sent credentials to the site')
+      }
       if (phase === 'save') {
         const file = path.join(userData, 'credentials/credentials.json')
         if ((fs.statSync(file).mode & 0o777) !== 0o600)

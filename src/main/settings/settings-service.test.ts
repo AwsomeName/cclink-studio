@@ -53,6 +53,15 @@ describe('SettingsService workspace startup', () => {
 })
 
 describe('SettingsService secrets', () => {
+  it('does not delete the live key if persisting cleared settings fails', async () => {
+    const service = createSettingsService()
+    await service.loadState()
+    await service.setSecret('apiKey', 'still-active')
+    await rm(join(tempDir, 'settings.json'))
+    await mkdir(join(tempDir, 'settings.json'))
+    await expect(service.clearSecret('apiKey')).rejects.toThrow()
+    expect(service.getRuntimeSettings().apiKey).toBe('still-active')
+  })
   it('saves a Claude connection without putting its key in settings or public snapshots', async () => {
     const service = createSettingsService()
     await service.loadState()

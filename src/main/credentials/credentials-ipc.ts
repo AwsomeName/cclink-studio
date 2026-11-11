@@ -3,6 +3,7 @@ import type {
   CredentialFieldResult,
   CredentialMetadataResult,
   CredentialOperationResult,
+  CredentialServiceStatus,
 } from '../../shared/ipc/credentials'
 import {
   registerTrustedIpcContract,
@@ -10,10 +11,22 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { CredentialService } from './credential-service'
 
+export type AgentCredentialMutation = (
+  run: () => Promise<CredentialServiceStatus>,
+) => Promise<CredentialOperationResult>
+
 export function registerCredentialsIpc(
   credentialService: CredentialService,
   trustedRendererGuard: TrustedRendererGuard,
+  mutateAgentCredentials: AgentCredentialMutation = async () => ({
+    success: false,
+    error: 'Agent 配置管理尚未就绪，请稍后重试',
+  }),
 ): void {
+  const mutate = (id: string, run: () => Promise<CredentialServiceStatus>) =>
+    id === 'agent:default' || id === 'agent:acp:codex'
+      ? mutateAgentCredentials(run)
+      : operation(run)
   registerTrustedIpcContract(credentialsIpc.getStatus, trustedRendererGuard, () =>
     credentialService.getStatus(),
   )
@@ -32,7 +45,7 @@ export function registerCredentialsIpc(
     credentialsIpc.set,
     trustedRendererGuard,
     async (_event, input): Promise<CredentialOperationResult> =>
-      operation(() => credentialService.setCredential(input)),
+      mutate(input.id, () => credentialService.setCredential(input)),
   )
 
   registerTrustedIpcContract(
@@ -65,13 +78,14 @@ export function registerCredentialsIpc(
     credentialsIpc.remove,
     trustedRendererGuard,
     async (_event, id): Promise<CredentialOperationResult> =>
-      operation(() => credentialService.removeCredential(id)),
+      mutate(id, () => credentialService.removeCredential(id)),
   )
 
   registerTrustedIpcContract(
     credentialsIpc.clearAll,
     trustedRendererGuard,
-    async (): Promise<CredentialOperationResult> => operation(() => credentialService.clearAll()),
+    async (): Promise<CredentialOperationResult> =>
+      mutateAgentCredentials(() => credentialService.clearAll()),
   )
 
   registerTrustedIpcContract(
@@ -95,7 +109,9 @@ export function registerCredentialsIpc(
     credentialsIpc.reload,
     trustedRendererGuard,
     async (): Promise<CredentialOperationResult> => {
-      const status = await credentialService.reload()
+      const result = await mutateAgentCredentials(() => credentialService.reload())
+      if (!result.success || !result.status) return result
+      const status = result.status
       if (status.status !== 'ready' && status.status !== 'conflict') {
         return {
           success: false,

@@ -45,10 +45,11 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
   activeBrowserHttpAuthWindow = window
 
   let completed = false
-  let acknowledgementTimer: ReturnType<typeof setTimeout> | null = null
+  let submitting = false
   let acknowledge: ((message: BrowserHttpAuthAcknowledgement) => void) | null = null
+  let abortSubmission: (() => void) | null = null
   const send = (message: BrowserHttpAuthChildMessage): void => {
-    if (typeof process.send === 'function') process.send(message)
+    if (typeof process.send === 'function' && process.connected !== false) process.send(message)
   }
   const cancel = (): void => {
     if (completed) return
@@ -79,6 +80,7 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
       window.close()
       return
     }
+    if (submitting) throw new Error('正在提交，请等待或取消')
     if (options.transport === 'insecure-http' && !response.allowInsecure) {
       throw new Error('必须明确确认明文 HTTP 风险')
     }
@@ -91,12 +93,14 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
       throw new Error('必须确认以后自动发送凭证')
     }
 
-    completed = true
+    submitting = true
     try {
       await new Promise<void>((resolve, reject) => {
         acknowledge = (message) =>
           message.error ? reject(new Error('credential-save-failed')) : resolve()
-        acknowledgementTimer = setTimeout(() => reject(new Error('ack-timeout')), 10_000)
+        // The parent owns the bounded challenge timeout. A second timeout here could
+        // enable a retry while the parent is still committing the previous save.
+        abortSubmission = () => reject(new Error('cancelled'))
         send({
           type: 'browser-http-auth-submitted',
           requestId: options.requestId,
@@ -109,15 +113,17 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
           allowInsecureAutoLogin: response.allowInsecureAutoLogin,
         })
       })
+      completed = true
       if (!window.isDestroyed()) window.close()
     } catch {
-      completed = false
+      if (completed) return
       throw new Error(
         '凭证保存或提交失败；可取消记住后单次登录，或在设置 → 本地凭证中检查存储状态。',
       )
     } finally {
-      if (acknowledgementTimer) clearTimeout(acknowledgementTimer)
+      submitting = false
       acknowledge = null
+      abortSubmission = null
     }
   }
 
@@ -126,21 +132,25 @@ export async function runBrowserHttpAuthChild(options: BrowserHttpAuthChildOptio
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.once('ready-to-show', () => window.show())
   window.on('closed', () => {
-    if (acknowledgementTimer) clearTimeout(acknowledgementTimer)
     ipcMain.removeHandler(BROWSER_HTTP_AUTH_RESPONSE_CHANNEL)
     if (activeBrowserHttpAuthWindow === window) activeBrowserHttpAuthWindow = null
     cancel()
+    abortSubmission?.()
+    process.removeListener('message', handleAcknowledgement)
+    process.removeListener('disconnect', handleDisconnect)
   })
 
-  process.on('message', (message: BrowserHttpAuthAcknowledgement) => {
+  const handleAcknowledgement = (message: BrowserHttpAuthAcknowledgement): void => {
     if (message?.type !== 'browser-http-auth-ack' || message.requestId !== options.requestId) {
       return
     }
     acknowledge?.(message)
-  })
-  process.once('disconnect', () => {
+  }
+  const handleDisconnect = (): void => {
     if (!window.isDestroyed()) window.close()
-  })
+  }
+  process.on('message', handleAcknowledgement)
+  process.once('disconnect', handleDisconnect)
 
   await window.loadURL(buildBrowserHttpAuthPage(options))
 }
@@ -176,7 +186,7 @@ function buildBrowserHttpAuthPage(options: BrowserHttpAuthChildOptions): string 
       main { max-width: 444px; margin: 0 auto; padding: 20px; background: #fff; border: 1px solid #d8dee4; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
       h1 { margin: 0 0 8px; font-size: 22px; }
       .origin { margin: 0 0 4px; overflow-wrap: anywhere; font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; color: #0969da; }
-      .realm { margin: 0 0 12px; color: #57606a; }
+      .realm { margin: 0 0 12px; color: #57606a; overflow-wrap: anywhere; }
       label { display: block; margin: 10px 0 4px; font-size: 13px; font-weight: 600; }
       input[type="text"], input[type="password"] { width: 100%; padding: 8px 10px; border: 1px solid #afb8c1; border-radius: 6px; font: inherit; background: #fff; color: #202124; }
       input:focus { border-color: #0969da; outline: 2px solid rgba(9,105,218,.2); }
