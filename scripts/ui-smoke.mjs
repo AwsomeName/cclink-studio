@@ -3491,32 +3491,26 @@ async function main() {
   await runCheck('settings page opens and searches locally', async () => {
     await clickByTitle(page, '设置')
     await page.waitForSelector('.settings-page', { timeout: 10_000 })
-    assert(
-      await page.getByRole('heading', { name: '设置' }).isVisible(),
-      'settings heading missing',
-    )
+    await page.locator('.settings-search input').waitFor({ state: 'visible' })
     await page.locator('.settings-search input').fill('agent')
     await page.waitForTimeout(200)
     const agentSearchResult = page.locator('.settings-search-result', { hasText: 'Agent 后端' })
     assert(await agentSearchResult.isVisible(), 'settings search result missing')
     await agentSearchResult.click()
     await page.waitForTimeout(200)
+    await page.getByRole('heading', { name: 'API Key 与连接', exact: true }).waitFor()
+    await page.getByRole('heading', { name: 'Claude Code', exact: true }).waitFor()
     assert(
-      await page.getByRole('heading', { name: 'Agent' }).isVisible(),
-      'agent settings section missing',
+      await page
+        .getByText('当前 Claude Code 仅支持 Anthropic 兼容接口。', { exact: true })
+        .isVisible(),
+      'Claude API compatibility explanation is missing',
     )
-    const apiFormatRow = page.locator('.settings-row', { hasText: 'API 格式' })
-    const apiFormatSelect = apiFormatRow.locator('select')
-    assert(await apiFormatSelect.isDisabled(), 'unsupported API format selector is still enabled')
     assert(
-      JSON.stringify(await apiFormatSelect.locator('option').allTextContents()) ===
-        JSON.stringify(['Anthropic']),
-      'OpenAI Compatible option is still rendered',
+      (await page.getByRole('option', { name: /OpenAI Compatible/ }).count()) === 0,
+      'unsupported API format option is still rendered',
     )
-    const providerOptions = await page
-      .locator('.settings-row', { hasText: '模型提供商' })
-      .locator('option')
-      .allTextContents()
+    const providerOptions = await page.getByLabel('模型服务商').locator('option').allTextContents()
     assert(!providerOptions.includes('OpenAI'), 'unsupported OpenAI provider is still rendered')
 
     await page.getByRole('button', { name: '更新', exact: true }).click()

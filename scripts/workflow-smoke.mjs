@@ -1691,7 +1691,8 @@ async function main() {
     await page.keyboard.press('Escape')
 
     await clickByTitle(page, '设置')
-    const setting = page.locator('[data-context-target="setting"]').first()
+    await page.locator('.settings-nav').getByRole('button', { name: '外观', exact: true }).click()
+    const setting = page.locator('[data-context-target="setting"]', { hasText: '应用缩放' })
     await setting.waitFor({ timeout: 15_000 })
     await verifyMouseAndKeyboardMenu(setting, 'settings.copy-key', 'settings.reset-current')
     await setting.focus()
