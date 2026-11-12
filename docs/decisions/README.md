@@ -70,3 +70,4 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 
 - `0022-codex-default-local-runtime.md`：新本地会话默认 Codex app-server；保留 Claude Code 与旧 ACP，取消 Claude 的全局启动前置条件，允许 Codex 自己使用本机文件登录，保持单一 run/权限所有者。
 - `0023-automatic-task-agent-selection.md`：Studio 自主任务在执行前检测 Codex，再选择已配置的 Claude 备选；显式聊天、原生 Session 和已开始执行的任务保持绑定，复用既有 run 与权限所有权。
+- `0024-personal-company-space-bindings.md`：proposed；“我的空间 / 我的公司”固定入口引用不同的普通本地工作空间，定义旧公司原位关联、混合目录保护和原记录 scope；用户已确认产品方向，尚未实现。

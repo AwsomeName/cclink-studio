@@ -1,0 +1,256 @@
+<div id="studio-fixed-spaces">
+  <style>
+    #studio-fixed-spaces { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    #studio-fixed-spaces .studio {
+      --s-bg: light-dark(#ffffff, #1e1e1e); --s-panel: light-dark(#f6f7f9, #252526);
+      --s-rail: light-dark(#edf0f3, #2c2d30); --s-top: light-dark(#f1f3f5, #303135);
+      --s-text: light-dark(#242a33, #e0e2e6); --s-muted: light-dark(#646d79, #a7abb3);
+      --s-line: light-dark(#dce0e5, #3b3d42); --s-hover: light-dark(#e7ebf0, #35383d);
+      --s-blue: light-dark(#006eae, #69b6ee); --s-selected: light-dark(#dcebf6, #253f52);
+      --s-warning: light-dark(#7b550c, #edca82); --s-wash: light-dark(#fff5dd, #3c3323);
+      --s-button: light-dark(#0874b9, #167bb7); --s-on-button: #fff;
+      color: var(--s-text); background: var(--s-bg); border: 1px solid var(--s-line); border-radius: 10px;
+      overflow: clip; min-height: 940px; display: flex; flex-direction: column; font-size: 13px; line-height: 1.55;
+      position: relative; text-align: left;
+    }
+    #studio-fixed-spaces .studio * { box-sizing: border-box; }
+    #studio-fixed-spaces .studio button, #studio-fixed-spaces .studio input, #studio-fixed-spaces .studio textarea { font: inherit; }
+    #studio-fixed-spaces .studio button { color: inherit; background: none; border: 0; }
+    #studio-fixed-spaces .studio button:hover { background: var(--s-hover); }
+    #studio-fixed-spaces .studio button:focus-visible, #studio-fixed-spaces .studio input:focus-visible { outline: 2px solid var(--s-blue); outline-offset: 2px; }
+    #studio-fixed-spaces .studio h1, #studio-fixed-spaces .studio h2, #studio-fixed-spaces .studio h3, #studio-fixed-spaces .studio p { margin: 0; }
+    #studio-fixed-spaces .studio h1 { font-size: 25px; line-height: 1.3; font-weight: 500; letter-spacing: -.6px; }
+    #studio-fixed-spaces .studio h2 { font-size: 15px; font-weight: 500; }
+    #studio-fixed-spaces .studio h3 { font-size: 14px; font-weight: 500; }
+    #studio-fixed-spaces .studio small { font-size: 12px; }
+    #studio-fixed-spaces .studio svg { width: 16px; height: 16px; flex-shrink: 0; }
+    #studio-fixed-spaces .s-muted { color: var(--s-muted); }
+    #studio-fixed-spaces .s-flex { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    #studio-fixed-spaces .s-spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #studio-fixed-spaces .s-window { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: var(--s-top); color: var(--s-muted); font-size: 11px; gap: 12px; }
+    #studio-fixed-spaces .s-dots { display: flex; gap: 6px; }
+    #studio-fixed-spaces .s-dots b { width: 9px; height: 9px; border-radius: 50%; background: var(--s-muted); opacity: .45; }
+    #studio-fixed-spaces .s-topbar { padding: 6px 10px; background: var(--s-top); border-bottom: 1px solid var(--s-line); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #studio-fixed-spaces .s-fixed { display: flex; gap: 5px; }
+    #studio-fixed-spaces .s-space { padding: 9px 13px; border: 1px solid transparent !important; border-radius: 5px; display: flex; align-items: center; gap: 8px; white-space: nowrap; font-weight: 500; }
+    #studio-fixed-spaces .s-space[aria-pressed="true"] { background: var(--s-selected); border-color: var(--s-blue) !important; color: var(--s-text); box-shadow: inset 0 -2px var(--s-blue); }
+    #studio-fixed-spaces .s-space .s-pin { width: 12px; height: 12px; color: var(--s-muted); }
+    #studio-fixed-spaces .s-ordinary { display: flex; gap: 5px; align-items: center; border-left: 1px solid var(--s-line); padding-left: 10px; min-width: 0; }
+    #studio-fixed-spaces .s-project { padding: 9px 10px; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+    #studio-fixed-spaces .s-project[aria-pressed="true"] { background: var(--s-selected); box-shadow: inset 0 -2px var(--s-blue); }
+    #studio-fixed-spaces .s-project .s-close { color: var(--s-muted); }
+    #studio-fixed-spaces .s-top-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+    #studio-fixed-spaces .s-icon { padding: 7px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    #studio-fixed-spaces .s-shell { display: grid; grid-template-columns: 140px minmax(0, 1fr) 224px; flex: 1; min-height: 685px; }
+    #studio-fixed-spaces .s-rail { background: var(--s-rail); border-right: 1px solid var(--s-line); padding: 12px 5px 8px; display: flex; flex-direction: column; gap: 10px; }
+    #studio-fixed-spaces .s-group-label { color: var(--s-muted); font-size: 11px; padding: 0 10px 5px; }
+    #studio-fixed-spaces .s-nav { width: 100%; min-height: 31px; padding: 5px 10px; display: flex; align-items: center; gap: 8px; text-align: left; border-radius: 4px; position: relative; }
+    #studio-fixed-spaces .s-nav[aria-current="page"] { background: var(--s-selected); }
+    #studio-fixed-spaces .s-nav[aria-current="page"]::before { content: ""; position: absolute; left: -5px; width: 3px; height: 19px; background: var(--s-blue); }
+    #studio-fixed-spaces .s-nav .s-jump { width: 12px; height: 12px; margin-left: auto; color: var(--s-muted); }
+    #studio-fixed-spaces .s-rail-bottom { margin-top: auto; padding-top: 12px; }
+    #studio-fixed-spaces .s-main { min-width: 0; display: flex; flex-direction: column; }
+    #studio-fixed-spaces .s-tabs { min-height: 39px; border-bottom: 1px solid var(--s-line); background: var(--s-panel); display: flex; align-items: stretch; }
+    #studio-fixed-spaces .s-tab { display: flex; align-items: center; gap: 8px; padding: 9px 15px; border-top: 2px solid var(--s-blue); background: var(--s-bg); }
+    #studio-fixed-spaces .s-breadcrumb { padding: 12px 22px 0; font-size: 12px; color: var(--s-muted); display: flex; align-items: center; gap: 7px; }
+    #studio-fixed-spaces .s-content { padding: 22px; flex: 1; min-width: 0; }
+    #studio-fixed-spaces .s-eyebrow { color: var(--s-muted); font-size: 12px; margin-bottom: 8px !important; }
+    #studio-fixed-spaces .s-caption { color: var(--s-muted); margin-top: 8px !important; }
+    #studio-fixed-spaces .s-button { padding: 7px 11px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--s-line) !important; border-radius: 5px; background: var(--s-panel) !important; white-space: normal; }
+    #studio-fixed-spaces .s-button:hover { background: var(--s-hover) !important; }
+    #studio-fixed-spaces .s-button.s-primary { background: var(--s-button) !important; color: var(--s-on-button); border-color: var(--s-button) !important; }
+    #studio-fixed-spaces .s-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    #studio-fixed-spaces .s-company-nav { margin: 24px 0 22px; border-bottom: 1px solid var(--s-line); display: flex; gap: 18px; flex-wrap: wrap; }
+    #studio-fixed-spaces .s-company-nav button { padding: 0 0 9px; color: var(--s-muted); border-bottom: 2px solid transparent; }
+    #studio-fixed-spaces .s-company-nav button[aria-pressed="true"] { color: var(--s-text); border-bottom-color: var(--s-blue); }
+    #studio-fixed-spaces .s-section { margin-top: 26px; }
+    #studio-fixed-spaces .s-section-title { margin-bottom: 12px; }
+    #studio-fixed-spaces .s-list { border-top: 1px solid var(--s-line); }
+    #studio-fixed-spaces .s-row { padding: 15px 0; border-bottom: 1px solid var(--s-line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #studio-fixed-spaces .s-row-title { margin-bottom: 3px !important; }
+    #studio-fixed-spaces .s-file-icon { width: 34px; height: 34px; border-radius: 6px; background: var(--s-panel); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    #studio-fixed-spaces .s-row-main { min-width: 0; }
+    #studio-fixed-spaces .s-chip { color: var(--s-muted); border: 1px solid var(--s-line); border-radius: 4px; padding: 2px 6px; font-size: 11px; white-space: nowrap; }
+    #studio-fixed-spaces .s-location { margin-top: 26px; padding: 12px; background: var(--s-panel); border-radius: 5px; color: var(--s-muted); font-size: 12px; }
+    #studio-fixed-spaces .s-path { overflow-wrap: anywhere; margin-top: 4px !important; }
+    #studio-fixed-spaces .s-agent { border-left: 1px solid var(--s-line); background: var(--s-panel); padding: 12px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    #studio-fixed-spaces .s-agent-head { display: flex; justify-content: space-between; align-items: center; }
+    #studio-fixed-spaces .s-agent-scope { font-size: 12px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; color: var(--s-muted); }
+    #studio-fixed-spaces .s-agent-center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 12px; padding: 10px 2px; }
+    #studio-fixed-spaces .s-agent-center > svg { color: var(--s-blue); width: 23px; height: 23px; }
+    #studio-fixed-spaces .s-agent-center p { font-size: 12px; color: var(--s-muted); }
+    #studio-fixed-spaces .s-composer { border: 1px solid var(--s-line); border-radius: 7px; background: var(--s-bg); padding: 10px; }
+    #studio-fixed-spaces .s-composer textarea { width: 100%; border: 0; background: transparent; color: var(--s-text); resize: none; min-height: 82px; font-size: 12px; outline: none; }
+    #studio-fixed-spaces .s-composer-foot { display: flex; align-items: center; justify-content: space-between; color: var(--s-muted); font-size: 11px; }
+    #studio-fixed-spaces .s-status { border-top: 1px solid var(--s-line); padding: 5px 12px; display: flex; justify-content: space-between; gap: 10px; color: var(--s-muted); font-size: 11px; background: var(--s-top); flex-wrap: wrap; }
+    #studio-fixed-spaces .s-overlay { position: absolute; inset: 90px 0 28px; background: light-dark(#f1f3f5dd, #18191bdd); display: flex; align-items: flex-start; justify-content: center; padding: 30px 22px; z-index: 4; }
+    #studio-fixed-spaces .s-dialog { width: 550px; max-width: 100%; padding: 25px; border: 1px solid var(--s-line); border-radius: 9px; background: var(--s-bg); box-shadow: 0 16px 55px #0003; }
+    #studio-fixed-spaces .s-dialog h1 { font-size: 22px; }
+    #studio-fixed-spaces .s-dialog-intro { color: var(--s-muted); margin-top: 10px !important; }
+    #studio-fixed-spaces .s-options { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    #studio-fixed-spaces .s-option { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid var(--s-line); border-radius: 6px; }
+    #studio-fixed-spaces .s-option:has(input:checked) { border-color: var(--s-blue); background: var(--s-selected); }
+    #studio-fixed-spaces .s-option input { accent-color: var(--s-blue); margin-top: 4px; }
+    #studio-fixed-spaces .s-option p { font-size: 12px; color: var(--s-muted); }
+    #studio-fixed-spaces .s-preserve { margin-top: 18px; padding: 13px; background: var(--s-panel); border-radius: 6px; font-size: 12px; }
+    #studio-fixed-spaces .s-preserve p + p { margin-top: 6px; color: var(--s-muted); }
+    #studio-fixed-spaces .s-dialog-footer { margin-top: 24px; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+    #studio-fixed-spaces .s-field { display: block; margin-top: 20px; }
+    #studio-fixed-spaces .s-field input { width: 100%; padding: 9px 11px; color: var(--s-text); background: var(--s-panel); border: 1px solid var(--s-line); border-radius: 5px; margin-top: 6px; }
+    #studio-fixed-spaces .s-warning { background: var(--s-wash); color: var(--s-warning); padding: 12px; border-radius: 5px; margin-top: 18px; }
+    #studio-fixed-spaces .s-document { margin-top: 20px; padding-top: 22px; border-top: 1px solid var(--s-line); }
+    #studio-fixed-spaces .s-document p { margin-top: 14px; }
+    #studio-fixed-spaces .s-notice { margin-top: 16px; padding: 10px 12px; background: var(--s-selected); color: var(--s-text); border-radius: 5px; font-size: 12px; }
+    #studio-fixed-spaces .studio.s-compact .s-shell { grid-template-columns: 48px minmax(0, 1fr) 224px; }
+    #studio-fixed-spaces .studio.s-compact .s-nav-label, #studio-fixed-spaces .studio.s-compact .s-group-label, #studio-fixed-spaces .studio.s-compact .s-jump { display: none; }
+    #studio-fixed-spaces .studio.s-compact .s-nav { justify-content: center; padding: 7px; }
+    #studio-fixed-spaces .studio.s-compact .s-rail { gap: 16px; }
+    @media (max-width: 1000px) {
+      #studio-fixed-spaces .s-shell { grid-template-columns: 140px minmax(0, 1fr) 200px; }
+      #studio-fixed-spaces .studio.s-compact .s-shell { grid-template-columns: 48px minmax(0, 1fr) 200px; }
+      #studio-fixed-spaces .s-content { padding: 20px; }
+      #studio-fixed-spaces .s-project-secondary { display: none; }
+    }
+    @media (max-width: 760px) {
+      #studio-fixed-spaces .studio { min-height: 1020px; }
+      #studio-fixed-spaces .s-shell, #studio-fixed-spaces .studio.s-compact .s-shell { grid-template-columns: 48px minmax(0, 1fr); }
+      #studio-fixed-spaces .s-agent { display: none; }
+      #studio-fixed-spaces .s-nav-label, #studio-fixed-spaces .s-group-label, #studio-fixed-spaces .s-jump { display: none; }
+      #studio-fixed-spaces .s-nav { justify-content: center; padding: 7px; }
+      #studio-fixed-spaces .s-rail { gap: 15px; }
+      #studio-fixed-spaces .s-content { padding: 18px; }
+      #studio-fixed-spaces .s-breadcrumb { padding-left: 18px; }
+      #studio-fixed-spaces .s-top-actions { display: none; }
+      #studio-fixed-spaces .s-space { padding: 9px 12px; }
+      #studio-fixed-spaces .s-company-nav { gap: 12px; }
+      #studio-fixed-spaces .s-row { flex-wrap: wrap; }
+      #studio-fixed-spaces .s-row > .s-flex { flex: 1 1 200px; }
+      #studio-fixed-spaces .s-dialog { padding: 20px; }
+    }
+    @media (max-width: 480px) {
+      #studio-fixed-spaces .studio { min-height: 1240px; }
+      #studio-fixed-spaces .s-window { padding: 8px; }
+      #studio-fixed-spaces .s-topbar { gap: 5px; padding: 5px; }
+      #studio-fixed-spaces .s-fixed { width: 100%; }
+      #studio-fixed-spaces .s-space { flex: 1; padding: 9px 6px; justify-content: center; gap: 6px; }
+      #studio-fixed-spaces .s-ordinary { border: 0; padding-left: 0; }
+      #studio-fixed-spaces .s-content { padding: 14px; }
+      #studio-fixed-spaces .s-breadcrumb { padding-left: 14px; }
+      #studio-fixed-spaces .s-content h1 { font-size: 23px; }
+      #studio-fixed-spaces .s-spread { flex-wrap: wrap; }
+      #studio-fixed-spaces .s-overlay { inset: 127px 0 48px; padding: 14px 10px; }
+      #studio-fixed-spaces .s-dialog { padding: 17px; }
+      #studio-fixed-spaces .s-dialog h1 { font-size: 20px; }
+      #studio-fixed-spaces .s-dialog-footer .s-button { width: 100%; }
+      #studio-fixed-spaces .s-status { min-height: 48px; }
+    }
+  </style>
+  <div class="viz-carousel" aria-label="我的空间与我的公司产品效果图" data-previous-label="上一张" data-next-label="下一张">
+    <section data-variant="我的公司" aria-label="我的公司工作台"><div class="studio" data-scene="company"></div></section>
+    <section data-variant="我的空间" aria-label="我的空间工作台" hidden><div class="studio" data-scene="personal"></div></section>
+    <section data-variant="专项工作空间" aria-label="专项工作空间" hidden><div class="studio" data-scene="project"></div></section>
+    <section data-variant="接回已有公司" aria-label="已有公司资料兼容" hidden><div class="studio" data-scene="legacy"></div></section>
+    <section data-variant="首次启用" aria-label="首次启用我的公司" hidden><div class="studio" data-scene="new"></div></section>
+    <section data-variant="原目录不可用" aria-label="公司原目录恢复" hidden><div class="studio" data-scene="missing"></div></section>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('studio-fixed-spaces');
+      const icon = (name, cls = '') => `<i data-lucide="${name}" class="${cls}" aria-hidden="true"></i>`;
+      const escape = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const labels = {personal:'我的空间', company:'我的公司', project:'woniu-forward'};
+      const groups = [
+        ['工作', [['home','工作台','home'],['folder','文件','files'],['messages-square','会话','sessions'],['globe','浏览器','browser'],['square-terminal','终端','terminal']]],
+        ['经营', [['building-2','公司经营','company'],['wallet','公司账目','finance']]],
+        ['流程', [['file-check','文章发布','publish'],['workflow','事务','affairs'],['calendar-clock','定时任务','schedule']]],
+        ['资源', [['panels-top-left','网站与账号','accounts'],['contact-round','角色','roles'],['database','数据源','data']]]
+      ];
+      const navItem = (name, label, id, state) => `<button type="button" class="s-nav cursor-interaction" data-nav="${id}" aria-label="${label}" data-tooltip="${label}" ${state.panel === id ? 'aria-current="page"' : ''}>${icon(name)}<span class="s-nav-label">${label}</span>${['company','finance'].includes(id) && state.active !== 'company' ? icon('arrow-up-right','s-jump') : ''}</button>`;
+      const button = (label, action, primary = false, ico = '') => `<button type="button" class="s-button ${primary?'s-primary':''} cursor-interaction" data-action="${action}">${ico?icon(ico):''}${label}</button>`;
+      const row = (ico, title, subtitle, action, status = '') => `<div class="s-row"><div class="s-flex"><div class="s-file-icon">${icon(ico)}</div><div class="s-row-main"><p class="s-row-title">${title}</p><small class="s-muted">${subtitle}</small></div></div>${status?`<span class="s-chip">${status}</span>`:button('打开',action)}</div>`;
+      const states = new Map();
+      function initial(scene) {return {scene, active:['company','project'].includes(scene)?scene:'personal', panel:scene==='company'?'company':scene==='project'?'files':'home', modal:['legacy','new','missing'].includes(scene)?scene:null, companyName:'示例工作室', companyPath:'~/CCLink Studio/默认工作空间', compact:false, more:false, notice:'', section:'公司总览'};}
+      function mainContent(s) {
+        if (s.active === 'company' && ['company','finance'].includes(s.panel)) {
+          const section = s.panel === 'finance' ? '财务' : s.section;
+          if (s.freshCompany) return `<p class="s-eyebrow">${escape(s.companyName)} · 独立公司资料</p><h1>公司总览</h1><p class="s-caption">公司空间已准备好，从第一项真实业务开始。</p><div class="s-actions">${button('创建业务项目','new-business',true,'plus')}${button('导入账目资料','sample',false,'upload')}</div><section class="s-section"><div class="s-list">${row('folder-open','关联已有资料与会话','按需选择资料，不自动导入个人内容','sample')}</div></section><div class="s-location"><p>公司资料位置</p><p class="s-path">${escape(s.companyPath)}</p></div>`;
+          return `<p class="s-eyebrow">${escape(s.companyName)} · 本地经营资料</p><div class="s-spread"><h1>${section}</h1>${button('新建业务','new-business',false,'plus')}</div>
+            <p class="s-caption">目标、业务与资料，都回到同一家公司。</p>
+            <nav class="s-company-nav" aria-label="公司业务导航">${['公司总览','业务项目','财务','运营','资料与会话'].map(x=>`<button type="button" class="cursor-interaction" data-section="${x}" aria-pressed="${section===x}">${x}</button>`).join('')}</nav>
+            ${section==='财务'?`<div class="s-section"><div class="s-spread s-section-title"><h2>2026 年 11 月账目</h2><span class="s-chip">示意月份</span></div><div class="s-list">${row('file-spreadsheet','账目与原件','沿用原公司资料中的账目记录','record')}${row('landmark','财务账户','与当前公司空间关联','record')}</div><div class="s-actions">${button('导入账目资料','sample',true,'upload')}${button('查看原账目','record')}</div></div>`:
+            section==='资料与会话'?`<div class="s-list">${row('file-text','产品规格说明.md','来自原公司空间 · 文件保持原位置','record')}${row('messages-square','本月运营讨论','原会话与消息历史','record')}${row('file-check','产品介绍稿','关联原发布事务 · 未提交','record')}</div>`:
+            section==='运营'?`<div class="s-section"><h2>原稿与发布事务</h2><div class="s-list">${row('file-text','产品介绍稿.md','运营 / 原稿 · 示例资料','record')}${row('file-check','产品介绍稿发布准备','打开原事务查看真实执行状态','publish','未提交')}</div><div class="s-actions">${button('进入文章发布','publish',true,'file-check')}</div></div>`:
+            `<section class="s-section"><div class="s-spread s-section-title"><h2>业务项目</h2><span class="s-muted">从原记录继续</span></div><div class="s-list">${row('box','AR 眼镜研发','规格、研发资料与关联支出','record')}${row('notebook-pen','内容运营','原稿、素材与发布事务','record')}</div></section>
+            <section class="s-section"><div class="s-spread s-section-title"><h2>本月经营资料</h2>${button('查看账目','finance')}</div><div class="s-list">${row('file-text','产品介绍稿.md','运营 / 原稿 · 示例资料','record')}${row('file-check','原发布事务','仍以原平台结果为准','record','未提交')}</div></section>`}
+            <div class="s-location"><div class="s-spread"><span class="s-flex">${icon('folder-check')}沿用原公司资料位置</span>${button('查看位置','location')}</div><p class="s-path">${escape(s.companyPath)}</p></div>`;
+        }
+        if (s.panel === 'home') return `<p class="s-eyebrow">个人资料与日常工作</p><h1>我的空间</h1><p class="s-caption">随手记录、继续对话，开始今天的工作。</p><div class="s-actions">${button('新建笔记','note',true,'square-pen')}${button('新建会话','sessions',false,'message-square-plus')}${button('打开网页','browser',false,'globe')}</div><section class="s-section"><div class="s-spread s-section-title"><h2>继续上次的工作</h2><span class="s-muted">仅当前空间</span></div><div class="s-list">${row('file-text','今日随记.md','个人笔记 · 示例内容','note')}${row('messages-square','阅读与想法','个人会话 · 示例内容','sessions')}${row('folder','资料收集','我的空间 / 资料','files')}</div></section><section class="s-section"><h2>公司经营</h2><p class="s-caption">经营资料保存在独立的公司空间。</p><div class="s-actions">${button('进入我的公司','company',false,'building-2')}</div></section><div class="s-location"><span class="s-flex">${icon('folder')}个人资料位置</span><p class="s-path">~/CCLink Studio/我的空间</p></div>`;
+        if (s.panel === 'files' && s.active==='project') return `<p class="s-eyebrow">专项工作空间 · woniu-forward</p><h1>研发日记</h1><div class="s-document"><h2>下一阶段的研发安排</h2><p>记录问题、整理规格，把讨论沉淀为可继续的工作。</p><p class="s-muted">这份文档和当前会话属于 woniu-forward。</p><div class="s-list s-section">${row('file-text','研发计划.md','当前工作空间','record')}${row('folder','产品资料','当前工作空间','files')}</div></div><div class="s-location"><span class="s-flex">${icon('building-2')}公司经营仍可随时返回</span><p>点击顶栏“我的公司”或左侧“公司经营”，进入原公司的资料空间。</p></div>`;
+        const names = {files:'文件',sessions:'会话',browser:'浏览器',terminal:'终端',publish:'文章发布',affairs:'事务',schedule:'定时任务',accounts:'网站与账号',roles:'角色',data:'数据源',note:'今日随记',settings:'设置',tools:'更多工具'};
+        const global = ['accounts','roles','data','settings','tools'].includes(s.panel);
+        return `<p class="s-eyebrow">${global?'本机资源':escape(labels[s.active])}</p><h1>${names[s.panel]||'原始记录'}</h1><p class="s-caption">${global?'切换空间后仍可使用已配置的资源。':'当前资料归属：'+escape(labels[s.active])}</p>${s.panel==='note'?'<div class="s-document"><h2>今天想记录什么？</h2><p class="s-muted">在这里开始写下想法。</p></div>':s.panel==='tools'?`<div class="s-list s-section">${row('clapperboard','视频创作','沿用原能力入口','sample')}${row('cpu','硬件生产','沿用原能力入口','sample')}${row('cloud','CCLink 远程','按需登录与连接','sample')}</div>`:`<div class="s-list s-section">${row(s.panel==='publish'?'file-check':'file-text',s.panel==='publish'?'原稿与发布事务':'已有资料与记录',global?'本机已配置资源':'保持当前空间归属','record')}</div>`}<div class="s-location">设计示意 · 复用现有${names[s.panel]||'记录'}页面，不新增一套业务数据。</div>`;
+      }
+      function modal(s) {
+        if (!s.modal) return '';
+        let body='';
+        if (s.modal==='legacy') body=`<p class="s-eyebrow">连接“我的公司”</p><h1>继续使用已有公司资料</h1><p class="s-dialog-intro">找到两份已登记的公司资料。选择你要从固定入口进入的那一份。</p><div class="s-options"><label class="s-option"><input type="radio" name="company-${s.scene}" value="default" checked><span><h3>示例工作室</h3><p class="s-path">~/CCLink Studio/默认工作空间</p><p>已有业务、账目和关联资料</p></span></label><label class="s-option"><input type="radio" name="company-${s.scene}" value="other"><span><h3>研发公司资料</h3><p class="s-path">~/Documents/研发日记</p><p>保留在另一个原工作空间</p></span></label></div><div class="s-preserve"><p class="s-flex">${icon('folder-check')}原目录、原账目、原会话继续使用</p><p>这次只关联入口，不移动或合并资料。“我的空间”使用独立目录；原目录里的个人笔记仍留在原处。</p></div><div class="s-dialog-footer">${button('稍后处理','dismiss')}${button('使用这份公司资料','bind',true,'arrow-right')}</div>`;
+        if (s.modal==='new') body=`<p class="s-eyebrow">首次使用</p><h1>启用我的公司</h1><p class="s-dialog-intro">为经营资料准备一个独立空间。个人笔记和会话继续留在“我的空间”。</p><label class="s-field">公司显示名称<input class="s-company-name" aria-label="公司显示名称" value="我的公司" placeholder="例如：我的工作室"></label><div class="s-location"><p>资料保存位置</p><p class="s-path">~/CCLink Studio/我的公司</p></div><div class="s-preserve"><p>已经在 Studio 使用过公司资料？</p><p>选择原目录，继续使用已有公司，避免重新建立空公司。</p><div class="s-actions">${button('选择已有公司资料','legacy',false,'folder-open')}</div></div><div class="s-dialog-footer">${button('暂不启用','dismiss')}${button('启用我的公司','create',true,'arrow-right')}</div>`;
+        if (s.modal==='missing') body=`<p class="s-eyebrow">我的公司 · 示例工作室</p><h1>原公司资料暂时无法打开</h1><p class="s-dialog-intro">原目录可能被移动，或当前设备无法访问。</p><div class="s-warning"><p class="s-flex">${icon('folder-search')}请定位原公司目录</p><p class="s-path">${escape(s.companyPath)}</p></div><div class="s-preserve"><p>公司入口和原资料关联仍然保留。</p><p>不会创建一个空公司替代原公司，也不会把公司资料改存到个人空间。</p></div><div class="s-actions">${button('定位原目录','locate',true,'folder-search')}${button('选择其他已有公司','legacy')}</div><div class="s-dialog-footer">${button('留在我的空间','dismiss')}</div>`;
+        if (s.modal==='location') body=`<p class="s-eyebrow">${escape(labels[s.active])}</p><h1>资料位置</h1><div class="s-location"><p class="s-path">${escape(s.active==='company'?s.companyPath:'~/CCLink Studio/我的空间')}</p></div><p class="s-dialog-intro">入口名称与资料目录分别管理。修改公司显示名称不会移动文件。</p><div class="s-dialog-footer">${button('知道了','dismiss',true)}</div>`;
+        if (s.modal==='business') body=`<h1>创建业务项目</h1><p class="s-dialog-intro">在当前公司中组织目标、资料和关联账目。</p><label class="s-field">业务项目名称<input aria-label="业务项目名称" placeholder="例如：新产品研发"></label><div class="s-dialog-footer">${button('取消','dismiss')}${button('保存示意','sample-save',true)}</div>`;
+        return `<div class="s-overlay"><section class="s-dialog" role="dialog" aria-modal="true" aria-label="公司资料设置">${body}</section></div>`;
+      }
+      function render(el,s) {
+        el.classList.toggle('s-compact',s.compact);
+        const isCompany = s.active==='company';
+        const title=s.panel==='company'?s.section:s.panel==='finance'?'公司账目':s.active==='project'?'研发日记.md':s.panel==='home'?'个人工作台':({files:'文件',sessions:'会话',note:'今日随记.md',publish:'文章发布'}[s.panel]||'工作台');
+        el.innerHTML=`<div class="s-window"><div class="s-dots" aria-hidden="true"><b></b><b></b><b></b></div><span>CCLink Studio</span><span>产品设计 · 示例资料</span></div>
+          <header class="s-topbar"><div class="s-fixed"><button type="button" class="s-space cursor-interaction" data-space="personal" aria-pressed="${s.active==='personal'}">${icon('house')}我的空间${icon('pin','s-pin')}</button><button type="button" class="s-space cursor-interaction" data-space="company" aria-pressed="${isCompany}">${icon('building-2')}我的公司${icon('pin','s-pin')}</button></div><div class="s-ordinary"><button type="button" class="s-project cursor-interaction" data-space="project" aria-pressed="${s.active==='project'}">${icon('folder')}woniu-forward<span class="s-close" aria-hidden="true">×</span></button><button type="button" class="s-project s-project-secondary cursor-interaction" data-action="project">研发日记 <span class="s-close" aria-hidden="true">×</span></button></div><div class="s-top-actions"><button type="button" class="s-icon cursor-interaction" data-action="open" aria-label="打开其他工作空间" data-tooltip="打开其他工作空间">${icon('folder-plus')}</button><button type="button" class="s-icon cursor-interaction" data-action="history" aria-label="历史空间与未归档" data-tooltip="历史空间与未归档">${icon('history')}</button></div></header>
+          <div class="s-shell"><aside class="s-rail" aria-label="能力导航">${groups.map(([name,items])=>`<div><div class="s-group-label">${name}</div>${items.map(([ico,label,id])=>navItem(ico,label,id,s)).join('')}</div>`).join('')}<div>${navItem('ellipsis','更多工具','tools',s)}</div><div class="s-rail-bottom">${navItem('settings','设置','settings',s)}<button type="button" class="s-nav cursor-interaction" data-action="compact" aria-label="收放导航" data-tooltip="收放导航">${icon('panel-left')}<span class="s-nav-label">收起导航</span></button></div></aside><main class="s-main"><div class="s-tabs"><span class="s-tab">${icon(isCompany?'building-2':s.active==='project'?'file-text':'house')}${escape(title)}</span></div><div class="s-breadcrumb">${icon(isCompany?'building-2':'folder')}<span>${escape(labels[s.active])}</span>${icon('chevron-right')}<span>${escape(title)}</span></div><div class="s-content">${mainContent(s)}${s.notice?`<div class="s-notice" role="status">${escape(s.notice)}</div>`:''}</div></main><aside class="s-agent"><div class="s-agent-head"><span class="s-flex">${icon('bot')}Agent</span><span class="s-muted">新会话</span></div><div class="s-agent-scope">上下文 <span class="s-chip">${escape(labels[s.active])}</span></div><div class="s-agent-center">${icon('sparkles')}<h3>${isCompany?'围绕这家公司继续工作':s.active==='project'?'继续当前研发工作':'从一个想法开始'}</h3><p>${isCompany?'引用公司资料、查看原记录，再决定下一步。':'当前会话与产物归属 '+escape(labels[s.active])+'。'}</p></div><div class="s-composer"><textarea aria-label="Agent 输入示意" placeholder="输入想法，@ 引用资料"></textarea><div class="s-composer-foot"><span>@ 资料</span><span>本地 Agent</span>${icon('arrow-up')}</div></div><small class="s-muted">设计预览 · 不运行 Agent</small></aside></div>
+          <footer class="s-status"><span>本地 · ${escape(labels[s.active])}${isCompany?' · '+escape(s.companyName):''}</span><span>示意界面 · 不读取或修改真实资料</span></footer>${modal(s)}`;
+        if(globalThis.lucide) globalThis.lucide.createIcons({root:el,attrs:{width:16,height:16}});
+      }
+      function save() {
+        if (window.openai?.setWidgetState) window.openai.setWidgetState({modelContent:{design:'我的空间与我的公司固定入口'},privateContent:{scenes:Object.fromEntries([...states].map(([el,s])=>[el.dataset.scene,s]))}}).catch(()=>{});
+      }
+      root.querySelectorAll('.studio').forEach(el=>{
+        const s=initial(el.dataset.scene); states.set(el,s);
+        const saved=window.openai?.widgetState?.privateContent?.scenes?.[el.dataset.scene];
+        if(saved && ['personal','company','project'].includes(saved.active)) Object.assign(s,saved);
+        render(el,s);
+        el.addEventListener('click',event=>{
+          const target=event.target.closest('button'); if(!target) return;
+          const space=target.dataset.space; const nav=target.dataset.nav; const action=target.dataset.action; const section=target.dataset.section;
+          s.notice='';
+          function company() {if(['legacy','new','missing'].includes(s.scene) && !s.bound){s.modal=s.scene;return;}s.active='company';s.panel='company';s.section='公司总览';s.modal=null;}
+          if(space==='company'||nav==='company'||action==='company') company();
+          else if(space==='personal'){s.active='personal';s.panel='home';s.modal=null;}
+          else if(space==='project'||action==='project'){s.active='project';s.panel='files';s.modal=null;}
+          else if(nav==='finance'||action==='finance'){company();if(!s.modal)s.panel='finance';}
+          else if(nav){s.panel=nav;if(nav==='home' && s.active==='company'){s.panel='company';s.section='公司总览';}else if(nav==='home' && s.active==='project'){s.panel='files';}}
+          else if(section){s.section=section;s.panel=section==='财务'?'finance':'company';}
+          else if(action==='bind'){const chosen=el.querySelector('input[type="radio"]:checked')?.value;s.companyPath=chosen==='other'?'~/Documents/研发日记':'~/CCLink Studio/默认工作空间';s.companyName=chosen==='other'?'研发公司资料':'示例工作室';s.bound=true;company();s.notice='已关联原公司资料（示意）；目录与原记录保持原位。';}
+          else if(action==='create'){s.companyName=el.querySelector('.s-company-name')?.value.trim()||'我的公司';s.companyPath='~/CCLink Studio/我的公司';s.bound=true;s.freshCompany=true;company();}
+          else if(action==='legacy'){s.modal='legacy';}
+          else if(action==='dismiss'){s.modal=null;}
+          else if(action==='location'){s.modal='location';}
+          else if(action==='locate'){s.bound=true;company();s.notice='示意：定位原目录后，继续使用原公司资料。';}
+          else if(action==='new-business'){s.modal='business';}
+          else if(action==='compact'){s.compact=!s.compact;}
+          else if(['note','files','sessions','browser','publish'].includes(action)){s.panel=action;}
+          else if(action==='history'){s.notice='历史空间保留普通目录与“未归档”入口；固定入口始终在顶栏。';}
+          else if(action==='open'){s.notice='打开其他本地或远程工作空间，不改变两个固定入口的资料归属。';}
+          else if(action==='sample-save'){s.modal=null;s.notice='此处演示原业务创建表单；效果图不保存真实业务。';}
+          else {s.notice='设计示意：打开当前空间中的原记录，保留原资料归属。';}
+          render(el,s);save();
+        });
+        if(globalThis.Tweak){const tweak=new Tweak({container:el,onChange:()=>render(el,s)});tweak.addToggle(s,'compact',{label:'收起侧边文字'});}
+      });
+      window.addEventListener('openai:set_globals',event=>{
+        const saved=event.detail?.globals?.widgetState?.privateContent?.scenes;
+        if(!saved)return;
+        states.forEach((s,el)=>{if(saved[el.dataset.scene] && ['personal','company','project'].includes(saved[el.dataset.scene].active)){Object.assign(s,saved[el.dataset.scene]);render(el,s);}});
+      });
+    })();
+  </script>
+</div>

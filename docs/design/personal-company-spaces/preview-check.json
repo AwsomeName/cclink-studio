@@ -1,0 +1,196 @@
+{
+  "date": "2026-11-12",
+  "scope": "Design preview only; no application acceptance",
+  "sourceSha256": "077e442d8d78c92522467c21520365c32756db81f561903a83260525cc922838",
+  "screens": [
+    "company",
+    "personal",
+    "project",
+    "legacy",
+    "new",
+    "missing",
+    "company-light",
+    "legacy-narrow"
+  ],
+  "layouts": [
+    {
+      "scene": "company",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "personal",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "project",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "legacy",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "new",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "missing",
+      "width": 1440,
+      "scrollWidth": 1440,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "company",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "personal",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "project",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "legacy",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "new",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "missing",
+      "width": 1024,
+      "scrollWidth": 1024,
+      "height": 940,
+      "outside": []
+    },
+    {
+      "scene": "company",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "personal",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "project",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "legacy",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "new",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "missing",
+      "width": 736,
+      "scrollWidth": 736,
+      "height": 1020,
+      "outside": []
+    },
+    {
+      "scene": "company",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    },
+    {
+      "scene": "personal",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    },
+    {
+      "scene": "project",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    },
+    {
+      "scene": "legacy",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    },
+    {
+      "scene": "new",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    },
+    {
+      "scene": "missing",
+      "width": 320,
+      "scrollWidth": 320,
+      "height": 1240,
+      "outside": []
+    }
+  ],
+  "interactions": [
+    "carousel",
+    "fixed-entry-switch",
+    "project-to-company",
+    "company-finance",
+    "compact-navigation",
+    "bind-existing-company-original-path",
+    "new-company-empty-state",
+    "missing-company-return-and-reopen"
+  ],
+  "pageErrors": []
+}

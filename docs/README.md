@@ -39,6 +39,9 @@
 - `docs/design/eyewear-step-ai-editing/pages.html`：收缩后的 STEP 查看、参数快照确认和新版结果自动打开三页效果示意；示例数据不代表当前实现状态。
 - `docs/features/company-accounts-product-design.md`：公司账目首版产品事实源，定义一个月份的导入、核对、汇总、导出和备份闭环。
 - `docs/features/company-workspace-product-design.md`：用户已确认的公司经营首版基线；第一批公司组织与原记录下钻已实现，AI 经营闭环尚待后续批次。
+- `docs/features/personal-company-spaces-product-design.md`：已确认“我的空间 / 我的公司”双固定入口方向；定义顶栏与侧栏、默认落点、旧公司原位关联及混合资料兼容，当前仅设计。
+- `docs/features/personal-company-spaces-development-plan.md`：双固定入口 P1–P3 实施顺序、唯一状态所有者、兼容提交、中断回退和真实 App 验收；尚未实现。
+- `docs/design/personal-company-spaces/preview.html`：个人、公司、专项目录、旧公司接回、首次启用及路径恢复六种可交互效果图；全部内容为示意。
 - `docs/features/company-workspace-development-plan.md`：公司工作空间的状态所有权、存储、IPC、AI 工作绑定、财务与发布复用，以及当前实现状态与四批验收方案。
 - `docs/testing/company-workspace-first-loop.md`：第一批真人操作步骤、真实 Electron 自动化证据及残余验收项。
 - `docs/design/company-workspace/preview.html`：公司工作空间两种布局与可点击业务路径；全部交易、任务和发布结果均为演示。

@@ -1,5 +1,7 @@
 # Activity Bar 文字横排产品方案
 
+> 2026-11-12 下一版布局提案：[“我的空间 / 我的公司”产品设计](personal-company-spaces-product-design.md)将经营入口归组并提供公司页内导航。当前仅效果图与计划，尚未实施；本文件仍描述已落地的文字、收放与几何验收基线。
+
 > 状态：2026-10-15 用户已确认采用“文字横排”方向；已完成最小实现及真实 Electron 自动化；真人使用签收与正式发布未执行。
 >
 > 实施证据：[文字横排验收记录](../design/activity-bar-text-navigation/README.md)。
