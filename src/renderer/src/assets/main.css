@@ -5404,6 +5404,10 @@ button.project-panel-row.active {
   line-height: 16px;
 }
 
+.session-sidebar-row-compact-status {
+  display: none;
+}
+
 .session-sidebar-row-preview {
   overflow: hidden;
   text-overflow: ellipsis;

@@ -370,7 +370,7 @@ function MainLayout(): React.ReactElement {
           style={{
             display: 'flex',
             overflow: 'hidden',
-            transition: 'width 200ms ease-out, opacity 200ms ease-out',
+            transition: 'opacity 200ms ease-out',
             width: panelLayout.agentPanelWidth,
             minWidth: panelLayout.agentPanelWidth,
             opacity: agentInRight ? 1 : 0,

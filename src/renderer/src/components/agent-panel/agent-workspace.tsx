@@ -20,6 +20,8 @@ import {
   getAgentNavigationLayout,
   MIN_AGENT_LIST_WIDTH,
   MAX_AGENT_LIST_WIDTH,
+  MIN_SPLIT_CHAT_WIDTH,
+  AGENT_LIST_SEPARATOR_WIDTH,
 } from '../../utils/agent-navigation-layout'
 import { clampPanelWidth } from '../../utils/panel-layout'
 import { cancelActivePanelResize } from '../../utils/panel-layout-drag-lifecycle'
@@ -34,7 +36,6 @@ export function AgentWorkspace(): React.ReactElement {
   const mode = useUIStore((state) => state.agentContentMode)
   const listWidth = useUIStore((state) => state.agentListWidth)
   const drawerOpen = useUIStore((state) => state.agentDrawerOpen)
-  const setMode = useUIStore((state) => state.setAgentContentMode)
   const setDrawerOpen = useUIStore((state) => state.setAgentDrawerOpen)
   const setListWidth = useUIStore((state) => state.setAgentListWidth)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -74,7 +75,7 @@ export function AgentWorkspace(): React.ReactElement {
 
   const closeList = (): void => {
     if (presentation === 'drawer') setDrawerOpen(false)
-    else setMode('chat')
+    else useUIStore.getState().hideAgentSessions(rootRef.current?.getBoundingClientRect().width)
     listButtonRef.current?.focus()
   }
 
@@ -116,7 +117,7 @@ export function AgentWorkspace(): React.ReactElement {
               else useUIStore.getState().showAgentSessions()
             }}
           >
-            <IconPanelLeft size={14} />
+            <IconPanelRight size={14} />
             <span>会话</span>
           </button>
           <button
@@ -132,13 +133,60 @@ export function AgentWorkspace(): React.ReactElement {
             aria-label={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
             title={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
             aria-expanded={chatShown}
-            onClick={() => (chatShown ? setMode('list') : useUIStore.getState().showAgentChat())}
+            onClick={() =>
+              chatShown
+                ? useUIStore.getState().hideAgentChat()
+                : useUIStore.getState().showAgentChat()
+            }
           >
-            <IconPanelRight size={14} />
+            <IconPanelLeft size={14} />
           </button>
         </div>
       </header>
       <div className="agent-workspace-body">
+        <div
+          className="agent-workspace-chat"
+          hidden={!chatVisible}
+          inert={!chatVisible || presentation === 'drawer'}
+        >
+          <AgentPanel variant="side" />
+        </div>
+        {presentation === 'split' && (
+          <ResizeHandle
+            area="agent-sessions"
+            side="right"
+            onResizeStart={() => {
+              resizeStart.current = listWidth
+            }}
+            onResize={(delta) => {
+              if (resizeStart.current !== null)
+                setPreview(
+                  clampPanelWidth(resizeStart.current + delta, {
+                    min: MIN_AGENT_LIST_WIDTH,
+                    max: Math.min(
+                      MAX_AGENT_LIST_WIDTH,
+                      width - MIN_SPLIT_CHAT_WIDTH - AGENT_LIST_SEPARATOR_WIDTH,
+                    ),
+                  }),
+                )
+            }}
+            onResizeEnd={({ reason, delta }) => {
+              const start = resizeStart.current
+              resizeStart.current = null
+              setPreview(null)
+              if (reason === 'commit' && start !== null)
+                setListWidth(
+                  clampPanelWidth(start + delta, {
+                    min: MIN_AGENT_LIST_WIDTH,
+                    max: Math.min(
+                      MAX_AGENT_LIST_WIDTH,
+                      width - MIN_SPLIT_CHAT_WIDTH - AGENT_LIST_SEPARATOR_WIDTH,
+                    ),
+                  }),
+                )
+            }}
+          />
+        )}
         <nav
           className="agent-navigation-list"
           aria-label="会话列表"
@@ -159,43 +207,6 @@ export function AgentWorkspace(): React.ReactElement {
             <AgentSessionList key={workspaceKey} />
           </div>
         </nav>
-        {presentation === 'split' && (
-          <ResizeHandle
-            area="agent-sessions"
-            side="left"
-            onResizeStart={() => {
-              resizeStart.current = listWidth
-            }}
-            onResize={(delta) => {
-              if (resizeStart.current !== null)
-                setPreview(
-                  clampPanelWidth(resizeStart.current + delta, {
-                    min: MIN_AGENT_LIST_WIDTH,
-                    max: Math.min(MAX_AGENT_LIST_WIDTH, width - 364),
-                  }),
-                )
-            }}
-            onResizeEnd={({ reason, delta }) => {
-              const start = resizeStart.current
-              resizeStart.current = null
-              setPreview(null)
-              if (reason === 'commit' && start !== null)
-                setListWidth(
-                  clampPanelWidth(start + delta, {
-                    min: MIN_AGENT_LIST_WIDTH,
-                    max: Math.min(MAX_AGENT_LIST_WIDTH, width - 364),
-                  }),
-                )
-            }}
-          />
-        )}
-        <div
-          className="agent-workspace-chat"
-          hidden={!chatVisible}
-          inert={!chatVisible || presentation === 'drawer'}
-        >
-          <AgentPanel variant="side" />
-        </div>
       </div>
     </div>
   )

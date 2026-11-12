@@ -310,6 +310,9 @@ function ConversationRow({
       preview={preview}
       activity={`${activity.label} · ${activity.detail}`}
       activityTitle={activity.detail}
+      compactStatus={
+        activity.kind === 'error' || activity.kind === 'running' ? activity.label : undefined
+      }
       meta={`${status.label} · ${conversation.messages.length} 条消息${
         activity.toolCount > 0 ? ` · ${activity.toolCount} 次工具` : ''
       }${activity.errorCount > 0 ? ` · ${activity.errorCount} 个错误` : ''}${

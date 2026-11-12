@@ -93,7 +93,10 @@
 
 .agent-composer-wrap .agent-input {
   padding: 12px;
-  min-height: 76px;
+  field-sizing: content;
+  min-height: 64px;
+  max-height: min(240px, 30vh);
+  overflow-y: auto;
 }
 
 .agent-composer-wrap .agent-input::placeholder {

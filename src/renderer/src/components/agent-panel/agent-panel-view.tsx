@@ -321,20 +321,6 @@ const MIN_COMPOSER_HEIGHT = 118
 const MAX_COMPOSER_HEIGHT = 520
 const MIN_MESSAGES_HEIGHT = 180
 
-function composerHeightStorageKey(variant: AgentPanelVariant): string {
-  return `cclink-studio-agent-composer-height-${variant}`
-}
-
-function loadComposerHeight(variant: AgentPanelVariant): number | null {
-  try {
-    const value = Number(localStorage.getItem(composerHeightStorageKey(variant)))
-    if (!Number.isFinite(value) || value < MIN_COMPOSER_HEIGHT) return null
-    return Math.min(value, MAX_COMPOSER_HEIGHT)
-  } catch {
-    return null
-  }
-}
-
 export function AgentPanelView({ model }: { model: AgentPanelViewModel }): ReactElement {
   const mainRef = useRef<HTMLDivElement>(null)
   const timelineRevision = model.timeline
@@ -372,7 +358,7 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
           onOpenFilePath={model.onOpenFilePath}
         />
         {model.costLabel ? <div className="agent-cost">{model.costLabel}</div> : null}
-        <ComposerFrame model={model.composer} variant={model.variant} mainRef={mainRef} />
+        <ComposerFrame model={model.composer} mainRef={mainRef} />
       </div>
     </div>
   )
@@ -771,17 +757,17 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
 
 export function ComposerFrame({
   model,
-  variant,
   mainRef,
 }: {
   model: AgentPanelComposerModel
-  variant: AgentPanelVariant
   mainRef: Ref<HTMLDivElement>
 }): ReactElement {
   const composerRef = useRef<HTMLDivElement>(null)
   const rendererFocusRequestPendingRef = useRef(false)
   const resolvedMainRef = mainRef as React.RefObject<HTMLDivElement | null>
-  const [height, setHeight] = useState<number | null>(() => loadComposerHeight(variant))
+  // Fixed heights are temporary overrides. Each mount starts in content-sized mode,
+  // including installations that used to persist a tall, empty composer.
+  const [height, setHeight] = useState<number | null>(null)
   const focusRenderer = useCallback(() => {
     if (rendererFocusRequestPendingRef.current) return
     rendererFocusRequestPendingRef.current = true
@@ -809,16 +795,6 @@ export function ComposerFrame({
     },
     [resolvedMainRef],
   )
-
-  useEffect(() => {
-    try {
-      const key = composerHeightStorageKey(variant)
-      if (height === null) localStorage.removeItem(key)
-      else localStorage.setItem(key, String(height))
-    } catch {
-      // localStorage 不可用时仍保留当前运行期尺寸。
-    }
-  }, [height, variant])
 
   const startResize = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {

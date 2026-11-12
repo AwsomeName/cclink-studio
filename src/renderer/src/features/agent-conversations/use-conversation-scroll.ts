@@ -74,6 +74,7 @@ export function useConversationScroll(
   contentRevision: unknown,
 ): ConversationScrollController {
   const listRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<{ width: number; height: number } | null>(null)
   const followsLatestRef = useRef(true)
   const restoredKeyRef = useRef<string | null>(null)
   const restoringRef = useRef(false)
@@ -92,6 +93,14 @@ export function useConversationScroll(
   const rememberPosition = useCallback(
     (element: HTMLDivElement) => {
       if (restoringRef.current || !userScrollIntentRef.current) return
+      const viewport = viewportRef.current
+      // A layout-induced scroll can arrive before ResizeObserver, while a recent
+      // wheel gesture is still marked active. It must not change reading intent.
+      if (
+        viewport &&
+        (viewport.width !== element.clientWidth || viewport.height !== element.clientHeight)
+      )
+        return
       const atBottom = isConversationNearBottom(element)
       pendingRestoreTopRef.current = null
       scrollPositions.set(conversationKey, {
@@ -144,15 +153,23 @@ export function useConversationScroll(
         wheelFallbackFrameRef.current = null
         const fallback = pendingWheelFallbackRef.current
         pendingWheelFallbackRef.current = null
-        if (!fallback || fallback.element.scrollTop !== fallback.startScrollTop) return
+        if (
+          !fallback ||
+          restoredKeyRef.current !== conversationKey ||
+          fallback.element.scrollTop !== fallback.startScrollTop
+        )
+          return
         fallback.element.scrollTop = resolveConversationWheelFallbackScrollTop(
           fallback.startScrollTop,
           fallback.deltaY,
           fallback.element,
         )
+        // A wheel gesture at the bottom may emit no scroll event. Record the final
+        // position even then, so it does not accidentally disable latest-message following.
+        rememberPosition(fallback.element)
       })
     },
-    [beginUserScroll],
+    [beginUserScroll, conversationKey, rememberPosition],
   )
 
   const handlePointerDown = useCallback<PointerEventHandler<HTMLDivElement>>(
@@ -176,6 +193,7 @@ export function useConversationScroll(
     const element = listRef.current
     if (!element) return
 
+    viewportRef.current = { width: element.clientWidth, height: element.clientHeight }
     userScrollIntentRef.current = false
     if (userScrollTimerRef.current !== null) {
       window.clearTimeout(userScrollTimerRef.current)
@@ -240,6 +258,28 @@ export function useConversationScroll(
       }
     }
   }, [contentRevision, conversationKey])
+
+  useLayoutEffect(() => {
+    const element = listRef.current
+    if (!element) return
+    const observer = new ResizeObserver(() => {
+      viewportRef.current = { width: element.clientWidth, height: element.clientHeight }
+      // Composer growth changes the viewport without changing message content.
+      // Only a reader already following the latest message should move with it.
+      if (
+        restoredKeyRef.current !== conversationKey ||
+        restoringRef.current ||
+        !followsLatestRef.current ||
+        element.clientHeight === 0 ||
+        element.clientWidth === 0
+      )
+        return
+      element.scrollTop = element.scrollHeight
+      scrollPositions.set(conversationKey, { scrollTop: element.scrollTop, atBottom: true })
+    })
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [conversationKey])
 
   useLayoutEffect(
     () => () => {

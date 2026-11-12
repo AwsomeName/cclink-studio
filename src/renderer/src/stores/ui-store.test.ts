@@ -23,13 +23,13 @@ describe('useUIStore', () => {
     expect(useUIStore.getState()).toMatchObject({
       agentPanelMode: 'right',
       agentContentMode: 'split',
-      agentPanelWidth: 700,
-      agentListWidth: 220,
+      agentPanelWidth: 554,
+      agentListWidth: 200,
     })
   })
 
   it('opening conversations preserves an existing usable two-column width', () => {
-    useUIStore.setState({ agentPanelWidth: 620, agentListWidth: 240 })
+    useUIStore.setState({ agentContentMode: 'split', agentPanelWidth: 620, agentListWidth: 240 })
     useUIStore.getState().showAgentSessions()
     expect(useUIStore.getState().agentPanelWidth).toBe(620)
   })
@@ -50,6 +50,38 @@ describe('useUIStore', () => {
   it('opening chat alone does not expand its single-column width', () => {
     useUIStore.getState().showAgentChat()
     expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 350 })
+  })
+
+  it('repeated list toggles preserve the displayed chat width without accumulating pixels', () => {
+    useUIStore.setState({ agentContentMode: 'split', agentPanelWidth: 700 })
+    for (let index = 0; index < 3; index++) {
+      useUIStore.getState().hideAgentSessions(650)
+      expect(useUIStore.getState()).toMatchObject({
+        agentContentMode: 'chat',
+        agentPanelWidth: 446,
+      })
+      useUIStore.getState().showAgentSessions()
+      expect(useUIStore.getState()).toMatchObject({
+        agentContentMode: 'split',
+        agentPanelWidth: 650,
+      })
+    }
+  })
+
+  it('closing list-only restores chat from the remembered expanded width, not the rail width', () => {
+    useUIStore.setState({ agentContentMode: 'list', agentPanelWidth: 700 })
+    useUIStore.getState().hideAgentSessions(200)
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 496 })
+  })
+
+  it('chat-only → list-only → split restores the original chat width', () => {
+    useUIStore.setState({ agentContentMode: 'chat', agentPanelWidth: 656, agentListWidth: 200 })
+    useUIStore.getState().hideAgentChat()
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'list', agentPanelWidth: 860 })
+    useUIStore.getState().showAgentChat()
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'split', agentPanelWidth: 860 })
+    useUIStore.getState().hideAgentSessions(860)
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 656 })
   })
 
   it('收放内部列和整个面板都不改写展开宽度', () => {
@@ -90,7 +122,7 @@ describe('useUIStore', () => {
     useUIStore.getState().hydrateFromWorkspaceState({})
     expect(useUIStore.getState()).toMatchObject({
       agentContentMode: 'chat',
-      agentListWidth: 220,
+      agentListWidth: 200,
       agentPanelWidth: 350,
     })
   })

@@ -154,7 +154,8 @@ export function ResizeHandle({
         ) {
           event.preventDefault()
           onResizeStart?.()
-          onResizeEnd?.({ reason: 'commit', delta: event.key === 'ArrowRight' ? 10 : -10 })
+          const direction = event.key === 'ArrowRight' ? 10 : -10
+          onResizeEnd?.({ reason: 'commit', delta: side === 'right' ? -direction : direction })
           return
         }
         if (!isContextMenuKeyboardEvent(event.nativeEvent)) return

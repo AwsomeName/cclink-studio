@@ -69,6 +69,7 @@ export function SessionSidebarRow({
   preview,
   activity,
   activityTitle,
+  compactStatus,
   meta,
   actions = [],
   onOpen,
@@ -86,6 +87,7 @@ export function SessionSidebarRow({
   preview: string
   activity?: string
   activityTitle?: string
+  compactStatus?: string
   meta: string
   actions?: SessionSidebarAction[]
   onOpen: () => void
@@ -109,6 +111,11 @@ export function SessionSidebarRow({
       <span className="session-sidebar-row-main">
         <span className="session-sidebar-row-head">
           <span className="session-sidebar-row-title">{title}</span>
+          {compactStatus && (
+            <span className="session-sidebar-row-compact-status" title={activityTitle}>
+              {compactStatus}
+            </span>
+          )}
           <span className="session-sidebar-row-time">{time}</span>
         </span>
         <span className="session-sidebar-row-preview">{preview}</span>

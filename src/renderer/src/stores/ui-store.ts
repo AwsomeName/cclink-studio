@@ -23,6 +23,8 @@ import {
   DEFAULT_AGENT_LIST_WIDTH,
   MIN_AGENT_LIST_WIDTH,
   MAX_AGENT_LIST_WIDTH,
+  AGENT_LIST_SEPARATOR_WIDTH,
+  getCollapsedAgentPanelWidth,
   getExpandedAgentPanelWidth,
   type AgentContentMode,
 } from '../utils/agent-navigation-layout'
@@ -79,6 +81,8 @@ interface UIState extends WorkspaceLayoutSnapshot {
   setAgentListWidth: (width: number) => void
   setAgentContentMode: (mode: AgentContentMode) => void
   showAgentSessions: () => void
+  hideAgentSessions: (displayedPanelWidth?: number) => void
+  hideAgentChat: () => void
   showAgentChat: () => void
   /** 从主进程 WorkspaceState 恢复布局状态 */
   hydrateFromWorkspaceState: (value: unknown) => void
@@ -419,8 +423,45 @@ export const useUIStore = create<UIState>((set) => ({
       agentPanelVisible: true,
       agentPanelModeSource: 'user',
       agentContentMode: 'split',
-      agentPanelWidth: getExpandedAgentPanelWidth(state.agentPanelWidth, state.agentListWidth),
+      agentPanelWidth: Math.min(
+        MAX_AGENT_PANEL_WIDTH,
+        getExpandedAgentPanelWidth(
+          state.agentContentMode === 'chat'
+            ? state.agentPanelWidth + state.agentListWidth + AGENT_LIST_SEPARATOR_WIDTH
+            : state.agentPanelWidth,
+          state.agentListWidth,
+        ),
+      ),
       agentDrawerOpen: true,
+    })),
+  hideAgentSessions: (displayedPanelWidth) =>
+    set((state) => ({
+      agentContentMode: 'chat',
+      agentDrawerOpen: false,
+      agentPanelWidth:
+        state.agentContentMode === 'chat'
+          ? state.agentPanelWidth
+          : getCollapsedAgentPanelWidth(
+              state.agentContentMode === 'split' &&
+                displayedPanelWidth !== undefined &&
+                Number.isFinite(displayedPanelWidth)
+                ? displayedPanelWidth
+                : state.agentPanelWidth,
+              state.agentListWidth,
+            ),
+    })),
+  hideAgentChat: () =>
+    set((state) => ({
+      agentContentMode: 'list',
+      agentDrawerOpen: false,
+      // List-only remembers a two-column width, even when entered from chat-only.
+      agentPanelWidth:
+        state.agentContentMode === 'chat'
+          ? Math.min(
+              MAX_AGENT_PANEL_WIDTH,
+              state.agentPanelWidth + state.agentListWidth + AGENT_LIST_SEPARATOR_WIDTH,
+            )
+          : state.agentPanelWidth,
     })),
   showAgentChat: () =>
     set((state) => ({

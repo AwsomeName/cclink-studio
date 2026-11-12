@@ -1,17 +1,26 @@
 export type AgentContentMode = 'chat' | 'split' | 'list'
 
-export const DEFAULT_AGENT_LIST_WIDTH = 220
+export const DEFAULT_AGENT_LIST_WIDTH = 200
 export const MIN_AGENT_LIST_WIDTH = 180
-export const MAX_AGENT_LIST_WIDTH = 280
-export const MIN_SPLIT_CHAT_WIDTH = 360
+export const MAX_AGENT_LIST_WIDTH = 240
+export const MIN_SPLIT_CHAT_WIDTH = 320
 export const AGENT_LIST_SEPARATOR_WIDTH = 4
 const DEFAULT_SPLIT_AGENT_PANEL_WIDTH = 700
 
+/** Remove only the visible navigation column; the outer border stays with chat. */
+export function getCollapsedAgentPanelWidth(panelWidth: number, listWidth: number): number {
+  const layout = getAgentNavigationLayout('split', Math.round(panelWidth - 1), listWidth, false)
+  return layout.presentation === 'split'
+    ? panelWidth - layout.listWidth - AGENT_LIST_SEPARATOR_WIDTH
+    : panelWidth
+}
+
 /** An explicit request to show both columns must also provide a usable outer width. */
 export function getExpandedAgentPanelWidth(panelWidth: number, listWidth: number): number {
-  // The Agent workspace has a 1px outer border; its measured client width excludes it.
-  return getAgentNavigationLayout('split', panelWidth - 1, listWidth, false).presentation ===
-    'split'
+  // Match the workspace's integer clientWidth, including fractional drag/zoom dimensions.
+  // Its 1px outer border is excluded from the measurement.
+  return getAgentNavigationLayout('split', Math.round(panelWidth - 1), listWidth, false)
+    .presentation === 'split'
     ? panelWidth
     : DEFAULT_SPLIT_AGENT_PANEL_WIDTH
 }

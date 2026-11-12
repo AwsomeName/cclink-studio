@@ -38,7 +38,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
         state.hideSidebar()
         state.setAgentPanelMode('right', 'user')
         state.setAgentPanelWidth(width)
-        state.setAgentListWidth(220)
+        state.setAgentListWidth(200)
         state.setAgentContentMode(mode)
       },
       { mode, width },
@@ -64,7 +64,11 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     )
   try {
     await resizeWindow(1440)
-    // Start with the real default width. Pre-setting 700px hid the broken entry action.
+    // Old fixed-height preferences must not restore an oversized empty composer.
+    await page.evaluate(() =>
+      localStorage.setItem('cclink-studio-agent-composer-height-side', '420'),
+    )
+    // Start with the real default width. Opening a rail adds only its width and divider.
     await ui('chat', 350)
     await page.evaluate(async () => {
       const ui = (await import('/src/stores/ui-store.ts')).useUIStore.getState()
@@ -75,7 +79,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await waitWidth(350)
     await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
     await presentation('split')
-    await waitWidth(700)
+    await waitWidth(554)
     const openedColumns = await page.evaluate(() => {
       const rect = (selector) => {
         const bounds = document.querySelector(selector).getBoundingClientRect()
@@ -89,9 +93,9 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       }
     })
     assert(
-      openedColumns.list.width === 220 &&
-        openedColumns.chat.width >= 360 &&
-        openedColumns.list.right <= openedColumns.chat.x &&
+      openedColumns.list.width === 200 &&
+        openedColumns.chat.width === 349 &&
+        openedColumns.chat.right <= openedColumns.list.x &&
         openedColumns.sidebar.width === 250 &&
         openedColumns.chatVisible === 'visible',
       `Default entry did not show two separate columns: ${JSON.stringify(openedColumns)}`,
@@ -112,6 +116,22 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await presentation('split')
     await waitWidth(700)
     const input = page.locator('.agent-workspace .agent-input')
+    await input.fill('')
+    const inputHeight = () => input.evaluate((el) => el.getBoundingClientRect().height)
+    const compactHeight = await inputHeight()
+    assert(compactHeight >= 60 && compactHeight <= 70, `Empty input is too tall: ${compactHeight}`)
+    await input.fill(Array.from({ length: 8 }, (_, i) => `第 ${i + 1} 行输入`).join('\n'))
+    const grownHeight = await inputHeight()
+    assert(grownHeight > compactHeight + 60, `Input did not grow: ${grownHeight}`)
+    await input.fill(Array.from({ length: 50 }, (_, i) => `长草稿 ${i + 1}`).join('\n'))
+    const cappedHeight = await inputHeight()
+    assert(cappedHeight <= 241, `Long input covers messages: ${cappedHeight}`)
+    assert(
+      await input.evaluate((el) => el.scrollHeight > el.clientHeight),
+      'Long input cannot scroll',
+    )
+    await input.fill('')
+    assert(Math.abs((await inputHeight()) - compactHeight) < 1, 'Clearing input did not shrink it')
     await input.fill('导航草稿：切换和收放后保留')
     const messages = page.locator('.agent-workspace .agent-messages')
     await messages.hover()
@@ -119,14 +139,52 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await wait(() => document.querySelector('.agent-workspace .agent-messages').scrollTop < 30)
     await page.screenshot({ path: join(evidenceDir, 'agent-navigation-split.png') })
 
-    await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
-    await presentation('chat')
-    await waitWidth(700)
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('split')
+    const geometry = () =>
+      page.evaluate(() => {
+        const rect = (selector) => {
+          const box = document.querySelector(selector).getBoundingClientRect()
+          return { x: box.x, right: box.right, width: box.width }
+        }
+        return {
+          chat: rect('.agent-workspace-chat'),
+          workbench: rect('.workbench'),
+          list: rect('.agent-navigation-list'),
+        }
+      })
+    const splitGeometry = await geometry()
+    let collapsedGeometry
+    for (let repeat = 0; repeat < 3; repeat++) {
+      await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
+      await presentation('chat')
+      await waitWidth(496)
+      collapsedGeometry = await geometry()
+      assert(
+        Math.abs(collapsedGeometry.chat.width - splitGeometry.chat.width) < 1,
+        'Collapsing expanded chat width',
+      )
+      assert(
+        Math.abs(collapsedGeometry.chat.x - splitGeometry.chat.x - 204) < 1,
+        'Chat did not shift right by the released rail width',
+      )
+      assert(
+        Math.abs(collapsedGeometry.workbench.width - splitGeometry.workbench.width - 204) < 1,
+        'Released rail width did not return to workbench',
+      )
+      if (repeat === 0)
+        await page.screenshot({
+          path: join(evidenceDir, 'agent-navigation-chat-shifted-right.png'),
+        })
+      await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
+      await presentation('split')
+      await waitWidth(700)
+      assert(
+        Math.abs((await geometry()).chat.width - splitGeometry.chat.width) < 1,
+        'Expanding changed chat width',
+      )
+    }
     await page.getByRole('button', { name: '收起聊天，仅保留会话列表', exact: true }).click()
     await presentation('list')
-    await waitWidth(220)
+    await waitWidth(200)
     await page.screenshot({ path: join(evidenceDir, 'agent-navigation-list-only.png') })
     assert(
       (await page.evaluate(
@@ -211,11 +269,11 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     assert(
       (await page.evaluate(
         async () => (await import('/src/stores/ui-store.ts')).useUIStore.getState().agentListWidth,
-      )) === 230,
+      )) === 190,
       'Keyboard list resize failed',
     )
     await page.locator('[data-layout-area="agent-sessions"]').press('ArrowLeft')
-    await resizeWindow(900)
+    await resizeWindow(860)
     await presentation('chat')
     await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
     await presentation('drawer')
@@ -256,7 +314,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     )
     await page.locator('.app-topbar-right button').click()
     await presentation('chat')
-    await waitWidth(700)
+    await waitWidth(496)
     assert(
       (await input.inputValue()) === '导航草稿：切换和收放后保留',
       'Draft lost after whole panel hide',
@@ -269,10 +327,95 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
           .rawText.includes('整体隐藏后仍继续'),
       ids.first,
     )
+    const auditIssues = []
+    const settleLayout = () =>
+      page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      )
+    await ui('chat', 656)
+    await presentation('chat')
+    await waitWidth(656)
+    const beforeChatToggle = (await geometry()).chat.width
+    await page.getByRole('button', { name: '收起聊天，仅保留会话列表', exact: true }).click()
+    await presentation('list')
+    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
+    await presentation('split')
+    await settleLayout()
+    const afterChatToggle = (await geometry()).chat.width
+    if (Math.abs(beforeChatToggle - afterChatToggle) >= 1)
+      auditIssues.push(
+        `Chat-only → list → split changed chat width: ${beforeChatToggle} → ${afterChatToggle}`,
+      )
+
+    await ui('split', 524.75)
+    await presentation('split')
+    await settleLayout()
+    const beforeFractionalToggle = (await geometry()).chat.width
+    await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
+    await presentation('chat')
+    await settleLayout()
+    const afterFractionalToggle = (await geometry()).chat.width
+    if (Math.abs(beforeFractionalToggle - afterFractionalToggle) >= 1)
+      auditIssues.push(
+        `Fractional split collapse changed chat width: ${beforeFractionalToggle} → ${afterFractionalToggle}`,
+      )
+    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
+    await presentation('split')
+    await settleLayout()
+    const reopenedFractionalChat = (await geometry()).chat.width
+    if (Math.abs(beforeFractionalToggle - reopenedFractionalChat) >= 1)
+      auditIssues.push(
+        `Fractional split reopening changed chat width: ${beforeFractionalToggle} → ${reopenedFractionalChat}`,
+      )
+
+    await ui('chat', 656)
+    await input.fill('')
+    await messages.hover()
+    await page.mouse.wheel(0, 20000)
+    await wait(() => {
+      const el = document.querySelector('.agent-workspace .agent-messages')
+      return el.scrollHeight - el.clientHeight - el.scrollTop < 2
+    })
+    await input.fill(Array.from({ length: 8 }, (_, i) => `自动增高时保留最新消息 ${i}`).join('\n'))
+    await settleLayout()
+    const bottomGapAfterTyping = await messages.evaluate(
+      (el) => el.scrollHeight - el.clientHeight - el.scrollTop,
+    )
+    if (bottomGapAfterTyping >= 2)
+      auditIssues.push(`Growing composer hid the latest message by ${bottomGapAfterTyping}px`)
+    await input.fill('')
+    await messages.hover()
+    await page.mouse.wheel(0, -1000)
+    await wait(() => {
+      const el = document.querySelector('.agent-workspace .agent-messages')
+      return el.scrollHeight - el.clientHeight - el.scrollTop > 500
+    })
+    const readingPosition = await messages.evaluate((el) => el.scrollTop)
+    await input.fill(Array.from({ length: 8 }, (_, i) => `阅读历史时输入 ${i}`).join('\n'))
+    await settleLayout()
+    const readingPositionAfterTyping = await messages.evaluate((el) => el.scrollTop)
+    if (Math.abs(readingPosition - readingPositionAfterTyping) >= 1)
+      auditIssues.push(
+        `Composer growth jumped away from reading position: ${readingPosition} → ${readingPositionAfterTyping}`,
+      )
+    assert(auditIssues.length === 0, `Navigation audit: ${JSON.stringify(auditIssues)}`)
     return {
       defaultEntryColumns: openedColumns,
       expandedWidth: 700,
-      listOnlyWidth: 220,
+      listOnlyWidth: 200,
+      splitGeometry,
+      collapsedGeometry,
+      composer: { compactHeight, grownHeight, cappedHeight },
+      audit: {
+        beforeChatToggle,
+        afterChatToggle,
+        beforeFractionalToggle,
+        afterFractionalToggle,
+        reopenedFractionalChat,
+        bottomGapAfterTyping,
+        readingPosition,
+        readingPositionAfterTyping,
+      },
       narrowDrawer: true,
       draftsPreserved: true,
       readPositionPreserved: true,

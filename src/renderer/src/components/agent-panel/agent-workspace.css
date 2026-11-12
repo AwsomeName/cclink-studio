@@ -82,18 +82,16 @@
   padding: 6px;
 }
 .agent-navigation-list .session-sidebar-row {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
+  padding: 7px 8px;
 }
 .agent-navigation-list .session-sidebar-row-preview,
-.agent-navigation-list .session-sidebar-row-meta {
+.agent-navigation-list .session-sidebar-row-details {
   display: none;
 }
-.agent-navigation-list .session-sidebar-row-activity {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
 .agent-navigation-list .session-sidebar-row-head {
+  column-gap: 5px;
+  row-gap: 3px;
   flex-wrap: wrap;
 }
 .agent-navigation-list .session-sidebar-row-title {
@@ -101,6 +99,20 @@
 }
 .agent-navigation-list .session-sidebar-row-time {
   font-size: 11px;
+  opacity: 1;
+}
+.agent-navigation-list .session-sidebar-row-compact-status {
+  display: inline;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-secondary);
+}
+.agent-navigation-list .session-sidebar-row-compact-status::after {
+  content: ' ·';
 }
 .agent-workspace-chat {
   display: flex;
