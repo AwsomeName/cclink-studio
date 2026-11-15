@@ -107,28 +107,6 @@ export function AgentWorkspace(): React.ReactElement {
         </span>
         <div className="agent-workspace-actions">
           <button
-            ref={listButtonRef}
-            type="button"
-            aria-label={listVisible ? '收起会话列表' : '展开会话列表'}
-            aria-expanded={listVisible}
-            title={listVisible ? '收起会话列表' : '展开会话列表'}
-            onClick={() => {
-              if (listVisible) closeList()
-              else useUIStore.getState().showAgentSessions()
-            }}
-          >
-            <IconPanelRight size={14} />
-            <span>会话</span>
-          </button>
-          <button
-            type="button"
-            aria-label="新建会话"
-            title="新建会话"
-            onClick={() => void newConversation()}
-          >
-            <IconPlus size={14} />
-          </button>
-          <button
             type="button"
             aria-label={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
             title={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
@@ -140,6 +118,28 @@ export function AgentWorkspace(): React.ReactElement {
             }
           >
             <IconPanelLeft size={14} />
+          </button>
+          <button
+            type="button"
+            aria-label="新建会话"
+            title="新建会话"
+            onClick={() => void newConversation()}
+          >
+            <IconPlus size={14} />
+          </button>
+          <button
+            ref={listButtonRef}
+            type="button"
+            aria-label={listVisible ? '收起会话列表' : '展开会话列表'}
+            aria-expanded={listVisible}
+            title={listVisible ? '收起会话列表' : '展开会话列表'}
+            onClick={() => {
+              if (listVisible) closeList()
+              else useUIStore.getState().showAgentSessions()
+            }}
+          >
+            <IconPanelRight size={14} />
+            <span>列表</span>
           </button>
         </div>
       </header>
