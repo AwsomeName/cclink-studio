@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chromium } from 'playwright-core'
@@ -10,6 +11,7 @@ const keepRunning = process.argv.includes('--keep-running')
 const results = []
 let startedBySmoke = false
 let workspaceDir = null
+let personalSpaceDir = null
 let originalWorkspaceSettings = null
 let pageRef = null
 const workspaceDirsToCleanup = new Set()
@@ -183,6 +185,22 @@ async function prepareWorkspaceCapability(path) {
   state.version = 2
   state.workspaces ??= {}
   state.localWorkspaces ??= {}
+  personalSpaceDir = await realpath(
+    await mkdtemp(join(homedir(), '.cclink-workflow-smoke-personal-')),
+  )
+  const projectId = randomUUID()
+  const metadata = join(personalSpaceDir, '.cclink-studio')
+  await mkdir(metadata)
+  await writeFile(
+    join(metadata, 'project.json'),
+    JSON.stringify({ version: 1, projectId, createdAt: Date.now() }),
+  )
+  state.fixedSpaces = {
+    version: 1,
+    personal: { workspacePath: personalSpaceDir, projectId },
+    company: null,
+    legacyDefaultPath: '',
+  }
   state.localWorkspaces['workflow-smoke-capability'] = {
     workspaceKey: path,
     workspacePath: path,
@@ -393,7 +411,7 @@ async function main() {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.main-window', { timeout: 15_000 })
     await ensureSidebarVisible(page)
-    await clickByTitle(page, '历史项目')
+    await clickByTitle(page, '历史空间')
     const projectItem = page.locator(`.project-history-item[title="${workspaceDir}"]`).first()
     await projectItem.waitFor({ timeout: 10_000 })
     await projectItem.click()
@@ -1672,7 +1690,11 @@ async function main() {
     }
 
     await ensureSidebarVisible(page)
-    await clickByTitle(page, '硬件生产')
+    const moreTools = page.locator('.activity-bar details.activity-more')
+    if (!(await moreTools.evaluate((element) => element.open))) {
+      await moreTools.locator('summary').click()
+    }
+    await moreTools.getByRole('button', { name: '硬件生产', exact: true }).click()
     const production = page.locator('[data-context-target="production"]').first()
     await production.waitFor({ timeout: 15_000 })
     await verifyMouseAndKeyboardMenu(production, 'production.scan', 'production.copy-status')
@@ -1852,6 +1874,7 @@ async function main() {
 
   const failed = results.filter((result) => result.status === 'fail')
   if (startedBySmoke && !keepRunning) runRestart('stop')
+  if (personalSpaceDir && !keepRunning) await rm(personalSpaceDir, { recursive: true, force: true })
   if (failed.length > 0) {
     console.error(`\nWorkflow smoke failed: ${failed.length}/${results.length}`)
     process.exit(1)
@@ -1881,6 +1904,9 @@ main().catch(async (error) => {
     } catch {
       // best effort cleanup
     }
+  }
+  if (personalSpaceDir && !keepRunning) {
+    await rm(personalSpaceDir, { recursive: true, force: true }).catch(() => {})
   }
   console.error(error)
   process.exit(1)
