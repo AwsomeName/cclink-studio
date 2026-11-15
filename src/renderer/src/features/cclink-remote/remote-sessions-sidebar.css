@@ -20,6 +20,7 @@
   overflow-wrap: anywhere;
 }
 .remote-session-row {
+  position: relative;
   min-width: 0;
   margin-bottom: 4px;
   padding: 7px 8px;
@@ -42,6 +43,26 @@
   padding: 0;
   text-align: left;
   cursor: pointer;
+}
+/* Stretch the native open button over the card, keeping its keyboard and disabled behavior. */
+.remote-session-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 5px;
+}
+.remote-session-open:active {
+  /* A transform would make the button itself the stretched hit area's containing block. */
+  transform: none;
+}
+.remote-session-open:disabled {
+  cursor: not-allowed;
+}
+/* Actions and the confirmation area must remain above the open button's hit area. */
+.remote-session-actions,
+.remote-session-confirm {
+  position: relative;
+  z-index: 1;
 }
 .remote-session-title {
   display: block;

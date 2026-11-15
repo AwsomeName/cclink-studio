@@ -5798,15 +5798,13 @@ body.is-resizing-panels .main-area > div {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  width: 28px;
   min-width: 28px;
   height: 28px;
-  padding: 0 7px;
+  padding: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 5px;
   color: var(--text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
 }
 
 .tab-create-button:hover {
@@ -5821,15 +5819,8 @@ body.is-resizing-panels .main-area > div {
 }
 
 @container workbench (max-width: 760px) {
-  .tab-create-button span {
-    display: none;
-  }
   .tab-create-actions {
     padding: 0 6px;
-  }
-  .tab-create-button {
-    padding: 0;
-    width: 28px;
   }
   .tab {
     flex-basis: 152px;

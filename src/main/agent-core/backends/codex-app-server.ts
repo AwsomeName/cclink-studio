@@ -114,6 +114,8 @@ export class CodexAppServer {
       resolve: (value: unknown) => void
       reject: (error: Error) => void
       timer: ReturnType<typeof setTimeout>
+      method: string
+      stage: CodexDiagnosticStage
     }
   >()
 
@@ -251,7 +253,7 @@ export class CodexAppServer {
         clearTimeout(pending.timer)
         if (message.error)
           pending.reject(
-            codexRpcError(message.error.code, message.error.message, this.diagnostic.stage),
+            codexRpcError(message.error.code, message.error.message, pending.stage, pending.method),
           )
         else pending.resolve(message.result)
       } else this.onMessage(message)
@@ -277,6 +279,7 @@ export class CodexAppServer {
       'turn/start': 'turn',
     }
     if (stages[method]) this.diagnostic.stage = stages[method]
+    const stage = this.diagnostic.stage
     const id = ++this.sequence
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -285,14 +288,18 @@ export class CodexAppServer {
           new CodexRuntimeError(
             'CODEX_REQUEST_TIMEOUT',
             `Codex 请求超时：${method}`,
-            ['thread', 'tools', 'turn'].includes(this.diagnostic.stage)
-              ? 'run-failed'
-              : 'start-failed',
-            this.diagnostic.stage,
+            ['thread', 'tools', 'turn'].includes(stage) ? 'run-failed' : 'start-failed',
+            stage,
           ),
         )
       }, this.requestTimeoutMs)
-      this.pending.set(id, { resolve: (value) => resolve(value as T), reject, timer })
+      this.pending.set(id, {
+        resolve: (value) => resolve(value as T),
+        reject,
+        timer,
+        method,
+        stage,
+      })
       this.write({ id, method, params })
     })
   }

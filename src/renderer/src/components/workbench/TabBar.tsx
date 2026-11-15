@@ -373,7 +373,6 @@ export function TabBar({
           onClick={onNewBrowser}
         >
           <IconGlobe size={15} />
-          <span>浏览器</span>
         </button>
         <button
           type="button"
@@ -383,7 +382,6 @@ export function TabBar({
           onClick={onNewDocument}
         >
           <IconFile size={15} />
-          <span>MD</span>
         </button>
         <button
           type="button"
@@ -393,7 +391,6 @@ export function TabBar({
           onClick={onNewTerminal}
         >
           <IconTerminal size={15} />
-          <span>Terminal</span>
         </button>
       </div>
       {conversationDropActive && (

@@ -12,6 +12,7 @@ const fixture = vi.hoisted(() => ({
   exitCode: null as number | null,
   timeout: false,
   rejectMethod: '',
+  rejectMessage: 'SECRET_PROVIDER_DETAIL sk-sensitive',
   calls: [] as string[],
   account: { type: 'chatgpt', email: 'private@example.test' } as unknown,
   config: {} as Record<string, unknown>,
@@ -69,7 +70,7 @@ vi.mock('node:child_process', () => ({
           JSON.stringify({
             id: message.id,
             ...(fixture.rejectMethod === message.method
-              ? { error: { code: -32600, message: 'SECRET_PROVIDER_DETAIL sk-sensitive' } }
+              ? { error: { code: -32600, message: fixture.rejectMessage } }
               : { result }),
           }) + '\n',
         )
@@ -87,6 +88,7 @@ beforeEach(() => {
     exitCode: null,
     timeout: false,
     rejectMethod: '',
+    rejectMessage: 'SECRET_PROVIDER_DETAIL sk-sensitive',
     calls: [],
     children: [],
     account: { type: 'chatgpt', email: 'private@example.test' },
@@ -97,6 +99,52 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('read-only Codex diagnostics through the actual app-server transport', () => {
+  it.each([
+    ['no rollout found for thread id SECRET_THREAD', 'CODEX_THREAD_NOT_FOUND'],
+    ['no rollout found for conversation id SECRET_THREAD', 'CODEX_THREAD_NOT_FOUND'],
+    [
+      'session SECRET_THREAD is archived. Run `codex unarchive SECRET_THREAD`',
+      'CODEX_THREAD_ARCHIVED',
+    ],
+    ['invalid thread id: SECRET_THREAD', 'CODEX_THREAD_ID_INVALID'],
+    ['SECRET_THREAD unknown rejection', 'CODEX_RPC_-32600'],
+  ])('classifies resume rejection without exporting native details: %s', async (message, code) => {
+    fixture.rejectMethod = 'thread/resume'
+    fixture.rejectMessage = message
+    const server = new CodexAppServer(
+      () => {},
+      () => {},
+    )
+    try {
+      await server.start('/tmp')
+      // A subsequent request must not overwrite the failed request's stage.
+      const resumed = server.request('thread/resume', { threadId: 'SECRET_THREAD' })
+      const tools = server.request('mcpServerStatus/list', {})
+      const error = await resumed.catch((error: unknown) => error)
+      await tools
+      expect(server.getDiagnostic(error)).toMatchObject({
+        code,
+        stage: 'thread',
+        state: 'run-failed',
+      })
+      const diagnostic = JSON.stringify(server.getDiagnostic(error))
+      expect(diagnostic).toContain('thread/resume')
+      expect(diagnostic).not.toContain('SECRET_THREAD')
+    } finally {
+      await server.stop()
+    }
+  })
+  it('does not interpret an unrelated request error as a lost session', () => {
+    const error = codexRpcError(
+      -32600,
+      'no rollout found for thread id SECRET',
+      'thread',
+      'thread/start',
+    )
+    expect(error.code).toBe('CODEX_RPC_-32600')
+    expect(error.message).toContain('thread/start')
+    expect(error.message).not.toContain('SECRET')
+  })
   it('stops an in-flight probe when the host lifetime ends', async () => {
     fixture.timeout = true
     const controller = new AbortController()

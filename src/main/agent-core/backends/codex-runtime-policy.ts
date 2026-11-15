@@ -16,20 +16,56 @@ export function codexRpcError(
   code: unknown,
   message: unknown,
   stage: CodexDiagnosticStage,
+  method?: string,
 ): CodexRuntimeError {
   const detail = typeof message === 'string' ? message : ''
+  const state = ['thread', 'tools', 'turn'].includes(stage) ? 'run-failed' : 'start-failed'
+  // Classify known native errors without copying IDs, paths, prompts or provider payloads.
+  // A missing rollout is not proof of deletion: a different CODEX_HOME has the same result.
+  if (method === 'thread/resume') {
+    const reason = /^no rollout found for (?:thread|conversation) id\b/i.test(detail)
+      ? {
+          code: 'CODEX_THREAD_NOT_FOUND',
+          message:
+            '本机 Codex 找不到此会话的原生记录。请在原电脑、原 Codex 数据目录恢复该记录后重试；Studio 已保留原会话，未自动新建替代会话。',
+        }
+      : /^session\s+\S+\s+is archived\./i.test(detail)
+        ? {
+            code: 'CODEX_THREAD_ARCHIVED',
+            message: '此 Codex 会话已归档。请在 Codex 中取消归档后重试；Studio 已保留原会话。',
+          }
+        : /^invalid thread id:/i.test(detail)
+          ? {
+              code: 'CODEX_THREAD_ID_INVALID',
+              message:
+                '此会话保存的 Codex 标识无效。请检查会话恢复记录；Studio 未删除历史或更换会话。',
+            }
+          : null
+    if (reason)
+      return new CodexRuntimeError(
+        reason.code,
+        `恢复已有会话（thread/resume）失败：${reason.message}`,
+        state,
+        stage,
+      )
+  }
   const http = detail.match(
     /(?:HTTP(?:\s+status)?|status(?:\s+code)?)\s*[:=]?\s*([45]\d\d)\b/i,
   )?.[1]
   const mcp = /mcp|cclink_studio/i.test(detail)
-  const state = ['thread', 'tools', 'turn'].includes(stage) ? 'run-failed' : 'start-failed'
+  const operation =
+    method === 'thread/resume'
+      ? '恢复已有会话（thread/resume）'
+      : method === 'thread/start'
+        ? '创建会话（thread/start）'
+        : '协议'
   return new CodexRuntimeError(
     http
       ? `CODEX_${mcp ? 'MCP_' : ''}HTTP_${http}`
       : `CODEX_RPC_${Number.isSafeInteger(code) ? code : 'FAILED'}`,
     http
       ? `${mcp ? 'Studio MCP 工具连接' : 'Codex 服务请求'}失败（HTTP ${http}）。${mcp ? '请检查本机代理是否排除 localhost 和 127.0.0.1。' : '请检查登录状态、网络和服务配置。'}`
-      : 'Codex 拒绝协议请求，请结合失败阶段检查本机版本和配置。',
+      : `Codex 拒绝${operation}请求（RPC ${Number.isSafeInteger(code) ? code : 'FAILED'}），请结合失败阶段检查本机版本和配置。`,
     state,
     stage,
   )
