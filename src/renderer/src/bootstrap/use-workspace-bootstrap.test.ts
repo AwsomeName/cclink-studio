@@ -58,6 +58,16 @@ function createDeps(overrides: Partial<WorkspaceBootstrapDeps> = {}): WorkspaceB
 }
 
 describe('restoreWorkspaceState', () => {
+  it('uses personal default when resume has no remembered root, without reclassifying unfiled', async () => {
+    const deps = createDeps({
+      getSettings: vi
+        .fn()
+        .mockResolvedValue({ lastWorkspacePath: '', startupWorkspaceTarget: 'resume' }),
+    })
+    await restoreWorkspaceState(deps)
+    expect(deps.ensureDefaultWorkspace).toHaveBeenCalledOnce()
+    expect(deps.initWorkspace).toHaveBeenCalledWith('/workspace/default', expect.anything())
+  })
   it('creates the default only for a first/default startup, without claiming global drafts', async () => {
     const deps = createDeps({
       getSettings: vi

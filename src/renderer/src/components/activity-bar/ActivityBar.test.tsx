@@ -35,22 +35,24 @@ describe('ActivityBar', () => {
     expect(markup).toContain('role="group" aria-label="流程"')
 
     const labels = [
-      '公司经营',
+      '工作台',
       '文件',
       '会话',
       '浏览器',
       'Terminal',
-      '角色',
-      '网站与账号',
-      '数据源',
+      '公司经营',
       '公司账目',
-      'CCLink 远程',
       '文章发布',
       '事务',
       '定时任务',
+      '网站与账号',
+      '角色',
+      '数据源',
       '视频创作',
       '硬件生产',
+      'CCLink 远程',
     ]
+
     const positions = labels.map((label) => markup.indexOf(`title="${label}"`))
 
     expect(positions.every((position) => position >= 0)).toBe(true)
@@ -83,6 +85,6 @@ describe('ActivityBar', () => {
     for (const group of ['工作', '资源', '流程']) {
       expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
     }
-    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(15)
+    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(16)
   })
 })

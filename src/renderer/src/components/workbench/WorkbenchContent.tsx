@@ -1,4 +1,5 @@
 import { CompanyWorkbench } from '../../features/company-workspace/CompanyWorkbench'
+import { WorkspaceHome } from '../../features/workspace-open/WorkspaceHome'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Terminal as XtermTerminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -106,6 +107,8 @@ export function WorkbenchContent({
           <PanelErrorFallback error={error} retry={retry} title="Tab 内容" />
         )}
       >
+        {(!activeTab || activeTab.type === 'workspace-home') &&
+          activeWorkspaceRef.kind !== 'global' && <WorkspaceHome />}
         {isBrowserTab && browserPreviewDataUrl && (
           <img
             className="browser-context-preview"

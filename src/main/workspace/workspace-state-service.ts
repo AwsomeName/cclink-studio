@@ -15,6 +15,10 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { isDeepStrictEqual } from 'node:util'
 import type {
+  FixedSpaceRef,
+  FixedSpaces,
+  CompanySpaceCandidate,
+  ConnectCompanySpaceInput,
   WorkspaceRecoveryTraceEntry,
   WorkspaceRecoveryTraceEvent,
   WorkspaceStateDiagnostics,
@@ -23,6 +27,7 @@ import type {
   WorkspaceStateResolveResult,
   WorkspaceStateSnapshot,
 } from '../../shared/ipc/workspace-state'
+import { CompanyWorkspaceService } from '../company-workspace/company-workspace-service'
 import type {
   WorkspaceConversationHistoryMutation,
   WorkspaceStateSetSectionOptions,
@@ -46,6 +51,7 @@ interface WorkspaceStateIndexEntry extends WorkspaceStateLocalWorkspaceSummary {
 
 interface WorkspaceStateFile {
   version: number
+  fixedSpaces?: FixedSpaces
   /** 全局/非本地状态，以及只读项目的 fallback。 */
   workspaces: Record<string, WorkspaceStateSnapshot>
   /** 本地项目只保留定位索引，不保存项目现场。 */
@@ -289,8 +295,35 @@ function migrateWorkspaceStateFile(raw: unknown): WorkspaceStateFile {
   }
 
   const file = current as Partial<WorkspaceStateFile>
+  if (file.fixedSpaces !== undefined) {
+    const fixed = file.fixedSpaces
+    const validRef = (ref: FixedSpaceRef | null): boolean =>
+      ref === null ||
+      Boolean(
+        ref &&
+        typeof ref.projectId === 'string' &&
+        ref.projectId.length > 0 &&
+        typeof ref.workspacePath === 'string' &&
+        isAbsolute(ref.workspacePath),
+      )
+    if (
+      fixed.version !== 1 ||
+      !validRef(fixed.personal) ||
+      !validRef(fixed.company) ||
+      typeof fixed.legacyDefaultPath !== 'string'
+    )
+      throw new Error('固定空间关联损坏，保留原关联与资料')
+    if (
+      fixed.personal &&
+      fixed.company &&
+      (fixed.personal.projectId === fixed.company.projectId ||
+        resolve(fixed.personal.workspacePath) === resolve(fixed.company.workspacePath))
+    )
+      throw new Error('固定空间身份重复，保留原关联与资料')
+  }
   return {
     version,
+    ...(file.fixedSpaces ? { fixedSpaces: file.fixedSpaces } : {}),
     workspaces: typeof file.workspaces === 'object' && file.workspaces ? file.workspaces : {},
     localWorkspaces:
       typeof file.localWorkspaces === 'object' && file.localWorkspaces ? file.localWorkspaces : {},
@@ -432,6 +465,7 @@ export class WorkspaceStateService {
   private stateLoadError: Error | null = null
   private saveQueue: Promise<void> = Promise.resolve()
   private defaultWorkspaceQueue: Promise<unknown> = Promise.resolve()
+  private fixedSpaceQueue: Promise<unknown> = Promise.resolve()
   private readonly workspaceQueues = new Map<string, Promise<unknown>>()
   private readonly pendingOperations = new Set<Promise<unknown>>()
 
@@ -514,6 +548,11 @@ export class WorkspaceStateService {
   async resolveLocalWorkspace(workspacePath: string): Promise<WorkspaceStateResolveResult> {
     try {
       const resolvedPath = await this.resolveLocalWorkspacePath(workspacePath)
+      const fixed = this.state.fixedSpaces
+      const bound = [fixed?.personal, fixed?.company].find(
+        (ref) => ref?.workspacePath === workspacePath || ref?.workspacePath === resolvedPath,
+      )
+      if (bound) await this.inspectFixedIdentity(resolvedPath, bound.projectId)
       return { valid: true, workspacePath: resolvedPath }
     } catch (error: unknown) {
       return {
@@ -529,13 +568,16 @@ export class WorkspaceStateService {
   }
 
   /** Initialize only a new default root or one already registered by this owner. */
-  async ensureDefaultWorkspace(configuredPath = ''): Promise<string> {
+  async ensureDefaultWorkspace(
+    configuredPath = '',
+    newDirectoryName = '默认工作空间',
+  ): Promise<string> {
     const operation = this.defaultWorkspaceQueue.then(async () => {
       this.assertCentralStateAvailable()
       const home = await realpath(app.getPath('home'))
       const target = configuredPath
         ? resolve(configuredPath)
-        : join(home, 'CCLink Studio', '默认工作空间')
+        : join(home, 'CCLink Studio', newDirectoryName)
       const within = relative(home, target)
       if (!within || within === '..' || within.startsWith(`..${sep}`) || isAbsolute(within)) {
         throw new Error('默认工作空间必须位于受支持的本地主目录内')
@@ -601,6 +643,244 @@ export class WorkspaceStateService {
     })
     this.defaultWorkspaceQueue = operation.catch(() => {})
     return this.trackOperation(operation)
+  }
+
+  getFixedSpaces(): FixedSpaces {
+    this.assertCentralStateAvailable()
+    return structuredClone(
+      this.state.fixedSpaces ?? {
+        version: 1,
+        personal: null,
+        company: null,
+        legacyDefaultPath: '',
+      },
+    )
+  }
+
+  private fixedOperation<T>(task: () => Promise<T>): Promise<T> {
+    const operation = this.fixedSpaceQueue.then(task)
+    this.fixedSpaceQueue = operation.catch(() => {})
+    return this.trackOperation(operation)
+  }
+
+  private async commitFixedSpaces(next: FixedSpaces): Promise<FixedSpaces> {
+    this.assertCentralStateAvailable()
+    this.saveQueue = this.saveQueue
+      .catch(() => {})
+      .then(async () => {
+        await this.writeStateFile({ ...this.state, fixedSpaces: next })
+        this.state.fixedSpaces = next
+      })
+    await this.saveQueue
+    return this.getFixedSpaces()
+  }
+
+  /** Read the primary identity without the normal repair/fork behavior. */
+  private async inspectFixedIdentity(path: string, expectedId?: string): Promise<FixedSpaceRef> {
+    this.assertCentralStateAvailable()
+    const root = await this.resolveLocalWorkspacePath(path)
+    for (const part of [
+      join(root, PROJECT_METADATA_DIR),
+      join(root, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
+    ]) {
+      if ((await lstat(part)).isSymbolicLink()) throw new Error('空间身份路径不能是符号链接')
+    }
+    const result = await this.readProjectManifestFile(
+      join(root, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
+    )
+    if (result.status !== 'ok')
+      throw new Error('原工作空间身份不可读取；请定位原目录，未创建空空间替代')
+    const projectId = result.value.projectId
+    const registered = Object.values(this.state.localWorkspaces).find(
+      (entry) => entry.workspacePath === root && entry.projectId,
+    )
+    if (
+      (expectedId && expectedId !== projectId) ||
+      (registered?.projectId && registered.projectId !== projectId)
+    )
+      throw new Error('空间身份与登记信息不一致，原资料已保留')
+    if (await this.findExistingProjectIdConflict(projectId, root))
+      throw new Error('空间身份冲突，请定位原目录；不会改写身份')
+    return { workspacePath: root, projectId }
+  }
+
+  async inspectCompanySpace(path: string): Promise<CompanySpaceCandidate> {
+    try {
+      const ref = await this.inspectFixedIdentity(path)
+      const company = await CompanyWorkspaceService.describeExisting({
+        workspacePath: ref.workspacePath,
+        workspaceId: ref.projectId,
+      })
+      this.assertBoundCompanyDatabase(ref, company)
+      let relatedData: CompanySpaceCandidate['relatedData']
+      if (!company) {
+        for (const [suffix, kind] of [
+          ['.cclink-studio/company-accounts/accounts.sqlite', 'ledger'],
+          ['运营/原稿', 'manuscripts'],
+        ] as const) {
+          const info = await lstat(join(ref.workspacePath, suffix)).catch(
+            (error: NodeJS.ErrnoException) => {
+              if (error.code === 'ENOENT') return null
+              throw error
+            },
+          )
+          if (info) {
+            relatedData = kind
+            break
+          }
+        }
+      }
+      return {
+        ...ref,
+        state: company ? 'company' : 'empty',
+        ...company,
+        ...(relatedData ? { relatedData } : {}),
+      }
+    } catch (error) {
+      return {
+        workspacePath: path,
+        projectId: null,
+        state: 'unavailable',
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async listCompanySpaces(): Promise<CompanySpaceCandidate[]> {
+    this.assertCentralStateAvailable()
+    const paths = new Set(
+      Object.values(this.state.localWorkspaces).map((entry) => entry.workspacePath),
+    )
+    const fixed = this.getFixedSpaces()
+    if (fixed.company) paths.add(fixed.company.workspacePath)
+    if (fixed.legacyDefaultPath) paths.add(fixed.legacyDefaultPath)
+    const result: CompanySpaceCandidate[] = []
+    for (const path of paths) {
+      const candidate = await this.inspectCompanySpace(path)
+      if (candidate.state !== 'empty' || candidate.relatedData) result.push(candidate)
+    }
+    return result
+  }
+
+  private assertIndependent(personal: FixedSpaceRef, company: FixedSpaceRef): void {
+    const contains = (parent: string, child: string): boolean => {
+      const rel = relative(parent, child)
+      return !rel || (!isAbsolute(rel) && rel !== '..' && !rel.startsWith(`..${sep}`))
+    }
+    if (
+      personal.projectId === company.projectId ||
+      contains(personal.workspacePath, company.workspacePath) ||
+      contains(company.workspacePath, personal.workspacePath)
+    )
+      throw new Error(
+        '我的空间与我的公司必须使用独立目录；不能是同一身份、目录别名或相互包含的目录',
+      )
+  }
+
+  private assertBoundCompanyDatabase(ref: FixedSpaceRef, description: unknown): void {
+    if (this.state.fixedSpaces?.company?.projectId === ref.projectId && !description)
+      throw new Error('原公司数据库不可用；请恢复原公司资料，不会创建空公司替代')
+  }
+
+  async ensurePersonalSpace(legacyDefaultPath = ''): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      if (fixed.personal) {
+        await this.inspectFixedIdentity(fixed.personal.workspacePath, fixed.personal.projectId)
+        return fixed
+      }
+      let personal: FixedSpaceRef | null = null
+      if (legacyDefaultPath) {
+        const candidate = await this.inspectCompanySpace(legacyDefaultPath)
+        if (candidate.state === 'empty' && candidate.projectId)
+          personal = { workspacePath: candidate.workspacePath, projectId: candidate.projectId }
+      }
+      if (!personal)
+        personal = await this.inspectFixedIdentity(
+          await this.ensureDefaultWorkspace('', '我的空间'),
+        )
+      if (fixed.company) this.assertIndependent(personal, fixed.company)
+      return this.commitFixedSpaces({
+        ...fixed,
+        personal,
+        legacyDefaultPath: fixed.legacyDefaultPath || legacyDefaultPath,
+      })
+    })
+  }
+
+  async resolveFixedSpace(role: 'personal' | 'company'): Promise<string> {
+    const ref = this.getFixedSpaces()[role]
+    if (!ref)
+      throw new Error(role === 'company' ? '请先选择已有公司或启用新公司' : '我的空间尚未初始化')
+    const verified = await this.inspectFixedIdentity(ref.workspacePath, ref.projectId)
+    if (
+      role === 'company' &&
+      !(await CompanyWorkspaceService.describeExisting({
+        workspacePath: verified.workspacePath,
+        workspaceId: verified.projectId,
+      }))
+    )
+      throw new Error('原公司数据库不可用；请定位原公司资料，不会创建空公司替代')
+    return verified.workspacePath
+  }
+
+  async setPersonalSpace(path: string): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      const personal = await this.inspectFixedIdentity(path)
+      const description = await CompanyWorkspaceService.describeExisting({
+        workspacePath: personal.workspacePath,
+        workspaceId: personal.projectId,
+      })
+      if (description) throw new Error('此目录已有公司资料，请通过“我的公司”接回；个人空间保持独立')
+      if (fixed.company) this.assertIndependent(personal, fixed.company)
+      return this.commitFixedSpaces({ ...fixed, personal })
+    })
+  }
+
+  async connectCompanySpace(
+    input: ConnectCompanySpaceInput,
+    configure: (
+      target: { workspacePath: string; workspaceId: string },
+      name: string,
+    ) => Promise<void>,
+  ): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      if (!input.workspacePath && !input.initializeName) throw new Error('请填写公司名称')
+      // A broken bound company must never be replaced by an automatically created empty root.
+      if (!input.workspacePath && fixed.company)
+        throw new Error('已关联公司，请定位原目录或明确选择另一份已有公司')
+      const path = input.workspacePath ?? (await this.ensureDefaultWorkspace('', '我的公司'))
+      const company = await this.inspectFixedIdentity(path)
+      const description = await CompanyWorkspaceService.describeExisting({
+        workspacePath: company.workspacePath,
+        workspaceId: company.projectId,
+      })
+      this.assertBoundCompanyDatabase(company, description)
+      if (!description && !input.initializeName)
+        throw new Error('此目录尚未启用公司，请填写名称并明确启用')
+      let personal = fixed.personal
+      if (
+        personal?.projectId === company.projectId ||
+        personal?.workspacePath === company.workspacePath
+      ) {
+        if (!input.replacePersonal)
+          throw new Error('此目录当前是我的空间；请确认整目录用于公司，并建立独立个人空间')
+        personal = await this.inspectFixedIdentity(
+          await this.ensureDefaultWorkspace('', '我的空间（个人）'),
+        )
+      }
+      if (personal) this.assertIndependent(personal, company)
+      if (!description)
+        await configure(
+          { workspacePath: company.workspacePath, workspaceId: company.projectId },
+          input.initializeName!,
+        )
+      // Check again after the domain operation; an existing company is never configured here.
+      await this.inspectFixedIdentity(company.workspacePath, company.projectId)
+      return this.commitFixedSpaces({ ...fixed, personal, company })
+    })
   }
 
   getActiveLocalWorkspace(): ActiveLocalWorkspaceSnapshot {
@@ -1623,9 +1903,9 @@ export class WorkspaceStateService {
     return migrateWorkspaceStateFile(JSON.parse(await readFile(filePath, 'utf-8')))
   }
 
-  private async writeStateFile(): Promise<void> {
+  private async writeStateFile(state: WorkspaceStateFile = this.state): Promise<void> {
     await mkdir(dirname(this.stateFilePath), { recursive: true })
-    await writeFile(this.tempFilePath, JSON.stringify(this.state, null, 2), 'utf-8')
+    await writeFile(this.tempFilePath, JSON.stringify(state, null, 2), 'utf-8')
     await copyFile(this.stateFilePath, this.backupFilePath).catch((error: unknown) => {
       if (!isMissingFileError(error)) throw error
     })

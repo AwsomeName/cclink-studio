@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'vite'
 import { _electron } from 'playwright-core'
 import electronPath from 'electron'
+import { runSessionNavigationParitySmoke } from './session-navigation-parity-smoke.mjs'
 
 // Real isolated Electron + current service/store/preload; only the remote transport is a fixture.
 // Never reads, stops or deletes a user's remote session.
@@ -15,6 +16,25 @@ const origin =
   process.argv.find((arg) => arg.startsWith('--renderer='))?.slice(11) || 'http://localhost:5173'
 await symlink(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir')
 await mkdir(join(dir, 'user-data'))
+const localPath = join(dir, 'local-workspace')
+await mkdir(localPath)
+await writeFile(
+  join(dir, 'user-data', 'workspace-state.json'),
+  JSON.stringify({
+    version: 2,
+    workspaces: {},
+    localWorkspaces: {
+      [localPath]: {
+        workspaceKey: localPath,
+        workspacePath: localPath,
+        ownerKey: null,
+        updatedAt: Date.now(),
+        storage: 'fallback',
+        projectId: null,
+      },
+    },
+  }),
+)
 await writeFile(
   join(dir, 'entry.ts'),
   `export { CclinkRemoteService } from ${JSON.stringify(join(root, 'src/main/cclink-remote/cclink-remote-service.ts'))};`,
@@ -180,11 +200,16 @@ try {
       source.match(/from "([^"]*\/workspace-store\.ts[^"]*)"/)[1]
     )
     const { useUIStore } = await import('/src/stores/ui-store.ts')
-    window.controlsSmoke = { useCclinkStore, useUIStore }
+    window.controlsSmoke = { useCclinkStore, useUIStore, useWorkspaceStore }
     window.cclinkStudio.cclink.onRealtimeEvent((event) =>
       useCclinkStore.getState().handleRealtimeEvent(event),
     )
-    useCclinkStore.setState({ initialized: true, realtime: { state: 'online' } })
+    useCclinkStore.setState({
+      initialized: true,
+      service: { configured: true },
+      session: { loggedIn: true, user: { id: 'controls-fixture' } },
+      realtime: { state: 'online' },
+    })
     useWorkspaceStore.getState().commitActiveWorkspace(ref)
     useUIStore.getState().setAgentPanelMode('right', 'user')
     useUIStore.getState().setAgentPanelWidth(700)
@@ -218,7 +243,7 @@ try {
   assert(geometry.contentWidth <= geometry.width + 1, JSON.stringify(geometry))
   await list.locator('.remote-sessions-sidebar').screenshot({ path: join(dir, 'session-list.png') })
   await page.screenshot({ path: join(dir, 'sessions-before.png') })
-  for (const width of [180, 280]) {
+  for (const width of [180, 240]) {
     await page.evaluate(
       (width) => window.controlsSmoke.useUIStore.getState().setAgentListWidth(width),
       width,
@@ -238,6 +263,7 @@ try {
     )
   }
   await page.evaluate(() => window.controlsSmoke.useUIStore.getState().setAgentListWidth(200))
+  const navigation = await runSessionNavigationParitySmoke({ page, app, ref, localPath, dir })
   await running.getByRole('button', { name: '停止', exact: true }).click()
   await page.getByText('远端已接受停止请求，等待任务结束', { exact: true }).waitFor()
   assert(await running.getByRole('button', { name: '删除', exact: true }).isDisabled())
@@ -281,6 +307,22 @@ try {
     1,
   )
   await list.getByRole('button', { name: '查看已归档会话', exact: true }).click()
+  await list.locator('[data-session-id="archived"] .remote-session-open').click()
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.agent-workspace-chat .agent-panel-heading strong')?.textContent ===
+      '已归档的会话',
+  )
+  assert.equal(
+    await page.evaluate(() => window.controlsSmoke.useCclinkStore.getState().selectedSessionId),
+    'archived',
+  )
+  await list.getByRole('button', { name: '返回当前会话', exact: true }).click()
+  await list
+    .locator('[data-session-id="archived"]')
+    .getByRole('button', { name: '归档', exact: true })
+    .click()
+  await list.getByRole('button', { name: '查看已归档会话', exact: true }).click()
   await list
     .locator('[data-session-id="archived"]')
     .getByRole('button', { name: '恢复', exact: true })
@@ -288,7 +330,11 @@ try {
   await list.getByRole('button', { name: '返回当前会话', exact: true }).click()
   await list.locator('[data-session-id="archived"]').waitFor()
   await page.screenshot({ path: join(dir, 'sessions-after.png') })
-  console.log(JSON.stringify({ ok: true, geometry, artifacts: dir }, null, 2))
+  const results = { ok: true, geometry, navigation, artifacts: dir }
+  await writeFile(join(dir, 'results.json'), JSON.stringify(results, null, 2))
+  console.log(JSON.stringify(results, null, 2))
 } finally {
-  await app?.close()
+  // This isolated fixture verifies UI/transport behavior, not the interactive quit flow.
+  await app?.evaluate(({ app }) => app.exit(0)).catch(() => {})
+  await app?.close().catch(() => {})
 }

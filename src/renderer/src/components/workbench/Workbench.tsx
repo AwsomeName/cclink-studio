@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useAgentStore, useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { workspaceRefKey } from '@shared/workspace-ref'
+import { CompanySidebar } from '../../features/company-workspace/CompanySidebar'
 import { AndroidToolbar } from './AndroidToolbar'
 import { BrowserToolbar } from './BrowserToolbar'
 import { TabBar } from './TabBar'
@@ -329,6 +330,10 @@ export function Workbench(): React.ReactElement {
           onNavigate={handleNavigate}
           onOpenUrl={openBrowserUrl}
         />
+      )}
+
+      {(activeTab?.type === 'company-workspace' || activeTab?.type === 'company-accounts') && (
+        <CompanySidebar />
       )}
 
       {isAndroidTab && <AndroidToolbar />}

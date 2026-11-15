@@ -5,15 +5,16 @@ import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { createShellContextCommands } from '../context-actions/domains/shell-context-actions'
-import { openDefaultWorkspace } from '../workspace-open/workspace-open-controller'
+import { openBoundCompany } from '../workspace-open/fixed-spaces-store'
 import { createCompanyWorkspaceCommands, openCompanyWorkspace } from './company-workspace-commands'
 
-vi.mock('../workspace-open/workspace-open-controller', () => ({
-  openDefaultWorkspace: vi.fn(),
+vi.mock('../workspace-open/fixed-spaces-store', () => ({
+  openBoundCompany: vi.fn(),
 }))
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(openBoundCompany).mockResolvedValue(true)
   useCommandStore.setState({ commands: createCompanyWorkspaceCommands() })
   useTabStore.setState({ tabs: [], activeTabId: null })
   useUIStore.setState({ activePanel: 'files', sidebarVisible: false })
@@ -29,17 +30,17 @@ afterEach(() => {
 describe('company workspace navigation', () => {
   it('opens the default workspace from unfiled before opening the company page', async () => {
     useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'global' } })
-    vi.mocked(openDefaultWorkspace).mockImplementation(async () => {
+    vi.mocked(openBoundCompany).mockImplementation(async () => {
       expect(useTabStore.getState().tabs).toHaveLength(0)
       const ref = { kind: 'local' as const, path: '/tmp/default-company' }
       useWorkspaceStore.setState({ activeWorkspaceRef: ref })
-      return ref
+      return true
     })
 
     await expect(
       useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' }),
     ).resolves.toEqual({ ok: true })
-    expect(openDefaultWorkspace).toHaveBeenCalledOnce()
+    expect(openBoundCompany).toHaveBeenCalledOnce()
     expect(useTabStore.getState().getActiveTab()).toMatchObject({
       type: 'company-workspace',
       workspaceRef: { kind: 'local', path: '/tmp/default-company' },
@@ -50,9 +51,9 @@ describe('company workspace navigation', () => {
     })
   })
 
-  it('keeps the current local company instead of switching to the default', async () => {
+  it('resolves the fixed company even from an existing local workspace', async () => {
     await useCommandStore.getState().executeCommand('company.projects', { source: 'toolbar' })
-    expect(openDefaultWorkspace).not.toHaveBeenCalled()
+    expect(openBoundCompany).toHaveBeenCalledWith('projects')
     expect(useTabStore.getState().getActiveTab()).toMatchObject({
       workspaceRef: { kind: 'local', path: '/tmp/company-a' },
       companyWorkspace: { section: 'projects' },
@@ -61,7 +62,7 @@ describe('company workspace navigation', () => {
 
   it('reports initialization failure without opening a company or changing the layout', async () => {
     useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'global' } })
-    vi.mocked(openDefaultWorkspace).mockRejectedValue(new Error('默认工作空间已丢失'))
+    vi.mocked(openBoundCompany).mockRejectedValue(new Error('默认工作空间已丢失'))
     await expect(
       useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' }),
     ).resolves.toMatchObject({ ok: false, message: '默认工作空间已丢失' })
@@ -69,24 +70,12 @@ describe('company workspace navigation', () => {
     expect(useUIStore.getState()).toMatchObject({ activePanel: 'files', sidebarVisible: false })
   })
 
-  it.each([null, { kind: 'local' as const, path: '/tmp/default-company' }])(
-    'does not open a company in another workspace when the pending entry loses its target (%j)',
-    async (result) => {
-      useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'global' } })
-      vi.mocked(openDefaultWorkspace).mockImplementation(async () => {
-        useWorkspaceStore.setState({
-          activeWorkspaceRef: { kind: 'local', path: '/tmp/other-company' },
-        })
-        return result
-      })
-      await expect(
-        useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' }),
-      ).resolves.toMatchObject({ ok: false, message: '工作空间已发生变化，请重新打开公司经营' })
-      expect(useTabStore.getState().tabs).toHaveLength(0)
-    },
-  )
-
-  it('keeps the remote boundary without switching to a local default', async () => {
+  it('does not open a company tab when setup or a later transition cancels entry', async () => {
+    vi.mocked(openBoundCompany).mockResolvedValue(false)
+    await useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' })
+    expect(useTabStore.getState().tabs).toHaveLength(0)
+  })
+  it('allows leaving remote through the same fixed local entry', async () => {
     useWorkspaceStore.setState({
       activeWorkspaceRef: remoteWorkspaceRef({
         endpointId: 'remote',
@@ -94,15 +83,24 @@ describe('company workspace navigation', () => {
         path: '/remote',
       }),
     })
+    vi.mocked(openBoundCompany).mockImplementation(async () => {
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: { kind: 'local', path: '/tmp/fixed-company' },
+      })
+      return true
+    })
     await expect(
       useCommandStore.getState().executeCommand('company.overview', { source: 'toolbar' }),
-    ).resolves.toMatchObject({ ok: false, reason: 'disabled' })
-    expect(openDefaultWorkspace).not.toHaveBeenCalled()
+    ).resolves.toEqual({ ok: true })
+    expect(useTabStore.getState().getActiveTab()?.workspaceRef).toEqual({
+      kind: 'local',
+      path: '/tmp/fixed-company',
+    })
   })
 
   it('awaits default workspace errors from the activity context entry', async () => {
     useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'global' } })
-    vi.mocked(openDefaultWorkspace).mockRejectedValue(new Error('默认目录不可写'))
+    vi.mocked(openBoundCompany).mockRejectedValue(new Error('默认目录不可写'))
     const command = createShellContextCommands().find((item) => item.id === 'activity.open')!
     await expect(
       command.action({

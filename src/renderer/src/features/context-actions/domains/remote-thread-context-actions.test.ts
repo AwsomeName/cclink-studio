@@ -61,6 +61,79 @@ beforeEach(() => {
 })
 
 describe('remote thread context actions', () => {
+  it('restores an archived session before selecting it and revealing chat', async () => {
+    let finishRestore!: (success: boolean) => void
+    const selectSession = vi.fn()
+    const loadMessages = vi.fn().mockResolvedValue(undefined)
+    const setSessionArchived = vi.fn(
+      () => new Promise<boolean>((resolve) => (finishRestore = resolve)),
+    )
+    useCclinkStore.setState({
+      sessions: [session('archived')],
+      selectSession,
+      loadMessages,
+      setSessionArchived,
+    })
+    useUIStore.setState({ agentContentMode: 'list', agentPanelWidth: 700, agentListWidth: 200 })
+    const command = createRemoteThreadContextCommands().find(
+      (candidate) => candidate.id === 'remoteAgent.openConversation',
+    )!
+    expect(command.visible?.(context())).toBe(true)
+    expect(command.contextLabel?.(context())).toBe('恢复并打开会话')
+    const opening = command.action(context())
+    expect(setSessionArchived).toHaveBeenCalledWith('remote-1', false)
+    expect(selectSession).not.toHaveBeenCalled()
+    finishRestore(true)
+    await opening
+    expect(selectSession).toHaveBeenCalledWith('remote-1')
+    expect(loadMessages).toHaveBeenCalledWith('remote-1')
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'split', agentPanelWidth: 700 })
+  })
+
+  it('keeps the selection and layout when restoring an archived session fails', async () => {
+    const selectSession = vi.fn()
+    const loadMessages = vi.fn()
+    useCclinkStore.setState({
+      sessions: [session('archived')],
+      selectSession,
+      loadMessages,
+      error: '历史记录保存失败',
+      setSessionArchived: vi.fn().mockResolvedValue(false),
+    })
+    useUIStore.setState({ agentContentMode: 'list' })
+    const command = createRemoteThreadContextCommands().find(
+      (candidate) => candidate.id === 'remoteAgent.openConversation',
+    )!
+    await expect(command.action(context())).rejects.toThrow('历史记录保存失败')
+    expect(selectSession).not.toHaveBeenCalled()
+    expect(loadMessages).not.toHaveBeenCalled()
+    expect(useUIStore.getState().agentContentMode).toBe('list')
+  })
+
+  it('does not select an old target when restore finishes after switching workspaces', async () => {
+    let finishRestore!: (success: boolean) => void
+    const selectSession = vi.fn()
+    const loadMessages = vi.fn()
+    useCclinkStore.setState({
+      sessions: [session('archived')],
+      selectSession,
+      loadMessages,
+      setSessionArchived: () => new Promise<boolean>((resolve) => (finishRestore = resolve)),
+    })
+    useUIStore.setState({ agentContentMode: 'list' })
+    const command = createRemoteThreadContextCommands().find(
+      (candidate) => candidate.id === 'remoteAgent.openConversation',
+    )!
+    const opening = command.action(context())
+    useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef('/tmp/other-workspace'))
+    useWorkspaceStore.getState().commitActiveWorkspace(workspaceRef)
+    finishRestore(true)
+    await opening
+    expect(selectSession).not.toHaveBeenCalled()
+    expect(loadMessages).not.toHaveBeenCalled()
+    expect(useUIStore.getState().agentContentMode).toBe('list')
+  })
+
   it('restores the chat and saved outer width when opening from list-only mode', async () => {
     useCclinkStore.setState({
       sessions: [session()],

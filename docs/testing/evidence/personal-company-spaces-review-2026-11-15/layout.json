@@ -1,0 +1,122 @@
+[
+  {
+    "theme": "dark",
+    "width": 1440,
+    "scroll": 1440,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  },
+  {
+    "theme": "light",
+    "width": 1440,
+    "scroll": 1440,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  },
+  {
+    "theme": "dark",
+    "width": 1200,
+    "scroll": 1200,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  },
+  {
+    "theme": "light",
+    "width": 1200,
+    "scroll": 1200,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  },
+  {
+    "theme": "dark",
+    "width": 900,
+    "scroll": 900,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  },
+  {
+    "theme": "light",
+    "width": 900,
+    "scroll": 900,
+    "nav": 140,
+    "sidebar": 0,
+    "fixed": [
+      {
+        "text": "我的空间",
+        "left": 46,
+        "right": 147
+      },
+      {
+        "text": "我的公司",
+        "left": 151,
+        "right": 252
+      }
+    ],
+    "selected": 1
+  }
+]

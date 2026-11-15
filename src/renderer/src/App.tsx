@@ -51,7 +51,10 @@ function MainLayout(): React.ReactElement {
   const workspaceReady = useWorkspaceBootstrap()
   useComponentSetupOnboarding(workspaceReady)
   useWorkspaceStateFlush()
+  const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
+  const sidebarContentVisible =
+    sidebarVisible && activePanel !== 'company-workspace' && activePanel !== 'workspace-home'
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)
   const agentPanelWidth = useUIStore((s) => s.agentPanelWidth)
@@ -109,6 +112,7 @@ function MainLayout(): React.ReactElement {
     {
       viewportWidth,
       sidebarVisible,
+      sidebarContentVisible,
       sidebarWidth,
       agentPanelWidth: agentContentMode === 'list' ? agentListWidth : agentPanelWidth,
       agentInRight,
@@ -136,6 +140,7 @@ function MainLayout(): React.ReactElement {
         if (
           resizeStartRef.current &&
           (state.sidebarVisible !== previous.sidebarVisible ||
+            state.activePanel !== previous.activePanel ||
             state.agentPanelMode !== previous.agentPanelMode ||
             state.sidebarWidth !== previous.sidebarWidth ||
             state.agentPanelWidth !== previous.agentPanelWidth ||
@@ -257,26 +262,26 @@ function MainLayout(): React.ReactElement {
           >
             <IconPanelLeft size={15} />
           </button>
-          <button
-            ref={workspaceOpenButtonRef}
-            className="app-topbar-open-project"
-            type="button"
-            onClick={() => {
-              if (workspaceOpen) {
-                closeWorkspaceOpen()
-                return
-              }
-              void executeCommand('workspace.open', { source: 'toolbar' })
-            }}
-            disabled={workspaceLoading || workspacePicking}
-            title="打开工作空间"
-            aria-expanded={workspaceOpen}
-          >
-            <IconFolder size={14} />
-            <span>打开工作空间</span>
-          </button>
         </div>
         <ProjectStrip />
+        <button
+          ref={workspaceOpenButtonRef}
+          className="app-topbar-open-project"
+          type="button"
+          onClick={() => {
+            if (workspaceOpen) {
+              closeWorkspaceOpen()
+              return
+            }
+            void executeCommand('workspace.open', { source: 'toolbar' })
+          }}
+          disabled={workspaceLoading || workspacePicking}
+          title="打开工作空间"
+          aria-expanded={workspaceOpen}
+        >
+          <IconFolder size={14} />
+          <span>打开工作空间</span>
+        </button>
         <div className="app-topbar-right">
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
@@ -308,15 +313,15 @@ function MainLayout(): React.ReactElement {
 
         <div
           id="workspace-sidebar"
-          className={`workspace-sidebar-shell ${sidebarVisible ? '' : 'collapsed'}`}
-          inert={!sidebarVisible}
+          className={`workspace-sidebar-shell ${sidebarContentVisible ? '' : 'collapsed'}`}
+          inert={!sidebarContentVisible}
           style={{
             display: 'flex',
             overflow: 'hidden',
             transition: 'width 200ms ease-out, opacity 200ms ease-out',
             width: panelLayout.sidebarWidth,
             minWidth: panelLayout.sidebarWidth,
-            opacity: sidebarVisible ? 1 : 0,
+            opacity: sidebarContentVisible ? 1 : 0,
           }}
         >
           <ErrorBoundary
@@ -326,7 +331,7 @@ function MainLayout(): React.ReactElement {
           </ErrorBoundary>
         </div>
 
-        {sidebarVisible && (
+        {sidebarContentVisible && (
           <ResizeHandle
             area="sidebar"
             side="left"

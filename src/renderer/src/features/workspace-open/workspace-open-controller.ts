@@ -44,6 +44,8 @@ export async function setCurrentWorkspaceAsDefault(): Promise<void> {
   if (!path) throw new Error('请先打开一个本地工作空间')
   const result = await window.cclinkStudio.workspaceState.setDefaultWorkspace(path)
   if (!result.success) throw new Error(result.error || '设置默认工作空间失败')
+  const { refreshFixedSpaces } = await import('./fixed-spaces-store')
+  await refreshFixedSpaces()
 }
 
 /**

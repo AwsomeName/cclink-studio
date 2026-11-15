@@ -1,6 +1,6 @@
 # 默认工作空间与数据迁移实施计划
 
-> 2026-11-12：入口层后续施工遵循[双固定入口实施计划](personal-company-spaces-development-plan.md)，当前仅设计。双入口不要求先完成本文第二、第三批事务目录化及备份移动，也不自动搬迁已有公司资料。
+> 2026-11-13：入口与导航以[双固定入口产品设计](personal-company-spaces-product-design.md)及[真实应用验收](../testing/personal-company-spaces.md)为准。源码已支持“我的空间 / 我的公司”原位关联与新侧栏；旧资料的领域所有者、原目录及独立业务验收保持不变。未打包发布。
 
 > 日期：2026-11-04。
 > 状态：第一批代码及真实 Electron 自动验收通过，真人签收待执行；第二、第三批尚未实现。实际结果见[第一批实现与验收](../testing/default-workspace-first-batch.md)。

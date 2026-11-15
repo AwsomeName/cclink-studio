@@ -14,6 +14,8 @@ const MIN_WORKBENCH_WIDTH = 320
 export interface PanelLayoutInput {
   viewportWidth: number
   sidebarVisible: boolean
+  /** Navigation can stay expanded while a page has no secondary sidebar. */
+  sidebarContentVisible?: boolean
   sidebarWidth: number
   agentPanelWidth: number
   agentInRight: boolean
@@ -31,6 +33,7 @@ export function getPanelLayout(
   {
     viewportWidth,
     sidebarVisible,
+    sidebarContentVisible = sidebarVisible,
     sidebarWidth,
     agentPanelWidth,
     agentInRight,
@@ -43,7 +46,7 @@ export function getPanelLayout(
   const budget =
     (Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0) -
     (sidebarVisible ? ACTIVITY_BAR_WIDTH : COLLAPSED_ACTIVITY_BAR_WIDTH) -
-    (Number(sidebarVisible) + Number(agentInRight)) * RESIZE_HANDLE_WIDTH -
+    (Number(sidebarContentVisible) + Number(agentInRight)) * RESIZE_HANDLE_WIDTH -
     MIN_WORKBENCH_WIDTH
   const sidebarBounds = {
     min: MIN_SIDEBAR_WIDTH,
@@ -52,7 +55,9 @@ export function getPanelLayout(
       Math.min(MAX_SIDEBAR_WIDTH, Math.floor(budget - (agentInRight ? agentMin : 0))),
     ),
   }
-  let effectiveSidebarWidth = sidebarVisible ? clampPanelWidth(sidebarWidth, sidebarBounds) : 0
+  let effectiveSidebarWidth = sidebarContentVisible
+    ? clampPanelWidth(sidebarWidth, sidebarBounds)
+    : 0
   const agentBounds = {
     min: agentMin,
     max: Math.max(agentMin, Math.min(agentMax, Math.floor(budget - effectiveSidebarWidth))),
@@ -69,7 +74,7 @@ export function getPanelLayout(
       MIN_SIDEBAR_WIDTH,
       Math.min(MAX_SIDEBAR_WIDTH, Math.floor(budget - effectiveAgentWidth)),
     )
-    effectiveSidebarWidth = sidebarVisible ? clampPanelWidth(sidebarWidth, sidebarBounds) : 0
+    effectiveSidebarWidth = sidebarContentVisible ? clampPanelWidth(sidebarWidth, sidebarBounds) : 0
     agentBounds.max = Math.max(agentBounds.max, effectiveAgentWidth)
   }
   return {

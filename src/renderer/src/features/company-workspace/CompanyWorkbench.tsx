@@ -239,7 +239,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
         </div>
       )}
       {!snapshot ? (
-        <p>正在读取公司资料…</p>
+        !error && <p>正在读取公司资料…</p>
       ) : !snapshot.enabled ? (
         <section className="company-start">
           <h1>启用公司视图</h1>

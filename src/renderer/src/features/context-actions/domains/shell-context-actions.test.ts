@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FixedSpaces } from '@shared/ipc/workspace-state'
+import { useFsStore } from '../../../stores/fs-store'
 import { useUIStore } from '../../../stores/ui-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { useWorkspaceStore } from '../../../stores/workspace-store'
 import { localWorkspaceRef } from '@shared/workspace-ref'
 import { createShellContextCommands } from './shell-context-actions'
+
+const companyPath = '/workspace/fixed-company'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 beforeEach(() => {
   useUIStore.setState(useUIStore.getInitialState(), true)
@@ -29,13 +37,44 @@ describe('shell context commands', () => {
     'video-creation',
     'production',
   ])('opens the valid %s activity idempotently', async (activityId) => {
+    const isCompanyActivity =
+      activityId === 'company-accounts' || activityId === 'company-workspace'
+    if (isCompanyActivity) {
+      const spaces: FixedSpaces = {
+        version: 1,
+        personal: null,
+        company: { projectId: 'company-id', workspacePath: companyPath },
+        legacyDefaultPath: '/workspace/legacy-default',
+      }
+      vi.stubGlobal('window', {
+        cclinkStudio: {
+          workspaceState: {
+            getFixedSpaces: async () => spaces,
+            resolveFixedSpace: async () => ({ success: true, workspacePath: companyPath }),
+          },
+        },
+      })
+    }
     const command = createShellContextCommands().find((item) => item.id === 'activity.open')!
     const context = {
       source: 'context-menu' as const,
       target: { kind: 'activity' as const, activityId },
     }
-    await command.action(context)
-    await command.action(context)
+    const originalOpen = useFsStore.getState().openRecentWorkspace
+    if (isCompanyActivity) {
+      useFsStore.setState({
+        openRecentWorkspace: async (path) => {
+          useWorkspaceStore.getState().commitActiveWorkspace(localWorkspaceRef(path))
+          return true
+        },
+      })
+    }
+    try {
+      await command.action(context)
+      await command.action(context)
+    } finally {
+      useFsStore.setState({ openRecentWorkspace: originalOpen })
+    }
     expect(useUIStore.getState()).toMatchObject(
       activityId === 'sessions'
         ? {
@@ -44,10 +83,16 @@ describe('shell context commands', () => {
             agentPanelMode: 'right',
             agentContentMode: 'split',
           }
-        : { activePanel: activityId, sidebarVisible: true },
+        : {
+            activePanel: isCompanyActivity ? 'company-workspace' : activityId,
+            sidebarVisible: true,
+          },
     )
-    if (activityId === 'company-accounts' || activityId === 'company-workspace') {
-      expect(useTabStore.getState().getActiveTab()?.type).toBe(activityId)
+    if (isCompanyActivity) {
+      expect(useTabStore.getState().getActiveTab()).toMatchObject({
+        type: activityId,
+        workspaceRef: localWorkspaceRef(companyPath),
+      })
       expect(useTabStore.getState().tabs.filter((tab) => tab.type === activityId)).toHaveLength(1)
     }
     if (activityId === 'browser') expect(useUIStore.getState().agentPanelMode).toBe('right')

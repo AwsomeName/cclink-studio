@@ -28,7 +28,7 @@ describe('registerWorkspaceStateIpc', () => {
     expect(settings.set).not.toHaveBeenCalled()
   })
 
-  it('keeps a registered default retryable after settings failure without granting a new root', async () => {
+  it('keeps an initialized personal space retryable after binding failure without granting a new root', async () => {
     const service = createService()
     const sender = { id: 31 }
     const settings = {
@@ -42,6 +42,7 @@ describe('registerWorkspaceStateIpc', () => {
       settings as never,
       files as never,
     )
+    service.ensurePersonalSpace.mockRejectedValueOnce(new Error('disk full'))
     const ensure = mockIpcMain.handlers.get('workspaceState:ensureDefaultWorkspace')!
     await expect(ensure({ sender })).resolves.toMatchObject({
       success: false,
@@ -313,6 +314,19 @@ describe('registerWorkspaceStateIpc', () => {
 
 function createService() {
   return {
+    getFixedSpaces: vi.fn(() => ({
+      version: 1,
+      personal: { workspacePath: '/default', projectId: 'personal' },
+      company: null,
+      legacyDefaultPath: '',
+    })),
+    ensurePersonalSpace: vi.fn(async () => ({
+      version: 1,
+      personal: { workspacePath: '/default', projectId: 'personal' },
+      company: null,
+      legacyDefaultPath: '',
+    })),
+    setPersonalSpace: vi.fn(async () => ({})),
     getDefaultWorkspacePath: vi.fn(() => '/default'),
     ensureDefaultWorkspace: vi.fn(async () => '/default'),
     getSnapshot: vi.fn(async () => ({ sections: {} })),

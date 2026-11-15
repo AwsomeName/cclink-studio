@@ -2,7 +2,7 @@ import type { Command } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
-import { openDefaultWorkspace } from '../workspace-open/workspace-open-controller'
+import { openBoundCompany } from '../workspace-open/fixed-spaces-store'
 export type CompanySection = 'overview' | 'projects' | 'finance' | 'operations' | 'knowledge'
 export const companySections: Array<{ id: CompanySection; label: string }> = [
   { id: 'overview', label: '公司总览' },
@@ -28,6 +28,8 @@ export function openCompanyWorkspace(
     )
   const selectedMonth = month ?? previous?.companyWorkspace?.month
   useUIStore.getState().showPanel('company-workspace')
+  if (useUIStore.getState().agentPanelMode === 'center')
+    useUIStore.getState().setAgentPanelMode('right', 'user')
   if (section === 'finance') {
     useTabStore.getState().openTab({
       type: 'company-accounts',
@@ -46,16 +48,9 @@ export function openCompanyWorkspace(
     })
   }
 }
-/** 公司入口为未归档提供默认资料归属，页内导航仍使用当前工作空间。 */
+/** Top-level shortcuts use the fixed company; in-page/deep links retain explicit scope. */
 export async function enterCompanyWorkspace(section: CompanySection = 'overview'): Promise<void> {
-  if (useWorkspaceStore.getState().activeWorkspaceRef.kind === 'global') {
-    const opened = await openDefaultWorkspace()
-    const active = useWorkspaceStore.getState().activeWorkspaceRef
-    if (!opened || active.kind !== 'local' || active.path !== opened.path) {
-      throw new Error('工作空间已发生变化，请重新打开公司经营')
-    }
-  }
-  openCompanyWorkspace(section)
+  if (await openBoundCompany(section)) openCompanyWorkspace(section)
 }
 
 export function createCompanyWorkspaceCommands(): Command[] {
@@ -64,10 +59,6 @@ export function createCompanyWorkspaceCommands(): Command[] {
     label: '打开' + section.label,
     category: '公司',
     risk: 'read',
-    enabled: () => ({
-      enabled: useWorkspaceStore.getState().activeWorkspaceRef.kind !== 'remote',
-      reason: '公司视图仅支持本地工作空间',
-    }),
     action: () => enterCompanyWorkspace(section.id),
   }))
 }

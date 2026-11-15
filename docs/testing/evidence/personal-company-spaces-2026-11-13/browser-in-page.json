@@ -1,0 +1,136 @@
+{
+  "diagnostic": {
+    "requestedTabId": "tab-3-1794506319267",
+    "visibleTabId": "tab-3-1794506319267",
+    "visibleUrl": "http://127.0.0.1:49997/fixed-spaces#in-page",
+    "visibleTitle": "127.0.0.1:49997/fixed-spaces#in-page",
+    "webContentsId": 2,
+    "ownerWindowId": "main",
+    "profileId": "web-draft-d1850cec-c464-4607-bb86-e5d9a15d9675",
+    "viewState": {
+      "viewMode": "desktop",
+      "zoomMode": "fit",
+      "zoomFactor": 1
+    },
+    "popup": null,
+    "recentUrls": [
+      "about:blank",
+      "http://127.0.0.1:49997/fixed-spaces",
+      "http://127.0.0.1:49997/fixed-spaces#in-page"
+    ],
+    "engineVersions": {
+      "electron": "43.1.1",
+      "chromium": "150.0.7871.114",
+      "node": "24.18.0"
+    },
+    "lastClaim": {
+      "status": "succeeded",
+      "timestamp": 1794506319522,
+      "expectedUrl": "http://127.0.0.1:49997/fixed-spaces"
+    },
+    "fitWidth": {
+      "trigger": "did-finish-load",
+      "status": "rejected",
+      "timestamp": 1794506320257,
+      "documentGeneration": 2,
+      "paneWidth": 946,
+      "viewBounds": {
+        "x": 140,
+        "y": 116,
+        "width": 946,
+        "height": 732
+      },
+      "contentWidth": 3563,
+      "rawFactor": 0.2655065955655347,
+      "appliedFactor": 1,
+      "actualZoomFactor": 1,
+      "visualScaleBeforeReset": 1,
+      "actualVisualScale": 1,
+      "rejectionReason": "auto-fit-too-small",
+      "samples": [
+        {
+          "offsetMs": 0,
+          "viewportWidth": 946,
+          "rootWidth": 3563,
+          "bodyWidth": 946
+        },
+        {
+          "offsetMs": 250,
+          "viewportWidth": 946,
+          "rootWidth": 3563,
+          "bodyWidth": 946
+        },
+        {
+          "offsetMs": 753,
+          "viewportWidth": 946,
+          "rootWidth": 3563,
+          "bodyWidth": 946
+        }
+      ]
+    },
+    "httpAuth": null,
+    "layout": {
+      "rendererBounds": {
+        "x": 140,
+        "y": 116,
+        "width": 946,
+        "height": 732,
+        "protectedTop": 116
+      },
+      "nativeBounds": {
+        "x": 140,
+        "y": 116,
+        "width": 946,
+        "height": 732
+      },
+      "protectedTop": 116,
+      "nativeProtectedTop": 116,
+      "overlapsProtectedTop": false
+    },
+    "session": {
+      "partition": "persist:cclink-studio-profile-web-draft-d1850cec-c464-4607-bb86-e5d9a15d9675",
+      "persistent": true,
+      "cookieStoreFlushed": true,
+      "cookieCount": 0,
+      "persistentCookieCount": 0,
+      "expiredCookieCount": 0,
+      "likelyAuthCookies": [],
+      "cookieNames": [],
+      "recentCookieChanges": []
+    },
+    "playwrightTabId": "tab-3-1794506319267",
+    "playwrightUrl": "http://127.0.0.1:49997/fixed-spaces#in-page",
+    "playwrightTitle": "",
+    "automationConnection": {
+      "isConnected": true,
+      "connectionGeneration": 1,
+      "contextCount": 1,
+      "pageCount": 2,
+      "reconnectInFlight": false,
+      "lastDisconnectedAt": null,
+      "lastReconnectAt": 1794506316724,
+      "lastReconnectTrigger": "initial_connect",
+      "lastReconnectError": null,
+      "forcedByEmptyContexts": false,
+      "boundGeneration": 1,
+      "boundConnectionGeneration": 1,
+      "boundWebContentsId": 2
+    },
+    "bindingStatus": "matched",
+    "page": {
+      "tabId": "tab-3-1794506319267",
+      "url": "http://127.0.0.1:49997/fixed-spaces#in-page",
+      "title": "",
+      "consoleErrors": [],
+      "networkIssues": [],
+      "suspectedChallenges": [],
+      "pageTextSample": "固定空间浏览器验收 overflow"
+    }
+  },
+  "actual": {
+    "viewport": 946,
+    "scroll": 3563,
+    "visualScale": 1
+  },
+  "pane": 946
+}

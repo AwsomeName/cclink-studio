@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useFixedSpacesStore } from '../features/workspace-open/fixed-spaces-store'
 import {
   useAgentStore,
   useBrowserStore,
@@ -94,7 +95,29 @@ export function useWorkspaceBootstrap(): boolean {
     let cancelled = false
 
     async function bootstrap(): Promise<void> {
+      // Initialize role bindings independently of the last active workspace.
+      await window.cclinkStudio.workspaceState
+        .ensurePersonalSpace()
+        .then((spaces) => {
+          useFixedSpacesStore.setState({ spaces })
+        })
+        .catch((error) => console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error))
       const result = await runWorkspaceBootstrapOnce()
+      if (
+        result.canPersistRuntime &&
+        result.workspacePath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath &&
+        useTabStore.getState().tabs.length === 0
+      ) {
+        useUIStore.getState().showPanel('workspace-home')
+        useTabStore.getState().openTab({
+          type: 'workspace-home',
+          title: '工作台',
+          icon: '⌂',
+          workspaceRef: { kind: 'local', path: result.workspacePath! },
+        })
+        if (useUIStore.getState().agentPanelMode === 'center')
+          useUIStore.getState().setAgentPanelMode('right', 'system')
+      }
       if (result.workspacePath) {
         await recoverPendingFileRelocations(result.workspacePath, () =>
           useFsStore.getState().refreshWorkspace(),

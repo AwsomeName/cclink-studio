@@ -4,6 +4,7 @@ import { useToastStore } from '../../../components/common/Toast'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useBrowserStore } from '../../../stores/browser-store'
 import type { Command } from '../../../stores/command-store'
+import { useCommandStore } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
 import { useGitBackupStore } from '../../../stores/git-backup-store'
 import { useGitStore } from '../../../stores/git-store'
@@ -26,6 +27,7 @@ type StatusTarget = Extract<ContextTarget, { kind: 'status-item' }>
 type LayoutTarget = Extract<ContextTarget, { kind: 'layout' }>
 
 const ACTIVITY_LABELS: Record<string, string> = {
+  'workspace-home': '工作台',
   'company-workspace': '公司经营',
   'company-accounts': '公司账目',
   'agent-roles': '角色',
@@ -184,6 +186,10 @@ export function createShellContextCommands(): Command[] {
       action: (context) => {
         const id = activityTarget(context)?.activityId
         if (!id) throw new Error('活动入口已失效')
+        if (id === 'workspace-home')
+          return useCommandStore
+            .getState()
+            .executeCommand('workspace.home', { source: 'context-menu' })
         if (id === 'settings') {
           useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
           useUIStore.getState().hideSidebar()
@@ -191,17 +197,12 @@ export function createShellContextCommands(): Command[] {
         }
         const panel = activityPanel(id)
         if (!panel) throw new Error('活动入口不可用')
-        if (panel === 'company-workspace') {
-          return enterCompanyWorkspace()
+        if (panel === 'company-workspace' || panel === 'company-accounts') {
+          return enterCompanyWorkspace(panel === 'company-accounts' ? 'finance' : 'overview')
         }
         const ui = useUIStore.getState()
         if (ui.activePanel !== panel || !ui.sidebarVisible) ui.setActivePanel(panel)
         if (panel === 'browser') ui.setAgentPanelMode('right', 'user')
-        if (panel === 'company-accounts') {
-          useTabStore
-            .getState()
-            .openTab({ type: 'company-accounts', title: '公司账目', icon: '账' })
-        }
       },
     },
     {

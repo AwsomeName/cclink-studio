@@ -185,7 +185,7 @@ function WorkspaceSourceChooser({
         >
           <IconFolder size={22} />
           <span>
-            <strong>默认工作空间</strong>
+            <strong>我的空间</strong>
             <small>{defaultPath || '打开日常资料目录'}</small>
           </span>
           <IconChevronRight size={14} />
@@ -224,7 +224,7 @@ function WorkspaceSourceChooser({
           disabled={busyKey !== null}
           onClick={() => void runWorkspaceCommand('workspace.set-default')}
         >
-          将当前工作空间设为默认
+          将当前工作空间用作我的空间
         </button>
       )}
       <button

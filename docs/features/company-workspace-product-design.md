@@ -1,6 +1,6 @@
 # 公司工作空间产品设计
 
-> 2026-11-12 下一版入口设计：[“我的空间 / 我的公司”固定入口](personal-company-spaces-product-design.md)及[实施计划](personal-company-spaces-development-plan.md)。用户已确认双固定入口方向，本轮仅设计；实施后公司快捷入口改为前往固定公司，历史记录仍保留原空间。本文件下述已实现行为不代表新入口已经上线。
+> 2026-11-13：入口与导航以[双固定入口产品设计](personal-company-spaces-product-design.md)及[真实应用验收](../testing/personal-company-spaces.md)为准。源码已支持“我的空间 / 我的公司”原位关联与新侧栏；旧资料的领域所有者、原目录及独立业务验收保持不变。未打包发布。
 
 > 状态：用户已确认的首版产品基线；第一批公司组织与原记录下钻代码已实现并通过真实 Electron 自动化验证，真人验收待完成；完整首版尚未交付。
 > 日期：2026-10-14。

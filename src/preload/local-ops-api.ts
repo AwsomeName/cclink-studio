@@ -56,6 +56,12 @@ export const cadApi: CadApiContract = {
 }
 
 export const workspaceStateApi: WorkspaceStateApiContract = {
+  getFixedSpaces: () => invokeIpcContract(workspaceStateIpc.getFixedSpaces),
+  ensurePersonalSpace: () => invokeIpcContract(workspaceStateIpc.ensurePersonalSpace),
+  listCompanySpaces: () => invokeIpcContract(workspaceStateIpc.listCompanySpaces),
+  inspectCompanySpace: (path) => invokeIpcContract(workspaceStateIpc.inspectCompanySpace, path),
+  connectCompanySpace: (input) => invokeIpcContract(workspaceStateIpc.connectCompanySpace, input),
+  resolveFixedSpace: (role) => invokeIpcContract(workspaceStateIpc.resolveFixedSpace, role),
   getDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.getDefaultWorkspace),
   ensureDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.ensureDefaultWorkspace),
   setDefaultWorkspace: (workspacePath) =>

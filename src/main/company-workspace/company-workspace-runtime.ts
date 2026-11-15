@@ -90,6 +90,19 @@ export function createCompanyWorkspaceRuntime(runtime: CclinkStudioRuntimeState)
           })
           if (metadata?.isSymbolicLink())
             throw new CompanyWorkspaceError('WORKSPACE_DENIED', '公司资料目录不能是符号链接')
+          // Restored tabs and direct domain calls must enforce the same protection as the anchor.
+          // Keep ordinary file access available; only the missing company's domain is unavailable.
+          const company = runtime.workspaceStateService?.getFixedSpaces().company
+          if (company?.workspacePath === workspacePath) {
+            try {
+              await runtime.workspaceStateService!.resolveFixedSpace('company')
+            } catch (error) {
+              throw new CompanyWorkspaceError(
+                'IO_ERROR',
+                error instanceof Error ? error.message : '原公司资料不可用，请恢复原目录',
+              )
+            }
+          }
           const workspaceId = await runtime.workspaceStateService?.getLocalProjectId(workspacePath)
           if (!workspaceId)
             throw new CompanyWorkspaceError(

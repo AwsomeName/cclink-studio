@@ -9,12 +9,14 @@ import type { FileService } from '../fs/file-service'
 import type { WebContents } from 'electron'
 import { isAbsolute } from 'node:path'
 import type { DefaultWorkspaceResult } from '../../shared/ipc/workspace-state'
+import type { CompanyWorkspaceService } from '../company-workspace/company-workspace-service'
 
 export function registerWorkspaceStateIpc(
   workspaceStateService: WorkspaceStateService,
   trustedRendererGuard: TrustedRendererGuard,
   settingsService?: SettingsService,
   fileService?: FileService,
+  getCompanyService?: () => CompanyWorkspaceService | null,
 ): void {
   const cleanupBoundSenders = new WeakSet<WebContents>()
   const bindCapabilityCleanup = (sender: WebContents): void => {
@@ -38,14 +40,92 @@ export function registerWorkspaceStateIpc(
     errorCode: 'DEFAULT_WORKSPACE_UNAVAILABLE',
     error: error instanceof Error ? error.message : '默认工作空间当前不可用',
   })
+  const grant = (sender: WebContents, paths: string[]): void => {
+    bindCapabilityCleanup(sender)
+    fileService?.registerKnownWorkspaces(sender.id, paths)
+    fileService?.registerPickerSelection(sender.id, paths, 'workspace')
+  }
+  registerTrustedIpcContract(workspaceStateIpcContracts.getFixedSpaces, trustedRendererGuard, () =>
+    workspaceStateService.getFixedSpaces(),
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.ensurePersonalSpace,
+    trustedRendererGuard,
+    async (event) => {
+      const fixed = await workspaceStateService.ensurePersonalSpace(
+        settingsService?.getAll().defaultWorkspacePath,
+      )
+      if (fixed.personal) grant(event.sender, [fixed.personal.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.listCompanySpaces,
+    trustedRendererGuard,
+    async (event) => {
+      const candidates = await workspaceStateService.listCompanySpaces()
+      grant(
+        event.sender,
+        candidates.map((item) => item.workspacePath),
+      )
+      return candidates
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.inspectCompanySpace,
+    trustedRendererGuard,
+    async (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.inspectCompanySpace(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.connectCompanySpace,
+    trustedRendererGuard,
+    async (event, input) => {
+      if (input.workspacePath) assertWorkspaceAccess(event.sender.id, input.workspacePath)
+      const fixed = await workspaceStateService.connectCompanySpace(input, async (target, name) => {
+        const service = getCompanyService?.()
+        if (!service) throw new Error('公司能力当前不可用，请稍后重试；原资料已保留')
+        await service.configure(target, {
+          workspaceRef: { kind: 'local', path: target.workspacePath },
+          name,
+          enabled: true,
+          month: new Date().toISOString().slice(0, 7),
+        })
+      })
+      grant(
+        event.sender,
+        [fixed.personal?.workspacePath, fixed.company?.workspacePath].filter(
+          (path): path is string => Boolean(path),
+        ),
+      )
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.resolveFixedSpace,
+    trustedRendererGuard,
+    async (event, role) => {
+      try {
+        const workspacePath = await workspaceStateService.resolveFixedSpace(role)
+        grant(event.sender, [workspacePath])
+        return { success: true, workspacePath }
+      } catch (error) {
+        return defaultFailure(error)
+      }
+    },
+  )
   registerTrustedIpcContract(
     workspaceStateIpcContracts.getDefaultWorkspace,
     trustedRendererGuard,
     () => ({
       success: true,
-      workspacePath: workspaceStateService.getDefaultWorkspacePath(
-        settingsService?.getAll().defaultWorkspacePath,
-      ),
+      workspacePath:
+        workspaceStateService.getFixedSpaces().personal?.workspacePath ??
+        workspaceStateService.getDefaultWorkspacePath(
+          settingsService?.getAll().defaultWorkspacePath,
+        ),
     }),
   )
   registerTrustedIpcContract(
@@ -55,10 +135,10 @@ export function registerWorkspaceStateIpc(
       bindCapabilityCleanup(event.sender)
       try {
         if (!settingsService) throw new Error('设置服务当前不可用')
-        const workspacePath = await workspaceStateService.ensureDefaultWorkspace(
+        const fixed = await workspaceStateService.ensurePersonalSpace(
           settingsService.getAll().defaultWorkspacePath,
         )
-        await settingsService.set({ defaultWorkspacePath: workspacePath })
+        const workspacePath = fixed.personal!.workspacePath
         fileService?.registerKnownWorkspaces(event.sender.id, [workspacePath])
         fileService?.registerPickerSelection(event.sender.id, [workspacePath], 'workspace')
         return { success: true, workspacePath }
@@ -78,8 +158,7 @@ export function registerWorkspaceStateIpc(
         }
         const resolved = await workspaceStateService.resolveLocalWorkspace(path)
         if (!resolved.valid || !resolved.workspacePath) throw new Error(resolved.error)
-        await workspaceStateService.getSnapshot(resolved.workspacePath)
-        await settingsService.set({ defaultWorkspacePath: resolved.workspacePath })
+        await workspaceStateService.setPersonalSpace(resolved.workspacePath)
         return { success: true, workspacePath: resolved.workspacePath }
       } catch (error) {
         return defaultFailure(error)
@@ -128,7 +207,7 @@ export function registerWorkspaceStateIpc(
               intent === 'remote'
                 ? 'resume'
                 : path
-                  ? path === settingsService.getAll().defaultWorkspacePath
+                  ? path === workspaceStateService.getFixedSpaces().personal?.workspacePath
                     ? 'default'
                     : 'resume'
                   : 'unfiled',

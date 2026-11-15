@@ -36,7 +36,10 @@ export function usePanelLayout(
       if (previous.input.agentPanelWidth !== input.agentPanelWidth) {
         // A deliberate Agent resize replaces the retained display width.
         if (previous.retainedAgentWidth !== undefined) retainedAgentWidth = input.agentPanelWidth
-      } else if (previous.input.sidebarVisible !== input.sidebarVisible) {
+      } else if (
+        previous.input.sidebarVisible !== input.sidebarVisible ||
+        previous.input.sidebarContentVisible !== input.sidebarContentVisible
+      ) {
         retainedAgentWidth = previous.layout.agentPanelWidth
       } else {
         retainedAgentWidth = previous.retainedAgentWidth

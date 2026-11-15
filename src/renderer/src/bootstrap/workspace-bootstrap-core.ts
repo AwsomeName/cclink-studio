@@ -59,10 +59,7 @@ export async function restoreWorkspaceState(
     let candidatePath = settings.lastWorkspacePath || null
     let startupError: string | null = null
     if (settings.startupWorkspaceTarget === 'unfiled') candidatePath = null
-    else if (
-      settings.startupWorkspaceTarget === 'default' ||
-      (!candidatePath && settings.startupWorkspaceTarget !== 'resume')
-    ) {
+    else if (settings.startupWorkspaceTarget === 'default' || !candidatePath) {
       const result = await deps.ensureDefaultWorkspace()
       candidatePath = result.success ? result.workspacePath : null
       if (!result.success)

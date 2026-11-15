@@ -1,0 +1,58 @@
+{
+  "results": [
+    {
+      "name": "首次启动双固定入口，个人自动可用，公司尚未建库",
+      "status": "pass"
+    },
+    {
+      "name": "真实编辑器写入个人笔记并保存到独立个人目录",
+      "status": "pass"
+    },
+    {
+      "name": "启用独立公司并准备原业务、流水、混合个人笔记及关联会话",
+      "status": "pass"
+    },
+    {
+      "name": "旧默认公司接回原目录，身份与公司库字节不变，混合资料保留",
+      "status": "pass"
+    },
+    {
+      "name": "原公司关联会话、流水与原发布事务可下钻，账目库不变、发布仍未开始",
+      "status": "pass"
+    },
+    {
+      "name": "专项空间进入公司、双空间往返及完整重启恢复原笔记和业务",
+      "status": "pass"
+    },
+    {
+      "name": "原路径失效保留关联、拒绝空公司替代，定位原目录后接回同一身份",
+      "status": "pass"
+    },
+    {
+      "name": "公司页内导航、六种窗口/主题组合、140/48px收放及更多工具可达",
+      "status": "pass"
+    },
+    {
+      "name": "关闭最后一个普通空间回到我的空间，固定入口仍保留",
+      "status": "pass"
+    },
+    {
+      "name": "真实WebContentsView：新页、页内导航、面板变宽、page/visual 30%恢复及重启均为100%",
+      "status": "pass"
+    },
+    {
+      "name": "多公司不默认猜选，更换主公司需确认，旧公司历史Tab及页内导航保持原归属",
+      "status": "pass"
+    },
+    {
+      "name": "关联保存后进入失败保留原现场，修复原状态后可直接重试进入",
+      "status": "pass"
+    },
+    {
+      "name": "重启恢复的公司库缺失时读写与接回均拒绝建空库，个人仍可用，恢复原库即可继续",
+      "status": "pass"
+    }
+  ],
+  "pageErrors": [],
+  "build": "/Users/apple/Desktop/cclink-dev/cclink-studio/.cache/fixed-spaces-build"
+}

@@ -1,14 +1,13 @@
-import { useCommandStore } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { useToastStore } from '../../components/common/Toast'
-import { companySections } from './company-workspace-commands'
+import { companySections, openCompanyWorkspace } from './company-workspace-commands'
 import './company-workspace.css'
+import { useFixedSpacesStore } from '../workspace-open/fixed-spaces-store'
+import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
 export function CompanySidebar(): React.ReactElement {
   const tab = useTabStore((state) => state.tabs.find((item) => item.id === state.activeTabId))
   const ref = useWorkspaceStore((state) => state.activeWorkspaceRef)
-  const execute = useCommandStore((state) => state.executeCommand)
-  const show = useToastStore((state) => state.show)
+  const boundCompany = useFixedSpacesStore((state) => state.spaces?.company)
   const current =
     tab?.type === 'company-accounts'
       ? 'finance'
@@ -23,16 +22,23 @@ export function CompanySidebar(): React.ReactElement {
           type="button"
           aria-current={current === section.id ? 'page' : undefined}
           disabled={ref.kind !== 'local'}
-          onClick={() => {
-            void execute('company.' + section.id, { source: 'toolbar' }).then((result) => {
-              if (!result.ok) show(result.message ?? '无法打开公司视图', 'error')
-            })
-          }}
+          onClick={() => openCompanyWorkspace(section.id)}
         >
           {section.label}
         </button>
       ))}
-      <p>业务项目关联工作、支出、内容与资料。</p>
+      {ref.kind === 'local' && ref.path === boundCompany?.workspacePath && (
+        <button
+          className="company-binding-settings"
+          onClick={() =>
+            useFixedSpacesStore.setState({
+              setup: { section: 'overview', generation: beginWorkspaceRuntimeTransition() },
+            })
+          }
+        >
+          关联设置
+        </button>
+      )}
       {ref.kind !== 'local' && <p>请先打开本地工作空间。</p>}
     </nav>
   )

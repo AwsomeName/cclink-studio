@@ -13,6 +13,7 @@ export type { LocalIdentity } from '@shared/ipc/identity'
 
 /** Activity Bar 面板类型 */
 export type ActivityPanel =
+  | 'workspace-home'
   | 'projects'
   | 'browser'
   | 'files'
@@ -32,6 +33,7 @@ export type ActivityPanel =
 
 /** Workbench Tab 类型 */
 export type TabType =
+  | 'workspace-home'
   | 'browser'
   | 'editor'
   | 'settings'

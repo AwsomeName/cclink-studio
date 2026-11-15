@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import { workspaceRefKey, type RemoteWorkspaceRef } from '@shared/workspace-ref'
 import type { CclinkRemoteSession } from '@shared/cclink'
-import { useCclinkStore, useTabStore, useUIStore } from '../../stores'
+import { useCclinkStore, useCommandStore, useTabStore } from '../../stores'
 import { IconSearch } from '../../components/common/Icons'
 import { useToastStore } from '../../components/common/Toast'
 import { writeRemoteConversationDragData } from '../agent-conversations/conversation-workbench'
@@ -100,10 +100,31 @@ function RemoteSessionRow({
   workspaceRef: RemoteWorkspaceRef
   active: boolean
 }): React.ReactElement {
-  const [pending, setPending] = useState<'stop' | 'delete' | 'archive' | null>(null)
+  const [pending, setPending] = useState<'open' | 'stop' | 'delete' | 'archive' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const running = session.status === 'active'
   const archived = session.status === 'archived'
+  const open = async (): Promise<void> => {
+    if (pending) return
+    setPending('open')
+    try {
+      const result = await useCommandStore
+        .getState()
+        .executeCommand('remoteAgent.openConversation', {
+          source: 'toolbar',
+          target: {
+            kind: 'remote-thread',
+            workspaceKey: workspaceRefKey(workspaceRef)!,
+            sessionId: session.id,
+            endpointId: workspaceRef.endpointId,
+            workspaceId: workspaceRef.workspaceId,
+          },
+        })
+      if (!result.ok) useToastStore.getState().show(result.message || '打开会话失败', 'error')
+    } finally {
+      setPending(null)
+    }
+  }
   const act = async (action: 'stop' | 'delete' | 'archive'): Promise<void> => {
     if (pending) return
     setPending(action)
@@ -146,15 +167,12 @@ function RemoteSessionRow({
         data-conversation-id={session.id}
         title={session.name}
         aria-current={active ? 'true' : undefined}
+        disabled={Boolean(pending)}
         draggable={!archived && !pending}
         onDragStart={(event) => {
           writeRemoteConversationDragData(event.dataTransfer, session.id, workspaceRef)
         }}
-        onClick={() => {
-          useCclinkStore.getState().selectSession(session.id)
-          void useCclinkStore.getState().loadMessages(session.id)
-          useUIStore.getState().showAgentChat()
-        }}
+        onClick={() => void open()}
       >
         <span
           className={`session-sidebar-status ${running ? 'running' : archived ? 'closed' : 'idle'}`}

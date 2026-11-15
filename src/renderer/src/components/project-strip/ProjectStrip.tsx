@@ -13,6 +13,14 @@ import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-c
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
+import { CompanySpaceDialog } from '../../features/workspace-open/CompanySpaceDialog'
+import {
+  useFixedSpacesStore,
+  refreshFixedSpaces,
+  openPersonalSpace,
+} from '../../features/workspace-open/fixed-spaces-store'
+import { enterCompanyWorkspace } from '../../features/company-workspace/company-workspace-commands'
+
 type DropPlacement = 'before' | 'after'
 
 function getProjectName(path: string): string {
@@ -34,13 +42,26 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
   return new Map(
     paths.map((path) => {
       const name = getProjectName(path)
-      return [path, counts.get(name) === 1 ? name : `${name} · ${getParentName(path)}`]
+      return [
+        path,
+        ['我的空间', '我的公司'].includes(name)
+          ? `${name} · 普通空间`
+          : counts.get(name) === 1
+            ? name
+            : `${name} · ${getParentName(path)}`,
+      ]
     }),
   )
 }
 
 export function ProjectStrip(): React.ReactElement {
-  const openProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
+  const spaces = useFixedSpacesStore((state) => state.spaces)
+  const allOpenProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
+  const fixedPaths = [spaces?.personal?.workspacePath, spaces?.company?.workspacePath]
+  const openProjectPaths = allOpenProjectPaths.filter((path) => !fixedPaths.includes(path))
+  useEffect(() => {
+    void refreshFixedSpaces().catch(() => {})
+  }, [])
   const reorderProject = useOpenProjectsStore((state) => state.reorderProject)
   const openRemoteWorkspaceRefs = useOpenProjectsStore((state) => state.openRemoteWorkspaceRefs)
   const recentWorkspaceRefs = useOpenProjectsStore((state) => state.recentWorkspaceRefs)
@@ -154,8 +175,11 @@ export function ProjectStrip(): React.ReactElement {
       if (fallbackLocal) {
         switched = await activateProject(fallbackLocal)
       } else {
-        await closeWorkspace()
-        switched = useWorkspaceStore.getState().activeWorkspaceRef.kind === 'global'
+        await openPersonalSpace().catch((error) => showToast(String(error), 'error'))
+        const active = useWorkspaceStore.getState().activeWorkspaceRef
+        switched =
+          active.kind === 'local' &&
+          active.path === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
         if (!switched) {
           showToast(useFsStore.getState().error || '项目关闭失败，已保留当前项目', 'error')
         }
@@ -205,6 +229,32 @@ export function ProjectStrip(): React.ReactElement {
 
   return (
     <div className="project-strip">
+      <CompanySpaceDialog />
+      <div className="fixed-space-entries" aria-label="固定空间">
+        {(['personal', 'company'] as const).map((role) => (
+          <button
+            key={role}
+            type="button"
+            className={`project-strip-item ${activePath && activePath === spaces?.[role]?.workspacePath ? 'active' : ''}`}
+            aria-current={
+              activePath && activePath === spaces?.[role]?.workspacePath ? 'page' : undefined
+            }
+            title={
+              spaces?.[role]?.workspacePath ||
+              (role === 'company' ? '连接已有公司或启用新公司' : '个人资料的默认空间')
+            }
+            disabled={workspaceBusy}
+            onClick={() => {
+              void (role === 'personal' ? openPersonalSpace() : enterCompanyWorkspace()).catch(
+                (error) => showToast(String(error), 'error'),
+              )
+            }}
+          >
+            <IconProjects size={14} />
+            <span>{role === 'personal' ? '我的空间' : '我的公司'}</span>
+          </button>
+        ))}
+      </div>
       <div className="project-strip-shell">
         <div
           ref={scrollRef}
@@ -343,17 +393,26 @@ export function ProjectStrip(): React.ReactElement {
             ref={historyButtonRef}
             className={`project-strip-history-button ${historyOpen ? 'active' : ''}`}
             type="button"
-            title="历史项目"
+            title="历史空间"
             onClick={toggleHistory}
           >
             <IconHistory size={13} />
-            <span>历史项目</span>
+            <span>历史空间</span>
           </button>
 
           {historyOpen && (
             <div className="project-history-popover" style={historyPosition}>
-              <div className="project-history-header">历史项目</div>
+              <div className="project-history-header">历史空间</div>
               <div className="project-history-list">
+                <button
+                  type="button"
+                  className="project-history-item"
+                  onClick={() => {
+                    void closeWorkspace().then(() => setHistoryOpen(false))
+                  }}
+                >
+                  进入未归档
+                </button>
                 {historyWorkspaceRefs.length > 0 ? (
                   historyWorkspaceRefs.map((ref) =>
                     ref.kind === 'local' ? (
@@ -389,7 +448,7 @@ export function ProjectStrip(): React.ReactElement {
                     ),
                   )
                 ) : (
-                  <div className="project-history-empty">暂无未打开的历史项目</div>
+                  <div className="project-history-empty">暂无未打开的历史空间</div>
                 )}
               </div>
             </div>

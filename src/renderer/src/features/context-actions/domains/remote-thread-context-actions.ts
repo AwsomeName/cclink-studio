@@ -46,15 +46,19 @@ export function createRemoteThreadContextCommands(): Command[] {
       label: '打开会话',
       contextOnly: true,
       category: '远程会话',
-      visible: (context) => {
-        const session = currentRemoteThread(context)
-        return Boolean(session && session.status !== 'archived')
-      },
+      visible: (context) => Boolean(currentRemoteThread(context)),
+      contextLabel: (context) =>
+        currentRemoteThread(context)?.status === 'archived' ? '恢复并打开会话' : '打开会话',
       action: async (context) => {
         const session = currentRemoteThread(context)
-        if (!session || session.status === 'archived') throw new Error('远程会话已不存在')
+        if (!session) throw new Error('远程会话已不存在')
         if (!currentRemoteWorkspace(context)) throw new Error('工作空间已切换')
         const workspaceTarget = captureActiveWorkspaceTarget()
+        if (session.status === 'archived') {
+          const restored = await useCclinkStore.getState().setSessionArchived(session.id, false)
+          if (!restored) throw new Error(useCclinkStore.getState().error || '远程会话恢复失败')
+          if (!isWorkspaceTargetCurrent(workspaceTarget)) return
+        }
         useCclinkStore.getState().selectSession(session.id)
         await useCclinkStore.getState().loadMessages(session.id)
         if (isWorkspaceTargetCurrent(workspaceTarget)) useUIStore.getState().showAgentChat()

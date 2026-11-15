@@ -232,6 +232,7 @@ export async function bootstrapMainProcessServices(
     runtime.trustedRendererGuard,
     runtime.settingsService,
     runtime.fileService,
+    () => runtime.companyWorkspaceService,
   )
   registerWorkbenchTabModelIpc(
     runtime.workbenchTabModel!,

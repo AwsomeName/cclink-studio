@@ -186,6 +186,27 @@ class WorkspaceStateWriteContractError extends Error {
 }
 
 export const workspaceStateIpcContracts = {
+  getFixedSpaces: bindLegacyNoArgs(workspaceStateIpc.getFixedSpaces),
+  ensurePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.ensurePersonalSpace),
+  listCompanySpaces: bindLegacyNoArgs(workspaceStateIpc.listCompanySpaces),
+  inspectCompanySpace: bindIpcParser(workspaceStateIpc.inspectCompanySpace, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  connectCompanySpace: bindIpcParser(workspaceStateIpc.connectCompanySpace, (args) =>
+    ipcArgs(
+      z
+        .object({
+          workspacePath: absolutePathSchema.optional(),
+          initializeName: z.string().trim().min(1).max(128).optional(),
+          replacePersonal: z.boolean().optional(),
+        })
+        .strict()
+        .parse(args[0]),
+    ),
+  ),
+  resolveFixedSpace: bindIpcParser(workspaceStateIpc.resolveFixedSpace, (args) =>
+    ipcArgs(z.enum(['personal', 'company']).parse(args[0])),
+  ),
   getDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.getDefaultWorkspace),
   ensureDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.ensureDefaultWorkspace),
   setDefaultWorkspace: bindIpcParser(workspaceStateIpc.setDefaultWorkspace, (args) =>

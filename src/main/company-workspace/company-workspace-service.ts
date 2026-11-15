@@ -38,6 +38,35 @@ export class CompanyWorkspaceError extends Error {
   }
 }
 export class CompanyWorkspaceService {
+  /** Compatibility probe: never creates, repairs, migrates, or opens other domains. */
+  static async describeExisting(
+    target: CompanyWorkspaceTarget,
+  ): Promise<{ name: string; enabled: boolean } | null> {
+    let path = await realpath(target.workspacePath)
+    if (path !== target.workspacePath) throw new Error('公司目录尚未规范化')
+    for (const segment of ['.cclink-studio', 'company-workspace', 'company.sqlite']) {
+      path = join(path, segment)
+      const info = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null
+        throw error
+      })
+      if (!info) return null
+      if (info.isSymbolicLink()) throw new Error('公司资料路径不能是符号链接，原资料已保留')
+    }
+    const db = new DatabaseSync(path, { readOnly: true })
+    try {
+      if (Number((db.prepare('PRAGMA user_version').get() as Row).user_version) !== 1)
+        throw new Error('公司数据版本不支持，原资料已保留')
+      const row = db.prepare('SELECT workspace_id,name,enabled FROM settings WHERE id=1').get() as
+        | Row
+        | undefined
+      if (!row || row.workspace_id !== target.workspaceId || typeof row.name !== 'string')
+        throw new Error('公司数据与原工作空间身份不一致，原资料已保留')
+      return { name: row.name.slice(0, 128), enabled: Boolean(row.enabled) }
+    } finally {
+      db.close()
+    }
+  }
   private queue: Promise<unknown> = Promise.resolve()
   private disposed = false
   constructor(private readonly sources: Sources) {}

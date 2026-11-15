@@ -1,3 +1,4 @@
+import { useFixedSpacesStore, openPersonalSpace } from '../../workspace-open/fixed-spaces-store'
 import type { Command } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
 import { getProjectCloseSuccessor, useOpenProjectsStore } from '../../../stores/open-projects-store'
@@ -88,6 +89,9 @@ export function createProjectContextCommands(): Command[] {
       action: async (context) => {
         const path = projectPath(context)
         if (!path) throw new Error('项目目标已失效')
+        const fixed = useFixedSpacesStore.getState().spaces
+        if (path === fixed?.personal?.workspacePath || path === fixed?.company?.workspacePath)
+          throw new Error('固定入口不能关闭')
         const currentActive = useWorkspaceStore.getState().activeWorkspaceRef
         const projectsStore = useOpenProjectsStore.getState()
         const isActive = currentActive.kind === 'local' && currentActive.path === path
@@ -96,14 +100,24 @@ export function createProjectContextCommands(): Command[] {
           return
         }
 
-        const nextPath = getProjectCloseSuccessor(projectsStore.openProjectPaths, path)
+        const nextPath = getProjectCloseSuccessor(
+          projectsStore.openProjectPaths.filter(
+            (item) =>
+              item !== fixed?.personal?.workspacePath && item !== fixed?.company?.workspacePath,
+          ),
+          path,
+        )
         if (nextPath) {
           if (await activateProject(nextPath)) useOpenProjectsStore.getState().removeProject(path)
           return
         }
 
-        await useFsStore.getState().closeWorkspace()
-        if (useWorkspaceStore.getState().activeWorkspaceRef.kind === 'global') {
+        await openPersonalSpace()
+        const active = useWorkspaceStore.getState().activeWorkspaceRef
+        if (
+          active.kind === 'local' &&
+          active.path === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
+        ) {
           useOpenProjectsStore.getState().removeProject(path)
         }
       },

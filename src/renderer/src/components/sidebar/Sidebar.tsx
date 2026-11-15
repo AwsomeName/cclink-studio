@@ -1,4 +1,3 @@
-import { CompanySidebar } from '../../features/company-workspace/CompanySidebar'
 import {
   useUIStore,
   useTabStore,
@@ -89,6 +88,8 @@ function getSidebarTitle(
   workspacePath: string | null,
 ): string {
   switch (activePanel) {
+    case 'workspace-home':
+      return '工作台'
     case 'projects':
       return '项目'
     case 'browser':
@@ -281,11 +282,7 @@ export function Sidebar(): React.ReactElement {
       )}
 
       <div className="sidebar-content">
-        {activePanel === 'company-workspace' ? (
-          <CompanySidebar />
-        ) : (
-          <ProjectSidebarContent activePanel={activePanel} />
-        )}
+        <ProjectSidebarContent activePanel={activePanel} />
       </div>
     </div>
   )

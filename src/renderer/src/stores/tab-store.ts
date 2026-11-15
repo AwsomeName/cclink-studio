@@ -372,7 +372,11 @@ export const useTabStore = create<TabState>((set, get) => ({
 
       // forceNew 跳过允许多开的 Tab 去重
       if (!forceNew) {
-        if (type === 'company-accounts' || type === 'company-workspace') {
+        if (
+          type === 'company-accounts' ||
+          type === 'company-workspace' ||
+          type === 'workspace-home'
+        ) {
           const existing = state.tabs.find(
             (tab) =>
               tab.type === type &&

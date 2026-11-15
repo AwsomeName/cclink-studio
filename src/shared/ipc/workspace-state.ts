@@ -188,7 +188,39 @@ export interface DefaultWorkspaceResult {
   errorCode?: 'DEFAULT_WORKSPACE_UNAVAILABLE'
 }
 
+export interface FixedSpaceRef {
+  workspacePath: string
+  projectId: string
+}
+export interface FixedSpaces {
+  version: 1
+  personal: FixedSpaceRef | null
+  company: FixedSpaceRef | null
+  legacyDefaultPath: string
+}
+export interface CompanySpaceCandidate {
+  workspacePath: string
+  projectId: string | null
+  state: 'company' | 'empty' | 'unavailable'
+  name?: string
+  enabled?: boolean
+  relatedData?: 'ledger' | 'manuscripts'
+  error?: string
+}
+export interface ConnectCompanySpaceInput {
+  /** Omitted only when explicitly creating a new company in the managed root. */
+  workspacePath?: string
+  initializeName?: string
+  replacePersonal?: boolean
+}
+
 export interface WorkspaceStateApiContract {
+  getFixedSpaces: () => Promise<FixedSpaces>
+  ensurePersonalSpace: () => Promise<FixedSpaces>
+  listCompanySpaces: () => Promise<CompanySpaceCandidate[]>
+  inspectCompanySpace: (workspacePath: string) => Promise<CompanySpaceCandidate>
+  connectCompanySpace: (input: ConnectCompanySpaceInput) => Promise<FixedSpaces>
+  resolveFixedSpace: (role: 'personal' | 'company') => Promise<DefaultWorkspaceResult>
   getDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
   ensureDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
   setDefaultWorkspace: (workspacePath: string) => Promise<DefaultWorkspaceResult>
@@ -216,6 +248,18 @@ export interface WorkspaceStateApiContract {
 }
 
 export const workspaceStateIpc = {
+  getFixedSpaces: defineIpcCall<[], FixedSpaces>('workspaceState:getFixedSpaces'),
+  ensurePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:ensurePersonalSpace'),
+  listCompanySpaces: defineIpcCall<[], CompanySpaceCandidate[]>('workspaceState:listCompanySpaces'),
+  inspectCompanySpace: defineIpcCall<[workspacePath: string], CompanySpaceCandidate>(
+    'workspaceState:inspectCompanySpace',
+  ),
+  connectCompanySpace: defineIpcCall<[input: ConnectCompanySpaceInput], FixedSpaces>(
+    'workspaceState:connectCompanySpace',
+  ),
+  resolveFixedSpace: defineIpcCall<[role: 'personal' | 'company'], DefaultWorkspaceResult>(
+    'workspaceState:resolveFixedSpace',
+  ),
   getDefaultWorkspace: defineIpcCall<[], DefaultWorkspaceResult>(
     'workspaceState:getDefaultWorkspace',
   ),

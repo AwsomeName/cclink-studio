@@ -104,6 +104,7 @@ export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
 
 const UI_STORAGE_KEY = 'cclink-studio-ui-state'
 const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
+  'workspace-home',
   'company-workspace',
   'company-accounts',
   'sessions',
