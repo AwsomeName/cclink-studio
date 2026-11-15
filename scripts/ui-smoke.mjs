@@ -268,7 +268,13 @@ async function ensureActivityPanel(page, panelId, title) {
     return { activePanel, sidebarVisible }
   })
   if (state.activePanel !== panelId || !state.sidebarVisible) {
-    await clickByTitle(page, title)
+    const bar = page.locator('.activity-bar')
+    const more = bar.locator('details.activity-more')
+    const button = bar.locator(`button[title="${title}"]`)
+    if ((await more.locator(`button[title="${title}"]`).count()) && !(await button.isVisible())) {
+      await more.locator('summary').click()
+    }
+    await button.click()
   }
 }
 
@@ -455,28 +461,30 @@ async function main() {
     }, separationWorkspace)
     assert(workspaceOpened, 'navigation separation fixture workspace did not open')
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 16, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 17, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
-        JSON.stringify(['工作', '资源', '流程']),
+        JSON.stringify(['工作', '经营', '流程', '资源', '更多工具']),
       'visible group headings missing',
     )
     const labels = [
-      '公司经营',
+      '工作台',
       '文件',
       '会话',
       '浏览器',
       '终端',
-      '角色',
-      '网站与账号',
-      '数据源',
+      '公司经营',
       '公司账目',
-      'CCLink 远程',
       '文章发布',
       '事务',
       '定时任务',
+      '网站与账号',
+      '角色',
+      '数据源',
+      '更多工具',
       '视频创作',
       '硬件生产',
+      'CCLink 远程',
       '设置',
     ]
     assert(
@@ -492,8 +500,10 @@ async function main() {
       }
     })
     assert(width.actual === width.reserved, `panel width mismatch: ${JSON.stringify(width)}`)
+    const more = bar.locator('details.activity-more')
+    if (!(await more.evaluate((element) => element.open))) await more.locator('summary').click()
     assert(
-      await bar.locator('.activity-bar-label').evaluateAll((labels) =>
+      await bar.locator('button .activity-bar-label').evaluateAll((labels) =>
         labels.every((label) => {
           const text = label.getBoundingClientRect()
           const button = label.parentElement.getBoundingClientRect()
@@ -699,7 +709,7 @@ async function main() {
     } finally {
       await page.setViewportSize({ width: 1440, height: 920 })
     }
-    return `15 separated activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
+    return `16 activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
   })
 
   await runCheck('workspace file and search boundaries survive a real project switch', async () => {
@@ -1610,7 +1620,7 @@ async function main() {
   })
 
   await runCheck('CCLink login is scoped to the remote entry and fails soft', async () => {
-    await clickByTitle(page, 'CCLink 远程')
+    await ensureActivityPanel(page, 'cclink', 'CCLink 远程')
     const service = await page.evaluate(() => window.cclinkStudio.auth.getServiceStatus())
     if (service.configured) {
       await page
