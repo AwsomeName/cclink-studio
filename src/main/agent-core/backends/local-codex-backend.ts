@@ -5,7 +5,11 @@ import type { ToolExecutionContext } from '../tools/types'
 import { filterToolsByScope, type AgentScope } from '../runtime/scope'
 import type { AgentEventHandler, AgentSendOptions, IAgentBackend } from './types'
 import { CodexAppServer, type CodexMessage } from './codex-app-server'
-import { assertNativeChatgptConfiguration } from './codex-runtime-policy'
+import {
+  CodexRuntimeError,
+  assertCodexPermissionBoundary,
+  assertNativeChatgptConfiguration,
+} from './codex-runtime-policy'
 import type { CodexRuntimeDiagnostic } from '../../../shared/codex-runtime'
 import { resolveProjectedSymlinkTarget } from './claude-native-scheduling-policy'
 
@@ -101,11 +105,12 @@ export class LocalCodexBackend implements IAgentBackend {
     this.currentText = ''
     this.items.clear()
     this.cwd = resolve(options.workspacePath || this.getWorkspacePath?.() || tmpdir())
+    const unattendedReads = this.toolHost.allowsUnattendedNativeReads()
     this.nativeToolsAllowed =
       this.scope.kind === 'all' &&
       !options.forceVisibleBrowser &&
       !options.disableBuiltinTools &&
-      this.toolHost.allowsUnattendedNativeReads()
+      unattendedReads
     const workspaceKey = options.resourceContext?.workspace.key ?? options.workspacePath ?? null
     this.context = {
       conversationId: options.conversationId,
@@ -125,6 +130,13 @@ export class LocalCodexBackend implements IAgentBackend {
       (error) => this.finish?.(error),
     )
     this.server = server
+    server.recordNativeTools({
+      allowed: this.nativeToolsAllowed,
+      scopeAll: this.scope.kind === 'all',
+      forceVisibleBrowser: Boolean(options.forceVisibleBrowser),
+      disableBuiltinTools: Boolean(options.disableBuiltinTools),
+      unattendedReads,
+    })
     try {
       await server.start(this.cwd)
       const account = await server.request('account/read', { refreshToken: false })
@@ -177,6 +189,9 @@ export class LocalCodexBackend implements IAgentBackend {
       config['sandbox_workspace_write.exclude_slash_tmp'] = true
       const params = {
         cwd: this.cwd,
+        // Resume otherwise inherits persisted roots and can re-add writable directories
+        // despite sandbox_workspace_write.writable_roots being explicitly empty.
+        runtimeWorkspaceRoots: [this.cwd],
         modelProvider: 'openai',
         approvalPolicy: 'untrusted',
         approvalsReviewer: 'user',
@@ -203,28 +218,39 @@ export class LocalCodexBackend implements IAgentBackend {
         ...params,
         ...(this.sessionId ? { threadId: this.sessionId, excludeTurns: true } : {}),
       })
-      const sandbox = record(response.sandbox)
+      server.recordValidation('provider')
       if (response.modelProvider !== 'openai')
-        throw new Error('Codex 未使用官方账号服务，已停止运行')
-      if (
-        response.approvalPolicy !== 'untrusted' ||
-        response.approvalsReviewer !== 'user' ||
-        sandbox.type !== (this.nativeToolsAllowed ? 'workspaceWrite' : 'readOnly') ||
-        sandbox.networkAccess !== false ||
-        (Array.isArray(sandbox.writableRoots) && sandbox.writableRoots.length > 0)
-      ) {
-        throw new Error(
-          '本机 Codex 未应用 Studio 要求的权限边界，已停止运行；请检查 Codex 版本和管理策略。',
+        throw new CodexRuntimeError(
+          'CODEX_PROVIDER_MISMATCH',
+          'Codex 未使用官方账号服务，已停止运行。',
+          'run-failed',
+          'thread',
         )
-      }
+      server.recordValidation('permissions')
+      assertCodexPermissionBoundary(response, this.nativeToolsAllowed)
+      server.recordValidation('session-id')
       const establishedSessionId = text(record(response.thread).id)
-      if (!establishedSessionId) throw new Error('Codex 未返回有效会话标识')
+      if (!establishedSessionId)
+        throw new CodexRuntimeError(
+          'CODEX_THREAD_ID_MISSING',
+          'Codex 未返回有效会话标识，已停止运行。',
+          'run-failed',
+          'thread',
+        )
+      server.recordValidation('tools')
       const status = await server.request('mcpServerStatus/list', {
         threadId: establishedSessionId,
         limit: 100,
         detail: 'toolsAndAuthOnly',
       })
       const servers = Array.isArray(status.data) ? status.data.map(record) : []
+      server.recordTools({
+        studioPresent: servers.some((entry) => entry.name === 'cclink_studio'),
+        externalWithTools: servers.filter(
+          (entry) => entry.name !== 'cclink_studio' && Object.keys(record(entry.tools)).length > 0,
+        ).length,
+        hasNextCursor: Boolean(status.nextCursor),
+      })
       if (
         status.nextCursor ||
         !servers.some((entry) => entry.name === 'cclink_studio') ||
@@ -232,7 +258,12 @@ export class LocalCodexBackend implements IAgentBackend {
           (entry) => entry.name !== 'cclink_studio' && Object.keys(record(entry.tools)).length > 0,
         )
       ) {
-        throw new Error('Codex 工具隔离检查失败，已停止运行')
+        throw new CodexRuntimeError(
+          'CODEX_TOOL_ISOLATION_FAILED',
+          'Codex 工具隔离检查失败，已停止运行。',
+          'run-failed',
+          'tools',
+        )
       }
       if (this.cancelled) return
       this.sessionId = establishedSessionId
@@ -258,7 +289,11 @@ export class LocalCodexBackend implements IAgentBackend {
       this.turnId = text(record(turn.turn).id)
       if (this.cancelled) return
       await completed
-      succeeded = true
+      if (!this.cancelled) {
+        server.markRunSucceeded()
+        this.diagnostic = server.getDiagnostic()
+        succeeded = true
+      }
     } catch (error) {
       if (!this.cancelled) {
         this.diagnostic = server.getDiagnostic(error)

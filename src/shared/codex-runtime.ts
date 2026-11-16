@@ -18,6 +18,29 @@ export type CodexDiagnosticStage =
   | 'turn'
 
 /** Allowlisted facts only: never include account identity, credentials, prompts or stderr. */
+export interface CodexPermissionFacts {
+  modelProvider: string
+  approvalPolicy: string
+  approvalsReviewer: string
+  sandboxType: string
+  networkAccess: boolean | string
+  writableRootsCount: number | string
+  writableRootsMatchingCwd: number
+  runtimeRootsCount: number | string
+  runtimeRootsMatchingCwd: number
+  excludeTmpdirEnvVar: boolean | string
+  excludeSlashTmp: boolean | string
+  cwdMatchesRequest: boolean
+}
+
+export interface CodexThreadDiagnostic {
+  method: 'thread/start' | 'thread/resume'
+  requested: CodexPermissionFacts
+  returned: CodexPermissionFacts | null
+  sameSession: boolean | null
+  mismatches: string[]
+}
+
 export interface CodexRuntimeDiagnostic {
   checkedAt: string
   state: CodexDiagnosticState
@@ -31,6 +54,20 @@ export interface CodexRuntimeDiagnostic {
   auth: 'not-checked' | 'missing' | 'chatgpt' | 'unsupported'
   exitCode: number | null
   signal: string | null
+  runtimeVersion?: string | null
+  customCodexHome?: boolean
+  requestMethod?: string
+  validationStep?: 'provider' | 'permissions' | 'session-id' | 'tools'
+  modelRequestSent?: boolean
+  nativeTools?: {
+    allowed: boolean
+    scopeAll: boolean
+    forceVisibleBrowser: boolean
+    disableBuiltinTools: boolean
+    unattendedReads: boolean
+  }
+  thread?: CodexThreadDiagnostic
+  tools?: { studioPresent: boolean; externalWithTools: number; hasNextCursor: boolean }
 }
 
 export const CODEX_DIAGNOSTIC_LABELS: Record<CodexDiagnosticState, string> = {

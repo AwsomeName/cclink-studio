@@ -1,4 +1,5 @@
 import type { CodexDiagnosticStage, CodexDiagnosticState } from '../../../shared/codex-runtime'
+import { codexPermissionMismatches } from './codex-permission-diagnostics'
 
 export class CodexRuntimeError extends Error {
   constructor(
@@ -75,6 +76,48 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {}
+}
+
+/** Compare the effective native policy before any model turn; export only fixed labels. */
+export function assertCodexPermissionBoundary(
+  response: Record<string, unknown>,
+  nativeToolsAllowed: boolean,
+): void {
+  const sandbox = record(response.sandbox)
+  const expectedSandbox = nativeToolsAllowed ? 'workspaceWrite' : 'readOnly'
+  const enumLabel = (value: unknown, allowed: string[]) =>
+    value === undefined
+      ? 'missing'
+      : typeof value === 'string' && allowed.includes(value)
+        ? value
+        : 'other'
+  const failures: string[] = []
+  const mismatches = codexPermissionMismatches(response, nativeToolsAllowed)
+  if (mismatches.includes('approvalPolicy'))
+    failures.push(
+      `approvalPolicy: expected=untrusted, actual=${enumLabel(response.approvalPolicy, ['untrusted', 'on-failure', 'on-request', 'never'])}`,
+    )
+  if (mismatches.includes('approvalsReviewer'))
+    failures.push(
+      `approvalsReviewer: expected=user, actual=${enumLabel(response.approvalsReviewer, ['user', 'guardian'])}`,
+    )
+  if (mismatches.includes('sandbox.type'))
+    failures.push(
+      `sandbox.type: expected=${expectedSandbox}, actual=${enumLabel(sandbox.type, ['workspaceWrite', 'readOnly', 'dangerFullAccess', 'externalSandbox'])}`,
+    )
+  if (mismatches.includes('sandbox.networkAccess'))
+    failures.push(
+      `sandbox.networkAccess: expected=false, actual=${sandbox.networkAccess === true ? 'true' : sandbox.networkAccess === undefined ? 'missing' : 'other'}`,
+    )
+  if (mismatches.includes('sandbox.writableRoots'))
+    failures.push('sandbox.writableRoots: expected=empty, actual=non-empty')
+  if (failures.length)
+    throw new CodexRuntimeError(
+      'CODEX_PERMISSION_BOUNDARY_MISMATCH',
+      `本机 Codex 返回的权限与 Studio 要求不一致，已在发送模型请求前停止。${failures.join('；')}。原会话已保留。`,
+      'run-failed',
+      'thread',
+    )
 }
 
 export function assertNativeChatgptConfiguration(

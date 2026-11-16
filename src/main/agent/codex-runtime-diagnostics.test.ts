@@ -3,7 +3,11 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { probeCodexRuntime } from './codex-runtime-diagnostics'
 import { CodexAppServer } from '../agent-core/backends/codex-app-server'
-import { codexRpcError } from '../agent-core/backends/codex-runtime-policy'
+import {
+  codexRpcError,
+  assertCodexPermissionBoundary,
+} from '../agent-core/backends/codex-runtime-policy'
+import { formatCodexDiagnostic } from '../../shared/codex-diagnostic-report'
 
 const fixture = vi.hoisted(() => ({
   missing: false,
@@ -16,6 +20,7 @@ const fixture = vi.hoisted(() => ({
   calls: [] as string[],
   account: { type: 'chatgpt', email: 'private@example.test' } as unknown,
   config: {} as Record<string, unknown>,
+  threadResult: {} as Record<string, unknown>,
   children: [] as EventEmitter[],
 }))
 vi.mock('node:fs/promises', async (original) => ({
@@ -63,9 +68,13 @@ vi.mock('node:child_process', () => ({
         const result =
           message.method === 'account/read'
             ? { account: fixture.account, requiresOpenaiAuth: true }
-            : message.method === 'config/read'
-              ? { config: fixture.config }
-              : {}
+            : message.method === 'initialize'
+              ? { userAgent: 'cclink_studio/0.169.0-alpha.11.1 (SECRET_HOST)' }
+              : message.method.startsWith('thread/')
+                ? fixture.threadResult
+                : message.method === 'config/read'
+                  ? { config: fixture.config }
+                  : {}
         child.stdout.write(
           JSON.stringify({
             id: message.id,
@@ -93,12 +102,125 @@ beforeEach(() => {
     children: [],
     account: { type: 'chatgpt', email: 'private@example.test' },
     config: {},
+    threadResult: {},
   })
   vi.stubEnv('PATH', '/fixture')
 })
 afterEach(() => vi.unstubAllEnvs())
 
 describe('read-only Codex diagnostics through the actual app-server transport', () => {
+  it.each([
+    [{ approvalPolicy: 'never' }, 'approvalPolicy'],
+    [{ approvalsReviewer: undefined }, 'approvalsReviewer'],
+    [{ sandbox: { type: 'readOnly', networkAccess: false } }, 'sandbox.type'],
+    [{ sandbox: { type: 'workspaceWrite', networkAccess: true } }, 'sandbox.networkAccess'],
+    [
+      {
+        sandbox: { type: 'workspaceWrite', networkAccess: false, writableRoots: ['/SECRET_PATH'] },
+      },
+      'sandbox.writableRoots',
+    ],
+    [{ approvalPolicy: { secret: 'SECRET_CONFIG' } }, 'approvalPolicy'],
+  ])(
+    'exports actual request/response differences through the report for %j',
+    async (overrides, field) => {
+      const server = new CodexAppServer(
+        () => {},
+        () => {},
+      )
+      fixture.threadResult = {
+        thread: { id: 'SECRET_SESSION' },
+        cwd: '/workspace',
+        modelProvider: 'openai',
+        approvalPolicy: 'untrusted',
+        approvalsReviewer: 'user',
+        sandbox: { type: 'workspaceWrite', networkAccess: false, writableRoots: [] },
+        ...overrides,
+      }
+      try {
+        await server.start('/workspace')
+        const result = await server.request('thread/resume', {
+          threadId: 'SECRET_SESSION',
+          cwd: '/workspace',
+          modelProvider: 'openai',
+          approvalPolicy: 'untrusted',
+          approvalsReviewer: 'user',
+          sandbox: 'workspace-write',
+          runtimeWorkspaceRoots: ['/workspace'],
+          developerInstructions: 'SECRET_PROMPT',
+          config: {
+            'sandbox_workspace_write.writable_roots': [],
+            'sandbox_workspace_write.network_access': false,
+            mcp_servers: { private: { url: 'http://127.0.0.1/mcp?session=SECRET_TOKEN' } },
+          },
+        })
+        server.recordValidation('permissions')
+        let failure: unknown
+        try {
+          assertCodexPermissionBoundary(result, true)
+        } catch (error) {
+          failure = error
+        }
+        const diagnostic = server.getDiagnostic(failure)
+        expect(diagnostic).toMatchObject({
+          code: 'CODEX_PERMISSION_BOUNDARY_MISMATCH',
+          runtimeVersion: '0.169.0-alpha.11.1',
+          requestMethod: 'thread/resume',
+          validationStep: 'permissions',
+          modelRequestSent: false,
+          thread: { sameSession: true, mismatches: expect.arrayContaining([field]) },
+        })
+        const report = formatCodexDiagnostic(diagnostic, 'run')
+        expect(report).toContain('请求权限：')
+        expect(report).toContain('返回权限：')
+        expect(report).toContain(`权限不匹配项：${field}`)
+        expect(report).toContain('已发送模型请求：否')
+        expect(report).not.toContain('SECRET')
+        expect(JSON.stringify(diagnostic)).not.toContain('SECRET')
+        expect(fixture.calls).not.toContain('turn/start')
+      } finally {
+        await server.stop()
+      }
+    },
+  )
+  it('retains a complete success snapshot and treats absent read-only write fields as normal', async () => {
+    const server = new CodexAppServer(
+      () => {},
+      () => {},
+    )
+    fixture.threadResult = {
+      thread: { id: 'SECRET_SESSION' },
+      cwd: '/workspace',
+      modelProvider: 'openai',
+      approvalPolicy: 'untrusted',
+      approvalsReviewer: 'user',
+      sandbox: { type: 'readOnly', networkAccess: false },
+    }
+    try {
+      await server.start('/workspace')
+      await server.request('thread/start', {
+        cwd: '/workspace',
+        modelProvider: 'openai',
+        sandbox: 'read-only',
+        config: {},
+      })
+      await server.request('turn/start', {
+        threadId: 'SECRET_SESSION',
+        input: [{ text: 'SECRET_PROMPT' }],
+      })
+      server.markRunSucceeded()
+      const diagnostic = server.getDiagnostic()
+      expect(diagnostic).toMatchObject({
+        code: 'CODEX_RUN_SUCCEEDED',
+        modelRequestSent: true,
+        thread: { mismatches: [], returned: { writableRootsCount: 'missing' } },
+      })
+      expect(formatCodexDiagnostic(diagnostic, 'run')).toContain('本次 Codex 执行成功')
+      expect(JSON.stringify(diagnostic)).not.toContain('SECRET')
+    } finally {
+      await server.stop()
+    }
+  })
   it.each([
     ['no rollout found for thread id SECRET_THREAD', 'CODEX_THREAD_NOT_FOUND'],
     ['no rollout found for conversation id SECRET_THREAD', 'CODEX_THREAD_NOT_FOUND'],

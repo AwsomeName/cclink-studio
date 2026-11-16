@@ -24,6 +24,7 @@
 | 会话记录缺失           | CODEX_THREAD_NOT_FOUND                      | thread/resume 明确返回找不到原生 rollout；不推定已被删除 |
 | 会话已归档             | CODEX_THREAD_ARCHIVED                       | thread/resume 明确返回归档状态                          |
 | 会话标识无效           | CODEX_THREAD_ID_INVALID                     | thread/resume 明确拒绝原生 thread ID                    |
+| 权限边界不匹配         | CODEX_PERMISSION_BOUNDARY_MISMATCH          | 原生会话响应通过协议层，但有效权限未通过 Studio 校验     |
 | 启动及本地登录检查通过 | CODEX_READY                                  | 程序握手、文件登录方式和全局提供商检查通过               |
 
 独立探测在临时目录执行，不验证某个工作空间配置、模型联网、登录凭证是否被远端撤销或账号
@@ -93,3 +94,48 @@ CCLINK_CODEX_RESUME_REAL_SMOKE=1 pnpm exec vitest run src/main/agent-core/backen
 原消息；成功需看到回复并保持原会话连续性，失败则复制完整诊断日志中的当前会话运行结果，
 按明确错误码继续处理。不要把全局 `CODEX_READY` 当作原会话恢复成功，也不要删除历史或
 自动换 thread 来掩盖恢复错误。本次未发布版本、未操作另一台电脑的会话数据。
+
+### 0.1.146 后续故障与应用内一次取证
+
+故障 Mac 在 2026-11-16 20:03（北京时间）的重试进入了 thread 响应后的权限校验分支，
+尚未发送模型请求。后续检查表明：相同 Codex 版本的新建临时会话权限正常；原会话保存的
+runtime roots 只有当前工作区、路径匹配。实际不匹配项尚未取得，不能宣称原故障已修复。
+
+新版的用户验收动作：在原 Studio 会话发送消息，失败后直接点击「复制完整诊断日志」。
+无需终端脚本，当前会话记录必须一次包含：
+
+- 实际使用的程序路径、从同一进程握手提取的 Codex 版本、是否自定义 CODEX_HOME。
+- 当前请求方法、provider/permissions/session-id/tools 检查点、是否已发送模型请求。
+- 原生工具是否开启及 all scope、可视浏览器约束、禁用内建工具、无需确认的读取四项判定事实。
+- thread/start 或 thread/resume 的请求权限、返回权限、所有未通过原有校验的字段，以及恢复是否保留同一原生 Session。
+- 审批策略/负责人、沙箱类型、网络开关、写入根目录与 runtime roots 的数量及与请求工作区匹配数、临时目录排除标记。
+- 工具初始化到达时，Studio MCP 是否存在、有工具的外部服务数量、是否有下一页。
+
+数据来自实际请求与响应，不另起探测来代替运行结果。目录只输出数量和匹配关系；未知枚举
+只输出类型标签，不导出路径、Session ID、开发者指令、模型输入、MCP URL、认证或配置正文。
+缺失/空值/类型不符分别显示；只读沙箱缺少写入字段不自动视为失败。权限报告与拦截使用同一
+比较函数，保留原保护条件。provider、Session ID、工具隔离失败使用独立错误码。
+
+另有已独立复现的边界缺陷：旧 runtime roots 中的额外目录会在恢复时重回可写列表。
+本次恢复请求显式限定 runtimeWorkspaceRoots=[cwd]，通过 experimentalApi 协议能力启用
+该字段；不放开 runtime 功能、审批或网络限制。这个修复不作为原故障已解决的证据。
+
+工程验证入口：
+
+```bash
+pnpm exec vitest run src/main/agent/codex-runtime-diagnostics.test.ts src/main/agent-core/backends/local-codex-lifecycle.test.ts
+CCLINK_CODEX_RESUME_REAL_SMOKE=1 pnpm exec vitest run src/main/agent-core/backends/codex-resume-real.test.ts
+pnpm build
+node scripts/codex-permission-diagnostics-ui-smoke.mjs
+```
+
+真实 Codex 测试覆盖只读和写入两种跨进程连续对话（会使用账号额度），以及隔离合成历史的
+旧目录继承对照（不调用模型）。UI smoke 使用真实 Electron/UI/IPC/stdio 和确定性 Codex
+fixture，首轮成功、同 Session 恢复返回 guardian/networkAccess=true 后被拦截，再从真实
+复制按钮验证完整报告和独立 CODEX_READY 探测同时存在。它不代表故障 Mac 用户验收完成。
+
+2026-11-16 发布前验证：隔离工作树构建/类型检查通过，57 项受影响与真实 Codex 测试通过；
+取消状态补测 21 项生命周期测试通过。真实 Electron 复制入口验证通过，证据位于
+`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-codex-policy-ui-Ls743y`，
+包含 copied-report.md 和 permission-failure.png。模拟权限拒绝没有发出第二轮模型请求，
+报告保留 guardian 与 networkAccess=true 两个不匹配项及单独的 CODEX_READY 探测。

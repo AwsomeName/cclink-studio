@@ -12,7 +12,9 @@ const fake = vi.hoisted(() => ({
   accountType: 'chatgpt',
   requiresOpenaiAuth: true,
   configExtras: {} as Record<string, unknown>,
+  policyExtras: {} as Record<string, unknown>,
   stop: vi.fn(async () => {}),
+  markRunSucceeded: vi.fn(),
 }))
 vi.mock('./codex-app-server', () => ({
   CodexAppServer: class {
@@ -22,6 +24,12 @@ vi.mock('./codex-app-server', () => ({
     async start() {}
     recordAccount() {}
     markReady() {}
+    markRunSucceeded() {
+      fake.markRunSucceeded()
+    }
+    recordNativeTools() {}
+    recordValidation() {}
+    recordTools() {}
     getDiagnostic() {
       return undefined
     }
@@ -54,6 +62,7 @@ vi.mock('./codex-app-server', () => ({
             networkAccess: false,
             writableRoots: [],
           },
+          ...fake.policyExtras,
         }
       if (method === 'mcpServerStatus/list') return { data: [{ name: 'cclink_studio', tools: {} }] }
       return { turn: { id: 'native-turn' } }
@@ -106,10 +115,65 @@ beforeEach(() => {
   fake.accountType = 'chatgpt'
   fake.requiresOpenaiAuth = true
   fake.configExtras = {}
+  fake.policyExtras = {}
   fake.stop.mockReset().mockResolvedValue(undefined)
+  fake.markRunSucceeded.mockReset()
 })
 
 describe('Codex lifecycle and authorization', () => {
+  it('pins runtime roots to the current workspace on both create and resume', async () => {
+    const { backend } = fixture()
+    for (const method of ['thread/start', 'thread/resume']) {
+      fake.messages = []
+      const run = backend.sendMessage('continue', { workspacePath: '/current-workspace' })
+      await started()
+      expect(fake.messages.find((message) => message.method === method)?.params).toMatchObject({
+        cwd: '/current-workspace',
+        runtimeWorkspaceRoots: ['/current-workspace'],
+        sandbox: 'workspace-write',
+        config: { 'sandbox_workspace_write.writable_roots': [] },
+      })
+      complete()
+      await run
+    }
+  })
+  it.each([
+    [{ approvalPolicy: 'never' }, 'approvalPolicy'],
+    [{ approvalsReviewer: undefined }, 'approvalsReviewer'],
+    [{ approvalsReviewer: 'guardian' }, 'approvalsReviewer'],
+    [{ sandbox: { type: 'dangerFullAccess', networkAccess: false } }, 'sandbox.type'],
+    [{ sandbox: { type: 'workspaceWrite', networkAccess: true } }, 'sandbox.networkAccess'],
+    [
+      {
+        sandbox: { type: 'workspaceWrite', networkAccess: false, writableRoots: ['/SECRET_PATH'] },
+      },
+      'sandbox.writableRoots',
+    ],
+    [{ approvalPolicy: { secret: 'SECRET_CREDENTIAL' } }, 'approvalPolicy'],
+  ])(
+    'reports the mismatched permission and stops before tools/model: %j',
+    async (policy, field) => {
+      fake.policyExtras = policy
+      const { backend, host } = fixture()
+      backend.setSessionId('previous-thread')
+      const error = await backend.sendMessage('continue').catch((error: unknown) => error)
+      expect(error).toMatchObject({
+        code: 'CODEX_PERMISSION_BOUNDARY_MISMATCH',
+        stage: 'thread',
+        state: 'run-failed',
+      })
+      expect((error as Error).message).toContain(field)
+      expect((error as Error).message).not.toContain('SECRET')
+      expect(
+        fake.messages.some((m) =>
+          ['turn/start', 'mcpServerStatus/list', 'thread/start'].includes(m.method),
+        ),
+      ).toBe(false)
+      expect(backend.getSessionId()).toBe('previous-thread')
+      expect(host.cancelToolSession).toHaveBeenCalledWith('fixture-session')
+      expect(fake.stop).toHaveBeenCalled()
+    },
+  )
   it('does not bind an unusable native Session when tool initialization fails', async () => {
     fake.fail = 'mcpServerStatus/list'
     const { backend } = fixture()
@@ -275,6 +339,7 @@ describe('Codex lifecycle and authorization', () => {
     expect(host.cancelToolSession).toHaveBeenCalledTimes(1)
     expect(backend.getStatus().connected).toBe(false)
     expect(events.mock.calls.some(([type]) => type === 'complete')).toBe(false)
+    expect(fake.markRunSucceeded).not.toHaveBeenCalled()
   })
 
   it('preserves a failed resume reference instead of silently starting a different thread', async () => {

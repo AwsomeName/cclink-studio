@@ -8,6 +8,7 @@ import { claudeProcessCommand } from '../runtime/claude-process-launch'
 import { sanitizeDiagnosticText } from '../../../shared/diagnostics'
 import type { CodexDiagnosticStage, CodexRuntimeDiagnostic } from '../../../shared/codex-runtime'
 import { CodexRuntimeError, codexRpcError } from './codex-runtime-policy'
+import { codexPermissionFacts, codexPermissionMismatches } from './codex-permission-diagnostics'
 
 export interface CodexMessage {
   id?: number | string
@@ -116,6 +117,8 @@ export class CodexAppServer {
       timer: ReturnType<typeof setTimeout>
       method: string
       stage: CodexDiagnosticStage
+      cwd?: string
+      sessionId?: string
     }
   >()
 
@@ -155,6 +158,24 @@ export class CodexAppServer {
         : 'unsupported'
   }
 
+  recordNativeTools(facts: NonNullable<CodexRuntimeDiagnostic['nativeTools']>): void {
+    this.diagnostic.nativeTools = { ...facts }
+  }
+
+  recordValidation(step: NonNullable<CodexRuntimeDiagnostic['validationStep']>): void {
+    this.diagnostic.validationStep = step
+  }
+
+  recordTools(facts: NonNullable<CodexRuntimeDiagnostic['tools']>): void {
+    this.diagnostic.tools = { ...facts }
+  }
+
+  markRunSucceeded(): void {
+    this.diagnostic.state = 'ready'
+    this.diagnostic.code = 'CODEX_RUN_SUCCEEDED'
+    this.diagnostic.message = '本次 Codex 模型执行已完成。'
+  }
+
   markReady(): void {
     this.diagnostic.state = 'ready'
     this.diagnostic.code = 'CODEX_READY'
@@ -172,6 +193,8 @@ export class CodexAppServer {
     this.diagnostic.stage = 'spawn'
     if (this.closed) throw new Error('Codex 运行已取消')
     const env = codexEnvironment()
+    this.diagnostic.customCodexHome = Boolean(env.CODEX_HOME)
+    this.diagnostic.modelRequestSent = false
     const args = [
       'app-server',
       '--listen',
@@ -255,12 +278,41 @@ export class CodexAppServer {
           pending.reject(
             codexRpcError(message.error.code, message.error.message, pending.stage, pending.method),
           )
-        else pending.resolve(message.result)
+        else {
+          if (
+            (pending.method === 'thread/start' || pending.method === 'thread/resume') &&
+            pending.cwd &&
+            this.diagnostic.thread
+          ) {
+            const response =
+              message.result && typeof message.result === 'object'
+                ? (message.result as Record<string, unknown>)
+                : {}
+            const thread = response.thread as { id?: unknown } | undefined
+            this.diagnostic.thread.returned = codexPermissionFacts(response, pending.cwd)
+            this.diagnostic.thread.sameSession =
+              pending.method === 'thread/resume' ? thread?.id === pending.sessionId : null
+            this.diagnostic.thread.mismatches = codexPermissionMismatches(
+              response,
+              this.diagnostic.thread.requested.sandboxType === 'workspace-write',
+            )
+          }
+          pending.resolve(message.result)
+        }
       } else this.onMessage(message)
     })
-    await this.request('initialize', {
+    const initialized = await this.request('initialize', {
       clientInfo: { name: 'cclink_studio', title: 'CCLink Studio', version: '1' },
+      // Required by runtimeWorkspaceRoots on thread start/resume. This opts into
+      // protocol fields only; runtime feature flags and approval checks stay restricted.
+      capabilities: { experimentalApi: true },
     })
+    this.diagnostic.runtimeVersion =
+      typeof initialized.userAgent === 'string'
+        ? (initialized.userAgent.match(
+            /^cclink_studio\/([0-9][0-9A-Za-z.+-]{0,80})(?:[ )]|$)/,
+          )?.[1] ?? null)
+        : null
     this.write({ method: 'initialized', params: {} })
   }
 
@@ -279,6 +331,18 @@ export class CodexAppServer {
       'turn/start': 'turn',
     }
     if (stages[method]) this.diagnostic.stage = stages[method]
+    if (stages[method]) this.diagnostic.requestMethod = method
+    const threadRequest = method === 'thread/start' || method === 'thread/resume'
+    const cwd = threadRequest && typeof params.cwd === 'string' ? params.cwd : undefined
+    if (threadRequest && cwd) {
+      this.diagnostic.thread = {
+        method,
+        requested: codexPermissionFacts(params, cwd, true),
+        returned: null,
+        sameSession: null,
+        mismatches: [],
+      }
+    }
     const stage = this.diagnostic.stage
     const id = ++this.sequence
     return new Promise<T>((resolve, reject) => {
@@ -299,7 +363,11 @@ export class CodexAppServer {
         timer,
         method,
         stage,
+        cwd,
+        sessionId:
+          threadRequest && typeof params.threadId === 'string' ? params.threadId : undefined,
       })
+      if (method === 'turn/start') this.diagnostic.modelRequestSent = true
       this.write({ id, method, params })
     })
   }
