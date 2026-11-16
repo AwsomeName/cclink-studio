@@ -1,0 +1,37 @@
+
+ RUN  v3.2.6 /Users/apple/Desktop/cclink-dev/cclink-studio
+
+ ❯ src/renderer/src/features/local-tts/tts-controller.test.ts (5 tests | 1 failed) 31ms
+   ✓ TTS audio transport races > retries an audio fetch interrupted by a preference command 18ms
+   ✓ TTS audio transport races > never plays a late audio response after stop 3ms
+   ✓ TTS audio transport races > does not let an old snapshot replay audio while stop awaits its fresh snapshot 3ms
+   ✓ TTS audio transport races > opens first-use setup for a native menu request without reopening after dismissal 1ms
+   × TTS audio transport races > lets a new source play without waiting for an older unresolved content request 5ms
+     → expected [ TestAudio{ paused: true, …(9) } ] to have a length of 2 but got 1
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/renderer/src/features/local-tts/tts-controller.test.ts > TTS audio transport races > lets a new source play without waiting for an older unresolved content request
+AssertionError: expected [ TestAudio{ paused: true, …(9) } ] to have a length of 2 but got 1
+
+- Expected
++ Received
+
+- 2
++ 1
+
+ ❯ src/renderer/src/features/local-tts/tts-controller.test.ts:165:23
+    163|     const first = controller.startTts(input)
+    164|     await controller.startTts(input)
+    165|     expect(instances).toHaveLength(2)
+       |                       ^
+    166|     expect(instances[1].play).toHaveBeenCalledTimes(1)
+    167|     stale.resolve({ok:false,error:{code:'CANCELLED',message:'cancelled…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  22:02:03
+   Duration  288ms (transform 31ms, setup 0ms, collect 19ms, tests 31ms, environment 0ms, prepare 56ms)

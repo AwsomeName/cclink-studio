@@ -69,6 +69,8 @@
 - `docs/features/agent-follow-up-actions.md`：Agent 后续消息产品规则与实现边界；本地 Claude Code 已支持入队、补充当前任务和停止后执行。
 - `docs/testing/agent-follow-up-actions.md`：本地真实 Runtime 的补充与停止后执行证据、复验动作及未覆盖范围。
 - `docs/design/agent-follow-up-actions/README.md`：对应交互效果图、浅深色及停止/切换/远程能力边界截图，均为设计示意。
+- `docs/features/local-tts.md`：Kokoro 本地朗读、MD/网页/对话入口与底栏播放器；真实 Electron 自动验收已通过，真人听感待签收。
+- `docs/testing/local-tts.md`：模型实测、应用验收证据、复验命令与真人操作步骤。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
 - `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
 - `docs/features/detachable-workbench-tabs.md`：方案、P0a/P0b 与 ADR 0017 已通过；Browser-only M1

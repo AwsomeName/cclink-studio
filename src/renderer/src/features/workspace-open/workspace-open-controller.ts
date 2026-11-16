@@ -3,6 +3,7 @@ import { useCclinkStore } from '../../stores/cclink-store'
 import { useFsStore } from '../../stores/fs-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
 import { confirmRemoteWorkspaceRef } from '../cclink-remote/remote-workspace-confirmation'
+import { showWorkspaceHome } from './workspace-home-navigation'
 import {
   applyWorkspaceRuntimeTransition,
   beginWorkspaceRuntimeTransition,
@@ -36,7 +37,7 @@ export async function openDefaultWorkspace(): Promise<LocalWorkspaceRef | null> 
     throw new Error(result.error || '默认工作空间不可用')
   const ref: LocalWorkspaceRef = { kind: 'local', path: result.workspacePath }
   await openWorkspaceRef(ref)
-  return ref
+  return showWorkspaceHome(ref) ? ref : null
 }
 
 export async function setCurrentWorkspaceAsDefault(): Promise<void> {

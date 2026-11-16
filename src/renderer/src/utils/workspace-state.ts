@@ -25,7 +25,7 @@ interface SectionWriteRequest {
 
 interface SectionWriteQueue {
   running: boolean
-  pending: SectionWriteRequest | null
+  pending: SectionWriteRequest[]
   idleWaiters: Array<() => void>
 }
 
@@ -147,7 +147,7 @@ export function persistWorkspaceSectionNow(
     const queueKey = workspaceSectionPersistenceKey(section, targetWorkspaceKey, targetOwnerKey)
     const queue = sectionWriteQueues.get(queueKey) ?? {
       running: false,
-      pending: null,
+      pending: [],
       idleWaiters: [],
     }
     sectionWriteQueues.set(queueKey, queue)
@@ -157,22 +157,27 @@ export function persistWorkspaceSectionNow(
     })
 
     const completion = new Promise<void>((resolve, reject) => {
-      if (queue.pending) {
-        // WorkspaceState 是快照而非事件流。正在写盘时只需保留最新快照，所有等待者
-        // 在该最新值落盘后一起完成，避免 Agent 流式增量制造无界磁盘写队列。
-        queue.pending.value = value
-        queue.pending.options = options
-        queue.pending.waiters.push({ resolve, reject })
+      const latest = queue.pending.at(-1)
+      if (
+        latest &&
+        !latest.options?.conversationHistoryMutation &&
+        !options?.conversationHistoryMutation
+      ) {
+        // 普通快照仍只保留最新值；显式删除/清空是不可合并的边界，必须单独确认。
+        // 否则自动保存会吞掉用户授权，主进程历史保护又会把已删除内容补回来。
+        latest.value = value
+        latest.options = options
+        latest.waiters.push({ resolve, reject })
         return
       }
-      queue.pending = {
+      queue.pending.push({
         workspaceKey: targetWorkspaceKey,
         ownerKey: targetOwnerKey,
         section,
         value,
         options,
         waiters: [{ resolve, reject }],
-      }
+      })
     })
 
     if (!queue.running) void drainSectionWriteQueue(queueKey, queue)
@@ -185,9 +190,8 @@ export function persistWorkspaceSectionNow(
 async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue): Promise<void> {
   queue.running = true
   try {
-    while (queue.pending) {
-      const request = queue.pending
-      queue.pending = null
+    while (queue.pending.length) {
+      const request = queue.pending.shift()!
       try {
         const normalizedValue = normalizeWorkspaceStateValue(request.value)
         const result = request.options
@@ -211,7 +215,7 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
           )
         }
         reportSectionPersistence(queueKey, {
-          status: queue.pending ? 'saving' : 'saved',
+          status: queue.pending.length ? 'saving' : 'saved',
           error: null,
         })
         for (const waiter of request.waiters) waiter.resolve()
@@ -224,7 +228,7 @@ async function drainSectionWriteQueue(queueKey: string, queue: SectionWriteQueue
     }
   } finally {
     queue.running = false
-    if (queue.pending) {
+    if (queue.pending.length) {
       void drainSectionWriteQueue(queueKey, queue)
     } else if (sectionWriteQueues.get(queueKey) === queue) {
       sectionWriteQueues.delete(queueKey)
@@ -244,7 +248,7 @@ export async function flushPendingWorkspaceSectionWrites(
     const queue = sectionWriteQueues.get(queueKey)
     if (!queue) return
     await new Promise<void>((resolve) => {
-      if (!queue.running && !queue.pending) resolve()
+      if (!queue.running && !queue.pending.length) resolve()
       else queue.idleWaiters.push(resolve)
     })
   }
@@ -257,7 +261,7 @@ export async function flushPendingWorkspaceStateWrites(): Promise<void> {
       Array.from(sectionWriteQueues.values()).map(
         (queue) =>
           new Promise<void>((resolve) => {
-            if (!queue.running && !queue.pending) resolve()
+            if (!queue.running && !queue.pending.length) resolve()
             else queue.idleWaiters.push(resolve)
           }),
       ),

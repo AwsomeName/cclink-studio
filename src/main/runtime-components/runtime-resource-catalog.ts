@@ -1,4 +1,5 @@
 import type { RuntimeResourceComponentId } from '../../shared/ipc/runtime-components'
+import kokoroFiles from '../local-tts/kokoro-files.json'
 
 export interface RuntimeResourceFile {
   archivePath?: string
@@ -25,6 +26,7 @@ export interface RuntimeResourceCatalogEntry {
         url: string
         sha256: string
         size: number
+        archiveFormat?: 'tar.bz2'
       }
   files: RuntimeResourceFile[]
 }
@@ -135,7 +137,22 @@ const AGENT_DEVICE_HELPERS: RuntimeResourceCatalogEntry = {
   ],
 }
 
-const ENTRIES = [OCCT_RUNTIME, SCRCPY_SERVER, AGENT_DEVICE_HELPERS] as const
+const KOKORO_MODEL: RuntimeResourceCatalogEntry = {
+  componentId: 'kokoro-tts-model',
+  displayName: 'Kokoro 本地中文/英文朗读',
+  version: '1.1-zh',
+  activation: 'domain-managed',
+  source: {
+    kind: 'direct',
+    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_1.tar.bz2',
+    sha256: 'b78e1ac42b852e839cceaafbe88f66806bf5860992d1d7b9a3f2ad1198427aed',
+    size: 364_855_331,
+    archiveFormat: 'tar.bz2',
+  },
+  files: kokoroFiles,
+}
+
+const ENTRIES = [OCCT_RUNTIME, SCRCPY_SERVER, AGENT_DEVICE_HELPERS, KOKORO_MODEL] as const
 
 export function listRuntimeResourceCatalogEntries(): RuntimeResourceCatalogEntry[] {
   return [...ENTRIES]

@@ -4,6 +4,7 @@ import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace
 import type { AgentConversationState } from '../../stores/agent-store'
 import { useAgentStore, useTabStore } from '../../stores'
 import { IconSearch } from '../../components/common/Icons'
+import { useToastStore } from '../../components/common/Toast'
 import { getConversationActivity } from './activity'
 import { writeConversationDragData } from './conversation-workbench'
 import { useContextMenuStore } from '../context-actions/context-menu-store'
@@ -169,7 +170,16 @@ export function LocalSessionsList({
               onRestore={restoreArchivedConversation}
               onDelete={(conversationId) => {
                 if (window.confirm('删除后将移除这个本地会话历史，确定删除吗？')) {
-                  void deleteConversation(conversationId)
+                  void deleteConversation(conversationId).then(
+                    () => useToastStore.getState().show('会话已删除', 'success'),
+                    (error: unknown) =>
+                      useToastStore
+                        .getState()
+                        .show(
+                          `删除会话失败：${error instanceof Error ? error.message : String(error)}`,
+                          'error',
+                        ),
+                  )
                 }
               }}
               muted

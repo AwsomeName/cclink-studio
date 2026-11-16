@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { join, posix, resolve } from 'node:path'
+import { dirname, join, posix, resolve } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
 import { extract } from 'tar-stream'
+import unbzip2 from 'unbzip2-stream'
 import type {
   ManagedClaudeInstallFailure,
   ManagedClaudeInstallProgress,
@@ -296,14 +297,20 @@ export class RuntimeResourceManager {
           await rm(packagePath, { force: true })
         } else {
           const source = entry.source
-          const target = join(stagingRoot, entry.files[0].installedPath)
+          const target = join(
+            stagingRoot,
+            source.archiveFormat ? 'model.tar.bz2' : entry.files[0].installedPath,
+          )
           await retryDownload(() =>
             this.downloadDirect(source.url, target, source.size, source.sha256, (progress) => {
               state.progress = progress
             }),
           )
           state.phase = 'verifying'
-          await verifyFile(target, entry.files[0])
+          if (source.archiveFormat) {
+            await extractSelectedFiles(target, stagingRoot, entry)
+            await rm(target, { force: true })
+          } else await verifyFile(target, entry.files[0])
         }
 
         state.phase = 'installing'
@@ -480,7 +487,13 @@ async function extractSelectedFiles(
     void (async () => {
       entryCount += 1
       expandedBytes += header.size ?? 0
-      assertSafeArchiveEntry(header.name, header.type, entryCount, expandedBytes)
+      assertSafeArchiveEntry(
+        header.name,
+        header.type,
+        entryCount,
+        expandedBytes,
+        entry.componentId === 'kokoro-tts-model',
+      )
       const file = wanted.get(header.name)
       if (!file) {
         stream.resume()
@@ -496,6 +509,7 @@ async function extractSelectedFiles(
       }
       found.add(header.name)
       const target = join(stagingRoot, file.installedPath)
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 })
       await pipeline(stream, createWriteStream(target, { flags: 'wx', mode: 0o600 }))
       await verifyFile(target, file)
       next()
@@ -505,7 +519,11 @@ async function extractSelectedFiles(
   })
 
   try {
-    await pipeline(createReadStream(packagePath), createGunzip(), archive)
+    const decoder =
+      entry.source.kind === 'direct' && entry.source.archiveFormat === 'tar.bz2'
+        ? unbzip2()
+        : createGunzip()
+    await pipeline(createReadStream(packagePath), decoder, archive)
   } catch (error) {
     if (error instanceof RuntimeComponentInstallError) throw error
     throw new RuntimeComponentInstallError(
@@ -523,11 +541,12 @@ function assertSafeArchiveEntry(
   type: string | null | undefined,
   entryCount: number,
   expandedBytes: number,
+  kokoro = false,
 ): void {
   const normalized = posix.normalize(name)
   if (
-    entryCount > MAX_ARCHIVE_ENTRIES ||
-    expandedBytes > MAX_EXPANDED_BYTES ||
+    entryCount > (kokoro ? 1024 : MAX_ARCHIVE_ENTRIES) ||
+    expandedBytes > (kokoro ? 450 * 1024 * 1024 : MAX_EXPANDED_BYTES) ||
     posix.isAbsolute(name) ||
     normalized === '..' ||
     normalized.startsWith('../') ||

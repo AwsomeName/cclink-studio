@@ -32,6 +32,7 @@ function parseRuntimeResourceId(args: unknown[]): [componentId: RuntimeResourceC
   if (
     componentId !== 'occt-runtime' &&
     componentId !== 'scrcpy-server' &&
+    componentId !== 'kokoro-tts-model' &&
     componentId !== 'agent-device-android-helpers'
   ) {
     throw new Error('Runtime 资源组件 ID 不在允许目录')

@@ -14,6 +14,8 @@
 ## 2026-11-16 图标入口复核
 
 - macOS 开发版真实窗口已确认三个入口均只显示图标；可访问树仍提供三个完整名称。沿用原生 `title` 悬停提示与原有点击回调，统一为 28×28px 按钮。
+- 随后校准图标的可见高度：原先相同的 15px SVG 外框并未统一内部轮廓，文件偏高、终端偏矮。此处分别使用地球 16px、文件 13px、终端 17px，使可见轮廓均约 13px 高并居中；仅调整三个入口的尺寸，不修改共用图标。
+- 尺寸校准后，在真实开发版窗口复核三者高度；`node scripts/ui-smoke.mjs --tab-create-only --keep-running` 通过 1/1，类型、TabBar ESLint 与格式检查通过。
 - `node scripts/ui-smoke.mjs --browser-toolbar-only --keep-running` 通过 5/5，覆盖三种标签创建、真实 Terminal、1440/1000/760px renderer 视口、17 个标签与键盘操作。
 - `pnpm typecheck:web`、TabBar ESLint、两个源码文件的 Prettier 检查通过。未打包发布；未单独验证 Windows/Linux 原生悬停提示。
 

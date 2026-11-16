@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useFixedSpacesStore } from '../features/workspace-open/fixed-spaces-store'
+import { showWorkspaceHome } from '../features/workspace-open/workspace-home-navigation'
 import {
   useAgentStore,
   useBrowserStore,
@@ -108,15 +109,7 @@ export function useWorkspaceBootstrap(): boolean {
         result.workspacePath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath &&
         useTabStore.getState().tabs.length === 0
       ) {
-        useUIStore.getState().showPanel('workspace-home')
-        useTabStore.getState().openTab({
-          type: 'workspace-home',
-          title: '工作台',
-          icon: '⌂',
-          workspaceRef: { kind: 'local', path: result.workspacePath! },
-        })
-        if (useUIStore.getState().agentPanelMode === 'center')
-          useUIStore.getState().setAgentPanelMode('right', 'system')
+        showWorkspaceHome({ kind: 'local', path: result.workspacePath! }, 'system')
       }
       if (result.workspacePath) {
         await recoverPendingFileRelocations(result.workspacePath, () =>

@@ -1,0 +1,21 @@
+
+ RUN  v3.2.6 /Users/apple/Desktop/cclink-dev/cclink-studio
+
+ ✓ src/renderer/src/features/local-tts/tts-controller.test.ts (5 tests) 253ms
+ ✓ src/main/browser/browser-context-menu.test.ts (5 tests) 22ms
+ ✓ src/main/local-tts/local-tts-service.test.ts (10 tests) 431ms
+ ✓ src/main/runtime-components/runtime-components-ipc.test.ts (2 tests) 4ms
+ ✓ src/main/runtime/bootstrap-runtime.test.ts (2 tests) 5ms
+ ✓ src/renderer/src/features/local-tts/tts-commands.test.ts (2 tests) 3ms
+ ✓ src/renderer/src/features/context-actions/context-action-m5.test.ts (5 tests) 6ms
+ ✓ src/renderer/src/features/cclink-remote/remote-agent-controller.test.tsx (8 tests) 16ms
+ ✓ src/main/runtime-components/runtime-resource-manager.test.ts (8 tests | 1 skipped) 1854ms
+   ✓ RuntimeResourceManager > installs only catalog files and reports the activation boundary  1171ms
+   ✓ RuntimeResourceManager > reuses verified userData resources after an App replacement  353ms
+ ✓ src/main/ipc/ipc-contract.test.ts (20 tests) 1503ms
+   ✓ IPC invoke contracts > records every production event with producer, consumer and disposer evidence  1149ms
+
+ Test Files  10 passed (10)
+      Tests  66 passed | 1 skipped (67)
+   Start at  22:03:05
+   Duration  4.10s (transform 3.67s, setup 0ms, collect 9.21s, tests 4.10s, environment 1ms, prepare 919ms)

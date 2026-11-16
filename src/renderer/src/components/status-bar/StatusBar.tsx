@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { TtsStatusPlayer } from '../../features/local-tts/TtsStatusPlayer'
 import {
   useFsStore,
   useTabStore,
@@ -100,6 +101,7 @@ export function StatusBar(): React.ReactElement {
             workspacePath={workspacePath}
             contextProps={statusContextProps('git')}
           />
+          <TtsStatusPlayer />
 
           {switchingPath && (
             <span

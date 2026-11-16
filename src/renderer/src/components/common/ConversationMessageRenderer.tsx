@@ -1,4 +1,7 @@
 import { memo, useState } from 'react'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { TtsButton } from '../../features/local-tts/TtsButton'
 import type { AgentMessage, ContentBlock } from '../../types'
 import { IconCheck, IconClipboard, IconError, IconThinking, IconTool } from './Icons'
 import { openFileRangeResource } from '../../features/markdown/markdown-navigation'
@@ -33,6 +36,7 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
   workspaceKey: string | null
   onOpenFilePath?: (path: string) => void
 }): React.ReactElement {
+  const activeWorkspaceKey = useWorkspaceStore((state) => workspaceRefKey(state.activeWorkspaceRef))
   const canRunCommands = useAgentStore((state) => {
     const conversation = state.conversations[conversationId]
     return (
@@ -113,6 +117,25 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
         </button>
       )}
       {isUserImageMessage && imageList}
+      {!message.isStreaming &&
+        message.content.some((block) => block.type === 'text' && block.text.trim()) && (
+          <div className="tts-message-action">
+            <TtsButton
+              context={{
+                source: 'toolbar',
+                inputValue: message.content
+                  .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+                  .join('\n\n'),
+                target: {
+                  kind: 'message',
+                  workspaceKey: workspaceKey ?? activeWorkspaceKey,
+                  conversationId,
+                  messageId: message.id,
+                },
+              }}
+            />
+          </div>
+        )}
       <div className="agent-message-body">
         {message.supplement ? (
           <div className="agent-supplement-receipt" role="status">

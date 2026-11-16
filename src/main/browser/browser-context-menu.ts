@@ -28,6 +28,7 @@ export type BrowserContextActionId =
   | 'send-link-to-agent'
   | 'send-image-to-agent'
   | 'send-page-to-agent'
+  | 'tts.readSelection'
 
 export interface BrowserContextMenuBinding {
   workspaceKey: string | null
@@ -41,6 +42,7 @@ interface BrowserContextMenuOptions {
   validate: () => boolean
   requestOpenTab: (request: BrowserOpenTabRequest) => void
   requestAgentMount: (request: BrowserContextAgentRequest) => void
+  requestReadSelection?: () => void
 }
 
 function boundedText(value: string): string {
@@ -107,6 +109,7 @@ export function buildBrowserContextMenuTemplate({
   validate,
   requestOpenTab,
   requestAgentMount,
+  requestReadSelection,
 }: BrowserContextMenuOptions): MenuItemConstructorOptions[] {
   const run =
     (action: () => void): (() => void) =>
@@ -245,6 +248,12 @@ export function buildBrowserContextMenuTemplate({
   }
 
   if (context.selectionText) {
+    if (requestReadSelection && !context.isEditable)
+      template.push({
+        id: 'tts.readSelection',
+        label: '朗读选中内容',
+        click: run(requestReadSelection),
+      })
     template.push({
       id: 'send-selection-to-agent',
       label: '将选中文本挂到 Agent',

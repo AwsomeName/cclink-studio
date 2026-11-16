@@ -680,11 +680,38 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   deleteConversation: async (id) => {
     const conversation = get().conversations[id]
     if (!conversation) return
+    if (isWorkspaceStateRestoring()) {
+      throw new Error('工作空间正在恢复，请稍后重试删除会话')
+    }
     const workspaceKey = conversationWorkspaceKey(conversation)
+    const orderIndex = get().conversationOrder.indexOf(id)
+    recordRendererDiagnosticLog('info', [
+      '[ConversationPersistence] delete-requested',
+      { conversationId: id },
+    ])
     set((state) => removeConversation(state, id))
-    await persistConversationWorkspaceByKey(workspaceKey, {
-      conversationHistoryMutation: { type: 'delete-conversation', conversationId: id },
-    })
+    try {
+      await persistConversationWorkspaceByKey(workspaceKey, {
+        conversationHistoryMutation: { type: 'delete-conversation', conversationId: id },
+      })
+      recordRendererDiagnosticLog('info', [
+        '[ConversationPersistence] delete-saved',
+        { conversationId: id },
+      ])
+    } catch (error) {
+      set((state) => {
+        if (state.conversations[id]) return state
+        const conversationOrder = [...state.conversationOrder]
+        conversationOrder.splice(Math.max(0, orderIndex), 0, id)
+        return { conversations: { ...state.conversations, [id]: conversation }, conversationOrder }
+      })
+      recordRendererDiagnosticLog('error', [
+        '[ConversationPersistence] delete-failed',
+        { conversationId: id },
+        error,
+      ])
+      throw error
+    }
   },
 
   renameConversation: (id, title) =>

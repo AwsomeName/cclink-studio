@@ -21,8 +21,11 @@ export type MarkdownEditorAction =
   | 'heading-6'
   | 'indent-list'
   | 'outdent-list'
+  | 'insert-date-time'
+  | 'insert-time'
 
 export interface EditorContextSurface {
+  isFocused?: () => boolean
   getSelectionText: () => string
   cut: () => void | Promise<void>
   copy: () => void | Promise<void>

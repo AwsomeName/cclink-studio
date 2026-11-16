@@ -1,0 +1,125 @@
+[
+  {
+    "viewportWidth": 1440,
+    "clock": {
+      "left": 650.3671875,
+      "right": 789.6328125,
+      "width": 139.265625
+    },
+    "git": {
+      "left": 12,
+      "right": 77.28125,
+      "width": 65.28125
+    },
+    "player": {
+      "left": 93.28125,
+      "right": 284.515625,
+      "width": 191.234375
+    },
+    "left": {
+      "left": 12,
+      "right": 634.3671875,
+      "width": 622.3671875
+    },
+    "items": [
+      {
+        "className": "git-status-root",
+        "right": 77.28125
+      },
+      {
+        "className": "tts-status-root active",
+        "right": 284.515625
+      },
+      {
+        "className": "status-bar-item status-bar-workspace",
+        "right": 524.5625
+      },
+      {
+        "className": "status-bar-item status-bar-url",
+        "right": 634.3671875
+      }
+    ]
+  },
+  {
+    "viewportWidth": 1024,
+    "clock": {
+      "left": 473,
+      "right": 551,
+      "width": 78
+    },
+    "git": {
+      "left": 12,
+      "right": 91.0859375,
+      "width": 79.0859375
+    },
+    "player": {
+      "left": 99.0859375,
+      "right": 329.0859375,
+      "width": 230
+    },
+    "left": {
+      "left": 12,
+      "right": 457,
+      "width": 445
+    },
+    "items": [
+      {
+        "className": "git-status-root",
+        "right": 91.0859375
+      },
+      {
+        "className": "tts-status-root active",
+        "right": 329.0859375
+      },
+      {
+        "className": "status-bar-item status-bar-workspace",
+        "right": 0
+      },
+      {
+        "className": "status-bar-item status-bar-url",
+        "right": 449.046875
+      }
+    ]
+  },
+  {
+    "viewportWidth": 760,
+    "clock": {
+      "left": 341,
+      "right": 419,
+      "width": 78
+    },
+    "git": {
+      "left": 12,
+      "right": 90.015625,
+      "width": 78.015625
+    },
+    "player": {
+      "left": 98.015625,
+      "right": 325,
+      "width": 226.984375
+    },
+    "left": {
+      "left": 12,
+      "right": 325,
+      "width": 313
+    },
+    "items": [
+      {
+        "className": "git-status-root",
+        "right": 90.015625
+      },
+      {
+        "className": "tts-status-root active",
+        "right": 325
+      },
+      {
+        "className": "status-bar-item status-bar-workspace",
+        "right": 0
+      },
+      {
+        "className": "status-bar-item status-bar-url",
+        "right": 0
+      }
+    ]
+  }
+]

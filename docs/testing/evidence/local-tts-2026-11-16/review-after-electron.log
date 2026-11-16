@@ -1,0 +1,22 @@
+$ node scripts/local-tts-smoke.mjs
+PASS existing model integrity checked at startup
+PASS MD toolbar → real utilityProcess synthesis → HTMLAudio playing event
+PASS pause confirmed by actual audio transport
+PASS resume, rate, volume and paragraph seek
+PASS unsaved Markdown snapshot read without saving
+PASS Markdown selection button reads actual editor selection
+PASS switching tabs retains current speech session
+PASS native webpage body filtered; player popup remains operable over browser
+PASS web selection command reads actual isolated-world selection
+PASS workspace change pauses actual playback
+PASS message button → same bottom player → actual audio
+PASS rendered message still reads its text when local conversation data is gone
+LAYOUT 1440 {"clock":{"left":650.3671875,"right":789.6328125,"width":139.265625},"git":{"left":12,"right":77.28125,"width":65.28125},"player":{"left":93.28125,"right":284.515625,"width":191.234375},"left":{"left":12,"right":634.3671875,"width":622.3671875},"items":[{"className":"git-status-root","right":77.28125},{"className":"tts-status-root active","right":284.515625},{"className":"status-bar-item status-bar-workspace","right":524.5625},{"className":"status-bar-item status-bar-url","right":634.3671875}]}
+LAYOUT 1024 {"clock":{"left":473,"right":551,"width":78},"git":{"left":12,"right":91.0859375,"width":79.0859375},"player":{"left":99.0859375,"right":329.0859375,"width":230},"left":{"left":12,"right":457,"width":445},"items":[{"className":"git-status-root","right":91.0859375},{"className":"tts-status-root active","right":329.0859375},{"className":"status-bar-item status-bar-workspace","right":0},{"className":"status-bar-item status-bar-url","right":449.046875}]}
+LAYOUT 760 {"clock":{"left":341,"right":419,"width":78},"git":{"left":12,"right":90.015625,"width":78.015625},"player":{"left":98.015625,"right":325,"width":226.984375},"left":{"left":12,"right":325,"width":313},"items":[{"className":"git-status-root","right":90.015625},{"className":"tts-status-root active","right":325},{"className":"status-bar-item status-bar-workspace","right":0},{"className":"status-bar-item status-bar-url","right":0}]}
+PASS player remains right of Git and left of clock at 1440/1024/760px
+PASS voice switching cancels and regenerates current paragraph
+PASS natural audio end reaches completed state
+PASS new synthesis and playback succeed with browser network offline
+PASS renderer reload stops synthesis and never auto resumes
+EVIDENCE /tmp/cclink-local-tts-acceptance

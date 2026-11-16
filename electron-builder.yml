@@ -10,6 +10,8 @@ files:
   - package.json
 asar: true
 asarUnpack:
+  # sherpa native addon and its sibling ONNX libraries must share real paths.
+  - node_modules/sherpa-onnx-*/**
   # node-pty：native .node 需要从真实文件路径加载，不能留在 asar 内
   - node_modules/node-pty/**
   # agent-device：helper APK 需真实文件路径供 adb install；daemon entry + import.meta 解析需出 asar

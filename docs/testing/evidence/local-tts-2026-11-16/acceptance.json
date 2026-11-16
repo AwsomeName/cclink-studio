@@ -1,0 +1,36 @@
+{
+  "checks": [
+    "existing model integrity checked at startup",
+    "MD toolbar → real utilityProcess synthesis → HTMLAudio playing event",
+    "pause confirmed by actual audio transport",
+    "resume, rate, volume and paragraph seek",
+    "unsaved Markdown snapshot read without saving",
+    "Markdown selection button reads actual editor selection",
+    "switching tabs retains current speech session",
+    "native webpage body filtered; player popup remains operable over browser",
+    "web selection command reads actual isolated-world selection",
+    "workspace change pauses actual playback",
+    "message button → same bottom player → actual audio",
+    "rendered message still reads its text when local conversation data is gone",
+    "player remains right of Git and left of clock at 1440/1024/760px",
+    "voice switching cancels and regenerates current paragraph",
+    "natural audio end reaches completed state",
+    "new synthesis and playback succeed with browser network offline",
+    "renderer reload stops synthesis and never auto resumes"
+  ],
+  "errors": [],
+  "model": {
+    "componentId": "kokoro-tts-model",
+    "displayName": "Kokoro 本地中文/英文朗读",
+    "constrainedVersion": "1.1-zh",
+    "availableVersion": "1.1-zh",
+    "updateAvailable": false,
+    "health": "healthy",
+    "installedVersion": "1.1-zh",
+    "phase": "installed",
+    "activation": "domain-managed",
+    "progress": null,
+    "failure": null
+  },
+  "runAt": "2026-11-16T14:04:11.062Z"
+}

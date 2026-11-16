@@ -51,6 +51,10 @@ export default defineConfig({
             resolve(__dirname, 'src/main/playwright/test-page.html'),
             resolve(outDir, 'test-page.html'),
           )
+          copyFileSync(
+            resolve(__dirname, 'src/main/local-tts/tts-worker.cjs'),
+            resolve(outDir, 'tts-worker.cjs'),
+          )
         },
       },
     ],

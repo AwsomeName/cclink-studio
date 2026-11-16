@@ -365,6 +365,7 @@ export function TabBar({
         )}
       </div>
       <div className="tab-create-actions" role="group" aria-label="新建">
+        {/* 按各图标的轮廓留白校准到约 13px 可见高度，保持视觉居中。 */}
         <button
           type="button"
           className="tab-create-button tab-new-browser-button"
@@ -372,7 +373,7 @@ export function TabBar({
           aria-label="新建浏览器页"
           onClick={onNewBrowser}
         >
-          <IconGlobe size={15} />
+          <IconGlobe size={16} />
         </button>
         <button
           type="button"
@@ -381,7 +382,7 @@ export function TabBar({
           aria-label="新建 Markdown 草稿"
           onClick={onNewDocument}
         >
-          <IconFile size={15} />
+          <IconFile size={13} />
         </button>
         <button
           type="button"
@@ -390,7 +391,7 @@ export function TabBar({
           aria-label="新建 Terminal"
           onClick={onNewTerminal}
         >
-          <IconTerminal size={15} />
+          <IconTerminal size={17} />
         </button>
       </div>
       {conversationDropActive && (

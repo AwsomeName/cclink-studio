@@ -1,0 +1,22 @@
+$ node scripts/local-tts-smoke.mjs
+PASS existing model integrity checked at startup
+PASS MD toolbar → real utilityProcess synthesis → HTMLAudio playing event
+PASS pause confirmed by actual audio transport
+PASS resume, rate, volume and paragraph seek
+PASS unsaved Markdown snapshot read without saving
+PASS Markdown selection button reads actual editor selection
+PASS switching tabs retains current speech session
+AssertionError [ERR_ASSERTION]: nested list must be read once
+
+2 !== 1
+
+    at file:///Users/apple/Desktop/cclink-dev/cclink-studio/scripts/local-tts-smoke.mjs:235:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+SNAPSHOT {"revision":26,"sessionId":"5fad702c-ee52-49e9-a146-c90ab76bf99a","generation":6,"phase":"playing","wantPlaying":true,"source":{"kind":"browser","workspaceKey":"/Users/apple/Desktop/cclink-dev/cclink-studio/.cache/local-tts-acceptance-workspace-1794836949744","tabId":"tab-2-1794836977512","title":"网页朗读验收","selection":false},"segments":["网页正文朗读","这是网页正文第一段，我们使用真实浏览器验证本地语音播放。","第二段介绍离线语音功能，文本只在本机处理。","父列表正文子列表正文","子列表正文","正常正文隐藏提示不应朗读按钮文字不应朗读"],"index":0,"voice":3,"rate":1.5,"volume":0.5,"audioKey":"5fad702c-ee52-49e9-a146-c90ab76bf99a:6:0","error":null,"resource":{"componentId":"kokoro-tts-model","displayName":"Kokoro 本地中文/英文朗读","constrainedVersion":"1.1-zh","availableVersion":"1.1-zh","updateAvailable":false,"health":"healthy","installedVersion":"1.1-zh","phase":"installed","activation":"domain-managed","progress":null,"failure":null}}
+[ELIFECYCLE] Command failed with exit code 1.

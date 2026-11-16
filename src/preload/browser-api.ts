@@ -10,6 +10,7 @@ import {
   parseBrowserContextAgentRequest,
   parseBrowserDownloadChangedPayload,
   parseBrowserFindResultPayload,
+  parseBrowserShortcutHelpInputPayload,
   parseBrowserFindShortcutTriggeredPayload,
   parseBrowserNativeContextMenuOpenedPayload,
   parseBrowserOpenTabRequest,
@@ -62,6 +63,14 @@ export const browserApi: BrowserApiContract = {
     }
     ipcRenderer.on(browserIpcEvents.findResult, handler)
     return () => ipcRenderer.removeListener(browserIpcEvents.findResult, handler)
+  },
+  onShortcutHelpInput: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, value: unknown) => {
+      const payload = parseBrowserShortcutHelpInputPayload(value)
+      if (payload) callback(payload)
+    }
+    ipcRenderer.on(browserIpcEvents.shortcutHelpInput, handler)
+    return () => ipcRenderer.removeListener(browserIpcEvents.shortcutHelpInput, handler)
   },
   getDiagnostics: (tabId) => invokeIpcContract(browserIpc.getDiagnostics, tabId),
   getRuntimeDiagnostics: (tabId) => invokeIpcContract(browserIpc.getRuntimeDiagnostics, tabId),

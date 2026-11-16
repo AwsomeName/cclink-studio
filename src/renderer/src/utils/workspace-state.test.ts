@@ -25,6 +25,43 @@ afterEach(() => {
 })
 
 describe('workspace-state utils', () => {
+  it.each(['delete-conversation', 'clear-messages'] as const)(
+    '普通自动保存不能覆盖连续的 %s',
+    async (type) => {
+      let release!: (value: { success: boolean }) => void
+      const setSection = vi.fn().mockResolvedValue({ success: true })
+      setSection.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve
+          }),
+      )
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const save = (revision: number, conversationId?: string) =>
+        persistWorkspaceSectionNow(
+          'agentConversations',
+          { revision },
+          '/workspace/a',
+          null,
+          conversationId ? { conversationHistoryMutation: { type, conversationId } } : undefined,
+        )
+      const writes = [save(0), save(1, 'a'), save(2), save(3, 'b'), save(4), save(5)]
+      release({ success: true })
+      await Promise.all(writes)
+      expect(
+        setSection.mock.calls.map((call) => [
+          call[2].revision,
+          call[4]?.conversationHistoryMutation?.conversationId,
+        ]),
+      ).toEqual([
+        [0, undefined],
+        [1, 'a'],
+        [2, undefined],
+        [3, 'b'],
+        [5, undefined],
+      ])
+    },
+  )
   it('does not treat a failed draft write as flushed, and clears failure only after a successful retry', async () => {
     const setSection = vi.fn().mockResolvedValue({ success: false, error: '磁盘已满' })
     vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })

@@ -1,4 +1,5 @@
 import { createTabContextCommands, tabMenuContributions } from './domains/tab-context-actions'
+import { createTtsCommands, ttsMenuContributions } from '../local-tts/tts-commands'
 import { createFileContextCommands, fileMenuContributions } from './domains/file-context-actions'
 import {
   createProjectContextCommands,
@@ -51,6 +52,7 @@ import {
 } from './domains/image-preview-context-actions'
 
 export const contextActionCommands = [
+  ...createTtsCommands(),
   ...createTabContextCommands(),
   ...createFileContextCommands(),
   ...createProjectContextCommands(),
@@ -69,6 +71,7 @@ export const contextActionCommands = [
 ]
 
 export const contextActionContributions = [
+  ...ttsMenuContributions,
   ...tabMenuContributions,
   ...fileMenuContributions,
   ...projectMenuContributions,

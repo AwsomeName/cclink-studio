@@ -186,6 +186,7 @@ function runtimeResourceRow(
   const damaged = status?.health === 'damaged'
   const awaitingHost = status?.activation === 'awaiting-host'
   const names: Record<RuntimeResourceComponentId, string> = {
+    'kokoro-tts-model': 'Kokoro 本地中文/英文朗读',
     'occt-runtime': 'OCCT Runtime',
     'scrcpy-server': 'Android scrcpy server',
     'agent-device-android-helpers': 'agent-device Android Helper',
@@ -407,6 +408,13 @@ export function ComponentManagementSettings(): React.ReactElement {
         resourceStatus('agent-device-android-helpers'),
         '0.17.2',
         'Android 语义快照与多点触控辅助 APK',
+      ),
+      runtimeResourceRow(
+        'kokoro-tts-model',
+        resourceStatus('kokoro-tts-model'),
+        '1.1-zh',
+        '中文与英文离线朗读 · 首次下载约 348 MiB',
+        false,
       ),
       ...BUILTIN_ROWS,
     ],

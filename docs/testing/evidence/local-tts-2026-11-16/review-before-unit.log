@@ -1,0 +1,100 @@
+
+ RUN  v3.2.6 /Users/apple/Desktop/cclink-dev/cclink-studio
+
+ ❯ src/renderer/src/features/local-tts/tts-controller.test.ts (3 tests | 1 failed) 35ms
+   ✓ TTS audio transport races > retries an audio fetch interrupted by a preference command 23ms
+   ✓ TTS audio transport races > never plays a late audio response after stop 5ms
+   × TTS audio transport races > does not let an old snapshot replay audio while stop awaits its fresh snapshot 6ms
+     → expected [ …(2) ] to have a length of 1 but got 2
+ ❯ src/main/local-tts/local-tts-service.test.ts (10 tests | 3 failed) 394ms
+   ✓ local TTS ownership and cancellation > requires actual playback events and only prefetches one next segment 56ms
+   ✓ local TTS ownership and cancellation > rejects old ended events after replacement and stops the worker 53ms
+   ✓ local TTS ownership and cancellation > ignores late synthesis after stop and leaves other operations responsive 1ms
+   ✓ local TTS ownership and cancellation > pauses on workspace change and waits for actual pause acknowledgement 52ms
+   × local TTS ownership and cancellation > keeps duplicate resume idempotent while audio is already playing 62ms
+     → expected 'ready' to be 'playing' // Object.is equality
+   × local TTS ownership and cancellation > advances a clip that ended concurrently with pause without resuming playback 54ms
+     → expected +0 to be 1 // Object.is equality
+   × local TTS ownership and cancellation > keeps completed state after a late pause and restarts from the beginning 104ms
+     → expected 'paused' to be 'ended' // Object.is equality
+   ✓ local TTS ownership and cancellation > retains a bounded request for first-use installation without starting a worker 1ms
+   ✓ speech input boundaries > keeps link labels and image descriptions but skips code fences 5ms
+   ✓ speech input boundaries > bounds unpunctuated paragraphs and rejects oversized IPC content 5ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/main/local-tts/local-tts-service.test.ts > local TTS ownership and cancellation > keeps duplicate resume idempotent while audio is already playing
+AssertionError: expected 'ready' to be 'playing' // Object.is equality
+
+Expected: "playing"
+Received: "ready"
+
+ ❯ src/main/local-tts/local-tts-service.test.ts:95:38
+     93|     service.report({ sessionId: s.sessionId!, audioKey: s.audioKey!, e…
+     94|     service.control({ sessionId: s.sessionId, action: 'resume' })
+     95|     expect(service.snapshot().phase).toBe('playing')
+       |                                      ^
+     96|     service.report({ sessionId: s.sessionId!, audioKey: s.audioKey!, e…
+     97|     expect(service.snapshot().index).toBe(1)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/main/local-tts/local-tts-service.test.ts > local TTS ownership and cancellation > advances a clip that ended concurrently with pause without resuming playback
+AssertionError: expected +0 to be 1 // Object.is equality
+
+- Expected
++ Received
+
+- 1
++ 0
+
+ ❯ src/main/local-tts/local-tts-service.test.ts:109:38
+    107|     service.report({ sessionId: s.sessionId!, audioKey: s.audioKey!, e…
+    108|     service.report({ sessionId: s.sessionId!, audioKey: s.audioKey!, e…
+    109|     expect(service.snapshot().index).toBe(1)
+       |                                      ^
+    110|     expect(service.snapshot().wantPlaying).toBe(false)
+    111|     expect(service.snapshot().phase).toBe('paused')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/main/local-tts/local-tts-service.test.ts > local TTS ownership and cancellation > keeps completed state after a late pause and restarts from the beginning
+AssertionError: expected 'paused' to be 'ended' // Object.is equality
+
+Expected: "ended"
+Received: "paused"
+
+ ❯ src/main/local-tts/local-tts-service.test.ts:127:38
+    125|     service.report({sessionId:s.sessionId!, audioKey:s.audioKey!, even…
+    126|     service.control({sessionId:s.sessionId, action:'pause'})
+    127|     expect(service.snapshot().phase).toBe('ended')
+       |                                      ^
+    128|     service.control({sessionId:s.sessionId, action:'resume'})
+    129|     expect(service.snapshot().index).toBe(0)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/renderer/src/features/local-tts/tts-controller.test.ts > TTS audio transport races > does not let an old snapshot replay audio while stop awaits its fresh snapshot
+AssertionError: expected [ …(2) ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/renderer/src/features/local-tts/tts-controller.test.ts:127:23
+    125|     old.resolve(oldValue)
+    126|     await oldRefresh
+    127|     expect(instances).toHaveLength(1)
+       |                       ^
+    128|     fresh.resolve({...oldValue,revision:2,phase:'stopped',audioKey:nul…
+    129|     await stop
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 9 passed (13)
+   Start at  21:46:44
+   Duration  764ms (transform 63ms, setup 0ms, collect 126ms, tests 429ms, environment 0ms, prepare 97ms)

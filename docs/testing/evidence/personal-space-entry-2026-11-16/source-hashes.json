@@ -1,0 +1,9 @@
+{
+  "src/renderer/src/features/workspace-open/workspace-home-navigation.ts": "1e4ea32597bab239bfec75e2421c2691dea2550f254339a05865c105b6256f3c",
+  "src/renderer/src/features/workspace-open/fixed-spaces-store.ts": "0546d4d8d59dc94659c63cd9b8eb28fd3e6ce7bacdd7bc9f90749043e5d8e94b",
+  "src/renderer/src/features/workspace-open/workspace-open-controller.ts": "d753137c6245cc6dbaf16b88e25be30044c63ceb8215d67bef743e5a51d5e1a6",
+  "src/renderer/src/features/workspace-open/workspace-open-controller.test.ts": "bdca7c0c5dce97de507ecf12eb32da87f8ef3d146acbdce54aafd0e1c151bf04",
+  "src/renderer/src/bootstrap/commands/workspace-commands.ts": "bc877b13ec724e4e813ef2a0d04ece59f490bdb49a104844d61ce530af6721ed",
+  "src/renderer/src/bootstrap/use-workspace-bootstrap.ts": "9f7a338792ffbdc0fc810bcb626e1e0379db65f2bf0106b19d10f5e309b74f62",
+  "scripts/fixed-spaces-smoke.mjs": "3c3c6d6a98a6a7af47f71659d2a272fe1d1dd41d3bc08904990193cd227449c5"
+}

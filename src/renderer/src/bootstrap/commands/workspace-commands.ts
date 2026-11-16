@@ -12,9 +12,8 @@ import {
   openPersonalSpace,
 } from '../../features/workspace-open/fixed-spaces-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { useTabStore } from '../../stores/tab-store'
-import { useUIStore } from '../../stores/ui-store'
 import { openCompanyWorkspace } from '../../features/company-workspace/company-workspace-commands'
+import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
 
 export function createWorkspaceCommands(): Command[] {
   return [
@@ -38,12 +37,7 @@ export function createWorkspaceCommands(): Command[] {
           openCompanyWorkspace()
           return
         }
-        useUIStore.getState().showPanel('workspace-home')
-        if (useUIStore.getState().agentPanelMode === 'center')
-          useUIStore.getState().setAgentPanelMode('right', 'user')
-        useTabStore
-          .getState()
-          .openTab({ type: 'workspace-home', title: '工作台', icon: '⌂', workspaceRef: ref })
+        showWorkspaceHome(ref)
       },
     },
     {

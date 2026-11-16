@@ -1,4 +1,5 @@
 import { type Editor, useEditorState } from '@tiptap/react'
+import { TtsButton } from '../../features/local-tts/TtsButton'
 import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
 import { IconCheck, IconLink } from '../common/Icons'
 import { useCommandStore } from '../../stores/command-store'
@@ -335,6 +336,8 @@ export function EditorToolbar({
       )}
 
       <div className="toolbar-trailing">
+        <TtsButton />
+        {editor && !editor.state.selection.empty && <TtsButton selection />}
         {diagnosticsCount > 0 && (
           <button
             type="button"

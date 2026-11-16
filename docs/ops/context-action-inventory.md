@@ -70,6 +70,11 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 ## 维护规则
 
+本地朗读由 `features/local-tts/tts-commands.ts` 贡献 `tts.read`、`tts.readSelection`、
+`tts.settings`。MD 工具栏、消息按钮、统一选区菜单和命令面板复用这些命令；
+网页选区继续由 `browser-context-menu.ts` 的原生适配器绑定当次目标，执行主进程朗读服务。
+不增加右键触发 owner，不建立第二菜单。
+
 1. 新增 target 时先扩展 `ContextTarget` 和本库存，再由领域 `context-actions.ts` 注册。
 2. 不得新增 renderer 原生 `Menu`、第二个 `ContextMenuHost` 或第二个菜单 Store。
 3. Browser 网页菜单只能走现有主进程原生适配器。

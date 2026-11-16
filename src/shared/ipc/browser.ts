@@ -34,6 +34,10 @@ export interface BrowserFindShortcutTriggeredPayload extends BrowserRuntimeIdent
   triggerSequence: number
 }
 
+export interface BrowserShortcutHelpInputPayload extends BrowserRuntimeIdentity {
+  phase: 'start' | 'cancel' | 'release'
+}
+
 export interface BrowserFindRequest extends BrowserRuntimeIdentity {
   requestToken: string
   query: string
@@ -472,6 +476,19 @@ export function parseBrowserFindShortcutTriggeredPayload(
     : null
 }
 
+export function parseBrowserShortcutHelpInputPayload(
+  value: unknown,
+): BrowserShortcutHelpInputPayload | null {
+  const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
+  return payload &&
+    hasBrowserRuntimeIdentity(payload) &&
+    (payload['phase'] === 'start' ||
+      payload['phase'] === 'cancel' ||
+      payload['phase'] === 'release')
+    ? (value as BrowserShortcutHelpInputPayload)
+    : null
+}
+
 export function parseBrowserFindResultPayload(value: unknown): BrowserFindResultPayload | null {
   const payload = parseBrowserEventRecord<Record<string, unknown>>(value)
   return payload &&
@@ -747,6 +764,7 @@ export interface BrowserApiContract {
     callback: (payload: BrowserFindShortcutTriggeredPayload) => void,
   ) => () => void
   onFindResult: (callback: (payload: BrowserFindResultPayload) => void) => () => void
+  onShortcutHelpInput: (callback: (payload: BrowserShortcutHelpInputPayload) => void) => () => void
   getDiagnostics: (tabId: string) => Promise<BrowserPageDiagnosticSummary | null>
   getRuntimeDiagnostics: (tabId: string) => Promise<BrowserRuntimeDiagnosticSummary>
   getSessionDiagnostics: (
@@ -894,4 +912,5 @@ export const browserIpcEvents = {
   downloadChanged: 'browserDownload:changed',
   findShortcutTriggered: 'browser:findShortcutTriggered',
   findResult: 'browser:findResult',
+  shortcutHelpInput: 'browser:shortcutHelpInput',
 } as const

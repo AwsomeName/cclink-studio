@@ -58,6 +58,7 @@ export interface ManagedClaudeRuntimeOperationResult {
 }
 
 export type RuntimeResourceComponentId =
+  | 'kokoro-tts-model'
   | 'occt-runtime'
   | 'scrcpy-server'
   | 'agent-device-android-helpers'

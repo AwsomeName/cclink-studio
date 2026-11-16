@@ -130,6 +130,28 @@ async function until(read, test, label) {
   throw new Error(label)
 }
 try {
+  const landingProject = join(root, 'personal-from-project/home/专项研发')
+  const landingProfile = await prepare('personal-from-project', {
+    startupWorkspaceTarget: 'resume',
+    lastWorkspacePath: landingProject,
+  })
+  await mkdir(landingProject)
+  await launch(landingProfile)
+  await page.locator('.status-bar-workspace').filter({ hasText: '专项研发' }).waitFor()
+  await clickFixed('我的空间')
+  await page.getByRole('heading', { name: '我的空间', exact: true }).waitFor()
+  await page.getByRole('button', { name: /新建笔记/ }).waitFor()
+  await until(
+    () =>
+      page
+        .locator('.workspace-sidebar-shell')
+        .evaluate((element) => element.getBoundingClientRect().width),
+    (width) => width < 1,
+    'Personal landing page kept an empty secondary sidebar',
+  )
+  await page.screenshot({ path: join(root, 'personal-from-project.png'), scale: 'css' })
+  pass('从普通空间启动后首次点击我的空间，直接显示个人工作台和新建入口')
+  await close()
   const profile = await prepare('main', { startupWorkspaceTarget: 'resume', lastWorkspacePath: '' })
   await launch(profile)
   await page.getByRole('heading', { name: '我的空间', exact: true }).waitFor()
@@ -160,6 +182,13 @@ try {
     (value) => value.includes('FIXED-SPACES-NOTE'),
     'Personal note was not saved',
   )
+  await clickFixed('我的空间')
+  await page.getByRole('heading', { name: '我的空间', exact: true }).waitFor()
+  await page
+    .locator('.workspace-home-record')
+    .filter({ hasText: note.split('/').at(-1) })
+    .click()
+  await page.locator('.tiptap').filter({ hasText: 'FIXED-SPACES-NOTE' }).waitFor()
   pass('真实编辑器写入个人笔记并保存到独立个人目录')
   await clickFixed('我的公司')
   await page.getByRole('dialog', { name: '连接已有公司，或开始新公司' }).waitFor()
@@ -334,6 +363,11 @@ try {
     '我的公司',
   )
   await clickFixed('我的空间')
+  await page.getByRole('heading', { name: '我的空间', exact: true }).waitFor()
+  await page
+    .locator('.workspace-home-record')
+    .filter({ hasText: note.split('/').at(-1) })
+    .click()
   await page.locator('.tiptap').filter({ hasText: 'FIXED-SPACES-NOTE' }).waitFor()
   await clickFixed('我的公司')
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
@@ -346,6 +380,11 @@ try {
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   assert.equal((await companySnapshot(oldCompany)).data.projects[0].id, businessId)
   await clickFixed('我的空间')
+  await page.getByRole('heading', { name: '我的空间', exact: true }).waitFor()
+  await page
+    .locator('.workspace-home-record')
+    .filter({ hasText: note.split('/').at(-1) })
+    .click()
   await page.locator('.tiptap').filter({ hasText: 'FIXED-SPACES-NOTE' }).waitFor()
   await page.screenshot({ path: join(root, 'personal-restored.png') })
   pass('专项空间进入公司、双空间往返及完整重启恢复原笔记和业务')

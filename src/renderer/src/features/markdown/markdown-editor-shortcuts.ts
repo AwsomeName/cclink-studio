@@ -1,4 +1,5 @@
 import { Extension, type Editor } from '@tiptap/core'
+import { closeHistory } from '@tiptap/pm/history'
 import type { MarkdownEditorAction } from '../context-actions/editor-context-surface'
 
 interface MarkdownKeyboardShortcutOptions {
@@ -155,6 +156,34 @@ export function runMarkdownEditorAction(
 ): boolean {
   if (!editor.isEditable) return false
   switch (action) {
+    case 'insert-date-time':
+    case 'insert-time': {
+      const now = new Date()
+      const pad = (value: number): string => String(value).padStart(2, '0')
+      const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`
+      const text =
+        action === 'insert-time'
+          ? time
+          : `${String(now.getFullYear()).padStart(4, '0')}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${time}:${pad(now.getSeconds())}`
+      const inserted = editor
+        .chain()
+        .focus()
+        .command(({ tr }) => {
+          // Keep a timestamp insertion separate from preceding typing or document hydration.
+          closeHistory(tr)
+          return true
+        })
+        .insertContent({ type: 'text', text })
+        .run()
+      if (inserted) {
+        // A separate transaction also separates subsequent typing from this insertion.
+        editor.commands.command(({ tr }) => {
+          closeHistory(tr)
+          return true
+        })
+      }
+      return inserted
+    }
     case 'undo':
       return editor.chain().focus().undo().run()
     case 'redo':

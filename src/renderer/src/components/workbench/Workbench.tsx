@@ -32,8 +32,13 @@ import {
 } from '../../utils/move-browser-tab-to-window'
 import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
 import { normalizeBrowserAddress } from '../../features/browser/browser-address'
+import { ShortcutHelp, type ShortcutHelpContext } from '../../features/shortcuts/ShortcutHelp'
 
-export function Workbench(): React.ReactElement {
+export function Workbench({
+  shortcutHelp = null,
+}: {
+  shortcutHelp?: ShortcutHelpContext | null
+}): React.ReactElement {
   const allTabs = useTabStore((s) => s.tabs)
   const placements = useWorkbenchWindowStore((s) => s.placements)
   const tabs = allTabs.filter((tab) => !isDetachedFromMain(placements[tab.id]))
@@ -331,6 +336,8 @@ export function Workbench(): React.ReactElement {
           onOpenUrl={openBrowserUrl}
         />
       )}
+
+      {isBrowserTab && <ShortcutHelp context={shortcutHelp} inline />}
 
       {(activeTab?.type === 'company-workspace' || activeTab?.type === 'company-accounts') && (
         <CompanySidebar />

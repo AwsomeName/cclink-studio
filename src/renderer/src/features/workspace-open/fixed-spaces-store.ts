@@ -8,6 +8,7 @@ import { openWorkspaceRef } from './workspace-open-controller'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useFsStore } from '../../stores/fs-store'
 import type { CompanySection } from '../company-workspace/company-workspace-commands'
+import { showWorkspaceHome } from './workspace-home-navigation'
 
 /** Main owns bindings; this is a disposable projection and a transient setup request. */
 export const useFixedSpacesStore = create<{
@@ -33,7 +34,9 @@ export async function openPersonalSpace(): Promise<void> {
   if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
   const path = spaces.personal?.workspacePath
   if (!path) throw new Error('我的空间当前不可用')
-  await openWorkspaceRef({ kind: 'local', path })
+  const ref = { kind: 'local' as const, path }
+  await openWorkspaceRef(ref)
+  showWorkspaceHome(ref)
 }
 
 export async function openBoundCompany(section: CompanySection): Promise<boolean> {

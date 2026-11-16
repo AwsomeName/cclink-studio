@@ -25,6 +25,7 @@ import {
 } from '../../shared/ipc/browser'
 import { browserProfilePartition, normalizeBrowserProfileId } from '../../shared/browser-profile'
 import { assertBrowserUrlAccess, isSupportedBrowserUrl } from './browser-url-access'
+import { browserSpeechScript } from './browser-speech-text'
 import { installBrowserCompatibilityHeaders, normalizeDesktopUserAgent } from './browser-stealth'
 import {
   isAllowedBrowserAuthCookie,
@@ -563,6 +564,48 @@ export class BrowserManager {
     return () => this.mainWorkspaceChangedCallbacks.delete(callback)
   }
 
+  private speechSelectionHandler: ((tabId: string, text: string) => void) | null = null
+
+  setSpeechSelectionHandler(handler: (tabId: string, text: string) => void): () => void {
+    this.speechSelectionHandler = handler
+    return () => {
+      if (this.speechSelectionHandler === handler) this.speechSelectionHandler = null
+    }
+  }
+
+  async readSpeechText(
+    tabId: string,
+    workspaceKey: string | null,
+    selection: boolean,
+  ): Promise<string> {
+    const entry = this.views.get(tabId)
+    if (
+      !entry ||
+      entry.ownerWindowId !== MAIN_BROWSER_HOST_ID ||
+      entry.workspaceKey !== workspaceKey ||
+      this.getHostWorkspaceKey(MAIN_BROWSER_HOST_ID) !== workspaceKey ||
+      this.getActiveViewId() !== tabId ||
+      entry.view.webContents.isDestroyed()
+    )
+      throw new Error('网页已切换，请重新选择朗读内容')
+    const generation = entry.fitDocumentGeneration
+    const result: unknown = await entry.view.webContents.executeJavaScriptInIsolatedWorld(1997, [
+      { code: browserSpeechScript(selection) },
+    ])
+    if (
+      this.views.get(tabId) !== entry ||
+      entry.fitDocumentGeneration !== generation ||
+      this.getActiveViewId() !== tabId ||
+      this.getHostWorkspaceKey(MAIN_BROWSER_HOST_ID) !== workspaceKey
+    )
+      throw new Error('网页已导航或切换，请重新朗读')
+    const value = result as { text?: unknown; tooLarge?: unknown } | null
+    if (value?.tooLarge) throw new Error('网页内容过长，请选中一部分后朗读')
+    if (typeof value?.text !== 'string' || !value.text.trim() || value.text.length > 120_000)
+      throw new Error(selection ? '请先选中网页文字' : '未找到可朗读正文，请选中文字后朗读')
+    return value.text
+  }
+
   private get currentBounds(): BrowserBounds {
     return (
       this.hosts.get(MAIN_BROWSER_HOST_ID)?.currentBounds ?? {
@@ -893,6 +936,26 @@ export class BrowserManager {
   /** 普通工作台 View 与网页 popup 共用同一套安全、导航和自动化监听。 */
   private installViewListeners(tabId: string, entry: ViewEntry): void {
     const wc = entry.view.webContents
+    const sendShortcutHelpInput = (phase: 'start' | 'cancel' | 'release'): void => {
+      const host = this.hostForEntry(entry)
+      if (
+        process.platform !== 'darwin' ||
+        this.views.get(tabId) !== entry ||
+        host?.activeViewId !== tabId ||
+        host.workspaceKey !== entry.workspaceKey
+      )
+        return
+      this.sendToOwner(entry, browserIpcEvents.shortcutHelpInput, {
+        phase,
+        tabId,
+        workspaceKey: entry.workspaceKey,
+        runtimeGeneration: entry.runtimeGeneration,
+      })
+    }
+    wc.on('blur', () => sendShortcutHelpInput('release'))
+    wc.on('input-event', (_event, input) => {
+      if (input.type === 'mouseDown') sendShortcutHelpInput('cancel')
+    })
     // Pinch-out below 1 expands Chromium layout viewport independently of the visible pane.
     // Keep shrinking in Electron page zoom; visual zoom only magnifies, and is reset by main.
     void wc
@@ -919,6 +982,16 @@ export class BrowserManager {
       else if (zoomDirection === 'out') this.zoomOut(tabId)
     })
     wc.on('before-input-event', (event, input) => {
+      const commandKey =
+        input.code === 'MetaLeft' || input.code === 'MetaRight' || input.key === 'Meta'
+      if (commandKey && input.type === 'keyUp') sendShortcutHelpInput('release')
+      else if (input.type === 'keyDown' && !input.isAutoRepeat && (input.meta || commandKey)) {
+        sendShortcutHelpInput(
+          commandKey && !input.isComposing && !input.control && !input.alt && !input.shift
+            ? 'start'
+            : 'cancel',
+        )
+      }
       const ownerHost = this.hostForEntry(entry)
       if (
         input.type !== 'keyDown' ||
@@ -1330,6 +1403,13 @@ export class BrowserManager {
       requestAgentMount: (request) => {
         if (validate()) win.webContents.send(browserIpcEvents.contextAgentRequest, request)
       },
+      requestReadSelection:
+        entry.ownerWindowId === MAIN_BROWSER_HOST_ID && this.speechSelectionHandler
+          ? () => {
+              if (validate())
+                this.speechSelectionHandler?.(tabId, params.selectionText.slice(0, 120_001))
+            }
+          : undefined,
     })
   }
 

@@ -127,6 +127,26 @@ describe('browser context menu', () => {
     expect(editable?.linkUrl).toBeNull()
   })
 
+  it('routes speech selection through the existing validated native menu only', () => {
+    const requestReadSelection = vi.fn()
+    let valid = true
+    const template = buildBrowserContextMenuTemplate({
+      context: context(),
+      webContents: webContents() as never,
+      validate: () => valid,
+      requestOpenTab: vi.fn(),
+      requestAgentMount: vi.fn(),
+      requestReadSelection,
+    })
+    const read = template.find((item) => item.id === 'tts.readSelection')!
+    expect(read.label).toBe('朗读选中内容')
+    read.click?.({} as never, {} as never, {} as never)
+    expect(requestReadSelection).toHaveBeenCalledTimes(1)
+    valid = false
+    read.click?.({} as never, {} as never, {} as never)
+    expect(requestReadSelection).toHaveBeenCalledTimes(1)
+  })
+
   it('invalidates every callback when the bound view token is stale', () => {
     const wc = webContents()
     const requestOpenTab = vi.fn()

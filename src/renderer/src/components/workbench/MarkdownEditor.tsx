@@ -404,6 +404,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   useEffect(() => {
     if (!editor) return
     return registerEditorContextSurface(tabId, {
+      isFocused: () => editor.isFocused && editor.isEditable,
       getSelectionText: () => {
         const { from, to } = editor.state.selection
         return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')

@@ -9,9 +9,24 @@ interface MarkdownCommandDefinition {
   label: string
   action: MarkdownEditorAction
   bindings: KeyChord[]
+  requiresEditorFocus?: boolean
 }
 
 const definitions: MarkdownCommandDefinition[] = [
+  {
+    id: 'markdown.insertDateTime',
+    label: 'Markdown：插入完整日期时间',
+    action: 'insert-date-time',
+    requiresEditorFocus: true,
+    bindings: [{ code: 'KeyT', modifiers: ['primary', 'alt'] }],
+  },
+  {
+    id: 'markdown.insertTime',
+    label: 'Markdown：插入时间（HH:mm）',
+    action: 'insert-time',
+    requiresEditorFocus: true,
+    bindings: [{ code: 'KeyT', modifiers: ['primary', 'shift'] }],
+  },
   {
     id: 'markdown.undo',
     label: 'Markdown：撤销',
@@ -124,10 +139,11 @@ const definitions: MarkdownCommandDefinition[] = [
   },
 ]
 
-function getActiveMarkdownSurface() {
+function getActiveMarkdownSurface(requireFocus = false) {
   const tab = useTabStore.getState().getActiveTab()
   if (tab?.type !== 'editor') return null
   const surface = getEditorContextSurface(tab.id)
+  if (requireFocus && !surface?.isFocused?.()) return null
   return surface?.runMarkdownAction ? surface : null
 }
 
@@ -142,12 +158,18 @@ export function createMarkdownCommands(): Command[] {
       inputPolicy: 'allow',
       defaultBindings: definition.bindings,
     },
-    enabled: () => ({
-      enabled: Boolean(getActiveMarkdownSurface()),
-      reason: '当前不是可编辑的 Markdown 文档',
+    enabled: (context) => ({
+      enabled: Boolean(
+        getActiveMarkdownSurface(definition.requiresEditorFocus && context.source === 'shortcut'),
+      ),
+      reason: definition.requiresEditorFocus
+        ? '请先将光标移到可编辑的 Markdown 正文'
+        : '当前不是可编辑的 Markdown 文档',
     }),
-    action: () => {
-      const surface = getActiveMarkdownSurface()
+    action: (context) => {
+      const surface = getActiveMarkdownSurface(
+        definition.requiresEditorFocus && context?.source === 'shortcut',
+      )
       if (!surface?.runMarkdownAction?.(definition.action)) {
         throw new Error('当前 Markdown 操作不可用')
       }

@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { workspaceRefKey } from '@shared/workspace-ref'
 import { isMacPlatform, keyChordFromKeyboardEvent, keyChordId } from '@shared/keybindings'
 import { useCommandStore } from '../../stores/command-store'
 import { useSettingsStore } from '../../stores/settings-store'
@@ -10,6 +11,8 @@ import { resolveEffectiveKeybindings } from './keybinding-resolver'
 import type { EffectiveKeybinding } from './keybinding-resolver'
 import { consumeShortcutCaptureEvent } from './shortcut-capture'
 import { recordRendererDiagnosticLog } from '../diagnostics/renderer-diagnostic-log'
+import { createCommandHoldHint } from './command-hold-hint'
+import type { ShortcutHelpContext } from './ShortcutHelp'
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false
@@ -71,7 +74,49 @@ export function shouldSuppressShortcutForUi(input: {
   return input.contextMenuOpen || input.floatingSurfaceOpen || input.dialogOpen
 }
 
-export function useShortcutRouter(): void {
+function shortcutHelpContext(
+  target: EventTarget | null,
+  nativeBrowser = false,
+): ShortcutHelpContext {
+  const tab = useTabStore.getState().getActiveTab()
+  const scopes = activeShortcutScopes(nativeBrowser ? null : target)
+  const composer =
+    target instanceof Element
+      ? target.closest<HTMLElement>('[data-agent-landmark="composer"]')
+      : null
+  const conversationId = composer?.dataset.agentCommandConversation
+  return {
+    title: scopes.has('agent')
+      ? 'Agent'
+      : scopes.has('markdown')
+        ? 'Markdown'
+        : scopes.has('browser')
+          ? '浏览器'
+          : scopes.has('terminal')
+            ? '终端'
+            : 'Studio',
+    tabId: tab?.id ?? null,
+    scopes,
+    editing: nativeBrowser || isTextEditingTarget(target),
+    nativeBrowser,
+    commandContext: {
+      source: 'shortcut',
+      ...(conversationId
+        ? {
+            target: {
+              kind: 'thread' as const,
+              conversationId,
+              activeRunId: composer?.dataset.agentCommandRun ?? null,
+              workspaceKey: composer?.dataset.agentCommandWorkspace ?? null,
+            },
+          }
+        : {}),
+    },
+  }
+}
+
+export function useShortcutRouter(): ShortcutHelpContext | null {
+  const [help, setHelp] = useState<ShortcutHelpContext | null>(null)
   const commands = useCommandStore((state) => state.commands)
   const executeCommand = useCommandStore((state) => state.executeCommand)
   const overrides = useSettingsStore((state) => state.settings.keybindingOverrides)
@@ -81,8 +126,54 @@ export function useShortcutRouter(): void {
   )
 
   useEffect(() => {
+    const mac = isMacPlatform(navigator.platform)
+    let pendingHelp: ShortcutHelpContext | null = null
+    let inputRevision = 0
+    const hold = createCommandHoldHint({
+      canShow: () =>
+        Boolean(pendingHelp) &&
+        (useTabStore.getState().activeTabId ?? null) === pendingHelp?.tabId &&
+        !useCommandStore.getState().paletteOpen &&
+        !useContextMenuStore.getState().open &&
+        !isAnyFloatingSurfaceOpen() &&
+        !document.querySelector('[role="dialog"], [aria-modal="true"]'),
+      show: () => {
+        setHelp(pendingHelp)
+      },
+      hide: () => setHelp(null),
+    })
+    const resetHold = (): void => {
+      inputRevision += 1
+      hold.release()
+    }
+    const cancelHold = (): void => {
+      inputRevision += 1
+      hold.cancel()
+    }
+    const releaseHold = (event: KeyboardEvent): void => {
+      if (event.key === 'Meta' || !event.metaKey) resetHold()
+    }
     const route = (event: KeyboardEvent): void => {
-      if (consumeShortcutCaptureEvent(event)) return
+      inputRevision += 1
+      if (consumeShortcutCaptureEvent(event)) {
+        hold.release()
+        return
+      }
+      if (
+        mac &&
+        event.key === 'Meta' &&
+        !event.repeat &&
+        !event.isComposing &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !event.defaultPrevented
+      ) {
+        pendingHelp = shortcutHelpContext(event.target)
+        hold.press()
+      } else if (event.key !== 'Meta' || event.isComposing) {
+        hold.cancel()
+      }
       if (event.defaultPrevented || event.isComposing || event.repeat) return
       const chord = keyChordFromKeyboardEvent(event, isMacPlatform(navigator.platform))
       if (!chord) return
@@ -138,7 +229,60 @@ export function useShortcutRouter(): void {
         ])
       })
     }
+    const removeNativeHint = window.cclinkStudio.browser.onShortcutHelpInput?.((payload) => {
+      if (!mac) return
+      const tab = useTabStore.getState().getActiveTab()
+      if (
+        tab?.id !== payload.tabId ||
+        tab.type !== 'browser' ||
+        !tab.workspaceRef ||
+        workspaceRefKey(tab.workspaceRef) !== payload.workspaceKey
+      )
+        return
+      const revision = ++inputRevision
+      if (payload.phase !== 'start') {
+        if (payload.phase === 'release') hold.release()
+        else hold.cancel()
+        return
+      }
+      void window.cclinkStudio.browser
+        .getRuntimeIdentity(payload.tabId)
+        .then((identity) => {
+          if (
+            revision !== inputRevision ||
+            identity?.runtimeGeneration !== payload.runtimeGeneration ||
+            identity?.workspaceKey !== payload.workspaceKey ||
+            useTabStore.getState().activeTabId !== payload.tabId
+          )
+            return
+          pendingHelp = shortcutHelpContext(null, true)
+          hold.press()
+        })
+        .catch(() => {
+          if (revision === inputRevision) hold.release()
+        })
+    })
+    const removeTabListener = useTabStore.subscribe((state, previous) => {
+      if (state.activeTabId !== previous.activeTabId) resetHold()
+    })
     window.addEventListener('keydown', route, true)
-    return () => window.removeEventListener('keydown', route, true)
+    window.addEventListener('keyup', releaseHold, true)
+    window.addEventListener('blur', resetHold)
+    window.addEventListener('pointerdown', cancelHold, true)
+    window.addEventListener('focusin', cancelHold)
+    document.addEventListener('visibilitychange', resetHold)
+    return () => {
+      hold.release()
+      inputRevision += 1
+      removeNativeHint?.()
+      removeTabListener()
+      window.removeEventListener('keydown', route, true)
+      window.removeEventListener('keyup', releaseHold, true)
+      window.removeEventListener('blur', resetHold)
+      window.removeEventListener('pointerdown', cancelHold, true)
+      window.removeEventListener('focusin', cancelHold)
+      document.removeEventListener('visibilitychange', resetHold)
+    }
   }, [bindings, executeCommand])
+  return help
 }

@@ -40,6 +40,7 @@ import type {
 } from '../shared/ipc/workbench-window'
 
 export interface CCLinkStudioAPI {
+  localTts: import('../shared/local-tts').LocalTtsApi
   reportWorkbenchBounds: (bounds: BrowserWorkbenchBounds) => void
 
   window: WindowApiContract

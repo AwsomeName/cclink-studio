@@ -8,6 +8,11 @@ import type { ContentBlock } from '../types'
 import { localWorkspaceRef } from '../../../shared/workspace-ref'
 import { createAgentConversationState } from '../features/agent-conversations/conversation-state'
 import { useSettingsStore } from './settings-store'
+import {
+  beginWorkspaceStateRestore,
+  endWorkspaceStateRestore,
+  flushPendingWorkspaceStateWrites,
+} from '../utils/workspace-state'
 
 beforeEach(() => {
   resetAgentWorkspaceActiveConversationMemoryForTests()
@@ -612,6 +617,33 @@ describe('useAgentStore', () => {
 
       expect(useAgentStore.getState().activeConversationId).toBe(activeId)
       expect(useAgentStore.getState().conversations[archivedId]).toBeUndefined()
+    })
+
+    it('删除写盘失败后恢复会话，并把失败传回列表', async () => {
+      const id = useAgentStore.getState().createConversation({ activate: false })
+      await useAgentStore.getState().archiveConversation(id)
+      const conversation = useAgentStore.getState().conversations[id]
+      const activeId = useAgentStore.getState().activeConversationId
+      const setSection = vi.fn().mockResolvedValue({ success: false, error: '磁盘已满' })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      await expect(useAgentStore.getState().deleteConversation(id)).rejects.toThrow('磁盘已满')
+      await flushPendingWorkspaceStateWrites()
+      expect(useAgentStore.getState().conversations[id]).toEqual(conversation)
+      expect(useAgentStore.getState().conversationOrder.filter((item) => item === id)).toHaveLength(
+        1,
+      )
+      expect(useAgentStore.getState().activeConversationId).toBe(activeId)
+    })
+
+    it('恢复期间拒绝删除，避免持久化跳过却报告删除成功', async () => {
+      const id = useAgentStore.getState().createConversation({ activate: false })
+      beginWorkspaceStateRestore()
+      try {
+        await expect(useAgentStore.getState().deleteConversation(id)).rejects.toThrow('正在恢复')
+        expect(useAgentStore.getState().conversations[id]).toBeDefined()
+      } finally {
+        endWorkspaceStateRestore()
+      }
     })
 
     it('挂载资源时按会话去重并支持移除', () => {

@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { localTtsApi } from './local-tts-api'
 import {
   authIpc,
   authIpcEvents,
@@ -406,6 +407,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   articlePublishing: articlePublishingApi,
 
   gitBackup: gitBackupApi,
+  localTts: localTtsApi,
 
   hardware: hardwareApi,
 

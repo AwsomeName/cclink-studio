@@ -18,6 +18,7 @@ import {
   parseBrowserContextAgentRequest,
   parseBrowserDownloadChangedPayload,
   parseBrowserFindResultPayload,
+  parseBrowserShortcutHelpInputPayload,
   parseBrowserFindShortcutTriggeredPayload,
   parseBrowserNativeContextMenuOpenedPayload,
   parseBrowserOpenTabRequest,
@@ -142,7 +143,12 @@ describe('preload event payload parsers', () => {
       workspaceKey: null,
       runtimeGeneration: 1,
     }
+    expect(
+      parseBrowserShortcutHelpInputPayload({ ...runtimeIdentity, phase: 'execute' }),
+    ).toBeNull()
+    expect(parseBrowserShortcutHelpInputPayload({ phase: 'start' })).toBeNull()
     const validPayloads = [
+      [parseBrowserShortcutHelpInputPayload, { ...runtimeIdentity, phase: 'start' }],
       [
         parseBrowserFindShortcutTriggeredPayload,
         { ...runtimeIdentity, commandId: 'workbench.find', configVersion: 1, triggerSequence: 1 },

@@ -24,6 +24,7 @@ import { useAgentConversationRestore } from './bootstrap/use-agent-conversation-
 import { useRemoteConversationRestore } from './bootstrap/use-remote-conversation-restore'
 import { useAppSession } from './bootstrap/use-app-session'
 import { useShortcutRouter } from './features/shortcuts/use-shortcut-router'
+import { ShortcutHelp } from './features/shortcuts/ShortcutHelp'
 import { useMainProcessEvents } from './bootstrap/use-main-process-events'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
 import { useTerminalEvents } from './bootstrap/use-terminal-events'
@@ -157,7 +158,8 @@ function MainLayout(): React.ReactElement {
   const workbenchWindowReady = useWorkbenchWindowEvents()
   useRegisterContextActions()
   useConversationSelectionMenu()
-  useShortcutRouter()
+  const shortcutHelp = useShortcutRouter()
+  const inlineShortcutHelp = activeTab?.type === 'browser' && !agentInCenter
   useBrowserFindBridge()
   useMainProcessEvents()
   useAgentStreamEvents()
@@ -355,7 +357,7 @@ function MainLayout(): React.ReactElement {
           <ErrorBoundary
             fallback={(e, retry) => <PanelErrorFallback error={e} retry={retry} title="主区域" />}
           >
-            <Workbench />
+            <Workbench shortcutHelp={inlineShortcutHelp ? shortcutHelp : null} />
           </ErrorBoundary>
         )}
 
@@ -395,6 +397,7 @@ function MainLayout(): React.ReactElement {
 
       <StatusBar />
       <CommandPalette />
+      <ShortcutHelp context={inlineShortcutHelp ? null : shortcutHelp} />
       <ContextMenuHost />
       <WorkspaceOpenSurface anchorRef={workspaceOpenButtonRef} />
     </div>

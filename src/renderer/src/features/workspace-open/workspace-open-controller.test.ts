@@ -19,6 +19,7 @@ import {
   setWorkspaceStatePath,
 } from '../../utils/workspace-state'
 import { beginWorkspaceRuntimeTransition } from '../../utils/workspace-transition'
+import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
 import {
   openDefaultWorkspace,
   openWorkspaceRef,
@@ -58,6 +59,12 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     cclinkStudio: {
       workspaceState: {
+        ensurePersonalSpace: vi.fn(async () => ({
+          version: 1,
+          personal: { workspacePath: '/workspace/default', projectId: 'personal-id' },
+          company: null,
+          legacyDefaultPath: '',
+        })),
         ensureDefaultWorkspace: vi.fn(async () => ({
           success: true,
           workspacePath: '/workspace/default',
@@ -105,6 +112,7 @@ beforeEach(() => {
   useTabStore.setState(useTabStore.getInitialState(), true)
   useUIStore.setState(useUIStore.getInitialState(), true)
   useWorkspaceStore.setState(useWorkspaceStore.getInitialState(), true)
+  useFixedSpacesStore.setState({ spaces: null, setup: null })
   useWorkspaceStore.getState().commitActiveWorkspace(localRef)
   setWorkspaceStateOwnerKey('local:owner')
 })
@@ -120,6 +128,61 @@ describe('workspace-open-controller', () => {
     const ref = await openDefaultWorkspace()
     expect(ref).toEqual(localWorkspaceRef('/workspace/default'))
     expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(ref)
+    expect(useTabStore.getState().getActiveTab()).toMatchObject({ type: 'workspace-home' })
+  })
+
+  it('opens the personal landing page after restoring a centered Agent, preserving existing documents', async () => {
+    const ref = localWorkspaceRef('/workspace/default')
+    const note = {
+      id: 'personal-note',
+      type: 'editor',
+      title: '原笔记.md',
+      icon: '📄',
+      filePath: ref.path + '/原笔记.md',
+      workspaceRef: ref,
+    }
+    vi.mocked(window.cclinkStudio.workspaceState.get).mockResolvedValue(
+      snapshot(ref.path, {
+        layout: { agentPanelMode: 'center', agentPanelModeSource: 'user', activePanel: 'files' },
+        tabs: { tabs: [note], activeTabId: note.id },
+      }),
+    )
+    await openPersonalSpace()
+    expect(useUIStore.getState()).toMatchObject({
+      activePanel: 'workspace-home',
+      agentPanelMode: 'right',
+    })
+    expect(useTabStore.getState().getActiveTab()).toMatchObject({
+      type: 'workspace-home',
+      workspaceRef: ref,
+    })
+    expect(useTabStore.getState().tabs).toContainEqual(expect.objectContaining({ id: note.id }))
+    useTabStore.getState().activateTab(note.id)
+    await openPersonalSpace()
+    expect(useTabStore.getState().getActiveTab()?.type).toBe('workspace-home')
+    expect(useTabStore.getState().tabs.filter((tab) => tab.type === 'workspace-home')).toHaveLength(
+      1,
+    )
+    expect(useTabStore.getState().tabs).toContainEqual(expect.objectContaining({ id: note.id }))
+  })
+
+  it('does not open a personal landing page when a later navigation cancels initialization', async () => {
+    const previousPanel = useUIStore.getState().activePanel
+    vi.mocked(window.cclinkStudio.workspaceState.ensurePersonalSpace).mockImplementation(
+      async () => {
+        beginWorkspaceRuntimeTransition()
+        return {
+          version: 1,
+          personal: { workspacePath: '/workspace/default', projectId: 'personal-id' },
+          company: null,
+          legacyDefaultPath: '',
+        }
+      },
+    )
+    await openPersonalSpace()
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(localRef)
+    expect(useUIStore.getState().activePanel).toBe(previousPanel)
+    expect(useTabStore.getState().tabs).toHaveLength(0)
   })
 
   it('returns no target when a later workspace transition cancels default initialization', async () => {

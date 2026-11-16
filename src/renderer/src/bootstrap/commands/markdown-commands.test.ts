@@ -4,9 +4,52 @@ import { registerEditorContextSurface } from '../../features/context-actions/edi
 import { useTabStore } from '../../stores/tab-store'
 
 describe('Markdown configurable commands', () => {
+  it.each([
+    ['markdown.insertDateTime', 'insert-date-time'],
+    ['markdown.insertTime', 'insert-time'],
+  ])(
+    '%s requires editor focus for shortcuts but remains available from the palette',
+    (id, action) => {
+      const runMarkdownAction = vi.fn(() => true)
+      const isFocused = vi.fn(() => false)
+      const unregister = registerEditorContextSurface('timestamp-editor', {
+        isFocused,
+        getSelectionText: () => '',
+        cut: vi.fn(),
+        copy: vi.fn(),
+        paste: vi.fn(),
+        selectAll: vi.fn(),
+        openFind: vi.fn(),
+        closeFind: vi.fn(),
+        runMarkdownAction,
+      })
+      const getState = vi.spyOn(useTabStore, 'getState').mockReturnValue({
+        getActiveTab: () => ({ id: 'timestamp-editor', type: 'editor' }),
+      } as never)
+      try {
+        const command = createMarkdownCommands().find((candidate) => candidate.id === id)!
+        expect(command.enabled?.({ source: 'shortcut' })).toMatchObject({ enabled: false })
+        expect(() => command.action({ source: 'shortcut' })).toThrow()
+        expect(runMarkdownAction).not.toHaveBeenCalled()
+
+        expect(command.enabled?.({ source: 'palette' })).toMatchObject({ enabled: true })
+        command.action({ source: 'palette' })
+        expect(runMarkdownAction).toHaveBeenLastCalledWith(action)
+
+        isFocused.mockReturnValue(true)
+        expect(command.enabled?.({ source: 'shortcut' })).toMatchObject({ enabled: true })
+        command.action({ source: 'shortcut' })
+        expect(runMarkdownAction).toHaveBeenCalledTimes(2)
+      } finally {
+        unregister()
+        getState.mockRestore()
+      }
+    },
+  )
+
   it('declares every migrated formatting shortcut in the fixed Markdown scope', () => {
     const commands = createMarkdownCommands()
-    expect(commands).toHaveLength(22)
+    expect(commands).toHaveLength(24)
     expect(commands.every((command) => command.configurable)).toBe(true)
     expect(commands.every((command) => command.shortcutPolicy?.scope === 'markdown')).toBe(true)
     expect(
