@@ -29,7 +29,6 @@ import {
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { getBrowserTabMode } from '../../features/browser/browser-tab-mode'
 import './browser-toolbar.css'
-import { TtsButton } from '../../features/local-tts/TtsButton'
 
 interface BrowserToolbarProps {
   tabId: string
@@ -525,7 +524,6 @@ export function BrowserToolbar({
           </div>
         )}
 
-        <TtsButton label="朗读正文" />
         <button
           type="button"
           className="browser-zoom-summary"

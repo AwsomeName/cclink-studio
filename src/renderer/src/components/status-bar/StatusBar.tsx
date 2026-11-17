@@ -97,12 +97,6 @@ export function StatusBar(): React.ReactElement {
     <>
       <div className="status-bar">
         <div className="status-bar-left">
-          <GitStatusBarItem
-            workspacePath={workspacePath}
-            contextProps={statusContextProps('git')}
-          />
-          <TtsStatusPlayer />
-
           {switchingPath && (
             <span
               className="status-bar-item status-bar-workspace-switch"
@@ -126,6 +120,12 @@ export function StatusBar(): React.ReactElement {
               {workspaceRefLabel(activeWorkspaceRef)}
             </span>
           </span>
+
+          <GitStatusBarItem
+            workspacePath={workspacePath}
+            contextProps={statusContextProps('git')}
+          />
+          <TtsStatusPlayer />
 
           {/* 浏览器 URL（截断显示） */}
           {activeTab?.type === 'browser' && currentUrl && (

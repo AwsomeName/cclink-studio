@@ -250,6 +250,13 @@ jobs:
             grep -F -- "Authority=$CSC_NAME" <<<"$dmg_signature"
             grep -F -- "TeamIdentifier=$expected_team_id" <<<"$dmg_signature"
           done
+      - name: Smoke packaged local TTS
+        working-directory: source
+        timeout-minutes: 15
+        run: |
+          app_path="$(find dist -maxdepth 3 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          pnpm smoke:local-tts-packaged "$app_path"
       - name: Prepare release assets
         working-directory: source
         run: |

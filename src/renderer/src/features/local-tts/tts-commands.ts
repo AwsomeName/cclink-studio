@@ -106,19 +106,44 @@ function resolveInput(context: CommandContext | undefined, selection: boolean): 
   }
 }
 
+async function readContent(context: CommandContext | undefined, selection: boolean): Promise<void> {
+  const input = resolveInput(context, selection)
+  if (input.source.kind === 'browser' && useTtsStore.getState().open) {
+    // The floating player temporarily detaches the native View. Let its existing
+    // lifecycle restore it, then confirm the actual projection before reading.
+    useTtsStore.setState({ open: false })
+    const deadline = Date.now() + 2500
+    while (true) {
+      const activeView = await window.cclinkStudio.browser.getActiveViewId(
+        input.source.workspaceKey,
+      )
+      if (
+        useTabStore.getState().activeTabId !== input.source.tabId ||
+        workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef) !==
+          input.source.workspaceKey
+      )
+        throw new Error('网页或工作空间已切换，请重新发起朗读')
+      if (activeView === input.source.tabId) break
+      if (Date.now() >= deadline) throw new Error('网页尚未恢复显示，请稍后重试朗读')
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+  }
+  await startTts(input)
+}
+
 export function createTtsCommands(): Command[] {
   return [
     {
       id: 'tts.read',
       label: '朗读当前内容',
       category: '本地朗读',
-      action: (context) => startTts(resolveInput(context, false)),
+      action: (context) => readContent(context, false),
     },
     {
       id: 'tts.readSelection',
       label: '朗读选中内容',
       category: '本地朗读',
-      action: (context) => startTts(resolveInput(context, true)),
+      action: (context) => readContent(context, true),
     },
     {
       id: 'tts.settings',

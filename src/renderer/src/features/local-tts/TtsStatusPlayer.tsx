@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { TTS_VOICES, type TtsPhase } from '@shared/local-tts'
 import { attachTtsTransport, controlTts, installTts, useTtsStore } from './tts-controller'
 import { TtsIcon } from './TtsButton'
+import { executeTtsCommand } from './tts-commands'
+import { useTabStore } from '../../stores/tab-store'
 import { useFloatingSurfaceRegistration } from '../../components/common/floating-surface-registry'
 import { useEscapeDismiss } from '../../components/common/dismissable-layer'
 import './local-tts.css'
@@ -22,6 +24,10 @@ const labels: Record<TtsPhase, string> = {
 
 export function TtsStatusPlayer(): React.ReactElement {
   const { snapshot, open, error } = useTtsStore()
+  const contentType = useTabStore(
+    (state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.type,
+  )
+  const canRead = contentType === 'editor' || contentType === 'browser'
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLElement>(null)
@@ -82,6 +88,7 @@ export function TtsStatusPlayer(): React.ReactElement {
         aria-label="展开本地朗读播放器"
         aria-expanded={open}
         aria-controls="tts-player-panel"
+        onMouseDown={(event) => event.preventDefault()}
         onClick={() => useTtsStore.setState({ open: !open })}
       >
         <TtsIcon />
@@ -146,6 +153,26 @@ export function TtsStatusPlayer(): React.ReactElement {
                 ⌄
               </button>
             </header>
+            <div className="tts-start-actions">
+              <button
+                type="button"
+                className="tts-primary"
+                disabled={!canRead}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void executeTtsCommand('tts.read')}
+              >
+                朗读当前内容
+              </button>
+              <button
+                type="button"
+                disabled={!canRead}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => void executeTtsCommand('tts.readSelection')}
+              >
+                朗读选中内容
+              </button>
+            </div>
+            {!canRead && <p className="tts-empty">打开 Markdown 文档或网页后开始朗读。</p>}
             {(error || snapshot?.error) && (
               <p className="tts-error" role="alert">
                 {error || snapshot?.error?.message}
@@ -226,7 +253,7 @@ export function TtsStatusPlayer(): React.ReactElement {
                 </div>
               </>
             ) : (
-              <p className="tts-empty">点击 MD 工具栏、网页工具栏或消息旁的“朗读”开始。</p>
+              <p className="tts-empty">选择上方操作开始朗读；朗读选区前，请先在正文中选中文字。</p>
             )}
             <div className="tts-preferences">
               <label>

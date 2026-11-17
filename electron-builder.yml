@@ -9,6 +9,7 @@ files:
   - out/**
   - package.json
 asar: true
+afterPack: scripts/verify-packaged-tts.cjs
 asarUnpack:
   # sherpa native addon and its sibling ONNX libraries must share real paths.
   - node_modules/sherpa-onnx-*/**

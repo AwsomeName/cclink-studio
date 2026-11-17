@@ -237,6 +237,28 @@ importers:
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.15)(react@19.2.6)(use-sync-external-store@1.6.0(react@19.2.6))
+    optionalDependencies:
+      sherpa-onnx-darwin-arm64:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-darwin-x64:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-linux-arm64:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-linux-x64:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-win-arm64:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-win-ia32:
+        specifier: 2.0.1
+        version: 2.0.1
+      sherpa-onnx-win-x64:
+        specifier: 2.0.1
+        version: 2.0.1
 
 packages:
 

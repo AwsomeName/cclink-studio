@@ -1,0 +1,18 @@
+Packaged TTS evidence: /private/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/cclink-tts-packaged-LKRgTb
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"code":"SYNTHESIS_FAILED","message":"本地语音进程已退出"}
+    at file:///Users/apple/Desktop/cclink-dev/cclink-studio/scripts/local-tts-packaged-smoke.mjs:131:12
+    at async waitFor (file:///Users/apple/Desktop/cclink-dev/cclink-studio/scripts/local-tts-packaged-smoke.mjs:82:20)
+    at async file:///Users/apple/Desktop/cclink-dev/cclink-studio/scripts/local-tts-packaged-smoke.mjs:129:19 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'failed',
+  expected: 'failed',
+  operator: 'notStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.2

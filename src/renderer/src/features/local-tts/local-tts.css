@@ -145,6 +145,7 @@
   background: var(--bg-hover);
   border-left: 2px solid var(--accent-color, #007acc);
 }
+.tts-start-actions,
 .tts-panel-transport {
   display: flex;
   justify-content: center;

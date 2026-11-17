@@ -1,0 +1,10 @@
+{
+  "app": "/tmp/cclink-tts-fixed-build/mac-arm64/CCLink Studio 开源版.app",
+  "platform": "darwin",
+  "arch": "arm64",
+  "renderer": "file://",
+  "modelHealth": "healthy",
+  "duration": 1.7233333333333334,
+  "bytes": 82764,
+  "phase": "ended"
+}

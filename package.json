@@ -19,6 +19,7 @@
   "scripts": {
     "usage": "node scripts/model-usage.mjs",
     "smoke:local-tts": "node scripts/local-tts-smoke.mjs",
+    "smoke:local-tts-packaged": "node scripts/local-tts-packaged-smoke.mjs",
     "smoke:model-usage": "node scripts/model-usage-smoke.mjs",
     "smoke:model-usage-ui": "node scripts/model-usage-ui-smoke.mjs",
     "start": "bash scripts/restart.sh start",
@@ -43,7 +44,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck": "pnpm typecheck:web && pnpm typecheck:node",
     "verify:oss-boundary": "node scripts/verify-oss-boundary.mjs && node --test scripts/verify-oss-boundary.test.mjs",
-    "verify:package-boundary": "node --test scripts/package-boundary.test.mjs",
+    "verify:package-boundary": "node --test scripts/package-boundary.test.mjs scripts/verify-packaged-tts.test.mjs",
     "verify:credential-boundary": "node scripts/verify-credential-boundary.mjs",
     "verify:claude-scheduling-boundary": "node scripts/verify-claude-native-scheduling.mjs && node --test scripts/verify-claude-native-scheduling.test.mjs",
     "verify:context-actions": "node scripts/verify-context-action-boundary.mjs",
@@ -168,5 +169,14 @@
     "vite": "^6.3.5",
     "vitest": "^3.2.6",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "sherpa-onnx-darwin-arm64": "2.0.1",
+    "sherpa-onnx-darwin-x64": "2.0.1",
+    "sherpa-onnx-linux-arm64": "2.0.1",
+    "sherpa-onnx-linux-x64": "2.0.1",
+    "sherpa-onnx-win-arm64": "2.0.1",
+    "sherpa-onnx-win-ia32": "2.0.1",
+    "sherpa-onnx-win-x64": "2.0.1"
   }
 }

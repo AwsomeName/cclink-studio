@@ -86,6 +86,18 @@ const check = (name) => {
   console.log('PASS', name)
 }
 const shot = (name) => page.screenshot({ path: join(runDir, `${name}.png`) })
+async function readFromStatus(selection = false) {
+  const trigger = page.getByLabel('展开本地朗读播放器')
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click()
+  await page
+    .getByRole('button', {
+      name: selection ? '朗读选中内容' : '朗读当前内容',
+      exact: true,
+    })
+    .click()
+  if (await page.getByLabel('收起朗读播放器').isVisible())
+    await page.getByLabel('收起朗读播放器').click()
+}
 async function openWorkspace(path) {
   await page.evaluate(async (path) => {
     await window.cclinkStudio.workspaceState.listLocalWorkspaces(null)
@@ -146,11 +158,14 @@ try {
     useUIStore.getState().showPanel('files')
   })
   await page.locator('.file-tree-item.file').filter({ hasText: '朗读验收.md' }).click()
-  await page.locator('.editor-toolbar .tts-source-button').first().waitFor()
-  await page.locator('.editor-toolbar .tts-source-button').first().click()
+  await page.locator('.tiptap[contenteditable=true]').waitFor()
+  assert.equal(await page.locator('.editor-toolbar .tts-source-button').count(), 0)
+  await readFromStatus()
   let first = await snap()
   if (first.resource?.health !== 'healthy') {
     assert.equal(first.phase, 'needs-model')
+    if ((await page.getByLabel('展开本地朗读播放器').getAttribute('aria-expanded')) !== 'true')
+      await page.getByLabel('展开本地朗读播放器').click()
     await page.getByRole('button', { name: '下载并安装', exact: true }).click()
     await shot('01-model-install')
     let last = ''
@@ -173,7 +188,7 @@ try {
   } else check('existing model integrity checked at startup')
   await phase('playing')
   await shot('02-md-playing')
-  check('MD toolbar → real utilityProcess synthesis → HTMLAudio playing event')
+  check('MD bottom player → real utilityProcess synthesis → HTMLAudio playing event')
   assert(!(await snap()).segments.join('').includes('secret_code_omit'))
   if (await page.getByLabel('收起朗读播放器').isVisible())
     await page.getByLabel('收起朗读播放器').click()
@@ -195,17 +210,17 @@ try {
   await page
     .locator('.tiptap[contenteditable=true]')
     .fill('未保存内容也可以朗读。这句话没有写入磁盘。')
-  await page.locator('.editor-toolbar .tts-source-button').first().click()
+  await readFromStatus()
   await phase('playing')
   assert((await snap()).segments.join('').includes('未保存内容'))
   assert.equal(await readFile(join(workspace, '朗读验收.md'), 'utf8'), md)
   check('unsaved Markdown snapshot read without saving')
   await page.locator('.tiptap[contenteditable=true]').click()
   await page.locator('.tiptap[contenteditable=true]').press('Meta+a')
-  await page.getByLabel('朗读选区', { exact: true }).click()
+  await readFromStatus(true)
   await phase('playing')
   assert.equal((await snap()).source.selection, true)
-  check('Markdown selection button reads actual editor selection')
+  check('bottom player preserves and reads actual Markdown selection')
 
   const oldSession = (await snap()).sessionId
   await page.evaluate(async (url) => {
@@ -214,7 +229,8 @@ try {
       .getState()
       .openTab({ type: 'browser', title: '网页朗读验收', icon: '🌐', initialUrl: url })
   }, url)
-  await page.getByLabel('朗读正文', { exact: true }).waitFor()
+  await page.getByLabel('浏览器地址', { exact: true }).waitFor()
+  assert.equal(await page.getByLabel('朗读正文', { exact: true }).count(), 0)
   const webPage = await waitFor(
     () =>
       browser
@@ -226,7 +242,7 @@ try {
   await webPage.waitForSelector('article p')
   assert.equal((await snap()).sessionId, oldSession)
   check('switching tabs retains current speech session')
-  await page.getByLabel('朗读正文', { exact: true }).click()
+  await readFromStatus()
   await waitFor(async () => (await snap()).source?.kind === 'browser', 'web source')
   await phase('playing')
   const webSnap = await snap()
@@ -257,14 +273,11 @@ try {
       selection.removeAllRanges()
       selection.addRange(range)
     })
-  await page.evaluate(async () => {
-    const { executeTtsCommand } = await import('/src/features/local-tts/tts-commands.ts')
-    await executeTtsCommand('tts.readSelection')
-  })
+  await readFromStatus(true)
   await phase('playing')
   assert.equal((await snap()).source.selection, true)
   assert((await snap()).segments.join('').startsWith('第二段'))
-  check('web selection command reads actual isolated-world selection')
+  check('bottom player preserves and reads native browser selection')
   await page.getByLabel('暂停朗读', { exact: true }).click()
   await phase('paused')
 
