@@ -23,6 +23,7 @@ import type {
 } from './scheduled-task-types'
 
 export const scheduledTasksIpc = {
+  inspect: defineIpcCall<[string], ScheduledTaskListResult>('scheduledTasks:inspect'),
   list: defineIpcCall<[string], ScheduledTaskListResult>('scheduledTasks:list'),
   get: defineIpcCall<[string, string], ScheduledTaskOperationResult>('scheduledTasks:get'),
   save: defineIpcCall<[SaveScheduledTaskInput], ScheduledTaskOperationResult>(
@@ -109,6 +110,14 @@ const invalidRuntimeStatus = async (): Promise<ScheduledTaskRuntimeStatus> => ({
 })
 
 export const scheduledTasksIpcContracts = {
+  inspect: bindIpcParser(
+    scheduledTasksIpc.inspect,
+    (args) => {
+      requireArgs(args, 1, scheduledTasksIpc.inspect.channel)
+      return ipcArgs(parseWorkspacePath(args[0]))
+    },
+    invalidList,
+  ),
   list: bindIpcParser(
     scheduledTasksIpc.list,
     (args) => {

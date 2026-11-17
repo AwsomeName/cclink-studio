@@ -1,3 +1,4 @@
+import type { DiaryDocument, DiaryDocumentInput } from '../personal-diary-source'
 import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
 import { defineIpcCall } from './contract'
 import { installImpactSchema, type UpdateInstallImpact } from '../update/update-contract'
@@ -215,6 +216,8 @@ export interface ConnectCompanySpaceInput {
 }
 
 export interface WorkspaceStateApiContract {
+  diaryDocument: (input: DiaryDocumentInput) => Promise<DiaryDocument>
+  verifyLocalIdentity: (path: string, projectId: string) => Promise<void>
   getFixedSpaces: () => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
   listCompanySpaces: () => Promise<CompanySpaceCandidate[]>
@@ -248,6 +251,8 @@ export interface WorkspaceStateApiContract {
 }
 
 export const workspaceStateIpc = {
+  diaryDocument: defineIpcCall<[DiaryDocumentInput], DiaryDocument>('workspaceState:diaryDocument'),
+  verifyLocalIdentity: defineIpcCall<[string, string], void>('workspaceState:verifyLocalIdentity'),
   getFixedSpaces: defineIpcCall<[], FixedSpaces>('workspaceState:getFixedSpaces'),
   ensurePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:ensurePersonalSpace'),
   listCompanySpaces: defineIpcCall<[], CompanySpaceCandidate[]>('workspaceState:listCompanySpaces'),

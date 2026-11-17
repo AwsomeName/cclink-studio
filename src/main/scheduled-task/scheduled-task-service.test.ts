@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -22,7 +22,7 @@ let workspacePath = ''
 let userDataPath = ''
 
 beforeEach(async () => {
-  tempDir = await mkdtemp(join(tmpdir(), 'cclink-studio-scheduled-task-'))
+  tempDir = await realpath(await mkdtemp(join(tmpdir(), 'cclink-studio-scheduled-task-')))
   workspacePath = join(tempDir, 'workspace')
   userDataPath = join(tempDir, 'user-data')
   await mkdir(join(workspacePath, '.git/info'), { recursive: true })
@@ -33,6 +33,33 @@ afterEach(async () => {
 })
 
 describe('ScheduledTaskService', () => {
+  it('inspects original tasks without changing definitions or activation and refuses pending migration', async () => {
+    const service = createService()
+    await service.load()
+    const saved = await service.save(createInput(true))
+    await writeFile(
+      join(workspacePath, '.cclink-studio/project.json'),
+      JSON.stringify({ projectId: 'project-1' }),
+    )
+    const definitionPath = join(
+      workspacePath,
+      '.cclink-studio/scheduled-tasks',
+      saved.task!.definition.id + '.json',
+    )
+    const before = await readFile(definitionPath, 'utf8')
+    const result = await service.inspect(workspacePath)
+    expect(result.success).toBe(true)
+    expect(result.tasks[0].definition.id).toBe(saved.task!.definition.id)
+    expect(result.tasks[0].activation).toEqual(saved.task!.activation)
+    expect(await readFile(definitionPath, 'utf8')).toBe(before)
+    const migrations = join(workspacePath, '.cclink-studio/scheduled-task-migrations')
+    await mkdir(migrations)
+    await writeFile(join(migrations, 'pending.json'), '{}')
+    expect((await service.inspect(workspacePath)).success).toBe(false)
+    expect(await readFile(join(migrations, 'pending.json'), 'utf8')).toBe('{}')
+    expect(await readFile(definitionPath, 'utf8')).toBe(before)
+  })
+
   it('keeps the real fallback file openable on a failed run after reloading', async () => {
     const executor = new ScheduledTaskAgentRunner({
       onRuntimeEvent: () => () => {},
@@ -837,6 +864,8 @@ function createService(
       valid: workspaceProjectIds.has(path),
       workspacePath: workspaceProjectIds.has(path) ? path : null,
     })),
+    listLocalWorkspaces: () =>
+      [...workspaceProjectIds].map(([workspacePath, projectId]) => ({ workspacePath, projectId })),
     getLocalProjectId: vi.fn(async (path: string) => workspaceProjectIds.get(path) ?? null),
   } as unknown as WorkspaceStateService
   return new ScheduledTaskService(workspaceStateService, {

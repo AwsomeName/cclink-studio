@@ -55,3 +55,16 @@ function getZonedDateTimeParts(
     minute: parts.minute,
   }
 }
+
+/** Only date components are substituted; callers still validate canonical output boundaries. */
+export function renderScheduledTaskDirectory(
+  template: string,
+  timestamp: number,
+  timezone: string,
+): string {
+  const parts = getZonedDateTimeParts(timestamp, timezone)
+  return template
+    .replaceAll('{year}', parts.year)
+    .replaceAll('{month}', parts.month)
+    .replaceAll('{day}', parts.day)
+}

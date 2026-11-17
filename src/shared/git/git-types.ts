@@ -1,3 +1,4 @@
+import type { GitTransferInput, GitTransferResult } from './git-transfer'
 export type GitRepositoryAvailability =
   | 'available'
   | 'not-repository'
@@ -88,6 +89,7 @@ export interface GitRepositorySnapshot {
 }
 
 export interface GitApiContract {
+  transfer(input: GitTransferInput): Promise<GitTransferResult>
   getSnapshot(workspacePath: string): Promise<GitRepositorySnapshot>
   getDiff(input: GitDiffRequest): Promise<GitDiffResult>
   commit(input: GitCommitInput): Promise<GitOperationResult>

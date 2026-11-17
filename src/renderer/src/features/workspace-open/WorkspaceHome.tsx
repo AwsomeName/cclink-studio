@@ -1,3 +1,4 @@
+import { PersonalDiaryHome } from './PersonalDiaryHome'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -51,11 +52,21 @@ export function WorkspaceHome(): React.ReactElement {
         if (!result.ok) useToastStore.getState().show(result.message || '操作失败', 'error')
       })
   }
+  if (personal)
+    return (
+      <div className="workspace-home personal-workspace-home">
+        <PersonalDiaryHome />
+      </div>
+    )
   return (
     <div className="workspace-home">
       <span className="workspace-home-eyebrow">{personal ? '个人工作台' : '工作空间'}</span>
       <h1>{personal ? '我的空间' : workspaceRefLabel(ref)}</h1>
-      <p>从一份笔记、一次对话开始。内容保存在当前空间，随时回来继续。</p>
+      {personal ? (
+        <PersonalDiaryHome />
+      ) : (
+        <p>从一份笔记、一次对话开始。内容保存在当前空间，随时回来继续。</p>
+      )}
       {ref.kind === 'local' && <small className="workspace-home-path">{ref.path}</small>}
       <div className="workspace-home-actions">
         <button disabled={ref.kind !== 'local'} onClick={() => execute('workspace.new-note')}>

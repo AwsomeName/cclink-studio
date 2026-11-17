@@ -1,3 +1,8 @@
+import {
+  gitTransferInputSchema,
+  type GitTransferInput,
+  type GitTransferResult,
+} from './git-transfer'
 import { bindIpcParser, defineIpcCall } from '../ipc/contract'
 import type {
   GitCommitInput,
@@ -9,6 +14,7 @@ import type {
 } from './git-types'
 
 export const gitIpc = {
+  transfer: defineIpcCall<[GitTransferInput], GitTransferResult>('git:transfer'),
   getSnapshot: defineIpcCall<[workspacePath: string], GitRepositorySnapshot>(
     'git:getRepositorySnapshot',
   ),
@@ -18,6 +24,9 @@ export const gitIpc = {
 } as const
 
 export const gitIpcContracts = {
+  transfer: bindIpcParser(gitIpc.transfer, (args): [GitTransferInput] => [
+    gitTransferInputSchema.parse(args[0]),
+  ]),
   getSnapshot: bindIpcParser(gitIpc.getSnapshot, (args): [workspacePath: string] => {
     if (args.length !== 1 || typeof args[0] !== 'string') {
       throw new Error('Git 状态请求需要一个工作空间路径')

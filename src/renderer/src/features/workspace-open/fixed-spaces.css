@@ -226,3 +226,136 @@
     display: none;
   }
 }
+
+.personal-diary-home nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.personal-diary-home button {
+  padding: 6px 10px;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+.personal-diary-home button[aria-pressed='true'] {
+  border-color: var(--accent-color);
+}
+.diary-source-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.diary-source-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diary-source-form input,
+.diary-source-form select {
+  padding: 8px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+.personal-diary-home [role='alert'] {
+  color: var(--error-color);
+}
+.personal-diary-sidebar {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+}
+.personal-diary-sidebar button {
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 10px 14px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+}
+.personal-diary-sidebar button[aria-current='page'] {
+  background: var(--bg-hover);
+  border-color: var(--accent-color);
+}
+.personal-diary-sidebar p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 24px 12px;
+}
+.personal-workspace-home {
+  padding: 24px 32px;
+}
+.personal-diary-home > h2 {
+  margin-top: 0;
+  font-size: 24px;
+}
+.diary-preview {
+  margin: 20px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.diary-preview header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.diary-preview .conversation-markdown {
+  line-height: 1.8;
+  font-size: 14px;
+}
+.diary-preview h2 {
+  font-size: 18px;
+}
+.diary-prepare {
+  padding: 20px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+  margin: 18px 0;
+}
+.diary-prepare button {
+  margin: 4px;
+}
+.personal-diary-home .workspace-home-record {
+  flex-wrap: wrap;
+}
+.personal-diary-home .workspace-home-record span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  flex-shrink: 1;
+}
+.diary-git {
+  max-width: 100%;
+}
+.diary-git pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 300px;
+  overflow: auto;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  padding: 14px;
+  border: 1px solid var(--border-color);
+}
+.diary-git > button {
+  margin: 16px 8px 8px 0;
+}
+.diary-git-result {
+  border: 1px solid var(--border-color);
+  padding: 20px;
+  margin-top: 20px;
+  border-radius: 8px;
+}
+.diary-git details {
+  margin: 12px 0;
+}

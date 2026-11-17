@@ -13,6 +13,11 @@ export function registerScheduledTaskIpc(
   mainWindow?: BrowserWindow,
 ): void {
   registerTrustedIpcContract(
+    scheduledTasksIpc.inspect,
+    trustedRendererGuard,
+    (_event, workspacePath) => service.inspect(workspacePath),
+  )
+  registerTrustedIpcContract(
     scheduledTasksIpc.list,
     trustedRendererGuard,
     (_event, workspacePath) => service.list(workspacePath),

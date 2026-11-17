@@ -1,0 +1,268 @@
+{
+  "kind": "product mockup only",
+  "errors": [],
+  "layoutChecks": [
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "today",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "diary",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "plans",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "connect",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "tasks",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "page": "git",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "today",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "diary",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "plans",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "connect",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "tasks",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 736,
+      "page": "git",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "today",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "diary",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "plans",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "connect",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "tasks",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "page": "git",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "today",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "diary",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "plans",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "connect",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "tasks",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "page": "git",
+      "scroll": 1024,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "today",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "diary",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "plans",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "connect",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "tasks",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 736,
+      "page": "git",
+      "scroll": 736,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "today",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "diary",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "plans",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "connect",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "tasks",
+      "scroll": 320,
+      "over": []
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "page": "git",
+      "scroll": 320,
+      "over": []
+    }
+  ],
+  "interactions": [
+    "navigation",
+    "continue original file",
+    "clone then mapping",
+    "shared tasks not enabled",
+    "dirty update blocked",
+    "fetch preview",
+    "commit review",
+    "first day state"
+  ]
+}

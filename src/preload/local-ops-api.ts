@@ -56,6 +56,9 @@ export const cadApi: CadApiContract = {
 }
 
 export const workspaceStateApi: WorkspaceStateApiContract = {
+  diaryDocument: (input) => invokeIpcContract(workspaceStateIpc.diaryDocument, input),
+  verifyLocalIdentity: (path, id) =>
+    invokeIpcContract(workspaceStateIpc.verifyLocalIdentity, path, id),
   getFixedSpaces: () => invokeIpcContract(workspaceStateIpc.getFixedSpaces),
   ensurePersonalSpace: () => invokeIpcContract(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: () => invokeIpcContract(workspaceStateIpc.listCompanySpaces),

@@ -1,3 +1,7 @@
+import {
+  personalDiarySourceSchema,
+  personalDiarySourceSection,
+} from '../../shared/personal-diary-source'
 import { workspaceStateIpcContracts } from '../../shared/ipc/workbench-contract'
 import { WorkspaceStateService } from './workspace-state-service'
 import {
@@ -18,6 +22,11 @@ export function registerWorkspaceStateIpc(
   fileService?: FileService,
   getCompanyService?: () => CompanyWorkspaceService | null,
 ): void {
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.diaryDocument,
+    trustedRendererGuard,
+    (_event, input) => workspaceStateService.diaryDocument(input),
+  )
   const cleanupBoundSenders = new WeakSet<WebContents>()
   const bindCapabilityCleanup = (sender: WebContents): void => {
     if (!fileService || cleanupBoundSenders.has(sender) || typeof sender.once !== 'function') return
@@ -34,6 +43,14 @@ export function registerWorkspaceStateIpc(
       throw new Error('工作空间状态只能访问当前项目或主进程已授权的项目')
     }
   }
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.verifyLocalIdentity,
+    trustedRendererGuard,
+    async (event, path, id) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      await workspaceStateService.verifyLocalIdentity(path, id)
+    },
+  )
   const defaultFailure = (error: unknown): DefaultWorkspaceResult => ({
     success: false,
     workspacePath: null,
@@ -235,6 +252,23 @@ export function registerWorkspaceStateIpc(
     async (_event, workspaceKey, section, value: unknown, ownerKey, options) => {
       try {
         assertWorkspaceAccess(_event.sender.id, workspaceKey)
+        if (section === personalDiarySourceSection) {
+          if (workspaceKey || ownerKey) throw new Error('个人资料连接仅保存在本机全局状态')
+          if (value !== null) {
+            const source = personalDiarySourceSchema.parse(value)
+            const known = workspaceStateService
+              .listLocalWorkspaces()
+              .find(
+                (item) =>
+                  item.workspacePath === source.workspacePath &&
+                  item.projectId === source.projectId,
+              )
+            if (!known) throw new Error('请先打开来源工作空间，确认其原身份')
+            assertWorkspaceAccess(_event.sender.id, source.workspacePath)
+            await workspaceStateService.verifyLocalIdentity(source.workspacePath, source.projectId)
+            value = source
+          }
+        }
         if (section === 'tabs' || section === 'browserTabs' || section === 'browserBookmarks') {
           throw new Error(`${section} 已由主进程 Workbench model 单独拥有，renderer 不得直接写入`)
         }

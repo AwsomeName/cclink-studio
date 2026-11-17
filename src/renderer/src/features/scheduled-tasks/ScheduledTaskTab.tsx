@@ -725,7 +725,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
             <>
               <div className="scheduled-task-form-grid scheduled-task-output-grid">
                 <label>
-                  <span>工作空间内目录</span>
+                  <span>工作空间内目录（支持 {'{year}/{month}'}）</span>
                   <input
                     value={form.outputDirectory}
                     placeholder="docs/周报"

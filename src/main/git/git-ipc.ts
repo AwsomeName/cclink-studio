@@ -1,3 +1,6 @@
+import { GitBackupError } from '../git-backup/git-backup-error'
+import type { GitTransferResult } from '../../shared/git'
+import type { FileService } from '../fs/file-service'
 import { gitIpcContracts } from '../../shared/git'
 import {
   registerTrustedIpcContract,
@@ -8,7 +11,37 @@ import type { GitWorkspaceService } from './git-workspace-service'
 export function registerGitIpc(
   service: GitWorkspaceService,
   trustedRendererGuard: TrustedRendererGuard,
+  fileService?: FileService,
 ): void {
+  registerTrustedIpcContract(
+    gitIpcContracts.transfer,
+    trustedRendererGuard,
+    async (event, input): Promise<GitTransferResult> => {
+      try {
+        if (
+          input.workspacePath &&
+          fileService &&
+          !fileService.canActivateWorkspace(event.sender.id, input.workspacePath)
+        )
+          throw Error('请先通过工作空间选择器登记来源')
+        const result = await service.transfer(input)
+        if (result.newCopy) {
+          fileService?.registerKnownWorkspaces(event.sender.id, [result.workspacePath])
+          fileService?.registerPickerSelection(event.sender.id, [result.workspacePath], 'workspace')
+        }
+        return { success: true, snapshot: result }
+      } catch (error) {
+        return {
+          success: false,
+          error: {
+            code: error instanceof GitBackupError ? error.code : 'GIT_TRANSFER_FAILED',
+            message: error instanceof Error ? error.message : 'Git 操作失败',
+            operation: input.action,
+          },
+        }
+      }
+    },
+  )
   registerTrustedIpcContract(
     gitIpcContracts.getSnapshot,
     trustedRendererGuard,

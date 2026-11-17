@@ -2,11 +2,17 @@
 
 > 状态：G1-G3、统一操作窗口与“已有 upstream 的显式 Push”已通过自动化真实 App smoke；G4 远程关联/Fetch、G5 收敛待完成
 >
-> 最后更新：2026-08-17
+> 最后更新：2026-11-17
 >
 > 开发计划：`docs/features/git-source-control-development-plan.md`
 >
 > 现有能力：`docs/features/manual-git-backup.md`
+
+## 2026-11-17 个人资料入口增量
+
+“我的空间 → Git”已在同一个 GitWorkspaceService 增加新目录 Clone、显式 Fetch、文件与正文差异审阅、受保护的新副本更新及确认连接。旧工作文件不改写；未提交内容、分叉、过期预览会阻止快捷更新。认证使用本次 HTTPS Token 或明确的 SSH 私钥，不调用系统钥匙串。来源映射仍由 WorkspaceStateService 拥有。
+
+真实 Electron + 本地 Git 远程验收见 [个人日记验收](../testing/personal-diary.md)。这项增量不等于通用状态栏入口的 G4/G5 全部完成；原地 Pull、复杂合并和统一远程配置迁移仍未交付。
 
 ## 1. 结论
 
@@ -87,7 +93,7 @@ Git
 ### 3.2 用户现在还不能做什么
 
 - 从新 Git 入口初始化仓库、填写远程地址、创建 GitHub 私有仓库或设置首次 upstream。
-- 在新入口显式 Fetch 并把 ahead/behind 标记为远程最新事实。
+- 在通用状态栏入口显式 Fetch；个人日记入口已经支持显式检查远程更新。
 - 在 Studio 内执行 Pull、Merge、Rebase、分支管理或冲突解决。
 - 完成旧侧栏备份卡片和兼容状态 owner 的 G5 收敛。
 

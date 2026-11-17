@@ -15,6 +15,7 @@ export interface GitCommandResult {
 }
 
 interface GitExecutorOptions {
+  isolatedConfig?: boolean
   gitPath?: string
   timeoutMs?: number
   askPassDirectory?: string
@@ -31,9 +32,11 @@ export class GitExecutor {
   private readonly gitPath: string
   private readonly timeoutMs: number
   private readonly askPassDirectory: string
+  private readonly isolatedConfig: boolean
   private askPassPath: string | null = null
 
   constructor(options: GitExecutorOptions = {}) {
+    this.isolatedConfig = options.isolatedConfig ?? false
     this.gitPath = options.gitPath ?? 'git'
     this.timeoutMs = options.timeoutMs ?? 120_000
     this.askPassDirectory = options.askPassDirectory ?? join(app.getPath('userData'), 'git-backup')
@@ -72,6 +75,16 @@ export class GitExecutor {
       LC_ALL: 'C',
       LANG: 'C',
     }
+    // Explicit authentication settings must take precedence over inherited Git and SSH settings.
+    for (const key of Object.keys(env))
+      if (key.startsWith('GIT_') || key === 'SSH_ASKPASS') delete env[key]
+    env.GIT_TERMINAL_PROMPT = '0'
+    env.GIT_ASKPASS = process.platform === 'win32' ? 'cmd /c exit 1' : '/usr/bin/false'
+    env.SSH_ASKPASS_REQUIRE = 'never'
+    if (this.isolatedConfig) {
+      env.GIT_CONFIG_NOSYSTEM = '1'
+      env.GIT_CONFIG_GLOBAL = process.platform === 'win32' ? 'NUL' : '/dev/null'
+    }
     if (authentication) {
       env.GIT_ASKPASS = await this.ensureAskPass()
       env.CCLINK_GIT_USERNAME = authentication.username
@@ -81,7 +94,13 @@ export class GitExecutor {
     return new Promise((resolve, reject) => {
       execFile(
         this.gitPath,
-        args,
+        [
+          '-c',
+          'credential.helper=',
+          '-c',
+          'core.sshCommand=ssh -F /dev/null -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentityAgent=none -o AddKeysToAgent=no -o IgnoreUnknown=UseKeychain -o UseKeychain=no',
+          ...args,
+        ],
         { cwd, env, timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
         (error, stdout, stderr) => {
           const sanitizedStdout = sanitizeOutput(String(stdout ?? ''), authentication)

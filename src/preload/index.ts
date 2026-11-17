@@ -216,6 +216,7 @@ const runtimeComponentsApi: RuntimeComponentsApiContract = {
 }
 
 const scheduledTasksApi: ScheduledTasksApiContract = {
+  inspect: (workspacePath) => invokeIpcContract(scheduledTasksIpc.inspect, workspacePath),
   list: (workspacePath) => invokeIpcContract(scheduledTasksIpc.list, workspacePath),
   get: (workspacePath, taskId) => invokeIpcContract(scheduledTasksIpc.get, workspacePath, taskId),
   save: (input) => invokeIpcContract(scheduledTasksIpc.save, input),

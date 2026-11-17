@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { AgentRuntimeEvent } from '../agent-core/runtime/agent-runtime'
 import type { AgentBridge } from '../agent/agent-bridge'
@@ -7,7 +7,10 @@ import type {
   ScheduledTaskArtifact,
   ScheduledTaskDefinition,
 } from '../../shared/scheduled-task/scheduled-task-types'
-import { renderScheduledTaskFileName } from '../../shared/scheduled-task/scheduled-task-file-name'
+import {
+  renderScheduledTaskFileName,
+  renderScheduledTaskDirectory,
+} from '../../shared/scheduled-task/scheduled-task-file-name'
 
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const RUN_TIMEOUT_MS = 10 * 60 * 1000
@@ -212,8 +215,25 @@ async function resolveOutput(
   occurrenceAt: number,
   runId: string,
 ): Promise<{ absolutePath: string; relativePath: string; canonicalDirectory: string }> {
-  const outputDirectory = resolve(workspaceRoot, definition.outputPolicy.directory)
-  await mkdir(outputDirectory, { recursive: true })
+  const outputDirectory = resolve(
+    workspaceRoot,
+    renderScheduledTaskDirectory(
+      definition.outputPolicy.directory,
+      occurrenceAt,
+      definition.schedule.timezone,
+    ),
+  )
+  if (!isPathWithin(workspaceRoot, outputDirectory)) throw new Error('输出目录逃逸出工作空间')
+  let cursor = workspaceRoot
+  for (const part of relative(workspaceRoot, outputDirectory).split(/[\\/]/).filter(Boolean)) {
+    cursor = resolve(cursor, part)
+    await mkdir(cursor).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error
+    })
+    const info = await lstat(cursor)
+    if (!info.isDirectory() || info.isSymbolicLink() || (await realpath(cursor)) !== cursor)
+      throw new Error('输出目录包含符号链接或不可用')
+  }
   const canonicalDirectory = await realpath(outputDirectory)
   if (!isPathWithin(workspaceRoot, canonicalDirectory)) {
     throw new Error('输出目录逃逸出工作空间')

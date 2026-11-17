@@ -1,3 +1,4 @@
+import { useFixedSpacesStore } from './features/workspace-open/fixed-spaces-store'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { workspaceRefKey } from '../../shared/workspace-ref'
 import { useCommandStore, useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
@@ -54,8 +55,6 @@ function MainLayout(): React.ReactElement {
   useWorkspaceStateFlush()
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
-  const sidebarContentVisible =
-    sidebarVisible && activePanel !== 'company-workspace' && activePanel !== 'workspace-home'
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)
   const agentPanelWidth = useUIStore((s) => s.agentPanelWidth)
@@ -73,6 +72,12 @@ function MainLayout(): React.ReactElement {
   const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const personalPath = useFixedSpacesStore((s) => s.spaces?.personal?.workspacePath)
+  const sidebarContentVisible =
+    sidebarVisible &&
+    activePanel !== 'company-workspace' &&
+    (activePanel !== 'workspace-home' ||
+      (activeWorkspaceRef.kind === 'local' && activeWorkspaceRef.path === personalPath))
   useEffect(() => {
     if (workspaceReady) return startMarkdownAutosave()
   }, [workspaceReady, activeWorkspaceRef])

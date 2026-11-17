@@ -1,3 +1,4 @@
+import { useDiaryNavigation } from './personal-diary-navigation'
 import { create } from 'zustand'
 import type { FixedSpaces } from '@shared/ipc/workspace-state'
 import {
@@ -23,6 +24,7 @@ export async function refreshFixedSpaces(): Promise<FixedSpaces> {
 }
 
 export async function openPersonalSpace(): Promise<void> {
+  useDiaryNavigation.getState().setPage('今天')
   const generation = beginWorkspaceRuntimeTransition()
   const spaces = await window.cclinkStudio.workspaceState.ensurePersonalSpace().catch((error) => {
     useFsStore.setState({

@@ -249,6 +249,35 @@ export class ScheduledTaskService {
     return () => this.changeListeners.delete(listener)
   }
 
+  /** Read-only home projection: never recovers migrations or changes activations. */
+  async inspect(workspacePath: string): Promise<ScheduledTaskListResult> {
+    try {
+      const known = this.workspaceStateService
+        .listLocalWorkspaces()
+        .find((item) => item.workspacePath === workspacePath)
+      if (!known?.projectId) throw new Error('请先打开来源工作空间以确认原身份')
+      const manifestPath = join(workspacePath, '.cclink-studio', 'project.json')
+      if (
+        (await realpath(workspacePath)) !== workspacePath ||
+        (await realpath(manifestPath)) !== manifestPath
+      )
+        throw new Error('来源身份路径发生变化，请重新确认')
+      const metadata = await lstat(manifestPath)
+      if (!metadata.isFile() || metadata.size > 16384) throw new Error('来源身份文件无效')
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf-8'))
+      if (manifest.projectId !== known.projectId) throw new Error('来源身份已变化，请重新连接')
+      this.assertActivationStoreAvailable()
+      const { definitions, issues } = await this.readDefinitions(workspacePath, false)
+      return {
+        success: true,
+        issues,
+        tasks: definitions.map((definition) => this.createSnapshot(definition, known.projectId!)),
+      }
+    } catch (error) {
+      return { success: false, tasks: [], error: toFailure(error) }
+    }
+  }
+
   async list(workspacePath: string): Promise<ScheduledTaskListResult> {
     try {
       const context = await this.resolveWorkspace(workspacePath, false)
@@ -1021,8 +1050,21 @@ export class ScheduledTaskService {
     return { workspacePath: resolved.workspacePath, workspaceId }
   }
 
-  private async readDefinitions(workspacePath: string): Promise<DefinitionListReadResult> {
-    const migrationIssues = await this.recoverDefinitionMigrations(workspacePath)
+  private async readDefinitions(
+    workspacePath: string,
+    recover = true,
+  ): Promise<DefinitionListReadResult> {
+    if (!recover) {
+      const pending = await readdir(
+        join(workspacePath, '.cclink-studio', 'scheduled-task-migrations'),
+      ).catch((error) => {
+        if (isMissingFileError(error)) return []
+        throw error
+      })
+      if (pending.some((name) => name.endsWith('.json')))
+        throw new Error('原任务存在待处理转换，请在原空间处理后重新读取')
+    }
+    const migrationIssues = recover ? await this.recoverDefinitionMigrations(workspacePath) : []
     const blockedTaskIds = new Set(migrationIssues.flatMap((issue) => issue.taskId ?? []))
     const candidates = new Map<
       string,

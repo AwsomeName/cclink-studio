@@ -399,7 +399,7 @@ export async function bootstrapMainProcessServices(
         }
       },
     })
-    registerGitIpc(runtime.gitWorkspaceService, runtime.trustedRendererGuard)
+    registerGitIpc(runtime.gitWorkspaceService, runtime.trustedRendererGuard, runtime.fileService)
     console.log('[CCLink Studio] Git 工作空间状态服务已初始化')
   } catch (error) {
     runtime.gitWorkspaceService = null

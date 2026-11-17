@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { renderScheduledTaskFileName } from './scheduled-task-file-name'
+import {
+  renderScheduledTaskFileName,
+  renderScheduledTaskDirectory,
+} from './scheduled-task-file-name'
 
 describe('renderScheduledTaskFileName', () => {
   it('renders Chinese weekday and compact month-day in the task timezone', () => {
@@ -25,4 +28,14 @@ describe('renderScheduledTaskFileName', () => {
       }),
     ).toBe('2026-08-15_0815_周六_task-1_run-1.md')
   })
+})
+
+it('renders dynamic directory by task timezone across year boundary without changing static directories', () => {
+  const timestamp = Date.parse('2026-12-31T17:00:00Z')
+  expect(renderScheduledTaskDirectory('个人/{year}/{month}', timestamp, 'Asia/Shanghai')).toBe(
+    '个人/2027/01',
+  )
+  expect(renderScheduledTaskDirectory('个人/2026/11', timestamp, 'Asia/Shanghai')).toBe(
+    '个人/2026/11',
+  )
 })

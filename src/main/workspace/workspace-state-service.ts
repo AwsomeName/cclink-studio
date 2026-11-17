@@ -1,3 +1,10 @@
+import {
+  personalDiarySourceSchema,
+  personalDiarySourceSection,
+  type DiaryDocumentInput,
+  type DiaryDocument,
+} from '../../shared/personal-diary-source'
+import { accessDiaryDocument } from './personal-diary-files'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import {
@@ -676,6 +683,23 @@ export class WorkspaceStateService {
   }
 
   /** Read the primary identity without the normal repair/fork behavior. */
+  async diaryDocument(input: DiaryDocumentInput): Promise<DiaryDocument> {
+    const snapshot = await this.getSnapshot(null)
+    const source = personalDiarySourceSchema.parse(snapshot.sections[personalDiarySourceSection])
+    await this.verifyLocalIdentity(source.workspacePath, source.projectId)
+    return accessDiaryDocument(source, input)
+  }
+
+  async verifyLocalIdentity(path: string, projectId: string): Promise<void> {
+    if (
+      !this.listLocalWorkspaces().some(
+        (item) => item.workspacePath === path && item.projectId === projectId,
+      )
+    )
+      throw new Error('来源未登记或身份已变化')
+    await this.inspectFixedIdentity(path, projectId)
+  }
+
   private async inspectFixedIdentity(path: string, expectedId?: string): Promise<FixedSpaceRef> {
     this.assertCentralStateAvailable()
     const root = await this.resolveLocalWorkspacePath(path)

@@ -251,6 +251,7 @@ export interface ScheduledTaskWorkspaceRuntimeStatusResult {
 }
 
 export interface ScheduledTasksApiContract {
+  inspect: (workspacePath: string) => Promise<ScheduledTaskListResult>
   list(workspacePath: string): Promise<ScheduledTaskListResult>
   get(workspacePath: string, taskId: string): Promise<ScheduledTaskOperationResult>
   save(input: SaveScheduledTaskInput): Promise<ScheduledTaskOperationResult>

@@ -1,3 +1,9 @@
+import {
+  gitTransferInputSchema,
+  type GitTransferInput,
+  type GitTransferSnapshot,
+} from '../../shared/git'
+import { transferRepository } from './git-transfer'
 import { readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, relative, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -46,6 +52,7 @@ export class GitWorkspaceService {
   private readonly resolveAuthentication: NonNullable<
     GitWorkspaceServiceOptions['resolveAuthentication']
   >
+  private readonly transferRunner = new GitExecutor({ isolatedConfig: true })
   private readonly activeOperations = new Set<string>()
 
   constructor(
@@ -55,6 +62,35 @@ export class GitWorkspaceService {
     this.runner = options.runner ?? new GitExecutor()
     this.now = options.now ?? (() => new Date())
     this.resolveAuthentication = options.resolveAuthentication ?? (async () => null)
+  }
+
+  async transfer(raw: GitTransferInput): Promise<GitTransferSnapshot> {
+    const input = gitTransferInputSchema.parse(raw)
+    let key = 'clone'
+    if (input.action !== 'clone') {
+      if (!input.workspacePath) throw Error('请先连接原资料')
+      const known = this.workspaceStateService
+        .listLocalWorkspaces()
+        .find((item) => item.workspacePath === input.workspacePath)
+      if (!known?.projectId) throw Error('请先打开并登记来源工作空间')
+      await this.workspaceStateService.verifyLocalIdentity(input.workspacePath, known.projectId)
+      key = await realpath(input.workspacePath)
+    }
+    if (this.activeOperations.has(key)) throw Error('此仓库已有 Git 操作正在执行')
+    this.activeOperations.add(key)
+    try {
+      const result = await transferRepository(input, {
+        runner: this.transferRunner,
+        authentication: input.token
+          ? { username: input.username || 'git', token: input.token }
+          : undefined,
+      })
+      // Register only a newly-created copy. Never initialize or migrate the connected old root.
+      if (result.newCopy) await this.workspaceStateService.getSnapshot(result.workspacePath)
+      return result
+    } finally {
+      this.activeOperations.delete(key)
+    }
   }
 
   async getSnapshot(requestedWorkspacePath: string): Promise<GitRepositorySnapshot> {

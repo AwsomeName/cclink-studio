@@ -1,3 +1,4 @@
+import { diaryDocumentInputSchema } from '../personal-diary-source'
 import path from 'node:path'
 import { z, ZodError } from 'zod'
 import {
@@ -122,6 +123,7 @@ export const workspaceStateSectionSchema = z.enum([
   'settingsPage',
   'agentConversations',
   'projectStrip',
+  'personalDiarySource',
 ])
 export const workspaceStateValueSchema = boundedJsonValueSchema(5 * 1024 * 1024, '工作空间状态')
 export const workspaceStateConversationValueSchema = boundedJsonValueSchema(
@@ -186,6 +188,12 @@ class WorkspaceStateWriteContractError extends Error {
 }
 
 export const workspaceStateIpcContracts = {
+  diaryDocument: bindIpcParser(workspaceStateIpc.diaryDocument, (args) =>
+    ipcArgs(diaryDocumentInputSchema.parse(args[0])),
+  ),
+  verifyLocalIdentity: bindIpcParser(workspaceStateIpc.verifyLocalIdentity, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0]), z.string().min(1).max(128).parse(args[1])),
+  ),
   getFixedSpaces: bindLegacyNoArgs(workspaceStateIpc.getFixedSpaces),
   ensurePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: bindLegacyNoArgs(workspaceStateIpc.listCompanySpaces),
