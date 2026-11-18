@@ -6,6 +6,7 @@ import {
   workspaceRefSourceLabel,
 } from '../../../../shared/workspace-ref'
 import type { AgentConversationState } from '../../stores/agent-store'
+import { conversationWorkspaceKey } from './conversation-workspace-state'
 import type { AgentSkillSummary } from '@shared/agent-skill'
 import type { AgentMountedResource, AgentMountedResourceKind, AgentScope, Tab } from '../../types'
 
@@ -362,9 +363,7 @@ function buildQuickThreadSummaries({
     const isActive = id === activeConversationId
     if (Boolean(conversation.archivedAt) !== archived) return []
 
-    const workspaceKey = conversation.runtime.workspaceRef
-      ? workspaceRefKey(conversation.runtime.workspaceRef)
-      : null
+    const workspaceKey = conversationWorkspaceKey(conversation)
     const workspaceLabel = conversation.runtime.workspaceRef
       ? workspaceRefLabel(conversation.runtime.workspaceRef)
       : '未绑定'

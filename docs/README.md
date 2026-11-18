@@ -110,7 +110,7 @@
 - `docs/features/activity-bar-text-navigation-product-design.md`：2026-10-15 用户选定的文字横排导航目标；固定完整名称、稳定入口、状态区分、小窗口宽度取舍及 U1–U8 验收；源码已实现，真实 Electron 自动化通过，真人签收待执行。
 - `docs/features/activity-bar-text-navigation-development-plan.md`：已实施的最小导航方案；包含入口定向修复、完整手势提交、有效栏宽和精简计数夹具；验证见文字横排验收记录。
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。
-- `docs/features/ai-employees.md`：已确认但暂停的 AI 员工领域边界；角色与员工分离、产品组合、单一 Studio 交付，当前商业范围仅保留 CCLink 托管远程功能。
+- [Owner（暂定名，原称「AI 员工」）](features/ai-employees.md)：以事务为中心的 Agent；定义跨会话持续负责的含义、与角色的区别及未来验收场景。功能仍暂停。
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
 - `docs/features/ai-web-affairs-agent.md`：AI 网页事务代理人产品事实源；网站与账号按 ADR 0014
   全局管理，事务继续属于项目，Agent 账号执行按 ADR 0016 使用明确任务、显式账号和人工接管。

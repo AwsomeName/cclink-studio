@@ -209,7 +209,7 @@ try {
   await page.getByLabel('交付条件').fill('原记录可以下钻')
   await page.getByRole('button', { name: '创建并打开业务', exact: true }).click()
   await page.getByRole('heading', { name: '原有经营业务', exact: true }).waitFor()
-  await page.getByRole('button', { name: '新建会话', exact: true }).first().click()
+  await page.getByRole('button', { name: '新建对话', exact: true }).first().click()
   const conversations = await until(
     () => companySnapshot(oldCompany),
     (value) => value.success && value.data.conversations.length > 0,

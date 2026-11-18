@@ -133,7 +133,7 @@ describe('agent conversation view model', () => {
       }),
       unbound: conversation({
         id: 'unbound',
-        title: '未绑定',
+        title: '新会话',
         surface: 'workbench-tab',
         workspaceRef: null,
       }),
@@ -157,15 +157,35 @@ describe('agent conversation view model', () => {
       }),
     }
 
-    const groups = getWorkspaceConversationGroups(
-      ['assistant', 'other', 'closed', 'unbound', 'current'],
-      conversations,
-      workspace,
-    )
+    const all = {
+      ...conversations,
+      archivedUnbound: conversation({
+        id: 'archivedUnbound',
+        title: '已关闭',
+        workspaceRef: null,
+        archivedAt: now,
+      }),
+      global: conversation({ id: 'global', title: '未归档会话', workspaceRef: { kind: 'global' } }),
+    }
+    const order = Object.keys(all)
+    const groups = getWorkspaceConversationGroups(order, all, workspace)
 
     expect(groups.current.map((item) => item.id)).toEqual(['assistant', 'current'])
-    expect(groups.unbound.map((item) => item.id)).toEqual(['unbound'])
     expect(groups.closed.map((item) => item.id)).toEqual(['closed'])
+    const globalGroups = getWorkspaceConversationGroups(order, all, { kind: 'global' })
+    expect(globalGroups.current.map((item) => item.id)).toEqual(['global', 'unbound'])
+    expect(globalGroups.closed.map((item) => item.id)).toEqual(['archivedUnbound'])
+    for (const ref of [workspace, { kind: 'global' } as const]) {
+      const listed = getWorkspaceConversationGroups(order, all, ref).current
+      const selectable = buildQuickThreadList({
+        conversations: all,
+        conversationOrder: order,
+        activeConversationId: 'unbound',
+        activeWorkspaceRef: ref,
+        expanded: true,
+      })
+      expect(listed.map((item) => item.id)).toEqual(selectable.map((item) => item.id))
+    }
   })
 
   it('keeps left sidebar conversations in fixed creation order while runs update', () => {

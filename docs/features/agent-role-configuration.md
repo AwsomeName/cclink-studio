@@ -45,10 +45,9 @@ Composer 当前角色 Chip
 `AgentConversationState.configuration` 唯一拥有，Sidebar、Tab 和 Composer 都只是投影
 和命令入口。
 
-角色也不是“AI 员工”的轻量命名。已确认采用“领域上分离，产品上组合，交付上保持一个
-Studio”：角色是可复用人格模板；员工是未来可能引用角色、资源和能力并被持续分配工作的
-执行主体。普通会话可直接使用角色，一个角色也可被多个员工引用；AI 员工当前暂停，不进入
-本角色里程碑，完整边界见 `docs/features/ai-employees.md`。
+角色（Role）是可复用的人格与行为模板；Owner（暂定名，原称「AI 员工」）是对事务持续负责的 Agent。
+普通会话可直接使用角色，多个 Owner 也可引用同一角色。更换会话不改变事务由谁负责。
+Owner 功能仍暂停，不进入本角色里程碑；见 [Owner 的职责与领域边界](ai-employees.md)。
 
 ## 产品范围定稿
 

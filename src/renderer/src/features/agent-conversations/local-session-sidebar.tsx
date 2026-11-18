@@ -6,6 +6,7 @@ import { useAgentStore, useTabStore } from '../../stores'
 import { IconSearch } from '../../components/common/Icons'
 import { useToastStore } from '../../components/common/Toast'
 import { getConversationActivity } from './activity'
+import { conversationWorkspaceKey } from './conversation-workspace-state'
 import { writeConversationDragData } from './conversation-workbench'
 import { useContextMenuStore } from '../context-actions/context-menu-store'
 import {
@@ -22,7 +23,6 @@ import {
 
 export interface WorkspaceConversationGroups {
   current: AgentConversationState[]
-  unbound: AgentConversationState[]
   closed: AgentConversationState[]
 }
 
@@ -42,30 +42,12 @@ export function getWorkspaceConversationGroups(
     )
     .map(({ conversation }) => conversation)
 
-  const belongsToActiveWorkspace = (conversation: AgentConversationState): boolean => {
-    const conversationWorkspaceKey = conversation.runtime.workspaceRef
-      ? workspaceRefKey(conversation.runtime.workspaceRef)
-      : null
-    if (workspaceRef.kind === 'global')
-      return !conversationWorkspaceKey || conversationWorkspaceKey === activeWorkspaceKey
-    return conversationWorkspaceKey === activeWorkspaceKey
-  }
-
-  const isUnbound = (conversation: AgentConversationState): boolean =>
-    !conversation.runtime.workspaceRef
-
+  const scoped = ordered.filter(
+    (conversation) => conversationWorkspaceKey(conversation) === activeWorkspaceKey,
+  )
   return {
-    current: ordered.filter(
-      (conversation) => !conversation.archivedAt && belongsToActiveWorkspace(conversation),
-    ),
-    unbound:
-      workspaceRef.kind === 'global'
-        ? []
-        : ordered.filter((conversation) => !conversation.archivedAt && isUnbound(conversation)),
-    closed: ordered.filter((conversation) => {
-      if (!conversation.archivedAt) return false
-      return belongsToActiveWorkspace(conversation) || isUnbound(conversation)
-    }),
+    current: scoped.filter((conversation) => !conversation.archivedAt),
+    closed: scoped.filter((conversation) => conversation.archivedAt),
   }
 }
 
@@ -99,10 +81,7 @@ export function LocalSessionsList({
   const [query, setQuery] = useState('')
   const [showClosed, setShowClosed] = useState(false)
   const filteredSessionGroups = filterConversationGroups(sessionGroups, query)
-  const visibleCount =
-    filteredSessionGroups.current.length +
-    filteredSessionGroups.unbound.length +
-    filteredSessionGroups.closed.length
+  const visibleCount = filteredSessionGroups.current.length + filteredSessionGroups.closed.length
 
   const openConversation = (conversation: AgentConversationState): void => {
     if (conversation.archivedAt) {
@@ -127,22 +106,6 @@ export function LocalSessionsList({
           <ConversationGroup
             title={workspaceRef.kind === 'global' ? '未归档' : '当前项目'}
             conversations={filteredSessionGroups.current}
-            activeConversationId={activeConversationId}
-            onOpen={openConversation}
-            onRename={(conversation) => {
-              const title = window.prompt('重命名会话', conversation.title)
-              if (title == null) return
-              renameConversation(conversation.id, title)
-            }}
-            onArchive={(conversationId) => {
-              void archiveConversation(conversationId).catch(() => {})
-              closeConversationTabs(tabs, closeTab, conversationId)
-            }}
-            showTitle={false}
-          />
-          <ConversationGroup
-            title="未绑定"
-            conversations={filteredSessionGroups.unbound}
             activeConversationId={activeConversationId}
             onOpen={openConversation}
             onRename={(conversation) => {
@@ -396,7 +359,6 @@ function filterConversationGroups(
 
   return {
     current: groups.current.filter(matches),
-    unbound: groups.unbound.filter(matches),
     closed: groups.closed.filter(matches),
   }
 }

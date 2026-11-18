@@ -144,7 +144,7 @@ try {
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   pass('关联真实文件并通过原编辑器查看')
   // Create a real conversation using the production command, without sending a model request.
-  const newConversation = page.getByRole('button', { name: '新建会话', exact: true })
+  const newConversation = page.getByRole('button', { name: '新建对话', exact: true })
   if (await newConversation.count()) await newConversation.first().click()
   const conversation = await until(
     async () =>

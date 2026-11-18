@@ -12,7 +12,7 @@ import {
   LocalSessionsList,
 } from '../../features/agent-conversations/local-session-sidebar'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
-import { IconPanelLeft, IconPanelRight, IconPlus, IconRobot } from '../common/Icons'
+import { IconPanelLeft, IconPanelRight, IconRobot } from '../common/Icons'
 import { ResizeHandle } from '../common/ResizeHandle'
 import { useToastStore } from '../common/Toast'
 import { AgentPanel } from './AgentPanel'
@@ -101,10 +101,14 @@ export function AgentWorkspace(): React.ReactElement {
       }}
     >
       <header className="agent-workspace-header">
-        <span className="agent-workspace-title">
+        <button
+          type="button"
+          className="agent-workspace-new-conversation"
+          onClick={() => void newConversation()}
+        >
           <IconRobot size={16} />
-          Agent
-        </span>
+          新建对话
+        </button>
         <div className="agent-workspace-actions">
           <button
             type="button"
@@ -118,14 +122,6 @@ export function AgentWorkspace(): React.ReactElement {
             }
           >
             <IconPanelLeft size={14} />
-          </button>
-          <button
-            type="button"
-            aria-label="新建会话"
-            title="新建会话"
-            onClick={() => void newConversation()}
-          >
-            <IconPlus size={14} />
           </button>
           <button
             ref={listButtonRef}

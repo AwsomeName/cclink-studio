@@ -2,25 +2,25 @@
 
 日期：2026-11-18。代码基线：`d50a5dae`。仅为产品设计盘点，不代表每项已经重新运行验收。
 
-此文件记录现有入口，防止重组时只覆盖截图里的大按钮。目标归属均是提案；不删除原入口、不修改原资料。
+此文件记录现有入口，防止重组时只覆盖截图里的大按钮。目标归属已按 2026-11-18 用户最新定义修订：项目类型封装首页和业务功能，工作模式是独立于项目类型的工作版面。目标归属均是提案；不删除原入口、不修改原资料。
 
 ## ActivityPanel：17 项
 
 | 当前 ID | 目标归属 |
 | --- | --- |
-| `workspace-home` | 工作台入口；默认模式首页 |
+| `workspace-home` | 工作台入口；项目类型首页 |
 | `projects` | 工作台选择器/历史入口（兼容类型） |
 | `browser` | 通用浏览器工具与标签 |
 | `files` | 工作台共用资料 |
 | `data-sources` | 连接进设置；查询/结果留资料工具 |
-| `company-accounts` | 经营模式 → 账目 |
-| `company-workspace` | 经营模式 → 总览与业务对象 |
-| `video-creation` | 内容模式 → 视频创作（保留新版/旧版边界） |
-| `production` | 电路与制造 → 检查/报告 |
+| `company-accounts` | 公司类型功能 → 账目 |
+| `company-workspace` | 公司类型功能 → 总览与业务对象 |
+| `video-creation` | 内容业务功能 → 视频创作（保留新版/旧版边界） |
+| `production` | 电子开发类型 → 检查/报告 |
 | `terminal` | 工具抽屉/标签 |
 | `operations` | 账号管理进设置；使用入口留任务与浏览器 |
-| `affairs` | 任务与运行/模式业务流程 |
-| `article-publishing` | 内容模式 → 文章发布 |
+| `affairs` | 任务与运行/业务流程 |
+| `article-publishing` | 内容业务功能 → 文章发布 |
 | `sessions` | 工作台助手与会话列表 |
 | `agent-roles` | 角色管理进设置；选择留会话 |
 | `scheduled-tasks` | 工作台 → 任务与运行 |
@@ -30,30 +30,30 @@
 
 | 当前 ID | 目标归属 |
 | --- | --- |
-| `workspace-home` | 当前模式首页 |
-| `browser` | 跨模式浏览器工具 |
+| `workspace-home` | 项目类型首页 |
+| `browser` | 网页工作版面/浏览器工具 |
 | `editor` | 共享文档编辑器 |
 | `settings` | 应用或当前工作台设置（明确作用域） |
 | `preview` | 文档派生预览（如微信排版） |
 | `file-preview` | 按格式只读预览/降级 |
 | `android` | 工具 → 真机画面 |
-| `model` | 模型工具；结构模式优先呈现 |
+| `model` | 3D 工作版面/模型查看工具 |
 | `conversation` | 工作台会话（可作为标签） |
 | `remote-conversation` | 远程工作台会话 |
-| `hardware-gerber` | 电路模式/跨模式专业文件工具 |
+| `hardware-gerber` | 电路工作版面/专业文件查看工具 |
 | `terminal` | 工具 → 终端 |
 | `terminal-record` | 终端执行历史/任务跳转 |
 | `data-source-query` | 资料 → 数据查询 |
 | `data-source-result` | 资料 → 查询结果 |
 | `scheduled-task` | 任务与运行 → 定时任务对象 |
 | `web-resource` | 设置 → 网站账号详情；业务页可定向进入 |
-| `web-affair` | 任务与运行/业务模式 → 网页事务对象 |
-| `article-publishing` | 内容 → 发布对象 |
+| `web-affair` | 任务与运行/业务功能 → 网页事务对象 |
+| `article-publishing` | 内容业务 → 发布对象 |
 | `agent-role` | 设置 → 角色详情 |
 | `remote-file` | 远程资料文件工具 |
-| `media-production` | 内容 → 视频工程（兼容旧版） |
-| `company-accounts` | 经营 → 账目 |
-| `company-workspace` | 经营 → 公司业务页面 |
+| `media-production` | 内容业务 → 视频工程（兼容旧版） |
+| `company-accounts` | 公司类型 → 账目 |
+| `company-workspace` | 公司类型 → 公司业务页面 |
 
 ## 设置导航：12 项
 
@@ -81,12 +81,12 @@
 | `agent-device` | 设备工具；显式设备和操作授权 |
 | `android` | 设备工具；环境配置进设置 |
 | `browser` | 通用工具/业务执行能力 |
-| `cad` | 结构模式工具；环境配置进设置 |
+| `cad` | 3D/CAD 工具；环境配置进设置 |
 | `data-source` | 查询工具；连接配置进设置 |
 | `editor` | 通用资料与编辑工具 |
-| `hardware` | 电路与制造模式工具 |
-| `image-generation` | 内容模式/文档配图工具；Provider 进设置 |
-| `meshy` | 结构/内容生成工具；Provider 进设置 |
+| `hardware` | 电子开发类型功能工具 |
+| `image-generation` | 内容业务功能/文档配图工具；Provider 进设置 |
+| `meshy` | 3D/素材生成工具；Provider 进设置 |
 | `scheduled-task` | 工作台任务（当前 MCP 为查询能力） |
 | `web-affairs` | 原网页事务执行 owner；汇总页仅投影 |
 | `web-resources` | 网站资源领域；配置与使用拆分 |

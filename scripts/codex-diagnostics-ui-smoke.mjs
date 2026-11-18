@@ -61,7 +61,7 @@ async function newConversation() {
   await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page.locator('.activity-bar-icon[title="会话"]').click()
-  await page.getByRole('button', { name: '新建会话', exact: true }).last().click()
+  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
 }
 async function menu() {
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
