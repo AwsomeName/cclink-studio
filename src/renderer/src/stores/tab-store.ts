@@ -251,6 +251,7 @@ interface TabState {
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
+  setTabLayout: (id: string, layout: 'standard' | 'focus') => void
   /** 远程文件或目录重命名后同步相关 Tab。 */
   rebaseRemoteFilePaths: (
     serverId: string,
@@ -674,6 +675,10 @@ export const useTabStore = create<TabState>((set, get) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, title } : t)),
     })),
 
+  setTabLayout: (id, layout) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => (tab.id === id ? { ...tab, workbenchLayout: layout } : tab)),
+    })),
   updateTabDirty: (id, dirty) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, dirty } : t)),

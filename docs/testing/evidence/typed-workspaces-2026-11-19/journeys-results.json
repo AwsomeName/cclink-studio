@@ -1,0 +1,25 @@
+{
+  "root": "/Users/apple/.cclink-typed-smoke-YZ1PTc",
+  "passed": [
+    "project type and relative diary settings through UI",
+    "original task export bytes preserved",
+    "configuration shared alone without local identity",
+    "company business links original engineering project",
+    "new engineering project created and associated from the same business form",
+    "native browser content and 100% zoom survive both layouts",
+    "Markdown layout and browser switching retains edited content",
+    "3D viewer in electronics and company without changing project type",
+    "accounts and roles accessible through settings",
+    "fresh profile Git clone restores diary type and original text",
+    "missing private task definitions reported honestly",
+    "import preserves two task IDs and defaults paused",
+    "repeat import creates no duplicate",
+    "explicit shared task enable and pause in real UI",
+    "running-work summary returns to the original task",
+    "main process refuses source detachment while linked task is enabled",
+    "fixed shortcut rebinding and restart restore",
+    "fixed company shortcut respects changed type and preserves business records when changed back",
+    "original diary, attachments, plans and local task bytes unchanged"
+  ],
+  "scope": "Real Electron, isolated profiles and local bare Git; no hosted account or external model calls"
+}

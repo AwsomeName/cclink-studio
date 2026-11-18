@@ -14,6 +14,7 @@ import type {
 } from './git-types'
 
 export const gitIpc = {
+  shareWorkspaceSettings: defineIpcCall<[string], GitOperationResult>('git:shareWorkspaceSettings'),
   transfer: defineIpcCall<[GitTransferInput], GitTransferResult>('git:transfer'),
   getSnapshot: defineIpcCall<[workspacePath: string], GitRepositorySnapshot>(
     'git:getRepositorySnapshot',
@@ -24,6 +25,16 @@ export const gitIpc = {
 } as const
 
 export const gitIpcContracts = {
+  shareWorkspaceSettings: bindIpcParser(gitIpc.shareWorkspaceSettings, (args) => {
+    if (
+      args.length !== 1 ||
+      typeof args[0] !== 'string' ||
+      !isValidWorkspacePath(args[0]) ||
+      !/^(?:\/|[A-Za-z]:[\\/])/.test(args[0])
+    )
+      throw Error('项目配置工作空间路径无效')
+    return [args[0]] as [string]
+  }),
   transfer: bindIpcParser(gitIpc.transfer, (args): [GitTransferInput] => [
     gitTransferInputSchema.parse(args[0]),
   ]),

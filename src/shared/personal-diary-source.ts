@@ -41,10 +41,20 @@ export interface DiaryDocument {
   created: boolean
   truncated: boolean
 }
-export type DiaryDocumentInput = { action: 'read'; path: string } | { action: 'prepare' }
+export type DiaryDocumentInput = ({ action: 'read'; path: string } | { action: 'prepare' }) & {
+  workspacePath?: string
+}
 export const diaryDocumentInputSchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('read'), path: diaryRelativePathSchema }).strict(),
-  z.object({ action: z.literal('prepare') }).strict(),
+  z
+    .object({
+      action: z.literal('read'),
+      path: diaryRelativePathSchema,
+      workspacePath: z.string().min(1).max(4096).optional(),
+    })
+    .strict(),
+  z
+    .object({ action: z.literal('prepare'), workspacePath: z.string().min(1).max(4096).optional() })
+    .strict(),
 ])
 export function diaryDateParts(
   timezone: string,

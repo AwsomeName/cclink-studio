@@ -1,4 +1,5 @@
 import {
+  type PersonalDiarySource,
   personalDiarySourceSchema,
   personalDiarySourceSection,
 } from '../../shared/personal-diary-source'
@@ -21,12 +22,8 @@ export function registerWorkspaceStateIpc(
   settingsService?: SettingsService,
   fileService?: FileService,
   getCompanyService?: () => CompanyWorkspaceService | null,
+  assertDiarySourceChange?: (previous: PersonalDiarySource) => Promise<void>,
 ): void {
-  registerTrustedIpcContract(
-    workspaceStateIpcContracts.diaryDocument,
-    trustedRendererGuard,
-    (_event, input) => workspaceStateService.diaryDocument(input),
-  )
   const cleanupBoundSenders = new WeakSet<WebContents>()
   const bindCapabilityCleanup = (sender: WebContents): void => {
     if (!fileService || cleanupBoundSenders.has(sender) || typeof sender.once !== 'function') return
@@ -49,6 +46,41 @@ export function registerWorkspaceStateIpc(
     async (event, path, id) => {
       assertWorkspaceAccess(event.sender.id, path)
       await workspaceStateService.verifyLocalIdentity(path, id)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.getSettings,
+    trustedRendererGuard,
+    (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.getWorkspaceSettings(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.saveSettings,
+    trustedRendererGuard,
+    (event, input) => {
+      assertWorkspaceAccess(event.sender.id, input.workspacePath)
+      return workspaceStateService.saveWorkspaceSettings(input)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.createWorkspace,
+    trustedRendererGuard,
+    async (event, input) => {
+      if (!fileService?.canActivateWorkspace(event.sender.id, input.parentPath))
+        throw Error('请先通过目录选择器选择父目录')
+      const result = await workspaceStateService.createWorkspace(input)
+      grant(event.sender, [result.workspacePath])
+      return result
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.diaryDocument,
+    trustedRendererGuard,
+    (event, input) => {
+      if (input.workspacePath) assertWorkspaceAccess(event.sender.id, input.workspacePath)
+      return workspaceStateService.diaryDocument(input)
     },
   )
   const defaultFailure = (error: unknown): DefaultWorkspaceResult => ({
@@ -253,7 +285,39 @@ export function registerWorkspaceStateIpc(
       try {
         assertWorkspaceAccess(_event.sender.id, workspaceKey)
         if (section === personalDiarySourceSection) {
-          if (workspaceKey || ownerKey) throw new Error('个人资料连接仅保存在本机全局状态')
+          if (ownerKey) throw new Error('个人资料连接只能保存在本机项目状态')
+          if (assertDiarySourceChange) {
+            let previous = (await workspaceStateService.getSnapshot(workspaceKey)).sections[
+              personalDiarySourceSection
+            ]
+            if (
+              previous === undefined &&
+              workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
+            )
+              previous = (await workspaceStateService.getSnapshot(null)).sections[
+                personalDiarySourceSection
+              ]
+            if (previous === undefined && workspaceKey && isAbsolute(workspaceKey)) {
+              const config = await workspaceStateService.getWorkspaceSettings(workspaceKey)
+              if (config.settings.diary)
+                previous = {
+                  version: 1,
+                  workspacePath: workspaceKey,
+                  projectId: await workspaceStateService.getLocalProjectId(workspaceKey),
+                  ...config.settings.diary,
+                }
+            }
+            const parsed = personalDiarySourceSchema.safeParse(previous)
+            const next = personalDiarySourceSchema.safeParse(value)
+            if (
+              parsed.success &&
+              (!next.success ||
+                parsed.data.workspacePath !== next.data.workspacePath ||
+                parsed.data.directory !== next.data.directory ||
+                parsed.data.projectId !== next.data.projectId)
+            )
+              await assertDiarySourceChange(parsed.data)
+          }
           if (value !== null) {
             const source = personalDiarySourceSchema.parse(value)
             const known = workspaceStateService

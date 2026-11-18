@@ -48,7 +48,7 @@ export const companyUpdateBusinessSchema = companyCreateBusinessSchema
 export const companyLinkSchema = companyWorkspaceScopeSchema
   .extend({
     businessId: id,
-    kind: z.enum(['file', 'conversation', 'publishing']),
+    kind: z.enum(['file', 'conversation', 'publishing', 'workspace']),
     target: z
       .string()
       .trim()
@@ -62,4 +62,15 @@ export const companyUnlinkSchema = companyWorkspaceScopeSchema
   .strict()
 export const companyWorkspaceChangedSchema = z
   .object({ workspaceId: id, revision: z.number().int().nonnegative() })
+  .strict()
+
+export const companyLinkedWorkspaceSchema = z
+  .object({
+    workspacePath: z
+      .string()
+      .min(1)
+      .max(4096)
+      .refine((value) => value.startsWith('/') && !value.includes('\0')),
+    workspaceId: z.string().min(1).max(128),
+  })
   .strict()

@@ -1,3 +1,4 @@
+import { WorkspaceCreationForm, WorkspaceGitAcquire } from './WorkspaceSettingsForm'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
 import { FloatingSurface } from '../../components/common/FloatingSurface'
@@ -56,7 +57,11 @@ export function WorkspaceOpenSurface({
         </button>
       </div>
 
-      {step === 'sources' ? (
+      {step === 'create' ? (
+        <WorkspaceCreationForm onOpened={close} />
+      ) : step === 'git' ? (
+        <WorkspaceGitAcquire onOpened={close} />
+      ) : step === 'sources' ? (
         <WorkspaceSourceChooser onRemote={showRemote} onOpened={close} />
       ) : (
         <div className="workspace-open-remote-step">
@@ -177,6 +182,20 @@ function WorkspaceSourceChooser({
     <div className="workspace-open-content">
       <div className="workspace-open-source-grid">
         <button
+          className="workspace-open-source-card"
+          onClick={() => useWorkspaceOpenStore.getState().show('create')}
+        >
+          <strong>新建项目…</strong>
+          <small>选择类型、名称和位置</small>
+        </button>
+        <button
+          className="workspace-open-source-card"
+          onClick={() => useWorkspaceOpenStore.getState().show('git')}
+        >
+          <strong>从 Git 获取…</strong>
+          <small>下载到新目录后读取项目设置</small>
+        </button>
+        <button
           type="button"
           className="workspace-open-source-card"
           disabled={busyKey !== null}
@@ -198,7 +217,7 @@ function WorkspaceSourceChooser({
         >
           <IconFolder size={22} />
           <span>
-            <strong>本地文件夹</strong>
+            <strong>打开已有项目…</strong>
             <small>从这台电脑选择工作空间</small>
           </span>
           <IconChevronRight size={14} />

@@ -84,6 +84,12 @@ export async function transferRepository(
   ): Promise<string> => {
     const home = await realpath(app.getPath('home'))
     const root = context.copyRoot ?? join(home, 'CCLinkStudio-Git')
+    if (
+      !isAbsolute(root) ||
+      relative(home, root).startsWith('..') ||
+      isAbsolute(relative(home, root))
+    )
+      throw Error('保存位置必须在用户目录中')
     await mkdir(root, { recursive: true })
     if ((await realpath(root)) !== root || (await lstat(root)).isSymbolicLink())
       throw Error('副本目录不能是符号链接')

@@ -1,3 +1,5 @@
+import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
+import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
 import { diaryDateParts, type DiaryDocument } from '@shared/personal-diary-source'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
@@ -25,6 +27,9 @@ import {
 } from '../scheduled-tasks/scheduled-task-view-model'
 
 export function PersonalDiaryHome(): React.ReactElement {
+  const ownerRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const ownerPath = ownerRef.kind === 'local' ? ownerRef.path : null
+  const config = useWorkspaceStore((state) => state.settingsSnapshot)
   const [source, setSource] = useState<PersonalDiarySource | null>(null)
   const [known, setKnown] = useState<WorkspaceStateLocalWorkspaceSummary[]>([])
   const [path, setPath] = useState('')
@@ -49,12 +54,30 @@ export function PersonalDiaryHome(): React.ReactElement {
     let alive = true
     void Promise.all([
       window.cclinkStudio.workspaceState.listLocalWorkspaces(),
-      window.cclinkStudio.workspaceState.get(null),
+      window.cclinkStudio.workspaceState.get(ownerPath),
     ])
-      .then(([items, snapshot]) => {
+      .then(async ([items, snapshot]) => {
         if (!alive) return
         setKnown(items.filter((item) => item.projectId))
-        const value = snapshot.sections[personalDiarySourceSection]
+        let value = snapshot.sections[personalDiarySourceSection]
+        if (
+          value === undefined &&
+          ownerPath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
+        )
+          value = (await window.cclinkStudio.workspaceState.get(null)).sections[
+            personalDiarySourceSection
+          ]
+        if (!alive) return
+        if (value === undefined && config?.settings.diary) {
+          const root = items.find((item) => item.workspacePath === ownerPath)
+          if (root?.projectId)
+            value = {
+              version: 1,
+              workspacePath: ownerPath,
+              projectId: root.projectId,
+              ...config.settings.diary,
+            }
+        }
         if (value) {
           const link = personalDiarySourceSchema.parse(value)
           setSource(link)
@@ -73,7 +96,7 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => {
       alive = false
     }
-  }, [])
+  }, [ownerPath, config?.revision])
   useEffect(() => {
     if (!source) return
     let alive = true
@@ -158,7 +181,7 @@ export function PersonalDiaryHome(): React.ReactElement {
     })
     await window.cclinkStudio.fs.readDir(path + '/' + value.directory)
     const result = await window.cclinkStudio.workspaceState.setSection(
-      null,
+      ownerPath,
       personalDiarySourceSection,
       value,
     )
@@ -184,11 +207,19 @@ export function PersonalDiaryHome(): React.ReactElement {
       taskIds: [],
     })
     const result = await window.cclinkStudio.workspaceState.setSection(
-      null,
+      ownerPath,
       personalDiarySourceSection,
       value,
     )
     if (!result.success) throw Error(result.error)
+    if (config?.status === 'saved') {
+      await window.cclinkStudio.workspaceState.saveSettings({
+        workspacePath: ref.path,
+        revision: config.revision,
+        settings: { ...config.settings, diary: { directory: '日记', timezone, taskIds: [] } },
+      })
+      await useWorkspaceStore.getState().refreshSettings()
+    }
     setKnown(roots.filter((item) => item.projectId))
     setSource(value)
     setPath(value.workspacePath)
@@ -235,6 +266,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       void window.cclinkStudio.workspaceState
         .diaryDocument({
           action: 'read',
+          workspacePath: ownerPath ?? undefined,
           path: selectedPreview.slice(source.workspacePath.length + 1),
         })
         .then((result) => {
@@ -246,9 +278,12 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => {
       alive = false
     }
-  }, [source, selectedPreview, revision])
+  }, [source, selectedPreview, revision, ownerPath])
   const prepare = async (): Promise<void> => {
-    const result = await window.cclinkStudio.workspaceState.diaryDocument({ action: 'prepare' })
+    const result = await window.cclinkStudio.workspaceState.diaryDocument({
+      action: 'prepare',
+      workspacePath: ownerPath ?? undefined,
+    })
     setPreviewPath(result.path)
     setPreview(result)
     setRevision((value) => value + 1)
@@ -312,6 +347,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       {busy && <p role="status">正在读取原资料…</p>}
       {page === 'Git' ? (
         <PersonalDiaryGit
+          ownerPath={ownerPath}
           source={source}
           onConnected={(value) => {
             setPreviewPath('')
@@ -324,6 +360,25 @@ export function PersonalDiaryHome(): React.ReactElement {
         />
       ) : page === '资料接入' ? (
         <div className="diary-source-form">
+          <button
+            disabled={busy}
+            onClick={() =>
+              act(async () => {
+                const picked = await window.cclinkStudio.dialog.showOpenDialog({
+                  selectDirectory: true,
+                  title: '选择原资料所在项目',
+                })
+                if (picked.canceled || !picked.filePaths[0]) return
+                const root = picked.filePaths[0]
+                await window.cclinkStudio.workspaceState.get(root)
+                const roots = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+                setKnown(roots.filter((item) => item.projectId))
+                setPath(root)
+              })
+            }
+          >
+            选择原资料目录
+          </button>
           <label>
             原工作空间
             <select aria-label="原工作空间" value={path} onChange={(e) => setPath(e.target.value)}>
@@ -356,7 +411,7 @@ export function PersonalDiaryHome(): React.ReactElement {
               从空白日记开始
             </button>
           )}
-          <p>使用原目录及文件名，仅保存本机连接。新目录请先通过“打开工作空间”登记。</p>
+          <p>使用原目录及文件名，仅保存本机连接。也可直接选择原资料所在的项目目录。</p>
           <button disabled={busy || !path} onClick={() => act(connect)}>
             确认连接
           </button>
@@ -365,7 +420,7 @@ export function PersonalDiaryHome(): React.ReactElement {
               onClick={() =>
                 act(async () => {
                   const result = await window.cclinkStudio.workspaceState.setSection(
-                    null,
+                    ownerPath,
                     personalDiarySourceSection,
                     null,
                   )
@@ -376,13 +431,29 @@ export function PersonalDiaryHome(): React.ReactElement {
                 })
               }
             >
-              解除连接（原任务仍按原设置运行）
+              解除资料连接（原文件保留）
             </button>
           )}
         </div>
       ) : page === '定时整理' ? (
         <div>
           <p>勾选要在个人空间关联的原任务；关联不会启用、复制或运行任务。</p>
+          {!tasks.length && (
+            <p>
+              尚未接回任务定义。请使用下方“接回原任务定义”，或获取已共享定义的 Git
+              项目；本机启用状态不会复制。
+            </p>
+          )}
+          {source && (
+            <TaskDefinitionTransfer
+              workspacePath={source.workspacePath}
+              taskIds={selected}
+              onImported={(ids) => {
+                setSelected((current) => [...new Set([...current, ...ids])])
+                setRevision((value) => value + 1)
+              }}
+            />
+          )}
           {tasks.map((task) => (
             <div className="workspace-home-record" key={task.definition.id}>
               <label>
@@ -421,11 +492,26 @@ export function PersonalDiaryHome(): React.ReactElement {
                 act(async () => {
                   const value = { ...source, taskIds: selected }
                   const result = await window.cclinkStudio.workspaceState.setSection(
-                    null,
+                    ownerPath,
                     personalDiarySourceSection,
                     value,
                   )
                   if (!result.success) throw new Error(result.error)
+                  if (source.workspacePath === ownerPath && config?.status === 'saved') {
+                    await window.cclinkStudio.workspaceState.saveSettings({
+                      workspacePath: ownerPath!,
+                      revision: config.revision,
+                      settings: {
+                        ...config.settings,
+                        diary: {
+                          directory: source.directory,
+                          timezone: source.timezone,
+                          taskIds: selected,
+                        },
+                      },
+                    })
+                    await useWorkspaceStore.getState().refreshSettings()
+                  }
                   setSource(value)
                 })
               }

@@ -1,3 +1,5 @@
+import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
+import { useUIStore } from '../../stores/ui-store'
 import { PersonalDiaryHome } from './PersonalDiaryHome'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
@@ -25,12 +27,15 @@ export async function createPersonalNote(): Promise<void> {
 }
 
 export function WorkspaceHome(): React.ReactElement {
+  const settingsSnapshot = useWorkspaceStore((state) => state.settingsSnapshot)
   const ref = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const spaces = useFixedSpacesStore((state) => state.spaces)
   const tabs = useTabStore((state) => state.tabs)
   const conversations = useAgentStore((state) => state.conversations)
   const key = workspaceRefKey(ref)
-  const personal = ref.kind === 'local' && ref.path === spaces?.personal?.workspacePath
+  const personal = settingsSnapshot
+    ? settingsSnapshot.settings.type === 'diary'
+    : ref.kind === 'local' && ref.path === spaces?.personal?.workspacePath
   const recent = tabs
     .filter((tab) => tab.type === 'editor' && workspaceRefKey(tab.workspaceRef ?? ref) === key)
     .slice(-6)
@@ -52,22 +57,51 @@ export function WorkspaceHome(): React.ReactElement {
         if (!result.ok) useToastStore.getState().show(result.message || '操作失败', 'error')
       })
   }
+  if (settingsSnapshot?.settings.type === 'company' && ref.kind === 'local')
+    return (
+      <CompanyWorkbench
+        key={key}
+        tab={{
+          id: 'company-home',
+          type: 'company-workspace',
+          title: '公司概览',
+          icon: '司',
+          workspaceRef: ref,
+        }}
+      />
+    )
   if (personal)
     return (
       <div className="workspace-home personal-workspace-home">
-        <PersonalDiaryHome />
+        <PersonalDiaryHome key={key} />
       </div>
     )
   return (
     <div className="workspace-home">
       <span className="workspace-home-eyebrow">{personal ? '个人工作台' : '工作空间'}</span>
-      <h1>{personal ? '我的空间' : workspaceRefLabel(ref)}</h1>
+      <h1>{settingsSnapshot?.settings.name ?? workspaceRefLabel(ref)}</h1>
+      {settingsSnapshot?.error && <p role="alert">{settingsSnapshot.error}</p>}
       {personal ? (
         <PersonalDiaryHome />
       ) : (
         <p>从一份笔记、一次对话开始。内容保存在当前空间，随时回来继续。</p>
       )}
       {ref.kind === 'local' && <small className="workspace-home-path">{ref.path}</small>}
+      {settingsSnapshot?.settings.type === 'electronics' && (
+        <section>
+          <h2>工程概览</h2>
+          <p>
+            打开原理图、PCB、Gerber 或 3D 文件使用对应查看器。Markdown、网页和 Agent
+            继续共用当前工程。
+          </p>
+          <button
+            className="workspace-home-record"
+            onClick={() => useUIStore.getState().showPanel('production')}
+          >
+            生产资料与检查 →
+          </button>
+        </section>
+      )}
       <div className="workspace-home-actions">
         <button disabled={ref.kind !== 'local'} onClick={() => execute('workspace.new-note')}>
           新建笔记<span>记录想法与日常资料</span>

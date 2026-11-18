@@ -4,6 +4,14 @@ import {
   type DiaryDocumentInput,
   type DiaryDocument,
 } from '../../shared/personal-diary-source'
+import { readWorkspaceSettings, writeWorkspaceSettings } from './workspace-settings-files'
+import {
+  createWorkspaceSchema,
+  type CreateWorkspace,
+  type SaveWorkspaceSettings,
+  type WorkspaceSettingsSnapshot,
+  type WorkspaceType,
+} from '../../shared/workspace-settings'
 import { accessDiaryDocument } from './personal-diary-files'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
@@ -311,7 +319,8 @@ function migrateWorkspaceStateFile(raw: unknown): WorkspaceStateFile {
         typeof ref.projectId === 'string' &&
         ref.projectId.length > 0 &&
         typeof ref.workspacePath === 'string' &&
-        isAbsolute(ref.workspacePath),
+        isAbsolute(ref.workspacePath) &&
+        (ref.requireCompanyData === undefined || typeof ref.requireCompanyData === 'boolean'),
       )
     if (
       fixed.version !== 1 ||
@@ -683,9 +692,65 @@ export class WorkspaceStateService {
   }
 
   /** Read the primary identity without the normal repair/fork behavior. */
+  async getWorkspaceSettings(path: string): Promise<WorkspaceSettingsSnapshot> {
+    const root = await this.resolveLocalWorkspacePath(path)
+    return this.enqueueWorkspaceMutation(`settings:${root}`, async () => {
+      let fallback: WorkspaceType = 'general'
+      if (this.getFixedSpaces().personal?.workspacePath === root) fallback = 'diary'
+      else if ((await this.inspectCompanySpace(root)).state === 'company') fallback = 'company'
+      const current = await readWorkspaceSettings(root, fallback)
+      if (current.status !== 'missing') return current
+      try {
+        return await writeWorkspaceSettings(root, current.settings, null)
+      } catch (error) {
+        return { ...current, error: `项目设置尚未保存：${String(error)}` }
+      }
+    })
+  }
+
+  async saveWorkspaceSettings(input: SaveWorkspaceSettings): Promise<WorkspaceSettingsSnapshot> {
+    const root = await this.resolveLocalWorkspacePath(input.workspacePath)
+    return this.enqueueWorkspaceMutation(`settings:${root}`, () =>
+      writeWorkspaceSettings(root, input.settings, input.revision),
+    )
+  }
+
+  async createWorkspace(input: CreateWorkspace): Promise<WorkspaceSettingsSnapshot> {
+    const value = createWorkspaceSchema.parse(input)
+    const parent = await this.resolveLocalWorkspacePath(value.parentPath)
+    const root = join(parent, value.directoryName)
+    await mkdir(root) // exclusive: an existing destination is never merged or removed
+    try {
+      const saved = await this.saveWorkspaceSettings({
+        workspacePath: root,
+        settings: value.settings,
+        revision: null,
+      })
+      await this.getSnapshot(root)
+      return saved
+    } catch (error) {
+      throw Error(`创建未完成，已保留目录 ${root}：${String(error)}`)
+    }
+  }
+
   async diaryDocument(input: DiaryDocumentInput): Promise<DiaryDocument> {
-    const snapshot = await this.getSnapshot(null)
-    const source = personalDiarySourceSchema.parse(snapshot.sections[personalDiarySourceSection])
+    const snapshot = await this.getSnapshot(input.workspacePath ?? null)
+    let value = snapshot.sections[personalDiarySourceSection]
+    if (value === undefined && input.workspacePath) {
+      if (this.getFixedSpaces().personal?.workspacePath === input.workspacePath)
+        value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
+      if (!value) {
+        const config = await this.getWorkspaceSettings(input.workspacePath)
+        if (config.settings.diary)
+          value = {
+            version: 1,
+            workspacePath: input.workspacePath,
+            projectId: await this.getLocalProjectId(input.workspacePath),
+            ...config.settings.diary,
+          }
+      }
+    }
+    const source = personalDiarySourceSchema.parse(value)
     await this.verifyLocalIdentity(source.workspacePath, source.projectId)
     return accessDiaryDocument(source, input)
   }
@@ -802,7 +867,11 @@ export class WorkspaceStateService {
   }
 
   private assertBoundCompanyDatabase(ref: FixedSpaceRef, description: unknown): void {
-    if (this.state.fixedSpaces?.company?.projectId === ref.projectId && !description)
+    if (
+      this.state.fixedSpaces?.company?.projectId === ref.projectId &&
+      this.state.fixedSpaces.company.requireCompanyData !== false &&
+      !description
+    )
       throw new Error('原公司数据库不可用；请恢复原公司资料，不会创建空公司替代')
   }
 
@@ -839,6 +908,8 @@ export class WorkspaceStateService {
     const verified = await this.inspectFixedIdentity(ref.workspacePath, ref.projectId)
     if (
       role === 'company' &&
+      (ref.requireCompanyData !== false ||
+        (await readWorkspaceSettings(verified.workspacePath)).settings.type === 'company') &&
       !(await CompanyWorkspaceService.describeExisting({
         workspacePath: verified.workspacePath,
         workspaceId: verified.projectId,
@@ -852,11 +923,6 @@ export class WorkspaceStateService {
     return this.fixedOperation(async () => {
       const fixed = this.getFixedSpaces()
       const personal = await this.inspectFixedIdentity(path)
-      const description = await CompanyWorkspaceService.describeExisting({
-        workspacePath: personal.workspacePath,
-        workspaceId: personal.projectId,
-      })
-      if (description) throw new Error('此目录已有公司资料，请通过“我的公司”接回；个人空间保持独立')
       if (fixed.company) this.assertIndependent(personal, fixed.company)
       return this.commitFixedSpaces({ ...fixed, personal })
     })
@@ -882,6 +948,21 @@ export class WorkspaceStateService {
         workspaceId: company.projectId,
       })
       this.assertBoundCompanyDatabase(company, description)
+      if (input.shortcutOnly) {
+        if (!input.workspacePath || input.initializeName || input.replacePersonal)
+          throw Error('快捷入口关联必须明确选择已有项目')
+        if (
+          !description &&
+          (await readWorkspaceSettings(company.workspacePath)).settings.type === 'company'
+        )
+          throw Error('请先在公司首页明确启用公司，再关联固定入口')
+        if (fixed.personal) this.assertIndependent(fixed.personal, company)
+        return this.commitFixedSpaces({
+          ...fixed,
+          company: { ...company, requireCompanyData: !!description },
+        })
+      }
+
       if (!description && !input.initializeName)
         throw new Error('此目录尚未启用公司，请填写名称并明确启用')
       let personal = fixed.personal

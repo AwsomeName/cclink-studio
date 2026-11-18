@@ -1,3 +1,4 @@
+import { companyLinkedWorkspaceSchema } from '../../shared/company-workspace/company-workspace-schema'
 import { lstat, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { CclinkStudioRuntimeState } from '../runtime/app-runtime'
@@ -25,6 +26,10 @@ export function createCompanyWorkspaceRuntime(runtime: CclinkStudioRuntimeState)
       }
       try {
         runtime.companyWorkspaceService = new CompanyWorkspaceService({
+          workspace: async (path, id) => {
+            if (!runtime.workspaceStateService) throw Error('工作空间服务不可用')
+            await runtime.workspaceStateService.verifyLocalIdentity(path, id)
+          },
           finance: (target, month) =>
             runtime.companyAccountsService?.getSnapshotForWorkspace(target.workspacePath, month) ??
             null,
@@ -83,6 +88,11 @@ export function createCompanyWorkspaceRuntime(runtime: CclinkStudioRuntimeState)
               'WORKSPACE_DENIED',
               '请从工作空间选择器打开已授权的本地目录',
             )
+          if ('kind' in input && input.kind === 'workspace' && 'target' in input) {
+            const link = companyLinkedWorkspaceSchema.parse(JSON.parse(String(input.target)))
+            if (!runtime.fileService?.canActivateWorkspace(event.sender.id, link.workspacePath))
+              throw new CompanyWorkspaceError('WORKSPACE_DENIED', '请先通过目录选择器选择关联工程')
+          }
           const workspacePath = await realpath(input.workspaceRef.path)
           const metadata = await lstat(join(workspacePath, '.cclink-studio')).catch((error) => {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null

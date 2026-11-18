@@ -1,3 +1,4 @@
+import { useTabStore } from '../../stores/tab-store'
 import { useEffect, useState } from 'react'
 import type { GitTransferInput, GitTransferSnapshot } from '@shared/git'
 import type { PersonalDiarySource } from '@shared/personal-diary-source'
@@ -10,8 +11,10 @@ import { useGitStore } from '../../stores/git-store'
 
 export function PersonalDiaryGit({
   source,
+  ownerPath,
   onConnected,
 }: {
+  ownerPath: string | null
   source: PersonalDiarySource | null
   onConnected: (value: PersonalDiarySource) => void
 }): React.ReactElement {
@@ -25,6 +28,43 @@ export function PersonalDiaryGit({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmed, setConfirmed] = useState(false)
+  const [copyReview, setCopyReview] = useState<string[]>([])
+  const [reviewError, setReviewError] = useState('')
+  useEffect(() => {
+    let alive = true
+    setCopyReview([])
+    setReviewError('')
+    setConfirmed(false)
+    if (result?.newCopy)
+      void (async () => {
+        const entries = await window.cclinkStudio.fs.readDir(result.workspacePath + '/' + directory)
+        const tasks = await window.cclinkStudio.scheduledTasks.inspect(result.workspacePath)
+        if (!tasks.success) throw Error(tasks.error?.message || '新副本任务不可读')
+        const lines = [
+          ...entries
+            .slice(0, 30)
+            .map((entry) => (entry.type === 'directory' ? '目录：' : '文件：') + entry.name),
+          ...tasks.tasks.map(
+            (task) =>
+              task.definition.title +
+              ' · 读取：' +
+              JSON.stringify(task.definition.resources) +
+              ' · 输出：' +
+              JSON.stringify(task.definition.outputPolicy) +
+              (/\/(Users|home)\//.test(task.definition.instruction)
+                ? ' · 指令包含电脑绝对路径，启用前需核对'
+                : ''),
+          ),
+        ]
+        if (!tasks.tasks.length) lines.push('副本不含可接回任务定义；不会从名称生成原任务。')
+        if (alive) setCopyReview(lines)
+      })().catch((error) => {
+        if (alive) setReviewError(String(error))
+      })
+    return () => {
+      alive = false
+    }
+  }, [result, directory])
   useEffect(() => {
     let alive = true
     if (source) setBusy(true)
@@ -81,6 +121,22 @@ export function PersonalDiaryGit({
     setBusy(true)
     setError('')
     try {
+      if (useTabStore.getState().tabs.some((tab) => tab.dirty))
+        throw Error('有未保存内容，请先保存或取消修改；副本已准备，关联未切换。')
+      if (source) {
+        const previous = await window.cclinkStudio.scheduledTasks.inspect(source.workspacePath)
+        if (!previous.success) throw Error('原任务状态读取失败，保持旧关联')
+        const active = previous.tasks.filter(
+          (task) =>
+            source.taskIds.includes(task.definition.id) &&
+            (task.activation.enabled ||
+              ['queued', 'running'].includes(task.latestRun?.status ?? '')),
+        )
+        if (active.length)
+          throw Error(
+            '原来源仍有启用或运行的任务，请先在原任务中暂停并核对输出位置；副本已准备，关联未切换。',
+          )
+      }
       const roots = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
       const root = roots.find((item) => item.workspacePath === result.workspacePath)
       if (!root?.projectId) throw Error('副本尚未登记，请重新打开目录')
@@ -94,7 +150,7 @@ export function PersonalDiaryGit({
       })
       await window.cclinkStudio.fs.readDir(value.workspacePath + '/' + value.directory)
       const saved = await window.cclinkStudio.workspaceState.setSection(
-        null,
+        ownerPath,
         personalDiarySourceSection,
         value,
       )
@@ -229,6 +285,20 @@ export function PersonalDiaryGit({
                 切换只改变首页来源。当前关联的 {source?.taskIds.length ?? 0}{' '}
                 项原任务需重新核对。旧目录的私有任务、运行历史、未上传文件不会跟来；旧任务仍按旧设置运行。新副本的共享任务需要在本设备重新确认，任务关联需重新选择。
               </p>
+              <p>
+                旧日记与计划：{source ? source.workspacePath + '/' + source.directory : '尚未关联'}
+              </p>
+              <p>
+                新日记与计划：{result.workspacePath + '/' + directory}
+                。附件继续使用副本内的相对引用；旧电脑绝对引用须另行核对。
+              </p>
+              <details>
+                <summary>核对副本目录与任务输出</summary>
+                {copyReview.map((line, index) => (
+                  <p key={index}>{line}</p>
+                ))}
+              </details>
+              {reviewError && <p role="alert">{reviewError}</p>}
               <label>
                 <input
                   type="checkbox"
@@ -236,9 +306,12 @@ export function PersonalDiaryGit({
                   checked={confirmed}
                   onChange={(e) => setConfirmed(e.target.checked)}
                 />
-                已核对目录和未上传资料，保留旧任务设置
+                已核对新目录、资料和任务路径，原关联任务已暂停
               </label>
-              <button disabled={busy || !confirmed} onClick={() => void connect()}>
+              <button
+                disabled={busy || !confirmed || !!reviewError || !copyReview.length}
+                onClick={() => void connect()}
+              >
                 确认改用此副本
               </button>
             </div>

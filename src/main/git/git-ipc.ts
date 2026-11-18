@@ -14,6 +14,14 @@ export function registerGitIpc(
   fileService?: FileService,
 ): void {
   registerTrustedIpcContract(
+    gitIpcContracts.shareWorkspaceSettings,
+    trustedRendererGuard,
+    (event, path) => {
+      if (!fileService?.canActivateWorkspace(event.sender.id, path)) throw Error('请先打开项目')
+      return service.shareWorkspaceSettings(path)
+    },
+  )
+  registerTrustedIpcContract(
     gitIpcContracts.transfer,
     trustedRendererGuard,
     async (event, input): Promise<GitTransferResult> => {
@@ -24,6 +32,11 @@ export function registerGitIpc(
           !fileService.canActivateWorkspace(event.sender.id, input.workspacePath)
         )
           throw Error('请先通过工作空间选择器登记来源')
+        if (
+          input.destinationParent &&
+          !fileService?.canActivateWorkspace(event.sender.id, input.destinationParent)
+        )
+          throw Error('请通过目录选择器选择 Git 保存位置')
         const result = await service.transfer(input)
         if (result.newCopy) {
           fileService?.registerKnownWorkspaces(event.sender.id, [result.workspacePath])

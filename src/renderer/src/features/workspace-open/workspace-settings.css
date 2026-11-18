@@ -1,0 +1,69 @@
+.workspace-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+  padding: 20px;
+}
+.workspace-settings-form h2,
+.workspace-settings-form p {
+  margin: 0;
+}
+.workspace-settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.workspace-settings-form label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+}
+.workspace-settings-form input:not([type='checkbox']),
+.workspace-settings-form select,
+.workspace-settings-form textarea {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 9px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.workspace-settings-form small {
+  color: var(--text-secondary);
+}
+.workspace-settings-form button {
+  padding: 8px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.workspace-settings-form button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.workspace-form-actions {
+  display: flex;
+  gap: 10px;
+}
+.workspace-settings-form [role='alert'] {
+  color: var(--error-color, #ef8c83);
+  overflow-wrap: anywhere;
+}
+
+.project-strip-item.project-strip-shortcut {
+  min-width: 32px;
+  width: 32px;
+  flex: 0 0 32px;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.workspace-form-actions {
+  flex-wrap: wrap;
+}
+.workspace-settings-form pre {
+  overflow-wrap: anywhere;
+}

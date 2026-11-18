@@ -61,3 +61,11 @@ export async function openBoundCompany(section: CompanySection): Promise<boolean
   const active = useWorkspaceStore.getState().activeWorkspaceRef
   return active.kind === 'local' && active.path === result.workspacePath
 }
+
+/** The fixed label does not override the project's explicit type. */
+export async function openCompanySpaceHome(): Promise<void> {
+  if (await openBoundCompany('overview')) {
+    await useWorkspaceStore.getState().refreshSettings()
+    showWorkspaceHome(useWorkspaceStore.getState().activeWorkspaceRef)
+  }
+}

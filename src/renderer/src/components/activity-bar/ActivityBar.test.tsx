@@ -27,14 +27,11 @@ describe('ActivityBar', () => {
       expect(markup).toContain(`aria-label="${count} 个任务排队或运行中">${expected}</span>`)
     }
   })
-  it('groups entries by task flow and keeps the intended order', () => {
+  it('keeps working features reachable while moving account and role management to settings', () => {
     const markup = renderToStaticMarkup(createElement(ActivityBar))
-
-    expect(markup).toContain('role="group" aria-label="工作"')
-    expect(markup).toContain('role="group" aria-label="资源"')
-    expect(markup).toContain('role="group" aria-label="流程"')
-
-    const labels = [
+    expect(markup).toContain('aria-label="项目功能"')
+    expect(markup).toContain('aria-label="工具"')
+    for (const label of [
       '工作台',
       '文件',
       '会话',
@@ -45,46 +42,14 @@ describe('ActivityBar', () => {
       '文章发布',
       '事务',
       '定时任务',
-      '网站与账号',
-      '角色',
       '数据源',
       '视频创作',
       '硬件生产',
       'CCLink 远程',
-    ]
-
-    const positions = labels.map((label) => markup.indexOf(`title="${label}"`))
-
-    expect(positions.every((position) => position >= 0)).toBe(true)
-    expect(positions).toEqual([...positions].sort((left, right) => left - right))
-    expect(markup.indexOf('title="设置"')).toBeGreaterThan(positions.at(-1) ?? -1)
-  })
-
-  it('shows complete labels and group headings without requiring hover', () => {
-    const markup = renderToStaticMarkup(createElement(ActivityBar))
-    for (const label of [
-      '公司经营',
-      '文件',
-      '会话',
-      '浏览器',
-      '终端',
-      '角色',
-      '网站与账号',
-      '数据源',
-      '公司账目',
-      'CCLink 远程',
-      '文章发布',
-      '事务',
-      '定时任务',
-      '视频创作',
-      '硬件生产',
       '设置',
-    ]) {
-      expect(markup).toContain(`class="activity-bar-label" aria-hidden="true">${label}</span>`)
-    }
-    for (const group of ['工作', '资源', '流程']) {
-      expect(markup).toContain(`class="activity-bar-group-label" aria-hidden="true">${group}</div>`)
-    }
-    expect(markup.match(/aria-pressed="(?:true|false)"/g)).toHaveLength(16)
+    ])
+      expect(markup).toContain(`title="${label}"`)
+    expect(markup).not.toContain('title="网站与账号"')
+    expect(markup).not.toContain('title="角色"')
   })
 })

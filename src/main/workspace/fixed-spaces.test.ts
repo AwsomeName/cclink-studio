@@ -57,6 +57,36 @@ const configure = async (
 }
 
 describe('fixed personal/company spaces preserve original data', () => {
+  it('allows explicit ordinary-project shortcuts without initializing or forcing a company type', async () => {
+    await service.ensurePersonalSpace()
+    const path = join(paths.root, '工程')
+    await mkdir(path)
+    await service.getSnapshot(path)
+    await service.saveWorkspaceSettings({
+      workspacePath: path,
+      revision: null,
+      settings: { version: 1, name: '工程', type: 'electronics' },
+    })
+    const configureSpy = vi.fn(configure)
+    const linked = await service.connectCompanySpace(
+      { workspacePath: path, shortcutOnly: true },
+      configureSpy,
+    )
+    expect(linked.company?.requireCompanyData).toBe(false)
+    expect(configureSpy).not.toHaveBeenCalled()
+    expect(await service.resolveFixedSpace('company')).toBe(path)
+    await expect(
+      service.connectCompanySpace({ workspacePath: path, shortcutOnly: true }, configureSpy),
+    ).resolves.toEqual(linked)
+    const restarted = new WorkspaceStateService()
+    await restarted.loadState()
+    expect(await restarted.resolveFixedSpace('company')).toBe(path)
+    expect((await restarted.getWorkspaceSettings(path)).settings.type).toBe('electronics')
+    await expect(
+      readFile(join(path, '.cclink-studio/company-workspace/company.sqlite')),
+    ).rejects.toThrow()
+  })
+
   it('initializes once, keeps company lazy and survives restart', async () => {
     const [a, b] = await Promise.all([service.ensurePersonalSpace(), service.ensurePersonalSpace()])
     expect(a).toEqual(b)

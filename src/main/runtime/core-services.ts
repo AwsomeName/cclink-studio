@@ -233,6 +233,19 @@ export async function bootstrapMainProcessServices(
     runtime.settingsService,
     runtime.fileService,
     () => runtime.companyWorkspaceService,
+    async (source) => {
+      const result = await runtime.scheduledTaskService?.inspect(source.workspacePath)
+      if (!result?.success) throw Error('原任务状态不可用，保持原关联')
+      if (
+        result.tasks.some(
+          (task) =>
+            source.taskIds.includes(task.definition.id) &&
+            (task.activation.enabled ||
+              ['queued', 'running'].includes(task.latestRun?.status ?? '')),
+        )
+      )
+        throw Error('原关联仍有启用或运行的任务，请先在原任务中暂停并核对输出位置')
+    },
   )
   registerWorkbenchTabModelIpc(
     runtime.workbenchTabModel!,

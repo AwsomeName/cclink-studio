@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type WorkspaceOpenStep = 'sources' | 'remote'
+export type WorkspaceOpenStep = 'sources' | 'remote' | 'create' | 'git'
 
 interface WorkspaceOpenState {
   open: boolean

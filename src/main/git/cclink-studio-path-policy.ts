@@ -1,3 +1,4 @@
+import { workspaceSettingsPath, workspaceSettingsSchema } from '../../shared/workspace-settings'
 import { parseStoredScheduledTaskDefinition } from '../../shared/scheduled-task/scheduled-task-schema'
 
 const SHARED_TASK_PATH_PATTERN =
@@ -45,7 +46,7 @@ export function findForbiddenCclinkStudioPaths(paths: string[]): string[] {
       paths
         .map(normalizeGitPath)
         .filter((path) => path === '.cclink-studio' || path.startsWith('.cclink-studio/'))
-        .filter((path) => !SHARED_TASK_PATH_PATTERN.test(path)),
+        .filter((path) => !SHARED_TASK_PATH_PATTERN.test(path) && path !== workspaceSettingsPath),
     ),
   ).slice(0, 20)
 }
@@ -74,8 +75,11 @@ export async function inspectSharedTaskIndexSecrets(
     '-z',
     '--',
     '.cclink-studio/shared/scheduled-tasks',
+    workspaceSettingsPath,
   ])
-  const paths = splitNullPaths(result.stdout).filter((path) => SHARED_TASK_PATH_PATTERN.test(path))
+  const paths = splitNullPaths(result.stdout).filter(
+    (path) => SHARED_TASK_PATH_PATTERN.test(path) || path === workspaceSettingsPath,
+  )
   if (paths.length > 200) return ['.cclink-studio/shared/scheduled-tasks/<too-many-files>']
   const sensitive: string[] = []
   for (const path of paths.slice(0, 200)) {
@@ -95,6 +99,7 @@ export async function inspectSharedTaskIndexDefinitions(
     '-z',
     '--',
     '.cclink-studio/shared/scheduled-tasks',
+    workspaceSettingsPath,
   ])
   const invalid: string[] = []
   const entries = result.stdout.split('\0').filter(Boolean)
@@ -103,7 +108,7 @@ export async function inspectSharedTaskIndexDefinitions(
     const match = /^(\d+) [0-9a-f]+ (\d+)\t(.+)$/.exec(entry)
     if (!match) continue
     const [, mode, stage, path] = match
-    if (!SHARED_TASK_PATH_PATTERN.test(path)) continue
+    if (!(SHARED_TASK_PATH_PATTERN.test(path) || path === workspaceSettingsPath)) continue
     if ((mode !== '100644' && mode !== '100755') || stage !== '0') {
       invalid.push(path)
       continue
@@ -159,9 +164,11 @@ export async function inspectSharedTaskOutgoingContent(
       commit,
       '--',
       '.cclink-studio/shared/scheduled-tasks',
+      workspaceSettingsPath,
     ])
-    for (const path of splitNullPaths(pathsResult.stdout).filter((candidate) =>
-      SHARED_TASK_PATH_PATTERN.test(candidate),
+    for (const path of splitNullPaths(pathsResult.stdout).filter(
+      (candidate) =>
+        SHARED_TASK_PATH_PATTERN.test(candidate) || candidate === workspaceSettingsPath,
     )) {
       let contents: string
       try {
@@ -211,6 +218,11 @@ function normalizeGitPath(path: string): string {
 function isValidSharedTaskDefinition(path: string, contents: string): boolean {
   if (Buffer.byteLength(contents, 'utf8') > 128 * 1024 || contents.includes('\0')) return false
   try {
+    if (path === workspaceSettingsPath)
+      return (
+        Buffer.byteLength(contents, 'utf8') <= 16384 &&
+        workspaceSettingsSchema.safeParse(JSON.parse(contents)).success
+      )
     const parsed = parseStoredScheduledTaskDefinition(JSON.parse(contents))
     const taskId = path.slice(path.lastIndexOf('/') + 1, -5)
     return parsed.schemaVersion === 2 && parsed.id === taskId

@@ -83,12 +83,14 @@ export interface GitRepositorySnapshot {
   lineStatsIncomplete: boolean
   refreshedAt: string
   revision: string
+  workspaceSettingsTracked?: boolean
   ignoredSharedTaskDefinitions?: Array<{ path: string; rule: string }>
   errorCode?: GitSnapshotErrorCode
   error?: string
 }
 
 export interface GitApiContract {
+  shareWorkspaceSettings(workspacePath: string): Promise<GitOperationResult>
   transfer(input: GitTransferInput): Promise<GitTransferResult>
   getSnapshot(workspacePath: string): Promise<GitRepositorySnapshot>
   getDiff(input: GitDiffRequest): Promise<GitDiffResult>

@@ -1,6 +1,6 @@
 # 当前代码入口盘点与目标归属
 
-日期：2026-11-18。代码基线：`d50a5dae`。仅为产品设计盘点，不代表每项已经重新运行验收。
+日期：2026-11-18。代码复核基线：`7c54acaa`。仅为产品设计盘点，不代表每项已经重新运行验收。
 
 此文件记录现有入口，防止重组时只覆盖截图里的大按钮。目标归属已按 2026-11-18 用户最新定义修订：项目类型封装首页和业务功能，工作模式是独立于项目类型的工作版面。目标归属均是提案；不删除原入口、不修改原资料。
 
@@ -44,7 +44,7 @@
 | `terminal` | 工具 → 终端 |
 | `terminal-record` | 终端执行历史/任务跳转 |
 | `data-source-query` | 资料 → 数据查询 |
-| `data-source-result` | 资料 → 查询结果 |
+| `data-source-result` | 保留类型兼容；当前结果在 DataSourceQueryTab 中呈现，不把独立类型声明计为独立已交付页面 |
 | `scheduled-task` | 任务与运行 → 定时任务对象 |
 | `web-resource` | 设置 → 网站账号详情；业务页可定向进入 |
 | `web-affair` | 任务与运行/业务功能 → 网页事务对象 |
@@ -59,16 +59,16 @@
 
 | 当前 ID | 当前名称/组 | 目标分组 |
 | --- | --- | --- |
-| `appearance` | 外观 / 通用 | 通用与编辑 |
-| `editor` | 编辑器 / 通用 | 通用与编辑 |
-| `shortcuts` | 快捷键 / 通用 | 通用与编辑 |
-| `connections` | API Key 与连接 / AI 与服务 | 账号与连接 |
-| `agent-capabilities` | Agent 行为与工具 / AI 与服务 | 助手与能力 |
+| `appearance` | 外观 / 通用 | 外观与编辑 |
+| `editor` | 编辑器 / 通用 | 外观与编辑 |
+| `shortcuts` | 快捷键 / 通用 | 外观与编辑 |
+| `connections` | API Key 与连接 / AI 与服务 | 模型与 API；Git/数据连接进入对应设置项 |
+| `agent-capabilities` | Agent 行为与工具 / AI 与服务 | Skills 与 MCP |
 | `model-usage` | 模型用量 / AI 与服务 | 用量与诊断 |
-| `components` | 组件管理 / AI 与服务 | 环境与设备 |
-| `browser` | 浏览器 / 工作台 | 通用与编辑 |
+| `components` | 组件管理 / AI 与服务 | 组件与设备 |
+| `browser` | 浏览器 / 工作台 | 外观与编辑 |
 | `git-backup` | Git 备份 / 工作台 | 工作台 Git 绑定/应用 Git 凭证（拆分） |
-| `cad` | 硬件与 CAD / 工作台 | 环境与设备 |
+| `cad` | 硬件与 CAD / 工作台 | 组件与设备 |
 | `updates` | 更新 / 应用 | 更新与关于 |
 | `about` | 关于 / 应用 | 更新与关于 |
 
@@ -84,7 +84,7 @@
 | `cad` | 3D/CAD 工具；环境配置进设置 |
 | `data-source` | 查询工具；连接配置进设置 |
 | `editor` | 通用资料与编辑工具 |
-| `hardware` | 电子开发类型功能工具 |
+| `hardware` | 电子开发的硬件工具 |
 | `image-generation` | 内容业务功能/文档配图工具；Provider 进设置 |
 | `meshy` | 3D/素材生成工具；Provider 进设置 |
 | `scheduled-task` | 工作台任务（当前 MCP 为查询能力） |
@@ -124,3 +124,31 @@
 3. 源码里的占位页、只读能力、旧版路径单列完成边界；不能把类型存在写成功能完成。
 4. 未发现代码实现的未来方案仅列为候选，不进入“现有可用功能”统计。
 5. 实施时须按主设计中的真实应用动作逐条回归；本次不运行应用验收，因为没有改应用代码。
+
+## 本轮补充核查
+
+- 最近会话：当前项目快捷切换、列表搜索、关闭/恢复/删除保留，配置管理迁移不能移走日常会话入口。
+- STEP：`cad_plan_modification`、`cad_modify_step`、结果自动打开已存在；必须归入 3D 工作版面，不能仅列模型预览。
+- FPC：当前服务提供扫描、检查、报告、Gerber 几何和形状上下文；完整自动改板不因方案文档存在就计为已实现。
+- 朗读：MD/网页统一底栏入口，消息/选区入口保留；不重新在编辑器和浏览器工具栏增加重复入口。
+- Claude 组件：保留安装/修复后启用和选择 Studio 管理版本的现有流程。
+- 视频：新版口播与旧版素材/声音/导出分别保留，新版后三页不视为已实现。
+
+## MCP 工具声明核对
+
+下面提取各模块 index.ts 的字面量工具声明，防止遗漏没有主侧栏入口的能力。声明存在不代表当前已授权或所有操作已重新验收；条件注册和权限继续由原服务控制。
+
+| 模块 | 声明数量 | 工具 ID |
+| --- | --- | --- |
+| `agent-device` | 4 | `agent_device_snapshot`, `agent_device_click`, `agent_device_swipe`, `agent_device_type` |
+| `android` | 14 | `android_screenshot`, `android_dump_ui`, `android_device_info`, `android_list_packages`, `android_current_activity`, `android_tap`, `android_swipe`, `android_press_key`, `android_type_text`, `android_launch_package`, `android_go_home`, `android_install_apk`, `android_uninstall_package`, `android_push_file` |
+| `browser` | 44 | `browser_screenshot`, `browser_extract`, `browser_title`, `browser_input_value`, `browser_wait_for_selector`, `browser_navigate`, `browser_go_back`, `browser_go_forward`, `browser_reload`, `browser_click`, `browser_fill`, `browser_select`, `browser_check`, `browser_uncheck`, `browser_press`, `browser_hover`, `browser_scroll`, `browser_upload_file`, `browser_wait_for_navigation`, `browser_press_key`, `browser_drag_drop`, `browser_evaluate`, `browser_handle_dialog`, `browser_set_auto_dialog`, `browser_clear_cookies`, `browser_intercept_request`, `browser_mock_response`, `browser_get_network_logs`, `browser_clear_intercepts`, `browser_new_tab`, `browser_close_tab`, `browser_list_tabs`, `browser_switch_tab`, `browser_get_tab_info`, `browser_wait_for_download`, `browser_download_info`, `browser_save_download`, `browser_list_frames`, `browser_frame_execute`, `browser_frame_content`, `browser_get_console_logs`, `browser_wait_for_popup`, `browser_mouse_click`, `browser_mouse_move` |
+| `cad` | 8 | `cad_get_backend_status`, `cad_get_model_support`, `cad_inspect_model`, `cad_convert_model`, `cad_get_cache_status`, `cad_clear_cache`, `cad_plan_modification`, `cad_modify_step` |
+| `data-source` | 6 | `data_source_list_sources`, `data_source_list_collections`, `data_source_list_saved_queries`, `data_source_search`, `data_source_get_record`, `data_source_run_saved_query` |
+| `editor` | 6 | `editor_write`, `editor_append`, `editor_insert`, `editor_read`, `editor_list`, `editor_save` |
+| `hardware` | 5 | `hardware_scan_project`, `hardware_inspect_production_package`, `hardware_write_production_report`, `hardware_prepare_fpc_shape_context`, `hardware_read_gerber_layer_geometry` |
+| `image-generation` | 2 | `image_generation_status`, `markdown_illustrate` |
+| `meshy` | 5 | `meshy_create_preview`, `meshy_create_refine`, `meshy_get_task`, `meshy_save_asset`, `meshy_generate_and_save` |
+| `scheduled-task` | 3 | `scheduled_task_list`, `scheduled_task_get_runtime_status`, `scheduled_task_list_runs` |
+| `web-affairs` | 11 | `image_research_search`, `image_research_inspect_page`, `image_research_open_result`, `image_research_propose`, `web_affair_get`, `web_affair_propose_flow_diff`, `web_affair_finish_attempt`, `web_affair_complete_check`, `article_publishing_inspect_page`, `article_publishing_report_checkpoint`, `article_publishing_report_asset` |
+| `web-resources` | 2 | `web_accounts_list`, `web_account_open` |

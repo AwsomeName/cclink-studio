@@ -1,3 +1,7 @@
+import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
+import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { WorkspaceSettingsForm } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_SETTINGS } from '@shared/ipc/settings'
 import type { AppSettings, CadBackend } from '@shared/ipc/settings'
@@ -44,6 +48,9 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 type SettingsSectionId =
+  | 'workspace'
+  | 'web-accounts'
+  | 'roles'
   | 'appearance'
   | 'updates'
   | 'components'
@@ -64,6 +71,9 @@ const SETTINGS_SECTIONS: Array<{
   group: string
   icon: (props: { size?: number }) => React.ReactElement
 }> = [
+  { id: 'web-accounts', label: '网站与账号', group: '资源管理', icon: IconGlobe },
+  { id: 'roles', label: '角色', group: '资源管理', icon: IconRobot },
+  { id: 'workspace', label: '当前项目', group: '项目', icon: IconFile },
   { id: 'appearance', label: '外观', group: '通用', icon: IconPaintbrush },
   { id: 'editor', label: '编辑器', group: '通用', icon: IconFile },
   { id: 'shortcuts', label: '快捷键', group: '通用', icon: IconKeyboard },
@@ -300,6 +310,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.ReactElement {
+  const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(
     normalizeSection(initialSection),
   )
@@ -738,7 +749,14 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
       </aside>
 
       <main className="settings-content">
-        {!['components', 'model-usage', 'connections'].includes(activeSection) && (
+        {![
+          'components',
+          'model-usage',
+          'connections',
+          'workspace',
+          'web-accounts',
+          'roles',
+        ].includes(activeSection) && (
           <div className="settings-header">
             <div>
               <h1>设置</h1>
@@ -753,6 +771,22 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {loading && <div className="settings-description">正在加载设置...</div>}
         {error && <div className="settings-error">{error}</div>}
 
+        {activeSection === 'web-accounts' && (
+          <section className="settings-section">
+            <h2>网站与账号</h2>
+            <WebResourcesSidebar
+              workspaceRef={workspaceRef}
+              workspacePath={workspaceRef.kind === 'local' ? workspaceRef.path : null}
+            />
+          </section>
+        )}
+        {activeSection === 'roles' && (
+          <section className="settings-section">
+            <h2>角色</h2>
+            <AgentRolesSidebar />
+          </section>
+        )}
+        {activeSection === 'workspace' && <WorkspaceSettingsForm />}
         {activeSection === 'appearance' && (
           <section className="settings-section">
             <h2>外观</h2>

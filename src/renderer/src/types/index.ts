@@ -160,6 +160,8 @@ export interface WebAffairDraftState {
 
 /** Workbench Tab */
 export interface Tab {
+  /** Local presentation preference, persisted by the existing Tab owner. */
+  workbenchLayout?: 'standard' | 'focus'
   id: string
   type: TabType
   title: string

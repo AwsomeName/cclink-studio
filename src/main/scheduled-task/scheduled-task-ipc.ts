@@ -13,6 +13,16 @@ export function registerScheduledTaskIpc(
   mainWindow?: BrowserWindow,
 ): void {
   registerTrustedIpcContract(
+    scheduledTasksIpc.exportBundle,
+    trustedRendererGuard,
+    (_event, path, ids) => service.exportBundle(path, ids),
+  )
+  registerTrustedIpcContract(
+    scheduledTasksIpc.importBundle,
+    trustedRendererGuard,
+    (_event, path, bundle) => service.importBundle(path, bundle),
+  )
+  registerTrustedIpcContract(
     scheduledTasksIpc.inspect,
     trustedRendererGuard,
     (_event, workspacePath) => service.inspect(workspacePath),

@@ -32,6 +32,47 @@ afterEach(async () => {
 })
 
 describe('GitWorkspaceService', () => {
+  it('shares only validated project settings and rejects malformed staged settings', async () => {
+    const workspacePath = join(tempDir, 'portable-settings')
+    await mkdir(join(workspacePath, '.cclink-studio'), { recursive: true })
+    await git(workspacePath, ['init', '-b', 'main'])
+    await git(workspacePath, ['config', 'user.name', 'Test'])
+    await git(workspacePath, ['config', 'user.email', 'test@example.invalid'])
+    await writeFile(join(workspacePath, 'README.md'), 'initial')
+    await git(workspacePath, ['add', 'README.md'])
+    await git(workspacePath, ['commit', '-m', 'initial'])
+    const config = '.cclink-studio/workspace-settings.json'
+    await writeFile(
+      join(workspacePath, config),
+      JSON.stringify({
+        version: 1,
+        name: 'Diary',
+        type: 'diary',
+        diary: { directory: '日记', timezone: 'UTC', taskIds: [] },
+      }),
+    )
+    await writeFile(join(workspacePath, '.cclink-studio/project.json'), 'private identity')
+    const service = createService(workspacePath)
+    expect((await service.shareWorkspaceSettings(workspacePath)).success).toBe(true)
+    expect((await gitOutput(workspacePath, ['diff', '--cached', '--name-only'])).trim()).toBe(
+      config,
+    )
+    await writeFile(
+      join(workspacePath, config),
+      JSON.stringify({ version: 1, name: 'Diary', type: 'diary', token: 'must-not-share' }),
+    )
+    await git(workspacePath, ['add', '-f', config])
+    const snapshot = await service.getSnapshot(workspacePath)
+    const result = await service.commit({
+      workspacePath,
+      expectedRevision: snapshot.revision,
+      message: 'blocked',
+      pathsToStage: [],
+    })
+    expect(result.success).toBe(false)
+    expect(await gitOutput(workspacePath, ['rev-list', '--count', 'HEAD'])).toBe('1\n')
+  })
+
   it('reads branch, grouped changes and known line counts from a real repository', async () => {
     const workspacePath = join(tempDir, 'workspace')
     await mkdir(workspacePath)
@@ -313,7 +354,7 @@ describe('GitWorkspaceService', () => {
       }),
     ).resolves.toMatchObject({
       success: false,
-      message: expect.stringContaining('合法的 v2'),
+      message: expect.stringContaining('格式不受支持'),
     })
 
     await writeFile(
@@ -401,7 +442,7 @@ describe('GitWorkspaceService', () => {
       service.push({ workspacePath, expectedHeadOid: snapshot.headOid! }),
     ).resolves.toMatchObject({
       success: false,
-      message: expect.stringContaining('无效共享任务定义'),
+      message: expect.stringContaining('无效项目配置或共享任务定义'),
     })
   })
 })

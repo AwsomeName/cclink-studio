@@ -250,7 +250,15 @@ export interface ScheduledTaskWorkspaceRuntimeStatusResult {
   error?: ScheduledTaskFailure
 }
 
+export interface ScheduledTaskBundleResult {
+  success: boolean
+  bundle?: string
+  taskIds?: string[]
+  error?: ScheduledTaskFailure
+}
 export interface ScheduledTasksApiContract {
+  exportBundle(workspacePath: string, taskIds: string[]): Promise<ScheduledTaskBundleResult>
+  importBundle(workspacePath: string, bundle: string): Promise<ScheduledTaskBundleResult>
   inspect: (workspacePath: string) => Promise<ScheduledTaskListResult>
   list(workspacePath: string): Promise<ScheduledTaskListResult>
   get(workspacePath: string, taskId: string): Promise<ScheduledTaskOperationResult>

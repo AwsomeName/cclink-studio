@@ -9,6 +9,7 @@ export const gitTransferInputSchema = z
     action: z.enum(['clone', 'inspect', 'fetch', 'update-copy']),
     workspacePath: bounded.optional(),
     url: bounded.optional(),
+    destinationParent: bounded.optional(),
     branch: z
       .string()
       .max(240)

@@ -1,3 +1,8 @@
+import type {
+  CreateWorkspace,
+  SaveWorkspaceSettings,
+  WorkspaceSettingsSnapshot,
+} from '../workspace-settings'
 import type { DiaryDocument, DiaryDocumentInput } from '../personal-diary-source'
 import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
 import { defineIpcCall } from './contract'
@@ -190,6 +195,8 @@ export interface DefaultWorkspaceResult {
 }
 
 export interface FixedSpaceRef {
+  /** Legacy company bindings require their original database; explicit project shortcuts may not. */
+  requireCompanyData?: boolean
   workspacePath: string
   projectId: string
 }
@@ -213,9 +220,13 @@ export interface ConnectCompanySpaceInput {
   workspacePath?: string
   initializeName?: string
   replacePersonal?: boolean
+  shortcutOnly?: boolean
 }
 
 export interface WorkspaceStateApiContract {
+  getSettings: (workspacePath: string) => Promise<WorkspaceSettingsSnapshot>
+  saveSettings: (input: SaveWorkspaceSettings) => Promise<WorkspaceSettingsSnapshot>
+  createWorkspace: (input: CreateWorkspace) => Promise<WorkspaceSettingsSnapshot>
   diaryDocument: (input: DiaryDocumentInput) => Promise<DiaryDocument>
   verifyLocalIdentity: (path: string, projectId: string) => Promise<void>
   getFixedSpaces: () => Promise<FixedSpaces>
@@ -251,6 +262,13 @@ export interface WorkspaceStateApiContract {
 }
 
 export const workspaceStateIpc = {
+  getSettings: defineIpcCall<[string], WorkspaceSettingsSnapshot>('workspaceState:getSettings'),
+  saveSettings: defineIpcCall<[SaveWorkspaceSettings], WorkspaceSettingsSnapshot>(
+    'workspaceState:saveSettings',
+  ),
+  createWorkspace: defineIpcCall<[CreateWorkspace], WorkspaceSettingsSnapshot>(
+    'workspaceState:createWorkspace',
+  ),
   diaryDocument: defineIpcCall<[DiaryDocumentInput], DiaryDocument>('workspaceState:diaryDocument'),
   verifyLocalIdentity: defineIpcCall<[string, string], void>('workspaceState:verifyLocalIdentity'),
   getFixedSpaces: defineIpcCall<[], FixedSpaces>('workspaceState:getFixedSpaces'),

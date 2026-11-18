@@ -33,6 +33,44 @@ afterEach(async () => {
 })
 
 describe('ScheduledTaskService', () => {
+  it('exports original definitions unchanged and imports identities once without enabling or overwriting', async () => {
+    const service = createService()
+    await service.load()
+    const saved = await service.save(createInput(false))
+    await writeFile(
+      join(workspacePath, '.cclink-studio/project.json'),
+      JSON.stringify({ projectId: 'project-1' }),
+    )
+    const original = join(
+      workspacePath,
+      '.cclink-studio/scheduled-tasks',
+      saved.task!.definition.id + '.json',
+    )
+    const bytes = await readFile(original, 'utf8')
+    const exported = await service.exportBundle(workspacePath, [saved.task!.definition.id])
+    expect(exported.success).toBe(true)
+    expect(await readFile(original, 'utf8')).toBe(bytes)
+    expect(exported.bundle).not.toContain(workspacePath)
+    const same = await service.importBundle(workspacePath, exported.bundle!)
+    expect(same.success).toBe(true)
+    const raw = JSON.parse(exported.bundle!)
+    raw.tasks[0].id = '12345678-1234-4234-8234-123456789abc'
+    const bundle = JSON.stringify(raw)
+    expect((await service.importBundle(workspacePath, bundle)).success).toBe(true)
+    expect((await service.importBundle(workspacePath, bundle)).success).toBe(true)
+    const tasks = await service.list(workspacePath)
+    expect(tasks.tasks).toHaveLength(2)
+    expect(
+      tasks.tasks.find((task) => task.definition.id === raw.tasks[0].id)?.activation.enabled,
+    ).toBe(false)
+    raw.tasks[0].instruction = 'different content'
+    expect((await service.importBundle(workspacePath, JSON.stringify(raw))).success).toBe(false)
+    expect(await readFile(original, 'utf8')).toBe(bytes)
+    expect(
+      (await service.get(workspacePath, raw.tasks[0].id)).task?.definition.instruction,
+    ).not.toBe('different content')
+  })
+
   it('inspects original tasks without changing definitions or activation and refuses pending migration', async () => {
     const service = createService()
     await service.load()

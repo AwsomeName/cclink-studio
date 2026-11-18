@@ -9,6 +9,7 @@ import {
   parseDeleteScheduledTaskInput,
 } from './scheduled-task-schema'
 import type {
+  ScheduledTaskBundleResult,
   SaveScheduledTaskInput,
   ScheduledTaskListResult,
   ScheduledTaskOperationResult,
@@ -23,6 +24,12 @@ import type {
 } from './scheduled-task-types'
 
 export const scheduledTasksIpc = {
+  exportBundle: defineIpcCall<[string, string[]], ScheduledTaskBundleResult>(
+    'scheduledTasks:exportBundle',
+  ),
+  importBundle: defineIpcCall<[string, string], ScheduledTaskBundleResult>(
+    'scheduledTasks:importBundle',
+  ),
   inspect: defineIpcCall<[string], ScheduledTaskListResult>('scheduledTasks:inspect'),
   list: defineIpcCall<[string], ScheduledTaskListResult>('scheduledTasks:list'),
   get: defineIpcCall<[string, string], ScheduledTaskOperationResult>('scheduledTasks:get'),
@@ -110,6 +117,25 @@ const invalidRuntimeStatus = async (): Promise<ScheduledTaskRuntimeStatus> => ({
 })
 
 export const scheduledTasksIpcContracts = {
+  exportBundle: bindIpcParser(
+    scheduledTasksIpc.exportBundle,
+    (args) => {
+      requireArgs(args, 2, scheduledTasksIpc.exportBundle.channel)
+      if (!Array.isArray(args[1]) || !args[1].length || args[1].length > 20)
+        throw Error('请选择 1–20 个原任务')
+      return ipcArgs(parseWorkspacePath(args[0]), args[1].map(parseScheduledTaskId))
+    },
+    invalidOperation,
+  ),
+  importBundle: bindIpcParser(
+    scheduledTasksIpc.importBundle,
+    (args) => {
+      requireArgs(args, 2, scheduledTasksIpc.importBundle.channel)
+      if (typeof args[1] !== 'string' || args[1].length > 1000000) throw Error('任务定义文件过大')
+      return ipcArgs(parseWorkspacePath(args[0]), args[1])
+    },
+    invalidOperation,
+  ),
   inspect: bindIpcParser(
     scheduledTasksIpc.inspect,
     (args) => {

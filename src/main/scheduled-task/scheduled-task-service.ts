@@ -20,6 +20,7 @@ import {
   parseWorkspacePath,
 } from '../../shared/scheduled-task/scheduled-task-schema'
 import type {
+  ScheduledTaskBundleResult,
   CancelScheduledTaskRunInput,
   DeleteScheduledTaskInput,
   RunScheduledTaskInput,
@@ -309,6 +310,86 @@ export class ScheduledTaskService {
     } catch (error) {
       return { success: false, error: toFailure(error) }
     }
+  }
+
+  async exportBundle(workspacePath: string, taskIds: string[]): Promise<ScheduledTaskBundleResult> {
+    try {
+      const inspected = await this.inspect(workspacePath)
+      if (!inspected.success || inspected.issues?.length)
+        throw Error(inspected.error?.message || '原任务有冲突，请先处理')
+      const tasks = [...new Set(taskIds)].map((id) => {
+        const task = inspected.tasks.find((item) => item.definition.id === id)
+        if (!task) throw Error('原任务已不存在，请刷新')
+        const stored = toStoredDefinition(task.definition)
+        if (containsObviousSecret(stored)) throw Error('任务包含疑似凭证，请移除后再导出')
+        return stored
+      })
+      return {
+        success: true,
+        bundle: JSON.stringify({ version: 1, tasks }, null, 2),
+        taskIds: tasks.map((task) => task.id),
+      }
+    } catch (error) {
+      return { success: false, error: toFailure(error) }
+    }
+  }
+
+  async importBundle(workspacePath: string, bundle: string): Promise<ScheduledTaskBundleResult> {
+    return this.enqueue(async () => {
+      try {
+        const raw = JSON.parse(bundle)
+        if (
+          raw?.version !== 1 ||
+          Object.keys(raw).some((key) => !['version', 'tasks'].includes(key)) ||
+          !Array.isArray(raw.tasks) ||
+          !raw.tasks.length ||
+          raw.tasks.length > 20
+        )
+          throw Error('任务定义包格式无效')
+        const tasks: StoredScheduledTaskDefinitionV2[] = raw.tasks.map((value: unknown) => {
+          const stored = parseStoredScheduledTaskDefinition(value)
+          if (stored.schemaVersion !== 2 || containsObviousSecret(stored))
+            throw Error('只接受不含凭证的 v2 原任务定义')
+          return stored
+        })
+        if (new Set(tasks.map((task) => task.id)).size !== tasks.length)
+          throw Error('任务定义包有重复身份')
+        const context = await this.resolveWorkspace(workspacePath, true)
+        this.assertActivationStoreAvailable()
+        const existing = await this.readDefinitions(context.workspacePath, false)
+        if (existing.issues.length) throw Error('项目中有任务冲突，请先处理')
+        for (const task of tasks) {
+          const previous = existing.definitions.find((item) => item.id === task.id)
+          if (previous && JSON.stringify(toStoredDefinition(previous)) !== JSON.stringify(task))
+            throw Error('同一任务已有不同定义，未覆盖：' + task.title)
+        }
+        const directory = definitionsDirectory(context.workspacePath, 'shared')
+        let parent = context.workspacePath
+        for (const name of ['.cclink-studio', 'shared', 'scheduled-tasks']) {
+          parent = join(parent, name)
+          await mkdir(parent).catch((error) => {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+          })
+          const metadata = await lstat(parent)
+          if (!metadata.isDirectory() || metadata.isSymbolicLink())
+            throw Error('任务目录不是普通目录')
+        }
+        await assertDefinitionDirectorySafe(context.workspacePath, directory)
+        for (const task of tasks) {
+          if (existing.definitions.some((item) => item.id === task.id)) continue
+          await writeFile(
+            join(directory, task.id + '.json'),
+            JSON.stringify(task, null, 2) + '\n',
+            { encoding: 'utf8', flag: 'wx', mode: 0o600 },
+          )
+        }
+        // No activation is copied or enabled. Retry recognizes definitions already created.
+        this.notifyChanged(context.workspacePath)
+        return { success: true, taskIds: tasks.map((task) => task.id) }
+      } catch (error) {
+        return { success: false, error: toFailure(error) }
+      }
+    })
   }
 
   async save(input: SaveScheduledTaskInput): Promise<ScheduledTaskOperationResult> {

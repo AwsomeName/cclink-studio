@@ -5,6 +5,21 @@ import {
 } from './cclink-studio-path-policy'
 
 describe('CCLink Studio tracked path policy', () => {
+  it('allows only the exact portable settings path, never identity or local state', () => {
+    expect(
+      findForbiddenCclinkStudioPaths([
+        '.cclink-studio/workspace-settings.json',
+        '.cclink-studio/project.json',
+        '.cclink-studio/state/layout.json',
+        '.cclink-studio/workspace-settings.json.bak',
+      ]),
+    ).toEqual([
+      '.cclink-studio/project.json',
+      '.cclink-studio/state/layout.json',
+      '.cclink-studio/workspace-settings.json.bak',
+    ])
+  })
+
   it('allows only valid shared scheduled task JSON paths', () => {
     expect(
       findForbiddenCclinkStudioPaths([

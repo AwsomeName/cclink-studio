@@ -1,3 +1,12 @@
+import {
+  useDiaryNavigation,
+  type DiaryPage,
+} from '../../features/workspace-open/personal-diary-navigation'
+import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
+import {
+  openCompanyWorkspace,
+  type CompanySection,
+} from '../../features/company-workspace/company-workspace-commands'
 import React, { useEffect, useState } from 'react'
 import {
   useUIStore,
@@ -89,6 +98,10 @@ const MAIN_ICON_GROUPS: Array<{ id: string; label: string; items: ActivityBarIte
 ]
 
 export function ActivityBar(): React.ReactElement {
+  const workspaceType = useWorkspaceStore(
+    (state) => state.settingsSnapshot?.settings.type ?? 'general',
+  )
+  const diaryPage = useDiaryNavigation((state) => state.page)
   const activeRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const companyPath = useFixedSpacesStore((state) => state.spaces?.company?.workspacePath)
   const activeTab = useTabStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId))
@@ -142,6 +155,10 @@ export function ActivityBar(): React.ReactElement {
       return
     }
     if (id === 'company-workspace' || id === 'company-accounts') {
+      if (workspaceType === 'company') {
+        openCompanyWorkspace(id === 'company-accounts' ? 'finance' : 'overview')
+        return
+      }
       void useCommandStore
         .getState()
         .executeCommand(id === 'company-accounts' ? 'company.finance' : 'company.overview', {
@@ -228,16 +245,97 @@ export function ActivityBar(): React.ReactElement {
   return (
     <div className={`activity-bar${sidebarVisible ? '' : ' activity-bar-compact'}`}>
       <div className="activity-bar-main">
-        {MAIN_ICON_GROUPS.filter((group) => group.id !== 'more').map(renderGroup)}
+        <div className="activity-bar-group" role="group" aria-label="项目功能">
+          {workspaceType === 'diary' ? (
+            (['今天', '日记', '计划', '定时整理', '资料接入', 'Git'] as DiaryPage[]).map((page) => (
+              <button
+                key={page}
+                className={`activity-bar-icon ${activePanel === 'workspace-home' && diaryPage === page ? 'active' : ''}`}
+                onClick={() => {
+                  useDiaryNavigation.getState().setPage(page)
+                  showWorkspaceHome(activeRef)
+                }}
+                title={page}
+                aria-label={page}
+              >
+                <ActivityProjectsIcon size={18} />
+                <span className="activity-bar-label">{page}</span>
+              </button>
+            ))
+          ) : workspaceType === 'company' ? (
+            (
+              [
+                ['overview', '公司概览'],
+                ['projects', '业务项目'],
+                ['finance', '公司账目'],
+                ['operations', '运营内容'],
+              ] as [CompanySection, string][]
+            ).map(([section, label]) => (
+              <button
+                key={section}
+                className="activity-bar-icon"
+                onClick={() => openCompanyWorkspace(section)}
+                title={label}
+                aria-label={label}
+              >
+                <ActivityCompanyAccountsIcon size={18} />
+                <span className="activity-bar-label">{label}</span>
+              </button>
+            ))
+          ) : (
+            <button
+              className={`activity-bar-icon ${activePanel === 'workspace-home' ? 'active' : ''}`}
+              onClick={() => handleClick('workspace-home')}
+              title="工作台"
+              aria-label="工作台"
+            >
+              <ActivityProjectsIcon size={18} />
+              <span className="activity-bar-label">
+                {workspaceType === 'electronics' ? '工程概览' : '项目首页'}
+              </span>
+            </button>
+          )}
+          {workspaceType === 'electronics' && (
+            <button
+              className="activity-bar-icon"
+              onClick={() => handleClick('production')}
+              title="生产资料与检查"
+              aria-label="生产资料与检查"
+            >
+              <ActivityProductionIcon size={18} />
+              <span className="activity-bar-label">生产资料与检查</span>
+            </button>
+          )}
+        </div>
+        {renderGroup({
+          id: 'common',
+          label: '工作',
+          items: MAIN_ICON_GROUPS[0].items.filter(
+            (item) => item.id === 'files' || item.id === 'sessions',
+          ),
+        })}
         <details
           className="activity-more"
-          open={MAIN_ICON_GROUPS[4].items.some((item) => item.id === activePanel) || undefined}
+          open={
+            !['workspace-home', 'files', 'sessions', 'company-workspace'].includes(
+              activePanel ?? '',
+            ) || undefined
+          }
         >
-          <summary title="更多工具">
+          <summary title="工具" aria-label="工具">
             <ActivityProjectsIcon size={18} />
-            <span className="activity-bar-label">更多工具</span>
+            <span className="activity-bar-label">工具</span>
           </summary>
-          {renderGroup(MAIN_ICON_GROUPS[4])}
+          {renderGroup({
+            id: 'tools',
+            label: '全部工具',
+            items: MAIN_ICON_GROUPS.flatMap((group) => group.items).filter(
+              (item) =>
+                !['workspace-home', 'files', 'sessions', 'operations', 'agent-roles'].includes(
+                  item.id,
+                ),
+            ),
+          })}
         </details>
       </div>
       <div className="activity-bar-bottom">

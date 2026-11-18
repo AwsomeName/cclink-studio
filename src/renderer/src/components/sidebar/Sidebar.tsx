@@ -1,5 +1,3 @@
-import { PersonalDiarySidebar } from '../../features/workspace-open/PersonalDiarySidebar'
-import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-store'
 import {
   useUIStore,
   useTabStore,
@@ -128,7 +126,6 @@ function getSidebarTitle(
 }
 
 export function Sidebar(): React.ReactElement {
-  const personalPath = useFixedSpacesStore((s) => s.spaces?.personal?.workspacePath)
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarWidth = useUIStore((s) => s.sidebarWidth)
   const workspacePath = useFsStore((s) => s.workspacePath)
@@ -137,12 +134,7 @@ export function Sidebar(): React.ReactElement {
   const executeCommand = useCommandStore((s) => s.executeCommand)
   const showToast = useToastStore((s) => s.show)
   const cclinkRealtimeState = useCclinkStore((s) => s.realtime.state)
-  const sidebarTitle =
-    activePanel === 'workspace-home' &&
-    activeWorkspaceRef.kind === 'local' &&
-    activeWorkspaceRef.path === personalPath
-      ? '我的日常'
-      : getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
+  const sidebarTitle = getSidebarTitle(activePanel, activeWorkspaceRef, workspacePath)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const sidebarTarget = {
     kind: 'sidebar' as const,
@@ -204,6 +196,7 @@ export function Sidebar(): React.ReactElement {
     openTab(createArticlePublishingDraftTab(activeWorkspaceRef))
   }, [activeWorkspaceRef, openTab])
 
+  if (activePanel === 'workspace-home') return <></>
   return (
     <div
       className="sidebar"
@@ -274,9 +267,6 @@ export function Sidebar(): React.ReactElement {
         </div>
       )}
 
-      {activePanel === 'workspace-home' &&
-        activeWorkspaceRef.kind === 'local' &&
-        activeWorkspaceRef.path === personalPath && <PersonalDiarySidebar />}
       {activePanel === 'sessions' && (
         <div className="sidebar-header">
           <span className="sidebar-header-title">{sidebarTitle}</span>

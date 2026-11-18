@@ -1,3 +1,5 @@
+import { readWorkspaceSettings } from '../workspace/workspace-settings-files'
+import { workspaceSettingsPath } from '../../shared/workspace-settings'
 import {
   gitTransferInputSchema,
   type GitTransferInput,
@@ -64,6 +66,30 @@ export class GitWorkspaceService {
     this.resolveAuthentication = options.resolveAuthentication ?? (async () => null)
   }
 
+  async shareWorkspaceSettings(path: string): Promise<GitOperationResult> {
+    const snapshot = await this.getSnapshot(path)
+    if (snapshot.availability !== 'available' || !snapshot.repositoryRoot)
+      return operationFailure(snapshot, snapshot.error || '请先建立 Git 仓库')
+    const root = snapshot.repositoryRoot
+    if (this.activeOperations.has(root))
+      return operationFailure(snapshot, '仓库已有操作，请稍后重试')
+    this.activeOperations.add(root)
+    try {
+      const config = await readWorkspaceSettings(root)
+      if (config.status !== 'saved') throw Error(config.error || '项目配置尚未保存')
+      await this.runner.run(root, ['add', '-f', '--', workspaceSettingsPath])
+      return {
+        success: true,
+        message: '项目配置已纳入 Git 暂存；请核对变更后提交、推送。',
+        snapshot: await this.getSnapshot(root),
+      }
+    } catch (error) {
+      return operationFailure(snapshot, String(error))
+    } finally {
+      this.activeOperations.delete(root)
+    }
+  }
+
   async transfer(raw: GitTransferInput): Promise<GitTransferSnapshot> {
     const input = gitTransferInputSchema.parse(raw)
     let key = 'clone'
@@ -81,6 +107,7 @@ export class GitWorkspaceService {
     try {
       const result = await transferRepository(input, {
         runner: this.transferRunner,
+        copyRoot: input.destinationParent,
         authentication: input.token
           ? { username: input.username || 'git', token: input.token }
           : undefined,
@@ -158,6 +185,16 @@ export class GitWorkspaceService {
           this.runner.run(workspacePath, ['diff', '--cached', '--numstat', '-z', '--']),
           this.findIgnoredSharedTaskDefinitions(workspacePath),
         ])
+      let workspaceSettingsTracked = false
+      try {
+        workspaceSettingsTracked = Boolean(
+          (
+            await this.runner.run(workspacePath, ['ls-files', '--', workspaceSettingsPath])
+          ).stdout.trim(),
+        )
+      } catch {
+        /* status remains usable if optional sharing inspection fails */
+      }
       const status = parseGitStatusPorcelainV2(statusResult.stdout)
       const workingNumstat = parseGitNumstat(workingNumstatResult.stdout)
       const stagedNumstat = parseGitNumstat(stagedNumstatResult.stdout)
@@ -168,6 +205,7 @@ export class GitWorkspaceService {
         repositoryRoot,
         repositoryName: basename(repositoryRoot),
         branch: status.branch,
+        workspaceSettingsTracked,
         headOid: status.headOid,
         detached: status.detached,
         unborn: status.unborn,
@@ -307,7 +345,7 @@ export class GitWorkspaceService {
       if (sharedTaskSecrets.length > 0) {
         return operationFailure(
           await this.getSnapshot(input.workspacePath),
-          `共享任务定义疑似包含密码、Token 或密钥，已停止提交：${sharedTaskSecrets.join('、')}`,
+          `项目配置或共享任务定义疑似包含密码、Token 或密钥，已停止提交：${sharedTaskSecrets.join('、')}`,
         )
       }
       const invalidSharedTasks = await inspectSharedTaskIndexDefinitions(
@@ -317,7 +355,7 @@ export class GitWorkspaceService {
       if (invalidSharedTasks.length > 0) {
         return operationFailure(
           await this.getSnapshot(input.workspacePath),
-          `共享任务定义不是合法的 v2 普通 JSON 文件，已停止提交：${invalidSharedTasks.join('、')}`,
+          `项目配置或共享任务定义格式不受支持，已停止提交：${invalidSharedTasks.join('、')}`,
         )
       }
       await this.assertGitIdentity(repositoryRoot)
@@ -402,7 +440,7 @@ export class GitWorkspaceService {
       if (invalidSharedTasks.length > 0 || outgoingSharedTaskContent.invalid.length > 0) {
         return operationFailure(
           snapshot,
-          `当前或待推送历史包含无效共享任务定义，已停止 Push：${Array.from(new Set([...invalidSharedTasks, ...outgoingSharedTaskContent.invalid])).join('、')}`,
+          `当前或待推送历史包含无效项目配置或共享任务定义，已停止 Push：${Array.from(new Set([...invalidSharedTasks, ...outgoingSharedTaskContent.invalid])).join('、')}`,
         )
       }
       if (sharedTaskSecrets.length > 0 || outgoingSharedTaskContent.sensitive.length > 0) {

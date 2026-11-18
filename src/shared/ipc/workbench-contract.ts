@@ -1,3 +1,4 @@
+import { createWorkspaceSchema, saveWorkspaceSettingsSchema } from '../workspace-settings'
 import { diaryDocumentInputSchema } from '../personal-diary-source'
 import path from 'node:path'
 import { z, ZodError } from 'zod'
@@ -188,6 +189,17 @@ class WorkspaceStateWriteContractError extends Error {
 }
 
 export const workspaceStateIpcContracts = {
+  getSettings: bindIpcParser(workspaceStateIpc.getSettings, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  saveSettings: bindIpcParser(workspaceStateIpc.saveSettings, (args) =>
+    ipcArgs(
+      saveWorkspaceSettingsSchema.extend({ workspacePath: absolutePathSchema }).parse(args[0]),
+    ),
+  ),
+  createWorkspace: bindIpcParser(workspaceStateIpc.createWorkspace, (args) =>
+    ipcArgs(createWorkspaceSchema.extend({ parentPath: absolutePathSchema }).parse(args[0])),
+  ),
   diaryDocument: bindIpcParser(workspaceStateIpc.diaryDocument, (args) =>
     ipcArgs(diaryDocumentInputSchema.parse(args[0])),
   ),
@@ -207,6 +219,7 @@ export const workspaceStateIpcContracts = {
           workspacePath: absolutePathSchema.optional(),
           initializeName: z.string().trim().min(1).max(128).optional(),
           replacePersonal: z.boolean().optional(),
+          shortcutOnly: z.boolean().optional(),
         })
         .strict()
         .parse(args[0]),

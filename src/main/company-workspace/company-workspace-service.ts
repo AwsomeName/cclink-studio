@@ -1,3 +1,4 @@
+import { companyLinkedWorkspaceSchema } from '../../shared/company-workspace/company-workspace-schema'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { lstat, mkdir, realpath, rename, rm, stat } from 'node:fs/promises'
@@ -23,6 +24,7 @@ export interface CompanyWorkspaceTarget {
   workspaceId: string
 }
 interface Sources {
+  workspace?(path: string, id: string): Promise<void>
   finance(target: CompanyWorkspaceTarget, month: string): CompanyAccountsSnapshot | null
   conversations(target: CompanyWorkspaceTarget): Promise<CompanyConversationSource[]>
   publications(target: CompanyWorkspaceTarget): CompanyPublishingSource[] | null
@@ -169,7 +171,13 @@ export class CompanyWorkspaceService {
       let linkTarget = input.target
       let size: number | null = null
       let modified: number | null = null
-      if (input.kind === 'file') {
+      if (input.kind === 'workspace') {
+        const link = companyLinkedWorkspaceSchema.parse(JSON.parse(input.target))
+        if (!this.sources.workspace)
+          throw new CompanyWorkspaceError('SERVICE_UNAVAILABLE', '工程关联暂不可用')
+        await this.sources.workspace(link.workspacePath, link.workspaceId)
+        linkTarget = JSON.stringify(link)
+      } else if (input.kind === 'file') {
         const path = await this.resourcePath(target.workspacePath, input.target)
         const info = await stat(path)
         if (!info.isFile())
@@ -416,7 +424,17 @@ export class CompanyWorkspaceService {
           label: linkTarget,
           availability: 'missing',
         }
-        if (kind === 'file') {
+        if (kind === 'workspace') {
+          try {
+            const link = companyLinkedWorkspaceSchema.parse(JSON.parse(linkTarget))
+            item.label = basename(link.workspacePath)
+            if (!this.sources.workspace) throw Error('工程来源暂不可用')
+            await this.sources.workspace(link.workspacePath, link.workspaceId)
+            item.availability = 'available'
+          } catch {
+            item.issue = '工程失联或身份变化，请重新关联；原记录保留'
+          }
+        } else if (kind === 'file') {
           try {
             const info = await stat(await this.resourcePath(target.workspacePath, linkTarget))
             item.availability = info.isFile()

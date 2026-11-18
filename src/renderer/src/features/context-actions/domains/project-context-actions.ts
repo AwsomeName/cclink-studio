@@ -1,3 +1,6 @@
+import { useAgentStore } from '../../../stores/agent-store'
+import { getRunningProjectCounts } from '../../agent-conversations/project-activity'
+import { openWorkspaceSettings } from '../../workspace-open/WorkspaceSettingsForm'
 import { useFixedSpacesStore, openPersonalSpace } from '../../workspace-open/fixed-spaces-store'
 import type { Command } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
@@ -53,6 +56,17 @@ export function createProjectContextCommands(): Command[] {
       },
     },
     {
+      id: 'project.settings',
+      label: '项目设置',
+      contextOnly: true,
+      category: '项目',
+      action: async (context) => {
+        const path = projectPath(context)
+        if (!path) throw Error('项目目标已失效')
+        if (await activateProject(path)) openWorkspaceSettings()
+      },
+    },
+    {
       id: 'project.copyPath',
       label: '复制项目路径',
       contextOnly: true,
@@ -81,9 +95,14 @@ export function createProjectContextCommands(): Command[] {
       category: '项目',
       enabled: (context) => {
         const path = projectPath(context)
+        const fixed = useFixedSpacesStore.getState().spaces
+        const isFixed =
+          path === fixed?.personal?.workspacePath || path === fixed?.company?.workspacePath
         return {
-          enabled: Boolean(path && useOpenProjectsStore.getState().openProjectPaths.includes(path)),
-          reason: '项目已关闭',
+          enabled: Boolean(
+            path && !isFixed && useOpenProjectsStore.getState().openProjectPaths.includes(path),
+          ),
+          reason: isFixed ? '固定入口不能关闭' : '项目已关闭',
         }
       },
       action: async (context) => {
@@ -92,6 +111,23 @@ export function createProjectContextCommands(): Command[] {
         const fixed = useFixedSpacesStore.getState().spaces
         if (path === fixed?.personal?.workspacePath || path === fixed?.company?.workspacePath)
           throw new Error('固定入口不能关闭')
+        const running =
+          getRunningProjectCounts(useAgentStore.getState().conversations).get(path) ?? 0
+        const tasks = await window.cclinkStudio.scheduledTasks?.inspect(path)
+        const activeTasks = tasks?.success
+          ? tasks.tasks.filter(
+              (task) =>
+                task.activation.enabled ||
+                ['queued', 'running'].includes(task.latestRun?.status ?? ''),
+            )
+          : []
+        if (
+          (running || activeTasks.length) &&
+          !window.confirm(
+            `关闭项目视图不会停止 ${running} 个工作会话及 ${activeTasks.length} 个启用/运行中的定时任务。${activeTasks.map((task) => task.definition.title).join('、')}。可从状态栏“进行中的工作”返回。是否仅关闭视图？`,
+          )
+        )
+          return
         const currentActive = useWorkspaceStore.getState().activeWorkspaceRef
         const projectsStore = useOpenProjectsStore.getState()
         const isActive = currentActive.kind === 'local' && currentActive.path === path
@@ -126,6 +162,14 @@ export function createProjectContextCommands(): Command[] {
 }
 
 export const projectMenuContributions: MenuContribution[] = [
+  {
+    id: 'project.settings',
+    targetKinds: ['project'],
+    group: '10-open',
+    order: 20,
+    commandId: 'project.settings',
+    icon: '⚙',
+  },
   {
     id: 'project.activate',
     targetKinds: ['project'],

@@ -32,7 +32,9 @@ export function createWorkspaceCommands(): Command[] {
         if (ref.kind === 'global') return openPersonalSpace()
         if (
           ref.kind === 'local' &&
-          ref.path === useFixedSpacesStore.getState().spaces?.company?.workspacePath
+          (useWorkspaceStore.getState().settingsSnapshot?.settings.type === 'company' ||
+            (!useWorkspaceStore.getState().settingsSnapshot &&
+              ref.path === useFixedSpacesStore.getState().spaces?.company?.workspacePath))
         ) {
           openCompanyWorkspace()
           return

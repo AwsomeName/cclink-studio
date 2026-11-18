@@ -1,3 +1,4 @@
+import { RunningWork } from './RunningWork'
 import { useEffect } from 'react'
 import { TtsStatusPlayer } from '../../features/local-tts/TtsStatusPlayer'
 import {
@@ -97,6 +98,7 @@ export function StatusBar(): React.ReactElement {
     <>
       <div className="status-bar">
         <div className="status-bar-left">
+          <RunningWork />
           {switchingPath && (
             <span
               className="status-bar-item status-bar-workspace-switch"

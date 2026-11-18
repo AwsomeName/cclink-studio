@@ -1,3 +1,7 @@
+import { WorkspaceCreationForm } from '../workspace-open/WorkspaceSettingsForm'
+import { companyLinkedWorkspaceSchema } from '@shared/company-workspace/company-workspace-schema'
+import { openWorkspaceRef } from '../workspace-open/workspace-open-controller'
+import { showWorkspaceHome } from '../workspace-open/workspace-home-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Tab } from '../../types'
 import type {
@@ -35,6 +39,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [companyName, setCompanyName] = useState('')
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(false)
   const [conversationId, setConversationId] = useState('')
@@ -158,8 +163,47 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
       if (isCurrent()) setError(reason instanceof Error ? reason.message : '选择文件失败')
     }
   }
+  const attachWorkspace = async (): Promise<void> => {
+    if (!business) return
+    const target = { ...scope, businessId: business.id }
+    try {
+      const picked = await window.cclinkStudio.dialog.showOpenDialog({
+        title: '选择已有工程项目',
+        selectDirectory: true,
+      })
+      if (!isCurrent() || picked.canceled || !picked.filePaths[0]) return
+      const path = picked.filePaths[0]
+      await window.cclinkStudio.workspaceState.get(path)
+      const roots = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+      const linked = roots.find((root) => root.workspacePath === path)
+      if (!linked?.projectId) throw Error('工程身份不可用')
+      if (!isCurrent()) return
+      await run(() =>
+        window.cclinkStudio.companyWorkspace.linkResource({
+          ...target,
+          kind: 'workspace',
+          target: JSON.stringify({ workspacePath: path, workspaceId: linked.projectId }),
+        }),
+      )
+    } catch (e) {
+      if (isCurrent()) setError(String(e))
+    }
+  }
   const openLink = (link: CompanyResourceLink): void => {
-    if (link.kind === 'file') {
+    if (link.kind === 'workspace') {
+      const target = companyLinkedWorkspaceSchema.parse(JSON.parse(link.target))
+      void window.cclinkStudio.workspaceState
+        .listLocalWorkspaces()
+        .then(() =>
+          window.cclinkStudio.workspaceState.verifyLocalIdentity(
+            target.workspacePath,
+            target.workspaceId,
+          ),
+        )
+        .then(() => openWorkspaceRef({ kind: 'local', path: target.workspacePath }))
+        .then(showWorkspaceHome)
+        .catch((e) => setError(String(e)))
+    } else if (link.kind === 'file') {
       const filePath = ref.path + '/' + link.target
       const ext = '.' + (link.target.split('.').at(-1) ?? '')
       useTabStore.getState().openTab({
@@ -191,11 +235,13 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
             <div>
               <strong>{link.label}</strong>
               <p>
-                {link.kind === 'file'
-                  ? link.target
-                  : link.kind === 'conversation'
-                    ? '原有工作会话'
-                    : '原发布任务'}{' '}
+                {link.kind === 'workspace'
+                  ? '关联工程'
+                  : link.kind === 'file'
+                    ? link.target
+                    : link.kind === 'conversation'
+                      ? '原有工作会话'
+                      : '原发布任务'}{' '}
                 ·{' '}
                 {link.availability === 'available'
                   ? '可查看'
@@ -553,6 +599,18 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                     <div className="company-actions">
                       <button
                         disabled={busy || business.archived}
+                        onClick={() => void attachWorkspace()}
+                      >
+                        关联已有工程
+                      </button>
+                      <button
+                        disabled={busy || business.archived}
+                        onClick={() => setCreatingWorkspace((value) => !value)}
+                      >
+                        新建工程并关联
+                      </button>
+                      <button
+                        disabled={busy || business.archived}
                         onClick={() => void attachFile()}
                       >
                         关联文件
@@ -585,6 +643,30 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                         关联会话
                       </button>
                     </div>
+                    {creatingWorkspace && (
+                      <WorkspaceCreationForm
+                        initialType="electronics"
+                        onOpened={() => setCreatingWorkspace(false)}
+                        onCreated={async (path) => {
+                          const roots =
+                            await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+                          const linked = roots.find((root) => root.workspacePath === path)
+                          if (!linked?.projectId)
+                            throw Error('新工程已创建，但身份不可用，请从业务记录重新关联')
+                          const result = await window.cclinkStudio.companyWorkspace.linkResource({
+                            ...scope,
+                            businessId: business.id,
+                            kind: 'workspace',
+                            target: JSON.stringify({
+                              workspacePath: path,
+                              workspaceId: linked.projectId,
+                            }),
+                          })
+                          if (!result.success)
+                            throw Error('新工程已创建，关联未完成：' + result.error?.message)
+                        }}
+                      />
+                    )}
                     {renderLinks()}
                   </section>
                   <section>
