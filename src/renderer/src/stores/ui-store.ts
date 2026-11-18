@@ -23,9 +23,6 @@ import {
   DEFAULT_AGENT_LIST_WIDTH,
   MIN_AGENT_LIST_WIDTH,
   MAX_AGENT_LIST_WIDTH,
-  AGENT_LIST_SEPARATOR_WIDTH,
-  getCollapsedAgentPanelWidth,
-  getExpandedAgentPanelWidth,
   type AgentContentMode,
 } from '../utils/agent-navigation-layout'
 
@@ -184,9 +181,7 @@ export function normalizeWorkspaceLayout(value: unknown): WorkspaceLayoutSnapsho
       UI_DEFAULTS.agentPanelWidth,
     ),
     agentContentMode:
-      parsed.agentContentMode === 'split' || parsed.agentContentMode === 'list'
-        ? parsed.agentContentMode
-        : UI_DEFAULTS.agentContentMode,
+      parsed.agentContentMode === 'list' ? parsed.agentContentMode : UI_DEFAULTS.agentContentMode,
     agentListWidth: normalizeWidth(
       parsed.agentListWidth,
       MIN_AGENT_LIST_WIDTH,
@@ -418,65 +413,25 @@ export const useUIStore = create<UIState>((set) => ({
   setAgentContentMode: (agentContentMode) => set({ agentContentMode, agentDrawerOpen: false }),
   setAgentDrawerOpen: (agentDrawerOpen) => set({ agentDrawerOpen }),
   showAgentSessions: () =>
-    set((state) => ({
+    set({
       agentPanelMode: 'right',
       agentPanelLastVisibleMode: 'right',
       agentPanelVisible: true,
       agentPanelModeSource: 'user',
-      agentContentMode: 'split',
-      agentPanelWidth: Math.min(
-        MAX_AGENT_PANEL_WIDTH,
-        getExpandedAgentPanelWidth(
-          state.agentContentMode === 'chat'
-            ? state.agentPanelWidth + state.agentListWidth + AGENT_LIST_SEPARATOR_WIDTH
-            : state.agentPanelWidth,
-          state.agentListWidth,
-        ),
-      ),
-      agentDrawerOpen: true,
-    })),
-  hideAgentSessions: (displayedPanelWidth) =>
-    set((state) => ({
-      agentContentMode: 'chat',
-      agentDrawerOpen: false,
-      agentPanelWidth:
-        state.agentContentMode === 'chat'
-          ? state.agentPanelWidth
-          : getCollapsedAgentPanelWidth(
-              state.agentContentMode === 'split' &&
-                displayedPanelWidth !== undefined &&
-                Number.isFinite(displayedPanelWidth)
-                ? displayedPanelWidth
-                : state.agentPanelWidth,
-              state.agentListWidth,
-            ),
-    })),
-  hideAgentChat: () =>
-    set((state) => ({
       agentContentMode: 'list',
       agentDrawerOpen: false,
-      // List-only remembers a two-column width, even when entered from chat-only.
-      agentPanelWidth:
-        state.agentContentMode === 'chat'
-          ? Math.min(
-              MAX_AGENT_PANEL_WIDTH,
-              state.agentPanelWidth + state.agentListWidth + AGENT_LIST_SEPARATOR_WIDTH,
-            )
-          : state.agentPanelWidth,
-    })),
+    }),
+  hideAgentSessions: () => set({ agentContentMode: 'chat', agentDrawerOpen: false }),
+  hideAgentChat: () => set({ agentContentMode: 'list', agentDrawerOpen: false }),
   showAgentChat: () =>
-    set((state) => ({
+    set({
       agentPanelMode: 'right',
       agentPanelLastVisibleMode: 'right',
       agentPanelVisible: true,
       agentPanelModeSource: 'user',
-      agentContentMode: state.agentContentMode === 'list' ? 'split' : state.agentContentMode,
-      agentPanelWidth:
-        state.agentContentMode === 'chat'
-          ? state.agentPanelWidth
-          : getExpandedAgentPanelWidth(state.agentPanelWidth, state.agentListWidth),
+      agentContentMode: 'chat',
       agentDrawerOpen: false,
-    })),
+    }),
   hydrateFromWorkspaceState: (value) => {
     set({ ...normalizeWorkspaceLayout(value), agentDrawerOpen: false })
   },

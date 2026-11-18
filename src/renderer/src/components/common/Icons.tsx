@@ -33,6 +33,42 @@ function I({ size = 16, className, style }: IconProps, path: React.ReactNode): R
 
 /* ====== Activity Bar 图标 ====== */
 
+export function IconList(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="M6 4h8M6 8h8M6 12h8M2 4h.3M2 8h.3M2 12h.3"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />,
+  )
+}
+
+export function IconPencil(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="m3 10 7.8-7.8 2.1 2.1L5 12l-3 .7z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />,
+  )
+}
+
+export function IconPaperclip(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="m6 10 5-5q2-2 3 0 .5 1-1 2.5l-6 6q-3 2-5-1-1-2 1-4l6-6"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+    />,
+  )
+}
+
 /** 文件浏览器 */
 export function IconFiles(p: IconProps = defaults): React.ReactElement {
   return I(

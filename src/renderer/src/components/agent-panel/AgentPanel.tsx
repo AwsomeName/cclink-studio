@@ -974,30 +974,32 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     `${roleId}@${version}`
   const timeline: AgentPanelTimelineItem[] = isStartConversation
     ? []
-    : buildAgentConversationTimeline(messages, activeConversation?.configurationEvents ?? []).map(
-        (item) =>
-          item.kind === 'message'
-            ? {
-                kind: 'message' as const,
-                id: item.value.id,
-                message: item.value,
-                conversationId: activeConversationId,
-                workspaceKey: activeConversation?.runtime.workspaceRef
-                  ? workspaceRefKey(activeConversation.runtime.workspaceRef)
-                  : null,
-              }
-            : {
-                kind: 'status' as const,
-                id: item.value.id,
-                label: `角色已从「${labelRole(
-                  item.value.fromRoleRef.roleId,
-                  item.value.fromRoleRef.version,
-                )}」切换为「${labelRole(
-                  item.value.toRoleRef.roleId,
-                  item.value.toRoleRef.version,
-                )}」`,
-                detail: `配置 #${item.value.configurationRevision}`,
-              },
+    : buildAgentConversationTimeline(
+        variant === 'side' ? messages.filter((message) => message.id !== 'welcome') : messages,
+        activeConversation?.configurationEvents ?? [],
+      ).map((item) =>
+        item.kind === 'message'
+          ? {
+              kind: 'message' as const,
+              id: item.value.id,
+              message: item.value,
+              conversationId: activeConversationId,
+              workspaceKey: activeConversation?.runtime.workspaceRef
+                ? workspaceRefKey(activeConversation.runtime.workspaceRef)
+                : null,
+            }
+          : {
+              kind: 'status' as const,
+              id: item.value.id,
+              label: `角色已从「${labelRole(
+                item.value.fromRoleRef.roleId,
+                item.value.fromRoleRef.version,
+              )}」切换为「${labelRole(
+                item.value.toRoleRef.roleId,
+                item.value.toRoleRef.version,
+              )}」`,
+              detail: `配置 #${item.value.configurationRevision}`,
+            },
       )
 
   const permissionModels: AgentPanelPermissionModel[] = pendingConfirmations.map((request) => ({
@@ -1056,6 +1058,12 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
         variant,
         timelineKey: `local:${workspaceRefKey(activeWorkspaceRef)}:${activeConversationId}`,
         header: {
+          editTitle: {
+            id: activeConversationId,
+            annotation: conversations[activeConversationId]?.annotation,
+            save: (title, note) =>
+              useAgentStore.getState().renameConversation(activeConversationId, title, note),
+          },
           title: conversations[activeConversationId]?.title ?? 'Agent',
           runtimeLabel: `本地 · ${activeRole?.label ?? activeRoleRef?.roleId ?? '角色加载中'}`,
           status: {
@@ -1076,7 +1084,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
             onInvoke: () => void handleCopyDiagnostics(),
           },
         },
-        contextChips,
+        contextChips: contextChips.filter((chip) => chip.kind !== 'workspace'),
         notices: [
           ...(contextCompaction.status === 'failed'
             ? [
@@ -1216,7 +1224,9 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
           placeholder:
             loading || contextCompacting
               ? '继续输入，Enter 加入队列；Shift+Enter 换行'
-              : '输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行',
+              : variant === 'side'
+                ? '继续提问，或用 @ 引用资源…'
+                : '输入消息，@ 挂资源，/ 挂技能；Shift+Enter 换行',
           onKeyDownBeforeSubmit: handleKeyDownBeforeSubmit,
           onPaste: (event) => {
             const files = Array.from(event.clipboardData.files).filter((file) =>
@@ -1276,6 +1286,7 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
           actionBar: {
             kind: 'local',
             toolbar: {
+              compact: variant === 'side',
               roleRef: activeRoleRef,
               roles,
               onRoleChange: (role) => void handleRoleChange(role),

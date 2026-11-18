@@ -21,6 +21,7 @@ import type {
   AgentScope,
   ConversationRuntimeRef,
   ConversationSurface,
+  ToolConfirmationRequest,
 } from '../../types'
 
 export type AgentRunStatus =
@@ -82,6 +83,8 @@ export function conversationQueueContextKey(conversation: AgentConversationState
 export interface AgentConversationState {
   id: string
   title: string
+  annotation?: string
+  viewedCompletionAt?: number
   surface: ConversationSurface
   runtime: ConversationRuntimeRef
   runtimeBinding?: AgentRuntimeBinding
@@ -123,6 +126,18 @@ export interface AgentConversationState {
   createdAt: number
   updatedAt: number
   archivedAt: number | null
+}
+
+export function conversationBusyStatus(
+  conversation: AgentConversationState,
+  pending: readonly ToolConfirmationRequest[],
+): '待确认' | '运行中' | null {
+  if (pending.some((request) => request.conversationId === conversation.id)) return '待确认'
+  return conversation.loading ||
+    conversation.activeRunId ||
+    ['starting', 'running', 'cancelling'].includes(conversation.runStatus ?? '')
+    ? '运行中'
+    : null
 }
 
 export const DEFAULT_CONVERSATION_ID = 'agent-default'

@@ -18,97 +18,19 @@ beforeEach(() => {
 })
 
 describe('useUIStore', () => {
-  it('opening conversations expands the default single-column width so both columns can fit', () => {
+  it.each([350, 620])('single page navigation keeps the panel width %i', (width) => {
+    useUIStore.setState({ agentPanelWidth: width })
     useUIStore.getState().showAgentSessions()
     expect(useUIStore.getState()).toMatchObject({
-      agentPanelMode: 'right',
-      agentContentMode: 'split',
-      agentPanelWidth: 554,
-      agentListWidth: 200,
-    })
-  })
-
-  it('opening conversations preserves an existing usable two-column width', () => {
-    useUIStore.setState({ agentContentMode: 'split', agentPanelWidth: 620, agentListWidth: 240 })
-    useUIStore.getState().showAgentSessions()
-    expect(useUIStore.getState().agentPanelWidth).toBe(620)
-  })
-
-  it.each(['list', 'split'] as const)(
-    'opening chat from %s repairs a legacy narrow two-column target',
-    (agentContentMode) => {
-      useUIStore.setState({ agentContentMode, agentPanelWidth: 350, agentDrawerOpen: true })
-      useUIStore.getState().showAgentChat()
-      expect(useUIStore.getState()).toMatchObject({
-        agentContentMode: 'split',
-        agentPanelWidth: 700,
-        agentDrawerOpen: false,
-      })
-    },
-  )
-
-  it('opening chat alone does not expand its single-column width', () => {
-    useUIStore.getState().showAgentChat()
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 350 })
-  })
-
-  it('repeated list toggles preserve the displayed chat width without accumulating pixels', () => {
-    useUIStore.setState({ agentContentMode: 'split', agentPanelWidth: 700 })
-    for (let index = 0; index < 3; index++) {
-      useUIStore.getState().hideAgentSessions(650)
-      expect(useUIStore.getState()).toMatchObject({
-        agentContentMode: 'chat',
-        agentPanelWidth: 446,
-      })
-      useUIStore.getState().showAgentSessions()
-      expect(useUIStore.getState()).toMatchObject({
-        agentContentMode: 'split',
-        agentPanelWidth: 650,
-      })
-    }
-  })
-
-  it('closing list-only restores chat from the remembered expanded width, not the rail width', () => {
-    useUIStore.setState({ agentContentMode: 'list', agentPanelWidth: 700 })
-    useUIStore.getState().hideAgentSessions(200)
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 496 })
-  })
-
-  it('chat-only → list-only → split restores the original chat width', () => {
-    useUIStore.setState({ agentContentMode: 'chat', agentPanelWidth: 656, agentListWidth: 200 })
-    useUIStore.getState().hideAgentChat()
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'list', agentPanelWidth: 860 })
-    useUIStore.getState().showAgentChat()
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'split', agentPanelWidth: 860 })
-    useUIStore.getState().hideAgentSessions(860)
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 656 })
-  })
-
-  it('收放内部列和整个面板都不改写展开宽度', () => {
-    const ui = useUIStore.getState()
-    ui.setAgentPanelWidth(700)
-    ui.setAgentListWidth(240)
-    ui.setAgentContentMode('split')
-    ui.setAgentContentMode('list')
-    ui.toggleAgentPanel()
-    ui.toggleAgentPanel()
-    expect(useUIStore.getState()).toMatchObject({
-      agentPanelWidth: 700,
-      agentListWidth: 240,
       agentContentMode: 'list',
+      agentPanelWidth: width,
     })
-    ui.showAgentChat()
+    useUIStore.getState().showAgentChat()
     expect(useUIStore.getState()).toMatchObject({
-      agentPanelWidth: 700,
-      agentListWidth: 240,
-      agentContentMode: 'split',
-      agentDrawerOpen: false,
+      agentContentMode: 'chat',
+      agentPanelWidth: width,
     })
-    ui.setAgentContentMode('chat')
-    ui.showAgentChat()
-    expect(useUIStore.getState().agentContentMode).toBe('chat')
   })
-
   it('工作空间恢复只恢复偏好，临时抽屉不跨工作空间泄漏', () => {
     const saved = normalizeWorkspaceLayout({
       agentPanelMode: 'right',
@@ -156,8 +78,8 @@ describe('useUIStore', () => {
         activePanel: 'files',
         sidebarVisible: false,
         agentPanelMode: 'right',
-        agentContentMode: 'split',
-        agentDrawerOpen: true,
+        agentContentMode: 'list',
+        agentDrawerOpen: false,
       })
     })
 

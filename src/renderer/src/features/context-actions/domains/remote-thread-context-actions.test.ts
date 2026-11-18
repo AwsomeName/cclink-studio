@@ -87,7 +87,7 @@ describe('remote thread context actions', () => {
     await opening
     expect(selectSession).toHaveBeenCalledWith('remote-1')
     expect(loadMessages).toHaveBeenCalledWith('remote-1')
-    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'split', agentPanelWidth: 700 })
+    expect(useUIStore.getState()).toMatchObject({ agentContentMode: 'chat', agentPanelWidth: 700 })
   })
 
   it('keeps the selection and layout when restoring an archived session fails', async () => {
@@ -148,7 +148,7 @@ describe('remote thread context actions', () => {
     await command.action(context())
 
     expect(useUIStore.getState()).toMatchObject({
-      agentContentMode: 'split',
+      agentContentMode: 'chat',
       agentPanelMode: 'right',
       agentPanelWidth: 700,
       agentListWidth: 220,

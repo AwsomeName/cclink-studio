@@ -213,7 +213,7 @@ try {
     useWorkspaceStore.getState().commitActiveWorkspace(ref)
     useUIStore.getState().setAgentPanelMode('right', 'user')
     useUIStore.getState().setAgentPanelWidth(700)
-    useUIStore.getState().setAgentContentMode('split')
+    useUIStore.getState().showAgentSessions()
     useUIStore.getState().setAgentListWidth(200)
     await useCclinkStore.getState().loadSessions(ref)
   }, ref)
@@ -243,14 +243,15 @@ try {
   assert(geometry.contentWidth <= geometry.width + 1, JSON.stringify(geometry))
   await list.locator('.remote-sessions-sidebar').screenshot({ path: join(dir, 'session-list.png') })
   await page.screenshot({ path: join(dir, 'sessions-before.png') })
-  for (const width of [180, 240]) {
+  for (const width of [250, 350]) {
     await page.evaluate(
-      (width) => window.controlsSmoke.useUIStore.getState().setAgentListWidth(width),
+      (width) => window.controlsSmoke.useUIStore.getState().setAgentPanelWidth(width),
       width,
     )
     await page.waitForFunction(
       (width) =>
-        document.querySelector('.agent-navigation-list')?.getBoundingClientRect().width === width,
+        document.querySelector('.agent-navigation-list')?.getBoundingClientRect().width ===
+        width - 1,
       width,
     )
     assert(

@@ -46,6 +46,7 @@ import { NoopUpdateProvider } from '../update/noop-update-provider'
 import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
+import { registerOwnerReadme } from '../owner/read-public-readme'
 import { registerModelUsageIpc } from '../usage/model-usage-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
 import { MacUpdateInstaller } from '../update/mac-update-installer'
@@ -242,6 +243,7 @@ export async function bootstrapMainProcessServices(
   runtime.rendererWorkspaceStateFlush = new RendererWorkspaceStateFlushCoordinator(
     runtime.mainWindow,
     runtime.trustedRendererGuard,
+    { isDev: runtime.isDev },
   )
   console.log('[CCLink Studio] 工作台状态 IPC 已注册')
 
@@ -270,6 +272,7 @@ export async function bootstrapMainProcessServices(
     runtime.mainWindow,
   )
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
+  registerOwnerReadme(runtime.trustedRendererGuard)
   registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
 
   runtime.mediaProjectIpcUnsubscribe?.()

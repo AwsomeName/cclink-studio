@@ -81,7 +81,7 @@ describe('shell context commands', () => {
             activePanel: 'files',
             sidebarVisible: true,
             agentPanelMode: 'right',
-            agentContentMode: 'split',
+            agentContentMode: 'list',
           }
         : {
             activePanel: isCompanyActivity ? 'company-workspace' : activityId,

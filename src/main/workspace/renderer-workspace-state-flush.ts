@@ -29,10 +29,12 @@ export class RendererWorkspaceStateFlushCoordinator {
   private closeAllowed = false
   private closeFlushPromise: Promise<void> | null = null
 
+  private preloadFailed = false
+
   constructor(
     private readonly mainWindow: BrowserWindow,
     trustedRendererGuard: TrustedRendererGuard,
-    private readonly timeoutMs = RENDERER_FLUSH_TIMEOUT_MS,
+    private readonly options: { isDev?: boolean; timeoutMs?: number } = {},
   ) {
     registerTrustedIpcListener(
       workspaceStateIpcEvents.flushAcknowledged,
@@ -50,6 +52,10 @@ export class RendererWorkspaceStateFlushCoordinator {
         )
       },
     )
+    if (this.options.isDev) {
+      this.mainWindow.webContents.on('preload-error', this.handlePreloadError)
+      this.mainWindow.webContents.on('did-start-navigation', this.handleNavigation)
+    }
     this.mainWindow.on('close', this.handleWindowClose)
   }
 
@@ -68,7 +74,10 @@ export class RendererWorkspaceStateFlushCoordinator {
         this.pending.delete(requestId)
         resolve(outcome)
       }
-      const timeout = setTimeout(() => finish('timeout'), this.timeoutMs)
+      const timeout = setTimeout(
+        () => finish('timeout'),
+        this.options.timeoutMs ?? RENDERER_FLUSH_TIMEOUT_MS,
+      )
       this.pending.set(requestId, finish)
       this.mainWindow.webContents.send(workspaceStateIpcEvents.flushRequest, requestId)
     })
@@ -80,7 +89,10 @@ export class RendererWorkspaceStateFlushCoordinator {
       return Promise.resolve(null)
     const requestId = `update-inspect:${randomUUID()}`
     return new Promise((resolve) => {
-      const timeout = setTimeout(() => finish(null), this.timeoutMs)
+      const timeout = setTimeout(
+        () => finish(null),
+        this.options.timeoutMs ?? RENDERER_FLUSH_TIMEOUT_MS,
+      )
       const finish = (value: WorkspaceStateFlushAcknowledgement | null): void => {
         clearTimeout(timeout)
         this.installReadiness.delete(requestId)
@@ -92,10 +104,28 @@ export class RendererWorkspaceStateFlushCoordinator {
   }
 
   dispose(): void {
+    if (
+      this.options.isDev &&
+      !this.mainWindow.isDestroyed() &&
+      !this.mainWindow.webContents.isDestroyed()
+    ) {
+      this.mainWindow.webContents.removeListener('preload-error', this.handlePreloadError)
+      this.mainWindow.webContents.removeListener('did-start-navigation', this.handleNavigation)
+    }
     for (const finish of this.installReadiness.values()) finish(null)
     this.mainWindow.removeListener('close', this.handleWindowClose)
     for (const finish of this.pending.values()) finish('unavailable')
     this.pending.clear()
+  }
+
+  private readonly handlePreloadError = (): void => {
+    this.preloadFailed = true
+  }
+
+  private readonly handleNavigation = (
+    event: Electron.WebContentsDidStartNavigationEventParams,
+  ): void => {
+    if (event.isMainFrame && !event.isSameDocument) this.preloadFailed = false
   }
 
   private readonly handleWindowClose = (event: Event): void => {
@@ -115,6 +145,17 @@ export class RendererWorkspaceStateFlushCoordinator {
         const outcome = await this.requestFlush()
         if (this.mainWindow.isDestroyed()) return
         if (outcome === 'flushed') break
+        if (this.options.isDev) {
+          if (outcome === 'timeout' && this.preloadFailed) {
+            console.warn('[WorkspaceStateService] 调试窗口 preload 加载失败，关闭未启动的工作台')
+            break
+          }
+          console.warn(
+            '[WorkspaceStateService] 调试窗口保存未完成，已保留窗口，可再次关闭重试',
+            outcome,
+          )
+          return
+        }
         const { response } = await dialog.showMessageBox(this.mainWindow, {
           type: 'warning',
           title: '工作现场尚未安全保存',

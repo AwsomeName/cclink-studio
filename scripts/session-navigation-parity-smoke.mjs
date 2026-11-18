@@ -44,35 +44,19 @@ export async function runSessionNavigationParitySmoke({ page, app, ref, localPat
         ui.setAgentPanelMode('right', 'user')
         ui.setAgentPanelWidth(700)
         ui.setAgentListWidth(200)
-        ui.setAgentContentMode('split')
+        ui.showAgentSessions()
         return id
       },
       { kind, ref, localPath },
     )
-    await presentation('split')
+    await presentation('list')
+    const before = await measure()
     const row = page.locator(`.agent-navigation-list [data-conversation-id="${sessionId}"]`)
     await row.click()
-    await page.waitForFunction(
-      () => document.querySelector('.workspace-sidebar-shell').getBoundingClientRect().width === 0,
-    )
-    const before = await measure()
-    assert.equal(before.list.width, 200, kind)
-    assert.equal(before.chat.width, 495, kind)
-    assert(before.chat.right < before.list.x, kind)
-    await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
     await presentation('chat')
     const collapsed = await measure()
-    assert.equal(collapsed.chat.width, before.chat.width, kind)
-    assert.equal(collapsed.chat.x - before.chat.x, 204, kind)
-    assert.equal(collapsed.workbench.width - before.workbench.width, 204, kind)
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('split')
-    assert.deepEqual(await measure(), before, kind)
-    await page.getByRole('button', { name: '收起聊天，仅保留会话列表', exact: true }).click()
-    await presentation('list')
-    await row.click()
-    await presentation('split')
-    assert.deepEqual(await measure(), before, kind)
+    assert.equal(collapsed.chat.width, before.list.width, kind)
+    assert.equal(collapsed.workbench.width, before.workbench.width, kind)
 
     const input = page.locator('.agent-workspace-chat .agent-input')
     const height = () => input.evaluate((el) => el.getBoundingClientRect().height)
@@ -89,20 +73,21 @@ export async function runSessionNavigationParitySmoke({ page, app, ref, localPat
 
     await resize(860)
     await presentation('chat')
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('drawer')
+    await page.getByRole('button', { name: '会话列表', exact: true }).click()
+    await presentation('list')
     assert(await page.locator('.agent-workspace-chat').evaluate((el) => el.inert), kind)
     await row.click()
     await presentation('chat')
     assert.equal(await input.inputValue(), '布局对照草稿', kind)
     await resize(1440)
-    await presentation('split')
-    assert.deepEqual(await measure(), before, kind)
+    await presentation('chat')
+    assert.deepEqual(await measure(), collapsed, kind)
     await input.fill('')
     assert.equal(await height(), emptyHeight, kind)
     await page.screenshot({ path: join(dir, `${kind}-navigation-parity.png`) })
     results[kind] = { before, collapsed, emptyHeight, growingHeight, maxHeight: 240 }
   }
+  await page.getByRole('button', { name: '会话列表', exact: true }).click()
   assert.deepEqual(results.remote, results.local)
   return results
 }

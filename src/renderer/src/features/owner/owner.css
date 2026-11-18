@@ -1,0 +1,200 @@
+.owner-dialog {
+  width: min(1280px, 96vw);
+  height: 90vh;
+  padding: 0;
+  color: var(--text-primary, #e4e8ed);
+  background: var(--bg-primary, #202226);
+  border: 1px solid var(--border-color, #596069);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.owner-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.owner-dialog::backdrop {
+  background: #0008;
+}
+.owner-dialog header,
+.own-actions,
+.own-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.owner-dialog header {
+  padding: 10px 20px;
+  border-bottom: 1px solid #64758858;
+}
+.owner-dialog header span,
+.owner-dialog small,
+.own-index p {
+  opacity: 0.72;
+}
+.owner-dialog header button {
+  margin-left: auto;
+}
+.owner-dialog button,
+.owner-dialog input,
+.owner-dialog textarea {
+  font: inherit;
+  color: inherit;
+}
+.owner-dialog button {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid #68798d77;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.owner-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.own-index {
+  padding: 36px max(6%, 32px);
+  overflow: auto;
+}
+.owner-dialog h1 {
+  font-size: 27px;
+  margin: 12px 0;
+}
+.owner-dialog h2 {
+  font-size: 18px;
+}
+.owner-dialog h3 {
+  font-size: 15px;
+  margin: 20px 0 10px;
+}
+.owner-dialog .own-primary {
+  background: #196da6;
+  color: white;
+}
+.own-empty,
+.own-call,
+.own-source,
+.own-sys,
+.owner-dialog pre {
+  padding: 14px;
+  background: #627f9b13;
+  border: 1px solid #72849a44;
+  border-radius: 5px;
+}
+.own-empty,
+.own-call {
+  margin: 18px 0;
+}
+.own-call {
+  border-left: 3px solid #56a8de;
+}
+.own-row {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
+}
+.own-row span {
+  flex: 1;
+  opacity: 0.8;
+}
+.own-row em {
+  font-style: normal;
+  color: #649bc5;
+}
+.own-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 32%);
+  flex: 1;
+  min-height: 0;
+}
+.own-detail article,
+.own-detail aside {
+  overflow: auto;
+  padding: 20px;
+}
+.own-detail aside {
+  border-left: 1px solid #72849a44;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.own-thread {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+}
+.owner-dialog textarea,
+.owner-dialog input {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #8293a455;
+  background: #7895a911;
+  border-radius: 4px;
+  margin: 5px 0;
+}
+.own-index form {
+  max-width: 680px;
+}
+.own-index label,
+.own-source {
+  display: block;
+  margin: 13px 0;
+}
+.own-source small {
+  float: right;
+}
+.owner-dialog pre,
+.own-thread p,
+.own-source details {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.owner-dialog textarea {
+  resize: vertical;
+  min-height: 55px;
+}
+.own-actions {
+  margin: 10px 0;
+}
+.owner-dialog [role='alert'] {
+  color: #d49054;
+}
+.owner-dialog {
+  -webkit-app-region: no-drag;
+  text-align: left;
+  white-space: normal;
+}
+
+.owner-dialog {
+  margin: auto;
+}
+.owner-dialog [role='alert'] {
+  overflow-wrap: anywhere;
+}
+.own-detail aside {
+  min-width: 0;
+}
+.own-start p {
+  line-height: 1.7;
+}
+.own-progress {
+  padding-left: 24px;
+}
+.own-progress li {
+  margin: 7px 0;
+  line-height: 1.55;
+}
+.own-detail article blockquote {
+  border-left: 2px solid #6483a4;
+  margin: 9px 0;
+  padding: 6px 12px;
+  overflow-wrap: anywhere;
+  opacity: 0.85;
+}
+.own-detail article details pre {
+  max-height: 220px;
+  overflow: auto;
+}
+.own-legacy {
+  overflow: auto;
+}

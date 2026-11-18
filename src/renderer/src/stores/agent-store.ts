@@ -47,6 +47,7 @@ import {
 import {
   createAgentConversationState,
   canChangeConversationRuntime,
+  conversationBusyStatus,
   DEFAULT_CONVERSATION_ID,
   type AgentContextCompactionState,
   type AgentConversationState,
@@ -136,7 +137,8 @@ interface AgentState {
   archiveConversation: (id: string) => Promise<void>
   restoreArchivedConversation: (id: string) => Promise<void>
   deleteConversation: (id: string) => Promise<void>
-  renameConversation: (id: string, title: string) => void
+  markCompletionViewed: (id: string) => void
+  renameConversation: (id: string, title: string, annotation?: string) => void
   markAsWorkConversation: (id: string, runtime: ConversationRuntimeRef) => void
   setRuntimeBinding: (binding: AgentRuntimeBinding, conversationId?: string) => boolean
   applyRunRuntimeBinding: (
@@ -343,12 +345,20 @@ function updateConversation(
   }
 }
 
-function removeConversation(state: AgentState, id: string): Partial<AgentState> | AgentState {
+function removeConversation(
+  state: AgentState,
+  id: string,
+  archived?: AgentConversationState,
+): Partial<AgentState> | AgentState {
   const current = state.conversations[id]
   if (!current) return state
 
-  const nextOrder = state.conversationOrder.filter((item) => item !== id)
-  const { [id]: _removed, ...rest } = state.conversations
+  const nextOrder = archived
+    ? state.conversationOrder
+    : state.conversationOrder.filter((item) => item !== id)
+  const rest = { ...state.conversations }
+  if (archived) rest[id] = archived
+  else delete rest[id]
   const fallbackId =
     state.activeConversationId === id
       ? findWorkspaceFallbackConversation(nextOrder, rest, current)
@@ -457,6 +467,7 @@ function saveStoredConversations(state: AgentState): void {
     )
 
     for (const workspaceKey of workspaceKeys) {
+      if (pendingHistoryWrites.has(workspaceKey)) continue
       const payload = buildAgentConversationWorkspaceSnapshot(state, workspaceKey)
       const workspaceConversationCount = state.conversationOrder.filter((id) => {
         const conversation = state.conversations[id]
@@ -497,18 +508,18 @@ async function persistConversationWorkspace(conversationId: string): Promise<voi
   const state = useAgentStore.getState()
   const conversation = state.conversations[conversationId]
   if (!conversation) return
-  const workspaceKey = conversationWorkspaceKey(conversation)
-  await persistWorkspaceSectionNow(
-    'agentConversations',
-    buildAgentConversationWorkspaceSnapshot(state, workspaceKey),
-    workspaceKey,
-  )
+  await persistConversationWorkspaceByKey(conversationWorkspaceKey(conversation))
 }
 
-async function persistConversationWorkspaceByKey(
+// Workspace snapshots share a write queue. While a history edit awaits disk, a
+// snapshot of the still-visible list must not reintroduce the previous history.
+const pendingHistoryWrites = new Map<string | null, Promise<void>>()
+
+export async function persistConversationWorkspaceByKey(
   workspaceKey: string | null,
   options?: WorkspaceStateSetSectionOptions,
 ): Promise<void> {
+  while (pendingHistoryWrites.has(workspaceKey)) await pendingHistoryWrites.get(workspaceKey)
   const state = useAgentStore.getState()
   await persistWorkspaceSectionNow(
     'agentConversations',
@@ -517,6 +528,127 @@ async function persistConversationWorkspaceByKey(
     undefined,
     options,
   )
+}
+
+type HistoryAction = 'archive' | 'restore' | 'delete'
+
+function archivedConversation(
+  current: AgentConversationState,
+  now: number,
+): AgentConversationState {
+  return {
+    ...current,
+    archivedAt: now,
+    updatedAt: now,
+    queuedMessages: current.queuedMessages?.map((item) => ({
+      ...item,
+      afterCancellation: item.afterCancellation
+        ? { ...item.afterCancellation, phase: 'paused' }
+        : undefined,
+    })),
+    messageQueuePauseReason: current.queuedMessages?.length
+      ? '会话已归档；恢复后请确认并继续队列'
+      : current.messageQueuePauseReason,
+  }
+}
+
+function checkHistoryAction(
+  state: AgentState,
+  id: string,
+  action: HistoryAction,
+): AgentConversationState {
+  const conversation = state.conversations[id]
+  if (!conversation) throw new Error('会话已不存在')
+  if (isWorkspaceStateRestoring()) throw new Error('工作空间正在恢复，请稍后重试')
+  const busy = conversationBusyStatus(conversation, state.pendingConfirmations)
+  if (action !== 'restore' && busy) throw new Error('会话' + busy + '，请先结束本轮任务')
+  return conversation
+}
+
+async function changeConversationHistory(id: string, action: HistoryAction): Promise<void> {
+  const initial = useAgentStore.getState()
+  const target = checkHistoryAction(initial, id, action)
+  const key = conversationWorkspaceKey(target)
+  while (pendingHistoryWrites.has(key)) await pendingHistoryWrites.get(key)
+  const before = useAgentStore.getState()
+  const current = checkHistoryAction(before, id, action)
+  if (conversationWorkspaceKey(current) !== key) throw new Error('会话工作空间已变更')
+  if ((action === 'archive' && current.archivedAt) || (action === 'restore' && !current.archivedAt))
+    return
+
+  let release!: () => void
+  pendingHistoryWrites.set(
+    key,
+    new Promise<void>((resolve) => {
+      release = resolve
+    }),
+  )
+  let saved = false
+  try {
+    recordRendererDiagnosticLog('info', [
+      '[ConversationPersistence] ' + action + '-requested',
+      { conversationId: id },
+    ])
+    const now = Date.now()
+    const conversations = { ...before.conversations }
+    if (action === 'delete') delete conversations[id]
+    else
+      conversations[id] =
+        action === 'archive'
+          ? archivedConversation(current, now)
+          : { ...current, archivedAt: null, updatedAt: now }
+
+    await persistWorkspaceSectionNow(
+      'agentConversations',
+      buildAgentConversationWorkspaceSnapshot({ ...before, conversations }, key),
+      key,
+      undefined,
+      action === 'delete'
+        ? { conversationHistoryMutation: { type: 'delete-conversation', conversationId: id } }
+        : undefined,
+    )
+    saved = true
+    useAgentStore.setState((state) => {
+      const latest = checkHistoryAction(state, id, action)
+      if (conversationWorkspaceKey(latest) !== key) throw new Error('会话工作空间已变更')
+      if (action === 'delete') {
+        if (latest.input !== current.input || latest.messages !== current.messages)
+          throw new Error('会话内容已更新，请重新确认删除')
+        return removeConversation(state, id)
+      }
+      if (action === 'archive')
+        return removeConversation(state, id, archivedConversation(latest, now))
+      const restored = { ...latest, archivedAt: null, updatedAt: now }
+      return {
+        conversations: { ...state.conversations, [id]: restored },
+        ...(state.activeConversationId === initial.activeConversationId
+          ? { activeConversationId: id, ...mirrorActive(state, restored) }
+          : {}),
+      }
+    })
+    recordRendererDiagnosticLog('info', [
+      '[ConversationPersistence] ' + action + '-saved',
+      { conversationId: id },
+    ])
+  } catch (error) {
+    recordRendererDiagnosticLog('error', [
+      '[ConversationPersistence] ' + action + '-failed',
+      { conversationId: id },
+      error,
+    ])
+    throw error
+  } finally {
+    pendingHistoryWrites.delete(key)
+    release()
+    // Replay edits made while saving and persist the actual selection/fallback.
+    const latest = useAgentStore.getState()
+    if (saved || latest !== before)
+      persistWorkspaceSection(
+        'agentConversations',
+        buildAgentConversationWorkspaceSnapshot(latest, key),
+        key,
+      )
+  }
 }
 
 /** 退出前生成最终会话快照，并等待 renderer 写队列真正排空。 */
@@ -593,132 +725,23 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   closeConversation: (id) => set((state) => removeConversation(state, id)),
 
-  archiveConversation: async (id) => {
-    set((state) => {
-      const current = state.conversations[id]
-      if (!current) return state
+  archiveConversation: (id) => changeConversationHistory(id, 'archive'),
+  restoreArchivedConversation: (id) => changeConversationHistory(id, 'restore'),
+  deleteConversation: (id) => changeConversationHistory(id, 'delete'),
 
-      const now = Date.now()
-      const archived = {
-        ...current,
-        archivedAt: now,
-        queuedMessages: current.queuedMessages?.map((item) => ({
-          ...item,
-          afterCancellation: item.afterCancellation
-            ? { ...item.afterCancellation, phase: 'paused' as const }
-            : undefined,
-        })),
-        messageQueuePauseReason: current.queuedMessages?.length
-          ? '会话已归档；恢复后请确认并继续队列'
-          : current.messageQueuePauseReason,
-        updatedAt: now,
-      }
-      const conversations = {
-        ...state.conversations,
-        [id]: archived,
-      }
-
-      if (state.activeConversationId !== id) {
-        return { conversations }
-      }
-
-      const fallbackId = findWorkspaceFallbackConversation(
-        state.conversationOrder,
-        conversations,
-        current,
-      )
-      const fallback = fallbackId ? conversations[fallbackId] : null
-
-      if (fallback) {
-        return {
-          conversations,
-          activeConversationId: fallbackId,
-          ...mirrorActive(state, fallback),
-        }
-      }
-
-      const fresh = createConversation(undefined, {
-        surface: 'assistant-panel',
-        runtime: current.runtime,
-      })
-      return {
-        conversations: {
-          ...conversations,
-          [fresh.id]: fresh,
-        },
-        conversationOrder: [...state.conversationOrder, fresh.id],
-        activeConversationId: fresh.id,
-        ...mirrorActive(state, fresh),
-      }
-    })
-    await persistConversationWorkspace(id)
-  },
-
-  restoreArchivedConversation: async (id) => {
-    set((state) => {
-      const current = state.conversations[id]
-      if (!current) return state
-
-      const restored = {
-        ...current,
-        archivedAt: null,
-        updatedAt: Date.now(),
-      }
-
-      return {
-        conversations: {
-          ...state.conversations,
-          [id]: restored,
-        },
-        activeConversationId: id,
-        ...mirrorActive(state, restored),
-      }
-    })
-    await persistConversationWorkspace(id)
-  },
-
-  deleteConversation: async (id) => {
-    const conversation = get().conversations[id]
-    if (!conversation) return
-    if (isWorkspaceStateRestoring()) {
-      throw new Error('工作空间正在恢复，请稍后重试删除会话')
-    }
-    const workspaceKey = conversationWorkspaceKey(conversation)
-    const orderIndex = get().conversationOrder.indexOf(id)
-    recordRendererDiagnosticLog('info', [
-      '[ConversationPersistence] delete-requested',
-      { conversationId: id },
-    ])
-    set((state) => removeConversation(state, id))
-    try {
-      await persistConversationWorkspaceByKey(workspaceKey, {
-        conversationHistoryMutation: { type: 'delete-conversation', conversationId: id },
-      })
-      recordRendererDiagnosticLog('info', [
-        '[ConversationPersistence] delete-saved',
-        { conversationId: id },
-      ])
-    } catch (error) {
-      set((state) => {
-        if (state.conversations[id]) return state
-        const conversationOrder = [...state.conversationOrder]
-        conversationOrder.splice(Math.max(0, orderIndex), 0, id)
-        return { conversations: { ...state.conversations, [id]: conversation }, conversationOrder }
-      })
-      recordRendererDiagnosticLog('error', [
-        '[ConversationPersistence] delete-failed',
-        { conversationId: id },
-        error,
-      ])
-      throw error
-    }
-  },
-
-  renameConversation: (id, title) =>
+  markCompletionViewed: (id) =>
+    set((state) =>
+      updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        viewedCompletionAt: conversation.lastRunEventAt ?? undefined,
+      })),
+    ),
+  renameConversation: (id, title, annotation) =>
     set((state) =>
       updateConversation(state, id, (conversation) => ({
         ...conversation,
         title: title.trim() || '新会话',
+        ...(annotation !== undefined ? { annotation: annotation.trim() } : {}),
         updatedAt: Date.now(),
       })),
     ),

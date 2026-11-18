@@ -8,23 +8,15 @@ import {
   useWorkspaceStore,
 } from '../../stores'
 import {
+  conversationActivityBadge,
   getWorkspaceConversationGroups,
+  type WorkspaceConversationGroups,
   LocalSessionsList,
 } from '../../features/agent-conversations/local-session-sidebar'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
-import { IconPanelLeft, IconPanelRight, IconRobot } from '../common/Icons'
-import { ResizeHandle } from '../common/ResizeHandle'
+import { IconList, IconRobot, IconArrowLeft } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import { AgentPanel } from './AgentPanel'
-import {
-  getAgentNavigationLayout,
-  MIN_AGENT_LIST_WIDTH,
-  MAX_AGENT_LIST_WIDTH,
-  MIN_SPLIT_CHAT_WIDTH,
-  AGENT_LIST_SEPARATOR_WIDTH,
-} from '../../utils/agent-navigation-layout'
-import { clampPanelWidth } from '../../utils/panel-layout'
-import { cancelActivePanelResize } from '../../utils/panel-layout-drag-lifecycle'
 import './agent-workspace.css'
 
 const listScrollPositions = new Map<string, number>()
@@ -34,50 +26,45 @@ export function AgentWorkspace(): React.ReactElement {
   const workspace = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const workspaceKey = workspaceRefKey(workspace) ?? 'global'
   const mode = useUIStore((state) => state.agentContentMode)
-  const listWidth = useUIStore((state) => state.agentListWidth)
-  const drawerOpen = useUIStore((state) => state.agentDrawerOpen)
-  const setDrawerOpen = useUIStore((state) => state.setAgentDrawerOpen)
-  const setListWidth = useUIStore((state) => state.setAgentListWidth)
-  const rootRef = useRef<HTMLDivElement>(null)
+  const listVisible = mode === 'list'
   const scrollRef = useRef<HTMLDivElement>(null)
-  const listButtonRef = useRef<HTMLButtonElement>(null)
-  const [width, setWidth] = useState(0)
-  const [preview, setPreview] = useState<number | null>(null)
-  const resizeStart = useRef<number | null>(null)
-  const layout = getAgentNavigationLayout(mode, width, preview ?? listWidth, drawerOpen)
-  const presentation = layout.presentation
-  const listVisible = presentation !== 'chat'
-  const chatVisible = presentation !== 'list'
-  const chatShown = chatVisible && presentation !== 'drawer'
-
-  useLayoutEffect(() => {
-    const element = rootRef.current
-    if (!element) return
-    const observer = new ResizeObserver(() => setWidth(element.clientWidth))
-    setWidth(element.clientWidth)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }, [])
-
+  const [updatesWorkspace, setUpdatesWorkspace] = useState<string | null>(null)
+  const updatesOnly =
+    listVisible && workspace.kind !== 'remote' && updatesWorkspace === workspaceKey
   useEffect(() => {
-    if (presentation === 'split' && drawerOpen) setDrawerOpen(false)
-    if (presentation === 'drawer') scrollRef.current?.querySelector('input')?.focus()
-  }, [presentation, drawerOpen, setDrawerOpen])
-
+    if (!listVisible || workspaceKey !== updatesWorkspace) setUpdatesWorkspace(null)
+  }, [listVisible, workspaceKey, updatesWorkspace])
+  const conversations = useAgentStore((state) => state.conversations)
+  const order = useAgentStore((state) => state.conversationOrder)
+  const activeId = useAgentStore((state) => state.activeConversationId)
+  const pending = useAgentStore((state) => state.pendingConfirmations)
+  const groups = getWorkspaceConversationGroups(order, conversations, workspace)
+  const updates = groups.current.filter(
+    (item) => item.id !== activeId && conversationActivityBadge(item, pending),
+  )
+  const counts = ['待确认', '运行中', '新完成']
+    .map((label) => ({
+      label,
+      count: updates.filter((item) => conversationActivityBadge(item, pending) === label).length,
+    }))
+    .filter((item) => item.count)
+  const summary = counts.map((item) => item.count + ' ' + item.label).join(' · ')
+  const active = conversations[activeId]
+  useEffect(() => {
+    if (
+      !listVisible &&
+      workspace.kind !== 'remote' &&
+      active?.runStatus === 'completed' &&
+      active.lastRunEventAt &&
+      active.viewedCompletionAt !== active.lastRunEventAt
+    ) {
+      useAgentStore.getState().markCompletionViewed(active.id)
+    }
+  }, [listVisible, workspace, active])
   useLayoutEffect(() => {
     if (listVisible && scrollRef.current)
-      scrollRef.current.scrollTop = listScrollPositions.get(workspaceKey) ?? 0
-  }, [workspaceKey, listVisible])
-
-  useEffect(() => {
-    if (resizeStart.current !== null) cancelActivePanelResize()
-  }, [workspaceKey, width, mode])
-
-  const closeList = (): void => {
-    if (presentation === 'drawer') setDrawerOpen(false)
-    else useUIStore.getState().hideAgentSessions(rootRef.current?.getBoundingClientRect().width)
-    listButtonRef.current?.focus()
-  }
+      scrollRef.current.scrollTop = updatesOnly ? 0 : (listScrollPositions.get(workspaceKey) ?? 0)
+  }, [workspaceKey, listVisible, updatesOnly])
 
   const newConversation = async (): Promise<void> => {
     const result = await useCommandStore.getState().executeCommand('agent.newConversation', {
@@ -88,18 +75,7 @@ export function AgentWorkspace(): React.ReactElement {
   }
 
   return (
-    <div
-      className="agent-workspace"
-      data-agent-navigation={presentation}
-      ref={rootRef}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape' && presentation === 'drawer') {
-          event.preventDefault()
-          event.stopPropagation()
-          closeList()
-        }
-      }}
-    >
+    <div className="agent-workspace" data-agent-navigation={listVisible ? 'list' : 'chat'}>
       <header className="agent-workspace-header">
         <button
           type="button"
@@ -112,95 +88,61 @@ export function AgentWorkspace(): React.ReactElement {
         <div className="agent-workspace-actions">
           <button
             type="button"
-            aria-label={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
-            title={chatShown ? '收起聊天，仅保留会话列表' : '展开聊天'}
-            aria-expanded={chatShown}
-            onClick={() =>
-              chatShown
-                ? useUIStore.getState().hideAgentChat()
-                : useUIStore.getState().showAgentChat()
-            }
-          >
-            <IconPanelLeft size={14} />
-          </button>
-          <button
-            ref={listButtonRef}
-            type="button"
-            aria-label={listVisible ? '收起会话列表' : '展开会话列表'}
-            aria-expanded={listVisible}
-            title={listVisible ? '收起会话列表' : '展开会话列表'}
             onClick={() => {
-              if (listVisible) closeList()
+              setUpdatesWorkspace(null)
+              if (listVisible) useUIStore.getState().showAgentChat()
               else useUIStore.getState().showAgentSessions()
             }}
           >
-            <IconPanelRight size={14} />
-            <span>列表</span>
+            {listVisible ? <IconArrowLeft size={14} /> : <IconList size={15} />}
+            {listVisible ? '返回会话' : '会话列表'}
           </button>
+          {!listVisible && workspace.kind !== 'remote' && summary && (
+            <button
+              className="agent-other-updates"
+              aria-label={'其他会话动态：' + summary}
+              onClick={() => {
+                setUpdatesWorkspace(workspaceKey)
+                useUIStore.getState().showAgentSessions()
+              }}
+            >
+              {counts.map(({ label, count }) => (
+                <span className="agent-update-count" key={label}>
+                  <i data-status={label} />
+                  {count} {label}
+                </span>
+              ))}
+            </button>
+          )}
         </div>
       </header>
       <div className="agent-workspace-body">
-        <div
-          className="agent-workspace-chat"
-          hidden={!chatVisible}
-          inert={!chatVisible || presentation === 'drawer'}
-        >
+        <div className="agent-workspace-chat" hidden={listVisible} inert={listVisible}>
           <AgentPanel variant="side" />
         </div>
-        {presentation === 'split' && (
-          <ResizeHandle
-            area="agent-sessions"
-            side="right"
-            onResizeStart={() => {
-              resizeStart.current = listWidth
-            }}
-            onResize={(delta) => {
-              if (resizeStart.current !== null)
-                setPreview(
-                  clampPanelWidth(resizeStart.current + delta, {
-                    min: MIN_AGENT_LIST_WIDTH,
-                    max: Math.min(
-                      MAX_AGENT_LIST_WIDTH,
-                      width - MIN_SPLIT_CHAT_WIDTH - AGENT_LIST_SEPARATOR_WIDTH,
-                    ),
-                  }),
-                )
-            }}
-            onResizeEnd={({ reason, delta }) => {
-              const start = resizeStart.current
-              resizeStart.current = null
-              setPreview(null)
-              if (reason === 'commit' && start !== null)
-                setListWidth(
-                  clampPanelWidth(start + delta, {
-                    min: MIN_AGENT_LIST_WIDTH,
-                    max: Math.min(
-                      MAX_AGENT_LIST_WIDTH,
-                      width - MIN_SPLIT_CHAT_WIDTH - AGENT_LIST_SEPARATOR_WIDTH,
-                    ),
-                  }),
-                )
-            }}
-          />
-        )}
         <nav
           className="agent-navigation-list"
           aria-label="会话列表"
           hidden={!listVisible}
-          style={{ width: layout.listWidth }}
+          style={{ width: '100%' }}
         >
           <div className="agent-navigation-list-heading">
-            <span>会话列表</span>
+            <span>{updatesOnly ? '其他会话动态' : '会话列表'}</span>
+            {updatesOnly && <button onClick={() => setUpdatesWorkspace(null)}>查看全部</button>}
           </div>
           <div
             className="agent-navigation-list-content"
             ref={scrollRef}
             onScroll={(event) => {
-              if (listVisible && event.currentTarget.clientHeight > 0)
+              if (listVisible && !updatesOnly && event.currentTarget.clientHeight > 0)
                 listScrollPositions.set(workspaceKey, event.currentTarget.scrollTop)
             }}
           >
-            <AgentSessionList key={workspaceKey} />
+            <AgentSessionList
+              key={workspaceKey}
+              activityOnly={updatesOnly}
+              groups={updatesOnly ? { current: updates, closed: [] } : groups}
+            />
           </div>
         </nav>
       </div>
@@ -208,10 +150,14 @@ export function AgentWorkspace(): React.ReactElement {
   )
 }
 
-function AgentSessionList(): React.ReactElement {
+function AgentSessionList({
+  groups,
+  activityOnly,
+}: {
+  groups: WorkspaceConversationGroups
+  activityOnly: boolean
+}): React.ReactElement {
   const workspace = useWorkspaceStore((state) => state.activeWorkspaceRef)
-  const conversations = useAgentStore((state) => state.conversations)
-  const order = useAgentStore((state) => state.conversationOrder)
   const activeId = useAgentStore((state) => state.activeConversationId)
   const tabs = useTabStore((state) => state.tabs)
   const agent = useAgentStore.getState()
@@ -219,7 +165,8 @@ function AgentSessionList(): React.ReactElement {
   return (
     <LocalSessionsList
       workspaceRef={workspace}
-      sessionGroups={getWorkspaceConversationGroups(order, conversations, workspace)}
+      sessionGroups={groups}
+      activityOnly={activityOnly}
       activeConversationId={activeId}
       switchConversation={agent.switchConversation}
       archiveConversation={agent.archiveConversation}

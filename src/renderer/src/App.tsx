@@ -35,6 +35,7 @@ import { useBrowserViewLifecycle } from './components/workbench/use-browser-view
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { useAgentWebResourceLaunchRequests } from './bootstrap/use-agent-web-resource-launch-requests'
 import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
+import { OwnerEntry } from './features/owner/owner-panel'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth } from './utils/panel-layout'
@@ -60,7 +61,6 @@ function MainLayout(): React.ReactElement {
   const agentPanelWidth = useUIStore((s) => s.agentPanelWidth)
   const agentContentMode = useUIStore((s) => s.agentContentMode)
   const agentListWidth = useUIStore((s) => s.agentListWidth)
-  const setAgentListWidth = useUIStore((s) => s.setAgentListWidth)
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth)
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
@@ -120,9 +120,8 @@ function MainLayout(): React.ReactElement {
       sidebarVisible,
       sidebarContentVisible,
       sidebarWidth,
-      agentPanelWidth: agentContentMode === 'list' ? agentListWidth : agentPanelWidth,
+      agentPanelWidth,
       agentInRight,
-      agentListOnly: agentContentMode === 'list',
     },
     resizePreview,
   )
@@ -187,12 +186,7 @@ function MainLayout(): React.ReactElement {
     resizeStartRef.current = {
       area,
       effective: area === 'sidebar' ? panelLayout.sidebarWidth : panelLayout.agentPanelWidth,
-      saved:
-        area === 'sidebar'
-          ? sidebarWidth
-          : agentContentMode === 'list'
-            ? agentListWidth
-            : agentPanelWidth,
+      saved: area === 'sidebar' ? sidebarWidth : agentPanelWidth,
       bounds: area === 'sidebar' ? panelLayout.sidebarBounds : panelLayout.agentBounds,
       viewport: { width: viewportWidth, height: window.innerHeight, dpr: window.devicePixelRatio },
       budget: {
@@ -240,10 +234,9 @@ function MainLayout(): React.ReactElement {
       const candidate = clampPanelWidth(start.effective + delta, start.bounds)
       if (candidate === start.effective) return
       if (start.area === 'sidebar') setSidebarWidth(candidate)
-      else if (current.agentContentMode === 'list') setAgentListWidth(candidate)
       else setAgentPanelWidth(candidate)
     },
-    [setSidebarWidth, setAgentPanelWidth, setAgentListWidth],
+    [setSidebarWidth, setAgentPanelWidth],
   )
 
   const toggleUnifiedAgentPanel = useCallback(() => {
@@ -290,6 +283,7 @@ function MainLayout(): React.ReactElement {
           <span>打开工作空间</span>
         </button>
         <div className="app-topbar-right">
+          <OwnerEntry />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
             onClick={toggleUnifiedAgentPanel}
