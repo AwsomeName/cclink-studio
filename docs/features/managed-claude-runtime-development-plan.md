@@ -1,7 +1,7 @@
 # Studio 托管 Claude Runtime 开发计划
 
 > 状态：M1 已完成；M2 的同构建 `.app` 整包替换、配置/凭证保留和失败回滚已通过。M3 真实双版本更新/回滚与 M4 扩展发布验收自 2026-08-15 起暂停，不属于当前路线图。
-> 最后更新：2026-08-15。
+> 最后更新：2026-11-18。
 > 架构决策：[`0007-managed-claude-runtime.md`](../decisions/0007-managed-claude-runtime.md)。
 
 ## 当前用户能做什么
@@ -10,7 +10,9 @@
 - 查看当前 Claude Runtime 来源、已安装版本、限定版本和可用版本。
 - 从 npm 官方 registry 安装固定的 managed Runtime `2.1.211`，安装过程显示进度。
 - 检查本机安装完整性、修复损坏文件和卸载受管版本；修复失败保留上一健康版本。
-- 在 Agent 设置中选择“Studio 管理版本”，探测通过后启用；没有 API Key 时拒绝启用。
+- 在组件管理点击“安装并启用”，安装与探测通过后自动启用 Studio 管理版本；已有安装可
+  一键启用，无需填写路径。没有 API Key 也可安装启用，但模型请求必须拒绝并提示配置 Key。
+  该流程按 2026-11-18 用户要求更新，见 ADR 0007 与 `docs/testing/api-key-connections.md`。
 - 使用已配置的国内兼容服务地址和模型，通过 managed Runtime 执行真实 Agent/MCP 任务。
 - App 进程退出、整个 `.app` 被替换并重新启动后，直接复用 `userData` 中已校验的
   Runtime、设置和凭证。
@@ -28,10 +30,10 @@ Runtime 位于 `.app` 外的 `userData`；真实 packaged smoke 已执行同一�
 1. 使用空白 `userData` 启动 Studio；PATH 中有无 `claude` 都不能影响 managed 安装。
 2. Studio 正常打开工作台和“组件管理”，Claude 行显示限定/可用版本
    `2.1.211`。
-3. 用户点击“安装”，看到下载、校验和安装进度。
-4. 成功后显示“已安装 · Studio 管理 / 版本 2.1.211”，文件位于
-   `userData/runtime-components`，不位于 `.app`。
-5. 用户配置支持的 API Key，重启或安全切换后，在真实工作空间完成一次文件任务
+3. 用户点击“安装并启用”，看到下载、校验和安装进度。
+4. 成功后显示“已启用 · Studio 管理 / 版本 2.1.211”，文件位于
+   `userData/runtime-components`，不位于 `.app`；旧自定义路径清空，无需手动应用。
+5. 用户配置支持的 API Key 后，在真实工作空间完成一次文件任务
    和一次 Studio MCP 工具调用。
 
 ### App 替换升级闭环

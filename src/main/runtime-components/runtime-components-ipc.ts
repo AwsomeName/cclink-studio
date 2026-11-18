@@ -8,6 +8,8 @@ import type { RuntimeComponentManager } from './runtime-component-manager'
 export interface RuntimeComponentsIpcDependencies {
   beginManagedClaudeMutation?: () => (() => void) | null
   isManagedClaudeSelected?: () => boolean
+  /** Runs under the same configuration lock as installation. */
+  activateManagedClaude?: (version: string) => Promise<void>
 }
 
 export function registerRuntimeComponentsIpc(
@@ -29,12 +31,17 @@ export function registerRuntimeComponentsIpc(
     runtimeComponentsIpcContracts.installManagedClaude,
     trustedRendererGuard,
     () =>
-      withManagedClaudeMutationLock(manager, dependencies, () => manager.installManagedClaude()),
+      withManagedClaudeMutationLock(manager, dependencies, () =>
+        installAndActivate(manager, dependencies, false),
+      ),
   )
   registerTrustedIpcContract(
     runtimeComponentsIpcContracts.repairManagedClaude,
     trustedRendererGuard,
-    () => withManagedClaudeMutationLock(manager, dependencies, () => manager.repairManagedClaude()),
+    () =>
+      withManagedClaudeMutationLock(manager, dependencies, () =>
+        installAndActivate(manager, dependencies, true),
+      ),
   )
   registerTrustedIpcContract(
     runtimeComponentsIpcContracts.uninstallManagedClaude,
@@ -76,6 +83,36 @@ export function registerRuntimeComponentsIpc(
     trustedRendererGuard,
     (_event, componentId) => manager.uninstallRuntimeResource(componentId),
   )
+}
+
+async function installAndActivate(
+  manager: RuntimeComponentManager,
+  dependencies: RuntimeComponentsIpcDependencies,
+  repair: boolean,
+): Promise<Awaited<ReturnType<RuntimeComponentManager['installManagedClaude']>>> {
+  if (!dependencies.activateManagedClaude) {
+    return {
+      success: false,
+      status: manager.getManagedClaudeStatus(),
+      error: 'RUNTIME_UNAVAILABLE: Claude Code 启用服务未初始化，请重启 Studio 后重试。',
+    }
+  }
+  const result = repair ? await manager.repairManagedClaude() : await manager.installManagedClaude()
+  if (!result.success) return result
+  try {
+    const version = result.status.constrainedVersion
+    if (!version || !result.status.installedVersions.includes(version)) {
+      throw new Error('安装结果中缺少已验证的 Claude Code 版本')
+    }
+    await dependencies.activateManagedClaude(version)
+    return result
+  } catch (error) {
+    return {
+      ...result,
+      success: false,
+      error: `Claude Code 已安装，但启用失败：${error instanceof Error ? error.message : String(error)}。请点击“启用 Studio 版本”重试。`,
+    }
+  }
 }
 
 async function withManagedClaudeMutationLock(

@@ -86,7 +86,9 @@ export interface RuntimeResourceOperationResult {
 export interface RuntimeComponentsApiContract {
   getManagedClaudeStatus(): Promise<ManagedClaudeRuntimeStatus>
   checkManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult>
+  /** Installs (or reuses) the verified Studio runtime, then persists and applies it. */
   installManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult>
+  /** Repairs and enables the Studio runtime under the same Agent configuration lock. */
   repairManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult>
   uninstallManagedClaude(): Promise<ManagedClaudeRuntimeOperationResult>
   listRuntimeResources(): Promise<RuntimeResourceStatus[]>

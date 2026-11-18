@@ -262,7 +262,7 @@ async function main() {
     firstCells.some((value) => value.includes('仅 2.1.211')),
     'App A 未显示限定版本',
   )
-  const installButton = firstRow.getByRole('button', { name: '安装' })
+  const installButton = firstRow.getByRole('button', { name: /^(安装|安装并启用)$/ })
   assert(await installButton.isEnabled(), 'App A 安装按钮不可用')
   await installButton.click()
   await first.page.waitForFunction(
@@ -273,7 +273,7 @@ async function main() {
       const failed = Array.from(document.querySelectorAll('.settings-description')).some(
         (candidate) => candidate.textContent?.includes('DOWNLOAD_FAILED'),
       )
-      return (row?.textContent?.includes('已安装 · Studio 管理') ?? false) || failed
+      return /已(?:安装|启用) · Studio 管理/.test(row?.textContent ?? '') || failed
     },
     undefined,
     { timeout: 10 * 60 * 1000 },
@@ -356,14 +356,14 @@ async function main() {
       const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
         (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
       )
-      return row?.textContent?.includes('已安装 · Studio 管理') ?? false
+      return /已(?:安装|启用) · Studio 管理/.test(row?.textContent ?? '')
     },
     undefined,
     { timeout: 60_000 },
   )
   const secondCells = await secondRow.locator('td').allTextContents()
   assert(
-    secondCells.some((value) => value.includes('已安装 · Studio 管理')),
+    secondCells.some((value) => /已(?:安装|启用) · Studio 管理/.test(value)),
     '替换 .app 后 managed Runtime 安装状态丢失',
   )
   assert(
@@ -371,7 +371,7 @@ async function main() {
     '替换 .app 后 managed Runtime 版本丢失',
   )
   assert(
-    (await secondRow.getByRole('button', { name: '安装' }).count()) === 0,
+    (await secondRow.getByRole('button', { name: /^(安装|安装并启用)$/ }).count()) === 0,
     '替换后错误地要求重装',
   )
   assert((await readFile(installRecordPath, 'utf8')) === originalRecord, '替换后安装记录被改写')

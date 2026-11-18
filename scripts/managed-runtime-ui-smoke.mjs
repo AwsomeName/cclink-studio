@@ -89,15 +89,16 @@ async function main() {
         (value) =>
           value.includes('未安装') ||
           value.includes('已安装 · system') ||
-          value.includes('已安装 · Studio 管理'),
+          value.includes('已启用 · Studio 管理') ||
+          value.includes('已安装 · 待启用'),
       )
     ) {
       throw new Error(`首次安装状态不明确: ${JSON.stringify(before)}`)
     }
     assertIncludes(before, '仅 2.1.211', '没有显示限定版本')
     assertIncludes(before, '2.1.211', '没有显示可用版本')
-    const installButton = firstRow.getByRole('button', { name: '安装' })
-    if (!before.some((value) => value.includes('已安装 · Studio 管理'))) {
+    const installButton = firstRow.getByRole('button', { name: /^(安装并启用|启用 Studio 版本)$/ })
+    if (!before.some((value) => value.includes('已启用 · Studio 管理'))) {
       if (!(await installButton.isEnabled())) throw new Error('Claude Runtime 安装按钮不可用')
       await installButton.click()
       await first.page.waitForFunction(
@@ -105,19 +106,19 @@ async function main() {
           const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
             (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
           )
-          return row?.textContent?.includes('已安装 · Studio 管理') ?? false
+          return row?.textContent?.includes('已启用 · Studio 管理') ?? false
         },
         undefined,
         { timeout: 10 * 60 * 1000 },
       )
     }
     const afterInstall = await firstRow.locator('td').allTextContents()
-    assertIncludes(afterInstall, '已安装 · Studio 管理', '安装完成状态没有更新')
+    assertIncludes(afterInstall, '已启用 · Studio 管理', '安装完成后没有自动启用')
     assertIncludes(afterInstall, '版本 2.1.211', '安装版本没有更新')
-    if ((await firstRow.getByRole('button', { name: '安装' }).count()) !== 0) {
+    if ((await firstRow.getByRole('button', { name: '安装并启用', exact: true }).count()) !== 0) {
       throw new Error('已安装版本仍显示安装按钮')
     }
-    for (const action of ['检查', '修复', '卸载']) {
+    for (const action of ['检查', '修复并启用']) {
       if (!(await firstRow.getByRole('button', { name: action, exact: true }).isEnabled())) {
         throw new Error(`Claude Runtime ${action}按钮不可用`)
       }
@@ -138,20 +139,15 @@ async function main() {
     const replacement = await connectRenderer()
     const replacementRow = await openComponents(replacement.page)
     const afterReplacement = await replacementRow.locator('td').allTextContents()
-    assertIncludes(afterReplacement, '已安装 · Studio 管理', '替换 App 后安装状态丢失')
+    assertIncludes(afterReplacement, '已启用 · Studio 管理', '重启后启用状态丢失')
     assertIncludes(afterReplacement, '版本 2.1.211', '替换 App 后版本信息丢失')
-    replacement.page.once('dialog', (dialog) => dialog.accept())
-    await replacementRow.getByRole('button', { name: '卸载', exact: true }).click()
-    await replacement.page.waitForFunction(
-      () => {
-        const row = Array.from(document.querySelectorAll('.component-table tbody tr')).find(
-          (candidate) => candidate.textContent?.includes('Claude Code Runtime'),
-        )
-        return Boolean(row?.textContent?.includes('未安装') && row.textContent.includes('安装'))
-      },
-      undefined,
-      { timeout: 30_000 },
-    )
+    if (await replacementRow.getByRole('button', { name: '卸载', exact: true }).isEnabled()) {
+      throw new Error('正在使用的 Studio 版本不应允许卸载')
+    }
+    const saved = await replacement.page.evaluate(() => window.cclinkStudio.settings.getAll())
+    if (saved.claudeRuntimeSource !== 'managed' || saved.claudeCodePath !== '') {
+      throw new Error('安装后的运行时选择未持久化')
+    }
     await replacement.browser.close()
 
     process.stdout.write(
@@ -162,7 +158,8 @@ async function main() {
           installedVersion: '2.1.211',
           appReplacementReuse: true,
           updateCheck: 'no trusted update',
-          uninstall: true,
+          automaticActivation: true,
+          uninstallWhileSelected: 'blocked',
           screenshotPath,
         },
         null,

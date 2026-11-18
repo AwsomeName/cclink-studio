@@ -8,6 +8,7 @@ import type {
   RuntimeResourceStatus,
 } from '@shared/ipc/runtime-components'
 import { APP_VERSION } from '../../app-metadata'
+import { useSettingsStore } from '../../stores/settings-store'
 
 type CapabilityKind = 'Runtime' | '能力插件' | '内容包'
 type InstallationState = 'installed' | 'not-installed' | 'checking' | 'unavailable'
@@ -122,6 +123,14 @@ const BUILTIN_ROWS: ManagedCapabilityRow[] = [
   },
 ]
 
+function isManagedClaudeEnabled(status: ClaudeRuntimeStatus | null): boolean {
+  return (
+    status?.selection.source === 'managed' &&
+    status.active?.source === 'managed' &&
+    (!status.failure || status.failure.code === 'AUTH_REQUIRED')
+  )
+}
+
 function claudeRow(
   status: ClaudeRuntimeStatus | null,
   managed: ManagedClaudeRuntimeStatus | null,
@@ -139,7 +148,7 @@ function claudeRow(
   return {
     id: 'claude-code-runtime',
     name: 'Claude Code Runtime',
-    description: '本地 Agent 执行引擎',
+    description: '安装后自动启用；配置和聊天记录与 Claude 桌面端分开保存',
     kind: 'Runtime',
     installationState: damaged
       ? 'unavailable'
@@ -151,7 +160,9 @@ function claudeRow(
     installationLabel: damaged
       ? '已损坏 · 可修复'
       : managedVersion
-        ? '已安装 · Studio 管理'
+        ? isManagedClaudeEnabled(status)
+          ? '已启用 · Studio 管理'
+          : '已安装 · 待启用'
         : active
           ? `已安装 · ${active.source}`
           : failed
@@ -222,6 +233,7 @@ function runtimeResourceRow(
 }
 
 export function ComponentManagementSettings(): React.ReactElement {
+  const loadSettings = useSettingsStore((state) => state.loadSettings)
   const [claudeStatus, setClaudeStatus] = useState<ClaudeRuntimeStatus | null>(null)
   const [managedClaudeStatus, setManagedClaudeStatus] = useState<ManagedClaudeRuntimeStatus | null>(
     null,
@@ -316,18 +328,19 @@ export function ComponentManagementSettings(): React.ReactElement {
               : operation === 'uninstall'
                 ? 'Claude Runtime 已卸载；Agent 配置和 API Key 已保留。'
                 : operation === 'repair'
-                  ? `Claude Runtime ${result.status.installedVersions[0] ?? ''} 已重新下载并校验。`
-                  : `Claude Runtime ${result.status.installedVersions[0] ?? ''} 已安装，可在 Agent 设置中启用。`
+                  ? `Claude Code ${result.status.installedVersions[0] ?? ''} 已修复并启用，无需填写路径。请在“API Key 与连接”配置或验证密钥。`
+                  : `Claude Code ${result.status.installedVersions[0] ?? ''} 已启用，无需填写路径。请在“API Key 与连接”配置或验证密钥。`
             : (result.error ?? `Claude Runtime ${operationLabel(operation)}失败`),
         )
       } catch (error) {
         setInstallMessage(error instanceof Error ? error.message : String(error))
       } finally {
-        setBusyOperation(null)
+        if (operation === 'install' || operation === 'repair') await loadSettings()
         await refresh()
+        setBusyOperation(null)
       }
     },
-    [refresh],
+    [loadSettings, refresh],
   )
 
   const runRuntimeResourceOperation = useCallback(
@@ -506,10 +519,23 @@ export function ComponentManagementSettings(): React.ReactElement {
                             progress !== null &&
                             progress !== undefined
                               ? `${progress}%`
-                              : '安装'}
+                              : row.managerKind === 'claude'
+                                ? '安装并启用'
+                                : '安装'}
                           </button>
                         ) : (
                           <>
+                            {row.managerKind === 'claude' &&
+                              !isManagedClaudeEnabled(claudeStatus) && (
+                                <button
+                                  type="button"
+                                  className="settings-secondary-btn component-row-action"
+                                  disabled={Boolean(currentBusy)}
+                                  onClick={() => void runClaudeOperation('install')}
+                                >
+                                  {currentBusy ? '启用中' : '启用 Studio 版本'}
+                                </button>
+                              )}
                             <button
                               type="button"
                               className="settings-secondary-btn component-row-action"
@@ -529,7 +555,9 @@ export function ComponentManagementSettings(): React.ReactElement {
                                 ? `${progress}%`
                                 : row.updateAvailable
                                   ? '更新'
-                                  : '修复'}
+                                  : row.managerKind === 'claude'
+                                    ? '修复并启用'
+                                    : '修复'}
                             </button>
                             <button
                               type="button"

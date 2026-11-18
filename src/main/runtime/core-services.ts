@@ -17,7 +17,7 @@ import { ImageResearchService } from '../image-research/image-research-service'
 import { registerArticlePublishingIpc } from '../article-publishing/article-publishing-ipc'
 import { registerWechatIPC } from '../ipc/wechat-ipc'
 import { SettingsService } from '../settings/settings-service'
-import { registerSettingsIpc } from '../settings/settings-ipc'
+import { activateInstalledManagedClaude, registerSettingsIpc } from '../settings/settings-ipc'
 import { CredentialService } from '../credentials/credential-service'
 import { registerCredentialsIpc } from '../credentials/credentials-ipc'
 import { PermissionManager } from '../mcp/permission'
@@ -315,6 +315,17 @@ export async function bootstrapMainProcessServices(
     },
     isManagedClaudeSelected: () =>
       runtime.settingsService?.getRuntimeSettings().claudeRuntimeSource === 'managed',
+    activateManagedClaude: (version) =>
+      activateInstalledManagedClaude(
+        version,
+        runtime.settingsService!,
+        runtime.claudeRuntimeManager,
+        runtime.agentBridge,
+        async () => {
+          const { bootstrapAgentRuntime } = await import('./agent-runtime')
+          await bootstrapAgentRuntime(runtime)
+        },
+      ),
   })
   console.log('[CCLink Studio] Runtime 组件管理 IPC 已注册')
 

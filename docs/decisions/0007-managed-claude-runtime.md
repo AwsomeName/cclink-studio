@@ -31,7 +31,9 @@ JavaScript 插件加载，也不运行用户机器上的 npm CLI。Studio 从 np
 2. 页面分别显示当前 Runtime 来源/版本、限定版本和可用版本。
 3. 用户点击“安装”后，Studio 下载、校验、解包和 probe；失败不改变当前
    selection。
-4. 安装成功后用户明确应用 managed Runtime；有活动 Agent 任务时拒绝切换。
+4. 用户点击“安装并启用”即选择 Studio 管理版本；安装与探测成功后自动持久化 managed
+   选择并应用后端，清除旧的自定义路径。已有安装提供“启用 Studio 版本”，复用已校验文件。
+   安装、修复和启用共用 Agent 配置锁；有活动任务时拒绝，失败不显示已启用。
 5. 配置 API Key 后，用户能在真实工作空间完成文件和 MCP 工具任务。
 
 2026-08-12 已以 managed `2.1.211`、SDK `0.3.211` 和用户现有的国内兼容服务配置完成
@@ -72,7 +74,7 @@ renderer 只显示主进程投影并发送受校验命令，不拥有安装或�
   `claude --version`。
 - 不接受 tar 路径越界、符号链接、设备文件或多个可执行候选。
 - managed Runtime 启动时注入 `DISABLE_UPDATES=1`，禁止绕过 Studio 自更新。
-- managed Runtime 使用 `runtime-components/.../config` 作为独立 `CLAUDE_CONFIG_DIR`，并清空
+- 所有 Studio Claude Runtime 使用 `agent-runtime/claude-api` 作为独立 `CLAUDE_CONFIG_DIR`，并清空
   继承的 OAuth token；即使本机 `~/.claude` 已登录，也只能使用 Studio 明确注入的 API Key。
 - 新版本只在 probe 成功且无活动任务时提交；失败保持上一已知可用版本。
 - 发布暂存目录前把同版本旧目录原子移到备份；最终校验失败立即恢复，进程中断则在
@@ -84,7 +86,11 @@ renderer 只显示主进程投影并发送受校验命令，不拥有安装或�
 
 - Provider、API URL、模型、权限模式、禁用工具、Agent 角色、工作空间和 UI 聊天历史
   保持在原所有者中，Runtime 安装不迁移它们。
-- 既有 `system` 和 `custom` 选择不自动改为 `managed`。
+- 不在启动时静默改写既有 `system` 和 `custom` 选择；用户执行“安装并启用”、
+  “修复并启用”或“启用 Studio 版本”后切换为 `managed`。这是 2026-11-18 用户确认的
+  安装即启用流程，替代原先安装后还需手动应用的步骤。
+- 安装和启用无需 API Key；缺 Key 只阻止模型请求，不阻止组件准备。启用失败保留已安装
+  文件并显示重试入口；设置写入失败不提交运行时，后端应用失败单独标记为待启用。
 - 安装器不修改、导入或删除用户 `~/.claude`。
 - Runtime、SDK、Provider、模型或角色兼容指纹变化时，保留 UI 历史但不恢复旧
   Claude Session ID；新会话使用已有连续性快照。

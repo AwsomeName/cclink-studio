@@ -1,6 +1,6 @@
 # CCLink Studio 文档索引
 
-> 当前事实源。最后更新：2026-11-06。
+> 当前事实源。最后更新：2026-11-17。
 
 ## 先读这些
 
@@ -49,6 +49,7 @@
 - `docs/features/company-accounts-development-plan.md`：公司账目最小开发计划与真实业务退出条件。
 - `docs/testing/company-accounts-v1-acceptance.md`：公司账目代表性桌面样本、自动门禁和仍待真实资料关闭的业务验收。
 - `docs/features/robotics-remote-simulation-workbench.md`：通过 frp 连接远程 Ubuntu Robot Runner，在 Studio 启动仿真、推理和训练并查看画面、日志与运行证据的低优先级讨论稿，尚未实现。
+- `docs/features/remote-mac-workspace-discussion.md`：美国 Mac 的真实桌面内嵌、Claude 浏览器登录、现有 chatcc-agent 验证与简化网络接入讨论；记录 Tailscale 复杂度反馈，网络方案未定，尚未实机验收。
 - `docs/features/component-management-settings.md`：组件管理配置页、首次安装自动打开、清单字段、状态所有权和页面验收标准。
 - `docs/features/runtime-components-and-capability-plugins-development-plan.md`：已暂停的参考计划；只有重启门禁成立并提交新 ADR 后才可恢复。
 - `docs/ops/stabilization-s0-acceptance.md`：S0 自动化证据和必须真人执行的核心流程验收记录。
@@ -69,8 +70,8 @@
 - `docs/features/agent-follow-up-actions.md`：Agent 后续消息产品规则与实现边界；本地 Claude Code 已支持入队、补充当前任务和停止后执行。
 - `docs/testing/agent-follow-up-actions.md`：本地真实 Runtime 的补充与停止后执行证据、复验动作及未覆盖范围。
 - `docs/design/agent-follow-up-actions/README.md`：对应交互效果图、浅深色及停止/切换/远程能力边界截图，均为设计示意。
-- `docs/features/local-tts.md`：Kokoro 本地朗读、MD/网页统一底栏入口、消息朗读与 Git 右侧播放器；真实 Electron 自动验收已通过，真人听感待签收。
-- `docs/testing/local-tts.md`：模型实测、应用验收证据、复验命令与真人操作步骤。
+- `docs/features/local-tts.md`：Kokoro 本地朗读、MD/网页统一底栏入口、消息朗读与 Git 右侧播放器；0.1.149 修复原生引擎漏打包，2026-11-18 用户反馈当前使用可接受。
+- `docs/testing/local-tts.md`：模型实测、应用及安装包验收证据、复验步骤，以及本地朗读会话的实现、自查、故障修复与收口记录。
 - `docs/features/context-action-system.md`：已实现的统一右键、命令与上下文操作系统。
 - `docs/features/configurable-keybinding-system.md`：已实现的统一可配置快捷键系统事实源，定义命令事实源、作用域路由、设置页录制与冲突处理、Browser `WebContentsView` 适配和验收门禁。
 - `docs/features/detachable-workbench-tabs.md`：方案、P0a/P0b 与 ADR 0017 已通过；Browser-only M1

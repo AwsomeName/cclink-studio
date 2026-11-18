@@ -34,6 +34,34 @@
 - 真实 Electron smoke 通过；除原有保存→验证→新建 Claude 会话→收到回复、401、删除和重启外，新增高级管理三条撤销路径、搜索/侧栏取消保留草稿及确认后清空的验收。
 - 本轮证据：`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-auth-ui-xcToka/result.json`。使用隔离 userData 和本地测试接口，没有使用真实用户密钥、产生付费模型调用或发布安装包。
 
+## 2026-11-18：Claude 安装后自动启用
+
+2026-11-18 安装即启用的验收动作：在组件管理点击“安装并启用”，确认显示“已启用 · Studio
+管理”；返回 API Key 与连接，运行时选择自动更新为 Studio 管理版本，自定义路径输入不再出现。
+配置 Key 后验证连接并新建 Claude 会话；重启后保持选择，会话仍位于 Studio 私有目录。
+已有安装且旧路径失效时，“启用 Studio 版本”应复用文件；任务进行中、安装失败或保存失败时
+不得切换。后端应用失败须显示“已安装，但启用失败”并允许重试。
+
+复跑 `node scripts/claude-auth-isolation-ui-smoke.mjs --managed-install`：真实下载固定 npm
+包、真实 Electron 与 Claude 进程，使用临时 userData 和本地模拟 API；不需要用户真实 Key。
+覆盖旧无效路径、未配 Key 安装、自动启用、已安装复用、设置页刷新、401 不回退、私有会话与重启。
+
+执行结果：
+
+- 真实 Electron + Claude `2.1.211` 完整流程通过，包含官方 npm 实际下载与校验、未配 Key
+  安装启用、已有安装记录逐字节不变、自动更新运行时表单、设置保存和重启恢复。
+- 配置测试 Key 后，验证连接与首条 UI 会话成功；401 不回退订阅登录，清除 Key 后立即及
+  重启均拒绝请求。会话留在 Studio 私有目录，外部配置目录保持不变。
+- 证据：`/var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/studio-auth-ui-zy7EKg/result.json`，
+  同目录包含 `installed-component-row.png`、`reused-component-row.png` 和对话截图。
+- 工程门禁：56 项相关测试通过（2 项可选 smoke 未在该命令启用）；另行启用真实进程隔离
+  smoke 后 5 项全部通过。类型检查、受影响 ESLint/Prettier、凭证边界、构建和 diff 检查通过。
+- 首轮完整 UI 测试停在重启断言：窗口已出现，但 Runtime 仍在异步校验。独立复核确认
+  `pending → managed active + AUTH_REQUIRED`，约 2.5 秒完成；脚本改为等待真实初始化结果，
+  从空白 profile 重新下载并复验成功，未以延时改动产品启动逻辑。
+- 未发布安装包，未操作另一台 Mac 或 Claude 桌面端 UI；本轮不重新宣称旧 packaged 跨版本
+  验收已覆盖新流程。
+
 ## 验收边界
 
 本地测试接口通过只能证明 UI、IPC、持久化、运行时和请求链路；不能证明真实厂商 Key 的额度、模型权限或可用性。Meshy/即梦/Pexels 的真实生成/搜索、GitHub 真实账号验证、真实厂商 Claude 会话及正式安装包真人验收仍需按以上动作执行。

@@ -876,7 +876,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                         }
                       }}
                     >
-                      <option value="managed">Studio 管理版本</option>
+                      <option value="managed">Studio 管理版本（安装后自动启用）</option>
                       <option value="system">系统安装</option>
                       <option value="custom">自定义路径</option>
                     </select>
@@ -922,16 +922,17 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                     onReset={resetOne}
                   >
                     <div className="settings-label">
-                      <span>Managed Runtime 版本</span>
+                      <span>Studio 管理版本</span>
                       <span className="settings-description">
-                        先在“组件管理”安装允许的版本，再在这里启用。
+                        在“组件管理”安装后自动启用，无需填写路径。配置和聊天记录保存在 Studio
+                        独立目录。
                       </span>
                     </div>
                     <div className="settings-control">
                       <input
                         className="settings-input"
                         value={claudeManagedVersion}
-                        onChange={(event) => setClaudeManagedVersion(event.target.value)}
+                        readOnly
                         placeholder={MANAGED_CLAUDE_RUNTIME_VERSION}
                       />
                     </div>

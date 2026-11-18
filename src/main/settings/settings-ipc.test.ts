@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from './types'
-import { registerSettingsIpc } from './settings-ipc'
+import { activateInstalledManagedClaude, registerSettingsIpc } from './settings-ipc'
 import { registerCredentialsIpc } from '../credentials/credentials-ipc'
 
 const mockIpcMain = vi.hoisted(() => ({
@@ -632,6 +632,97 @@ describe('registerSettingsIpc', () => {
     })
     finishTest?.()
     await expect(firstTest).resolves.toMatchObject({ success: true })
+  })
+})
+
+describe('activateInstalledManagedClaude', () => {
+  function fixture() {
+    let settings = {
+      ...DEFAULT_SETTINGS,
+      claudeRuntimeSource: 'custom' as const,
+      claudeCodePath: '/missing/claude',
+    } as typeof DEFAULT_SETTINGS
+    const service = {
+      getRuntimeSettings: () => settings,
+      set: vi.fn(async (partial) => {
+        settings = { ...settings, ...partial }
+        return settings
+      }),
+    }
+    const runtime = {
+      source: 'managed',
+      executablePath: '/studio/claude',
+      claudeCodeVersion: '2.1.211',
+      sdkVersion: '0.3.211',
+      fingerprint: 'a'.repeat(64),
+      integrity: 'catalog-sha256',
+      probedAt: 1,
+    }
+    const manager = {
+      probe: vi.fn(async () => ({ success: true, runtime })),
+      commit: vi.fn(),
+      getStatus: vi.fn(() => ({ active: runtime })),
+      reportFailure: vi.fn(),
+    }
+    const bridge = createAgentBridge()
+    const recover = vi.fn(async () => undefined)
+    const activate = () =>
+      activateInstalledManagedClaude(
+        '2.1.211',
+        service as never,
+        manager as never,
+        bridge as never,
+        recover,
+      )
+    return { service, manager, bridge, recover, activate }
+  }
+
+  it('enables the verified managed binary without a Key, clearing only the obsolete path', async () => {
+    const f = fixture()
+    await f.activate()
+    expect(f.manager.probe).toHaveBeenCalledWith({ source: 'managed', version: '2.1.211' })
+    expect(f.service.set).toHaveBeenCalledWith({
+      claudeRuntimeSource: 'managed',
+      claudeManagedVersion: '2.1.211',
+      claudeCodePath: '',
+    })
+    expect(f.bridge.reconfigure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        claudeCodePath: '/studio/claude',
+        apiKey: '',
+        runtimeProvenance: expect.objectContaining({ source: 'managed' }),
+      }),
+      { forceResetSessions: false },
+    )
+    expect(f.recover).not.toHaveBeenCalled()
+  })
+
+  it('does not replace the selected runtime when probing or persistence fails', async () => {
+    const f = fixture()
+    f.manager.probe.mockResolvedValueOnce({
+      success: false,
+      failure: { code: 'MANAGED_RUNTIME_INTEGRITY_FAILED', message: 'damaged' },
+    } as never)
+    await expect(f.activate()).rejects.toThrow('damaged')
+    expect(f.service.set).not.toHaveBeenCalled()
+    expect(f.manager.commit).not.toHaveBeenCalled()
+    f.service.set.mockRejectedValueOnce(new Error('disk full'))
+    await expect(f.activate()).rejects.toThrow('disk full')
+    expect(f.manager.commit).not.toHaveBeenCalled()
+    expect(f.bridge.reconfigure).not.toHaveBeenCalled()
+  })
+
+  it('reports a backend application failure and allows activation to be retried', async () => {
+    const f = fixture()
+    f.bridge.reconfigure.mockImplementationOnce(() => {
+      throw new Error('backend failed')
+    })
+    await expect(f.activate()).rejects.toThrow('未能应用新配置')
+    expect(f.manager.reportFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'RUNTIME_SWITCH_PENDING' }),
+    )
+    await expect(f.activate()).resolves.toBeUndefined()
+    expect(f.bridge.reconfigure).toHaveBeenCalledTimes(2)
   })
 })
 

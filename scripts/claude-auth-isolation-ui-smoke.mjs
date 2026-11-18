@@ -10,6 +10,7 @@ import { _electron as electron } from 'playwright-core'
 // Real Electron + real Claude, with only a loopback API and disposable credentials.
 const runDir = await mkdtemp(join(tmpdir(), 'studio-auth-ui-'))
 const userData = join(runDir, 'user-data')
+const managedInstall = process.argv.includes('--managed-install')
 const privateConfig = join(userData, 'agent-runtime', 'claude-api')
 const foreignConfig = join(runDir, 'external-claude-config')
 await mkdir(foreignConfig)
@@ -146,25 +147,116 @@ function inspectStoredSession(configDir, sessionId) {
   )
 }
 try {
+  if (managedInstall) {
+    await mkdir(userData, { recursive: true })
+    await writeFile(
+      join(userData, 'settings.json'),
+      JSON.stringify({
+        claudeRuntimeSource: 'custom',
+        claudeCodePath: join(runDir, 'missing-claude'),
+        provider: 'custom',
+        apiFormat: 'anthropic',
+        apiBaseUrl,
+        modelName: 'claude-sonnet-4-6',
+      }),
+    )
+  }
   let page = await launch()
+  if (managedInstall) {
+    const recordPath = join(
+      userData,
+      'runtime-components',
+      'claude-runtime',
+      `darwin-${process.arch}`,
+      '2.1.211',
+      'install-record.json',
+    )
+    async function enableFromComponents(action) {
+      await openAgentSettings(page)
+      await page
+        .locator('.settings-nav')
+        .getByRole('button', { name: '组件管理', exact: true })
+        .click()
+      const row = page.locator('.component-table tbody tr', { hasText: 'Claude Code Runtime' })
+      await row.getByRole('button', { name: action, exact: true }).click()
+      await page
+        .getByText(
+          'Claude Code 2.1.211 已启用，无需填写路径。请在“API Key 与连接”配置或验证密钥。',
+          { exact: true },
+        )
+        .waitFor({ timeout: 600000 })
+      await row.getByText('已启用 · Studio 管理', { exact: true }).waitFor()
+      await row.screenshot({
+        path: join(runDir, `${action === '安装并启用' ? 'installed' : 'reused'}-component-row.png`),
+      })
+      assert.equal(await row.getByRole('button', { name: '卸载', exact: true }).isEnabled(), false)
+      const state = await page.evaluate(async () => ({
+        settings: await window.cclinkStudio.settings.getAll(),
+        runtime: await window.cclinkStudio.settings.getClaudeRuntimeStatus(),
+      }))
+      assert.equal(state.settings.claudeRuntimeSource, 'managed')
+      assert.equal(state.settings.claudeCodePath, '')
+      assert.equal(state.settings.apiBaseUrl, apiBaseUrl)
+      assert.equal(state.runtime.status.active.source, 'managed')
+      assert.ok(state.runtime.status.active.executablePath.startsWith(userData))
+      await openAgentSettings(page)
+      await page.locator('summary', { hasText: '运行环境与兼容设置' }).click()
+      // Parent settings must refresh without a page reload or a manual Apply.
+      assert.equal(
+        await page
+          .locator('select')
+          .filter({ has: page.locator('option[value="managed"]') })
+          .inputValue(),
+        'managed',
+      )
+      assert.equal(await page.getByText('自定义可执行文件', { exact: true }).count(), 0)
+      assert.equal(requests.length, 0)
+      await page.screenshot({
+        path: join(runDir, `${action === '安装并启用' ? 'installed' : 'reused'}-managed.png`),
+        fullPage: true,
+      })
+    }
+    await enableFromComponents('安装并启用')
+    const record = await readFile(recordPath, 'utf8')
+    await app.close()
+    app = null
+    // An older profile may already have the component while still selecting a
+    // stale custom path. Reuse it through the same command, without redownloading.
+    const saved = JSON.parse(await readFile(join(userData, 'settings.json'), 'utf8'))
+    assert.equal(saved.claudeRuntimeSource, 'managed')
+    await writeFile(
+      join(userData, 'settings.json'),
+      JSON.stringify({
+        ...saved,
+        claudeRuntimeSource: 'custom',
+        claudeCodePath: join(runDir, 'missing-claude'),
+        claudeManagedVersion: '',
+      }),
+    )
+    page = await launch()
+    await enableFromComponents('启用 Studio 版本')
+    assert.equal(await readFile(recordPath, 'utf8'), record)
+  }
   await openAgentSettings(page)
   const missing = await page.evaluate(() => window.cclinkStudio.agent.getStatus())
   assert.equal(missing.ready, true)
   assert.equal((await send(page, 'auth-ui-missing')).code, 'AUTH_REQUIRED')
   assert.equal(requests.length, 0)
-  const configured = await page.evaluate(
-    async ({ apiBaseUrl, path }) => {
-      return window.cclinkStudio.settings.set({
-        apiBaseUrl,
-        modelName: 'claude-sonnet-4-6',
-        claudeRuntimeSource: 'custom',
-        claudeCodePath: path,
-      })
-    },
-    { apiBaseUrl, path: resolve('.agent-runtime-staging', `darwin-${process.arch}`, 'claude') },
-  )
-  assert.equal(configured.success, true)
-  await page.reload()
+  if (!managedInstall) {
+    const configured = await page.evaluate(
+      async ({ apiBaseUrl, path }) => {
+        return window.cclinkStudio.settings.set({
+          apiBaseUrl,
+          modelName: 'claude-sonnet-4-6',
+          claudeRuntimeSource: 'custom',
+          claudeCodePath: path,
+        })
+      },
+      { apiBaseUrl, path: resolve('.agent-runtime-staging', `darwin-${process.arch}`, 'claude') },
+    )
+    assert.equal(configured.success, true)
+    await page.reload()
+  }
   await openAgentSettings(page)
   const keyInput = page.locator('.connections-form input[type="password"]').first()
   const form = page.locator('.connections-detail')
@@ -371,6 +463,31 @@ try {
   await app.close()
   app = null
   page = await launch()
+  if (managedInstall) {
+    // The workbench is visible before the optional runtime finishes hashing and
+    // probing. Poll the resolved IPC value, not an async waitForFunction predicate.
+    let runtimeStatus
+    const deadline = Date.now() + 30000
+    do {
+      runtimeStatus = await page.evaluate(() =>
+        window.cclinkStudio.settings.getClaudeRuntimeStatus(),
+      )
+      if (
+        runtimeStatus.status?.selection.source === 'managed' &&
+        runtimeStatus.status.pending === null
+      )
+        break
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    } while (Date.now() < deadline)
+    assert.equal(runtimeStatus.status?.active?.source, 'managed', JSON.stringify(runtimeStatus))
+    const state = await page.evaluate(async () => ({
+      settings: await window.cclinkStudio.settings.getAll(),
+      runtime: await window.cclinkStudio.settings.getClaudeRuntimeStatus(),
+    }))
+    assert.equal(state.settings.claudeRuntimeSource, 'managed')
+    assert.equal(state.settings.claudeCodePath, '')
+    assert.equal(state.runtime.status.active.source, 'managed')
+  }
   const restarted = await page.evaluate(() => window.cclinkStudio.agent.getStatus())
   assert.equal(restarted.ready, true)
   assert.equal((await send(page, 'auth-ui-restarted')).code, 'AUTH_REQUIRED')
@@ -388,6 +505,9 @@ try {
   const report = {
     success: true,
     runtime: 'real Electron + Claude',
+    managedInstallation: managedInstall
+      ? 'real download, install-and-enable without Key, reuse existing installation, stale custom path cleared, UI refresh and restart passed'
+      : 'not exercised',
     api: 'local fixture, no paid calls',
     missingKey: 'blocked',
     configuredKey:

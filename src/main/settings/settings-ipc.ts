@@ -200,7 +200,7 @@ export function registerSettingsIpc(
         ? selectionFromSettings({ ...settingsService.getAll(), ...normalizedPartial })
         : null
       if (
-        (runtimeSelection?.source === 'bundled' || runtimeSelection?.source === 'managed') &&
+        runtimeSelection?.source === 'bundled' &&
         !settingsService.getRuntimeSettings().apiKey.trim()
       ) {
         return {
@@ -548,6 +548,38 @@ function applyToolModuleSettings(toolHost: McpToolHost | null, disabledModules: 
   const disabled = new Set(disabledModules)
   for (const module of toolHost.getRegisteredModules()) {
     toolHost.setModuleEnabled(module.name, !disabled.has(module.name))
+  }
+}
+
+/** The component command holds the Agent configuration lock across install and activation. */
+export async function activateInstalledManagedClaude(
+  version: string,
+  settingsService: SettingsService,
+  runtimeManager: ClaudeRuntimeManager | null,
+  agentBridge: AgentBridge | null,
+  recoverAgentRuntime: () => Promise<void>,
+): Promise<void> {
+  if (!runtimeManager) throw new Error('Claude Code 运行时管理器未初始化')
+  const selection: ClaudeRuntimeSelection = { source: 'managed', version }
+  const probe = await runtimeManager.probe(selection)
+  if (!probe.success) throw new Error(`${probe.failure.code}: ${probe.failure.message}`)
+
+  // Runtime installation never needs a Key. Authentication remains enforced by
+  // the isolated backend at send time; only these three non-secret fields change.
+  await settingsService.set({
+    claudeRuntimeSource: 'managed',
+    claudeManagedVersion: version,
+    claudeCodePath: '',
+  })
+  runtimeManager.commit(selection, probe.runtime)
+  try {
+    await applyAgentConfiguration(agentBridge, settingsService, runtimeManager, recoverAgentRuntime)
+  } catch (error) {
+    runtimeManager.reportFailure({
+      code: 'RUNTIME_SWITCH_PENDING',
+      message: 'Studio 版本已保存，但当前 Agent 未能启用。请重试启用。',
+    })
+    throw error
   }
 }
 
