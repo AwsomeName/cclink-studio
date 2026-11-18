@@ -48,8 +48,16 @@ export function openCompanyWorkspace(
     })
   }
 }
-/** Top-level shortcuts use the fixed company; in-page/deep links retain explicit scope. */
+/** Prefer the current company instance; use the fixed shortcut outside company projects. */
 export async function enterCompanyWorkspace(section: CompanySection = 'overview'): Promise<void> {
+  const current = useWorkspaceStore.getState()
+  if (
+    current.activeWorkspaceRef.kind === 'local' &&
+    current.settingsSnapshot?.settings.type === 'company'
+  ) {
+    openCompanyWorkspace(section)
+    return
+  }
   if (await openBoundCompany(section)) openCompanyWorkspace(section)
 }
 

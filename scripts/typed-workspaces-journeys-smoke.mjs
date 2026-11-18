@@ -193,12 +193,24 @@ try {
   // A company and a separate engineering project share files through links, not copies.
   const engineering = await createProject('electronics', '眼镜研发')
   await page.getByRole('heading', { name: '工程概览', exact: true }).waitFor()
+  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await page.getByLabel('固定浏览器', { exact: true }).check()
+  await page.getByLabel('固定终端', { exact: true }).check()
+  await page.getByRole('button', { name: 'terminal上移', exact: true }).click()
+  assert.deepEqual(
+    await page
+      .getByRole('group', { name: '常用工具', exact: true })
+      .locator('button')
+      .allTextContents(),
+    ['终端', '浏览器'],
+  )
   const mdPath = join(engineering, '说明.md')
   await writeFile(mdPath, '# 工程说明\n独立工程原文\n')
   const stl =
     'solid sample\n facet normal 0 0 1\n outer loop\n vertex 0 0 0\n vertex 10 0 0\n vertex 0 10 0\n endloop\n endfacet\nendsolid sample\n'
   await writeFile(join(engineering, '外壳.stl'), stl)
   const company = await createProject('company', '模拟公司')
+  assert.equal(await page.getByRole('group', { name: '常用工具', exact: true }).count(), 0)
   await page.getByLabel('公司显示名称', { exact: true }).fill('模拟公司')
   await page.getByRole('button', { name: '开始使用', exact: true }).click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
@@ -217,17 +229,41 @@ try {
   await page.screenshot({ path: join(root, 'company-linked-engineering.png') })
   await record.getByRole('button', { name: '打开原记录', exact: true }).click()
   await page.getByRole('heading', { name: '工程概览', exact: true }).waitFor()
+  assert.deepEqual(
+    await page
+      .getByRole('group', { name: '常用工具', exact: true })
+      .locator('button')
+      .allTextContents(),
+    ['终端', '浏览器'],
+  )
+  await page
+    .getByRole('region', { name: '工程文件', exact: true })
+    .getByRole('button')
+    .filter({ hasText: '外壳.stl' })
+    .waitFor()
+  await page.screenshot({ path: join(root, 'engineering-home-audit.png') })
+  await page
+    .getByRole('region', { name: '工程文件', exact: true })
+    .getByRole('button')
+    .filter({ hasText: '外壳.stl' })
+    .click()
+  await page.locator('.model-viewer canvas').waitFor()
+  await page.waitForFunction(() => !document.querySelector('.model-viewer-overlay'))
+  assert.equal(await page.locator('.model-viewer-error').count(), 0)
+
   await page.getByRole('button', { name: '文件', exact: true }).click()
   await page.locator('.file-tree-name').getByText('说明.md', { exact: true }).click()
   await page.locator('.tiptap[contenteditable="true"]').waitFor()
   await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
-  await page.locator('.tiptap[contenteditable="true"]').fill('工程说明\n独立工程原文\n版面切换继续编辑')
+  await page
+    .locator('.tiptap[contenteditable="true"]')
+    .fill('工程说明\n独立工程原文\n版面切换继续编辑')
   await page.getByLabel('工作版面', { exact: true }).selectOption('standard')
   assert((await page.locator('.tiptap').innerText()).includes('版面切换继续编辑'))
   await page.getByRole('button', { name: '新建浏览器页', exact: true }).click()
   await page.locator('.browser-toolbar').waitFor()
   await page.getByLabel('浏览器地址', { exact: true }).fill(browserUrl)
-  assert.equal(await page.getByLabel('浏览器地址', {exact:true}).inputValue(),browserUrl)
+  assert.equal(await page.getByLabel('浏览器地址', { exact: true }).inputValue(), browserUrl)
   await page.getByLabel('浏览器地址', { exact: true }).press('Enter')
   for (let attempt = 0; attempt < 30; attempt++) {
     if (
@@ -280,6 +316,18 @@ try {
   await page.locator('.settings-nav').getByText('角色', { exact: true }).click()
   await page.getByRole('heading', { name: '角色', exact: true }).waitFor()
   await page.screenshot({ path: join(root, 'settings-management.png') })
+  await page.locator('.settings-nav').getByText('数据源连接', { exact: true }).click()
+  await page.getByText('添加 Elasticsearch', { exact: true }).waitFor()
+  await page.screenshot({ path: join(root, 'data-connections-audit.png') })
+  await page.locator('.settings-nav').getByText('远程设备', { exact: true }).click()
+  await page.getByRole('heading', { name: '远程设备', exact: true }).waitFor()
+  await page.locator('.activity-more > summary').click()
+  await page.getByRole('button', { name: '数据源', exact: true }).click()
+  await page.getByRole('button', { name: '管理数据源连接 →', exact: true }).waitFor()
+  assert.equal(
+    await page.locator('.sidebar').getByText('添加 Elasticsearch', { exact: true }).count(),
+    0,
+  )
   for (const [path, bytes] of originals) assert.equal(await readFile(path, 'utf8'), bytes)
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).click()
@@ -315,6 +363,28 @@ try {
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).waitFor()
+  const secondCompany = await createProject('company', '第二家公司')
+  await page.getByLabel('公司显示名称', { exact: true }).fill('第二家公司')
+  await page.getByRole('button', { name: '开始使用', exact: true }).click()
+  await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
+  assert.equal(
+    await page.locator('.company-link').getByText('智能眼镜', { exact: true }).count(),
+    0,
+  )
+  await page.keyboard.press('Meta+Shift+p')
+  await page.getByPlaceholder('输入命令...').fill('打开财务')
+  await page.locator('.command-palette-label').getByText('打开财务', { exact: true }).click()
+  await page.waitForFunction(() =>
+    document.querySelector('.tab.active')?.textContent.includes('公司账目'),
+  )
+  assert(
+    (await page.locator('.status-bar-workspace').getAttribute('title')).includes(secondCompany),
+  )
+  assert.equal(
+    await page.locator('.activity-bar [aria-label="公司账目"][aria-pressed="true"]').count(),
+    1,
+  )
+  await page.screenshot({ path: join(root, 'second-company-audit.png') })
   // New-machine simulation: fresh application profile, no prior local paths, tasks or bindings.
   await app.close()
   app = null
@@ -400,6 +470,16 @@ try {
   )
   assert.equal(rejectedHandoff.success, false)
   assert.match(rejectedHandoff.error, /启用或运行/)
+  const removedTask = await page.evaluate(async (path) => {
+    const state = await window.cclinkStudio.workspaceState.get(path)
+    return window.cclinkStudio.workspaceState.setSection(path, 'personalDiarySource', {
+      ...state.sections.personalDiarySource,
+      taskIds: [],
+    })
+  }, copy)
+  assert.equal(removedTask.success, false)
+  assert.match(removedTask.error, /启用或运行/)
+
   await page.getByRole('button', { name: '进行中的工作', exact: true }).click()
   const runningDialog = page.getByRole('dialog').filter({ hasText: '刷新工作状态' })
   await runningDialog.getByRole('button').filter({ hasText: '每日简报' }).waitFor()
@@ -422,6 +502,13 @@ try {
   const result = {
     root,
     passed: [
+      'per-project pinned tool order restores and does not leak into another project',
+      'engineering homepage lists actual files from the existing scan service',
+      'data connection configuration in settings while querying remains in tools',
+      'remote settings entry reachable without blocking local work',
+      'two company instances keep separate records and finance command stays in current company',
+      'company activity selection reflects the actual finance page',
+      'removing linked enabled task is rejected before association changes',
       'project type and relative diary settings through UI',
       'original task export bytes preserved',
       'configuration shared alone without local identity',

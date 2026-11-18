@@ -40,6 +40,42 @@ export function registerWorkspaceStateIpc(
       throw new Error('工作空间状态只能访问当前项目或主进程已授权的项目')
     }
   }
+  const previousDiarySource = async (workspaceKey: string | null | undefined): Promise<unknown> => {
+    let value = (await workspaceStateService.getSnapshot(workspaceKey)).sections[
+      personalDiarySourceSection
+    ]
+    if (
+      value === undefined &&
+      workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
+    )
+      value = (await workspaceStateService.getSnapshot(null)).sections[personalDiarySourceSection]
+    if (value === undefined && workspaceKey && isAbsolute(workspaceKey)) {
+      const config = await workspaceStateService.getWorkspaceSettings(workspaceKey)
+      if (config.settings.diary)
+        value = {
+          version: 1,
+          workspacePath: workspaceKey,
+          projectId: await workspaceStateService.getLocalProjectId(workspaceKey),
+          ...config.settings.diary,
+        }
+    }
+    return value
+  }
+  const guardDiaryChange = async (previous: unknown, value: unknown): Promise<void> => {
+    if (!assertDiarySourceChange) return
+    const before = personalDiarySourceSchema.safeParse(previous)
+    const after = personalDiarySourceSchema.safeParse(value)
+    if (
+      before.success &&
+      (!after.success ||
+        before.data.workspacePath !== after.data.workspacePath ||
+        before.data.projectId !== after.data.projectId ||
+        before.data.directory !== after.data.directory ||
+        before.data.timezone !== after.data.timezone ||
+        before.data.taskIds.some((id) => !after.data.taskIds.includes(id)))
+    )
+      await assertDiarySourceChange(before.data)
+  }
   registerTrustedIpcContract(
     workspaceStateIpcContracts.verifyLocalIdentity,
     trustedRendererGuard,
@@ -59,8 +95,33 @@ export function registerWorkspaceStateIpc(
   registerTrustedIpcContract(
     workspaceStateIpcContracts.saveSettings,
     trustedRendererGuard,
-    (event, input) => {
+    async (event, input) => {
       assertWorkspaceAccess(event.sender.id, input.workspacePath)
+      // A portable relative mapping can be the active source too. Editing it must
+      // obey the same task handoff guard as changing an external association.
+      const state = await workspaceStateService.getSnapshot(input.workspacePath)
+      let override = state.sections[personalDiarySourceSection]
+      if (
+        override === undefined &&
+        input.workspacePath === workspaceStateService.getFixedSpaces().personal?.workspacePath
+      )
+        override = (await workspaceStateService.getSnapshot(null)).sections[
+          personalDiarySourceSection
+        ]
+      if (override === undefined) {
+        const previous = await previousDiarySource(input.workspacePath)
+        await guardDiaryChange(
+          previous,
+          input.settings.diary
+            ? {
+                version: 1,
+                workspacePath: input.workspacePath,
+                projectId: await workspaceStateService.getLocalProjectId(input.workspacePath),
+                ...input.settings.diary,
+              }
+            : null,
+        )
+      }
       return workspaceStateService.saveWorkspaceSettings(input)
     },
   )
@@ -286,38 +347,8 @@ export function registerWorkspaceStateIpc(
         assertWorkspaceAccess(_event.sender.id, workspaceKey)
         if (section === personalDiarySourceSection) {
           if (ownerKey) throw new Error('个人资料连接只能保存在本机项目状态')
-          if (assertDiarySourceChange) {
-            let previous = (await workspaceStateService.getSnapshot(workspaceKey)).sections[
-              personalDiarySourceSection
-            ]
-            if (
-              previous === undefined &&
-              workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
-            )
-              previous = (await workspaceStateService.getSnapshot(null)).sections[
-                personalDiarySourceSection
-              ]
-            if (previous === undefined && workspaceKey && isAbsolute(workspaceKey)) {
-              const config = await workspaceStateService.getWorkspaceSettings(workspaceKey)
-              if (config.settings.diary)
-                previous = {
-                  version: 1,
-                  workspacePath: workspaceKey,
-                  projectId: await workspaceStateService.getLocalProjectId(workspaceKey),
-                  ...config.settings.diary,
-                }
-            }
-            const parsed = personalDiarySourceSchema.safeParse(previous)
-            const next = personalDiarySourceSchema.safeParse(value)
-            if (
-              parsed.success &&
-              (!next.success ||
-                parsed.data.workspacePath !== next.data.workspacePath ||
-                parsed.data.directory !== next.data.directory ||
-                parsed.data.projectId !== next.data.projectId)
-            )
-              await assertDiarySourceChange(parsed.data)
-          }
+          if (assertDiarySourceChange)
+            await guardDiaryChange(await previousDiarySource(workspaceKey), value)
           if (value !== null) {
             const source = personalDiarySourceSchema.parse(value)
             const known = workspaceStateService

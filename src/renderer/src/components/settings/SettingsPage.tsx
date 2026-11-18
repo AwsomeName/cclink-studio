@@ -1,3 +1,5 @@
+import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
+import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -48,6 +50,8 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 type SettingsSectionId =
+  | 'data-connections'
+  | 'remote-devices'
   | 'workspace'
   | 'web-accounts'
   | 'roles'
@@ -73,6 +77,8 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   { id: 'web-accounts', label: '网站与账号', group: '资源管理', icon: IconGlobe },
   { id: 'roles', label: '角色', group: '资源管理', icon: IconRobot },
+  { id: 'data-connections', label: '数据源连接', group: '资源管理', icon: IconDatabase },
+  { id: 'remote-devices', label: '远程设备', group: '资源管理', icon: IconCloud },
   { id: 'workspace', label: '当前项目', group: '项目', icon: IconFile },
   { id: 'appearance', label: '外观', group: '通用', icon: IconPaintbrush },
   { id: 'editor', label: '编辑器', group: '通用', icon: IconFile },
@@ -754,6 +760,8 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           'model-usage',
           'connections',
           'workspace',
+          'data-connections',
+          'remote-devices',
           'web-accounts',
           'roles',
         ].includes(activeSection) && (
@@ -784,6 +792,18 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           <section className="settings-section">
             <h2>角色</h2>
             <AgentRolesSidebar />
+          </section>
+        )}
+        {activeSection === 'data-connections' && (
+          <section className="settings-section">
+            <h2>数据源连接</h2>
+            <DataSourcesPanel configuration />
+          </section>
+        )}
+        {activeSection === 'remote-devices' && (
+          <section className="settings-section">
+            <h2>远程设备</h2>
+            <CclinkPanel />
           </section>
         )}
         {activeSection === 'workspace' && <WorkspaceSettingsForm />}

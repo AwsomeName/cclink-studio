@@ -1,0 +1,32 @@
+{
+  "root": "/Users/apple/.cclink-typed-smoke-6RIeHY",
+  "passed": [
+    "per-project pinned tool order restores and does not leak into another project",
+    "engineering homepage lists actual files from the existing scan service",
+    "data connection configuration in settings while querying remains in tools",
+    "remote settings entry reachable without blocking local work",
+    "two company instances keep separate records and finance command stays in current company",
+    "company activity selection reflects the actual finance page",
+    "removing linked enabled task is rejected before association changes",
+    "project type and relative diary settings through UI",
+    "original task export bytes preserved",
+    "configuration shared alone without local identity",
+    "company business links original engineering project",
+    "new engineering project created and associated from the same business form",
+    "native browser content and 100% zoom survive both layouts",
+    "Markdown layout and browser switching retains edited content",
+    "3D viewer in electronics and company without changing project type",
+    "accounts and roles accessible through settings",
+    "fresh profile Git clone restores diary type and original text",
+    "missing private task definitions reported honestly",
+    "import preserves two task IDs and defaults paused",
+    "repeat import creates no duplicate",
+    "explicit shared task enable and pause in real UI",
+    "running-work summary returns to the original task",
+    "main process refuses source detachment while linked task is enabled",
+    "fixed shortcut rebinding and restart restore",
+    "fixed company shortcut respects changed type and preserves business records when changed back",
+    "original diary, attachments, plans and local task bytes unchanged"
+  ],
+  "scope": "Real Electron, isolated profiles and local bare Git; no hosted account or external model calls"
+}

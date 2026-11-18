@@ -482,3 +482,19 @@ describe('useUIStore', () => {
     })
   })
 })
+
+describe('per-project tool preferences', () => {
+  it('restores independent tool order, filters invalid entries and resets missing state', () => {
+    useUIStore
+      .getState()
+      .hydrateFromWorkspaceState({
+        pinnedTools: ['terminal', 'browser', 'terminal', 'unknown'],
+        toolsExpanded: true,
+      })
+    expect(useUIStore.getState().pinnedTools).toEqual(['terminal', 'browser'])
+    expect(useUIStore.getState().toolsExpanded).toBe(true)
+    useUIStore.getState().hydrateFromWorkspaceState({})
+    expect(useUIStore.getState().pinnedTools).toEqual([])
+    expect(useUIStore.getState().toolsExpanded).toBe(false)
+  })
+})

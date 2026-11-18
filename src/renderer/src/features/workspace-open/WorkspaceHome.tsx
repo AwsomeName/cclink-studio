@@ -1,3 +1,4 @@
+import { HardwareProductionSection } from '../../components/sidebar/HardwareProductionSection'
 import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
 import { useUIStore } from '../../stores/ui-store'
 import { PersonalDiaryHome } from './PersonalDiaryHome'
@@ -27,6 +28,7 @@ export async function createPersonalNote(): Promise<void> {
 }
 
 export function WorkspaceHome(): React.ReactElement {
+  const activePanel = useUIStore((state) => state.activePanel)
   const settingsSnapshot = useWorkspaceStore((state) => state.settingsSnapshot)
   const ref = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const spaces = useFixedSpacesStore((state) => state.spaces)
@@ -59,20 +61,24 @@ export function WorkspaceHome(): React.ReactElement {
   }
   if (settingsSnapshot?.settings.type === 'company' && ref.kind === 'local')
     return (
-      <CompanyWorkbench
-        key={key}
-        tab={{
-          id: 'company-home',
-          type: 'company-workspace',
-          title: '公司概览',
-          icon: '司',
-          workspaceRef: ref,
-        }}
-      />
+      <>
+        {settingsSnapshot?.error && <p role="alert">{settingsSnapshot.error}</p>}
+        <CompanyWorkbench
+          key={key}
+          tab={{
+            id: 'company-home',
+            type: 'company-workspace',
+            title: '公司概览',
+            icon: '司',
+            workspaceRef: ref,
+          }}
+        />
+      </>
     )
   if (personal)
     return (
       <div className="workspace-home personal-workspace-home">
+        {settingsSnapshot?.error && <p role="alert">{settingsSnapshot.error}</p>}
         <PersonalDiaryHome key={key} />
       </div>
     )
@@ -84,10 +90,14 @@ export function WorkspaceHome(): React.ReactElement {
       {personal ? (
         <PersonalDiaryHome />
       ) : (
-        <p>从一份笔记、一次对话开始。内容保存在当前空间，随时回来继续。</p>
+        <p>
+          {settingsSnapshot?.settings.type === 'electronics'
+            ? '查看设计文件、检查生产资料，继续当前工程。'
+            : '从一份笔记、一次对话开始。内容保存在当前空间，随时回来继续。'}
+        </p>
       )}
       {ref.kind === 'local' && <small className="workspace-home-path">{ref.path}</small>}
-      {settingsSnapshot?.settings.type === 'electronics' && (
+      {settingsSnapshot?.settings.type === 'electronics' && ref.kind === 'local' && (
         <section>
           <h2>工程概览</h2>
           <p>
@@ -100,6 +110,14 @@ export function WorkspaceHome(): React.ReactElement {
           >
             生产资料与检查 →
           </button>
+          {activePanel !== 'production' && (
+            <HardwareProductionSection
+              workspacePath={ref.path}
+              workspaceRef={ref}
+              alwaysVisible
+              defaultExpanded
+            />
+          )}
         </section>
       )}
       <div className="workspace-home-actions">

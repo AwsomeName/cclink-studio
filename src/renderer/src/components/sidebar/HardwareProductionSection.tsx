@@ -1,7 +1,10 @@
+import { getTabTypeForFile } from '../../utils/model-files'
+import { isGerberFileExtension } from '../../utils/hardware-files'
 import { useEffect, useState } from 'react'
 import type {
   FpcShapeContext,
   HardwareRiskLevel,
+  HardwareArtifactType,
   HardwareReportConclusion,
 } from '@shared/ipc/hardware'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
@@ -20,6 +23,20 @@ import {
   IconMonitor,
   IconRefresh,
 } from '../common/Icons'
+
+const artifactLabels: Record<HardwareArtifactType, string> = {
+  schematic: '原理图',
+  'pcb-source': 'PCB 源文件',
+  'gerber-package': 'Gerber 生产文件',
+  bom: '物料清单',
+  centroid: '坐标文件',
+  drill: '钻孔文件',
+  'assembly-drawing': '装配图',
+  enclosure: '结构模型',
+  firmware: '固件',
+  datasheet: '器件资料',
+  unknown: '其他资料',
+}
 
 function conclusionLabel(conclusion: HardwareReportConclusion): string {
   switch (conclusion) {
@@ -323,6 +340,38 @@ export function HardwareProductionSection({
                 ? `Gerber ${gerberCount} · BOM ${bomCount} · 坐标 ${centroidCount} · 风险 ${riskCount}`
                 : '当前工作空间暂未发现硬件生产文件'}
           </div>
+
+          {sameWorkspace && summary.artifacts.length > 0 && (
+            <section aria-label="工程文件">
+              <h3>工程文件</h3>
+              {summary.artifacts.slice(0, 30).map((artifact) => (
+                <button
+                  key={artifact.id}
+                  className="workspace-home-record"
+                  title={artifact.path}
+                  onClick={() => {
+                    const extension = '.' + artifact.path.split('.').pop()?.toLowerCase()
+                    const gerber =
+                      artifact.type === 'gerber-package' || isGerberFileExtension(extension)
+                    openTab({
+                      type: gerber ? 'hardware-gerber' : getTabTypeForFile(extension),
+                      title: artifact.displayName,
+                      icon: gerber ? '▧' : '📄',
+                      filePath: artifact.path,
+                      workspaceRef,
+                      ...(gerber
+                        ? { hardwareGerber: { workspacePath, packagePath: artifact.path } }
+                        : {}),
+                    })
+                  }}
+                >
+                  {artifact.displayName}
+                  <small>{artifactLabels[artifact.type]}</small>
+                </button>
+              ))}
+              {summary.artifacts.length > 30 && <p>显示前 30 项，全部资料可从文件入口浏览。</p>}
+            </section>
+          )}
 
           {report && (
             <div className={`hardware-report-status ${report.conclusion}`}>

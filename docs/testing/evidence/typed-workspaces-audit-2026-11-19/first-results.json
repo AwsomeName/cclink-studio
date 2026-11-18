@@ -1,0 +1,28 @@
+{
+  "root": "/Users/apple/.cclink-typed-smoke-UNRcIL",
+  "passed": [
+    "new diary project and display name saved through UI",
+    "existing destination rejected without overwriting settings",
+    "first-run offline diary source available",
+    "connect original files",
+    "plans visible",
+    "original body visible in homepage preview",
+    "personal sidebar navigation",
+    "same two task IDs",
+    "original task settings opens",
+    "activation unchanged",
+    "original editor opens",
+    "restart restores connection",
+    "all original Markdown and task definition bytes unchanged",
+    "prepare today creates blank template once",
+    "mismatched original daily task is not rewritten or run",
+    "failed clone retains original connection and data",
+    "real Git clone and confirmed source mapping",
+    "shared task retains ID and is not enabled",
+    "fetch shows updates without changing original worktree",
+    "dirty worktree blocks updates in UI and main process",
+    "reviewed update creates separate copy and preserves previous original",
+    "updated body and source survive app restart"
+  ],
+  "scope": "isolated real Electron and actual local Git remote; simulated user data; no external model or hosted Git credentials"
+}

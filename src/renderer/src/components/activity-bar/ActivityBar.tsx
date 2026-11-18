@@ -101,11 +101,14 @@ export function ActivityBar(): React.ReactElement {
   const workspaceType = useWorkspaceStore(
     (state) => state.settingsSnapshot?.settings.type ?? 'general',
   )
+  const pinnedTools = useUIStore((state) => state.pinnedTools)
+  const toolsExpanded = useUIStore((state) => state.toolsExpanded)
   const diaryPage = useDiaryNavigation((state) => state.page)
   const activeRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const companyPath = useFixedSpacesStore((state) => state.spaces?.company?.workspacePath)
   const activeTab = useTabStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId))
-  const jumpsToCompany = activeRef.kind !== 'local' || activeRef.path !== companyPath
+  const jumpsToCompany =
+    workspaceType !== 'company' && (activeRef.kind !== 'local' || activeRef.path !== companyPath)
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
@@ -186,6 +189,10 @@ export function ActivityBar(): React.ReactElement {
       : sessionsActive && activePanel !== 'company-workspace'
         ? 'sessions'
         : activePanel
+  const isTypeEntry = (id: ActivityPanel): boolean =>
+    (workspaceType === 'company' && (id === 'company-workspace' || id === 'company-accounts')) ||
+    (workspaceType === 'electronics' && id === 'production')
+  const visiblePinnedTools = pinnedTools.filter((id) => !isTypeEntry(id))
   const renderGroup = (group: (typeof MAIN_ICON_GROUPS)[number]): React.ReactElement => (
     <div key={group.id} className="activity-bar-group" role="group" aria-label={group.label}>
       <div className="activity-bar-group-label" aria-hidden="true">
@@ -273,7 +280,14 @@ export function ActivityBar(): React.ReactElement {
             ).map(([section, label]) => (
               <button
                 key={section}
-                className="activity-bar-icon"
+                className={`activity-bar-icon ${activeTab?.type === 'company-accounts' ? (section === 'finance' ? 'active' : '') : (activeTab?.type === 'company-workspace' && (activeTab.companyWorkspace?.section ?? 'overview') === section) || (activeTab?.type === 'workspace-home' && section === 'overview') ? 'active' : ''}`}
+                aria-pressed={
+                  activeTab?.type === 'company-accounts'
+                    ? section === 'finance'
+                    : (activeTab?.type === 'company-workspace' &&
+                        (activeTab.companyWorkspace?.section ?? 'overview') === section) ||
+                      (activeTab?.type === 'workspace-home' && section === 'overview')
+                }
                 onClick={() => openCompanyWorkspace(section)}
                 title={label}
                 aria-label={label}
@@ -314,13 +328,21 @@ export function ActivityBar(): React.ReactElement {
             (item) => item.id === 'files' || item.id === 'sessions',
           ),
         })}
+        {visiblePinnedTools.length > 0 &&
+          renderGroup({
+            id: 'pinned',
+            label: '常用工具',
+            items: visiblePinnedTools.flatMap((id) =>
+              MAIN_ICON_GROUPS.flatMap((group) => group.items).filter((item) => item.id === id),
+            ),
+          })}
         <details
           className="activity-more"
-          open={
-            !['workspace-home', 'files', 'sessions', 'company-workspace'].includes(
-              activePanel ?? '',
-            ) || undefined
-          }
+          open={toolsExpanded}
+          onToggle={(event) => {
+            if (event.currentTarget.open !== toolsExpanded)
+              useUIStore.getState().setToolsExpanded(event.currentTarget.open)
+          }}
         >
           <summary title="工具" aria-label="工具">
             <ActivityProjectsIcon size={18} />
@@ -331,6 +353,8 @@ export function ActivityBar(): React.ReactElement {
             label: '全部工具',
             items: MAIN_ICON_GROUPS.flatMap((group) => group.items).filter(
               (item) =>
+                !pinnedTools.includes(item.id) &&
+                !isTypeEntry(item.id) &&
                 !['workspace-home', 'files', 'sessions', 'operations', 'agent-roles'].includes(
                   item.id,
                 ),

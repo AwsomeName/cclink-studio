@@ -1,3 +1,5 @@
+import { useUIStore } from '../../stores/ui-store'
+import type { ActivityPanel } from '../../types'
 import {
   personalDiarySourceSchema,
   personalDiarySourceSection,
@@ -54,6 +56,74 @@ function TypeSelector({
       </select>
       <small>{descriptions[value]}</small>
     </label>
+  )
+}
+
+const toolOptions: [ActivityPanel, string][] = [
+  ['browser', '浏览器'],
+  ['terminal', '终端'],
+  ['company-workspace', '公司经营'],
+  ['company-accounts', '公司账目'],
+  ['article-publishing', '文章发布'],
+  ['affairs', '事务'],
+  ['scheduled-tasks', '定时任务'],
+  ['data-sources', '数据源'],
+  ['video-creation', '视频创作'],
+  ['production', '硬件生产'],
+  ['cclink', 'CCLink 远程'],
+]
+
+function SidebarPreferences(): React.ReactElement {
+  const pinned = useUIStore((state) => state.pinnedTools)
+  const setPinned = useUIStore((state) => state.setPinnedTools)
+  const move = (index: number, delta: number): void => {
+    const next = [...pinned]
+    ;[next[index], next[index + delta]] = [next[index + delta], next[index]]
+    setPinned(next)
+  }
+  return (
+    <section aria-label="本机侧栏设置">
+      <h3>本机侧栏</h3>
+      <p>固定常用工具并调整顺序，自动保存在本机当前项目；不改变资料或共享配置。</p>
+      {toolOptions.map(([id, label]) => (
+        <label key={id}>
+          <input
+            type="checkbox"
+            aria-label={'固定' + label}
+            checked={pinned.includes(id)}
+            onChange={(event) =>
+              setPinned(
+                event.target.checked ? [...pinned, id] : pinned.filter((item) => item !== id),
+              )
+            }
+          />
+          {label}
+        </label>
+      ))}
+      {pinned.map((id, index) => (
+        <div key={id}>
+          {toolOptions.find(([key]) => key === id)?.[1]}{' '}
+          <button aria-label={id + '上移'} disabled={index === 0} onClick={() => move(index, -1)}>
+            上移
+          </button>{' '}
+          <button
+            aria-label={id + '下移'}
+            disabled={index === pinned.length - 1}
+            onClick={() => move(index, 1)}
+          >
+            下移
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={() => {
+          setPinned([])
+          useUIStore.getState().setToolsExpanded(false)
+        }}
+      >
+        恢复本机侧栏默认
+      </button>
+    </section>
   )
 }
 
@@ -314,6 +384,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
           重新加载
         </button>
       </div>
+      <SidebarPreferences />
     </section>
   )
 }

@@ -10,7 +10,9 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 
-export function DataSourcesPanel(): React.ReactElement {
+export function DataSourcesPanel({
+  configuration = false,
+}: { configuration?: boolean } = {}): React.ReactElement {
   const sources = useDataSourceStore((s) => s.sources)
   const collectionsBySourceId = useDataSourceStore((s) => s.collectionsBySourceId)
   const savedQueriesBySourceId = useDataSourceStore((s) => s.savedQueriesBySourceId)
@@ -100,8 +102,27 @@ export function DataSourcesPanel(): React.ReactElement {
         </button>
       )}
 
+      {!configuration && (
+        <button
+          onClick={() =>
+            openTab({
+              type: 'settings',
+              title: '数据源连接',
+              icon: '⚙',
+              settingsSection: 'data-connections',
+            })
+          }
+        >
+          管理数据源连接 →
+        </button>
+      )}
+      {configuration && (
+        <p>当前项目的数据连接；凭证仅在本机管理。查询和结果仍从“工具 → 数据源”打开。</p>
+      )}
       <section className="sidebar-section">
-        <div className="sidebar-section-header">连接</div>
+        <div className="sidebar-section-header">
+          {configuration ? '连接管理' : '可查询的数据源'}
+        </div>
         {sources.length === 0 && !loading ? (
           <div className="data-source-empty">还没有数据源</div>
         ) : (
@@ -156,7 +177,7 @@ export function DataSourcesPanel(): React.ReactElement {
         )}
       </section>
 
-      {selectedSourceId && (
+      {!configuration && selectedSourceId && (
         <section className="sidebar-section">
           <div className="sidebar-section-header data-source-section-header">
             <span>Index</span>
@@ -223,7 +244,7 @@ export function DataSourcesPanel(): React.ReactElement {
         </section>
       )}
 
-      {selectedSourceId && (
+      {!configuration && selectedSourceId && (
         <section className="sidebar-section">
           <div className="sidebar-section-header">Saved Queries</div>
           {selectedSavedQueries.length === 0 ? (
@@ -282,37 +303,39 @@ export function DataSourcesPanel(): React.ReactElement {
         </section>
       )}
 
-      <section className="sidebar-section">
-        <div className="sidebar-section-header">添加 Elasticsearch</div>
-        <form className="data-source-form" onSubmit={(event) => void handleCreate(event)}>
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="名称"
-          />
-          <input
-            value={endpoint}
-            onChange={(event) => setEndpoint(event.target.value)}
-            placeholder="https://es.example.com"
-          />
-          <input
-            value={defaultCollection}
-            onChange={(event) => setDefaultCollection(event.target.value)}
-            placeholder="默认 index，例如 articles-*"
-          />
-          <input
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="API Key，可留空"
-            type="password"
-          />
-          <button type="submit" disabled={!canSubmit}>
-            添加
-          </button>
-        </form>
-      </section>
+      {configuration && (
+        <section className="sidebar-section">
+          <div className="sidebar-section-header">添加 Elasticsearch</div>
+          <form className="data-source-form" onSubmit={(event) => void handleCreate(event)}>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="名称"
+            />
+            <input
+              value={endpoint}
+              onChange={(event) => setEndpoint(event.target.value)}
+              placeholder="https://es.example.com"
+            />
+            <input
+              value={defaultCollection}
+              onChange={(event) => setDefaultCollection(event.target.value)}
+              placeholder="默认 index，例如 articles-*"
+            />
+            <input
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder="API Key，可留空"
+              type="password"
+            />
+            <button type="submit" disabled={!canSubmit}>
+              添加
+            </button>
+          </form>
+        </section>
+      )}
 
-      {selectedSourceId && (
+      {configuration && selectedSourceId && (
         <div className="data-source-actions">
           <button
             type="button"

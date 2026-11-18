@@ -16,6 +16,87 @@ describe('registerWorkspaceStateIpc', () => {
     mockIpcMain.handlers.clear()
   })
 
+  it('guards relative diary settings and removal of linked tasks before writing', async () => {
+    const id = '11111111-1111-4111-8111-111111111111'
+    const source = {
+      version: 1,
+      workspacePath: '/diary',
+      projectId: 'original',
+      directory: '日记',
+      timezone: 'Asia/Shanghai',
+      taskIds: [id],
+    }
+    const service = {
+      ...createService(),
+      getWorkspaceSettings: vi.fn(async () => ({
+        settings: {
+          version: 1,
+          name: '日记',
+          type: 'diary',
+          diary: {
+            directory: source.directory,
+            timezone: source.timezone,
+            taskIds: source.taskIds,
+          },
+        },
+      })),
+      getLocalProjectId: vi.fn(async () => 'original'),
+      saveWorkspaceSettings: vi.fn(async () => ({})),
+    }
+    const guard = vi.fn(async () => {
+      throw Error('任务仍启用')
+    })
+    registerWorkspaceStateIpc(
+      service as never,
+      createGuard('trusted') as never,
+      undefined,
+      undefined,
+      undefined,
+      guard,
+    )
+    const save = mockIpcMain.handlers.get('workspaceState:saveSettings')!
+    await expect(
+      save(
+        { sender: 'trusted' },
+        {
+          workspacePath: '/diary',
+          revision: null,
+          settings: {
+            version: 1,
+            name: '日记',
+            type: 'diary',
+            diary: { directory: '另一个目录', timezone: source.timezone, taskIds: [id] },
+          },
+        },
+      ),
+    ).rejects.toThrow('任务仍启用')
+    expect(service.saveWorkspaceSettings).not.toHaveBeenCalled()
+    await expect(
+      mockIpcMain.handlers.get('workspaceState:setSection')!(
+        { sender: 'trusted' },
+        '/diary',
+        'personalDiarySource',
+        { ...source, taskIds: [] },
+        null,
+      ),
+    ).resolves.toMatchObject({ success: false })
+    expect(service.setSection).not.toHaveBeenCalled()
+    await save(
+      { sender: 'trusted' },
+      {
+        workspacePath: '/diary',
+        revision: null,
+        settings: {
+          version: 1,
+          name: '新显示名称',
+          type: 'diary',
+          diary: { directory: source.directory, timezone: source.timezone, taskIds: [id] },
+        },
+      },
+    )
+    expect(service.saveWorkspaceSettings).toHaveBeenCalledOnce()
+  })
+
   it('does not overwrite remembered intent when startup falls back to global', async () => {
     const service = createService()
     const settings = { set: vi.fn(), getAll: () => ({ defaultWorkspacePath: '' }) }

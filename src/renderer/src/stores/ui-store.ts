@@ -42,6 +42,9 @@ export type WorkContext =
   | 'data-source'
 
 export interface WorkspaceLayoutSnapshot {
+  /** 本机当前项目的通用工具固定顺序；不进入可共享项目设置。 */
+  pinnedTools: ActivityPanel[]
+  toolsExpanded: boolean
   /** 当前激活的 Activity Bar 面板 */
   activePanel: ActivityPanel
   /** 侧栏是否展开 */
@@ -66,6 +69,8 @@ interface UIState extends WorkspaceLayoutSnapshot {
   /** Transient; narrow-window presentation must not overwrite the user's layout preference. */
   agentDrawerOpen: boolean
   setAgentDrawerOpen: (open: boolean) => void
+  setPinnedTools: (tools: ActivityPanel[]) => void
+  setToolsExpanded: (expanded: boolean) => void
   // --- Actions ---
   setActivePanel: (panel: ActivityPanel) => void
   /** 程序化展示面板；与 Activity Bar 的再次点击折叠语义分离。 */
@@ -90,6 +95,8 @@ interface UIState extends WorkspaceLayoutSnapshot {
 
 /** UI 状态默认值 */
 export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
+  pinnedTools: [],
+  toolsExpanded: false,
   activePanel: 'files' as ActivityPanel,
   sidebarVisible: true,
   agentPanelVisible: true,
@@ -101,6 +108,20 @@ export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
   agentPanelLastVisibleMode: 'center' as VisibleAgentPanelMode | null,
   agentPanelModeSource: 'system' as AgentPanelModeSource,
 }
+
+export const PINNABLE_TOOLS = new Set<ActivityPanel>([
+  'browser',
+  'terminal',
+  'company-workspace',
+  'company-accounts',
+  'article-publishing',
+  'affairs',
+  'scheduled-tasks',
+  'data-sources',
+  'video-creation',
+  'production',
+  'cclink',
+])
 
 const UI_STORAGE_KEY = 'cclink-studio-ui-state'
 const VISIBLE_ACTIVITY_PANELS = new Set<ActivityPanel>([
@@ -164,6 +185,10 @@ export function normalizeWorkspaceLayout(value: unknown): WorkspaceLayoutSnapsho
   const parsed = value as Partial<UIState>
   const mode = normalizeStoredAgentPanelMode(parsed.agentPanelMode, parsed.agentPanelVisible)
   return {
+    pinnedTools: Array.isArray(parsed.pinnedTools)
+      ? [...new Set(parsed.pinnedTools.filter((id) => PINNABLE_TOOLS.has(id)))]
+      : [],
+    toolsExpanded: parsed.toolsExpanded === true,
     activePanel:
       parsed.activePanel === 'sessions' ? 'files' : normalizeActivityPanel(parsed.activePanel),
     sidebarVisible:
@@ -477,6 +502,9 @@ export const useUIStore = create<UIState>((set) => ({
           : getExpandedAgentPanelWidth(state.agentPanelWidth, state.agentListWidth),
       agentDrawerOpen: false,
     })),
+  setPinnedTools: (tools) =>
+    set({ pinnedTools: [...new Set(tools.filter((id) => PINNABLE_TOOLS.has(id)))] }),
+  setToolsExpanded: (toolsExpanded) => set({ toolsExpanded }),
   hydrateFromWorkspaceState: (value) => {
     set({ ...normalizeWorkspaceLayout(value), agentDrawerOpen: false })
   },
