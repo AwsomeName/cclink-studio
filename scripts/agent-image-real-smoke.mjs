@@ -35,7 +35,7 @@ try {
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
   }, workspace)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page.locator('.activity-bar-icon[title="会话"]').click()
   await page.getByRole('button', { name: '新建对话', exact: true }).last().click()

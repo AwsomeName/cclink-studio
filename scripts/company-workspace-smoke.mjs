@@ -105,7 +105,7 @@ async function switchWorkspace(path) {
   await app.evaluate(({ dialog }, target) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] })
   }, path)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })

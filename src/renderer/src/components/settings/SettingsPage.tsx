@@ -4,7 +4,6 @@ import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
 import { AgentRolesSidebar } from '../../features/agent-roles/AgentRolesSidebar'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { WorkspaceSettingsForm } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_SETTINGS } from '@shared/ipc/settings'
 import type { AppSettings, CadBackend } from '@shared/ipc/settings'
@@ -54,7 +53,6 @@ type SettingsSectionId =
   | 'diagnostics'
   | 'data-connections'
   | 'remote-devices'
-  | 'workspace'
   | 'web-accounts'
   | 'roles'
   | 'appearance'
@@ -81,7 +79,6 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'roles', label: '角色', group: '资源管理', icon: IconRobot },
   { id: 'data-connections', label: '数据源连接', group: '资源管理', icon: IconDatabase },
   { id: 'remote-devices', label: '远程设备', group: '资源管理', icon: IconCloud },
-  { id: 'workspace', label: '当前项目', group: '项目', icon: IconFile },
   { id: 'appearance', label: '外观', group: '通用', icon: IconPaintbrush },
   { id: 'editor', label: '编辑器', group: '通用', icon: IconFile },
   { id: 'shortcuts', label: '快捷键', group: '通用', icon: IconKeyboard },
@@ -704,6 +701,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
   return (
     <div className="settings-page">
       <aside className="settings-sidebar">
+        <strong className="studio-settings-title">Studio 设置</strong>
         <div className="settings-search">
           <IconSearch size={14} />
           <input
@@ -763,7 +761,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           'components',
           'model-usage',
           'connections',
-          'workspace',
           'data-connections',
           'remote-devices',
           'web-accounts',
@@ -771,7 +768,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         ].includes(activeSection) && (
           <div className="settings-header">
             <div>
-              <h1>设置</h1>
+              <h1>Studio 设置</h1>
               <p>管理本机工作台的外观、工具和使用偏好。</p>
             </div>
             <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>
@@ -818,7 +815,6 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
           </section>
         )}
         {activeSection === 'diagnostics' && <DiagnosticsSettings navigate={navigateSettings} />}
-        {activeSection === 'workspace' && <WorkspaceSettingsForm />}
         {activeSection === 'appearance' && (
           <section className="settings-section">
             <h2>外观</h2>

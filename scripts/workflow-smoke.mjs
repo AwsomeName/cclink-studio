@@ -423,7 +423,7 @@ async function main() {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForSelector('.main-window', { timeout: 15_000 })
     await ensureSidebarVisible(page)
-    await clickByTitle(page, '历史空间')
+    await clickByTitle(page, '历史项目')
     const projectItem = page.locator(`.project-history-item[title="${workspaceDir}"]`).first()
     await projectItem.waitFor({ timeout: 10_000 })
     await projectItem.click()
@@ -1727,7 +1727,7 @@ async function main() {
     )
     await page.keyboard.press('Escape')
 
-    await clickByTitle(page, '设置')
+    await clickByTitle(page, 'Studio 设置')
     await page.locator('.settings-nav').getByRole('button', { name: '外观', exact: true }).click()
     const setting = page.locator('[data-context-target="setting"]', { hasText: '应用缩放' })
     await setting.waitFor({ timeout: 15_000 })

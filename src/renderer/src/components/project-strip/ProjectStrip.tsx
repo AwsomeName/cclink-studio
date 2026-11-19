@@ -1,5 +1,3 @@
-import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
-import { openWorkspaceSettings } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } from '../../stores'
 import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
@@ -48,7 +46,7 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
   )
 }
 
-export function ProjectStrip(): React.ReactElement {
+export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): React.ReactElement {
   const spaces = useFixedSpacesStore((state) => state.spaces)
   const allOpenProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const personalPath = spaces?.personal?.workspacePath
@@ -261,22 +259,6 @@ export function ProjectStrip(): React.ReactElement {
   return (
     <div className="project-strip">
       <CompanySpaceDialog />
-      <button
-        className="project-strip-item project-strip-shortcut"
-        aria-label="新建或打开项目"
-        title="新建或打开项目"
-        onClick={() => useWorkspaceOpenStore.getState().show()}
-      >
-        ＋
-      </button>
-      <button
-        className="project-strip-item project-strip-shortcut"
-        aria-label="当前项目设置"
-        title="当前项目设置"
-        onClick={openWorkspaceSettings}
-      >
-        ⚙
-      </button>
       <div className="project-strip-shell">
         <div
           ref={scrollRef}
@@ -425,21 +407,22 @@ export function ProjectStrip(): React.ReactElement {
           </div>
         </div>
 
+        {openButton}
         <div className="project-strip-history-wrap" ref={historyRef}>
           <button
             ref={historyButtonRef}
             className={`project-strip-history-button ${historyOpen ? 'active' : ''}`}
             type="button"
-            title="历史空间"
+            title="历史项目"
             onClick={toggleHistory}
           >
             <IconHistory size={13} />
-            <span>历史空间</span>
+            <span>历史项目</span>
           </button>
 
           {historyOpen && (
             <div className="project-history-popover" style={historyPosition}>
-              <div className="project-history-header">历史空间</div>
+              <div className="project-history-header">历史项目</div>
               <div className="project-history-list">
                 <button
                   type="button"
@@ -485,7 +468,7 @@ export function ProjectStrip(): React.ReactElement {
                     ),
                   )
                 ) : (
-                  <div className="project-history-empty">暂无未打开的历史空间</div>
+                  <div className="project-history-empty">暂无未打开的历史项目</div>
                 )}
               </div>
             </div>

@@ -88,7 +88,7 @@ async function company() {
   await page.getByRole('button', { name: '公司经营', exact: true }).click()
 }
 async function unfiled() {
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: '进入未归档', exact: true }).click()
   await page.locator('.status-bar-workspace[title="未归档"]').waitFor()
 }
@@ -106,7 +106,7 @@ async function switchTo(path) {
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
   }, path)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })

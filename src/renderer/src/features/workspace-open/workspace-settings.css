@@ -67,3 +67,15 @@
 .workspace-settings-form pre {
   overflow-wrap: anywhere;
 }
+
+.project-settings-page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+.studio-settings-title {
+  display: block;
+  padding: 12px 14px;
+}

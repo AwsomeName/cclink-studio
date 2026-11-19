@@ -1,3 +1,4 @@
+import { WorkspaceSettingsForm } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { CompanyWorkbench } from '../../features/company-workspace/CompanyWorkbench'
 import { WorkspaceHome } from '../../features/workspace-open/WorkspaceHome'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
@@ -134,9 +135,14 @@ export function WorkbenchContent({
         )}
         {!isBrowserTab && activeTab && (
           <>
-            {activeTab.type === 'settings' && (
-              <SettingsPage initialSection={activeTab.settingsSection} />
-            )}
+            {activeTab.type === 'settings' &&
+              (activeTab.settingsSection === 'workspace' ? (
+                <main className="project-settings-page" key={activeTab.id}>
+                  <WorkspaceSettingsForm />
+                </main>
+              ) : (
+                <SettingsPage key={activeTab.id} initialSection={activeTab.settingsSection} />
+              ))}
             {activeTab.type === 'agent-role' && <AgentRoleDetailTab tab={activeTab} />}
             {activeTab.type === 'remote-file' && activeTab.remoteFile && (
               <RemoteFileViewer

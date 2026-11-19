@@ -220,7 +220,7 @@ try {
   await app.evaluate(({ dialog }, path) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
   }, other)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })
@@ -230,7 +230,7 @@ try {
     other,
   )
   assert(otherAffairs.success && otherAffairs.data.affairs.length === 0)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.locator('.workspace-open-source-card').filter({ hasText: '默认工作空间' }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })

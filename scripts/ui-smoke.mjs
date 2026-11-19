@@ -654,7 +654,7 @@ async function main() {
         'hardware pointer context menu has the wrong activity label',
       )
       await page.keyboard.press('Escape')
-      const settings = bar.getByRole('button', { name: '设置', exact: true })
+      const settings = page.getByRole('button', { name: 'Studio 设置', exact: true })
       const settingsBox = await settings.boundingBox()
       assert(
         settingsBox && settingsBox.y + settingsBox.height <= 560,
@@ -666,7 +666,7 @@ async function main() {
       await page.locator('.unified-context-menu').waitFor({ state: 'visible' })
       await page.keyboard.press('Escape')
       await page.waitForFunction(
-        () => document.activeElement?.getAttribute('aria-label') === '设置',
+        () => document.activeElement?.getAttribute('aria-label') === 'Studio 设置',
       )
       for (const trigger of ['pointer', 'keyboard']) {
         if (trigger === 'pointer') await settings.click({ button: 'right' })
@@ -1596,7 +1596,7 @@ async function main() {
   }
 
   await runCheck('workspace opener unifies local and CCLink remote entry', async () => {
-    await clickByTitle(page, '打开工作空间')
+    await clickByTitle(page, '新建或打开项目')
     const opener = page.locator('.workspace-open-surface')
     await opener.waitFor({ state: 'visible', timeout: 10_000 })
     assert(
@@ -3523,7 +3523,7 @@ async function main() {
   )
 
   await runCheck('settings page opens and searches locally', async () => {
-    await clickByTitle(page, '设置')
+    await clickByTitle(page, 'Studio 设置')
     await page.waitForSelector('.settings-page', { timeout: 10_000 })
     await page.locator('.settings-search input').waitFor({ state: 'visible' })
     await page.locator('.settings-search input').fill('agent')

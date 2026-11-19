@@ -162,6 +162,17 @@ try {
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
   await page.getByRole('button', { name: '今天', exact: true }).click()
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
+  await page.screenshot({ path: join(root, 'navigation-diary.png') })
+  const projectSettings = page
+    .locator('.activity-bar-bottom')
+    .getByRole('button', { name: '当前项目设置' })
+  const studioSettings = page
+    .locator('.app-topbar-right')
+    .getByRole('button', { name: 'Studio 设置' })
+  await projectSettings.click()
+  await page.getByRole('heading', { name: '项目设置 · woniu-forward' }).waitFor()
+  assert.equal(await page.locator('.settings-nav').count(), 0)
+  await page.screenshot({ path: join(root, 'navigation-diary-settings.png') })
   await page.getByRole('button', { name: '定时整理', exact: true }).click()
   for (const title of ['每日简报', '每周计划和总结'])
     await page.getByLabel(title, { exact: true }).check()
@@ -228,6 +239,10 @@ try {
   await companyTab.click({ button: 'right' })
   await page.getByRole('menuitem', { name: '关闭项目', exact: true }).click()
   await companyTab.waitFor({ state: 'detached' })
+  const history = page.getByRole('button', { name: '历史项目', exact: true })
+  await history.click()
+  await page.locator('.project-strip-history-wrap').getByText('模拟公司', { exact: true }).waitFor()
+  await history.click()
   await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByText('接回公司资料…', { exact: true }).click()
   await page.getByRole('dialog').getByText('模拟公司', { exact: true }).click()
@@ -318,6 +333,30 @@ try {
   await companyTab.click()
   await page.getByRole('button', { name: '公司概览', exact: true }).first().click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
+  await page.screenshot({ path: join(root, 'navigation-company.png') })
+  assert.equal(await page.getByRole('button', { name: '定时整理', exact: true }).count(), 0)
+  await projectSettings.click()
+  await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
+  await page.screenshot({ path: join(root, 'navigation-company-settings.png') })
+  await studioSettings.click()
+  await page.locator('.settings-nav').waitFor()
+  assert.equal(await page.locator('.workspace-settings-form').count(), 0)
+  await page.screenshot({ path: join(root, 'navigation-studio-settings.png') })
+  await projectSettings.click()
+  await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
+  const diaryTab = page
+    .locator('.project-strip')
+    .getByRole('button', { name: 'woniu-forward', exact: true })
+  await diaryTab.click()
+  await projectSettings.click()
+  await page.getByRole('heading', { name: '项目设置 · woniu-forward' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '业务项目', exact: true }).count(), 0)
+  await page.getByRole('button', { name: '今天', exact: true }).click()
+  await page.getByText('原日记保持不变', { exact: true }).waitFor()
+  await page.screenshot({ path: join(root, 'navigation-diary.png') })
+  await companyTab.click()
+  await projectSettings.click()
+  await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
   await writeFile(join(company, '公司模型.stl'), stl)
   await page.getByRole('button', { name: '文件', exact: true }).click()
   await page.locator('.file-tree-name').getByText('公司模型.stl', { exact: true }).click()
@@ -327,7 +366,7 @@ try {
     (await page.getByRole('button', { name: '业务项目', exact: true }).count()) > 0,
     true,
   )
-  await page.getByRole('button', { name: '设置', exact: true }).click()
+  await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
   await page.locator('.settings-nav').getByText('网站与账号', { exact: true }).click()
   await page.getByRole('heading', { name: '网站与账号', exact: true }).waitFor()
   await page.locator('.settings-nav').getByText('角色', { exact: true }).click()
@@ -569,6 +608,7 @@ try {
       'data connection configuration in settings while querying remains in tools',
       'remote settings entry reachable without blocking local work',
       'two company instances keep separate records and finance command stays in current company',
+      'top navigation, history and independent settings verified across diary and company switches',
       'company activity selection reflects the actual finance page',
       'removing linked enabled task is rejected before association changes',
       'project type and relative diary settings through UI',

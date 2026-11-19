@@ -93,7 +93,9 @@ export function scopeWorkspaceTabSnapshot(
     if (!isTabCompatibleWithWorkspace(tab, workspaceRef)) return []
 
     const nextTab: Record<string, unknown> =
-      tab.type === 'settings' ? { ...tab } : { ...tab, workspaceRef }
+      tab.type === 'settings' && tab.settingsSection !== 'workspace'
+        ? { ...tab }
+        : { ...tab, workspaceRef }
 
     if (tab.type === 'conversation' && tab.conversation && typeof tab.conversation === 'object') {
       const conversation = tab.conversation as Record<string, unknown>
@@ -181,7 +183,7 @@ function isTabCompatibleWithWorkspace(
   tab: Record<string, unknown>,
   workspaceRef: WorkspaceRef,
 ): boolean {
-  if (tab.type === 'settings') return true
+  if (tab.type === 'settings' && tab.settingsSection !== 'workspace') return true
   if (tab.workspaceRef && typeof tab.workspaceRef === 'object') {
     const existingKey = workspaceRefKey(tab.workspaceRef as WorkspaceRef)
     if (existingKey !== workspaceRefKey(workspaceRef)) return false
