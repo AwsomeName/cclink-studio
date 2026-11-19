@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { useAgentStore } from '../../stores/agent-store'
 import { createConversationRunController as controller } from '../agent-conversations/conversation-run-controller'
 import { ensureSession } from './owner-agent'
-import { useOwners } from './owner-store'
+import { acceptDirectory, useOwners } from './owner-store'
 import { checkReport, planSchema, type Research } from './research-model'
 import type { Affair } from './affair'
 
@@ -18,13 +18,40 @@ export const subscribeWork = (listener: () => void) => {
 const notify = () => listeners.forEach((f) => f())
 
 const current = (id: string) => useOwners.getState().items.find((a) => a.id === id)
+const changes = new Map<string, Promise<unknown>>()
 function change(id: string, fn: (r: Research, a: Affair) => void) {
-  const prev = current(id)
-  if (!prev?.research) throw Error('事务不存在')
-  const next = structuredClone(prev)
-  fn(next.research!, next)
-  if (!useOwners.getState().save(next)) throw Error('保存失败')
-  return next
+  const update = async () => {
+    const prev = current(id)
+    if (!prev?.research) throw Error('事务不存在')
+    if (prev.directory?.error) throw Error(prev.directory.error)
+    const next = structuredClone(prev)
+    fn(next.research!, next)
+    if (prev.directory) {
+      let receipt: Affair
+      try {
+        receipt = acceptDirectory(
+          await window.cclinkStudio.ownerDirectories.save(next, prev.directory.revision),
+        )
+      } catch (e) {
+        acceptDirectory({
+          ...prev,
+          directory: { ...prev.directory, error: '事务保存未确认：' + String(e) },
+        })
+        throw e
+      }
+      if (receipt.directory?.error) throw Error(receipt.directory.error)
+      return receipt
+    }
+    if (!useOwners.getState().save(next)) throw Error('保存失败')
+    return next
+  }
+  const promise = (changes.get(id) ?? Promise.resolve()).then(update)
+  changes.set(id, promise)
+  const cleanup = () => {
+    if (changes.get(id) === promise) changes.delete(id)
+  }
+  void promise.then(cleanup, cleanup)
+  return promise
 }
 function event(r: Research, text: string) {
   r.log = [...r.log, text].slice(-60)
@@ -66,7 +93,7 @@ async function sendRun(a: Affair, mode: 'a' | 'main', task: string, question: bo
   if (res.status !== 'accepted' || !res.runId)
     throw Error(res.status === 'failed' ? res.error : '会话没有接受委托：' + res.status)
   if (!question)
-    change(a.id, (r, v) => {
+    await change(a.id, (r, v) => {
       if (mode === 'a') event(r, '执行会话 A 已接收本轮委托')
       v.run = res.runId ?? null
     })
@@ -106,7 +133,8 @@ async function work(id: string, fn: () => Promise<void>) {
   try {
     await fn()
   } catch (e) {
-    change(id, (r, a) => {
+    if (current(id)?.directory?.error) return
+    await change(id, (r, a) => {
       r.phase = r.report ? 'done' : 'error'
       a.issue = e instanceof Error ? e.message : String(e)
       event(r, a.issue.slice(0, 300))
@@ -130,7 +158,7 @@ export async function askOwner(id: string, text: string, retryId?: string) {
   answering.set(id, questionId)
   notify()
   try {
-    const a = change(id, (r) => {
+    const a = await change(id, (r) => {
       if (retryId) {
         const original = r.chat.find((m) => m.questionId === retryId)
         if (!original || original.answer || original.text !== text) throw Error('问题已变更')
@@ -163,12 +191,13 @@ export async function askOwner(id: string, text: string, retryId?: string) {
       true,
     )
     const reply = z.string().trim().min(1).max(4500).parse(out.reply)
-    change(id, (r) => {
+    await change(id, (r) => {
       const m = r.chat.find((m) => m.questionId === questionId)
       if (m) m.answer = reply
     })
   } catch (error) {
-    change(id, (r) => {
+    if (current(id)?.directory?.error) return
+    await change(id, (r) => {
       const m = r.chat.find((m) => m.questionId === questionId)
       if (m) m.answerError = String(error).slice(0, 600)
     })
@@ -181,7 +210,7 @@ export async function discuss(id: string, text: string) {
   if (!text.trim()) return
   if (current(id)?.confirmed) return askOwner(id, text)
   await work(id, async () => {
-    const a = change(id, (r, a) => {
+    const a = await change(id, (r, a) => {
       a.issue = ''
       if (!r.chat.length) {
         a.goal = text.slice(0, 1500)
@@ -199,7 +228,7 @@ export async function discuss(id: string, text: string) {
     )
     const reply = z.string().min(1).max(3200).parse(out.reply),
       plan = planSchema.nullable().parse(out.plan)
-    change(id, (r) => {
+    await change(id, (r) => {
       r.plan = plan
       r.phase = plan ? 'ready' : 'draft'
       say(r, 'Owner', reply)
@@ -221,7 +250,7 @@ function decision(r: Research, kind: 'read' | 'more' | 'deliver', reason: string
   r.decisions = [...(r.decisions ?? []), { kind, reason }].slice(-60)
 }
 function remember(id: string, message: string) {
-  change(id, (r) => event(r, message))
+  return change(id, (r) => event(r, message))
 }
 
 // The Owner chooses the research question and search terms. A chooses documents from the real tree.
@@ -241,11 +270,11 @@ async function collect(a: Affair, order: Instruction) {
     }
     const index = await window.cclinkStudio.ownerResearch.findPaths(repo, terms, revision(repo))
     if (!index.ok) {
-      remember(a.id, index.error)
+      await remember(a.id, index.error)
       continue
     }
     candidates.push({ repo, paths: index.paths })
-    remember(
+    await remember(
       a.id,
       repo +
         ' · 检索 ' +
@@ -257,19 +286,27 @@ async function collect(a: Affair, order: Instruction) {
     )
   }
   if (!candidates.some((c) => c.paths.length)) {
-    remember(a.id, '此次目录检索没有取得可选文件')
+    await remember(a.id, '此次目录检索没有取得可选文件')
     return
   }
   const result = await run(
     a,
     'a',
-    '你是本事务唯一执行会话 A。为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
+    '你是本事务唯一执行会话 A。为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
       JSON.stringify({
         goal: a.goal,
         plan,
         order,
         candidates,
-        alreadyRead: docs.map((d) => [d.repo, d.path]),
+        alreadyRead: docs.map((d) => [
+          d.repo,
+          d.path,
+          d.startLine,
+          (d.startLine ?? 1) + d.text.split('\n').length - 1,
+        ]),
+        locationHints: current(a.id)!
+          .research!.log.filter((l) => l.startsWith('文件内定位 '))
+          .slice(-10),
       }),
   )
   const files = z
@@ -285,10 +322,10 @@ async function collect(a: Affair, order: Instruction) {
     .parse(result.files)
   for (const file of files) {
     if (!candidates.some((c) => c.repo === file.repo && c.paths.includes(file.path))) {
-      remember(a.id, 'A 选择的路径未在该仓库的目录中找到：' + file.path)
+      await remember(a.id, 'A 选择的路径未在该仓库的目录中找到：' + file.path)
       continue
     }
-    remember(
+    await remember(
       a.id,
       'A 查 ' + file.repo + '/' + file.path.replace('@README', 'README') + ' · ' + file.purpose,
     )
@@ -299,10 +336,12 @@ async function collect(a: Affair, order: Instruction) {
       revision(file.repo),
     )
     if (!got.ok) {
-      remember(a.id, got.error)
+      await remember(a.id, got.error)
       continue
     }
-    change(a.id, (r) => {
+    await change(a.id, (r) => {
+      if (got.locations?.length)
+        event(r, '文件内定位 ' + file.repo + '/' + file.path + ' · ' + got.locations.join(' | '))
       if (got.matchedAnchor === false)
         event(r, file.path + ' 未找到定位词「' + file.anchor + '」，本次返回文件开头')
       if (
@@ -356,14 +395,14 @@ async function restoreSourceLines(a: Affair) {
     if (!got.ok || got.sha !== doc.sha || !got.startLine) continue
     const offset = got.text.indexOf(prefix)
     if (offset < 0 || got.text.indexOf(prefix, offset + 1) >= 0) continue
-    change(a.id, (r) => {
+    await change(a.id, (r) => {
       r.docs[index].startLine = got.startLine + got.text.slice(0, offset).split('\n').length - 1
     })
   }
 }
 export async function research(id: string) {
   await work(id, async () => {
-    const a = change(id, (r, a) => {
+    const a = await change(id, (r, a) => {
       if (!r.plan || r.report) throw Error('没有可执行的调研约定')
       if (!a.confirmed) say(r, '你', '确认目标和交付物，开始调研。')
       a.confirmed = true
@@ -408,7 +447,7 @@ export async function research(id: string) {
           )
             throw Error('每个结论都需要实际来源链接')
           const report = checkReport(state, out)
-          change(id, (r) => {
+          await change(id, (r) => {
             r.report = report
             r.phase = 'done'
             decision(r, 'deliver', reason)
@@ -417,8 +456,9 @@ export async function research(id: string) {
           })
           return
         } catch (e) {
+          if (current(id)?.directory?.error) throw e
           correction = String(e)
-          remember(id, '交付核对未通过：' + correction)
+          await remember(id, '交付核对未通过：' + correction)
           if (++invalid >= 3) throw Error(correction)
           continue
         }
@@ -427,12 +467,12 @@ export async function research(id: string) {
       if (out.action !== 'read') throw Error('未收到可执行的取证或交付决定')
       if (rounds++ >= 5) throw Error('本轮核对仍缺证据：' + reason)
       const order = instruction.parse(out)
-      change(id, (r) => {
+      await change(id, (r) => {
         decision(r, r.decisions?.length || r.docs.length ? 'more' : 'read', reason)
         r.phase = 'reading'
       })
       await collect(a, order)
-      change(id, (r) => {
+      await change(id, (r) => {
         r.phase = 'checking'
         event(r, 'Owner 按交付目标复核 A 取得的资料')
       })

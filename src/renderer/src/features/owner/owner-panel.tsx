@@ -1,7 +1,7 @@
 import { ResearchInbox, ResearchView } from './research-view'
 import { activeWork, subscribeWork } from './research-work'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { useOwners } from './owner-store'
+import { useOwners, loadDirectories } from './owner-store'
 import { brief, next, verify, type Affair } from './affair'
 import { dispatch, ensureSession, reconcile, session } from './owner-agent'
 import { useAgentStore } from '../../stores/agent-store'
@@ -324,6 +324,9 @@ export function OwnerPanel({ open, close }: { open: boolean; close: () => void }
     error = useOwners((s) => s.error),
     save = useOwners((s) => s.save),
     selected = items.find((a) => a.id === sel)
+  useEffect(() => {
+    void loadDirectories()
+  }, [])
   useFloatingSurfaceRegistration(open)
   useEffect(() => {
     if (!items.some((a) => a.attempt)) return

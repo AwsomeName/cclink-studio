@@ -1,3 +1,4 @@
+import { sourceWindow } from './source-window'
 import {
   ownerResearchIpc,
   publicFilePath,
@@ -58,17 +59,10 @@ async function read(repo: string, path?: string, anchor = '', ref = ''): Promise
       Buffer.from(data.content, 'base64'),
     )
     if (!raw.trim() || raw.includes('\0')) throw Error('文件没有可读文本')
-    const position = anchor ? raw.toLowerCase().indexOf(anchor.toLowerCase()) : 0
-    const offset = Math.max(0, position - 1500)
-    const lineStart = offset ? raw.lastIndexOf('\n', offset - 1) + 1 : 0
-    const start = position + anchor.length > lineStart + 9000 ? offset : lineStart
-    const startLine = raw.slice(0, start).split('\n').length
     return {
       ok: true,
       repo,
-      text: raw.slice(start, start + 9000),
-      startLine,
-      ...(anchor ? { matchedAnchor: position >= 0 } : {}),
+      ...sourceWindow(raw, anchor),
       url: data.html_url,
       sha: data.sha,
       at: Date.now(),

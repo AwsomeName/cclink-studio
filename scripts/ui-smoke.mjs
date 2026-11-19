@@ -258,7 +258,7 @@ async function stopWebFixture() {
 }
 
 async function openResourceSettings(page, title) {
-  await page.locator('.activity-bar button[title="设置"]').click()
+  await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
   await page.locator('.settings-nav').getByRole('button', { name: title, exact: true }).click()
   if (title === '网站与账号') {
     await page.locator('.web-resources-sidebar').waitFor({ state: 'visible' })
@@ -277,6 +277,10 @@ async function clickByTitle(page, title) {
 }
 
 async function ensureActivityPanel(page, panelId, title) {
+  if (panelId === 'cclink') {
+    await openResourceSettings(page, '远程设备')
+    return
+  }
   if (panelId === 'operations' || panelId === 'agent-roles') {
     await openResourceSettings(page, title)
     return
@@ -480,7 +484,7 @@ async function main() {
     }, separationWorkspace)
     assert(workspaceOpened, 'navigation separation fixture workspace did not open')
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 15, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 12, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '全部工具']),
@@ -493,16 +497,13 @@ async function main() {
       '工具',
       '浏览器',
       '终端',
-      '公司经营',
-      '公司账目',
       '文章发布',
       '事务',
       '定时任务',
       '数据源',
       '视频创作',
       '硬件生产',
-      'CCLink 远程',
-      '设置',
+      '项目设置',
     ]
     assert(
       JSON.stringify(await bar.locator('.activity-bar-label').allTextContents()) ===
@@ -3647,7 +3648,7 @@ async function main() {
       'new browser tab did not include the saved-account surface',
     )
     assert(
-      (await page.locator('.activity-bar-icon[title="设置"]').count()) === 1,
+      (await page.getByRole('button', { name: 'Studio 设置', exact: true }).count()) === 1,
       'settings entry for website accounts is missing',
     )
     await page.waitForFunction(

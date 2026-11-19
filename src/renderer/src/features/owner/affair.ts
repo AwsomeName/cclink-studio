@@ -1,26 +1,7 @@
-import { researchSchema, researchStatus } from './research-model'
+export { affair, material, receipt, type Affair } from '@shared/owner/affair'
+import { receipt, type Affair } from '@shared/owner/affair'
+import { researchStatus } from './research-model'
 import { z } from 'zod'
-
-export const material = z.object({
-  name: z.string().trim().min(1).max(120),
-  text: z.string().max(4000),
-})
-export const receipt = z.object({ index: z.number().int(), quote: z.string().min(1).max(500) })
-export const affair = z.object({
-  id: z.string().uuid(),
-  title: z.string().trim().min(1).max(120),
-  goal: z.string().trim().min(1).max(1500),
-  sources: z.array(material).max(6),
-  research: researchSchema.optional(),
-  confirmed: z.boolean(),
-  updated: z.number(),
-  attempt: z.string().nullable(),
-  run: z.string().nullable(),
-  issue: z.string(),
-  result: z.array(receipt).nullable(),
-  method: z.enum(['agent', 'local']).nullable(),
-})
-export type Affair = z.infer<typeof affair>
 export function verify(a: Affair, data: unknown) {
   const parsed = z.array(receipt).safeParse(data)
   if (!parsed.success || parsed.data.length !== a.sources.length)
@@ -33,6 +14,7 @@ export function verify(a: Affair, data: unknown) {
   })
 }
 export function next(a: Affair, active = false) {
+  if (a.directory?.error) return ['需要处理', a.directory.error]
   if (a.research)
     return a.research.phase === 'error' && a.issue
       ? ['需要处理', a.issue]

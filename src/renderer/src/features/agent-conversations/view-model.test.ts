@@ -16,7 +16,7 @@ import {
 } from './view-model'
 import { getWorkspaceConversationGroups } from './local-session-sidebar'
 
-const now = new Date('2026-07-14T12:00:00+08:00').getTime()
+const now = new Date(2026, 6, 14, 12, 0, 0).getTime()
 const workspace: WorkspaceRef = { kind: 'local', path: '/Users/apple/project' }
 
 describe('agent conversation view model', () => {

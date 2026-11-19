@@ -1,3 +1,4 @@
+import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../../shared/ipc/owner-research'
 import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
 import { localTtsIpc } from '../../shared/local-tts'
@@ -98,6 +99,14 @@ function expandInvokeGroup(group: InvokeInventoryGroup): IpcInvokeContractInvent
 
 /** P0-P4 收敛范围的现行 invoke 库存；不能用下面的 legacy allowlist 替代。 */
 export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] = [
+  ...expandInvokeGroup({
+    owner: 'OwnerDirectory',
+    definitionFile: 'src/shared/ipc/owner-directory.ts',
+    definitionName: 'ownerDirectoryIpc',
+    definitions: ownerDirectoryIpc,
+    handlerFiles: ['src/main/owner/directory-ipc.ts'],
+    preloadFiles: ['src/preload/index.ts'],
+  }),
   ...expandInvokeGroup({
     owner: 'OwnerResearch',
     definitionFile: 'src/shared/ipc/owner-research.ts',
