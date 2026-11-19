@@ -37,6 +37,7 @@ export function StatusBar(): React.ReactElement {
     activeTab?.type === 'browser' ? s.tabs[activeTab.id]?.url : undefined,
   )
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const projectSettings = useWorkspaceStore((s) => s.settingsSnapshot)
   const workspacePath = useFsStore((s) => s.workspacePath)
   const switchingPath = useFsStore((s) => s.switchingPath)
   const updateSnapshot = useUpdateStore((state) => state.snapshot)
@@ -119,7 +120,10 @@ export function StatusBar(): React.ReactElement {
           >
             <span className="status-bar-text">
               {workspaceRefSourceLabel(activeWorkspaceRef)} ·{' '}
-              {workspaceRefLabel(activeWorkspaceRef)}
+              {activeWorkspaceRef.kind === 'local' &&
+              projectSettings?.workspacePath === activeWorkspaceRef.path
+                ? projectSettings.settings.name
+                : workspaceRefLabel(activeWorkspaceRef)}
             </span>
           </span>
 

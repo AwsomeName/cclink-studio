@@ -697,11 +697,15 @@ export class WorkspaceStateService {
     return this.enqueueWorkspaceMutation(`settings:${root}`, async () => {
       let fallback: WorkspaceType = 'general'
       if (this.getFixedSpaces().personal?.workspacePath === root) fallback = 'diary'
-      else if ((await this.inspectCompanySpace(root)).state === 'company') fallback = 'company'
+      const company = fallback === 'general' ? await this.inspectCompanySpace(root) : null
+      if (company?.state === 'company') fallback = 'company'
       const current = await readWorkspaceSettings(root, fallback)
       if (current.status !== 'missing') return current
       try {
-        return await writeWorkspaceSettings(root, current.settings, null)
+        const name = company?.name?.trim()
+        const settings =
+          name && name.length <= 80 ? { ...current.settings, name } : current.settings
+        return await writeWorkspaceSettings(root, settings, null)
       } catch (error) {
         return { ...current, error: `项目设置尚未保存：${String(error)}` }
       }

@@ -294,37 +294,14 @@ export function WorkspaceSettingsForm(): React.ReactElement {
               .then(async (result) => {
                 if (!result.success) throw Error(result.error)
                 await refreshFixedSpaces()
-                setNotice('“我的空间”已关联当前项目；旧项目和资料保持原位。')
+                setNotice('已设为默认项目。')
               })
               .catch((e) => setError(String(e)))
               .finally(() => setBusy(false))
           }}
         >
-          将此项目关联到“我的空间”
+          设为默认项目
         </button>
-        {
-          <button
-            disabled={busy}
-            onClick={() => {
-              setBusy(true)
-              setError('')
-              void window.cclinkStudio.workspaceState
-                .connectCompanySpace({ workspacePath: ref.path, shortcutOnly: true })
-                .then(async () => {
-                  await refreshFixedSpaces()
-                  setNotice(
-                    draft.type === 'company'
-                      ? '“我的公司”已关联当前公司。'
-                      : '“我的公司”已关联当前项目；入口按项目实际类型打开。',
-                  )
-                })
-                .catch((e) => setError(String(e)))
-                .finally(() => setBusy(false))
-            }}
-          >
-            {draft.type === 'company' ? '将此公司关联到“我的公司”' : '将此项目关联到“我的公司”'}
-          </button>
-        }
       </div>
       <p>配置位置：.cclink-studio/workspace-settings.json</p>
       <button
@@ -415,6 +392,7 @@ export function WorkspaceCreationForm({
       await onCreated?.(result.workspacePath)
       const ref = await openWorkspaceRef({ kind: 'local', path: result.workspacePath })
       await useWorkspaceStore.getState().refreshSettings()
+      useDiaryNavigation.getState().setPage('今天')
       showWorkspaceHome(ref)
       onOpened()
     } catch (e) {
@@ -481,6 +459,7 @@ export function WorkspaceGitAcquire({ onOpened }: { onOpened: () => void }): Rea
       if (!result.success) throw Error(result.error.message)
       const ref = await openWorkspaceRef({ kind: 'local', path: result.snapshot.workspacePath })
       await useWorkspaceStore.getState().refreshSettings()
+      useDiaryNavigation.getState().setPage('今天')
       showWorkspaceHome(ref)
       onOpened()
     } catch (e) {

@@ -20,7 +20,6 @@ import {
   useFixedSpacesStore,
   refreshFixedSpaces,
   openPersonalSpace,
-  openCompanySpaceHome,
 } from '../../features/workspace-open/fixed-spaces-store'
 
 type DropPlacement = 'before' | 'after'
@@ -44,14 +43,7 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
   return new Map(
     paths.map((path) => {
       const name = getProjectName(path)
-      return [
-        path,
-        ['我的空间', '我的公司'].includes(name)
-          ? `${name} · 普通空间`
-          : counts.get(name) === 1
-            ? name
-            : `${name} · ${getParentName(path)}`,
-      ]
+      return [path, counts.get(name) === 1 ? name : `${name} · ${getParentName(path)}`]
     }),
   )
 }
@@ -59,8 +51,14 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
 export function ProjectStrip(): React.ReactElement {
   const spaces = useFixedSpacesStore((state) => state.spaces)
   const allOpenProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
-  const fixedPaths = [spaces?.personal?.workspacePath, spaces?.company?.workspacePath]
-  const openProjectPaths = allOpenProjectPaths.filter((path) => !fixedPaths.includes(path))
+  const personalPath = spaces?.personal?.workspacePath
+  const openProjectPaths = useMemo(
+    () =>
+      personalPath
+        ? [personalPath, ...allOpenProjectPaths.filter((path) => path !== personalPath)]
+        : allOpenProjectPaths,
+    [personalPath, allOpenProjectPaths],
+  )
   useEffect(() => {
     void refreshFixedSpaces().catch(() => {})
   }, [])
@@ -103,11 +101,10 @@ export function ProjectStrip(): React.ReactElement {
   const activeWorkspaceKey = workspaceRefKey(activeWorkspaceRef)
   const workspaceBusy = workspaceLoading || workspacePicking || switchingPath !== null
   const [projectNames, setProjectNames] = useState<Record<string, string>>({})
-  const projectPathsKey = allOpenProjectPaths.join('\0')
   useEffect(() => {
     let alive = true
     void Promise.allSettled(
-      allOpenProjectPaths.map(async (path) => {
+      openProjectPaths.map(async (path) => {
         const value = await window.cclinkStudio.workspaceState.getSettings(path)
         return [path, value.settings.name] as const
       }),
@@ -122,7 +119,7 @@ export function ProjectStrip(): React.ReactElement {
     return () => {
       alive = false
     }
-  }, [projectPathsKey, settingsSnapshot?.revision])
+  }, [openProjectPaths, settingsSnapshot?.revision])
   const labels = useMemo(() => {
     const fallback = buildProjectLabels(openProjectPaths)
     for (const path of openProjectPaths)
@@ -130,14 +127,7 @@ export function ProjectStrip(): React.ReactElement {
         const name = projectNames[path]
         const duplicates =
           openProjectPaths.filter((other) => projectNames[other] === name).length > 1
-        fallback.set(
-          path,
-          ['我的空间', '我的公司'].includes(name)
-            ? `${name} · 普通项目`
-            : duplicates
-              ? `${name} · ${getParentName(path)}`
-              : name,
-        )
+        fallback.set(path, duplicates ? `${name} · ${getParentName(path)}` : name)
       }
     return fallback
   }, [openProjectPaths, projectNames])
@@ -287,55 +277,6 @@ export function ProjectStrip(): React.ReactElement {
       >
         ⚙
       </button>
-      <div className="fixed-space-entries" aria-label="固定空间">
-        {(['personal', 'company'] as const).map((role) => (
-          <button
-            key={role}
-            type="button"
-            className={`project-strip-item ${activePath && activePath === spaces?.[role]?.workspacePath ? 'active' : ''}`}
-            aria-current={
-              activePath && activePath === spaces?.[role]?.workspacePath ? 'page' : undefined
-            }
-            title={
-              spaces?.[role]?.workspacePath ||
-              (role === 'company' ? '连接已有公司或启用新公司' : '个人资料的默认空间')
-            }
-            disabled={workspaceBusy}
-            onContextMenu={(event) => {
-              const path = spaces?.[role]?.workspacePath
-              if (path) {
-                event.preventDefault()
-                showContextMenu({
-                  target: { kind: 'project', path, workspaceKey: path },
-                  x: event.clientX,
-                  y: event.clientY,
-                  focusReturn: event.currentTarget,
-                })
-              }
-            }}
-            onKeyDown={(event) => {
-              const path = spaces?.[role]?.workspacePath
-              if (path && isContextMenuKeyboardEvent(event.nativeEvent)) {
-                event.preventDefault()
-                showContextMenu(
-                  buildKeyboardContextMenuInput(
-                    { kind: 'project', path, workspaceKey: path },
-                    event.currentTarget,
-                  ),
-                )
-              }
-            }}
-            onClick={() => {
-              void (role === 'personal' ? openPersonalSpace() : openCompanySpaceHome()).catch(
-                (error) => showToast(String(error), 'error'),
-              )
-            }}
-          >
-            <IconProjects size={14} />
-            <span>{role === 'personal' ? '我的空间' : '我的公司'}</span>
-          </button>
-        ))}
-      </div>
       <div className="project-strip-shell">
         <div
           ref={scrollRef}
@@ -347,6 +288,17 @@ export function ProjectStrip(): React.ReactElement {
           }}
         >
           <div className="project-strip-list">
+            {!personalPath && (
+              <button
+                className="project-strip-item"
+                disabled={workspaceBusy}
+                onClick={() =>
+                  void openPersonalSpace().catch((error) => showToast(String(error), 'error'))
+                }
+              >
+                <IconProjects size={13} /> 我的空间
+              </button>
+            )}
             {openProjectPaths.map((path) => {
               const active = path === activePath
               const runningCount = runningProjectCounts.get(path) ?? 0
@@ -359,14 +311,16 @@ export function ProjectStrip(): React.ReactElement {
                     else projectRefs.current.delete(path)
                   }}
                   className={`project-strip-item ${active ? 'active' : ''} ${draggingPath === path ? 'dragging' : ''} ${dropClass}`}
-                  draggable
+                  draggable={path !== personalPath}
                   data-project-path={path}
                   title={path}
                   aria-current={active ? 'page' : undefined}
                   disabled={workspaceBusy}
                   onClick={() => {
                     if (suppressClickRef.current) return
-                    void activateProject(path)
+                    if (path === personalPath)
+                      void openPersonalSpace().catch((error) => showToast(String(error), 'error'))
+                    else void activateProject(path)
                   }}
                   onContextMenu={(event) => {
                     event.preventDefault()
@@ -396,7 +350,7 @@ export function ProjectStrip(): React.ReactElement {
                     event.dataTransfer.effectAllowed = 'move'
                     event.dataTransfer.setData('text/project-path', path)
                   }}
-                  onDragOver={(event) => handleDragOver(event, path)}
+                  onDragOver={(event) => path !== personalPath && handleDragOver(event, path)}
                   onDrop={(event) => {
                     event.preventDefault()
                     const sourcePath =
@@ -404,7 +358,7 @@ export function ProjectStrip(): React.ReactElement {
                     const rect = event.currentTarget.getBoundingClientRect()
                     const placement: DropPlacement =
                       event.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-                    if (sourcePath) {
+                    if (sourcePath && path !== personalPath) {
                       reorderProject(sourcePath, path, placement)
                     }
                     setDraggingPath(null)
