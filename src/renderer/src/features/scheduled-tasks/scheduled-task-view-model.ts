@@ -1,3 +1,4 @@
+import type { ScheduledTaskRun } from '@shared/scheduled-task/scheduled-task-types'
 import type {
   ScheduledTaskSchedule,
   ScheduledTaskSnapshot,
@@ -53,4 +54,18 @@ export function formatNextRun(nextRunAt: number | null): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(nextRunAt)
+}
+
+export function formatRunStatus(status: ScheduledTaskRun['status']): string {
+  const labels: Record<ScheduledTaskRun['status'], string> = {
+    queued: '排队中',
+    running: '运行中',
+    completed: '已完成',
+    failed: '失败',
+    cancelled: '已取消',
+    interrupted: '已中断',
+    missed: '已错过',
+    skipped: '已跳过',
+  }
+  return labels[status]
 }

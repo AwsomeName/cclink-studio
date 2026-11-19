@@ -1,3 +1,10 @@
+import { useBrowserStore } from '../../../stores/browser-store'
+import { useCommandStore } from '../../../stores/command-store'
+import { useWorkspaceStore } from '../../../stores/workspace-store'
+import { workspaceRefKey } from '@shared/workspace-ref'
+import { useEditorStore } from '../../../stores/editor-store'
+import { contentPresentation } from '../../../utils/content-presentation'
+import { runEditorSaveGuard } from '../../editor-save-guard'
 import type { Command } from '../../../stores/command-store'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useFsStore } from '../../../stores/fs-store'
@@ -53,6 +60,76 @@ function renameTabLabel(context?: CommandContext): string {
 
 export function createTabContextCommands(): Command[] {
   return [
+    ...(['markdown', 'source', 'html'] as const).map(
+      (mode): Command => ({
+        id: `workbench.openAs.${mode}`,
+        label: { markdown: '以 Markdown 正文打开', source: '以源码打开', html: '用浏览器预览' }[
+          mode
+        ],
+        category: '打开方式',
+        enabled: (context) => {
+          const tab = useTabStore
+            .getState()
+            .tabs.find(
+              (item) =>
+                item.id === (tabIdFromContext(context) ?? useTabStore.getState().activeTabId),
+            )
+          return Boolean(
+            tab?.filePath && contentPresentation(tab)?.options.some((option) => option.id === mode),
+          )
+        },
+        action: async (context) => {
+          const tab = useTabStore
+            .getState()
+            .tabs.find(
+              (item) =>
+                item.id === (tabIdFromContext(context) ?? useTabStore.getState().activeTabId),
+            )
+          if (
+            !tab?.filePath ||
+            !contentPresentation(tab)?.options.some((option) => option.id === mode)
+          )
+            throw new Error('当前内容不支持此打开方式')
+          // Inspect the live rich document before unmounting; retain the same EditorStore buffer.
+          if (tab.type === 'editor') await runEditorSaveGuard(tab.filePath)
+          const stillCurrent = (): boolean =>
+            useTabStore.getState().tabs.some((item) => item.id === tab.id) &&
+            (!tab.workspaceRef ||
+              workspaceRefKey(tab.workspaceRef) ===
+                workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef))
+          if (!stillCurrent()) throw new Error('文件所属项目已切换')
+          if (isHtmlFilePath(tab.filePath)) {
+            if (mode === 'html' && useEditorStore.getState().files[tab.filePath]?.dirty) {
+              const result = await useEditorStore.getState().saveFile(tab.filePath)
+              if (result !== 'saved' || useEditorStore.getState().files[tab.filePath]?.dirty)
+                throw new Error('请先处理未保存内容或文件冲突，再预览网页')
+            }
+            if (!stillCurrent()) throw new Error('文件所属项目已切换')
+            const preview =
+              mode === 'html'
+                ? useTabStore
+                    .getState()
+                    .tabs.find(
+                      (item) =>
+                        item.type === 'browser' &&
+                        item.filePath === tab.filePath &&
+                        item.workspaceRef &&
+                        tab.workspaceRef &&
+                        workspaceRefKey(item.workspaceRef) === workspaceRefKey(tab.workspaceRef),
+                    )
+                : undefined
+            useTabStore.getState().openTab({
+              ...(mode === 'html'
+                ? buildHtmlBrowserTabDraft(tab.filePath, tab.title)
+                : buildHtmlTextTabDraft(tab.filePath, tab.title)),
+              workspaceRef: tab.workspaceRef,
+            })
+            if (preview && useBrowserStore.getState().tabs[preview.id])
+              await window.cclinkStudio.browser.reload(preview.id)
+          } else if (mode !== 'html') useTabStore.getState().setEditorPresentation(tab.id, mode)
+        },
+      }),
+    ),
     {
       id: 'workbench.toggleTabPinned',
       label: '固定标签',
@@ -110,17 +187,18 @@ export function createTabContextCommands(): Command[] {
         const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
         return Boolean(tab && isHtmlFilePath(tab.filePath))
       },
-      action: (context) => {
-        const tabId = tabIdFromContext(context)
-        const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
-        if (!tab?.filePath) throw new Error('HTML 标签页已不存在')
-        useTabStore
+      action: async (context) => {
+        const tab = useTabStore
           .getState()
-          .openTab(
-            tab.type === 'browser'
-              ? buildHtmlTextTabDraft(tab.filePath, tab.title)
-              : buildHtmlBrowserTabDraft(tab.filePath, tab.title),
+          .tabs.find((item) => item.id === tabIdFromContext(context))
+        if (!tab?.filePath) throw new Error('HTML 标签页已不存在')
+        const result = await useCommandStore
+          .getState()
+          .executeCommand(
+            `workbench.openAs.${tab.type === 'browser' ? 'source' : 'html'}`,
+            context ?? { source: 'palette' },
           )
+        if (!result.ok) throw new Error(result.message ?? '打开方式切换失败')
       },
     },
     {
@@ -205,6 +283,36 @@ export function createTabContextCommands(): Command[] {
 }
 
 export const tabMenuContributions: MenuContribution[] = [
+  // Compatibility owner for the legacy command; the unified open-as entries supersede its menu.
+  {
+    id: 'tab.html-alternative',
+    targetKinds: ['tab'],
+    group: '30-open',
+    order: 10,
+    commandId: 'workbench.openHtmlAlternative',
+    when: () => false,
+  },
+  ...(['markdown', 'source', 'html'] as const).map(
+    (mode): MenuContribution => ({
+      id: `tab.open-as-${mode}`,
+      targetKinds: ['tab'],
+      group: '30-open',
+      order: 11,
+      commandId: `workbench.openAs.${mode}`,
+      when: (context) => {
+        const tab = useTabStore
+          .getState()
+          .tabs.find((item) => item.id === tabIdFromContext(context))
+        const view = tab && contentPresentation(tab)
+        return Boolean(
+          view &&
+          view.options.length > 1 &&
+          view.selected !== mode &&
+          view.options.some((option) => option.id === mode),
+        )
+      },
+    }),
+  ),
   {
     id: 'tab.pin',
     targetKinds: ['tab'],
@@ -227,14 +335,6 @@ export const tabMenuContributions: MenuContribution[] = [
         return useTabStore.getState().tabs.find((item) => item.id === tabId)?.title ?? ''
       },
     },
-  },
-  {
-    id: 'tab.html-alternative',
-    targetKinds: ['tab'],
-    group: '30-open',
-    order: 10,
-    commandId: 'workbench.openHtmlAlternative',
-    icon: '</>',
   },
   {
     id: 'tab.duplicate',

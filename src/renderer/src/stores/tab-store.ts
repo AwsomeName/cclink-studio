@@ -248,6 +248,7 @@ interface TabState {
   /** 拖拽排序：把 fromId 移动到 toId 的位置 */
   reorderTabs: (fromId: string, toId: string) => void
   /** 更新 Tab 标题 */
+  setEditorPresentation: (id: string, mode: 'markdown' | 'source') => void
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
@@ -670,6 +671,12 @@ export const useTabStore = create<TabState>((set, get) => ({
     })
   },
 
+  setEditorPresentation: (id, mode) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id && tab.type === 'editor' ? { ...tab, editorPresentation: mode } : tab,
+      ),
+    })),
   updateTabTitle: (id, title) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.id === id ? { ...t, title } : t)),

@@ -1,3 +1,4 @@
+import { inspectWorkspaceWork } from '../../running-work/workspace-work'
 import { useAgentStore } from '../../../stores/agent-store'
 import { getRunningProjectCounts } from '../../agent-conversations/project-activity'
 import { openWorkspaceSettings } from '../../workspace-open/WorkspaceSettingsForm'
@@ -113,18 +114,16 @@ export function createProjectContextCommands(): Command[] {
           throw new Error('固定入口不能关闭')
         const running =
           getRunningProjectCounts(useAgentStore.getState().conversations).get(path) ?? 0
-        const tasks = await window.cclinkStudio.scheduledTasks?.inspect(path)
-        const activeTasks = tasks?.success
-          ? tasks.tasks.filter(
-              (task) =>
-                task.activation.enabled ||
-                ['queued', 'running'].includes(task.latestRun?.status ?? ''),
-            )
-          : []
+        const work = await inspectWorkspaceWork(path)
+        const names = [
+          ...work.tasks.map((task) => task.definition.title),
+          ...work.affairs.map((affair) => affair.title),
+          ...work.terminals.map(() => 'Terminal'),
+        ]
         if (
-          (running || activeTasks.length) &&
+          (running || names.length || work.errors.length) &&
           !window.confirm(
-            `关闭项目视图不会停止 ${running} 个工作会话及 ${activeTasks.length} 个启用/运行中的定时任务。${activeTasks.map((task) => task.definition.title).join('、')}。可从状态栏“进行中的工作”返回。是否仅关闭视图？`,
+            `此项目有 ${running} 个工作会话、${work.tasks.length} 个定时任务、${work.affairs.length} 个待处理事务、${work.terminals.length} 个终端。${names.join('、')}。${work.errors.length ? work.errors.join('；') + '，尚未确认全部工作状态。' : ''}关闭仅移除项目视图，不停止或删除任务。可从状态栏“进行中的工作”返回；完全退出应用会中断本机运行。是否仅关闭视图？`,
           )
         )
           return

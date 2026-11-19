@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentConversationState } from '../../stores/agent-store'
-import { getRunningProjectCounts } from './project-activity'
+import { getRunningProjectCounts, conversationNeedsAttention } from './project-activity'
 
 function conversation(
   id: string,
@@ -64,4 +64,17 @@ describe('getRunningProjectCounts', () => {
     expect(counts.get('/workspace/a')).toBe(2)
     expect(counts.has('/workspace/b')).toBe(false)
   })
+})
+
+it('keeps interrupted and failed conversations discoverable without counting them as running', () => {
+  const interrupted = conversation('interrupted', '/a', { runStatus: 'interrupted' })
+  expect(conversationNeedsAttention(interrupted)).toBe(true)
+  expect(conversationNeedsAttention(conversation('failed', '/a', { runStatus: 'failed' }))).toBe(
+    true,
+  )
+  expect(conversationNeedsAttention(conversation('done', '/a', { runStatus: 'completed' }))).toBe(
+    false,
+  )
+  expect(conversationNeedsAttention({ ...interrupted, archivedAt: Date.now() })).toBe(false)
+  expect(getRunningProjectCounts({ interrupted }).size).toBe(0)
 })

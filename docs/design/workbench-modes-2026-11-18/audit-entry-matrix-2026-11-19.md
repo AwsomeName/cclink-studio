@@ -30,7 +30,7 @@
 | --------------------- | --------------------------------------------------------------------------------------- |
 | `workspace-home`      | 按 saved settings.type 路由日记/公司/电子/通用。                                        |
 | `browser`             | 原生 WebContentsView 与 BrowserToolbar 保留；两版面真实网页验证。                       |
-| `editor`              | WorkbenchContent 原内容路由保留；Tab/文档持久化仍由原 owner 负责。                      |
+| `editor`              | 正文/源码共享 EditorStore；代码默认源码，Tab 保存打开方式；未保存正文重启恢复实测。     |
 | `settings`            | WorkbenchContent 原内容路由保留；Tab/文档持久化仍由原 owner 负责。                      |
 | `preview`             | WorkbenchContent 原内容路由保留；Tab/文档持久化仍由原 owner 负责。                      |
 | `file-preview`        | WorkbenchContent 原内容路由保留；Tab/文档持久化仍由原 owner 负责。                      |
@@ -70,7 +70,7 @@
 | `updates`            | 原设置 section ID 与入口仍存在；新增配置分类没有删除此组。 |
 | `about`              | 原设置 section ID 与入口仍存在；新增配置分类没有删除此组。 |
 
-新增设置组为当前项目、网站与账号、角色、数据源连接、远程设备；不将新增分组数作为产品完成度。
+新增设置组为当前项目、网站与账号、角色、数据源连接、远程设备、运行状态与诊断；不将新增分组数作为产品完成度。
 
 ## MCP：12 模块逐个与原实现比较
 
@@ -92,7 +92,15 @@
 ## 命令、工作版面和执行 owner
 
 - `bootstrap/commands` 原命令文件保留；公司命令补“当前公司优先”，其余入口迁移没有另建业务执行器。
-- `WorkbenchContent.tsx` 与基线逐字节相同；原内容类型的渲染分发没有为重组删分支。版面选择发生在 TabBar 和原 UI layout。
+- `WorkbenchContent.tsx` 本轮修改 editor 分支：Markdown 正文/源码与文本代码使用原两个编辑器；其他内容分发没有删分支。统一工具条位于 Workbench，TabBar 保留标准/专注布局；不再声明整个文件与基线逐字节相同。
 - 硬件首页复用原扫描/检查服务。原 Hardware store 增加晚到结果的代次校验，仅保护 renderer 投影。
 - 账户/角色/数据源/远程设置复用原组件和服务。凭证、调度、Agent、WebAffair 继续由原领域拥有。
 - 关闭运行项目、真实远程、独立窗口和所有专业格式仍需专项真实执行验收；本表不会把“声明/分支保留”标成这些动作全部通过。
+
+## 本轮生命周期补验
+
+- ScheduledTask：原服务/账本/IPC/UI + 确定性模拟生成器，关闭标签/项目后返回原运行，退出后中断，显式重试保留旧历史。
+- WebAffair：真实服务建立 waiting-human 节点，关闭/返回/重启不改变原节点 ID 或隐式执行。
+- Terminal：真实本机 Shell，关闭视图保留、返回附着同一 session、显式终止。
+- Agent：失败/中断会话在汇总可发现，筛选单测通过；真实模型长会话仍待外部集成验收。
+- 专项原始结果与实际截图见 [补验报告](../../testing/typed-workspaces-followup-2026-11-19.md)。

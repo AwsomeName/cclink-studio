@@ -1,3 +1,4 @@
+import { useWorkspaceOpenStore } from '../workspace-open/workspace-open-store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CclinkServer, CclinkTreeNode } from '@shared/cclink'
 import { useCclinkStore } from '../../stores'
@@ -9,13 +10,19 @@ import {
 import { remoteWorkspaceRefFromAgent } from './remote-workspace-confirmation'
 import { openWorkspaceRef } from '../workspace-open/workspace-open-controller'
 
-export function CclinkPanel(): React.ReactElement {
-  return <CclinkWorkspacePicker />
+export function CclinkPanel({
+  configuration = false,
+}: {
+  configuration?: boolean
+}): React.ReactElement {
+  return <CclinkWorkspacePicker configuration={configuration} />
 }
 
 export function CclinkWorkspacePicker({
   onWorkspaceOpened,
+  configuration = false,
 }: {
+  configuration?: boolean
   onWorkspaceOpened?: () => void
 }): React.ReactElement {
   const state = useCclinkStore()
@@ -100,7 +107,7 @@ export function CclinkWorkspacePicker({
     )
   }
 
-  if (selectedServer) {
+  if (selectedServer && !configuration) {
     return (
       <RemoteDirectoryPicker
         server={selectedServer}
@@ -153,12 +160,20 @@ export function CclinkWorkspacePicker({
         </button>
       </div>
       {state.error && <div className="cclink-inline-notice error">{state.error}</div>}
+      {configuration && (
+        <p>
+          设备与登录属于本机配置。浏览远程目录请使用打开项目入口。
+          <button onClick={() => useWorkspaceOpenStore.getState().showRemote()}>
+            打开远程项目…
+          </button>
+        </p>
+      )}
       <div className="cclink-server-list">
         {state.servers.map((server) => (
           <button
             key={server.id}
             type="button"
-            disabled={server.status !== 'online'}
+            disabled={configuration || server.status !== 'online'}
             onClick={() => setSelectedServer(server)}
           >
             <span className={`cclink-status-dot ${server.status}`} />

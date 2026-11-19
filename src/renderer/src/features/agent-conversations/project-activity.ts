@@ -18,3 +18,14 @@ export function getRunningProjectCounts(
 
   return counts
 }
+
+/** Pending work includes failed/interrupted runs without misreporting them as running. */
+export function conversationNeedsAttention(conversation: AgentConversationState): boolean {
+  return (
+    !conversation.archivedAt &&
+    (conversation.loading ||
+      ['starting', 'running', 'cancelling', 'interrupted', 'failed'].includes(
+        conversation.runStatus ?? '',
+      ))
+  )
+}

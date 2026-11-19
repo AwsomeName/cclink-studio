@@ -1,16 +1,27 @@
+import { conversationNeedsAttention } from '../../features/agent-conversations/project-activity'
+import { inspectWorkspaceWork } from '../../features/running-work/workspace-work'
+import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
+import {
+  buildTerminalTabDraftFromSession,
+  buildTerminalRecordTabDraft,
+} from '../../utils/terminal-tab'
 import { useEffect, useRef, useState } from 'react'
 import { FloatingSurface } from '../common/FloatingSurface'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
 import { openConversationInWorkbench } from '../../features/agent-conversations/conversation-workbench'
-import { createScheduledTaskTab } from '../../features/scheduled-tasks/scheduled-task-view-model'
+import {
+  createScheduledTaskTab,
+  formatRunStatus,
+} from '../../features/scheduled-tasks/scheduled-task-view-model'
 import { WEB_AFFAIR_STATUS_LABELS } from '../../features/web-affairs/web-affair-view-model'
 import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
 import type { WebAffair } from '@shared/web-affairs/web-affair-types'
 
 type Row = {
   path: string
+  terminal?: TerminalSessionSnapshot
   task?: ScheduledTaskSnapshot
   affair?: Pick<WebAffair, 'id' | 'title' | 'status'>
 }
@@ -23,11 +34,7 @@ export function RunningWork(): React.ReactElement {
   const [revision, setRevision] = useState(0)
   const anchor = useRef<HTMLButtonElement>(null)
   const conversations = useAgentStore((state) => state.conversations)
-  const running = Object.values(conversations).filter(
-    (item) =>
-      !item.archivedAt &&
-      (item.loading || ['starting', 'running', 'cancelling'].includes(item.runStatus ?? '')),
-  )
+  const running = Object.values(conversations).filter(conversationNeedsAttention)
   useEffect(() => {
     if (!open) return
     let alive = true
@@ -39,35 +46,13 @@ export function RunningWork(): React.ReactElement {
       const groups = await Promise.all(
         projects.map(async (project) => {
           const path = project.workspacePath
-          const [tasks, affairs] = await Promise.allSettled([
-            window.cclinkStudio.scheduledTasks.inspect(path),
-            window.cclinkStudio.webAffairs.getSnapshot({ workspaceRef: { kind: 'local', path } }),
-          ])
-          const result: Row[] = []
-          if (tasks.status === 'fulfilled' && tasks.value.success)
-            result.push(
-              ...tasks.value.tasks
-                .filter(
-                  (task) =>
-                    task.activation.enabled ||
-                    ['queued', 'running', 'interrupted', 'failed'].includes(
-                      task.latestRun?.status ?? '',
-                    ),
-                )
-                .map((task) => ({ path, task })),
-            )
-          else failures.push(path + '：定时任务状态不可用')
-          if (affairs.status === 'fulfilled' && affairs.value.success)
-            result.push(
-              ...affairs.value.data.affairs
-                .filter((affair) =>
-                  ['active', 'needs-attention', 'waiting-external', 'paused', 'failed'].includes(
-                    affair.status,
-                  ),
-                )
-                .map((affair) => ({ path, affair })),
-            )
-          else failures.push(path + '：事务状态不可用')
+          const work = await inspectWorkspaceWork(path)
+          failures.push(...work.errors.map((error) => path + '：' + error))
+          const result: Row[] = [
+            ...work.tasks.map((task) => ({ path, task })),
+            ...work.affairs.map((affair) => ({ path, affair })),
+            ...work.terminals.map((terminal) => ({ path, terminal })),
+          ]
           return result
         }),
       )
@@ -88,7 +73,11 @@ export function RunningWork(): React.ReactElement {
     const offAffair = window.cclinkStudio.webAffairs.onChanged(() =>
       setRevision((value) => value + 1),
     )
+    const offTerminal = window.cclinkStudio.terminal.onExecutionEvent((event) => {
+      if (event.kind !== 'output') setRevision((value) => value + 1)
+    })
     return () => {
+      offTerminal()
       alive = false
       unsubscribe()
       offAffair()
@@ -97,6 +86,20 @@ export function RunningWork(): React.ReactElement {
   const visit = async (row: Row): Promise<void> => {
     try {
       const ref = await openWorkspaceRef({ kind: 'local', path: row.path })
+      if (row.terminal) {
+        const existing = useTabStore
+          .getState()
+          .tabs.find((tab) => tab.terminal?.sessionId === row.terminal!.sessionId)
+        if (existing) useTabStore.getState().activateTab(existing.id)
+        else
+          useTabStore
+            .getState()
+            .openTab(
+              row.terminal.attachable
+                ? buildTerminalTabDraftFromSession(row.terminal)
+                : buildTerminalRecordTabDraft(row.terminal),
+            )
+      }
       if (row.task) useTabStore.getState().openTab(createScheduledTaskTab(row.path, row.task))
       if (row.affair)
         useTabStore.getState().openTab({
@@ -168,15 +171,24 @@ export function RunningWork(): React.ReactElement {
         ))}
         {rows.map((row) => (
           <button
-            key={row.path + ':' + (row.task?.definition.id ?? row.affair!.id)}
+            key={
+              row.path +
+              ':' +
+              (row.task?.definition.id ?? row.terminal?.sessionId ?? row.affair!.id)
+            }
             onClick={() => void visit(row)}
           >
             {row.task
               ? row.task.definition.title +
                 ' · ' +
-                (row.task.latestRun?.status ??
-                  (row.task.activation.enabled ? '本机已启用，等待触发' : '未启用'))
-              : row.affair!.title + ' · ' + WEB_AFFAIR_STATUS_LABELS[row.affair!.status]}
+                (row.task.latestRun
+                  ? formatRunStatus(row.task.latestRun.status)
+                  : row.task.activation.enabled
+                    ? '本机已启用，等待触发'
+                    : '未启用')
+              : row.terminal
+                ? 'Terminal · ' + row.terminal.status
+                : row.affair!.title + ' · ' + WEB_AFFAIR_STATUS_LABELS[row.affair!.status]}
             <small>{row.path}</small>
           </button>
         ))}

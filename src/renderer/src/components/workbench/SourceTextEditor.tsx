@@ -1,9 +1,10 @@
+import { useCommandStore } from '../../stores/command-store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../stores/editor-store'
 import { EditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
-import { buildHtmlBrowserTabDraft } from '../../utils/html-files'
+import { isHtmlFilePath } from '../../utils/html-files'
 import { IconGlobe } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -165,12 +166,17 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   }, [filePath, showToast])
 
   const handleOpenPreview = useCallback(async () => {
-    if (useEditorStore.getState().files[filePath]?.dirty && !(await handleSave())) return
-    const title = useTabStore.getState().tabs.find((tab) => tab.id === tabId)?.title
-    useTabStore
-      .getState()
-      .openTab(buildHtmlBrowserTabDraft(filePath, title ?? filePath.split('/').pop() ?? 'HTML'))
-  }, [filePath, handleSave, tabId])
+    const result = await useCommandStore.getState().executeCommand('workbench.openAs.html', {
+      source: 'toolbar',
+      target: {
+        kind: 'tab',
+        tabId,
+        tabType: 'editor',
+        workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+      },
+    })
+    if (!result.ok) showToast(result.message ?? '预览失败', 'error')
+  }, [tabId, showToast])
 
   const handleReload = useCallback(async () => {
     try {
@@ -329,14 +335,18 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   return (
     <div className="markdown-editor-wrapper source-text-editor">
       <div className="source-text-toolbar">
-        <span className="source-text-mode">HTML 源码</span>
+        <span className="source-text-mode">
+          {isHtmlFilePath(filePath) ? 'HTML 源码' : '文本 / 源码'}
+        </span>
         <span className="source-text-path" title={filePath}>
           {filePath}
         </span>
-        <button type="button" onClick={() => void handleOpenPreview()} title="用浏览器预览">
-          <IconGlobe size={14} />
-          <span>预览</span>
-        </button>
+        {isHtmlFilePath(filePath) && (
+          <button type="button" onClick={() => void handleOpenPreview()} title="用浏览器预览">
+            <IconGlobe size={14} />
+            <span>预览</span>
+          </button>
+        )}
         <button
           type="button"
           className={fileState.dirty ? 'dirty' : ''}
@@ -436,7 +446,7 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
           onChange={(event) =>
             useEditorStore.getState().updateContent(filePath, event.target.value)
           }
-          aria-label="HTML 源码"
+          aria-label={isHtmlFilePath(filePath) ? 'HTML 源码' : '文件源码'}
           spellCheck={false}
           wrap={editorWordWrap ? 'soft' : 'off'}
           onContextMenu={(event) => {

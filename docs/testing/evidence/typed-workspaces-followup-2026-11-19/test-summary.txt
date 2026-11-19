@@ -1,0 +1,17 @@
+ Test Files  42 passed (42)
+      Tests  374 passed (374)
+   Start at  08:15:36
+   Duration  8.23s (transform 3.30s, setup 0ms, collect 9.85s, tests 18.16s, environment 21ms, prepare 4.49s)
+
+
+末次打开方式守卫补充：
+
+ RUN  v3.2.6 /Users/apple/Desktop/cclink-dev/cclink-studio-typed-workspaces
+
+ ✓ src/renderer/src/features/context-actions/domains/tab-context-actions.test.ts (12 tests) 15ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  08:17:07
+   Duration  566ms (transform 217ms, setup 0ms, collect 305ms, tests 15ms, environment 0ms, prepare 43ms)
+

@@ -1,3 +1,4 @@
+import { ContentPresentationBar } from './ContentPresentationBar'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useAgentStore, useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
@@ -322,6 +323,8 @@ export function Workbench({
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
         conversationDropActive={conversationDropActive}
       />
+
+      <ContentPresentationBar tab={activeTab} />
 
       {isBrowserTab && activeTabId && (
         <BrowserToolbar

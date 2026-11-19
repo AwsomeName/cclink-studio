@@ -39,7 +39,7 @@ import { ModelViewer } from './ModelViewer'
 import { WorkbenchAgentConversation } from './WorkbenchAgentConversation'
 import { WeChatPreview } from './wechat/WeChatPreview'
 import type { TerminalOutputLine } from '../../stores/terminal-store'
-import { isHtmlFilePath } from '../../utils/html-files'
+import { isMarkdownPath } from '../../utils/content-presentation'
 import {
   pasteClipboardToTerminal,
   registerTerminalContextSurface,
@@ -145,7 +145,8 @@ export function WorkbenchContent({
               />
             )}
             {activeTab.type === 'editor' &&
-              (activeTab.filePath && isHtmlFilePath(activeTab.filePath) ? (
+              (activeTab.filePath &&
+              (!isMarkdownPath(activeTab.filePath) || activeTab.editorPresentation === 'source') ? (
                 <SourceTextEditor
                   key={activeTab.filePath}
                   filePath={activeTab.filePath}

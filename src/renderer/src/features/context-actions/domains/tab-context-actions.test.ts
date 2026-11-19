@@ -256,3 +256,11 @@ describe('pinned tab commands', () => {
     expect(useTabStore.getState().tabs.some((tab) => tab.id === second)).toBe(false)
   })
 })
+
+it('does not offer file opening conversions for an unnamed draft', () => {
+  useTabStore.getState().openTab({ type: 'editor', title: '未命名', icon: 'x' })
+  const command = createTabContextCommands().find(
+    (item) => item.id === 'workbench.openAs.markdown',
+  )!
+  expect(command.enabled?.({ source: 'palette' })).toBe(false)
+})

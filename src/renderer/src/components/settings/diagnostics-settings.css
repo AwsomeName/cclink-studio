@@ -1,0 +1,49 @@
+.diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.diagnostics-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.diagnostics-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.diagnostics-summary article {
+  padding: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+}
+.diagnostics-summary strong {
+  display: block;
+  margin-bottom: 8px;
+}
+.diagnostics-summary p {
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.diagnostics-details {
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+}
+.diagnostics-details summary {
+  cursor: pointer;
+}
+.diagnostics-details pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-height: 55vh;
+  overflow: auto;
+}

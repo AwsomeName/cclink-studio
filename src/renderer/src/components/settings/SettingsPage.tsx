@@ -1,3 +1,4 @@
+import { DiagnosticsSettings } from './DiagnosticsSettings'
 import { DataSourcesPanel } from '../data-sources/DataSourcesPanel'
 import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { WebResourcesSidebar } from '../../features/web-resources/WebResourcesSidebar'
@@ -50,6 +51,7 @@ import {
   isContextMenuKeyboardEvent,
 } from '../../features/context-actions/context-menu-trigger'
 type SettingsSectionId =
+  | 'diagnostics'
   | 'data-connections'
   | 'remote-devices'
   | 'workspace'
@@ -90,6 +92,7 @@ const SETTINGS_SECTIONS: Array<{
   { id: 'browser', label: '浏览器', group: '工作台', icon: IconGlobe },
   { id: 'git-backup', label: 'Git 备份', group: '工作台', icon: IconLink },
   { id: 'cad', label: '硬件与 CAD', group: '工作台', icon: IconMonitor },
+  { id: 'diagnostics', label: '运行状态与诊断', group: '应用', icon: IconTool },
   { id: 'updates', label: '更新', group: '应用', icon: IconCloud },
   { id: 'about', label: '关于', group: '应用', icon: IconSettings },
 ]
@@ -756,6 +759,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
       <main className="settings-content">
         {![
+          'diagnostics',
           'components',
           'model-usage',
           'connections',
@@ -782,6 +786,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'web-accounts' && (
           <section className="settings-section">
             <h2>网站与账号</h2>
+            <p className="settings-description">
+              本机网站账号与登录状态；任务使用账号仍遵循原任务授权。
+            </p>
             <WebResourcesSidebar
               workspaceRef={workspaceRef}
               workspacePath={workspaceRef.kind === 'local' ? workspaceRef.path : null}
@@ -791,6 +798,9 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'roles' && (
           <section className="settings-section">
             <h2>角色</h2>
+            <p className="settings-description">
+              复用原角色库。角色用于会话与任务，不改变当前项目类型。
+            </p>
             <AgentRolesSidebar />
           </section>
         )}
@@ -803,9 +813,11 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         {activeSection === 'remote-devices' && (
           <section className="settings-section">
             <h2>远程设备</h2>
-            <CclinkPanel />
+            <p className="settings-description">本机账号与设备连接，不写入项目文件或 Git。</p>
+            <CclinkPanel configuration />
           </section>
         )}
+        {activeSection === 'diagnostics' && <DiagnosticsSettings navigate={navigateSettings} />}
         {activeSection === 'workspace' && <WorkspaceSettingsForm />}
         {activeSection === 'appearance' && (
           <section className="settings-section">

@@ -1,3 +1,4 @@
+import { formatRunStatus } from './scheduled-task-view-model'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ScheduledTaskResourceRef,
@@ -843,20 +844,6 @@ export function ScheduledTaskRunActions({
 }
 
 const EMPTY_RUNS: ScheduledTaskRun[] = []
-
-function formatRunStatus(status: ScheduledTaskRun['status']): string {
-  const labels: Record<ScheduledTaskRun['status'], string> = {
-    queued: '排队中',
-    running: '运行中',
-    completed: '已完成',
-    failed: '失败',
-    cancelled: '已取消',
-    interrupted: '已中断',
-    missed: '已错过',
-    skipped: '已跳过',
-  }
-  return labels[status]
-}
 
 function formatRunTrigger(run: ScheduledTaskRun): string {
   if (run.trigger === 'manual') return '立即运行'

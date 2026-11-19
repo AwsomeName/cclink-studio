@@ -173,7 +173,10 @@ export function ActivityBar(): React.ReactElement {
         })
       return
     }
-    setActivePanel(id)
+    if (agentPanelMode === 'center') {
+      setAgentPanelMode('right', 'user')
+      useUIStore.getState().showPanel(id)
+    } else setActivePanel(id)
     if (id === 'files') void useFsStore.getState().refreshWorkspace()
     if (id === 'browser') setAgentPanelMode('right', 'user')
   }
