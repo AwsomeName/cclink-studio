@@ -1,3 +1,4 @@
+import { ownerResearchIpc } from '../shared/ipc/owner-research'
 import { contextBridge, ipcRenderer } from 'electron'
 import { localTtsApi } from './local-tts-api'
 import {
@@ -444,6 +445,13 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   workbenchWindow: workbenchWindowApi,
 
   scheduledTasks: scheduledTasksApi,
+  ownerResearch: {
+    findPaths: (repo: string, terms: string[], ref: string) =>
+      invokeIpcContract(ownerResearchIpc.findPaths, repo, terms, ref),
+    readFile: (repo: string, path: string, anchor: string, ref: string) =>
+      invokeIpcContract(ownerResearchIpc.readFile, repo, path, anchor, ref),
+    readReadme: (repo: string) => invokeIpcContract(ownerResearchIpc.readReadme, repo),
+  },
   modelUsage: {
     snapshot: (query) => invokeIpcContract(modelUsageIpc.snapshot, query),
     calls: (query, offset, exclude) =>

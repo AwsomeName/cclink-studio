@@ -172,6 +172,30 @@ try {
   assert.equal(await readFile(md, 'utf8'), originals.get(md))
   pass('Markdown 正文/源码共享原未保存内容与标签，原文件未写入')
   await page.getByLabel('打开方式', { exact: true }).selectOption('source')
+  await page.getByLabel('工作版面', { exact: true }).selectOption('standard')
+  const agentPanel = page.locator('.agent-workspace')
+  await agentPanel.waitFor()
+  const agentWidth = (await agentPanel.boundingBox()).width
+  await agentPanel.getByRole('button', { name: '会话列表', exact: true }).click()
+  assert.equal((await agentPanel.boundingBox()).width, agentWidth)
+  await agentPanel.getByRole('button', { name: '新建对话', exact: true }).click()
+  assert.equal((await agentPanel.boundingBox()).width, agentWidth)
+  assert.match(await page.locator('.source-text-editor textarea').inputValue(), /源码继续编辑/)
+  assert.equal(
+    await page.locator('.tab.active').getAttribute('data-workbench-tab-id'),
+    originalTabId,
+  )
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await page.locator('#owner-board').waitFor()
+  await page.screenshot({ path: join(root, 'owner-project-integration.png') })
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await page.locator('.source-text-editor textarea').waitFor()
+  assert.match(await page.locator('.source-text-editor textarea').inputValue(), /源码继续编辑/)
+  assert.equal(
+    await page.locator('.tab.active').getAttribute('data-workbench-tab-id'),
+    originalTabId,
+  )
+  pass('合并组合：Agent 列表/对话同宽切换、Owner 往返保留原 Markdown 标签和未保存内容')
   await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
   await page.screenshot({ path: join(root, 'markdown-source.png') })
   await file('example.ts')
@@ -192,6 +216,30 @@ try {
       ),
     'HTML native page',
   )
+  const nativeId = await app.evaluate(
+    ({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .find(
+          (wc) =>
+            wc.getURL().includes('%E6%9C%AC%E5%9C%B0') || wc.getURL().endsWith('/本地页面.html'),
+        ).id,
+  )
+  const attached = () =>
+    app.evaluate(
+      ({ BrowserWindow }, id) =>
+        BrowserWindow.getAllWindows().some((win) =>
+          win.contentView.children.some((view) => view.webContents?.id === id),
+        ),
+      nativeId,
+    )
+  await until(attached, 'native browser attached')
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await page.locator('#owner-board').waitFor()
+  await until(async () => !(await attached()), 'Owner hides native browser')
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await until(attached, 'original native browser reattached')
+  pass('合并组合：Owner 展开隐藏原生网页，返回重新附着同一 WebContents')
   await page.getByLabel('打开方式', { exact: true }).selectOption('source')
   await page.locator('.source-text-editor textarea').waitFor()
   assert.equal(await page.locator('.source-text-editor textarea').inputValue(), originals.get(html))
@@ -281,6 +329,13 @@ try {
     'long task started',
   )
   const firstRun = (await runs(task.definition.id))[0]
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await page.locator('#owner-board').waitFor()
+  assert.equal((await runs(task.definition.id))[0].id, firstRun.id)
+  assert.equal((await runs(task.definition.id))[0].status, 'running')
+  await page.getByRole('button', { name: /^◈ Owner/ }).click()
+  await page.locator('.scheduled-task-tab').waitFor()
+  pass('合并组合：Owner 往返不打断原定时长任务、不创建新运行')
   await closeActiveTab()
   assert.equal((await runs(task.definition.id))[0].id, firstRun.id)
   assert.equal((await runs(task.definition.id))[0].status, 'running')

@@ -1,0 +1,11 @@
+ Test Files  43 passed (43)
+      Tests  580 passed | 1 skipped (581)
+   Start at  10:45:49
+   Duration  9.04s (transform 5.25s, setup 0ms, collect 15.24s, tests 19.48s, environment 7ms, prepare 4.99s)
+
+
+Web/Node TypeScript: passed
+Electron build: passed
+Changed-code ESLint: passed
+Context actions boundary: passed
+Credential boundary: passed

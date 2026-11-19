@@ -534,12 +534,12 @@ describe('useAgentStore', () => {
       expect(useAgentStore.getState().conversations[secondId]).toBeUndefined()
     })
 
-    it('归档会话时保留消息并切到其他未归档会话', () => {
+    it('归档会话时保留消息并切到其他未归档会话', async () => {
       const firstId = useAgentStore.getState().activeConversationId
       const secondId = useAgentStore.getState().createConversation()
       useAgentStore.getState().addUserMessage('需要长期保存的工作现场', secondId)
 
-      useAgentStore.getState().archiveConversation(secondId)
+      await useAgentStore.getState().archiveConversation(secondId)
 
       const state = useAgentStore.getState()
       expect(state.activeConversationId).toBe(firstId)
@@ -547,10 +547,10 @@ describe('useAgentStore', () => {
       expect(state.conversations[secondId].messages.at(-1)?.rawText).toBe('需要长期保存的工作现场')
     })
 
-    it('归档最后一个可见会话时创建新的即时会话兜底', () => {
+    it('归档最后一个可见会话时创建新的即时会话兜底', async () => {
       const onlyId = useAgentStore.getState().activeConversationId
 
-      useAgentStore.getState().archiveConversation(onlyId)
+      await useAgentStore.getState().archiveConversation(onlyId)
 
       const state = useAgentStore.getState()
       expect(state.conversations[onlyId].archivedAt).toEqual(expect.any(Number))
@@ -559,7 +559,7 @@ describe('useAgentStore', () => {
       expect(state.conversations[state.activeConversationId].surface).toBe('assistant-panel')
     })
 
-    it('归档项目最后一个会话时不会切到其他项目', () => {
+    it('归档项目最后一个会话时不会切到其他项目', async () => {
       const projectA = useAgentStore.getState().createConversation({
         activate: false,
         runtime: {
@@ -578,7 +578,7 @@ describe('useAgentStore', () => {
         },
       })
 
-      useAgentStore.getState().archiveConversation(projectB)
+      await useAgentStore.getState().archiveConversation(projectB)
 
       const state = useAgentStore.getState()
       const fallback = state.conversations[state.activeConversationId]
@@ -587,11 +587,11 @@ describe('useAgentStore', () => {
       expect(fallback.archivedAt).toBeNull()
     })
 
-    it('恢复已归档会话后切为活跃会话', () => {
+    it('恢复已归档会话后切为活跃会话', async () => {
       const archivedId = useAgentStore.getState().createConversation()
-      useAgentStore.getState().archiveConversation(archivedId)
+      await useAgentStore.getState().archiveConversation(archivedId)
 
-      useAgentStore.getState().restoreArchivedConversation(archivedId)
+      await useAgentStore.getState().restoreArchivedConversation(archivedId)
 
       const state = useAgentStore.getState()
       expect(state.activeConversationId).toBe(archivedId)
@@ -611,7 +611,7 @@ describe('useAgentStore', () => {
     it('删除已归档历史会话时不切走当前活跃会话', async () => {
       const activeId = useAgentStore.getState().activeConversationId
       const archivedId = useAgentStore.getState().createConversation({ activate: false })
-      useAgentStore.getState().archiveConversation(archivedId)
+      await useAgentStore.getState().archiveConversation(archivedId)
 
       await useAgentStore.getState().deleteConversation(archivedId)
 
@@ -633,6 +633,83 @@ describe('useAgentStore', () => {
         1,
       )
       expect(useAgentStore.getState().activeConversationId).toBe(activeId)
+    })
+
+    it.each(['运行中', '待确认'])('操作入口拒绝归档和删除%s的会话', async (reason) => {
+      const agent = useAgentStore.getState()
+      const id = agent.activeConversationId
+      if (reason === '运行中') agent.beginRun(id)
+      else
+        agent.addPendingConfirmation({
+          id: 'confirm',
+          conversationId: id,
+          toolName: 'edit',
+          summary: [],
+          riskLevel: 'write',
+        })
+      await expect(agent.archiveConversation(id)).rejects.toThrow(reason)
+      await expect(agent.deleteConversation(id)).rejects.toThrow(reason)
+      expect(useAgentStore.getState().conversations[id].archivedAt).toBeNull()
+    })
+
+    it.each(['delete', 'archive'] as const)(
+      '%s 写入失败时保留唯一会话、选中项和草稿',
+      async (action) => {
+        const agent = useAgentStore.getState()
+        const id = agent.activeConversationId
+        agent.setInput('未发送草稿', id)
+        const setSection = vi.fn().mockResolvedValue({ success: false, error: '磁盘已满' })
+        vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+        await expect(
+          action === 'delete' ? agent.deleteConversation(id) : agent.archiveConversation(id),
+        ).rejects.toThrow('磁盘已满')
+        expect(useAgentStore.getState()).toMatchObject({
+          conversationOrder: [id],
+          activeConversationId: id,
+          input: '未发送草稿',
+          conversations: { [id]: { archivedAt: null, input: '未发送草稿' } },
+        })
+      },
+    )
+
+    it('删除失败不覆盖等待写盘期间切换的会话或新草稿', async () => {
+      const agent = useAgentStore.getState()
+      const first = agent.activeConversationId
+      const second = agent.createConversation({ input: '原草稿' })
+      let finish!: (result: { success: boolean; error?: string }) => void
+      const setSection = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve
+            }),
+        )
+        .mockResolvedValue({ success: true })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const deleting = agent.deleteConversation(second)
+      agent.switchConversation(first)
+      agent.setInput('另一会话的新草稿', first)
+      finish({ success: false, error: '磁盘已满' })
+      await expect(deleting).rejects.toThrow('磁盘已满')
+      await flushPendingWorkspaceStateWrites()
+      expect(useAgentStore.getState()).toMatchObject({
+        activeConversationId: first,
+        input: '另一会话的新草稿',
+        conversations: { [second]: { input: '原草稿' } },
+      })
+    })
+
+    it('恢复写入失败时保留原归档时间及当前会话', async () => {
+      const agent = useAgentStore.getState()
+      const id = agent.createConversation()
+      await agent.archiveConversation(id)
+      const before = useAgentStore.getState()
+      const setSection = vi.fn().mockResolvedValue({ success: false, error: '磁盘已满' })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      await expect(agent.restoreArchivedConversation(id)).rejects.toThrow('磁盘已满')
+      expect(useAgentStore.getState().conversations[id]).toBe(before.conversations[id])
+      expect(useAgentStore.getState().activeConversationId).toBe(before.activeConversationId)
     })
 
     it('恢复期间拒绝删除，避免持久化跳过却报告删除成功', async () => {
@@ -1379,16 +1456,15 @@ describe('useAgentStore', () => {
           settled = true
         })
 
-      expect(useAgentStore.getState().conversations[conversationId].archivedAt).not.toBeNull()
+      expect(useAgentStore.getState().conversations[conversationId].archivedAt).toBeNull()
       expect(setSection).toHaveBeenCalledTimes(1)
       expect(settled).toBe(false)
 
       completions[0]({ success: true })
-      await vi.waitFor(() => expect(setSection).toHaveBeenCalledTimes(2))
-      expect(settled).toBe(false)
-
-      completions[1]({ success: true })
       await archive
+      expect(useAgentStore.getState().conversations[conversationId].archivedAt).not.toBeNull()
+      completions[1]({ success: true })
+      await flushPendingWorkspaceStateWrites()
       expect(settled).toBe(true)
     })
   })

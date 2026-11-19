@@ -144,6 +144,29 @@ describe('registerAgentIpc', () => {
     )
   })
 
+  it('binds text-only sends to the backend tool restrictions and rejects an unsupported runtime', async () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+    const send = mockIpcMain.handlers.get('agent:sendMessage')!
+    const input = { message: '核对', toolAccess: 'none', workspaceRef: { kind: 'global' } }
+    await send({ sender: 'trusted' }, 'conversation-1', {
+      ...input,
+      runtimeBinding: { kind: 'codex' },
+    })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledWith(
+      '核对',
+      'conversation-1',
+      expect.objectContaining({ allowedTools: [], disableBuiltinTools: true }),
+    )
+    await expect(
+      send({ sender: 'trusted' }, 'conversation-1', {
+        ...input,
+        runtimeBinding: { kind: 'acp', implementationId: 'codex-acp' },
+      }),
+    ).resolves.toMatchObject({ success: false })
+    expect(deps.agentBridge.sendMessage).toHaveBeenCalledTimes(1)
+  })
+
   it('rejects a renderer workspace that is not the main-process current workspace', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)

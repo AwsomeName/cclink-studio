@@ -1,0 +1,1 @@
+PASS create → confirm → partially supply → restart → finish → export Markdown

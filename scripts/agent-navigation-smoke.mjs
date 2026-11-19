@@ -68,53 +68,18 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await page.evaluate(() =>
       localStorage.setItem('cclink-studio-agent-composer-height-side', '420'),
     )
-    // Start with the real default width. Opening a rail adds only its width and divider.
     await ui('chat', 350)
-    await page.evaluate(async () => {
-      const ui = (await import('/src/stores/ui-store.ts')).useUIStore.getState()
-      ui.setSidebarWidth(250)
-      ui.showPanel('files')
-    })
-    await presentation('chat')
+    const swap = async (to) => {
+      await page
+        .locator('.agent-workspace-header')
+        .getByRole('button', { name: to === 'list' ? '会话列表' : '返回会话', exact: true })
+        .click()
+      await presentation(to)
+    }
+    await swap('list')
     await waitWidth(350)
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('split')
-    await waitWidth(554)
-    const openedColumns = await page.evaluate(() => {
-      const rect = (selector) => {
-        const bounds = document.querySelector(selector).getBoundingClientRect()
-        return { x: bounds.x, right: bounds.right, width: bounds.width }
-      }
-      return {
-        list: rect('.agent-navigation-list'),
-        chat: rect('.agent-workspace-chat'),
-        sidebar: rect('.workspace-sidebar-shell'),
-        chatVisible: getComputedStyle(document.querySelector('.agent-workspace-chat')).visibility,
-      }
-    })
-    assert(
-      openedColumns.list.width === 200 &&
-        openedColumns.chat.width === 349 &&
-        openedColumns.chat.right <= openedColumns.list.x &&
-        openedColumns.sidebar.width === 250 &&
-        openedColumns.chatVisible === 'visible',
-      `Default entry did not show two separate columns: ${JSON.stringify(openedColumns)}`,
-    )
-    await page.screenshot({ path: join(evidenceDir, 'agent-navigation-default-open-split.png') })
-    await page.locator('.agent-workspace').screenshot({
-      path: join(evidenceDir, 'agent-navigation-two-columns.png'),
-    })
-
-    // An existing narrow split preference must also be repairable from the drawer's chat button.
-    await ui('split', 350)
+    await swap('chat')
     await waitWidth(350)
-    await page.evaluate(async () =>
-      (await import('/src/stores/ui-store.ts')).useUIStore.getState().setAgentDrawerOpen(true),
-    )
-    await presentation('drawer')
-    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
-    await presentation('split')
-    await waitWidth(700)
     const input = page.locator('.agent-workspace .agent-input')
     await input.fill('')
     const inputHeight = () => input.evaluate((el) => el.getBoundingClientRect().height)
@@ -137,64 +102,15 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await messages.hover()
     await page.mouse.wheel(0, -20000)
     await wait(() => document.querySelector('.agent-workspace .agent-messages').scrollTop < 30)
-    await page.screenshot({ path: join(evidenceDir, 'agent-navigation-split.png') })
-
-    const geometry = () =>
-      page.evaluate(() => {
-        const rect = (selector) => {
-          const box = document.querySelector(selector).getBoundingClientRect()
-          return { x: box.x, right: box.right, width: box.width }
-        }
-        return {
-          chat: rect('.agent-workspace-chat'),
-          workbench: rect('.workbench'),
-          list: rect('.agent-navigation-list'),
-        }
-      })
-    const splitGeometry = await geometry()
-    let collapsedGeometry
-    for (let repeat = 0; repeat < 3; repeat++) {
-      await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
-      await presentation('chat')
-      await waitWidth(496)
-      collapsedGeometry = await geometry()
-      assert(
-        Math.abs(collapsedGeometry.chat.width - splitGeometry.chat.width) < 1,
-        'Collapsing expanded chat width',
-      )
-      assert(
-        Math.abs(collapsedGeometry.chat.x - splitGeometry.chat.x - 204) < 1,
-        'Chat did not shift right by the released rail width',
-      )
-      assert(
-        Math.abs(collapsedGeometry.workbench.width - splitGeometry.workbench.width - 204) < 1,
-        'Released rail width did not return to workbench',
-      )
-      if (repeat === 0)
-        await page.screenshot({
-          path: join(evidenceDir, 'agent-navigation-chat-shifted-right.png'),
-        })
-      await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-      await presentation('split')
-      await waitWidth(700)
-      assert(
-        Math.abs((await geometry()).chat.width - splitGeometry.chat.width) < 1,
-        'Expanding changed chat width',
-      )
-    }
-    await page.getByRole('button', { name: '收起聊天，仅保留会话列表', exact: true }).click()
-    await presentation('list')
-    await waitWidth(200)
-    await page.screenshot({ path: join(evidenceDir, 'agent-navigation-list-only.png') })
+    await swap('list')
     assert(
-      (await page.evaluate(
-        async () => (await import('/src/stores/ui-store.ts')).useUIStore.getState().agentPanelWidth,
-      )) === 700,
-      'List-only overwrote expanded width',
+      await page.locator('.agent-workspace-chat').evaluate((el) => el.inert),
+      'Hidden chat is not inert',
     )
+    await page.screenshot({ path: join(evidenceDir, 'agent-list.png') })
     await page.locator('.agent-navigation-list .session-sidebar-row[title="导航测试 A"]').click()
-    await presentation('split')
-    await waitWidth(700)
+    await presentation('chat')
+    await waitWidth(350)
     assert(
       (await input.inputValue()) === '导航草稿：切换和收放后保留',
       'Draft lost after list-only',
@@ -204,6 +120,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       'Reading position lost after list-only',
     )
 
+    await swap('list')
     await page.locator('.agent-navigation-list .session-sidebar-row[title="导航测试 B"]').click()
     await selected(ids.second)
     await input.fill('B 的独立草稿')
@@ -244,6 +161,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
           .rawText.includes('后台继续输出'),
       ids.first,
     )
+    await swap('list')
     await page.locator('.agent-navigation-list .session-sidebar-row[title="导航测试 A"]').click()
     await selected(ids.first)
     assert(
@@ -264,38 +182,10 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       `Hidden conversation stopped receiving events: ${JSON.stringify(run)}`,
     )
 
-    await page.locator('[data-layout-area="agent-sessions"]').focus()
-    await page.keyboard.press('ArrowRight')
-    assert(
-      (await page.evaluate(
-        async () => (await import('/src/stores/ui-store.ts')).useUIStore.getState().agentListWidth,
-      )) === 190,
-      'Keyboard list resize failed',
-    )
-    await page.locator('[data-layout-area="agent-sessions"]').press('ArrowLeft')
-    await resizeWindow(860)
-    await presentation('chat')
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('drawer')
-    assert(
-      await page.locator('.agent-workspace-chat').evaluate((el) => el.inert),
-      'Covered chat must be inert',
-    )
-    await page.screenshot({ path: join(evidenceDir, 'agent-navigation-drawer.png') })
-    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
-    await presentation('chat')
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('drawer')
-    await page.keyboard.press('Escape')
-    await presentation('chat')
-    await resizeWindow(1440)
-    await presentation('split')
-    await waitWidth(700)
-    await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
     await resizeWindow(900)
+    await swap('list')
+    await swap('chat')
     await resizeWindow(1440)
-    await presentation('chat')
-
     await page.locator('.app-topbar-right button').click()
     await page.locator('.agent-workspace').waitFor({ state: 'detached' })
     await electronApp.evaluate(
@@ -314,7 +204,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     )
     await page.locator('.app-topbar-right button').click()
     await presentation('chat')
-    await waitWidth(496)
+    await waitWidth(350)
     assert(
       (await input.inputValue()) === '导航草稿：切换和收放后保留',
       'Draft lost after whole panel hide',
@@ -332,42 +222,11 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       page.evaluate(
         () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
       )
-    await ui('chat', 656)
-    await presentation('chat')
-    await waitWidth(656)
-    const beforeChatToggle = (await geometry()).chat.width
-    await page.getByRole('button', { name: '收起聊天，仅保留会话列表', exact: true }).click()
-    await presentation('list')
-    await page.getByRole('button', { name: '展开聊天', exact: true }).click()
-    await presentation('split')
-    await settleLayout()
-    const afterChatToggle = (await geometry()).chat.width
-    if (Math.abs(beforeChatToggle - afterChatToggle) >= 1)
-      auditIssues.push(
-        `Chat-only → list → split changed chat width: ${beforeChatToggle} → ${afterChatToggle}`,
-      )
-
-    await ui('split', 524.75)
-    await presentation('split')
-    await settleLayout()
-    const beforeFractionalToggle = (await geometry()).chat.width
-    await page.getByRole('button', { name: '收起会话列表', exact: true }).click()
-    await presentation('chat')
-    await settleLayout()
-    const afterFractionalToggle = (await geometry()).chat.width
-    if (Math.abs(beforeFractionalToggle - afterFractionalToggle) >= 1)
-      auditIssues.push(
-        `Fractional split collapse changed chat width: ${beforeFractionalToggle} → ${afterFractionalToggle}`,
-      )
-    await page.getByRole('button', { name: '展开会话列表', exact: true }).click()
-    await presentation('split')
-    await settleLayout()
-    const reopenedFractionalChat = (await geometry()).chat.width
-    if (Math.abs(beforeFractionalToggle - reopenedFractionalChat) >= 1)
-      auditIssues.push(
-        `Fractional split reopening changed chat width: ${beforeFractionalToggle} → ${reopenedFractionalChat}`,
-      )
-
+    await ui('chat', 524.75)
+    const previousWidth = await width()
+    await swap('list')
+    await swap('chat')
+    assert(Math.abs(previousWidth - (await width())) < 1, 'Page switch changed fractional width')
     await ui('chat', 656)
     await input.fill('')
     await messages.hover()
@@ -400,23 +259,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
       )
     assert(auditIssues.length === 0, `Navigation audit: ${JSON.stringify(auditIssues)}`)
     return {
-      defaultEntryColumns: openedColumns,
-      expandedWidth: 700,
-      listOnlyWidth: 200,
-      splitGeometry,
-      collapsedGeometry,
       composer: { compactHeight, grownHeight, cappedHeight },
-      audit: {
-        beforeChatToggle,
-        afterChatToggle,
-        beforeFractionalToggle,
-        afterFractionalToggle,
-        reopenedFractionalChat,
-        bottomGapAfterTyping,
-        readingPosition,
-        readingPositionAfterTyping,
-      },
-      narrowDrawer: true,
       draftsPreserved: true,
       readPositionPreserved: true,
       controlledIpcWhileHidden: true,

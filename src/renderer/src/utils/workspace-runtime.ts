@@ -1,6 +1,6 @@
 import type { WorkspaceStateSnapshot } from '@shared/ipc/workspace-state'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
-import { buildAgentConversationWorkspaceSnapshot, useAgentStore } from '../stores/agent-store'
+import { persistConversationWorkspaceByKey, useAgentStore } from '../stores/agent-store'
 import { useBrowserStore } from '../stores/browser-store'
 import { persistEditorDrafts, useEditorStore } from '../stores/editor-store'
 import { useTabStore } from '../stores/tab-store'
@@ -141,8 +141,6 @@ export async function persistRuntimeSections(
       ? tabState.activeTabId
       : (workspaceTabs[0]?.id ?? null)
 
-  const agentState = useAgentStore.getState()
-
   const writes = [
     {
       section: 'tabs' as const,
@@ -181,11 +179,7 @@ export async function persistRuntimeSections(
       : [
           {
             section: 'agentConversations' as const,
-            promise: persistWorkspaceSectionNow(
-              'agentConversations',
-              buildAgentConversationWorkspaceSnapshot(agentState, targetWorkspaceKey),
-              targetWorkspaceKey,
-            ),
+            promise: persistConversationWorkspaceByKey(targetWorkspaceKey),
           },
         ]),
   ]

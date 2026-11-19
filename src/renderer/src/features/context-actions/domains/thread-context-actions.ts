@@ -11,6 +11,8 @@ import { focusAgentComposer } from '../../markdown/markdown-navigation'
 import { buildAgentConversationContextDiagnosticMarkdown } from '../../diagnostics/conversation-context-diagnostics'
 import { openConversationInWorkbench } from '../../agent-conversations/conversation-workbench'
 
+import { conversationBusyStatus } from '../../agent-conversations/conversation-state'
+
 export const THREAD_RESTORED_EVENT = 'cclink:thread-restored'
 
 function threadId(context?: CommandContext): string | null {
@@ -113,18 +115,24 @@ export function createThreadContextCommands(): Command[] {
       contextOnly: true,
       category: '会话',
       visible: (context) => Boolean(currentThread(context) && !currentThread(context)?.archivedAt),
+      enabled: (context) => {
+        const conversation = currentThread(context)
+        const busy =
+          conversation &&
+          conversationBusyStatus(conversation, useAgentStore.getState().pendingConfirmations)
+        return {
+          enabled: Boolean(conversation && !busy),
+          reason: busy ? '会话' + busy + '，请先结束本轮任务' : undefined,
+        }
+      },
       action: async (context) => {
         const id = threadId(context)
         if (!id || !currentThread(context)) throw new Error('会话已不存在')
-        try {
-          await useAgentStore.getState().archiveConversation(id)
-          const tabStore = useTabStore.getState()
-          tabStore.tabs
-            .filter((tab) => tab.type === 'conversation' && tab.conversation?.sessionId === id)
-            .forEach((tab) => tabStore.closeTab(tab.id))
-        } catch (error) {
-          useToastStore.getState().show(`会话已移到历史，但保存失败：${String(error)}`, 'error')
-        }
+        await useAgentStore.getState().archiveConversation(id)
+        const tabStore = useTabStore.getState()
+        tabStore.tabs
+          .filter((tab) => tab.type === 'conversation' && tab.conversation?.sessionId === id)
+          .forEach((tab) => tabStore.closeTab(tab.id))
       },
     },
     {
@@ -136,12 +144,8 @@ export function createThreadContextCommands(): Command[] {
       action: async (context) => {
         const id = threadId(context)
         if (!id || !currentThread(context)) throw new Error('会话已不存在')
-        try {
-          await useAgentStore.getState().restoreArchivedConversation(id)
-          window.dispatchEvent(new CustomEvent(THREAD_RESTORED_EVENT, { detail: { id } }))
-        } catch (error) {
-          useToastStore.getState().show(`会话已恢复，但保存失败：${String(error)}`, 'error')
-        }
+        await useAgentStore.getState().restoreArchivedConversation(id)
+        window.dispatchEvent(new CustomEvent(THREAD_RESTORED_EVENT, { detail: { id } }))
       },
     },
   ]

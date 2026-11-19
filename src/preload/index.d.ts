@@ -105,6 +105,20 @@ export interface CCLinkStudioAPI {
   workbenchWindow: WorkbenchMainWindowApiContract
 
   scheduledTasks: ScheduledTasksApiContract
+  ownerResearch: {
+    findPaths: (
+      repo: string,
+      terms: string[],
+      ref: string,
+    ) => Promise<{ ok: true; paths: string[]; truncated: boolean } | { ok: false; error: string }>
+    readFile: (
+      repo: string,
+      path: string,
+      anchor: string,
+      ref: string,
+    ) => Promise<import('../shared/ipc/owner-research').ReadmeResult>
+    readReadme: (repo: string) => Promise<import('../shared/ipc/owner-research').ReadmeResult>
+  }
   modelUsage: ModelUsageApiContract
 
   mediaProjects: MediaProjectsApiContract

@@ -112,6 +112,7 @@ export interface AgentConversationContinuity {
 }
 
 export interface AgentSendMessagePayload {
+  toolAccess?: 'none'
   message: string
   /** Thread 绑定的本地 runtime；旧数据缺失时必须按 Claude Code 处理。 */
   runtimeBinding?: AgentRuntimeBinding

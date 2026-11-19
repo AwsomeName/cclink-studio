@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStateFlushAcknowledgement } from '../../shared/ipc/workspace-state'
 import { dialog } from 'electron'
 
@@ -25,9 +26,58 @@ vi.mock('../ipc/trusted-renderer-guard', () => ({
 import { RendererWorkspaceStateFlushCoordinator } from './renderer-workspace-state-flush'
 
 describe('RendererWorkspaceStateFlushCoordinator', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it.each(['timeout', 'failed'])(
+    'keeps the debug workbench open without a dialog on %s and allows a retry',
+    async (outcome) => {
+      const window = createWindow()
+      new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, {
+        isDev: true,
+        timeoutMs: 10,
+      })
+      const warning = vi.spyOn(console, 'warn')
+      try {
+        // A successful reload must not inherit the previous document's preload failure.
+        window.value.webContents.emit('preload-error')
+        window.value.webContents.emit('did-start-navigation', {
+          isMainFrame: true,
+          isSameDocument: false,
+        })
+        window.emitClose({ preventDefault: vi.fn() })
+        if (outcome === 'failed') {
+          ipcRegistration.listener?.({}, { requestId: window.lastRequestId(), success: false })
+        }
+        await vi.waitFor(() => expect(warning).toHaveBeenCalledWith(expect.any(String), outcome))
+        expect(dialog.showMessageBox).not.toHaveBeenCalled()
+        expect(window.close).not.toHaveBeenCalled()
+        window.emitClose({ preventDefault: vi.fn() })
+        ipcRegistration.listener?.({}, { requestId: window.lastRequestId(), success: true })
+        await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce())
+      } finally {
+        warning.mockRestore()
+      }
+    },
+  )
+
+  it('closes a debug window with a failed preload after attempting to save, without a dialog', async () => {
+    const window = createWindow()
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, {
+      isDev: true,
+      timeoutMs: 5,
+    })
+    window.value.webContents.emit('preload-error')
+    window.emitClose({ preventDefault: vi.fn() })
+    expect(window.lastRequestId()).toBeTruthy()
+    await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce())
+    expect(dialog.showMessageBox).not.toHaveBeenCalled()
+  })
+
   it('keeps the window open after a failed write and permits a later successful retry', async () => {
     const window = createWindow()
-    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 100)
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, {
+      timeoutMs: 100,
+    })
     window.emitClose({ preventDefault: vi.fn() })
     ipcRegistration.listener?.({}, { requestId: window.lastRequestId(), success: false })
     await vi.waitFor(() => expect(dialog.showMessageBox).toHaveBeenCalled())
@@ -41,7 +91,7 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
   it('requires an explicit discard decision to close after a timeout', async () => {
     vi.mocked(dialog.showMessageBox).mockResolvedValueOnce({ response: 2, checkboxChecked: false })
     const window = createWindow()
-    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 5)
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, { timeoutMs: 5 })
     window.emitClose({ preventDefault: vi.fn() })
     expect(window.close).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(window.close).toHaveBeenCalledOnce())
@@ -51,7 +101,7 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
     const coordinator = new RendererWorkspaceStateFlushCoordinator(
       window.value as never,
       {} as never,
-      100,
+      { timeoutMs: 100 },
     )
     const pending = coordinator.requestInstallReadiness()
     const requestId = window.lastRequestId()
@@ -65,7 +115,9 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
   })
   it('waits for a successful renderer acknowledgement before closing the window', async () => {
     const window = createWindow()
-    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, 100)
+    new RendererWorkspaceStateFlushCoordinator(window.value as never, {} as never, {
+      timeoutMs: 100,
+    })
 
     const event = { preventDefault: vi.fn() }
     window.emitClose(event)
@@ -82,7 +134,7 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
     const coordinator = new RendererWorkspaceStateFlushCoordinator(
       window.value as never,
       {} as never,
-      100,
+      { timeoutMs: 100 },
     )
 
     const pending = coordinator.requestFlush()
@@ -96,7 +148,7 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
     const coordinator = new RendererWorkspaceStateFlushCoordinator(
       window.value as never,
       {} as never,
-      100,
+      { timeoutMs: 100 },
     )
 
     const pending = coordinator.requestFlush()
@@ -117,7 +169,7 @@ describe('RendererWorkspaceStateFlushCoordinator', () => {
     const coordinator = new RendererWorkspaceStateFlushCoordinator(
       window.value as never,
       {} as never,
-      5,
+      { timeoutMs: 5 },
     )
 
     await expect(coordinator.requestFlush()).resolves.toBe('timeout')
@@ -131,10 +183,7 @@ function createWindow() {
   return {
     value: {
       isDestroyed: () => false,
-      webContents: {
-        isDestroyed: () => false,
-        send,
-      },
+      webContents: Object.assign(new EventEmitter(), { isDestroyed: () => false, send }),
       on: (event: string, listener: (event: { preventDefault: () => void }) => void) => {
         if (event === 'close') closeListeners.add(listener)
       },

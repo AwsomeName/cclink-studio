@@ -6,11 +6,13 @@ import { getPermissionModeOption, PERMISSION_MODE_OPTIONS } from './composer-vie
 
 export function AgentPermissionModeMenu({
   mode,
+  compact = false,
   disabled,
   onChange,
   open,
   onOpenChange,
 }: {
+  compact?: boolean
   mode: PermissionMode
   disabled?: boolean
   onChange(mode: PermissionMode): void
@@ -31,7 +33,7 @@ export function AgentPermissionModeMenu({
         disabled={disabled}
         title={`Studio 权限模式（本地与远程共用）: ${selected.label}`}
       >
-        <IconCircle size={8} filled color={selected.color} />
+        {compact ? '权限：' : <IconCircle size={8} filled color={selected.color} />}
         {selected.label}
         <IconChevronDown size={12} />
       </button>

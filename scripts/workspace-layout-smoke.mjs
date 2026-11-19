@@ -947,7 +947,7 @@ try {
       const navigationA = {
         ...layoutA,
         agentPanelWidth: 700,
-        agentContentMode: 'split',
+        agentContentMode: 'chat',
         agentListWidth: 240,
       }
       const navigationB = {
@@ -965,19 +965,19 @@ try {
         await browser.close()
         await connect()
         await assertLayout(a, navigationA)
-        await page.waitForSelector('[data-agent-navigation="split"]')
+        await page.waitForSelector('[data-agent-navigation="chat"]')
         await measure(browserATabId, urlA, 'restart-a')
         await open(b)
         await assertLayout(b, navigationB)
         await page.waitForSelector('[data-agent-navigation="list"]')
         const listOnlyWidth = await until(
           () => page.locator('.agent-side-shell').evaluate((element) => element.clientWidth),
-          (width) => Math.abs(width - 200) < 2,
+          (width) => Math.abs(width - navigationB.agentPanelWidth) < 2,
           'B restored list width after layout transition',
         )
         await open(a)
         await assertLayout(a, navigationA)
-        await page.waitForSelector('[data-agent-navigation="split"]')
+        await page.waitForSelector('[data-agent-navigation="chat"]')
         await page.screenshot({ path: join(evidenceDir, 'restored-layout.png') })
         return { expandedWidth: 700, listWidthA: 240, listWidthB: listOnlyWidth }
       } finally {

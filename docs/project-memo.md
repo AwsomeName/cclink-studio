@@ -1,7 +1,24 @@
 # CCLink Studio 项目备忘录
 
 > 本文件记录尚未进入正式方案的候选想法，以及已退出当前主线的暂缓事项；不是当前实现事实源。
-> 最后更新：2026-10-16。
+> 最后更新：2026-11-19。
+
+## 2026-11-19 · 托管云环境与用户自有 Agent
+
+**讨论建议：暂缓建设通用托管云环境，优先实测自有 Agent 在 Studio 断开后能否继续工作，并在重连后交回结果。** 本次为产品调研；建设托管服务仍是候选方向。
+
+### Codex 和 Claude 的云环境
+
+- **机器由谁提供。** Codex Cloud 的标准执行机由 OpenAI 管理，Claude Code 默认由 Anthropic 提供隔离虚拟机。用户选项目决定处理哪份代码，选环境决定在哪里工作、可用哪些工具和网络。环境配置可以复用，每次任务有独立工作区。Codex 的默认环境还支持先运行无仓库任务。[Codex 环境](https://learn.chatgpt.com/docs/environments/modes) · [Claude 云会话](https://code.claude.com/docs/en/claude-code-on-the-web)
+- **GitHub 和本地文件。** 常规网页流程中，用户授权并选择仓库，云端拉取已推送的代码，Agent 可以改文件、运行测试、推分支并发起 PR。本机未推送的修改、其他目录及浏览器登录态不会随仓库自动同步。Claude 托管环境通过服务端代理为 Git 请求附加凭证。另有一个 CLI 例外：运行 `claude --cloud` 时，如果没有 Git 远端或对应 GitHub 仓库未安装 Claude GitHub App，CLI 可能打包本地仓库，包括历史及部分已跟踪文件的未提交修改，未跟踪文件不在包内。[Codex 云环境](https://learn.chatgpt.com/docs/environments/cloud-environments) · [Claude 仓库上传规则](https://code.claude.com/docs/en/claude-code-on-the-web#send-local-repositories-without-github)
+- **长期运行的含义。** 关闭客户端后，已启动的云任务仍可执行。Claude 云会话空闲过期后会回收虚拟机，重开能恢复对话，原先运行的命令需要重跑。定时检查或监听 PR 由云端保存触发规则，满足条件时启动执行。Claude Remote Control 则连接用户机器上的会话，执行机仍须在线。[云会话生命周期](https://code.claude.com/docs/en/claude-code-on-the-web#environment-expired) · [定时和事件触发](https://code.claude.com/docs/en/routines) · [Remote Control](https://code.claude.com/docs/en/remote-control)
+- **个人用户费用。** 调研时美国月付价均为 20 美元起，两家订阅分别购买。ChatGPT Plus 须已开放 Codex Cloud，Claude Pro 包含云会话。标准托管虚拟机当前没有单列的小时租金；本地与云端使用各自产品的 AI 套餐额度。Codex 的消耗取决于模型、上下文、推理和工具等，不能按机器开机时长换算。套餐有用量上限，另购额度或启用额外用量可能增加支出。[ChatGPT Plus](https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus) · [Codex 计量](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan) · [Claude 价格](https://claude.com/pricing) · [Claude 额外用量](https://support.claude.com/en/articles/12429409-manage-usage-credits-for-paid-claude-plans)
+
+### 对 Studio 的实际价值与复议条件
+
+- **已有常开执行机的用户**可以把工作交给自己的 Agent。Studio 当前已有真人登录并打开远程项目的记录，远程会话、审批、终端续接仍有实机验收缺项。下一次可在真实远端发起会生成文件的任务，退出 Studio，待远端执行后重新打开，核对原会话、实际生成的文件和最终结果。[远程验收记录](ops/cclink-remote-stage-1-acceptance.md)
+- **没有在线执行机的用户**是托管服务受益最明显的人群。对于只依赖仓库的任务，用户可省去安装、配对和维护 Agent，所有自有设备关机后仍可交付结果。独立机器还可以分担并行任务的资源占用。对于依赖美国 Mac 的现有登录态、Studio 真实桌面或 Android 真机的任务，新云机器仍缺少原设备上的验收条件。[远程 Mac 使用目标](features/remote-mac-workspace-discussion.md)
+- **何时重新评估。** 观察是否反复出现“仓库足以执行，但用户没有在线设备”的真实需求。若需求出现，先验证一个付费场景：用户授权仓库、下发任务、关闭所有自有电脑，再回来审查 PR 和测试结果。以真实交付、重复使用和付费意愿决定后续投入。
 
 ## 架构检查与维护：2026-10-16 会话交接
 

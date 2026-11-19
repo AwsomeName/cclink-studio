@@ -19,6 +19,7 @@ import {
   IconChevronDown,
   IconFile,
   IconPlus,
+  IconPaperclip,
   IconRefresh,
   IconRobot,
   IconSettings,
@@ -36,6 +37,7 @@ import { AgentRoleIcon } from '../agent-roles/agent-role-presentation'
 import { AgentPermissionModeMenu } from './agent-permission-mode-menu'
 
 export interface AgentComposerToolbarProps {
+  compact?: boolean
   roleRef?: AgentRoleRef
   roles?: AgentRoleSummary[]
   onRoleChange?: (role: AgentRoleSummary) => void
@@ -61,6 +63,7 @@ export interface AgentComposerToolbarProps {
 type ComposerMenuName = 'add' | 'role' | 'permission' | 'context' | 'runtime'
 
 export function AgentComposerToolbar({
+  compact = false,
   roleRef,
   roles = [],
   onRoleChange,
@@ -153,8 +156,81 @@ export function AgentComposerToolbar({
     setOpenMenu((current) => (current === menu ? null : menu))
   }
 
+  const roleMenu = onRoleChange && (
+    <div className="agent-composer-menu-wrap" ref={roleRefElement}>
+      <button
+        className="agent-mode-btn agent-profile-btn"
+        data-agent-action="role"
+        onClick={() => toggleMenu('role')}
+        title={
+          roleRef
+            ? `当前角色: ${selectedRole?.label ?? roleRef.roleId}`
+            : '当前角色不可用，请先加载角色列表'
+        }
+        disabled={loading || !roleRef || roles.length === 0}
+      >
+        {selectedRole ? (
+          <AgentRoleIcon icon={selectedRole.icon} size={14} />
+        ) : (
+          <IconRobot size={13} />
+        )}
+        <span>{selectedRole?.label ?? '角色不可用'}</span>
+        <IconChevronDown size={12} />
+      </button>
+      <FloatingSurface
+        anchorRef={roleRefElement}
+        open={openMenu === 'role'}
+        placement="top-start"
+        className="agent-composer-menu agent-profile-menu"
+        onRequestClose={() => setOpenMenu(null)}
+      >
+        <div className="agent-composer-menu-title">选择角色</div>
+        {roles.map((role) => {
+          const selected = role.roleId === roleRef?.roleId && role.version === roleRef?.version
+          return (
+            <button
+              key={`${role.roleId}@${role.version}`}
+              className={selected ? 'selected' : ''}
+              onClick={() => {
+                setOpenMenu(null)
+                if (!selected) onRoleChange(role)
+              }}
+            >
+              <span className="agent-profile-avatar">
+                <AgentRoleIcon icon={role.icon} size={16} />
+              </span>
+              <span>
+                <strong>{role.label}</strong>
+                <em>{role.description}</em>
+                {role.disclaimer && <small>{role.disclaimer}</small>}
+              </span>
+              {selected && <IconCheck size={11} />}
+            </button>
+          )
+        })}
+      </FloatingSurface>
+    </div>
+  )
+  const permissionMenu = (
+    <AgentPermissionModeMenu
+      compact={compact}
+      mode={permissionMode}
+      disabled={loading}
+      onChange={onPermissionModeChange}
+      open={openMenu === 'permission'}
+      onOpenChange={(open) => setOpenMenu(open ? 'permission' : null)}
+    />
+  )
+
   return (
     <div className="agent-composer-toolbar">
+      {!compact && (
+        <span className="agent-conversation-usage">
+          {contextUsage
+            ? `上下文已用 ${contextPercent}% · ${formatTokens(contextUsage.totalTokens)} / ${formatTokens(contextUsage.maxTokens)} tokens`
+            : '上下文用量待上报'}
+        </span>
+      )}
       <div className="agent-composer-tools">
         <div className="agent-composer-menu-wrap" ref={addRef}>
           <input
@@ -176,7 +252,7 @@ export function AgentComposerToolbar({
             onClick={() => toggleMenu('add')}
             disabled={loading}
           >
-            <IconPlus size={16} />
+            {compact ? <IconPaperclip size={14} /> : <IconPlus size={16} />}
           </button>
           <FloatingSurface
             anchorRef={addRef}
@@ -224,77 +300,21 @@ export function AgentComposerToolbar({
           </FloatingSurface>
         </div>
 
-        {onRoleChange && (
-          <div className="agent-composer-menu-wrap" ref={roleRefElement}>
-            <button
-              className="agent-mode-btn agent-profile-btn"
-              data-agent-action="role"
-              onClick={() => toggleMenu('role')}
-              title={
-                roleRef
-                  ? `当前角色: ${selectedRole?.label ?? roleRef.roleId}`
-                  : '当前角色不可用，请先加载角色列表'
-              }
-              disabled={loading || !roleRef || roles.length === 0}
-            >
-              {selectedRole ? (
-                <AgentRoleIcon icon={selectedRole.icon} size={14} />
-              ) : (
-                <IconRobot size={13} />
-              )}
-              <span>{selectedRole?.label ?? '角色不可用'}</span>
-              <IconChevronDown size={12} />
-            </button>
-            <FloatingSurface
-              anchorRef={roleRefElement}
-              open={openMenu === 'role'}
-              placement="top-start"
-              className="agent-composer-menu agent-profile-menu"
-              onRequestClose={() => setOpenMenu(null)}
-            >
-              <div className="agent-composer-menu-title">选择角色</div>
-              {roles.map((role) => {
-                const selected =
-                  role.roleId === roleRef?.roleId && role.version === roleRef?.version
-                return (
-                  <button
-                    key={`${role.roleId}@${role.version}`}
-                    className={selected ? 'selected' : ''}
-                    onClick={() => {
-                      setOpenMenu(null)
-                      if (!selected) onRoleChange(role)
-                    }}
-                  >
-                    <span className="agent-profile-avatar">
-                      <AgentRoleIcon icon={role.icon} size={16} />
-                    </span>
-                    <span>
-                      <strong>{role.label}</strong>
-                      <em>{role.description}</em>
-                      {role.disclaimer && <small>{role.disclaimer}</small>}
-                    </span>
-                    {selected && <IconCheck size={11} />}
-                  </button>
-                )
-              })}
-            </FloatingSurface>
-          </div>
+        {!compact && (
+          <>
+            {roleMenu}
+            {permissionMenu}
+          </>
         )}
-
-        <AgentPermissionModeMenu
-          mode={permissionMode}
-          disabled={loading}
-          onChange={onPermissionModeChange}
-          open={openMenu === 'permission'}
-          onOpenChange={(open) => setOpenMenu(open ? 'permission' : null)}
-        />
       </div>
 
       <div className="agent-composer-tools">
-        <div className="agent-composer-menu-wrap" ref={contextRef}>
+        <div className={compact ? 'agent-chat-usage' : 'agent-composer-menu-wrap'} ref={contextRef}>
           <button
             type="button"
-            className={`agent-context-usage-btn ${contextTone}`}
+            className={
+              compact ? 'agent-chat-usage-button' : `agent-context-usage-btn ${contextTone}`
+            }
             data-agent-action="contextUsage"
             style={
               {
@@ -309,13 +329,32 @@ export function AgentComposerToolbar({
             aria-label={contextUsage ? `上下文占用 ${contextPercent}%` : '上下文占用未知'}
             onClick={() => toggleMenu('context')}
           >
-            <span>
-              {contextCompaction.status === 'compacting'
-                ? '…'
-                : contextUsage
-                  ? contextPercent
-                  : '–'}
-            </span>
+            {compact ? (
+              <>
+                <span>
+                  {contextUsage && <meter min={0} max={100} value={contextPercent} />}{' '}
+                  {contextCompaction.status === 'compacting'
+                    ? '正在压缩上下文'
+                    : contextUsage
+                      ? '上下文已用 ' + contextPercent + '%'
+                      : '上下文用量待上报'}
+                </span>
+                {contextUsage && (
+                  <small>
+                    {formatTokens(contextUsage.totalTokens)} /{' '}
+                    {formatTokens(contextUsage.maxTokens)} tokens
+                  </small>
+                )}
+              </>
+            ) : (
+              <span>
+                {contextCompaction.status === 'compacting'
+                  ? '…'
+                  : contextUsage
+                    ? contextPercent
+                    : '–'}
+              </span>
+            )}
           </button>
           <FloatingSurface
             anchorRef={contextRef}
@@ -419,8 +458,10 @@ export function AgentComposerToolbar({
             title="运行环境"
             onClick={() => toggleMenu('runtime')}
           >
-            <span className="agent-runtime-label">{runtimeLabel}</span>
-            <span>{runtimeDetail}</span>
+            <span className="agent-runtime-label">
+              {compact && runtimeBinding.kind === 'codex' ? runtimeDetail : runtimeLabel}
+            </span>
+            {!compact && <span>{runtimeDetail}</span>}
             <IconChevronDown size={12} />
           </button>
           <FloatingSurface
@@ -584,6 +625,12 @@ export function AgentComposerToolbar({
             </button>
           </FloatingSurface>
         </div>
+        {compact && (
+          <>
+            {permissionMenu}
+            {roleMenu}
+          </>
+        )}
         <span className="agent-composer-send-slot">{sendButton}</span>
       </div>
     </div>

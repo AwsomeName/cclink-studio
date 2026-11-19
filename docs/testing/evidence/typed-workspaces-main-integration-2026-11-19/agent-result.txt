@@ -1,0 +1,5 @@
+PASS: running and pending-confirmation sessions protected in both list and context menu
+PASS: retained search, exact three status counts and conversation IDs, read completion cleared
+PASS: failed delete retained selected title and the exact composer draft
+PASS: failed archive retained chat; failed restoration stayed in archive; retry restored the draft
+PASS: chat/list width 350 draft, background event, edit, archive, restore, cancel and delete. /var/folders/4z/030bqrj52qn9vpf4w6hydk_c0000gn/T/agent-page-evidence-lOxNfP

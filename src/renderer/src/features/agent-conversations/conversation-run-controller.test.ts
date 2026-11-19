@@ -351,6 +351,31 @@ describe('conversation-run-controller', () => {
     expect(agentApi.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('refuses a text-only dispatch during running work instead of queuing a detached job', async () => {
+    const { controller, store, agentApi } = createHarness(createConversation({ loading: true }))
+    await expect(controller.send('调研', 'text-only-now')).resolves.toEqual({
+      status: 'ignored',
+      reason: 'busy',
+    })
+    expect(store.enqueueMessage).not.toHaveBeenCalled()
+    expect(agentApi.sendMessage).not.toHaveBeenCalled()
+  })
+
+  it('retries a text-only turn with an empty paused queue and preserves the chat draft', async () => {
+    const { controller, store, agentApi } = createHarness(
+      createConversation({ messageQueuePauseReason: '上次发送失败' }),
+    )
+    await expect(controller.send('调研', 'text-only-now')).resolves.toMatchObject({
+      status: 'accepted',
+    })
+    expect(agentApi.sendMessage).toHaveBeenCalledWith(
+      'agent-1',
+      expect.objectContaining({ toolAccess: 'none' }),
+    )
+    expect(store.setInput).not.toHaveBeenCalled()
+    expect(store.enqueueMessage).not.toHaveBeenCalled()
+  })
+
   it('后端拒绝发送命令时按 runId 收敛失败投影', async () => {
     const { store, agentApi, controller } = createHarness()
     agentApi.sendMessage.mockResolvedValue({ success: false, error: 'runtime unavailable' })

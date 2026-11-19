@@ -371,6 +371,9 @@ export class AgentBridge {
         this.runtime.restoreConversation(conversationId, null)
       }
       const sendPlan = this.resolveSendPlan(conversationId, context)
+      const noTools = context?.disableBuiltinTools && context.allowedTools?.length === 0
+      if (sendPlan.options.forceVisibleBrowser && noTools)
+        throw new Error('纯文本回合不能绑定浏览器操作目标，请先移除该目标。')
       if (sendPlan.options.forceVisibleBrowser) {
         await this.syncVisibleBrowserPage(sendPlan.browserTabId, sendPlan.workspaceKey)
       }
@@ -379,14 +382,8 @@ export class AgentBridge {
         scope: this.runtime.getScope(conversationId),
         browserTabId: sendPlan.browserTabId,
         context,
-        browserManager:
-          context?.disableBuiltinTools && context.allowedTools?.length === 0
-            ? undefined
-            : this.deps.browserManager,
-        playwrightBridge:
-          context?.disableBuiltinTools && context.allowedTools?.length === 0
-            ? undefined
-            : this.deps.playwrightBridge,
+        browserManager: noTools ? undefined : this.deps.browserManager,
+        playwrightBridge: noTools ? undefined : this.deps.playwrightBridge,
         settings: this.deps.getSettingsSnapshot?.() ?? DEFAULT_SETTINGS,
       })
       preparation?.controller.signal.throwIfAborted()

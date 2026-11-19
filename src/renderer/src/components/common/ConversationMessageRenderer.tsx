@@ -3,7 +3,7 @@ import { workspaceRefKey } from '@shared/workspace-ref'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { TtsButton } from '../../features/local-tts/TtsButton'
 import type { AgentMessage, ContentBlock } from '../../types'
-import { IconCheck, IconClipboard, IconError, IconThinking, IconTool } from './Icons'
+import { IconCheck, IconClipboard, IconRobot, IconError, IconThinking, IconTool } from './Icons'
 import { openFileRangeResource } from '../../features/markdown/markdown-navigation'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import { useToastStore } from './Toast'
@@ -27,11 +27,13 @@ type ContentRenderUnit =
 
 export const ConversationMessageRenderer = memo(function ConversationMessageRenderer({
   message,
+  showAuthor = false,
   conversationId,
   workspaceKey,
   onOpenFilePath,
 }: {
   message: AgentMessage
+  showAuthor?: boolean
   conversationId: string
   workspaceKey: string | null
   onOpenFilePath?: (path: string) => void
@@ -105,6 +107,18 @@ export const ConversationMessageRenderer = memo(function ConversationMessageRend
           )
       }}
     >
+      {showAuthor && message.role === 'assistant' && (
+        <div className="agent-chat-author">
+          <IconRobot size={14} />
+          助手{' '}
+          <time>
+            {new Date(message.timestamp).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </time>
+        </div>
+      )}
       {copyText && (
         <button
           type="button"

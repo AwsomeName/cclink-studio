@@ -1,3 +1,4 @@
+import { ConversationTitleEditor } from '../../features/agent-conversations/conversation-title-editor'
 import {
   useCallback,
   useEffect,
@@ -29,6 +30,7 @@ import {
   IconCircle,
   IconClipboard,
   IconError,
+  IconPencil,
   IconPlus,
   IconRobot,
   IconSend,
@@ -69,6 +71,7 @@ export interface AgentPanelCapability {
 }
 
 export interface AgentPanelHeaderModel {
+  editTitle?: { id: string; annotation?: string; save: (title: string, note: string) => void }
   title: string
   runtimeLabel: string
   status: {
@@ -333,21 +336,27 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
     )
     .concat(model.permissions.map((permission) => permission.id))
     .join('|')
+  const compact = model.variant === 'side' && model.runtime === 'local'
   const conversationScroll = useConversationScroll(model.timelineKey, timelineRevision)
 
   return (
     <div
-      className={`agent-panel agent-panel-${model.variant}`}
+      className={`agent-panel agent-panel-${model.variant}${compact ? ' agent-chat-compact' : ''}`}
       data-agent-panel-runtime={model.runtime}
       data-agent-panel-variant={model.variant}
     >
       <div className="agent-conversation-main" ref={mainRef}>
-        <PanelHeader model={model.header} />
-        <ContextBar chips={model.contextChips} />
+        <PanelHeader
+          key={model.timelineKey}
+          model={model.header}
+          detailsChips={compact ? model.contextChips : undefined}
+        />
+        {!compact && <ContextBar chips={model.contextChips} />}
         <NoticePermissionArea notices={model.notices} activities={[]} permissions={[]} />
         <MessageTimeline
           items={model.timeline}
-          empty={model.empty}
+          empty={compact ? undefined : model.empty}
+          showAuthor={compact}
           activities={model.activities}
           permissions={model.permissions}
           listRef={conversationScroll.listRef}
@@ -358,24 +367,27 @@ export function AgentPanelView({ model }: { model: AgentPanelViewModel }): React
           onOpenFilePath={model.onOpenFilePath}
         />
         {model.costLabel ? <div className="agent-cost">{model.costLabel}</div> : null}
-        <ComposerFrame model={model.composer} mainRef={mainRef} />
+        <ComposerFrame compact={compact} model={model.composer} mainRef={mainRef} />
       </div>
     </div>
   )
 }
 
-export function PanelHeader({ model }: { model: AgentPanelHeaderModel }): ReactElement {
+export function PanelHeader({
+  model,
+  detailsChips,
+}: {
+  model: AgentPanelHeaderModel
+  detailsChips?: AgentContextChip[]
+}): ReactElement {
+  const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState<string | null>(null)
   const diagnosticsDisabled = model.diagnostics.state !== 'enabled'
   const diagnosticsTitle = diagnosticsDisabled
     ? model.diagnostics.reason || model.diagnostics.label
     : model.diagnostics.label
-  return (
-    <header className="agent-panel-header" data-agent-landmark="header">
-      <IconRobot size={15} />
-      <div className="agent-panel-heading">
-        <strong>{model.title}</strong>
-        <span>{model.runtimeLabel}</span>
-      </div>
+  const statusAndDiagnostics = (
+    <>
       <div
         className={`agent-panel-status ${model.status.tone}`}
         role="status"
@@ -398,6 +410,66 @@ export function PanelHeader({ model }: { model: AgentPanelHeaderModel }): ReactE
           <IconClipboard size={14} />
         </button>
       ) : null}
+    </>
+  )
+  return (
+    <header className="agent-panel-header" data-agent-landmark="header">
+      {!detailsChips && <IconRobot size={15} />}
+      <div className="agent-panel-heading">
+        {model.editTitle ? (
+          editing === model.editTitle.id ? (
+            <ConversationTitleEditor
+              key={editing}
+              title={model.title}
+              annotation={model.editTitle.annotation}
+              onCancel={() => setEditing(null)}
+              onSave={(title, note) => {
+                model.editTitle?.save(title, note)
+                setEditing(null)
+              }}
+            />
+          ) : (
+            <>
+              <button
+                className="conversation-edit-title"
+                title="编辑标题与标注"
+                onClick={() => setEditing(model.editTitle!.id)}
+              >
+                <strong>{model.title}</strong>{' '}
+                {detailsChips ? <IconPencil size={13} /> : <span aria-hidden="true">✎</span>}
+              </button>
+              {model.editTitle.annotation && (
+                <span className="agent-chat-note">{model.editTitle.annotation}</span>
+              )}
+            </>
+          )
+        ) : (
+          <strong>{model.title}</strong>
+        )}
+        {!detailsChips && <span>{model.runtimeLabel}</span>}
+      </div>
+      {detailsChips ? (
+        <>
+          <button
+            className="agent-chat-info-toggle"
+            aria-label="会话信息"
+            aria-expanded={expanded}
+            title="会话信息与操作目标"
+            onClick={() => setExpanded(!expanded)}
+          >
+            <IconChevronDown size={13} />
+          </button>
+          <div className="agent-chat-details" hidden={!expanded}>
+            <div className="agent-chat-details-line">
+              <span>{model.runtimeLabel}</span>
+              {statusAndDiagnostics}
+            </div>
+            <ContextBar chips={detailsChips} />
+          </div>
+        </>
+      ) : (
+        statusAndDiagnostics
+      )}
     </header>
   )
 }
@@ -544,6 +616,7 @@ function PermissionCard({ model }: { model: AgentPanelPermissionModel }): ReactE
 export function MessageTimeline({
   items,
   empty,
+  showAuthor = false,
   activities = [],
   permissions = [],
   listRef,
@@ -554,7 +627,8 @@ export function MessageTimeline({
   onOpenFilePath,
 }: {
   items: AgentPanelTimelineItem[]
-  empty: AgentPanelEmptyModel
+  empty?: AgentPanelEmptyModel
+  showAuthor?: boolean
   activities?: AgentPanelActivityModel[]
   permissions?: AgentPanelPermissionModel[]
   listRef?: Ref<HTMLDivElement>
@@ -575,13 +649,16 @@ export function MessageTimeline({
       onTouchStart={onTouchStart}
     >
       {items.length === 0 ? (
-        <EmptyState model={empty} />
+        empty ? (
+          <EmptyState model={empty} />
+        ) : null
       ) : (
         items.map((item) => {
           if (item.kind === 'message') {
             return (
               <ConversationMessageRenderer
                 key={item.id}
+                showAuthor={showAuthor}
                 message={item.message}
                 conversationId={item.conversationId}
                 workspaceKey={item.workspaceKey}
@@ -756,11 +833,13 @@ function QuestionCard({ model }: { model: AgentPanelQuestionModel }): ReactEleme
 }
 
 export function ComposerFrame({
+  compact = false,
   model,
   mainRef,
 }: {
   model: AgentPanelComposerModel
   mainRef: Ref<HTMLDivElement>
+  compact?: boolean
 }): ReactElement {
   const composerRef = useRef<HTMLDivElement>(null)
   const rendererFocusRequestPendingRef = useRef(false)
@@ -903,7 +982,8 @@ export function ComposerFrame({
             onRequestClose={enhancements.skillCandidates.onRequestClose}
           />
         ) : null}
-        {enhancements?.mountedResources ? (
+        {enhancements?.mountedResources &&
+        (!compact || enhancements.mountedResources.items.length > 0) ? (
           <MountedResourceBar
             resources={enhancements.mountedResources.items}
             onRemove={enhancements.mountedResources.onRemove}
@@ -953,7 +1033,12 @@ export function ComposerFrame({
           />
           <ActionBar model={model} submit={submit} />
         </div>
-        {model.allowQueueWhileRunning ? (
+        {model.allowQueueWhileRunning &&
+        (!compact ||
+          model.hint ||
+          model.submitting ||
+          model.queue?.pauseReason ||
+          model.queue?.items.length) ? (
           <p className="agent-composer-queue-hint">
             {model.hint ||
               (model.queue?.pauseReason

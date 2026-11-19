@@ -119,16 +119,20 @@ try {
 
 ;({ app, page } = await launch())
 try {
-  await page.getByTitle('展开已关闭').click()
-  const row = (id) => page.locator(`.session-sidebar-row[data-conversation-id="${id}"]`).first()
+  await page.getByTitle('展开已归档').click()
+  const row = (id) =>
+    page
+      .locator('.conversation-managed-row')
+      .filter({ has: page.locator(`[data-conversation-id="${id}"]`) })
+      .first()
   await row('delete-a').hover()
-  page.once('dialog', (dialog) => dialog.dismiss())
-  await row('delete-a').getByTitle('删除本地会话历史', { exact: true }).click()
+  await row('delete-a').getByRole('button', { name: '删除会话', exact: true }).click()
+  await page.getByRole('button', { name: '取消', exact: true }).click()
   assert.equal(await row('delete-a').count(), 1, 'Cancel must keep history')
   for (const id of ['delete-a', 'delete-b']) {
     await row(id).hover()
-    page.once('dialog', (dialog) => dialog.accept())
-    await row(id).getByTitle('删除本地会话历史', { exact: true }).click()
+    await row(id).getByRole('button', { name: '删除会话', exact: true }).click()
+    await page.getByRole('button', { name: '确认删除', exact: true }).click()
     await row(id).waitFor({ state: 'detached' })
     await page.getByText('会话已删除', { exact: true }).waitFor()
   }
@@ -147,8 +151,8 @@ try {
     })
   })
   await row('keep-c').hover()
-  page.once('dialog', (dialog) => dialog.accept())
-  await row('keep-c').getByTitle('删除本地会话历史', { exact: true }).click()
+  await row('keep-c').getByRole('button', { name: '删除会话', exact: true }).click()
+  await page.getByRole('button', { name: '确认删除', exact: true }).click()
   await page.getByRole('alert').filter({ hasText: '删除会话失败：SMOKE: disk full' }).waitFor()
   await row('keep-c').waitFor()
   assert.ok((await snapshot(page)).conversations['keep-c'])
@@ -162,7 +166,7 @@ try {
 
 ;({ app, page } = await launch())
 try {
-  await page.getByTitle('展开已关闭').click()
+  await page.getByTitle('展开已归档').click()
   assert.equal(await page.locator('[data-conversation-id="delete-a"]').count(), 0)
   assert.equal(await page.locator('[data-conversation-id="delete-b"]').count(), 0)
   await page.locator('[data-conversation-id="keep-c"]').first().waitFor()

@@ -352,7 +352,10 @@ describe('conversation message queue', () => {
       }
       useAgentStore.getState().applyRuntimeRunStatus(record)
       await controller.stopAndSend('D')
-      if (reason === 'archive') await useAgentStore.getState().archiveConversation(id)
+      if (reason === 'archive') {
+        await expect(useAgentStore.getState().archiveConversation(id)).rejects.toThrow('运行中')
+        useAgentStore.getState().setMessageQueuePauseReason('等待归档', id)
+      }
       if (reason === 'workspace')
         useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'local', path: '/other' } })
       if (reason === 'manual pause')
@@ -374,7 +377,10 @@ describe('conversation message queue', () => {
       useAgentStore
         .getState()
         .applyRuntimeRunStatus({ ...record, status: 'cancelled', updatedAt: 2, completedAt: 2 })
-      if (reason === 'archive') await useAgentStore.getState().restoreArchivedConversation(id)
+      if (reason === 'archive') {
+        await useAgentStore.getState().archiveConversation(id)
+        await useAgentStore.getState().restoreArchivedConversation(id)
+      }
       useWorkspaceStore.setState({ activeWorkspaceRef: { kind: 'local', path: '/original' } })
       await settle()
       expect(api.sendMessage).toHaveBeenCalledTimes(1)
