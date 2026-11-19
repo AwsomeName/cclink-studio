@@ -2,7 +2,7 @@
 
 > 后续逐项复核发现收口差距并继续整改。当前完整结论以 [51 项逐项评估与整改报告](./audit-2026-11-19.md) 为准；三流程通过不代表全部旧功能或专业版面均已完成。
 
-本地分支：`codex/typed-workspaces`。独立 worktree：`../cclink-studio-typed-workspaces`。基线 `7c54acaa`。本轮实现和模拟资料真实应用验收已通过，尚未合并 main 或发布。主工作区存在另一批未提交且与 App.tsx、core-services.ts 等文件重叠的改动，保留本分支等待协调集成，未修改该工作区。
+本地分支：`codex/typed-workspaces`。独立 worktree：`../cclink-studio-typed-workspaces`。基线 `7c54acaa`。已整合 main `9c70c44e` 并完成真实应用组合回归，整合提交 `2dea0f0d` 已快进合回本地主线。主工作区 124 个未提交/未跟踪路径和暂存状态保持不变；未推送、未发布。详见 [组合验收与保护记录](../../testing/typed-workspaces-main-integration-2026-11-19.md)。
 
 ## 用户验收与顺序
 

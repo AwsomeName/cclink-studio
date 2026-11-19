@@ -1,0 +1,12 @@
+{
+  "beforeHead": "9c70c44e1c58feca8b7882b8b7f150583ee2eba8",
+  "afterHead": "2dea0f0df776b0542f92326d20c684b4467319cc",
+  "preservedPaths": 124,
+  "statusIdentical": true,
+  "indexDiffIdentical": true,
+  "worktreeDiffIdentical": true,
+  "fileHashesAndModesIdentical": true,
+  "usedStash": false,
+  "pushed": false,
+  "released": false
+}
