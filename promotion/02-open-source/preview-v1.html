@@ -1,0 +1,58 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self';"><title>GitHub 与开源社区 · CCLink Studio</title><link rel="stylesheet" href="../assets/style.css"></head><body><header class="top"><a class="wordmark" href="../index.html"><img src="../assets/brand/app-icon.png" alt="">CCLink Studio</a><nav><a href="../index.html">宣传资料</a><a class="secondary" href="../README.md">使用说明</a><a href="https://github.com/AwsomeName/cclink-studio">GitHub ↗</a></nav></header><div class="preview-meta"><span>GitHub 与开源社区</span><span>图文初稿 · 2026.10</span></div><main class="article"><h1>CCLink Studio 开源桌面工作台介绍</h1>
+<figure><a href="../assets/graphics/cover-wide.png" target="_blank" rel="noopener"><img src="../assets/graphics/cover-wide.png" alt="CCLink Studio 项目封面" loading="eager" decoding="async"></a></figure>
+<p>大家好，我们正在开发 CCLink Studio，一款采用 GPL-3.0-only 许可证的本地优先 AI 桌面工作台。</p>
+<p>使用 AI 完成实际工作时，参考网页、本地资料、讨论过程和最终文件经常分散在不同工具中。我们希望以工作空间为中心，把这些环节连接起来，让 Agent 可以结合指定材料，通过工具参与实际操作。</p>
+<h2>当前本地能力</h2>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>工作空间与文件</td>
+<td>打开本地目录，管理文件，保存标签页、草稿和会话状态</td>
+</tr>
+<tr>
+<td>内嵌浏览器</td>
+<td>查看网页，让 Agent 在授权范围内通过 Playwright 操作可见页面</td>
+</tr>
+<tr>
+<td>Markdown 编辑</td>
+<td>可视化编辑和本地保存，通过 Agent 工具读取、写入和追加内容</td>
+</tr>
+<tr>
+<td>本地 Agent</td>
+<td>使用 Claude Code 后端，提供流式输出、工具调用、权限确认和会话管理</td>
+</tr>
+<tr>
+<td>本地终端</td>
+<td>在工作台内运行命令、查看输出</td>
+</tr>
+<tr>
+<td>数据与设备入口</td>
+<td>Elasticsearch 只读查询，用户自有 Android 真机连接</td>
+</tr>
+</tbody></table>
+<figure><a href="../assets/graphics/capability-map.png" target="_blank" rel="noopener"><img src="../assets/graphics/capability-map.png" alt="工作空间与文件、网页、文档、终端、Agent 的关系示意" loading="eager" decoding="async"></a></figure>
+<p><em>能力关系示意，展示工作组织方式。</em></p>
+<p>本地能力免费，免 CCLink 账号登录；模型服务需要用户自行配置并承担相关费用。当前完整工具 Agent 以 Claude Code 后端为基础。远程服务通过独立入口按需登录使用。</p>
+<h2>一个容易上手的场景</h2>
+<p>打开一个本地工作空间，放入笔记和 Markdown 草稿。在内嵌浏览器里查阅资料，再回到文档中继续编辑。配置 Agent 后，可以围绕指定文件提出整理、补充和修改任务。</p>
+<figure><a href="../assets/screenshots/studio-writing.jpg" target="_blank" rel="noopener"><img src="../assets/screenshots/studio-writing.jpg" alt="当前 Studio 文档界面和待发送的 Agent 指令" loading="eager" decoding="async"></a></figure>
+<p><em>真实开发版界面，使用演示文档；本图展示任务准备状态。</em></p>
+<h2>技术栈与启动方式</h2>
+<p>项目主要使用 Electron、React、TypeScript、Zustand、Tiptap 和 Playwright。文件读写统一经主进程 IPC，浏览器、编辑器、Agent 和终端按各自能力边界接入工作台。</p>
+<p>当前桌面目标平台为 macOS。源码启动需要 Node.js 与 pnpm，具体环境要求以仓库 README 为准。</p>
+<pre><code class="language-bash">git clone https://github.com/AwsomeName/cclink-studio.git
+cd cclink-studio
+pnpm install
+pnpm dev
+</code></pre>
+<p>使用 Agent 还需安装和认证对应运行时，或在设置中配置受支持的运行时与模型服务。</p>
+<h2>欢迎带着具体问题参与</h2>
+<p>我们尤其欢迎资料整理、Markdown 写作、开发辅助和网页操作中的实际反馈。提交问题时，附上操作步骤、预期结果、实际现象和脱敏诊断，更容易帮助项目定位问题。</p>
+<p>使用反馈、文档完善、问题复现和代码贡献都欢迎。</p>
+<p>项目地址：<a href="https://github.com/AwsomeName/cclink-studio">GitHub CCLink Studio</a></p>
+</main><footer class="bottom"><span>CCLink Studio 宣传资料</span><a href="article-v1.md">打开可编辑正文</a><a href="../index.html">返回图文总览</a></footer></body></html>

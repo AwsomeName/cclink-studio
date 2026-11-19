@@ -1,0 +1,108 @@
+{
+  "checked_at": "2026-11-05T23:31:53.464274+08:00",
+  "research_status": "read-only snapshot; no consumer answer sampling, paid API calls, publication, installation or online configuration changes",
+  "source_commit": "ea320c828eda940a29209f4fe7d98a1787e80ec3",
+  "source_package_version": "0.1.128",
+  "records": [
+    {
+      "url": "https://cclink.woniucoder.cn/",
+      "final_url": "https://cclink.woniucoder.cn/",
+      "status": 200,
+      "content_type": "text/html",
+      "sha256": "0a0e886c4445077aceabedac8f7743fe9daf3b745b18b1c3ff1b9317bdd5d89f",
+      "title": "CCLink｜用手机继续电脑上的 AI 编程任务",
+      "canonical": ["https://cclink.woniucoder.cn/"],
+      "desktop_links": [
+        "https://github.com/AwsomeName/cclink-studio/releases",
+        "https://github.com/AwsomeName/cclink-studio"
+      ],
+      "studio_image_paths": ["iPad-images/studio模式.png", "iPad-images/白色studio模式.png"],
+      "observed_analytics_markers": [],
+      "analytics_limitation": "Only public HTML inspected; server logs or server-side analytics not inspected.",
+      "software_entities": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "CCLink",
+          "operatingSystem": "iOS, iPadOS, Android",
+          "url": "https://cclink.woniucoder.cn/"
+        }
+      ]
+    },
+    {
+      "url": "https://cclink.woniucoder.cn/robots.txt",
+      "final_url": "https://cclink.woniucoder.cn/robots.txt",
+      "status": 200,
+      "content_type": "text/plain",
+      "sha256": "e0c4a67f931a2f7775617d96042d1e1ac14b7924cb35d017f5e67b6f613ee8d4",
+      "body": "User-agent: *\nAllow: /\nDisallow: /wechat-api/\n\nSitemap: https://cclink.woniucoder.cn/sitemap.xml\n"
+    },
+    {
+      "url": "https://cclink.woniucoder.cn/sitemap.xml",
+      "final_url": "https://cclink.woniucoder.cn/sitemap.xml",
+      "status": 200,
+      "content_type": "text/xml",
+      "sha256": "7efc911f3307b3853e1de95c774f616f0ff65be097bc127914ab031aae7d438c",
+      "body": null,
+      "listed_urls": [
+        "https://cclink.woniucoder.cn/",
+        "https://cclink.woniucoder.cn/guides/use-claude-code-from-phone.html",
+        "https://cclink.woniucoder.cn/guides/use-codex-from-phone.html",
+        "https://cclink.woniucoder.cn/guides/remote-agent-workflow.html",
+        "https://cclink.woniucoder.cn/compare/cclink-and-claude-remote-control.html",
+        "https://cclink.woniucoder.cn/compare/cclink-and-happy.html",
+        "https://cclink.woniucoder.cn/ios-support.html",
+        "https://cclink.woniucoder.cn/privacy-policy.html",
+        "https://cclink.woniucoder.cn/user-agreement.html"
+      ],
+      "lastmod_values": ["2026-08-12"]
+    },
+    {
+      "url": "https://api.github.com/repos/AwsomeName/cclink-studio/releases/latest",
+      "final_url": "https://api.github.com/repos/AwsomeName/cclink-studio/releases/latest",
+      "status": 200,
+      "content_type": "application/json; charset=utf-8",
+      "sha256": "a18194f6000776355d64a1de523c1e02a25d76ad37b25351f952d691857c19cd",
+      "tag_name": "v0.1.127",
+      "published_at": "2026-11-05T06:27:40Z",
+      "html_url": "https://github.com/AwsomeName/cclink-studio/releases/tag/v0.1.127",
+      "draft": false,
+      "prerelease": false,
+      "assets": [
+        {
+          "name": "build-record-arm64.json",
+          "size": 250,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/AwsomeName/cclink-studio/releases/download/v0.1.127/build-record-arm64.json"
+        },
+        {
+          "name": "cclink-studio-0.1.127-arm64.dmg",
+          "size": 144534274,
+          "download_count": 2,
+          "browser_download_url": "https://github.com/AwsomeName/cclink-studio/releases/download/v0.1.127/cclink-studio-0.1.127-arm64.dmg"
+        },
+        {
+          "name": "checksums-arm64.txt",
+          "size": 100,
+          "download_count": 0,
+          "browser_download_url": "https://github.com/AwsomeName/cclink-studio/releases/download/v0.1.127/checksums-arm64.txt"
+        },
+        {
+          "name": "update-manifest.json",
+          "size": 412,
+          "download_count": 1,
+          "browser_download_url": "https://github.com/AwsomeName/cclink-studio/releases/download/v0.1.127/update-manifest.json"
+        }
+      ]
+    },
+    {
+      "url": "https://cclink.woniucoder.cn/iPad-images/studio%E6%A8%A1%E5%BC%8F.png",
+      "sha256": "bb62f1497abd714b5afb56f89c3bbce3695ec12f312137fadab3e17c61272d0f",
+      "visual_observation": "Visible iPad-style system status bar and home indicator; not a macOS Electron desktop screenshot. Image was visually inspected locally; it is not republished here."
+    }
+  ],
+  "limits": [
+    "HTTP 200 is not evidence of nationwide accessibility, crawler indexing or correct installation.",
+    "Release asset counts are aggregate requests, not attributed new users.",
+    "Browser search cache returned v0.1.88, while this unauthenticated live GitHub API snapshot returned the version recorded above."
+  ]
+}

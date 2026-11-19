@@ -1,0 +1,226 @@
+{
+  "date": "2026-10-16",
+  "passed": true,
+  "results": [
+    {
+      "channel": "01-wechat",
+      "viewport": "desktop",
+      "h1": 1,
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/workflow.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-browser.jpg"
+        }
+      ],
+      "scrollWidth": 1280,
+      "title": "公众号与项目首发 · CCLink Studio",
+      "width": 1280
+    },
+    {
+      "channel": "02-open-source",
+      "viewport": "desktop",
+      "h1": 1,
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/capability-map.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        }
+      ],
+      "scrollWidth": 1280,
+      "title": "GitHub 与开源社区 · CCLink Studio",
+      "width": 1280
+    },
+    {
+      "channel": "03-website",
+      "viewport": "desktop",
+      "h1": 1,
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-browser.jpg"
+        }
+      ],
+      "scrollWidth": 1280,
+      "title": "官网首页文案 · CCLink Studio",
+      "width": 1280
+    },
+    {
+      "channel": "04-social",
+      "viewport": "desktop",
+      "h1": 1,
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/cover-square.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-01-introduction.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-02-workspace.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-03-get-started.png"
+        }
+      ],
+      "scrollWidth": 1280,
+      "title": "朋友圈与社交媒体 · CCLink Studio",
+      "width": 1280
+    },
+    {
+      "channel": "01-wechat",
+      "viewport": "mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/workflow.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-browser.jpg"
+        }
+      ],
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "channel": "02-open-source",
+      "viewport": "mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/capability-map.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        }
+      ],
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "channel": "03-website",
+      "viewport": "mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/graphics/cover-wide.png"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-writing.jpg"
+        },
+        {
+          "loaded": true,
+          "src": "../assets/screenshots/studio-browser.jpg"
+        }
+      ],
+      "scrollWidth": 390,
+      "width": 390
+    },
+    {
+      "channel": "04-social",
+      "viewport": "mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/cover-square.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-01-introduction.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-02-workspace.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/card-03-get-started.png"
+        }
+      ],
+      "scrollWidth": 390,
+      "width": 390
+    }
+  ]
+}

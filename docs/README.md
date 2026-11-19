@@ -16,6 +16,7 @@
 - `docs/decisions/`：架构原则例外和重大取舍的 ADR。
 - `docs/development.md`：当前开发事实源。
 - `docs/project-memo.md`：尚未进入正式方案或计划的候选想法备忘录，不作为当前实现事实源。
+- `docs/research/geo-studio-2026-11-05/README.md`：桌面 Studio GEO 方向的源码/验收核对、国内平台技术调研与最小实验提案；附问题集和公开入口核查，尚未批准架构、开发或对外发布，不代表 GEO 效果已验证。
 - `docs/features/ai-chip-workbench.md`：独立 AI 芯片产品域的当前设计事实源；定义首版忆阻器模拟闭环、对象模型、核心页面、HTS 导入、AI 边界与阶段路线，尚未实现。
 - `docs/architecture/ai-chip-workbench.md`：芯片工程目录、状态所有者、固定 EDA 适配器、运行证据、IPC、生命周期与失败降级架构，尚未实现。
 - `docs/design/ai-chip-workbench/pages.html`：聚焦规格、设计、真实运行、波形比较和实现阶段门的六页效果示意；全部项目、工具状态和波形均为示意。
