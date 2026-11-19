@@ -86,6 +86,7 @@ interface DefinitionMigrationJournal {
 }
 
 interface ScheduledTaskServiceOptions {
+  getLocalOwnerKey?: () => Promise<string | null>
   userDataPath?: string
   homePath?: string
   now?: () => number
@@ -127,10 +128,13 @@ export class ScheduledTaskService {
   /** null 表示 Runtime 全局错误；路径表示只属于该工作空间。 */
   private lastRuntimeErrorWorkspacePath: string | null = null
 
+  private readonly getLocalOwnerKey?: () => Promise<string | null>
+
   constructor(
     private readonly workspaceStateService: WorkspaceStateService,
     options: ScheduledTaskServiceOptions = {},
   ) {
+    this.getLocalOwnerKey = options.getLocalOwnerKey
     const root = join(options.userDataPath ?? app.getPath('userData'), 'scheduled-tasks')
     this.activationFilePath = join(root, 'activations.json')
     this.activationBackupPath = `${this.activationFilePath}.bak`
@@ -254,7 +258,7 @@ export class ScheduledTaskService {
   async inspect(workspacePath: string): Promise<ScheduledTaskListResult> {
     try {
       const known = this.workspaceStateService
-        .listLocalWorkspaces()
+        .listLocalWorkspaces(await this.getLocalOwnerKey?.())
         .find((item) => item.workspacePath === workspacePath)
       if (!known?.projectId) throw new Error('请先打开来源工作空间以确认原身份')
       const manifestPath = join(workspacePath, '.cclink-studio', 'project.json')

@@ -147,7 +147,12 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   }
   console.log('[CCLink Studio] 工作台状态服务已初始化')
 
-  runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService)
+  runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService, {
+    getLocalOwnerKey: async () => {
+      const identity = await runtime.localIdentityService?.ensureIdentity()
+      return identity ? `local:${identity.localId}` : null
+    },
+  })
   await runtime.scheduledTaskService.load()
   console.log('[CCLink Studio] 定时任务定义与本机启用状态已初始化（尚未启动调度）')
 
