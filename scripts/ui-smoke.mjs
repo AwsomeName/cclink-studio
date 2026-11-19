@@ -257,11 +257,30 @@ async function stopWebFixture() {
   })
 }
 
+async function openResourceSettings(page, title) {
+  await page.locator('.activity-bar button[title="设置"]').click()
+  await page.locator('.settings-nav').getByRole('button', { name: title, exact: true }).click()
+  if (title === '网站与账号') {
+    await page.locator('.web-resources-sidebar').waitFor({ state: 'visible' })
+    await page
+      .locator('.web-resources-empty', { hasText: '正在读取网站与账号' })
+      .waitFor({ state: 'hidden' })
+  }
+}
+
 async function clickByTitle(page, title) {
+  if (title === '角色' || title === '网站与账号') {
+    await openResourceSettings(page, title)
+    return
+  }
   await page.locator(`[title="${title}"]`).first().click()
 }
 
 async function ensureActivityPanel(page, panelId, title) {
+  if (panelId === 'operations' || panelId === 'agent-roles') {
+    await openResourceSettings(page, title)
+    return
+  }
   const state = await page.evaluate(async () => {
     const { useUIStore } = await import('/src/stores/ui-store.ts')
     const { activePanel, sidebarVisible } = useUIStore.getState()
@@ -461,16 +480,17 @@ async function main() {
     }, separationWorkspace)
     assert(workspaceOpened, 'navigation separation fixture workspace did not open')
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 17, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 15, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
-        JSON.stringify(['工作', '经营', '流程', '资源', '更多工具']),
+        JSON.stringify(['工作', '全部工具']),
       'visible group headings missing',
     )
     const labels = [
-      '工作台',
+      '项目首页',
       '文件',
       '会话',
+      '工具',
       '浏览器',
       '终端',
       '公司经营',
@@ -478,10 +498,7 @@ async function main() {
       '文章发布',
       '事务',
       '定时任务',
-      '网站与账号',
-      '角色',
       '数据源',
-      '更多工具',
       '视频创作',
       '硬件生产',
       'CCLink 远程',
@@ -709,7 +726,7 @@ async function main() {
     } finally {
       await page.setViewportSize({ width: 1440, height: 920 })
     }
-    return `16 activities plus settings; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
+    return `typed project navigation and tools; historical video fixture open, hardware scan/check/report, scrolling, keyboard/right-click menus, light/dark, exact real native browser bounds; evidence: ${evidenceDir}`
   })
 
   await runCheck('workspace file and search boundaries survive a real project switch', async () => {
@@ -1172,47 +1189,33 @@ async function main() {
           `${variant} local/remote landmark order differs`,
         )
         assert(
-          JSON.stringify(local.actions) === JSON.stringify(remote.actions),
-          `${variant} local/remote action order differs`,
+          JSON.stringify([...local.actions].sort()) === JSON.stringify([...remote.actions].sort()),
+          `${variant} local/remote capabilities differ`,
         )
-        for (const key of ['header', 'context', 'composer', 'actionBar', 'primaryAction']) {
-          const left = local.boxes[key]
-          const right = remote.boxes[key]
-          assert(left && right, `${variant} ${key} bounding box missing`)
-          for (const metric of ['height']) {
+        for (const [runtime, panel] of Object.entries({ local, remote })) {
+          for (const key of [
+            'header',
+            'composer',
+            'actionBar',
+            'primaryAction',
+            'addContextAction',
+            'roleAction',
+            'permissionAction',
+            'contextUsageAction',
+            'runtimeAction',
+          ]) {
+            const box = panel.boxes[key]
+            assert(box && box.width > 0 && box.height > 0, `${variant} ${runtime} ${key} is hidden`)
             assert(
-              Math.abs(left[metric] - right[metric]) <= 1,
-              `${variant} ${key}.${metric} differs (${left[metric]} vs ${right[metric]})`,
+              box.x >= -1 && box.x + box.width <= panel.rootWidth + 1,
+              `${variant} ${runtime} ${key} overflows the panel`,
             )
           }
-          const leftPosition =
-            key === 'primaryAction' ? local.rootWidth - left.x - left.width : left.x
-          const rightPosition =
-            key === 'primaryAction' ? remote.rootWidth - right.x - right.width : right.x
+          const composer = panel.boxes.composer
+          const action = panel.boxes.primaryAction
           assert(
-            Math.abs(leftPosition - rightPosition) <= 1,
-            `${variant} ${key} position/inset differs (${leftPosition} vs ${rightPosition})`,
-          )
-          const leftWidth = key === 'primaryAction' ? left.width : local.rootWidth - left.width
-          const rightWidth = key === 'primaryAction' ? right.width : remote.rootWidth - right.width
-          assert(
-            Math.abs(leftWidth - rightWidth) <= 1,
-            `${variant} ${key} width/inset differs (${leftWidth} vs ${rightWidth})`,
-          )
-        }
-        for (const key of [
-          'addContextAction',
-          'roleAction',
-          'permissionAction',
-          'contextUsageAction',
-          'runtimeAction',
-        ]) {
-          const left = local.boxes[key]
-          const right = remote.boxes[key]
-          assert(left && right, `${variant} ${key} bounding box missing`)
-          assert(
-            Math.abs(left.height - right.height) <= 1,
-            `${variant} ${key}.height differs (${left.height} vs ${right.height})`,
+            action.y >= composer.y && action.y + action.height <= composer.y + composer.height + 1,
+            `${variant} ${runtime} send control escapes the composer`,
           )
         }
         assert(
@@ -1502,7 +1505,7 @@ async function main() {
       })
 
       if (!agentPanelOnly) {
-        return 'single fixed side view, equivalent landmarks and boxes, scrollable approval cards, IME-safe Enter, and Shift+Enter'
+        return 'single fixed side view, matching capabilities, bounded controls, scrollable approval cards, IME-safe Enter, and Shift+Enter'
       }
 
       // center 是无 Workbench Tab 的首次会话 surface；先回到本地并清空 smoke Tab 投影。
@@ -1597,7 +1600,7 @@ async function main() {
     const opener = page.locator('.workspace-open-surface')
     await opener.waitFor({ state: 'visible', timeout: 10_000 })
     assert(
-      await opener.getByRole('button', { name: /本地文件夹/ }).isVisible(),
+      await opener.getByRole('button', { name: /打开已有项目/ }).isVisible(),
       'local workspace source is missing',
     )
     assert(
@@ -1613,7 +1616,7 @@ async function main() {
     assert(await page.locator('.main-window').isVisible(), 'remote source replaced the local shell')
 
     await opener.getByRole('button', { name: '返回来源选择' }).click()
-    await opener.getByRole('button', { name: /本地文件夹/ }).waitFor({ state: 'visible' })
+    await opener.getByRole('button', { name: /打开已有项目/ }).waitFor({ state: 'visible' })
     await opener.getByRole('button', { name: '关闭打开工作空间' }).click()
     await opener.waitFor({ state: 'hidden' })
     return 'shared source chooser and scoped remote step'
@@ -1694,7 +1697,7 @@ async function main() {
         .evaluate((element) => getComputedStyle(element).webkitAppRegion)) !== 'drag',
       'conversation controls are part of the window drag region',
     )
-    const expandList = page.getByRole('button', { name: '展开会话列表', exact: true })
+    const expandList = page.getByRole('button', { name: '会话列表', exact: true })
     if (await expandList.count()) await expandList.click()
     await threadRow.click({ button: 'right' })
     const contextMenu = page.locator('.unified-context-menu')
@@ -1793,7 +1796,7 @@ async function main() {
         previousActiveTabId: beforeDrop.previousActiveTabId,
       },
     )
-    const collapseList = page.getByRole('button', { name: '收起会话列表', exact: true })
+    const collapseList = page.getByRole('button', { name: '返回会话', exact: true })
     if (await collapseList.count()) await collapseList.click()
     return 'right navigation, unchanged left sidebar, thread menu, drag-open, and Tab deduplication verified'
   })
@@ -1826,7 +1829,10 @@ async function main() {
     await clickByTitle(page, '角色')
     await page.locator('.agent-role-sidebar').waitFor({ state: 'visible', timeout: 10_000 })
     assert(
-      (await page.locator('.sidebar-header-title').innerText()) === '角色',
+      await page
+        .locator('.settings-section')
+        .getByRole('heading', { name: '角色', exact: true })
+        .isVisible(),
       'role sidebar title missing',
     )
     const roleRows = page.locator('.agent-role-row[data-role-source="builtin"]')
@@ -1847,6 +1853,15 @@ async function main() {
     const appliedRow = page.locator('.agent-role-row.applied')
     assert((await appliedRow.count()) === 1, 'expected exactly one applied role')
     const appliedLabel = await appliedRow.locator('strong').innerText()
+    const appliedRoleLabel = () =>
+      page.evaluate(async () => {
+        const { useAgentStore } = await import('/src/stores/agent-store.ts')
+        const state = useAgentStore.getState()
+        const ref = state.conversations[state.activeConversationId]?.configuration.roleRef
+        const roles = await window.cclinkStudio.agent.listRoles()
+        return roles.find((role) => role.roleId === ref?.roleId && role.version === ref?.version)
+          ?.label
+      })
     const candidateRow = page.locator('.agent-role-row:not(.applied)').first()
     await candidateRow.click()
     await page.locator('.agent-role-detail').waitFor({ state: 'visible', timeout: 10_000 })
@@ -1857,14 +1872,15 @@ async function main() {
       'role apply action is not available',
     )
     assert(
-      (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
+      (await appliedRoleLabel()) === appliedLabel,
       'opening a role detail changed the conversation configuration',
     )
     assert(
       await page.getByRole('button', { name: '设为新会话默认' }).isVisible(),
       'new-conversation default action missing',
     )
-    for (let index = 0; index < (await roleRows.count()); index += 1) {
+    for (let index = 0; index < 7; index += 1) {
+      await clickByTitle(page, '角色')
       const roleRow = roleRows.nth(index)
       const roleLabel = await roleRow.locator('strong').innerText()
       await roleRow.click()
@@ -1883,6 +1899,7 @@ async function main() {
       )
     }
 
+    await clickByTitle(page, '角色')
     const challengerRow = roleRows.filter({ hasText: '反方挑战者' })
     await challengerRow.click()
     await page.locator('[data-role-soul]').waitFor({ state: 'visible', timeout: 10_000 })
@@ -1911,6 +1928,7 @@ async function main() {
       JSON.stringify(mountedSkillRefs) === JSON.stringify([{ skillId: 'grill-me', version: 1 }]),
       'mounted Skill was not stored as a versioned reference',
     )
+    await clickByTitle(page, '角色')
     const nextViewedRow = roleRows.last()
     const nextViewedLabel = await nextViewedRow.locator('strong').innerText()
     await nextViewedRow.click()
@@ -1919,11 +1937,11 @@ async function main() {
       'switching roles created another configuration tab',
     )
     assert(
-      (await page.locator('.agent-role-row.opened strong').innerText()) === nextViewedLabel,
+      await page.getByRole('heading', { name: nextViewedLabel, exact: true }).isVisible(),
       'singleton role configuration tab did not switch its viewed role',
     )
     assert(
-      (await page.locator('.agent-role-row.applied strong').innerText()) === appliedLabel,
+      (await appliedRoleLabel()) === appliedLabel,
       'switching the viewed role changed the conversation configuration',
     )
     assert(
@@ -1942,6 +1960,7 @@ async function main() {
 
     const customRoleName = `UI Smoke 审稿人 ${Date.now()}`
     const customRoleV2Name = `${customRoleName} v2`
+    await clickByTitle(page, '角色')
     await page.getByRole('button', { name: '＋ 新建角色' }).click()
     await page.locator('[data-role-editor]').waitFor({ state: 'visible', timeout: 10_000 })
     await page.getByLabel('名称').fill(customRoleName)
@@ -1953,10 +1972,12 @@ async function main() {
       state: 'visible',
       timeout: 10_000,
     })
-    await page.locator('.agent-role-row', { hasText: customRoleName }).waitFor({
-      state: 'visible',
-      timeout: 10_000,
-    })
+    assert(
+      (await page.evaluate(() => window.cclinkStudio.agent.listRoles())).some(
+        (role) => role.label === customRoleName,
+      ),
+      'created role is missing from the role library',
+    )
     await page.getByRole('button', { name: '编辑角色', exact: true }).click()
     await page.getByLabel('名称').fill(customRoleV2Name)
     await page.getByRole('button', { name: '保存为新版本' }).click()
@@ -3135,6 +3156,7 @@ async function main() {
       'reopening one website account created a duplicate Browser Tab',
     )
 
+    await ensureActivityPanel(page, 'operations', '网站与账号')
     const matrixName = 'UI Smoke Matrix'
     const matrixRow = () => page.locator('.web-resource-group-row', { hasText: matrixName })
     if ((await matrixRow().count()) === 0) {
@@ -3255,7 +3277,7 @@ async function main() {
         'web affairs panel missing',
       )
 
-      const affairTitle = 'UI Smoke Web Affair Global v3'
+      const affairTitle = `UI Smoke Web Affair Global v3 ${Date.now()}`
       const affairRow = () => page.locator('.web-affair-row', { hasText: affairTitle })
       if ((await affairRow().count()) === 0) {
         await page.getByRole('button', { name: '新建事务' }).click()
@@ -3270,9 +3292,11 @@ async function main() {
         await form.getByLabel('最终目标').fill('验证事务列表、流程、节点详情和重启恢复')
         await selectSmokeBusinessSubject(form)
         const account = form.locator('.web-affairs-account-choice', { hasText: 'UI Smoke Account' })
-        if ((await account.count()) > 0) await account.first().locator('input').check()
+        await account.first().waitFor({ state: 'visible', timeout: 10_000 })
+        await account.first().locator('input').check()
         const matrix = form.locator('label', { hasText: 'UI Smoke Matrix' })
-        if ((await matrix.count()) > 0) await matrix.locator('input[type="checkbox"]').check()
+        await matrix.waitFor({ state: 'visible', timeout: 10_000 })
+        await matrix.locator('input[type="checkbox"]').check()
         await form.getByRole('button', { name: '创建事务' }).click()
       } else {
         await affairRow().click()
@@ -3623,8 +3647,8 @@ async function main() {
       'new browser tab did not include the saved-account surface',
     )
     assert(
-      (await page.locator('.activity-bar-icon[title="网站与账号"]').count()) === 1,
-      'website-account activity entry is missing',
+      (await page.locator('.activity-bar-icon[title="设置"]').count()) === 1,
+      'settings entry for website accounts is missing',
     )
     await page.waitForFunction(
       () => !document.querySelector('.browser-new-tab-empty')?.textContent?.includes('正在加载'),

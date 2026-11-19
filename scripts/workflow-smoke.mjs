@@ -143,15 +143,27 @@ async function closeTemporaryWorkspaces() {
       hasText: '关闭项目',
     })
     await closeAction.waitFor({ timeout: 10_000 })
-    await closeAction.click()
-    await pageRef.waitForFunction(
-      (projectPath) =>
-        !Array.from(document.querySelectorAll('.project-strip-item')).some(
-          (element) => element.getAttribute('data-project-path') === projectPath,
-        ),
-      path,
-      { timeout: 15_000 },
-    )
+    const confirmClose = async (dialog) => {
+      if (dialog.type() === 'confirm' && dialog.message().includes('是否仅关闭视图？')) {
+        await dialog.accept()
+      } else {
+        await dialog.dismiss()
+      }
+    }
+    pageRef.on('dialog', confirmClose)
+    try {
+      await closeAction.click()
+      await pageRef.waitForFunction(
+        (projectPath) =>
+          !Array.from(document.querySelectorAll('.project-strip-item')).some(
+            (element) => element.getAttribute('data-project-path') === projectPath,
+          ),
+        path,
+        { timeout: 15_000 },
+      )
+    } finally {
+      pageRef.off('dialog', confirmClose)
+    }
   }
 }
 
@@ -1275,6 +1287,9 @@ async function main() {
     )
 
     const copyAll = page.locator('[data-agent-action="diagnostics"]')
+    if (!(await copyAll.isVisible())) {
+      await page.getByRole('button', { name: '会话信息', exact: true }).click()
+    }
     await copyAll.waitFor({ timeout: 10_000 })
     await copyAll.click()
     let agentDiagnostic = ''

@@ -5654,7 +5654,7 @@ body.is-resizing-panels .main-area > div {
 }
 
 .tab {
-  flex: 0 0 176px;
+  flex: 0 0 min(176px, 100%);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -5665,7 +5665,7 @@ body.is-resizing-panels .main-area > div {
   cursor: pointer;
   white-space: nowrap;
   font-size: 13px;
-  min-width: 100px;
+  min-width: min(100px, 100%);
   max-width: 260px;
   color: var(--text-secondary);
   transition:
@@ -5823,7 +5823,7 @@ body.is-resizing-panels .main-area > div {
     padding: 0 6px;
   }
   .tab {
-    flex-basis: 152px;
+    flex-basis: min(152px, 100%);
   }
 }
 
