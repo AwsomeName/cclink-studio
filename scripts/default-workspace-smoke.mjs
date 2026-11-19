@@ -101,7 +101,7 @@ async function close() {
   app = null
 }
 async function chooser() {
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
 }
 async function switchTo(path) {
   await app.evaluate(({ dialog }, target) => {

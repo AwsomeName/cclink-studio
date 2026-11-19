@@ -326,7 +326,10 @@ function ProjectSidebarContent({
       return false
     }
   }
-  const projectTabs = tabs.filter((tab) => tab.type !== 'settings' && tab.type !== 'agent-role')
+  const projectTabs = tabs.filter(
+    (tab) =>
+      (tab.type !== 'settings' || tab.settingsSection === 'workspace') && tab.type !== 'agent-role',
+  )
   const sessionGroups = getWorkspaceConversationGroups(
     conversationOrder,
     conversations,

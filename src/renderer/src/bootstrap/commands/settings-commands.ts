@@ -3,13 +3,13 @@ import { useTabStore } from '../../stores/tab-store'
 
 export function createSettingsCommands(): Command[] {
   const openSettings = (): void => {
-    useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+    useTabStore.getState().openTab({ type: 'settings', title: 'Studio 设置', icon: '⚙️' })
   }
 
   return [
     {
       id: 'settings.open',
-      label: '打开设置',
+      label: '打开 Studio 设置',
       category: '设置',
       configurable: true,
       shortcutPolicy: {

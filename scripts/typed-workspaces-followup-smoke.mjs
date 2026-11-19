@@ -244,7 +244,7 @@ try {
   await page.locator('.source-text-editor textarea').waitFor()
   assert.equal(await page.locator('.source-text-editor textarea').inputValue(), originals.get(html))
   pass('HTML 在真实原生浏览器与原源码标签间切换')
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
   await page.getByRole('button', { name: '运行状态与诊断', exact: true }).click()
   await until(
     async () =>

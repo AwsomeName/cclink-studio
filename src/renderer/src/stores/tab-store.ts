@@ -45,7 +45,9 @@ function normalizeFileTab(tab: Tab): Tab {
 }
 
 function isProjectTab(tab: Tab): boolean {
-  return tab.type !== 'settings' && tab.type !== 'agent-role'
+  return (
+    (tab.type !== 'settings' || tab.settingsSection === 'workspace') && tab.type !== 'agent-role'
+  )
 }
 
 function getConversationRuntime(conversation?: ConversationTabRef): {
@@ -446,8 +448,15 @@ export const useTabStore = create<TabState>((set, get) => ({
             return { tabs: nextTabs, activeTabId: existing.id }
           }
         } else if (type === 'settings') {
-          // settings 是单例，去重
-          const existing = state.tabs.find((t) => t.type === 'settings' && !t.filePath)
+          const existing = state.tabs.find(
+            (t) =>
+              t.type === 'settings' &&
+              (settingsSection === 'workspace'
+                ? t.settingsSection === 'workspace' &&
+                  workspaceRefKey(t.workspaceRef ?? resolvedWorkspaceRef) ===
+                    workspaceRefKey(resolvedWorkspaceRef)
+                : t.settingsSection !== 'workspace'),
+          )
           if (existing) {
             const nextTabs = state.tabs.map((tab) =>
               tab.id === existing.id
@@ -554,7 +563,7 @@ export const useTabStore = create<TabState>((set, get) => ({
         type,
         title,
         icon,
-        ...(type === 'settings' || type === 'agent-role'
+        ...((type === 'settings' && settingsSection !== 'workspace') || type === 'agent-role'
           ? {}
           : { workspaceRef: resolvedWorkspaceRef }),
         filePath,

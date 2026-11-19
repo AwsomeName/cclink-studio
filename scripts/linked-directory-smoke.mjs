@@ -74,7 +74,7 @@ async function launch() {
     }
   })
   if (!(await page.locator('.file-tree-item').filter({ hasText: '研发日记' }).count())) {
-    await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+    await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
     await page.getByRole('button', { name: /本地文件夹/ }).click()
   }
   await page.locator('.file-tree-item').filter({ hasText: '研发日记' }).waitFor({ timeout: 30000 })
@@ -146,7 +146,7 @@ try {
   const brokenRow = page.locator('.file-tree-item').filter({ hasText: 'broken-link' })
   await brokenRow.click()
   await page.locator('.file-tree-item').filter({ hasText: 'recovered.md' }).waitFor()
-  assert.ok(!((await page.locator('body').innerText()).includes('链接目标不存在')))
+  assert.ok(!(await page.locator('body').innerText()).includes('链接目标不存在'))
   console.log('PASS broken link recovers on click after its target is created')
 
   const other = join(fixture, 'other')

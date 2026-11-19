@@ -15,9 +15,8 @@ import {
   useFsStore,
   useWorkspaceStore,
 } from '../../stores'
-import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-store'
+import { openWorkspaceSettings } from '../../features/workspace-open/WorkspaceSettingsForm'
 import type { ActivityPanel } from '../../types'
-import { useToastStore } from '../common/Toast'
 import {
   ActivityAffairsIcon,
   ActivityArticlePublishingIcon,
@@ -105,10 +104,7 @@ export function ActivityBar(): React.ReactElement {
   const toolsExpanded = useUIStore((state) => state.toolsExpanded)
   const diaryPage = useDiaryNavigation((state) => state.page)
   const activeRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
-  const companyPath = useFixedSpacesStore((state) => state.spaces?.company?.workspacePath)
   const activeTab = useTabStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId))
-  const jumpsToCompany =
-    workspaceType !== 'company' && (activeRef.kind !== 'local' || activeRef.path !== companyPath)
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
   const agentPanelMode = useUIStore((s) => s.agentPanelMode)
@@ -116,33 +112,39 @@ export function ActivityBar(): React.ReactElement {
   const sessionsActive = agentPanelMode === 'right' && agentContentMode !== 'chat'
   const setActivePanel = useUIStore((s) => s.setActivePanel)
   const setAgentPanelMode = useUIStore((s) => s.setAgentPanelMode)
-  const hideSidebar = useUIStore((s) => s.hideSidebar)
-  const openTab = useTabStore((s) => s.openTab)
   const showContextMenu = useContextMenuStore((s) => s.show)
   const [scheduledRunCount, setScheduledRunCount] = useState(0)
 
   useEffect(() => {
+    setScheduledRunCount(0)
+    if (activeRef.kind !== 'local') return
     let disposed = false
     let generation = 0
     const refresh = (): void => {
       const requested = ++generation
       void window.cclinkStudio.scheduledTasks
-        .getRuntimeStatus()
+        .inspect(activeRef.path)
         .then((status) => {
           if (!disposed && requested === generation)
-            setScheduledRunCount(status.queuedCount + (status.runningRunId ? 1 : 0))
+            setScheduledRunCount(
+              status.tasks.filter(
+                (t) => t.latestRun?.status === 'queued' || t.latestRun?.status === 'running',
+              ).length,
+            )
         })
         .catch(() => {
           if (!disposed && requested === generation) setScheduledRunCount(0)
         })
     }
     refresh()
-    const unsubscribe = window.cclinkStudio.scheduledTasks.onChanged(() => refresh())
+    const unsubscribe = window.cclinkStudio.scheduledTasks.onChanged((path) => {
+      if (path === activeRef.path) refresh()
+    })
     return () => {
       disposed = true
       unsubscribe()
     }
-  }, [])
+  }, [activeRef])
 
   const handleClick = (id: ActivityPanel): void => {
     if (id === 'workspace-home') {
@@ -157,22 +159,6 @@ export function ActivityBar(): React.ReactElement {
         })
       return
     }
-    if (id === 'company-workspace' || id === 'company-accounts') {
-      if (workspaceType === 'company') {
-        openCompanyWorkspace(id === 'company-accounts' ? 'finance' : 'overview')
-        return
-      }
-      void useCommandStore
-        .getState()
-        .executeCommand(id === 'company-accounts' ? 'company.finance' : 'company.overview', {
-          source: 'toolbar',
-        })
-        .then((result) => {
-          if (!result.ok)
-            useToastStore.getState().show(result.message ?? '公司入口暂不可用', 'error')
-        })
-      return
-    }
     if (agentPanelMode === 'center') {
       setAgentPanelMode('right', 'user')
       useUIStore.getState().showPanel(id)
@@ -181,19 +167,16 @@ export function ActivityBar(): React.ReactElement {
     if (id === 'browser') setAgentPanelMode('right', 'user')
   }
 
-  const handleOpenSettings = (): void => {
-    openTab({ type: 'settings', title: '设置', icon: '⚙️' })
-    hideSidebar()
-  }
-
-  const selectedItem =
-    activePanel === 'company-workspace' && activeTab?.type === 'company-accounts'
+  const inSettings = activeTab?.type === 'settings'
+  const selectedItem = inSettings
+    ? null
+    : activePanel === 'company-workspace' && activeTab?.type === 'company-accounts'
       ? 'company-accounts'
       : sessionsActive && activePanel !== 'company-workspace'
         ? 'sessions'
         : activePanel
   const isTypeEntry = (id: ActivityPanel): boolean =>
-    (workspaceType === 'company' && (id === 'company-workspace' || id === 'company-accounts')) ||
+    ['company-workspace', 'company-accounts', 'cclink', 'operations', 'agent-roles'].includes(id) ||
     (workspaceType === 'electronics' && id === 'production')
   const visiblePinnedTools = pinnedTools.filter((id) => !isTypeEntry(id))
   const renderGroup = (group: (typeof MAIN_ICON_GROUPS)[number]): React.ReactElement => (
@@ -234,11 +217,6 @@ export function ActivityBar(): React.ReactElement {
           <span className="activity-bar-label" aria-hidden="true">
             {displayLabel ?? label}
           </span>
-          {jumpsToCompany && (id === 'company-workspace' || id === 'company-accounts') && (
-            <span className="activity-bar-jump" title="进入我的公司" aria-hidden="true">
-              ↗
-            </span>
-          )}
           {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
             <span
               className="activity-bar-badge"
@@ -260,7 +238,7 @@ export function ActivityBar(): React.ReactElement {
             (['今天', '日记', '计划', '定时整理', '资料接入', 'Git'] as DiaryPage[]).map((page) => (
               <button
                 key={page}
-                className={`activity-bar-icon ${activePanel === 'workspace-home' && diaryPage === page ? 'active' : ''}`}
+                className={`activity-bar-icon ${!inSettings && activePanel === 'workspace-home' && diaryPage === page ? 'active' : ''}`}
                 onClick={() => {
                   useDiaryNavigation.getState().setPage(page)
                   showWorkspaceHome(activeRef)
@@ -301,7 +279,7 @@ export function ActivityBar(): React.ReactElement {
             ))
           ) : (
             <button
-              className={`activity-bar-icon ${activePanel === 'workspace-home' ? 'active' : ''}`}
+              className={`activity-bar-icon ${!inSettings && activePanel === 'workspace-home' ? 'active' : ''}`}
               onClick={() => handleClick('workspace-home')}
               title="工作台"
               aria-label="工作台"
@@ -368,33 +346,16 @@ export function ActivityBar(): React.ReactElement {
       <div className="activity-bar-bottom">
         <button
           type="button"
-          className="activity-bar-icon"
-          onClick={handleOpenSettings}
-          onContextMenu={(event) => {
-            event.preventDefault()
-            showContextMenu({
-              target: { kind: 'activity', activityId: 'settings' },
-              x: event.clientX,
-              y: event.clientY,
-              focusReturn: event.currentTarget,
-            })
-          }}
-          onKeyDown={(event) => {
-            if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
-            event.preventDefault()
-            showContextMenu(
-              buildKeyboardContextMenuInput(
-                { kind: 'activity', activityId: 'settings' },
-                event.currentTarget,
-              ),
-            )
-          }}
-          aria-label="设置"
-          title="设置"
+          className={`activity-bar-icon ${inSettings && activeTab.settingsSection === 'workspace' ? 'active' : ''}`}
+          aria-pressed={inSettings && activeTab.settingsSection === 'workspace'}
+          onClick={openWorkspaceSettings}
+          disabled={activeRef.kind !== 'local'}
+          aria-label="当前项目设置"
+          title="当前项目设置"
         >
           <ActivitySettingsIcon size={18} />
           <span className="activity-bar-label" aria-hidden="true">
-            设置
+            项目设置
           </span>
         </button>
       </div>

@@ -76,7 +76,7 @@ try {
   await app.evaluate(({ dialog }, workspace) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [workspace] })
   }, workspace)
-  await page.getByRole('button', { name: '打开工作空间', exact: true }).click()
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   // A newly opened empty workspace already owns a fresh conversation.
   await page.locator('[data-agent-landmark="composer"] textarea:visible').last().waitFor()

@@ -62,19 +62,17 @@ function TypeSelector({
 const toolOptions: [ActivityPanel, string][] = [
   ['browser', '浏览器'],
   ['terminal', '终端'],
-  ['company-workspace', '公司经营'],
-  ['company-accounts', '公司账目'],
   ['article-publishing', '文章发布'],
   ['affairs', '事务'],
   ['scheduled-tasks', '定时任务'],
   ['data-sources', '数据源'],
   ['video-creation', '视频创作'],
   ['production', '硬件生产'],
-  ['cclink', 'CCLink 远程'],
 ]
 
 function SidebarPreferences(): React.ReactElement {
-  const pinned = useUIStore((state) => state.pinnedTools)
+  const storedPins = useUIStore((state) => state.pinnedTools)
+  const pinned = storedPins.filter((id) => toolOptions.some(([key]) => key === id))
   const setPinned = useUIStore((state) => state.setPinnedTools)
   const move = (index: number, delta: number): void => {
     const next = [...pinned]
@@ -233,7 +231,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
   }
   return (
     <section className="workspace-settings-form" aria-label="当前项目设置">
-      <h2>当前项目</h2>
+      <h2>项目设置 · {snapshot.settings.name}</h2>
       <p className="workspace-home-path">{ref.path}</p>
       <label>
         显示名称

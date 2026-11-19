@@ -672,7 +672,7 @@ try {
         )
       }
     }
-    await page.locator('.activity-bar-bottom button').click()
+    await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
     await page.locator('.settings-page').waitFor({ state: 'visible' })
     const files = page.locator('.activity-bar').getByRole('button', { name: '文件', exact: true })
     await files.click()

@@ -9,10 +9,14 @@ import { AgentPanel } from './components/agent-panel/AgentPanel'
 import { AgentWorkspace } from './components/agent-panel/agent-workspace'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { ResizeHandle, type PanelResizeEnd } from './components/common/ResizeHandle'
-import { IconFolder, IconPanelLeft, IconPanelRight } from './components/common/Icons'
+import { IconPlus, IconSettings, IconPanelLeft, IconPanelRight } from './components/common/Icons'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { PanelErrorFallback } from './components/common/ErrorFallback'
 import { CommandPalette } from './components/command-palette/CommandPalette'
+import {
+  buildKeyboardContextMenuInput,
+  isContextMenuKeyboardEvent,
+} from './features/context-actions/context-menu-trigger'
 import { ContextMenuHost } from './features/context-actions/ContextMenuHost'
 import { useContextMenuStore } from './features/context-actions/context-menu-store'
 import { useRegisterContextActions } from './features/context-actions/use-register-context-actions'
@@ -270,26 +274,62 @@ function MainLayout(): React.ReactElement {
             <IconPanelLeft size={15} />
           </button>
         </div>
-        <ProjectStrip />
-        <button
-          ref={workspaceOpenButtonRef}
-          className="app-topbar-open-project"
-          type="button"
-          onClick={() => {
-            if (workspaceOpen) {
-              closeWorkspaceOpen()
-              return
-            }
-            void executeCommand('workspace.open', { source: 'toolbar' })
-          }}
-          disabled={workspaceLoading || workspacePicking}
-          title="打开工作空间"
-          aria-expanded={workspaceOpen}
-        >
-          <IconFolder size={14} />
-          <span>打开工作空间</span>
-        </button>
+        <ProjectStrip
+          openButton={
+            <button
+              ref={workspaceOpenButtonRef}
+              className="app-topbar-open-project"
+              type="button"
+              onClick={() => {
+                if (workspaceOpen) {
+                  closeWorkspaceOpen()
+                  return
+                }
+                void executeCommand('workspace.open', { source: 'toolbar' })
+              }}
+              disabled={workspaceLoading || workspacePicking}
+              title="新建或打开项目"
+              aria-label="新建或打开项目"
+              aria-expanded={workspaceOpen}
+            >
+              <IconPlus size={14} />
+              <span>新建／打开</span>
+            </button>
+          }
+        />
         <div className="app-topbar-right">
+          <button
+            className="app-topbar-open-project"
+            title="Studio 设置"
+            aria-label="Studio 设置"
+            onContextMenu={(event) => {
+              event.preventDefault()
+              useContextMenuStore
+                .getState()
+                .show({
+                  target: { kind: 'activity', activityId: 'settings' },
+                  x: event.clientX,
+                  y: event.clientY,
+                  focusReturn: event.currentTarget,
+                })
+            }}
+            onKeyDown={(event) => {
+              if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+              event.preventDefault()
+              useContextMenuStore
+                .getState()
+                .show(
+                  buildKeyboardContextMenuInput(
+                    { kind: 'activity', activityId: 'settings' },
+                    event.currentTarget,
+                  ),
+                )
+            }}
+            onClick={() => void executeCommand('settings.open', { source: 'toolbar' })}
+          >
+            <IconSettings size={15} />
+            <span>Studio 设置</span>
+          </button>
           <OwnerEntry open={ownerOpen} toggle={() => setOwnerOpen((v) => !v)} />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}

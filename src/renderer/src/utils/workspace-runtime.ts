@@ -27,7 +27,7 @@ import { syncWorkbenchBookmarksNow, syncWorkbenchBrowserStateNow } from './workb
 import { applyAgentRunStatusToStore } from '../bootstrap/use-agent-stream-events'
 
 function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][number]): boolean {
-  return tab.type !== 'settings'
+  return tab.type !== 'settings' || tab.settingsSection === 'workspace'
 }
 
 export function hydrateRuntimeSections(
