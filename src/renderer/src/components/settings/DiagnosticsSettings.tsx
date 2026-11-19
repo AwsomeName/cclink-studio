@@ -21,18 +21,14 @@ export function DiagnosticsSettings({
     void Promise.all([
       collectFrameworkDiagnosticReport(),
       Promise.allSettled([
-        window.cclinkStudio.scheduledTasks
-          .getRuntimeStatus()
-          .then((status) => ({
-            title: '定时任务',
-            value: `${status.state === 'ready' ? '可调度' : status.state === 'degraded' ? '暂不可调度' : '已停止'} · ${status.enabledCount} 个已启用 · ${status.queuedCount} 个排队${status.lastError ? ' · ' + status.lastError.message : ''}`,
-          })),
-        window.cclinkStudio.runtimeComponents
-          .listRuntimeResources()
-          .then((resources) => ({
-            title: '可选组件',
-            value: `${resources.filter((item) => item.health === 'healthy').length} / ${resources.length} 项已安装且通过原服务检查；详情见组件管理`,
-          })),
+        window.cclinkStudio.scheduledTasks.getRuntimeStatus().then((status) => ({
+          title: '定时任务',
+          value: `${status.state === 'ready' ? '可调度' : status.state === 'degraded' ? '暂不可调度' : '已停止'} · ${status.enabledCount} 个已启用 · ${status.queuedCount} 个排队${status.lastError ? ' · ' + status.lastError.message : ''}`,
+        })),
+        window.cclinkStudio.runtimeComponents.listRuntimeResources().then((resources) => ({
+          title: '可选组件',
+          value: `${resources.filter((item) => item.health === 'healthy').length} / ${resources.length} 项已安装且通过原服务检查；详情见组件管理`,
+        })),
       ]),
     ])
       .then(([value, checks]) => {

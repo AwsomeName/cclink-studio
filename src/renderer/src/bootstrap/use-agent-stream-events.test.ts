@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { useAgentStore } from '../stores/agent-store'
+import { buildAgentConversationWorkspaceSnapshot, useAgentStore } from '../stores/agent-store'
 import { useUIStore } from '../stores/ui-store'
 import {
   applyAgentCompleteToStore,
@@ -110,6 +110,37 @@ describe('applyAgentStreamEventToStore', () => {
       runStatus: 'running',
     })
     expect(conversation.messages.at(-1)?.rawText).toBe('正在上传并核验正文图片')
+  })
+
+  it('a delayed running event cannot reverse cancellation or reopen a finished run after hydration', () => {
+    const store = useAgentStore.getState()
+    const conversationId = store.activeConversationId
+    const running = {
+      conversationId,
+      workspaceKey: null,
+      runId: 'first',
+      startedAt: 100,
+      updatedAt: 100,
+      completedAt: null,
+      status: 'running' as const,
+    }
+    applyAgentRunStatusToStore(running)
+    applyAgentRunStatusToStore({ ...running, status: 'cancelling' })
+    applyAgentRunStatusToStore(running)
+    expect(useAgentStore.getState().conversations[conversationId].runStatus).toBe('cancelling')
+    applyAgentRunStatusToStore({
+      ...running,
+      status: 'cancelled',
+      completedAt: 102,
+      updatedAt: 102,
+    })
+    const snapshot = buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), null)
+    store.hydrateFromWorkspaceState(snapshot)
+    applyAgentRunStatusToStore(running)
+    expect(useAgentStore.getState().conversations[conversationId].runStatus).toBe('cancelled')
+    applyAgentRunStatusToStore({ ...running, runId: 'second', startedAt: 103, updatedAt: 103 })
+    applyAgentRunStatusToStore(running)
+    expect(useAgentStore.getState().conversations[conversationId].activeRunId).toBe('second')
   })
 
   it('does not adopt a main-owned run from another workspace', () => {

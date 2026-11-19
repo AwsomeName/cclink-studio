@@ -218,11 +218,8 @@ export async function reconcileAgentRuntimeStatuses(
   const statuses = getStatus
     ? await Promise.allSettled(
         conversationIds.map(async (conversationId) => {
-          const conversation = useAgentStore.getState().conversations[conversationId]
+          const conversation = state.conversations[conversationId]
           return {
-            conversationId,
-            observedRunId: conversation?.activeRunId ?? null,
-            observedEventAt: conversation?.lastRunEventAt ?? null,
             status: await getStatus(conversationId),
             run:
               conversation?.activeRunId && getRunStatus
@@ -236,14 +233,15 @@ export async function reconcileAgentRuntimeStatuses(
 
   for (const [index, result] of statuses.entries()) {
     const conversationId = conversationIds[index]
+    const observed = state.conversations[conversationId]
+    const current = useAgentStore.getState().conversations[conversationId]
+    if (
+      !current ||
+      current.activeRunId !== observed.activeRunId ||
+      current.lastRunEventAt !== observed.lastRunEventAt
+    )
+      continue
     if (result.status === 'fulfilled') {
-      const current = useAgentStore.getState().conversations[conversationId]
-      if (
-        current?.activeRunId !== result.value.observedRunId ||
-        current?.lastRunEventAt !== result.value.observedEventAt
-      ) {
-        continue
-      }
       if (result.value.run) {
         applyAgentRunStatusToStore(result.value.run)
         if (

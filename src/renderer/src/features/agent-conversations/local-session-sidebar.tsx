@@ -2,13 +2,14 @@ import { useState } from 'react'
 import type { WorkspaceRef } from '../../../../shared/workspace-ref'
 import { workspaceRefKey, workspaceRefLabel } from '../../../../shared/workspace-ref'
 import type { AgentConversationState } from '../../stores/agent-store'
-import { useAgentStore, useTabStore } from '../../stores'
+import { useAgentStore, useTabStore, useWorkspaceStore } from '../../stores'
 import { conversationBusyStatus } from './conversation-state'
 import { ConversationTitleEditor } from './conversation-title-editor'
 import { IconSearch } from '../../components/common/Icons'
 import { useToastStore } from '../../components/common/Toast'
 import { getConversationActivity } from './activity'
 import { conversationWorkspaceKey } from './conversation-workspace-state'
+import { recordConversationNavigation } from '../diagnostics/conversation-context-diagnostics'
 import { writeConversationDragData } from './conversation-workbench'
 import { useContextMenuStore } from '../context-actions/context-menu-store'
 import {
@@ -70,7 +71,8 @@ export function getWorkspaceConversationGroups(
 export function LocalSessionsList({
   workspaceRef,
   sessionGroups,
-  activityOnly = false,
+  activityFilter = null,
+  archivedOnly = false,
   activeConversationId,
   switchConversation,
   archiveConversation,
@@ -83,7 +85,8 @@ export function LocalSessionsList({
 }: {
   workspaceRef: WorkspaceRef
   sessionGroups: WorkspaceConversationGroups
-  activityOnly?: boolean
+  archivedOnly?: boolean
+  activityFilter?: ReturnType<typeof conversationActivityBadge>
   activeConversationId: string
   switchConversation: (id: string) => void
   archiveConversation: ReturnType<typeof useAgentStore.getState>['archiveConversation']
@@ -98,16 +101,28 @@ export function LocalSessionsList({
 }): React.ReactElement {
   const [query, setQuery] = useState('')
   const [showClosed, setShowClosed] = useState(false)
-  const filteredSessionGroups = activityOnly
+  const filteredSessionGroups = activityFilter
     ? sessionGroups
     : filterConversationGroups(sessionGroups, query)
   const visibleCount = filteredSessionGroups.current.length + filteredSessionGroups.closed.length
 
   const openConversation = async (conversation: AgentConversationState): Promise<void> => {
+    const trace = (event: 'row-click' | 'selection-result' | 'restore-failed'): void => {
+      const state = useAgentStore.getState()
+      recordConversationNavigation(
+        event,
+        useWorkspaceStore.getState().activeWorkspaceRef,
+        conversation.id,
+        state.conversations[conversation.id],
+        state.activeConversationId,
+      )
+    }
+    trace('row-click')
     if (conversation.archivedAt) {
       try {
         await restoreArchivedConversation(conversation.id)
       } catch (error) {
+        trace('restore-failed')
         useToastStore
           .getState()
           .show(
@@ -116,16 +131,21 @@ export function LocalSessionsList({
           )
         return
       }
-      if (useAgentStore.getState().activeConversationId !== conversation.id) return
     } else {
       switchConversation(conversation.id)
     }
+    trace('selection-result')
+    if (
+      conversation.archivedAt &&
+      useAgentStore.getState().activeConversationId !== conversation.id
+    )
+      return
     revealConversation()
   }
 
   return (
     <div className="sidebar-section">
-      {!activityOnly && (
+      {!activityFilter && (
         <label className="session-sidebar-search" title="搜索会话标题、摘要或工作空间">
           <IconSearch size={13} />
           <input
@@ -156,14 +176,15 @@ export function LocalSessionsList({
           {filteredSessionGroups.closed.length > 0 && (
             <ConversationGroup
               title="已归档"
-              conversations={showClosed ? filteredSessionGroups.closed : []}
+              conversations={archivedOnly || showClosed ? filteredSessionGroups.closed : []}
               activeConversationId={activeConversationId}
               onOpen={openConversation}
               onRename={renameConversation}
               onRestore={restoreArchivedConversation}
               onDelete={deleteConversation}
               muted
-              collapsed={!showClosed}
+              showTitle={!archivedOnly}
+              collapsed={!archivedOnly && !showClosed}
               count={filteredSessionGroups.closed.length}
               onToggleCollapsed={() => setShowClosed((value) => !value)}
             />
@@ -171,11 +192,13 @@ export function LocalSessionsList({
         </>
       ) : (
         <div className="project-panel-empty">
-          {activityOnly
-            ? '暂无其他会话动态'
+          {activityFilter
+            ? '暂无其他' + activityFilter + '会话'
             : query.trim()
               ? '没有匹配的会话'
-              : '当前工作空间暂无会话'}
+              : archivedOnly
+                ? '暂无已归档会话'
+                : '当前工作空间暂无会话'}
         </div>
       )}
     </div>

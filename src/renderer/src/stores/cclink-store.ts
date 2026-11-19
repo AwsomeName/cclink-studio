@@ -3,7 +3,8 @@ import { create } from 'zustand'
 import type { CclinkRemoteMessage, CclinkRemoteSession, CclinkServer } from '@shared/cclink'
 import type { AuthServiceStatus, AuthSession } from '@shared/ipc/auth'
 import type { CclinkRealtimeEvent, CclinkRealtimeStatus } from '@shared/ipc/cclink'
-import type { RemoteWorkspaceRef } from '@shared/workspace-ref'
+import { workspaceRefKey, type RemoteWorkspaceRef } from '@shared/workspace-ref'
+import { captureActiveWorkspaceTarget, isWorkspaceTargetCurrent } from './workspace-store'
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import {
   createRemoteMessageQueueSlice,
@@ -73,6 +74,8 @@ export interface CclinkState extends RemoteMessageQueueSlice, RemoteQuestionSlic
 let initializePromise: Promise<void> | null = null
 let eventsInstalled = false
 let sessionsRequestGeneration = 0
+let sessionSelectionGeneration = 0
+let sessionRequestGeneration = 0
 
 export const useCclinkStore = create<CclinkState>((set, get, api) => ({
   ...createRemoteMessageQueueSlice(set, get, api),
@@ -210,6 +213,7 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
   },
 
   loadSessions: async (ref) => {
+    const request = ++sessionRequestGeneration
     const generation = ++sessionsRequestGeneration
     set({ activeSessionsRef: ref })
     set({ loading: true, error: null })
@@ -222,26 +226,41 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
       set({ sessions, selectedSessionId })
       if (selectedSessionId) await get().loadMessages(selectedSessionId)
     } catch (error) {
-      if (generation === sessionsRequestGeneration) set({ error: message(error) })
+      if (request === sessionRequestGeneration) set({ error: message(error) })
     } finally {
-      if (generation === sessionsRequestGeneration) set({ loading: false })
+      if (request === sessionRequestGeneration) set({ loading: false })
     }
   },
 
   createSession: async (ref, name, options) => {
+    const request = ++sessionRequestGeneration
+    const target = captureActiveWorkspaceTarget()
+    const selection = get().selectedSessionId
+    const intent = options?.select === false ? null : ++sessionSelectionGeneration
+
     set({ loading: true, error: null })
     try {
       const session = await window.cclinkStudio.cclink.createSession({ ref, name })
-      set((state) => ({
-        sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
-        selectedSessionId: options?.select === false ? state.selectedSessionId : session.id,
-      }))
+      const activeRef = get().activeSessionsRef
+      if (
+        isWorkspaceTargetCurrent(target) &&
+        (!activeRef || workspaceRefKey(activeRef) === workspaceRefKey(ref))
+      ) {
+        set((state) => ({
+          sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
+          selectedSessionId:
+            intent === sessionSelectionGeneration && state.selectedSessionId === selection
+              ? session.id
+              : state.selectedSessionId,
+        }))
+      }
       return session
     } catch (error) {
-      set({ error: message(error) })
+      if (request === sessionRequestGeneration && isWorkspaceTargetCurrent(target))
+        set({ error: message(error) })
       throw error
     } finally {
-      set({ loading: false })
+      if (request === sessionRequestGeneration) set({ loading: false })
     }
   },
 
@@ -270,7 +289,10 @@ export const useCclinkStore = create<CclinkState>((set, get, api) => ({
     }
   },
 
-  selectSession: (selectedSessionId) => set({ selectedSessionId }),
+  selectSession: (selectedSessionId) => {
+    ++sessionSelectionGeneration
+    set({ selectedSessionId })
+  },
 
   loadMessages: async (sessionId) => {
     try {

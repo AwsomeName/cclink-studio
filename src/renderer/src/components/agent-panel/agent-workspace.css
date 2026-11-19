@@ -258,24 +258,23 @@
   background: var(--bg-hover);
   color: var(--chat-ink);
 }
-.agent-workspace-actions .agent-other-updates {
+.agent-other-updates {
   grid-column: 2;
+  display: flex;
   justify-self: end;
-  position: relative;
-  padding-inline: 4px 7px;
+  align-items: center;
+  gap: 1px;
+}
+.agent-workspace-actions .agent-update-count {
+  gap: 2px;
+  padding-inline: 3px;
   background: transparent;
   color: var(--chat-muted);
   font-size: 10.5px;
-  font-weight: 400;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
-.agent-other-updates::before {
-  content: '';
-  position: absolute;
-  inset-inline-end: 0;
-  height: 14px;
-  border-inline-end: 1px solid var(--chat-line);
-}
-.agent-workspace-actions .agent-other-updates:hover {
+.agent-workspace-actions .agent-update-count:hover {
   background: var(--bg-hover);
   color: var(--chat-ink);
 }
@@ -287,56 +286,84 @@
   outline-color: var(--chat-ink);
   outline-offset: 1px;
 }
-.agent-updates-total {
+.agent-update-short {
   display: none;
 }
-.agent-update-counts {
-  display: inline-flex;
-  gap: 6px;
+.agent-update-count i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--chat-blue);
 }
+.agent-update-count[data-status='待确认'] i {
+  background: var(--chat-amber);
+}
+.agent-update-count[data-status='新完成'] i {
+  background: #81b69c;
+}
+
 @container agent-nav (max-width: 389px) {
   .agent-workspace-switch svg {
     display: none;
   }
 }
-.agent-other-updates[data-compact] .agent-updates-total {
-  display: inline;
-}
-.agent-other-updates[data-compact] .agent-update-counts {
-  display: none;
-}
-@container agent-nav (max-width: 339px) {
-  .agent-updates-total {
-    display: inline;
-  }
-  .agent-update-counts {
+@container agent-nav (max-width: 389px) {
+  .agent-other-updates[data-large-count] :is(.agent-update-label, i) {
     display: none;
   }
-}
-@container agent-nav (max-width: 249px) {
-  .agent-workspace-actions button {
-    padding-inline: 4px;
-    gap: 3px;
+  .agent-other-updates[data-large-count] .agent-update-short {
+    display: inline;
   }
 }
-.agent-update-count {
-  display: inline-flex;
+@container agent-nav (max-width: 339px) {
+  .agent-update-label,
+  .agent-update-count i {
+    display: none;
+  }
+  .agent-update-short {
+    display: inline;
+  }
+}
+@container agent-nav (max-width: 299px) {
+  .agent-workspace-new-conversation span {
+    display: none;
+  }
+  .agent-workspace-actions .agent-update-count {
+    padding-inline: 2px;
+  }
+}
+@container agent-nav (max-width: 239px) {
+  .agent-workspace-actions {
+    padding-inline-start: 4px;
+    gap: 1px;
+  }
+  .agent-workspace-actions .agent-update-count {
+    gap: 1px;
+    padding-inline: 1px;
+    font-size: 10px;
+  }
+}
+
+.agent-list-filters {
+  display: flex;
+  gap: 6px;
   align-items: center;
-  gap: 3px;
-  white-space: nowrap;
+}
+.agent-list-filters button {
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.agent-list-filters button:hover {
+  background: var(--bg-hover);
+}
+.agent-list-filters button[aria-pressed='true'] {
+  background: var(--chat-surface);
+  color: var(--chat-ink);
+  font-weight: 600;
+}
+.agent-list-filters button span {
   font-variant-numeric: tabular-nums;
-}
-.agent-update-count i {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--chat-blue);
-}
-.agent-update-count i[data-status='待确认'] {
-  background: var(--chat-amber);
-}
-.agent-update-count i[data-status='新完成'] {
-  background: #81b69c;
 }
 
 .agent-chat-compact {

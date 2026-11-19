@@ -99,6 +99,9 @@ export interface AgentConversationState {
   activeRunId?: string | null
   supplementSupported?: boolean
   activeRunSupplementContextKey?: string
+  /** Identity and start time survive terminal events so delayed IPC cannot reopen a run. */
+  lastRunId?: string
+  lastRunStartedAt?: number
   lastRunEventAt?: number | null
   lastRunTerminalReason?: AgentRunTerminalReason | null
   sessionId: string | null

@@ -19,6 +19,10 @@ import { useToastStore } from '../common/Toast'
 import { AgentPanel } from './AgentPanel'
 import './agent-workspace.css'
 
+const activityLabels = ['待确认', '运行中', '新完成'] as const
+type ListFilter = (typeof activityLabels)[number] | '已归档'
+const shortLabels = { 待确认: '确认', 运行中: '运行', 新完成: '完成' }
+
 const listScrollPositions = new Map<string, number>()
 
 /** Presentation only. Run subscriptions and cancellation stay outside this component. */
@@ -28,27 +32,28 @@ export function AgentWorkspace(): React.ReactElement {
   const mode = useUIStore((state) => state.agentContentMode)
   const listVisible = mode === 'list'
   const scrollRef = useRef<HTMLDivElement>(null)
-  const [updatesWorkspace, setUpdatesWorkspace] = useState<string | null>(null)
-  const updatesOnly =
-    listVisible && workspace.kind !== 'remote' && updatesWorkspace === workspaceKey
+  const [selection, setSelection] = useState<{ key: string; filter: ListFilter } | null>(null)
+  const filter = listVisible && selection?.key === workspaceKey ? selection.filter : null
   useEffect(() => {
-    if (!listVisible || workspaceKey !== updatesWorkspace) setUpdatesWorkspace(null)
-  }, [listVisible, workspaceKey, updatesWorkspace])
+    if (!listVisible || selection?.key !== workspaceKey) setSelection(null)
+  }, [listVisible, workspaceKey, selection])
   const conversations = useAgentStore((state) => state.conversations)
   const order = useAgentStore((state) => state.conversationOrder)
   const activeId = useAgentStore((state) => state.activeConversationId)
   const pending = useAgentStore((state) => state.pendingConfirmations)
   const groups = getWorkspaceConversationGroups(order, conversations, workspace)
-  const updates = groups.current.filter(
-    (item) => item.id !== activeId && conversationActivityBadge(item, pending),
-  )
-  const counts = ['待确认', '运行中', '新完成']
-    .map((label) => ({
-      label,
-      count: updates.filter((item) => conversationActivityBadge(item, pending) === label).length,
-    }))
-    .filter((item) => item.count)
-  const summary = counts.map((item) => item.count + ' ' + item.label).join(' · ')
+  const byStatus: Record<(typeof activityLabels)[number], typeof groups.current> = {
+    待确认: [],
+    运行中: [],
+    新完成: [],
+  }
+  for (const item of groups.current) {
+    const status = conversationActivityBadge(item, pending)
+    if (item.id !== activeId && status) byStatus[status].push(item)
+  }
+  const statuses = activityLabels.filter((label) => byStatus[label].length)
+  const archived = filter === '已归档'
+  const activity = filter && filter !== '已归档' ? filter : null
   const active = conversations[activeId]
   useEffect(() => {
     if (
@@ -63,8 +68,8 @@ export function AgentWorkspace(): React.ReactElement {
   }, [listVisible, workspace, active])
   useLayoutEffect(() => {
     if (listVisible && scrollRef.current)
-      scrollRef.current.scrollTop = updatesOnly ? 0 : (listScrollPositions.get(workspaceKey) ?? 0)
-  }, [workspaceKey, listVisible, updatesOnly])
+      scrollRef.current.scrollTop = filter ? 0 : (listScrollPositions.get(workspaceKey) ?? 0)
+  }, [workspaceKey, listVisible, filter])
 
   const newConversation = async (): Promise<void> => {
     const result = await useCommandStore.getState().executeCommand('agent.newConversation', {
@@ -81,40 +86,49 @@ export function AgentWorkspace(): React.ReactElement {
           <button
             type="button"
             className="agent-workspace-new-conversation"
+            aria-label="新建对话"
+            title="新建对话"
             onClick={() => void newConversation()}
           >
             <IconRobot size={16} />
-            新建对话
+            <span>新建对话</span>
           </button>
-          {!listVisible && workspace.kind !== 'remote' && summary && (
-            <button
+          {!listVisible && workspace.kind !== 'remote' && statuses.length > 0 && (
+            <div
               className="agent-other-updates"
-              title={'其他会话动态：' + summary}
-              aria-label={'其他会话动态：' + summary}
-              data-compact={counts.some(({ count }) => count > 9) || undefined}
-              onClick={() => {
-                setUpdatesWorkspace(workspaceKey)
-                useUIStore.getState().showAgentSessions()
-              }}
+              role="group"
+              aria-label="其他会话动态"
+              data-large-count={statuses.some((label) => byStatus[label].length > 9) || undefined}
             >
-              <span className="agent-updates-total">
-                动态 {updates.length > 99 ? '99+' : updates.length}
-              </span>
-              <span className="agent-update-counts">
-                {counts.map(({ label, count }) => (
-                  <span className="agent-update-count" key={label}>
-                    <i data-status={label} />
-                    {count} {label}
-                  </span>
-                ))}
-              </span>
-            </button>
+              {statuses.map((label) => {
+                const count = byStatus[label].length
+                return (
+                  <button
+                    type="button"
+                    className="agent-update-count"
+                    key={label}
+                    data-status={label}
+                    aria-label={label + ' ' + count}
+                    title={label + ' · ' + count + ' 个其他会话'}
+                    onClick={() => {
+                      setSelection({ key: workspaceKey, filter: label })
+                      useUIStore.getState().showAgentSessions()
+                    }}
+                  >
+                    <i aria-hidden="true" />
+                    <span>{count > 99 ? '99+' : count}</span>
+                    <span className="agent-update-label">{label}</span>
+                    <span className="agent-update-short">{shortLabels[label]}</span>
+                  </button>
+                )
+              })}
+            </div>
           )}
           <button
             className="agent-workspace-switch"
             type="button"
             onClick={() => {
-              setUpdatesWorkspace(null)
+              setSelection(null)
               if (listVisible) useUIStore.getState().showAgentChat()
               else useUIStore.getState().showAgentSessions()
             }}
@@ -135,21 +149,52 @@ export function AgentWorkspace(): React.ReactElement {
           style={{ width: '100%' }}
         >
           <div className="agent-navigation-list-heading">
-            <span>{updatesOnly ? '其他会话动态' : '会话列表'}</span>
-            {updatesOnly && <button onClick={() => setUpdatesWorkspace(null)}>查看全部</button>}
+            {workspace.kind === 'remote' ? (
+              <span>会话列表</span>
+            ) : activity ? (
+              <>
+                <span>
+                  {activity} · {byStatus[activity].length}
+                </span>
+                <button type="button" onClick={() => setSelection(null)}>
+                  查看全部
+                </button>
+              </>
+            ) : (
+              <div className="agent-list-filters" role="group" aria-label="会话范围">
+                <button type="button" aria-pressed={!archived} onClick={() => setSelection(null)}>
+                  全部会话
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={archived}
+                  onClick={() => setSelection({ key: workspaceKey, filter: '已归档' })}
+                >
+                  已归档 <span>{groups.closed.length}</span>
+                </button>
+              </div>
+            )}
           </div>
           <div
             className="agent-navigation-list-content"
             ref={scrollRef}
             onScroll={(event) => {
-              if (listVisible && !updatesOnly && event.currentTarget.clientHeight > 0)
+              if (listVisible && !filter && event.currentTarget.clientHeight > 0)
                 listScrollPositions.set(workspaceKey, event.currentTarget.scrollTop)
             }}
           >
             <AgentSessionList
-              key={workspaceKey}
-              activityOnly={updatesOnly}
-              groups={updatesOnly ? { current: updates, closed: [] } : groups}
+              key={
+                workspace.kind === 'remote'
+                  ? workspaceKey
+                  : JSON.stringify([workspaceKey, listVisible, filter])
+              }
+              activityFilter={activity}
+              archivedOnly={archived}
+              groups={{
+                current: archived ? [] : activity ? byStatus[activity] : groups.current,
+                closed: archived ? groups.closed : [],
+              }}
             />
           </div>
         </nav>
@@ -160,10 +205,12 @@ export function AgentWorkspace(): React.ReactElement {
 
 function AgentSessionList({
   groups,
-  activityOnly,
+  activityFilter,
+  archivedOnly,
 }: {
   groups: WorkspaceConversationGroups
-  activityOnly: boolean
+  activityFilter: (typeof activityLabels)[number] | null
+  archivedOnly: boolean
 }): React.ReactElement {
   const workspace = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const activeId = useAgentStore((state) => state.activeConversationId)
@@ -174,7 +221,8 @@ function AgentSessionList({
     <LocalSessionsList
       workspaceRef={workspace}
       sessionGroups={groups}
-      activityOnly={activityOnly}
+      activityFilter={activityFilter}
+      archivedOnly={archivedOnly}
       activeConversationId={activeId}
       switchConversation={agent.switchConversation}
       archiveConversation={agent.archiveConversation}

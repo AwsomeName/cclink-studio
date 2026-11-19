@@ -47,6 +47,7 @@ import {
   selectDiagnosticBrowserTask,
 } from '../../features/diagnostics/agent-diagnostic-report'
 import { collectUnifiedDiagnosticReport } from '../../features/diagnostics/unified-diagnostic-report'
+import { recordConversationNavigation } from '../../features/diagnostics/conversation-context-diagnostics'
 import { APP_VERSION } from '../../app-metadata'
 import { useToastStore } from '../common/Toast'
 import {
@@ -661,11 +662,18 @@ function LocalAgentPanelController({ variant = 'side' }: AgentPanelProps): React
     const fallback = allQuickThreads.find((thread) => !conversations[thread.id]?.archivedAt)
     if (fallback) {
       switchConversation(fallback.id)
-      return
+    } else {
+      createConversation({
+        runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
+      })
     }
-    createConversation({
-      runtime: createConversationRuntimeForWorkspace(activeWorkspaceRef),
-    })
+    recordConversationNavigation(
+      'panel-fallback',
+      activeWorkspaceRef,
+      activeConversationId,
+      active,
+      useAgentStore.getState().activeConversationId,
+    )
   }, [
     activeConversationId,
     activeWorkspaceRef,

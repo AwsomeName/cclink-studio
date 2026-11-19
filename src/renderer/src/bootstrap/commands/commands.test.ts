@@ -13,6 +13,7 @@ import { createWorkbenchCommands } from './workbench-commands'
 import { createMarkdownCommands } from './markdown-commands'
 import { createWorkspaceCommands } from './workspace-commands'
 import { useSettingsStore } from '../../stores/settings-store'
+import { useCommandStore } from '../../stores/command-store'
 import { useAgentStore } from '../../stores/agent-store'
 import { useCclinkStore } from '../../stores/cclink-store'
 import { useUIStore } from '../../stores/ui-store'
@@ -145,6 +146,7 @@ describe('bootstrap command modules', () => {
     } as ReturnType<typeof useWorkspaceStore.getState>)
     vi.spyOn(useCclinkStore, 'getState').mockReturnValue({
       createSession,
+      selectedSessionId: 'remote-session',
     } as unknown as ReturnType<typeof useCclinkStore.getState>)
     vi.spyOn(useUIStore, 'getState').mockReturnValue({ showAgentChat } as unknown as ReturnType<
       typeof useUIStore.getState
@@ -159,6 +161,36 @@ describe('bootstrap command modules', () => {
       expect(showAgentChat).toHaveBeenCalledOnce()
     } finally {
       vi.restoreAllMocks()
+    }
+  })
+
+  it('远程工作空间执行重置命令时保护本地会话和 Runtime', async () => {
+    const workspace = useWorkspaceStore.getState()
+    const initial = useAgentStore.getState()
+    const id = initial.createConversation()
+    initial.addUserMessage('本地记录', id)
+    initial.renameConversation(id, '本地会话', '保留标注')
+    const before = useAgentStore.getState().conversations[id]
+    const resetSession = vi.fn()
+    vi.stubGlobal('window', { cclinkStudio: { agent: { resetSession } } })
+    try {
+      useWorkspaceStore.setState({
+        activeWorkspaceRef: remoteWorkspaceRef({
+          endpointId: 'server',
+          workspaceId: 'a',
+          path: '/a',
+        }),
+      })
+      useCommandStore.getState().registerCommands(createAgentCommands())
+      await expect(
+        useCommandStore.getState().executeCommand('agent.resetSession', { source: 'palette' }),
+      ).resolves.toMatchObject({ ok: false, reason: 'disabled' })
+      expect(resetSession).not.toHaveBeenCalled()
+      expect(useAgentStore.getState().conversations[id]).toBe(before)
+    } finally {
+      useAgentStore.setState(initial, true)
+      useWorkspaceStore.setState(workspace, true)
+      vi.unstubAllGlobals()
     }
   })
 

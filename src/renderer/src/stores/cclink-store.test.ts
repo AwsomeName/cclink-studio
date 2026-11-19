@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CclinkRemoteSession } from '@shared/cclink'
 import { remoteWorkspaceRef } from '@shared/workspace-ref'
+import { useWorkspaceStore } from './workspace-store'
 import { useCclinkStore } from './cclink-store'
 
 const workspaceRef = remoteWorkspaceRef({
@@ -146,6 +147,41 @@ describe('cclink session selection ownership', () => {
 
     expect(useCclinkStore.getState().selectedSessionId).toBe(created.id)
   })
+
+  it.each([true, false])(
+    '创建回执保留用户后选的会话（切换工作空间=%s）',
+    async (switchWorkspace) => {
+      const previous = useWorkspaceStore.getState()
+      let finish!: (value: CclinkRemoteSession) => void
+      vi.stubGlobal('window', {
+        cclinkStudio: {
+          cclink: {
+            createSession: () =>
+              new Promise((resolve) => {
+                finish = resolve
+              }),
+          },
+        },
+      })
+      try {
+        useWorkspaceStore.setState({ activeWorkspaceRef: workspaceRef, generation: 1 })
+        const creating = useCclinkStore.getState().createSession(workspaceRef)
+        if (switchWorkspace)
+          useWorkspaceStore.setState({
+            activeWorkspaceRef: { ...workspaceRef, workspaceId: 'b' },
+            generation: 2,
+          })
+        useCclinkStore.getState().selectSession('user-selected')
+        finish(session('created'))
+        await creating
+        const result = useCclinkStore.getState()
+        expect(result.selectedSessionId).toBe('user-selected')
+        expect(result.sessions.some((s) => s.id === 'created')).toBe(!switchWorkspace)
+      } finally {
+        useWorkspaceStore.setState(previous, true)
+      }
+    },
+  )
 
   it('keeps remote Agent drafts scoped by workspace and only clears the submitted version', () => {
     const store = useCclinkStore.getState()

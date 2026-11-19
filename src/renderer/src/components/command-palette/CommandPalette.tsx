@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useCommandStore } from '../../stores/command-store'
 import type { Command } from '../../stores/command-store'
+import { useToastStore } from '../common/Toast'
 import { IconSearch } from '../common/Icons'
 import { useSettingsStore } from '../../stores/settings-store'
 import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding-resolver'
@@ -63,14 +64,15 @@ export function CommandPalette(): React.ReactElement {
 
   /** 执行选中的命令 */
   const executeSelected = useCallback(
-    (index: number) => {
-      const cmd = filtered[index]
+    (cmd: Command | undefined) => {
       if (cmd) {
         closePalette()
-        void executeCommand(cmd.id, { source: 'palette' })
+        void executeCommand(cmd.id, { source: 'palette' }).then((result) => {
+          if (!result.ok) useToastStore.getState().show(result.message ?? '命令执行失败', 'error')
+        })
       }
     },
-    [filtered, executeCommand, closePalette],
+    [executeCommand, closePalette],
   )
 
   /** 键盘导航 */
@@ -87,7 +89,7 @@ export function CommandPalette(): React.ReactElement {
           break
         case 'Enter':
           e.preventDefault()
-          executeSelected(selectedIndex)
+          executeSelected(grouped.flatMap((group) => group.commands)[selectedIndex])
           break
         case 'Escape':
           e.preventDefault()
@@ -95,7 +97,7 @@ export function CommandPalette(): React.ReactElement {
           break
       }
     },
-    [filtered.length, selectedIndex, executeSelected, closePalette],
+    [filtered.length, grouped, selectedIndex, executeSelected, closePalette],
   )
 
   if (!paletteOpen) return <></>
@@ -145,7 +147,7 @@ export function CommandPalette(): React.ReactElement {
                     key={cmd.id}
                     ref={isSelected ? selectedRef : null}
                     className={`command-palette-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => executeSelected(idx)}
+                    onClick={() => executeSelected(cmd)}
                     onMouseEnter={() => setSelectedIndex(idx)}
                   >
                     <span className="command-palette-label">{cmd.label}</span>

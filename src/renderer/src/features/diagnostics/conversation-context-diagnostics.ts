@@ -1,5 +1,29 @@
-import { workspaceRefKey } from '@shared/workspace-ref'
+import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import type { AgentConversationState } from '../../stores/agent-store'
+import { recordRendererDiagnosticLog } from './renderer-diagnostic-log'
+
+export function recordConversationNavigation(
+  event: 'row-click' | 'selection-result' | 'restore-failed' | 'panel-fallback',
+  workspace: WorkspaceRef,
+  targetId: string,
+  target: AgentConversationState | undefined,
+  activeId: string,
+): void {
+  const binding = target?.runtime.workspaceRef
+  recordRendererDiagnosticLog(event === 'restore-failed' ? 'warn' : 'info', [
+    '[ConversationNavigation] ' + event,
+    {
+      targetId,
+      activeId,
+      workspaceKind: workspace.kind,
+      targetBinding: !target ? 'missing' : (binding?.kind ?? 'unbound'),
+      matchesWorkspace: target
+        ? (binding ? workspaceRefKey(binding) : null) === workspaceRefKey(workspace)
+        : null,
+      archived: target ? Boolean(target.archivedAt) : null,
+    },
+  ])
+}
 
 function bounded(value: string): string {
   return value
@@ -17,6 +41,7 @@ export function buildAgentConversationContextDiagnosticMarkdown(
     '# CCLink Studio 会话诊断',
     `- conversationId: ${bounded(conversation.id)}`,
     `- workspace: ${bounded(workspaceKey ?? '未绑定')}`,
+    `- targetBinding: ${conversation.runtime.workspaceRef?.kind ?? 'unbound'}`,
     `- backend: ${conversation.backendState}`,
     `- runStatus: ${conversation.runStatus ?? 'unknown'}`,
     `- activeRunId: ${bounded(conversation.activeRunId ?? '无')}`,

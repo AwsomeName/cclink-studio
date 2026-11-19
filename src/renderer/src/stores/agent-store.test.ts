@@ -102,6 +102,46 @@ describe('useAgentStore', () => {
       })
     })
 
+    it.each([true, false])('压缩时丢失 Runtime（ready=%s）可以重新发送', (ready) => {
+      const state = useAgentStore.getState()
+      const id = state.activeConversationId
+      const runId = state.beginContextCompaction(id)
+      state.reconcileRuntimeStatus(
+        { connected: true, busy: true, ready: true, runId, sessionId: null },
+        id,
+      )
+      expect(useAgentStore.getState().contextCompaction.status).toBe('compacting')
+      state.reconcileRuntimeStatus({ connected: false, busy: false, ready, sessionId: null }, id)
+      expect(useAgentStore.getState().conversations[id]).toMatchObject({
+        activeRunId: null,
+        runStatus: 'interrupted',
+        contextCompaction: { status: 'failed' },
+      })
+      state.beginRun(id)
+      expect(useAgentStore.getState().contextCompaction.status).toBe('idle')
+    })
+
+    it.each(['succeeded', 'failed', 'cancelled'] as const)(
+      '压缩仅收到 %s 回执也能退出压缩态',
+      (status) => {
+        const state = useAgentStore.getState()
+        const id = state.activeConversationId
+        const runId = state.beginContextCompaction(id)
+        state.applyRuntimeRunStatus({
+          conversationId: id,
+          workspaceKey: null,
+          runId,
+          startedAt: 1,
+          updatedAt: 2,
+          completedAt: 2,
+          status,
+        })
+        expect(useAgentStore.getState().contextCompaction.status).toBe(
+          status === 'succeeded' ? 'completed' : 'failed',
+        )
+      },
+    )
+
     it('发送后立即进入启动中，不等待首个流事件', () => {
       useAgentStore.getState().addUserMessage('开始执行')
       useAgentStore.getState().beginRun()
@@ -346,6 +386,9 @@ describe('useAgentStore', () => {
       useAgentStore.getState().addUserMessage('test')
       useAgentStore.getState().setSessionId('sess-1')
       useAgentStore.getState().setLastCost(0.5)
+      const id = useAgentStore.getState().activeConversationId
+      useAgentStore.getState().renameConversation(id, '工作记录', '保留标注')
+      useAgentStore.getState().setInput('未发送草稿', id)
 
       await useAgentStore.getState().clearMessages()
 
@@ -354,6 +397,11 @@ describe('useAgentStore', () => {
       expect(state.messages[0].id).toBe('welcome')
       expect(state.sessionId).toBeNull()
       expect(state.lastCost).toBeNull()
+      expect(state.conversations[id]).toMatchObject({
+        title: '工作记录',
+        annotation: '保留标注',
+        input: '未发送草稿',
+      })
     })
   })
 
@@ -671,6 +719,38 @@ describe('useAgentStore', () => {
         })
       },
     )
+
+    it('删除写盘期间新增图片会撤销删除，并在报错前恢复磁盘会话', async () => {
+      const agent = useAgentStore.getState()
+      const id = agent.createConversation()
+      agent.addUserMessage('原始记录', id)
+      let finish!: (value: { success: boolean }) => void
+      const setSection = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve
+            }),
+        )
+        .mockResolvedValue({ success: true })
+      vi.stubGlobal('window', { cclinkStudio: { workspaceState: { setSection } } })
+      const deleting = agent.deleteConversation(id)
+      const image = {
+        id: 'draft-image',
+        name: 'draft.png',
+        mediaType: 'image/png' as const,
+        data: 'AA==',
+        size: 1,
+      }
+      agent.addPendingImages([image], id)
+      finish({ success: true })
+      await expect(deleting).rejects.toThrow('会话内容已更新')
+      expect(useAgentStore.getState().conversations[id].pendingImages).toEqual([image])
+      expect(
+        setSection.mock.calls.at(-1)?.[2].conversations[id].messages.at(-1).content[0].text,
+      ).toBe('原始记录')
+    })
 
     it('删除失败不覆盖等待写盘期间切换的会话或新草稿', async () => {
       const agent = useAgentStore.getState()

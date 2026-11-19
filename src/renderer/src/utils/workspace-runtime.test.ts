@@ -618,6 +618,27 @@ describe('workspace-runtime', () => {
     })
   })
 
+  it('过期的 Runtime 查询失败不能中断后来开始的压缩', async () => {
+    hydrateRecoveringConversation()
+    let rejectStatus!: (error: Error) => void
+    const getStatus = vi.fn(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectStatus = reject
+        }),
+    )
+    Object.assign(window.cclinkStudio, { agent: { getStatus } })
+    const pending = reconcileAgentRuntimeStatuses(null)
+    const runId = useAgentStore.getState().beginContextCompaction('recovering')
+    rejectStatus(new Error('old query failed'))
+    await pending
+    expect(useAgentStore.getState().conversations.recovering).toMatchObject({
+      activeRunId: runId,
+      runStatus: 'running',
+      contextCompaction: { status: 'compacting' },
+    })
+  })
+
   it('状态查询期间收到完成事件时忽略过期的 busy 回复', async () => {
     hydrateRecoveringConversation()
     let resolveStatus!: (value: {

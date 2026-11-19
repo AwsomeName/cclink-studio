@@ -28,6 +28,19 @@ describe('registerAgentIpc', () => {
     expect(deps.agentBridge.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('refuses a reset if the runtime started before its IPC arrived', () => {
+    const deps = createDeps()
+    registerAgentIpc(deps as never)
+    deps.agentBridge.isBusy.mockReturnValue(true)
+    const reset = () =>
+      mockIpcMain.handlers.get('agent:resetSession')?.({ sender: 'trusted' }, 'chat')
+    expect(reset).toThrow('请先结束本轮任务')
+    expect(deps.agentBridge.resetSession).not.toHaveBeenCalled()
+    deps.agentBridge.isBusy.mockReturnValue(false)
+    reset()
+    expect(deps.agentBridge.resetSession).toHaveBeenCalledWith('chat')
+  })
+
   it('rejects oversized messages before reaching the Agent bridge', async () => {
     const deps = createDeps()
     registerAgentIpc(deps as never)
@@ -530,6 +543,8 @@ function createDeps() {
   const agentBridge = {
     sendMessage: vi.fn(async () => undefined),
     abort: vi.fn(),
+    isBusy: vi.fn(() => false),
+    resetSession: vi.fn(),
     supplement: vi.fn().mockResolvedValue({ status: 'received' }),
     getRunStatus: vi.fn(),
     compactConversation: vi.fn(async () => undefined),

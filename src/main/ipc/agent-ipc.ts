@@ -535,6 +535,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     const [conversationId] = args
     const agentBridge = requireAgentBridge()
     if (!agentBridge) return
+    if (agentBridge.isBusy(conversationId)) throw new Error('请先结束本轮任务')
     agentBridge.resetSession(conversationId)
   })
 

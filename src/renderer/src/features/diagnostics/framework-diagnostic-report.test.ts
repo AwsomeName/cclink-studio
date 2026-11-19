@@ -13,6 +13,8 @@ import {
   resetRendererDiagnosticsForTest,
 } from './renderer-diagnostic-log'
 import { collectFrameworkDiagnosticReport } from './framework-diagnostic-report'
+import { recordConversationNavigation } from './conversation-context-diagnostics'
+import { createAgentConversationState } from '../agent-conversations/conversation-state'
 
 describe('collectFrameworkDiagnosticReport', () => {
   beforeEach(() => {
@@ -126,6 +128,12 @@ describe('collectFrameworkDiagnosticReport', () => {
     })
     recordRendererDiagnosticLog('error', ['[FsStore] 打开所选项目失败: EACCES'])
     recordRendererDiagnosticLog('error', ['[AgentBridge] agent-renderer-private-log'])
+    const workspace = localWorkspaceRef('/workspace/private-project-label')
+    const target = createAgentConversationState('row-2', { input: 'private-draft' })
+    target.title = 'private-title'
+    recordConversationNavigation('row-click', workspace, target.id, target, 'row-1')
+    recordConversationNavigation('selection-result', workspace, target.id, target, target.id)
+    recordConversationNavigation('panel-fallback', workspace, target.id, target, 'row-1')
 
     const report = await collectFrameworkDiagnosticReport()
 
@@ -137,6 +145,12 @@ describe('collectFrameworkDiagnosticReport', () => {
     expect(report).toContain('打开项目失败: EACCES')
     expect(report).toContain('[WorkspaceStateService] project open failed')
     expect(report).toContain('[FsStore] 打开所选项目失败: EACCES')
+    expect(report).toContain(
+      '[ConversationNavigation] row-click {"targetId":"row-2","activeId":"row-1","workspaceKind":"local","targetBinding":"unbound","matchesWorkspace":false',
+    )
+    expect(report).toContain('selection-result {"targetId":"row-2","activeId":"row-2"')
+    expect(report).toContain('panel-fallback {"targetId":"row-2","activeId":"row-1"')
+    expect(report).not.toMatch(/private-draft|private-title|private-project-label/)
     expect(report).toContain('Agent 会话恢复轨迹：已从框架报告排除')
     expect(report).toContain('已打开项目：本地=1 远程=1')
     expect(report).toContain('项目条中已打开远程工作区：1')

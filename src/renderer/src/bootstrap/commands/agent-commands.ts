@@ -8,14 +8,39 @@ import {
 } from '../../stores/workspace-store'
 import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
-import { workspaceRefLabel } from '@shared/workspace-ref'
+import { workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
 import {
   AGENT_FOLLOW_UP,
   followUpUnavailableReason,
 } from '../../features/agent-conversations/follow-up-actions'
-import { createConversationRunController } from '../../features/agent-conversations/conversation-run-controller'
-
+import {
+  createConversationRunController,
+  isConversationSendPending,
+} from '../../features/agent-conversations/conversation-run-controller'
 import { createConversationTerminalCommands } from '../../features/terminal/conversation-terminal-command'
+import { conversationBusyStatus } from '../../features/agent-conversations/conversation-state'
+import { conversationWorkspaceKey } from '../../features/agent-conversations/conversation-workspace-state'
+import { isWorkspaceStateRestoring } from '../../utils/workspace-state'
+
+function resetUnavailableReason(): string | undefined {
+  const { ref } = captureActiveWorkspaceTarget()
+  if (ref.kind === 'remote') return '远程会话暂不支持重置'
+  const state = useAgentStore.getState()
+  const chat = state.conversations[state.activeConversationId]
+  if (
+    !chat ||
+    isWorkspaceStateRestoring() ||
+    chat.runtime.location !== 'local' ||
+    conversationWorkspaceKey(chat) !== workspaceRefKey(ref)
+  )
+    return '请先打开当前工作空间的本地会话'
+  if (chat.archivedAt) return '请先恢复已归档会话'
+  if (
+    conversationBusyStatus(chat, state.pendingConfirmations) ||
+    isConversationSendPending(chat.id)
+  )
+    return '请先结束本轮任务'
+}
 
 export function createAgentCommands(): Command[] {
   return [
@@ -82,10 +107,14 @@ export function createAgentCommands(): Command[] {
         const target = captureActiveWorkspaceTarget()
         const activeWorkspaceRef = target.ref
         if (activeWorkspaceRef.kind === 'remote') {
-          await useCclinkStore
+          const created = await useCclinkStore
             .getState()
             .createSession(activeWorkspaceRef, `会话 · ${workspaceRefLabel(activeWorkspaceRef)}`)
-          if (isWorkspaceTargetCurrent(target)) useUIStore.getState().showAgentChat()
+          if (
+            isWorkspaceTargetCurrent(target) &&
+            useCclinkStore.getState().selectedSessionId === created.id
+          )
+            useUIStore.getState().showAgentChat()
           return
         }
         const conversationId = useAgentStore.getState().createConversation({
@@ -106,10 +135,36 @@ export function createAgentCommands(): Command[] {
       id: 'agent.resetSession',
       label: '重置 Agent 会话',
       category: 'Agent',
-      action: () => {
-        const { activeConversationId, clearMessages } = useAgentStore.getState()
-        void clearMessages(activeConversationId)
-        window.cclinkStudio.agent.resetSession(activeConversationId)
+      enabled: () => {
+        const reason = resetUnavailableReason()
+        return { enabled: !reason, reason }
+      },
+      action: async () => {
+        const reason = resetUnavailableReason()
+        if (reason) throw new Error(reason)
+        const state = useAgentStore.getState()
+        const chat = state.conversations[state.activeConversationId]
+        const target = captureActiveWorkspaceTarget()
+        await window.cclinkStudio.agent.resetSession(chat.id)
+        try {
+          if (
+            !isWorkspaceTargetCurrent(target) ||
+            useAgentStore.getState().conversations[chat.id] !== chat
+          )
+            throw new Error('会话已变更，已保留聊天记录')
+          await state.clearMessages(chat.id)
+        } catch (error) {
+          // Native reset succeeded even if the history write failed. Never resume the old session.
+          const latest = useAgentStore.getState().conversations[chat.id]
+          if (
+            chat.sessionId &&
+            latest?.sessionId === chat.sessionId &&
+            !latest.activeRunId &&
+            latest.lastRunId === chat.lastRunId
+          )
+            state.setSessionId(null, chat.id)
+          throw error
+        }
       },
     },
   ]

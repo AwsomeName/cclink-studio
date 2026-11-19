@@ -325,6 +325,41 @@ function updateConversation(
   if (!current) return {}
 
   let next = updater(current)
+  if (next === current) return {}
+  if (next.activeRunId && next.activeRunId !== next.lastRunId) {
+    next = {
+      ...next,
+      lastRunId: next.activeRunId,
+      lastRunStartedAt: next.lastRunEventAt ?? Date.now(),
+    }
+  } else if (!next.activeRunId && current.activeRunId && !next.lastRunId) {
+    // Legacy snapshot with no recorded start time.
+    next = {
+      ...next,
+      lastRunId: current.activeRunId,
+      lastRunStartedAt: current.lastRunEventAt ?? undefined,
+    }
+  }
+  const replacedRun =
+    current.activeRunId && next.activeRunId && current.activeRunId !== next.activeRunId
+  if (
+    next.contextCompaction.status === 'compacting' &&
+    (next.lastRunTerminalReason ||
+      (replacedRun && next.contextCompaction === current.contextCompaction))
+  ) {
+    const completed =
+      !replacedRun && next.runStatus === 'completed' && next.contextCompaction.trigger === 'manual'
+    next = {
+      ...next,
+      contextCompaction: {
+        ...next.contextCompaction,
+        status: completed ? 'completed' : 'failed',
+        error: completed ? null : '压缩未收到完成结果，可重新压缩或继续发送消息',
+        errorCode: completed ? null : 'context_compaction_failed',
+        updatedAt: next.updatedAt,
+      },
+    }
+  }
   if (
     next.queuedMessages?.length &&
     next.lastRunTerminalReason &&
@@ -530,7 +565,35 @@ export async function persistConversationWorkspaceByKey(
   )
 }
 
-type HistoryAction = 'archive' | 'restore' | 'delete'
+type HistoryAction = 'archive' | 'restore' | 'delete' | 'clear'
+
+function clearedConversation(current: AgentConversationState): AgentConversationState {
+  const fresh = createConversation(current.id)
+  return {
+    ...current,
+    messages: fresh.messages,
+    sessionId: null,
+    sessionCompatibilityFingerprint: null,
+    streamingMessageId: null,
+    activeImageDraft: undefined,
+    supplementSupported: false,
+    activeRunSupplementContextKey: undefined,
+    backendState: fresh.backendState,
+    runStatus: 'idle',
+    lastRunTerminalReason: null,
+    viewedCompletionAt: undefined,
+    lastCost: null,
+    lastRunConfigurationReceipt: null,
+    contextUsage: null,
+    contextCompaction: fresh.contextCompaction,
+    queuedMessages: current.queuedMessages?.map((item) => ({
+      ...item,
+      afterCancellation: undefined,
+    })),
+    messageQueuePauseReason: current.queuedMessages?.length ? '会话已重置，请确认后继续队列' : null,
+    updatedAt: fresh.updatedAt,
+  }
+}
 
 function archivedConversation(
   current: AgentConversationState,
@@ -560,6 +623,7 @@ function checkHistoryAction(
   const conversation = state.conversations[id]
   if (!conversation) throw new Error('会话已不存在')
   if (isWorkspaceStateRestoring()) throw new Error('工作空间正在恢复，请稍后重试')
+  if (action === 'clear' && conversation.archivedAt) throw new Error('请先恢复已归档会话')
   const busy = conversationBusyStatus(conversation, state.pendingConfirmations)
   if (action !== 'restore' && busy) throw new Error('会话' + busy + '，请先结束本轮任务')
   return conversation
@@ -575,6 +639,9 @@ async function changeConversationHistory(id: string, action: HistoryAction): Pro
   if (conversationWorkspaceKey(current) !== key) throw new Error('会话工作空间已变更')
   if ((action === 'archive' && current.archivedAt) || (action === 'restore' && !current.archivedAt))
     return
+
+  if ((action === 'delete' || action === 'clear') && current !== target)
+    throw new Error('会话内容已更新，请重新确认操作')
 
   let release!: () => void
   pendingHistoryWrites.set(
@@ -592,6 +659,7 @@ async function changeConversationHistory(id: string, action: HistoryAction): Pro
     const now = Date.now()
     const conversations = { ...before.conversations }
     if (action === 'delete') delete conversations[id]
+    else if (action === 'clear') conversations[id] = clearedConversation(current)
     else
       conversations[id] =
         action === 'archive'
@@ -605,17 +673,18 @@ async function changeConversationHistory(id: string, action: HistoryAction): Pro
       undefined,
       action === 'delete'
         ? { conversationHistoryMutation: { type: 'delete-conversation', conversationId: id } }
-        : undefined,
+        : action === 'clear'
+          ? { conversationHistoryMutation: { type: 'clear-messages', conversationId: id } }
+          : undefined,
     )
     saved = true
     useAgentStore.setState((state) => {
       const latest = checkHistoryAction(state, id, action)
       if (conversationWorkspaceKey(latest) !== key) throw new Error('会话工作空间已变更')
-      if (action === 'delete') {
-        if (latest.input !== current.input || latest.messages !== current.messages)
-          throw new Error('会话内容已更新，请重新确认删除')
-        return removeConversation(state, id)
-      }
+      if ((action === 'delete' || action === 'clear') && latest !== current)
+        throw new Error('会话内容已更新，请重新确认操作')
+      if (action === 'delete') return removeConversation(state, id)
+      if (action === 'clear') return updateConversation(state, id, () => conversations[id])
       if (action === 'archive')
         return removeConversation(state, id, archivedConversation(latest, now))
       const restored = { ...latest, archivedAt: null, updatedAt: now }
@@ -631,6 +700,15 @@ async function changeConversationHistory(id: string, action: HistoryAction): Pro
       { conversationId: id },
     ])
   } catch (error) {
+    if (saved) {
+      // Disk accepted the mutation, but a newer local edit or run vetoed it.
+      // Restore the retained conversation before releasing the workspace write lock.
+      await persistWorkspaceSectionNow(
+        'agentConversations',
+        buildAgentConversationWorkspaceSnapshot(useAgentStore.getState(), key),
+        key,
+      )
+    }
     recordRendererDiagnosticLog('error', [
       '[ConversationPersistence] ' + action + '-failed',
       { conversationId: id },
@@ -1372,11 +1450,21 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   applyRuntimeRunStatus: (record) =>
     set((state) => ({
       ...updateConversation(state, record.conversationId, (conversation) => {
-        const mayAdoptMainOwnedRun =
-          (record.status === 'running' || record.status === 'cancelling') &&
-          conversationWorkspaceKey(conversation) === record.workspaceKey &&
-          (!conversation.activeRunId || record.startedAt >= (conversation.lastRunEventAt ?? 0))
-        if (conversation.activeRunId !== record.runId && !mayAdoptMainOwnedRun) {
+        const active = record.status === 'running' || record.status === 'cancelling'
+        if (conversation.activeRunId !== record.runId) {
+          const previousStart =
+            conversation.lastRunStartedAt ??
+            (conversation.activeRunId || conversation.lastRunTerminalReason
+              ? conversation.lastRunEventAt
+              : null)
+          if (
+            !active ||
+            conversationWorkspaceKey(conversation) !== record.workspaceKey ||
+            record.runId === conversation.lastRunId ||
+            (previousStart != null && record.startedAt < previousStart)
+          )
+            return conversation
+        } else if (record.status === 'running' && conversation.runStatus === 'cancelling') {
           return conversation
         }
         const now = Date.now()
@@ -1387,6 +1475,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             backendState: 'streaming' as AgentBackendState,
             runStatus: record.status,
             activeRunId: record.runId,
+            lastRunId: record.runId,
+            lastRunStartedAt: record.startedAt,
             lastRunEventAt: now,
             lastRunTerminalReason: null,
             updatedAt: now,
@@ -1425,6 +1515,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                 ? 'cancelled'
                 : 'failed',
           activeRunId: null,
+          lastRunId: record.runId,
+          lastRunStartedAt: record.startedAt,
           activeImageDraft: undefined,
           lastRunEventAt: now,
           lastRunTerminalReason:
@@ -1608,7 +1700,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             ),
             loading: true,
             backendState: 'streaming' as AgentBackendState,
-            runStatus: conversation.runStatus === 'starting' ? 'starting' : 'running',
+            runStatus:
+              conversation.runStatus === 'starting' || conversation.runStatus === 'cancelling'
+                ? conversation.runStatus
+                : 'running',
             activeRunId: status.runId ?? conversation.activeRunId ?? null,
             lastRunEventAt: Date.now(),
             lastRunTerminalReason: null,
@@ -1621,7 +1716,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           conversation.runStatus === 'starting' ||
           conversation.runStatus === 'running' ||
           conversation.runStatus === 'cancelling' ||
-          Boolean(conversation.activeRunId)
+          Boolean(conversation.activeRunId) ||
+          conversation.contextCompaction.status === 'compacting'
         if (!awaitingRuntimeReconciliation) {
           return runtimeSession.sessionId !== conversation.sessionId ||
             runtimeSession.sessionCompatibilityFingerprint !==
@@ -1651,29 +1747,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   setPlaywrightStatus: (playwrightStatus) => set({ playwrightStatus }),
 
-  clearMessages: async (conversationId) => {
-    const id = conversationId ?? get().activeConversationId
-    const conversation = get().conversations[id]
-    if (!conversation) return
-    const workspaceKey = conversationWorkspaceKey(conversation)
-    set((state) =>
-      updateConversation(state, conversationId, (conversation) => {
-        const fresh = createConversation(conversation.id, {
-          surface: conversation.surface,
-          runtime: conversation.runtime,
-          roleRef: conversation.configuration.roleRef,
-        })
-        return {
-          ...fresh,
-          title: conversation.title,
-          scope: conversation.scope,
-        }
-      }),
-    )
-    await persistConversationWorkspaceByKey(workspaceKey, {
-      conversationHistoryMutation: { type: 'clear-messages', conversationId: id },
-    })
-  },
+  clearMessages: (conversationId) =>
+    changeConversationHistory(conversationId ?? get().activeConversationId, 'clear'),
 
   addPendingConfirmation: (req) =>
     set((state) => ({
