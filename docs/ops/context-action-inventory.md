@@ -8,7 +8,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 当前维护门禁统计：
 
-- Renderer context-menu owner：19 个组件文件。
+- Renderer context-menu owner：20 个组件文件。
 - Browser 原生菜单 owner：1 个主进程文件。
 - ContextMenu Store owner：1 个。
 - 结构化 `ContextTarget`：22 种，全部有 contribution 覆盖。
@@ -20,6 +20,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 | 区域          | Target        | Renderer owner     | 结论                                                                                     |
 | ------------- | ------------- | ------------------ | ---------------------------------------------------------------------------------------- |
 | Project Strip | `project`     | `ProjectStrip.tsx` | 切换、路径、Finder、诊断、关闭                                                           |
+| Studio 顶栏设置 | `activity` | `App.tsx` | 设置入口复用统一菜单和键盘触发，执行既有设置命令 |
 | Activity Bar  | `activity`    | `ActivityBar.tsx`  | 打开区域、Sidebar 布局                                                                   |
 | Sidebar 容器  | `sidebar`     | `Sidebar.tsx`      | 创建、刷新、宽度、隐藏                                                                   |
 | 文件树        | `file`        | `FileTree.tsx`     | 文件领域命令；复制/粘贴、重命名、删除等副作用由 FS owner 执行，作用域由 workspace 再校验 |

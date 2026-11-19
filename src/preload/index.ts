@@ -1,3 +1,4 @@
+import { ownerDirectoryIpc } from '../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../shared/ipc/owner-research'
 import { contextBridge, ipcRenderer } from 'electron'
 import { localTtsApi } from './local-tts-api'
@@ -445,6 +446,14 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   workbenchWindow: workbenchWindowApi,
 
   scheduledTasks: scheduledTasksApi,
+  ownerDirectories: {
+    list: () => invokeIpcContract(ownerDirectoryIpc.list),
+    save: (a: import('../shared/owner/affair').Affair, revision: number) =>
+      invokeIpcContract(ownerDirectoryIpc.save, a, revision),
+    retry: (id: string) => invokeIpcContract(ownerDirectoryIpc.retry, id),
+    reveal: (id: string) => invokeIpcContract(ownerDirectoryIpc.reveal, id),
+    preview: (id: string, name: string) => invokeIpcContract(ownerDirectoryIpc.preview, id, name),
+  },
   ownerResearch: {
     findPaths: (repo: string, terms: string[], ref: string) =>
       invokeIpcContract(ownerResearchIpc.findPaths, repo, terms, ref),

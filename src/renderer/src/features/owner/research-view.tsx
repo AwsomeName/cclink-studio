@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore, useRef, useEffect } from 'react'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useAgentStore } from '../../stores/agent-store'
-import { useOwners } from './owner-store'
+import { acceptDirectory } from './owner-store'
 import {
   discuss,
   research,
@@ -15,28 +15,42 @@ import { session } from './owner-agent'
 import { next, type Affair } from './affair'
 export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
   const [text, set] = useState('')
-  function start() {
+  const [saving, setSaving] = useState(false),
+    [error, setError] = useState('')
+  const creating = useRef(false)
+  async function start() {
     const t = text.trim()
-    if (!t) return
+    if (!t || creating.current) return
+    creating.current = true
+    setSaving(true)
     const id = crypto.randomUUID()
-    if (
-      useOwners.getState().save({
-        id,
-        title: t.slice(0, 60),
-        goal: t.slice(0, 1500),
-        sources: [],
-        confirmed: false,
-        updated: Date.now(),
-        attempt: null,
-        run: null,
-        issue: '',
-        method: null,
-        result: null,
-        research: freshResearch(),
-      })
-    ) {
+    try {
+      const created = acceptDirectory(
+        await window.cclinkStudio.ownerDirectories.save(
+          {
+            id,
+            title: t.slice(0, 60),
+            goal: t.slice(0, 1500),
+            sources: [],
+            confirmed: false,
+            updated: Date.now(),
+            attempt: null,
+            run: null,
+            issue: '',
+            method: null,
+            result: null,
+            research: freshResearch(),
+          },
+          0,
+        ),
+      )
       begin(id)
-      void discuss(id, t)
+      if (!created.directory?.error) void discuss(id, t)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      creating.current = false
+      setSaving(false)
     }
   }
   return (
@@ -53,7 +67,9 @@ export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
           placeholder="帮我调研开源芯片项目"
         />
       </label>
-      <button className="own-primary" disabled={!text.trim()} onClick={start}>
+      <small>保存到「我的空间 / Owner 事务」</small>
+      {error && <p role="alert">{error}</p>}
+      <button className="own-primary" disabled={!text.trim() || saving} onClick={start}>
         发给 Owner
       </button>
     </aside>
@@ -63,6 +79,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const r = a.research!,
     [text, set] = useState(''),
     [notice, setNotice] = useState(''),
+    [preview, setPreview] = useState<{ name: string; content: string } | null>(null),
     active = useSyncExternalStore(subscribeWork, () => !interrupted(a.id)),
     questionId = useSyncExternalStore(subscribeWork, () => activeQuestion(a.id)),
     bottom = useRef<HTMLDivElement>(null)
@@ -77,6 +94,14 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     bottom.current?.scrollIntoView({ block: 'nearest' })
   }, [r.chat.length, questionId])
   const chatBusy = a.confirmed ? !!questionId : active
+  async function openFile(name: string) {
+    try {
+      const content = await window.cclinkStudio.ownerDirectories.preview(a.id, name)
+      setPreview({ name, content })
+    } catch (e) {
+      setNotice(String(e))
+    }
+  }
   function send() {
     const t = text.trim()
     if (chatBusy || !t) return
@@ -92,9 +117,65 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   }
   return (
     <>
-      <article>
+      <article data-owner-phase={r.phase} data-owner-id={a.id}>
         <button onClick={back}>‹ 我的事务</button>
         <h1>{title}</h1>
+        {a.directory && (
+          <section>
+            <button
+              onClick={() =>
+                void window.cclinkStudio.ownerDirectories
+                  .reveal(a.id)
+                  .catch((e) => setNotice(String(e)))
+              }
+            >
+              打开事务目录
+            </button>{' '}
+            <small>{a.directory.path}</small>
+            {a.directory.error && (
+              <p role="alert">
+                {a.directory.error}{' '}
+                <button
+                  onClick={() =>
+                    void window.cclinkStudio.ownerDirectories
+                      .retry(a.id)
+                      .then(acceptDirectory)
+                      .catch((e) => setNotice(String(e)))
+                  }
+                >
+                  重试保存文件
+                </button>
+              </p>
+            )}
+            {!a.directory.error && (
+              <>
+                <details>
+                  <summary>事务文件 · {a.directory.files.length}</summary>
+                  {a.directory.files.map((name) => (
+                    <p key={name}>
+                      <button onClick={() => void openFile(name)}>{name}</button>
+                    </p>
+                  ))}
+                </details>
+                {a.directory.reportFile && (
+                  <button
+                    className="own-primary"
+                    onClick={() => void openFile(a.directory!.reportFile!)}
+                  >
+                    打开交付物
+                  </button>
+                )}
+              </>
+            )}
+            {preview && (
+              <section>
+                <h3>{preview.name}</h3>
+                <button onClick={() => setPreview(null)}>关闭预览</button>
+                <ConversationMarkdown source={preview.content} />
+              </section>
+            )}
+          </section>
+        )}
         <div className="own-call">
           <small>{label}</small>
           <h2>
@@ -134,7 +215,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             )}
           </section>
         )}
-        {r.report && (
+        {r.report && !a.directory?.error && (
           <section>
             <h3>调研简报</h3>
             <ConversationMarkdown source={r.report.conclusion} />
@@ -234,7 +315,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             ))}
           </section>
         )}
-        {(r.phase === 'error' || waitingForReentry) && !active && (
+        {(r.phase === 'error' || waitingForReentry) && !a.directory?.error && !active && (
           <button
             onClick={() =>
               void (a.confirmed
@@ -314,7 +395,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               ))}
             </div>
           ))}
-        {ready && (
+        {ready && !a.directory?.error && (
           <button className="own-primary" onClick={() => void research(a.id)}>
             确认范围和交付物，开始调研
           </button>
@@ -329,7 +410,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             a.confirmed ? '问 Owner 当前进展或补查原因…' : '调整对象、比较维度或交付形式…'
           }
         />
-        <button disabled={chatBusy || !text.trim()} onClick={send}>
+        <button disabled={chatBusy || !!a.directory?.error || !text.trim()} onClick={send}>
           {chatBusy ? '等待 Owner 答复' : '发送给 Owner'}
         </button>
       </aside>

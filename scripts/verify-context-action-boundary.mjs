@@ -7,6 +7,7 @@ const rootDir = resolve(import.meta.dirname, '..')
 const sourceDir = resolve(rootDir, 'src')
 
 const expectedRendererContextMenuOwners = new Set([
+  'src/renderer/src/App.tsx',
   'src/renderer/src/components/activity-bar/ActivityBar.tsx',
   'src/renderer/src/components/common/ConversationMessageRenderer.tsx',
   'src/renderer/src/components/common/ResizeHandle.tsx',

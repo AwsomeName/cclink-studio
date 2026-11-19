@@ -25,7 +25,7 @@ export const useOwners = create<State>((set, get) => {
   function write(items: Affair[]) {
     if (get().blocked) return false
     try {
-      localStorage.setItem(key, JSON.stringify(schema.parse(items)))
+      localStorage.setItem(key, JSON.stringify(schema.parse(items.filter((a) => !a.directory))))
       set({ items, error: '' })
       return true
     } catch {
@@ -42,3 +42,22 @@ export const useOwners = create<State>((set, get) => {
     },
   }
 })
+
+export function acceptDirectory(a: Affair) {
+  useOwners.setState((s) => ({
+    items: [a, ...s.items.filter((x) => x.id !== a.id)].sort((a, b) => b.updated - a.updated),
+  }))
+  return a
+}
+export async function loadDirectories() {
+  try {
+    const { items, errors } = await window.cclinkStudio.ownerDirectories.list()
+    for (const a of items) {
+      const current = useOwners.getState().items.find((x) => x.id === a.id)
+      if ((current?.directory?.revision ?? 0) <= a.directory!.revision) acceptDirectory(a)
+    }
+    if (errors.length) useOwners.setState({ error: errors.join('；') })
+  } catch (e) {
+    useOwners.setState({ error: '事务目录读取失败：' + String(e) })
+  }
+}

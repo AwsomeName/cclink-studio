@@ -543,7 +543,7 @@ async function main() {
     'find shortcut can be rebound in settings and survives an app restart',
     async () => {
       const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-      await page.locator('.activity-bar-icon[title="设置"]').first().click()
+      await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
       await page.locator('.settings-nav-item', { hasText: '快捷键' }).click()
       const findRow = page.locator('.keybindings-row', { hasText: '查找当前内容' }).first()
       await findRow.waitFor({ state: 'visible', timeout: 5_000 })
@@ -1418,7 +1418,7 @@ async function main() {
 
   await runCheck('shortcut conflict, recording guards, and defaults are recoverable', async () => {
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-    await page.locator('.activity-bar-icon[title="设置"]').first().click()
+    await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
     await page.locator('.settings-nav-item', { hasText: '快捷键' }).click()
     await page.waitForFunction(
       () => document.querySelector('.keybindings-sync-status')?.textContent?.includes('已同步'),
@@ -1755,7 +1755,7 @@ async function main() {
 
   await runCheck('context menu stays inside a compact viewport', async () => {
     await page.setViewportSize({ width: 900, height: 620 })
-    const settingsButton = page.locator('.activity-bar-icon[title="设置"]').first()
+    const settingsButton = page.getByRole('button', { name: 'Studio 设置', exact: true })
     await settingsButton.click({ button: 'right' })
     const menu = page.locator('.unified-context-menu')
     await menu.waitFor({ timeout: 10_000 })

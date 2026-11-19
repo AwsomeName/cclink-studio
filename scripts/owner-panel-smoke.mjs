@@ -1,6 +1,6 @@
 // Real Electron, disposable app profile. Defaults to the current out/ build.
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
@@ -12,10 +12,12 @@ await writeFile(
   join(dir, 'profile/settings.json'),
   JSON.stringify({ componentSetupPageSeenVersion: 2 }),
 )
+const sampleHome = process.env.OWNER_SMOKE_HOME || join(dir, 'home')
+await mkdir(sampleHome, { recursive: true })
 const launcher = join(dir, 'launch.cjs')
 await writeFile(
   launcher,
-  `const {app}=require('electron');app.setPath('home',${JSON.stringify(join(dir, 'home'))});app.setPath('documents',${JSON.stringify(join(dir, 'documents'))});app.setAppPath(${JSON.stringify(root)});require(${JSON.stringify(resolve(root, process.env.CCLINK_OWNER_BUILD || 'out', 'main/index.js'))})`,
+  `const {app}=require('electron');app.setPath('home',${JSON.stringify(sampleHome)});app.setPath('documents',${JSON.stringify(join(dir, 'documents'))});app.setAppPath(${JSON.stringify(root)});require(${JSON.stringify(resolve(root, process.env.CCLINK_OWNER_BUILD || 'out', 'main/index.js'))})`,
 )
 let app, page
 async function launch() {
@@ -77,24 +79,31 @@ try {
     }
     const startPage = page
     const state = () =>
-      page.evaluate(() => JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0])
+      page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
       .fill(
-        '帮我调研开源芯片 Ibex，给我一张源码入门卡。先从项目定位和默认流水线各级职责中选出适合初读的一级，再沿你选的级追到一处真实寄存器，用 RTL 中的更新条件和赋值解释它何时更新。',
+        '开源芯片 Ibex 调研。请交付一张中文《Ibex 源码入门卡》，用这个标题。先从项目定位和默认流水线各级职责中选出适合初读的一级，再沿你选的级追到一处真实寄存器，用 RTL 中的更新条件和赋值解释它何时更新。',
       )
     await click('发给 Owner')
     const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
     await page.waitForFunction(
       () =>
         ['ready', 'error'].includes(
-          JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0].research.phase,
+          document.querySelector('[data-owner-phase]')?.dataset.ownerPhase,
         ),
       null,
       { timeout: 150000 },
     )
     const proposed = await state()
     assert.equal(proposed.research.phase, 'ready', proposed.issue)
+    const folder = proposed.directory.path
+    console.log('建档', folder)
+    assert.deepEqual(
+      (await readdir(folder)).filter((n) => !n.startsWith('.')).sort(),
+      ['事务.md', '工作记录.md'].sort(),
+    )
+    assert.match(await readFile(join(folder, '事务.md'), 'utf8'), /Ibex/)
     await confirm.waitFor()
     assert.equal((await state()).research.docs.length, 0)
     await snap('adaptive-01-plan')
@@ -103,7 +112,7 @@ try {
     let workerRun
     while (!workerRun && Date.now() < deadline) {
       const sample = await page.evaluate(async () => {
-        const a = JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0]
+        const a = (await window.cclinkStudio.ownerDirectories.list()).items[0]
         if (['done', 'error'].includes(a.research.phase))
           return { status: a.research.phase, issue: a.issue }
         const runId = document.querySelector('[data-owner-worker-run]')?.dataset.ownerWorkerRun
@@ -120,6 +129,10 @@ try {
     }
     assert.ok(workerRun, '未观察到 A 的原生补查运行')
     const beforeQuestion = await state()
+    const during = await readFile(join(folder, '工作记录.md'), 'utf8')
+    assert.match(during, /续用会话 A 补查/)
+    assert.ok((await readdir(join(folder, '资料'))).length > 0)
+    console.log('补查时已保存', await readdir(join(folder, '资料')))
     const question = '为什么要让 A 补查？已取得的资料能说明什么，还缺什么？'
     await page.getByLabel('和 Owner 沟通').fill(question)
     await click('发送给 Owner')
@@ -136,7 +149,7 @@ try {
     await page.waitForFunction(
       () =>
         ['done', 'error'].includes(
-          JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0].research.phase,
+          document.querySelector('[data-owner-phase]')?.dataset.ownerPhase,
         ),
       null,
       { timeout: 450000 },
@@ -162,6 +175,25 @@ try {
             d.text.replace(/\s+/g, ' ').includes(item.quote.replace(/\s+/g, ' ')),
         ),
       ),
+    )
+    assert.ok(!a.directory.error, a.directory.error)
+    const report = await readFile(join(folder, a.directory.reportFile), 'utf8')
+    assert.match(report, /Ibex/i)
+    assert.match(report, /\[本地证据\]/)
+    const raw = await Promise.all(
+      (await readdir(join(folder, '资料'))).map((f) => readFile(join(folder, '资料', f), 'utf8')),
+    )
+    assert.ok(raw.some((content) => content.includes('rtl/') && content.includes('always_ff')))
+    for (const link of report.matchAll(/\[本地证据\]\(\.\.\/(.*?)\)/g))
+      assert.ok(await readFile(join(folder, decodeURI(link[1])), 'utf8'))
+    await click('打开交付物')
+    await page.getByRole('heading', { name: a.directory.reportFile, exact: true }).waitFor()
+    await click('关闭预览')
+    console.log(
+      '成品',
+      join(folder, a.directory.reportFile),
+      '已核对引文',
+      a.research.report.items.length,
     )
     const count = a.research.report.items.length
     assert.equal(page, startPage)

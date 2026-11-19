@@ -304,14 +304,12 @@ function MainLayout(): React.ReactElement {
             aria-label="Studio 设置"
             onContextMenu={(event) => {
               event.preventDefault()
-              useContextMenuStore
-                .getState()
-                .show({
-                  target: { kind: 'activity', activityId: 'settings' },
-                  x: event.clientX,
-                  y: event.clientY,
-                  focusReturn: event.currentTarget,
-                })
+              useContextMenuStore.getState().show({
+                target: { kind: 'activity', activityId: 'settings' },
+                x: event.clientX,
+                y: event.clientY,
+                focusReturn: event.currentTarget,
+              })
             }}
             onKeyDown={(event) => {
               if (!isContextMenuKeyboardEvent(event.nativeEvent)) return

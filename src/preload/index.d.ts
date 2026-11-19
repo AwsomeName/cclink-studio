@@ -105,6 +105,16 @@ export interface CCLinkStudioAPI {
   workbenchWindow: WorkbenchMainWindowApiContract
 
   scheduledTasks: ScheduledTasksApiContract
+  ownerDirectories: {
+    list: () => Promise<{ items: import('../shared/owner/affair').Affair[]; errors: string[] }>
+    save: (
+      a: import('../shared/owner/affair').Affair,
+      revision: number,
+    ) => Promise<import('../shared/owner/affair').Affair>
+    retry: (id: string) => Promise<import('../shared/owner/affair').Affair>
+    reveal: (id: string) => Promise<void>
+    preview: (id: string, name: string) => Promise<string>
+  }
   ownerResearch: {
     findPaths: (
       repo: string,

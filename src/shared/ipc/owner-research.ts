@@ -16,6 +16,7 @@ export type ReadmeResult =
       sha: string
       at: number
       startLine: number
+      locations?: string[]
       matchedAnchor?: boolean
     }
   | { ok: false; error: string }
