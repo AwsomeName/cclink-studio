@@ -1,3 +1,4 @@
+import { getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { conversationNeedsAttention } from '../../features/agent-conversations/project-activity'
 import { inspectWorkspaceWork } from '../../features/running-work/workspace-work'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
@@ -41,7 +42,9 @@ export function RunningWork(): React.ReactElement {
     setLoading(true)
     setError('')
     void (async () => {
-      const projects = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
+      const projects = await window.cclinkStudio.workspaceState.listLocalWorkspaces(
+        getWorkspaceStateOwnerKey(),
+      )
       const failures: string[] = []
       const groups = await Promise.all(
         projects.map(async (project) => {
