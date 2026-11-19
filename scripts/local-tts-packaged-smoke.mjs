@@ -105,7 +105,7 @@ try {
   assert(page.url().startsWith('file://'), 'Must exercise bundled renderer, never dev server')
   const snap = () => page.evaluate(() => window.cclinkStudio.localTts.getSnapshot())
   // Select only the registered temporary fixture; never the machine's real default space.
-  await page.getByRole('button', { name: '我的空间', exact: true }).click()
+  await page.locator(`.project-strip-item[data-project-path=${JSON.stringify(workspace)}]`).click()
   await page.getByRole('button', { name: '文件', exact: true }).click()
   await page.locator('.file-tree-item.file').filter({ hasText: '朗读安装包验收.md' }).click()
   await page.locator('.tiptap[contenteditable=true]').waitFor()
