@@ -1,3 +1,4 @@
+import { useFixedSpacesStore } from './fixed-spaces-store'
 import { WorkspaceCreationForm, WorkspaceGitAcquire } from './WorkspaceSettingsForm'
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
@@ -190,6 +191,18 @@ function WorkspaceSourceChooser({
         </button>
         <button
           className="workspace-open-source-card"
+          onClick={() => {
+            onOpened()
+            useFixedSpacesStore.setState({
+              setup: { section: 'overview', generation: beginWorkspaceRuntimeTransition() },
+            })
+          }}
+        >
+          <strong>接回公司资料…</strong>
+          <small>选择已有公司目录</small>
+        </button>
+        <button
+          className="workspace-open-source-card"
           onClick={() => useWorkspaceOpenStore.getState().show('git')}
         >
           <strong>从 Git 获取…</strong>
@@ -204,7 +217,7 @@ function WorkspaceSourceChooser({
         >
           <IconFolder size={22} />
           <span>
-            <strong>我的空间</strong>
+            <strong>打开默认项目</strong>
             <small>{defaultPath || '打开日常资料目录'}</small>
           </span>
           <IconChevronRight size={14} />

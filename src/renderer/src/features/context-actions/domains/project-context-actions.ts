@@ -97,8 +97,7 @@ export function createProjectContextCommands(): Command[] {
       enabled: (context) => {
         const path = projectPath(context)
         const fixed = useFixedSpacesStore.getState().spaces
-        const isFixed =
-          path === fixed?.personal?.workspacePath || path === fixed?.company?.workspacePath
+        const isFixed = path === fixed?.personal?.workspacePath
         return {
           enabled: Boolean(
             path && !isFixed && useOpenProjectsStore.getState().openProjectPaths.includes(path),
@@ -110,8 +109,7 @@ export function createProjectContextCommands(): Command[] {
         const path = projectPath(context)
         if (!path) throw new Error('项目目标已失效')
         const fixed = useFixedSpacesStore.getState().spaces
-        if (path === fixed?.personal?.workspacePath || path === fixed?.company?.workspacePath)
-          throw new Error('固定入口不能关闭')
+        if (path === fixed?.personal?.workspacePath) throw new Error('固定入口不能关闭')
         const running =
           getRunningProjectCounts(useAgentStore.getState().conversations).get(path) ?? 0
         const work = await inspectWorkspaceWork(path)
@@ -136,10 +134,7 @@ export function createProjectContextCommands(): Command[] {
         }
 
         const nextPath = getProjectCloseSuccessor(
-          projectsStore.openProjectPaths.filter(
-            (item) =>
-              item !== fixed?.personal?.workspacePath && item !== fixed?.company?.workspacePath,
-          ),
+          projectsStore.openProjectPaths.filter((item) => item !== fixed?.personal?.workspacePath),
           path,
         )
         if (nextPath) {

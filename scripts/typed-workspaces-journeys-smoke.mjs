@@ -63,7 +63,7 @@ await writeFile(
 const launcher = join(root, 'launch.cjs')
 await writeFile(
   launcher,
-  `const {app}=require('electron'); app.setPath('home',${JSON.stringify(home)});app.setPath('documents',${JSON.stringify(home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('out/main/index.js'))});`,
+  `const {app}=require('electron'); app.setPath('home',process.env.STUDIO_SIMULATED_HOME);app.setPath('documents',process.env.STUDIO_SIMULATED_HOME);app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('out/main/index.js'))});`,
 )
 let app
 async function launch() {
@@ -72,6 +72,7 @@ async function launch() {
     args: [launcher],
     env: {
       ...process.env,
+      STUDIO_SIMULATED_HOME: profile === join(root, 'profile') ? home : join(home, '新电脑家目录'),
       ELECTRON_RUN_AS_NODE: '',
       ELECTRON_RENDERER_URL: '',
       CCLINK_STUDIO_TEST_USER_DATA_PATH: profile,
@@ -214,9 +215,24 @@ try {
   await page.getByLabel('公司显示名称', { exact: true }).fill('模拟公司')
   await page.getByRole('button', { name: '开始使用', exact: true }).click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
-  await page.getByRole('button', { name: '将此公司关联到“我的公司”', exact: true }).click()
-  await page.getByText('“我的公司”已关联当前公司。', { exact: true }).waitFor()
+  const companyTab = page
+    .locator('.project-strip')
+    .getByRole('button', { name: '模拟公司', exact: true })
+  assert.equal(
+    await page
+      .locator('.project-strip')
+      .getByRole('button', { name: '我的公司', exact: true })
+      .count(),
+    0,
+  )
+  await companyTab.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: '关闭项目', exact: true }).click()
+  await companyTab.waitFor({ state: 'detached' })
+  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
+  await page.getByText('接回公司资料…', { exact: true }).click()
+  await page.getByRole('dialog').getByText('模拟公司', { exact: true }).click()
+  await page.locator('.fixed-space-dialog footer button').last().click()
+  await companyTab.waitFor()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.getByRole('button', { name: '创建业务项目', exact: true }).click()
   await page.getByLabel('业务项目名称', { exact: true }).fill('智能眼镜')
@@ -299,7 +315,8 @@ try {
   assert.equal(await page.locator('.model-viewer-error').count(), 0)
   await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
   await page.screenshot({ path: join(root, 'engineering-model-layout.png') })
-  await page.getByRole('button', { name: '我的公司', exact: true }).click()
+  await companyTab.click()
+  await page.getByRole('button', { name: '公司概览', exact: true }).first().click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await writeFile(join(company, '公司模型.stl'), stl)
   await page.getByRole('button', { name: '文件', exact: true }).click()
@@ -339,7 +356,7 @@ try {
   await form.getByRole('button', { name: '选择父目录', exact: true }).click()
   await form.getByRole('button', { name: '创建并打开', exact: true }).click()
   await page.getByRole('heading', { name: '工程概览', exact: true }).waitFor()
-  await page.getByRole('button', { name: '我的公司', exact: true }).click()
+  await companyTab.click()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).click()
   await page
@@ -352,14 +369,16 @@ try {
   await page.getByLabel('项目类型', { exact: true }).selectOption('general')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
-  await page.getByRole('button', { name: '我的公司', exact: true }).click()
+  await companyTab.click()
+  await page.getByRole('button', { name: '工作台', exact: true }).click()
   await page.getByRole('heading', { name: '模拟公司', exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: '业务项目', exact: true }).count(), 0)
   await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
   await page.getByLabel('项目类型', { exact: true }).selectOption('company')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
-  await page.getByRole('button', { name: '我的公司', exact: true }).click()
+  await companyTab.click()
+  await page.getByRole('button', { name: '公司概览', exact: true }).first().click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).waitFor()
@@ -388,6 +407,7 @@ try {
   // New-machine simulation: fresh application profile, no prior local paths, tasks or bindings.
   await app.close()
   app = null
+  await mkdir(join(home, '新电脑家目录'))
   profile = join(root, 'new-mac-profile')
   await mkdir(profile)
   await writeFile(
@@ -395,12 +415,39 @@ try {
     JSON.stringify({ componentSetupPageSeenVersion: 2, claudeRuntimeSource: 'system' }),
   )
   page = await launch()
-  const downloads = join(home, '新电脑资料')
+  const strip = page.locator('.project-strip')
+  await strip.getByRole('button', { name: '我的空间', exact: true }).waitFor()
+  assert.equal(await strip.getByRole('button', { name: '我的公司', exact: true }).count(), 0)
+  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await page.getByLabel('项目显示名称', { exact: true }).fill('我的日常')
+  await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
+  const pinned = strip.getByRole('button', { name: '我的日常', exact: true })
+  await pinned.click({ button: 'right' })
+  assert.equal(
+    await page
+      .getByRole('menuitem', { name: /关闭项目.*固定入口不能关闭/ })
+      .getAttribute('aria-disabled'),
+    'true',
+  )
+  await page.keyboard.press('Escape')
+  await app.close()
+  page = await launch()
+  await page
+    .locator('.project-strip')
+    .getByRole('button', { name: '我的日常', exact: true })
+    .waitFor()
+  await page
+    .locator('.status-bar-workspace')
+    .getByText(/我的日常/)
+    .waitFor()
+  const downloads = join(home, '新电脑家目录', '新电脑资料')
   await mkdir(downloads)
+  const newMachineRemote = join(home, '新电脑家目录', '模拟远端.git')
+  await exec('git', ['clone', '--bare', '--no-local', remote, newMachineRemote])
   await pick(downloads)
   await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: '从 Git 获取…', exact: false }).click()
-  await page.getByLabel('获取项目仓库地址', { exact: true }).fill(remote)
+  await page.getByLabel('获取项目仓库地址', { exact: true }).fill(newMachineRemote)
   await page.getByRole('button', { name: '选择 Git 保存位置', exact: true }).click()
   await page.getByRole('button', { name: '获取并打开', exact: true }).click()
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
@@ -443,11 +490,19 @@ try {
   )
   await page.screenshot({ path: join(root, 'new-mac-tasks-paused.png') })
   await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
-  await page.getByRole('button', { name: '将此项目关联到“我的空间”', exact: true }).click()
+  await page.getByLabel('项目显示名称', { exact: true }).fill('日常手记')
+  await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
+  await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
+  await page.getByRole('button', { name: '设为默认项目', exact: true }).click()
+  await page.getByText('已设为默认项目。', { exact: true }).waitFor()
   await page
-    .getByText('“我的空间”已关联当前项目；旧项目和资料保持原位。', { exact: true })
-    .waitFor()
-  await page.getByRole('button', { name: '我的空间', exact: true }).click()
+    .locator('.project-strip')
+    .getByRole('button', { name: '日常手记', exact: true })
+    .click()
+  assert.equal(
+    await page.locator('.project-strip button[data-project-path]').first().innerText(),
+    '日常手记',
+  )
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
   await page.screenshot({ path: join(root, 'new-mac-diary.png') })
   await page
@@ -491,7 +546,14 @@ try {
   await app.close()
   app = null
   page = await launch()
-  await page.getByRole('button', { name: '我的空间', exact: true }).click()
+  await page
+    .locator('.project-strip')
+    .getByRole('button', { name: '日常手记', exact: true })
+    .click()
+  assert.equal(
+    await page.locator('.project-strip button[data-project-path]').first().innerText(),
+    '日常手记',
+  )
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
   assert.equal(
     (await page.evaluate(() => window.cclinkStudio.workspaceState.getFixedSpaces())).personal
@@ -525,8 +587,8 @@ try {
       'explicit shared task enable and pause in real UI',
       'running-work summary returns to the original task',
       'main process refuses source detachment while linked task is enabled',
-      'fixed shortcut rebinding and restart restore',
-      'fixed company shortcut respects changed type and preserves business records when changed back',
+      'renamed default project remains first after restart',
+      'ordinary company closes, reconnects under its project name, and retains business records across type changes',
       'original diary, attachments, plans and local task bytes unchanged',
     ],
     scope:

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { CompanySpaceCandidate } from '@shared/ipc/workspace-state'
-import { useFixedSpacesStore, openPersonalSpace } from './fixed-spaces-store'
-import { enterCompanyWorkspace } from '../company-workspace/company-workspace-commands'
+import { useFixedSpacesStore, openPersonalSpace, openBoundCompany } from './fixed-spaces-store'
+import { openCompanyWorkspace } from '../company-workspace/company-workspace-commands'
 import { isWorkspaceRuntimeTransitionCurrent } from '../../utils/workspace-transition'
 import { useFloatingSurfaceRegistration } from '../../components/common/floating-surface-registry'
 import { useEscapeDismiss } from '../../components/common/dismissable-layer'
@@ -67,7 +67,8 @@ export function CompanySpaceDialog(): React.ReactElement | null {
   )
   const needsConfirmation = replacingPersonal || changingCompany
   const activate = async (): Promise<void> => {
-    await enterCompanyWorkspace(request.section)
+    if (!(await openBoundCompany(request.section))) return
+    openCompanyWorkspace(request.section)
     if (useFixedSpacesStore.getState().setup === request)
       useFixedSpacesStore.setState({ setup: null })
   }
@@ -150,7 +151,7 @@ export function CompanySpaceDialog(): React.ReactElement | null {
       >
         <header>
           <div>
-            <span>固定入口 · 我的公司</span>
+            <span>公司项目</span>
             <h2 id="company-space-title">
               {request.error ? '找回原公司资料' : '连接已有公司，或开始新公司'}
             </h2>
@@ -242,7 +243,7 @@ export function CompanySpaceDialog(): React.ReactElement | null {
             />
             {replacingPersonal
               ? '确认将原目录整体用于公司，并新建独立个人空间；资料全部留在原处。'
-              : '确认将“我的公司”关联到所选资料；原公司的资料及后台任务保持原归属。'}
+              : '确认打开所选公司资料；原公司的资料及后台任务保持原归属。'}
           </label>
         )}
         {error && (
