@@ -444,6 +444,10 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   scheduledTasks: scheduledTasksApi,
   ownerResearch: {
+    findPaths: (repo: string, terms: string[], ref: string) =>
+      invokeIpcContract(ownerResearchIpc.findPaths, repo, terms, ref),
+    readFile: (repo: string, path: string, anchor: string, ref: string) =>
+      invokeIpcContract(ownerResearchIpc.readFile, repo, path, anchor, ref),
     readReadme: (repo: string) => invokeIpcContract(ownerResearchIpc.readReadme, repo),
   },
   modelUsage: {

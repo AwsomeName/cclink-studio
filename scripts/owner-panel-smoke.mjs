@@ -50,51 +50,133 @@ const a = '处理器采用两级流水线。',
   b = '系统芯片集成存储器和外设。'
 try {
   await launch()
-  if (process.argv.includes('--research')) {
+  if (process.argv.includes('--interruption')) {
+    await page
+      .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
+      .fill('帮我调研开源芯片 Ibex，给我一张源码入门卡。')
+    await click('发给 Owner')
+    await page.getByText('Owner 正在整理范围和交付物', { exact: true }).waitFor()
+    await app.close()
+    app = null
+    await launch()
+    await page.getByRole('heading', { name: /^待恢复/ }).waitFor()
+    assert.match(await page.getByRole('button', { name: /^◈ Owner/ }).innerText(), /1 待处理/)
+    await page.locator('.own-row').click()
+    await page.getByText('待恢复', { exact: true }).waitFor()
+    await click('从这里继续')
+    await page
+      .getByRole('button', { name: '确认范围和交付物，开始调研' })
+      .waitFor({ timeout: 150000 })
+    console.log(
+      'PASS interrupted planning → restart → pending badge and list → manual resume → plan ready',
+    )
+  } else if (process.argv.includes('--research')) {
     const snap = async (name) => {
       if (process.env.OWNER_RESEARCH_SHOTS)
         await page.screenshot({ path: join(process.env.OWNER_RESEARCH_SHOTS, name + '.png') })
     }
+    const startPage = page
+    const state = () =>
+      page.evaluate(() => JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0])
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
-      .fill('帮我调研开源芯片项目')
+      .fill(
+        '帮我调研开源芯片 Ibex，给我一张源码入门卡。先从项目定位和默认流水线各级职责中选出适合初读的一级，再沿你选的级追到一处真实寄存器，用 RTL 中的更新条件和赋值解释它何时更新。',
+      )
     await click('发给 Owner')
     const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
-    await confirm.waitFor({ timeout: 120000 })
-    await page
-      .getByLabel('和 Owner 沟通')
-      .fill(
-        '这次只比较 lowRISC/ibex 和 lowRISC/opentitan，从第一次读处理器源码的角度，交付中文比较和学习建议。',
-      )
-    await click('发送给 Owner')
-    await confirm.waitFor({ timeout: 120000 })
-    assert.match(await page.locator('.own-detail article').innerText(), /lowrisc\/ibex/i)
-    assert.equal(await page.locator('.own-detail article summary').count(), 0)
-    await snap('research-01-plan')
-    console.log('PASS main chat → scope revision → no reads before confirmation')
-    await confirm.click()
-    const final = await page.waitForFunction(
-      () => {
-        const state = JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0]
-        return ['done', 'error'].includes(state.research.phase)
-          ? { phase: state.research.phase, issue: state.issue, log: state.research.log }
-          : null
-      },
+    await page.waitForFunction(
+      () =>
+        ['ready', 'error'].includes(
+          JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0].research.phase,
+        ),
       null,
-      { timeout: 300000 },
+      { timeout: 150000 },
     )
-    const value = await final.jsonValue()
-    console.log(value)
-    assert.equal(value.phase, 'done')
-    assert.equal(await page.locator('.own-detail article blockquote').count(), 2)
-    await snap('research-02-delivered')
+    const proposed = await state()
+    assert.equal(proposed.research.phase, 'ready', proposed.issue)
+    await confirm.waitFor()
+    assert.equal((await state()).research.docs.length, 0)
+    await snap('adaptive-01-plan')
+    await confirm.click()
+    const deadline = Date.now() + 450000
+    let workerRun
+    while (!workerRun && Date.now() < deadline) {
+      const sample = await page.evaluate(async () => {
+        const a = JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0]
+        if (['done', 'error'].includes(a.research.phase))
+          return { status: a.research.phase, issue: a.issue }
+        const runId = document.querySelector('[data-owner-worker-run]')?.dataset.ownerWorkerRun
+        if (!runId || a.research.decisions?.at(-1)?.kind !== 'more') return null
+        return await window.cclinkStudio.agent.getRunStatus('owner-' + a.id + '-a', runId)
+      })
+      if (sample?.status === 'running') {
+        workerRun = sample
+        break
+      }
+      if (sample && ['done', 'error'].includes(sample.status))
+        throw Error(sample.issue || '事务已结束，未观察到执行中的补查')
+      await new Promise((resolve) => setTimeout(resolve, 150))
+    }
+    assert.ok(workerRun, '未观察到 A 的原生补查运行')
+    const beforeQuestion = await state()
+    const question = '为什么要让 A 补查？已取得的资料能说明什么，还缺什么？'
+    await page.getByLabel('和 Owner 沟通').fill(question)
+    await click('发送给 Owner')
+    await snap('adaptive-02-followup')
+    await click('‹ 我的事务')
+    await page.locator('.own-row').first().click()
+    await page.locator('.own-answer').first().waitFor({ timeout: 240000 })
+    const answer = await page.locator('.own-answer p').first().innerText()
+    assert.match(answer, /Ibex|取指|寄存器|流水线|RTL/i)
+    assert.deepEqual((await state()).research.plan, beforeQuestion.research.plan)
+    await snap('live-question')
+    console.log('Owner answered during research:', answer)
+
+    await page.waitForFunction(
+      () =>
+        ['done', 'error'].includes(
+          JSON.parse(localStorage.getItem('studio.owner.affairs.v1'))[0].research.phase,
+        ),
+      null,
+      { timeout: 450000 },
+    )
+    const a = await state()
+    assert.equal(a.research.phase, 'done', a.issue)
+    assert.equal(
+      await page.evaluate(
+        async ({ conversationId, runId }) =>
+          (await window.cclinkStudio.agent.getRunStatus(conversationId, runId))?.status,
+        workerRun,
+      ),
+      'succeeded',
+    )
+    assert.ok(a.research.decisions.some((d) => d.kind === 'more' && d.reason))
+    assert.equal(a.research.decisions.at(-1).kind, 'deliver')
+    assert.ok(a.research.docs.some((d) => d.path && !/^readme(\.md)?$/i.test(d.path)))
+    assert.ok(
+      a.research.report.items.every((item) =>
+        a.research.docs.some(
+          (d) =>
+            d.url === item.url &&
+            d.text.replace(/\s+/g, ' ').includes(item.quote.replace(/\s+/g, ' ')),
+        ),
+      ),
+    )
+    const count = a.research.report.items.length
+    assert.equal(page, startPage)
+    assert.equal((await app.windows()).length, 1)
+    await snap('adaptive-03-delivery')
     await click('‹ 我的事务')
     await app.close()
     app = null
     await launch()
     await page.locator('.own-row').first().click()
-    assert.equal(await page.locator('.own-detail article blockquote').count(), 2)
-    console.log('PASS real agent READ requests → two public sources → verified report → restored')
+    assert.equal(await page.locator('.own-detail article blockquote').count(), count)
+    assert.equal(await page.locator('.own-answer p').first().innerText(), answer)
+    console.log(
+      'PASS single Studio window → goal → evidence review → same A follows up → sourced delivery → restored',
+    )
   } else {
     await start('芯片调研 · 入门资料', false)
     await page.getByRole('textbox', { name: '处理器说明', exact: true }).fill(a)

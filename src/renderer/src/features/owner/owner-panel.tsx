@@ -1,5 +1,6 @@
 import { ResearchInbox, ResearchView } from './research-view'
-import { useEffect, useRef, useState } from 'react'
+import { activeWork, subscribeWork } from './research-work'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useOwners } from './owner-store'
 import { brief, next, verify, type Affair } from './affair'
 import { dispatch, ensureSession, reconcile, session } from './owner-agent'
@@ -293,10 +294,28 @@ function Inspector({ a, back }: { a: Affair; back: () => void }) {
     </>
   )
 }
-export function OwnerEntry() {
-  const dialog = useRef<HTMLDialogElement>(null),
-    [open, setOpen] = useState(false),
-    [sel, setSel] = useState<string | null>(null),
+export function OwnerEntry({ open, toggle }: { open: boolean; toggle: () => void }) {
+  const active = useSyncExternalStore(subscribeWork, activeWork)
+  const count = useOwners(
+    (s) =>
+      s.items.filter((a) =>
+        ['等我确认', '等我提供资料', '需要处理', '待恢复'].includes(next(a, active.has(a.id))[0]),
+      ).length,
+  )
+  return (
+    <button
+      className="app-topbar-open-project"
+      onClick={toggle}
+      aria-expanded={open}
+      aria-controls="owner-board"
+    >
+      ◈ Owner{count ? ' · ' + count + ' 待处理' : ''}
+    </button>
+  )
+}
+export function OwnerPanel({ open, close }: { open: boolean; close: () => void }) {
+  const active = useSyncExternalStore(subscribeWork, activeWork)
+  const [sel, setSel] = useState<string | null>(null),
     [create, setCreate] = useState(false),
     [title, setTitle] = useState(''),
     [goal, setGoal] = useState(''),
@@ -320,177 +339,164 @@ export function OwnerEntry() {
     }, 1200)
     return () => clearInterval(handle)
   }, [items])
-  const count = items.filter((a) =>
-    ['等我确认', '等我提供资料', '需要处理'].includes(next(a)[0]),
-  ).length
+  useEffect(() => {
+    if (!open) {
+      setSel(null)
+      setCreate(false)
+    }
+  }, [open])
+  if (!open) return null
   return (
-    <>
-      <button
-        className="app-topbar-open-project"
-        onClick={() => {
-          setSel(null)
-          setCreate(false)
-          dialog.current?.showModal()
-          setOpen(true)
-        }}
-      >
-        ◈ Owner{count ? ' · ' + count + ' 待处理' : ''}
-      </button>
-      <dialog
-        className="owner-dialog"
-        ref={dialog}
-        onClose={() => setOpen(false)}
-        aria-label="Owner 独立面板"
-      >
-        <header>
-          <b>◈　Owner</b>
-          <span>独立面板　/　我的事务</span>
-          <button onClick={() => dialog.current?.close()}>返回 Studio　×</button>
-        </header>
-        {error && <p role="alert">{error}</p>}
-        {open &&
-          (selected ? (
-            <div className="own-detail">
-              {selected.research ? (
-                <ResearchView a={selected} key={selected.id} back={() => setSel(null)} />
-              ) : (
-                <Inspector a={selected} key={selected.id} back={() => setSel(null)} />
-              )}
-            </div>
-          ) : (
-            <div className={create ? 'own-legacy' : 'own-detail'}>
-              <article className="own-index">
-                <small>OWNER　 /　 本机事务</small>
-                <h1>{create ? '新建事务' : '我的事务'}</h1>
-                {create ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      const sourceNames = names
-                        .split('\n')
-                        .map((s) => s.trim())
-                        .filter(Boolean)
-                      if (
-                        !sourceNames.length ||
-                        sourceNames.length > 6 ||
-                        new Set(sourceNames).size !== sourceNames.length ||
-                        sourceNames.some((n) => n.length > 120)
-                      ) {
-                        const field = e.currentTarget.elements.namedItem(
-                          'sources',
-                        ) as HTMLTextAreaElement
-                        field.setCustomValidity('请填写 1 到 6 个不同的材料名，每个不超过 120 字。')
-                        field.reportValidity()
-                        return
-                      }
-                      const id = crypto.randomUUID()
-                      if (
-                        save({
-                          id,
-                          title: title.trim(),
-                          goal: goal.trim(),
-                          sources: sourceNames.map((name) => ({ name, text: '' })),
-                          confirmed: false,
-                          attempt: null,
-                          run: null,
-                          issue: '',
-                          result: null,
-                          method: null,
-                          updated: Date.now(),
-                        })
-                      ) {
-                        setSel(id)
-                        setCreate(false)
-                        setTitle('')
-                        setGoal('')
-                        setNames('')
-                      }
-                    }}
+    <section id="owner-board" className="owner-dialog" aria-label="Owner 事务面板">
+      <header>
+        <b>◈　Owner</b>
+        <span>我的事务</span>
+        <button onClick={close}>返回工作台</button>
+      </header>
+      {error && <p role="alert">{error}</p>}
+      {open &&
+        (selected ? (
+          <div className="own-detail">
+            {selected.research ? (
+              <ResearchView a={selected} key={selected.id} back={() => setSel(null)} />
+            ) : (
+              <Inspector a={selected} key={selected.id} back={() => setSel(null)} />
+            )}
+          </div>
+        ) : (
+          <div className={create ? 'own-legacy' : 'own-detail'}>
+            <article className="own-index">
+              <small>OWNER　 /　 本机事务</small>
+              <h1>{create ? '新建事务' : '我的事务'}</h1>
+              {create ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const sourceNames = names
+                      .split('\n')
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                    if (
+                      !sourceNames.length ||
+                      sourceNames.length > 6 ||
+                      new Set(sourceNames).size !== sourceNames.length ||
+                      sourceNames.some((n) => n.length > 120)
+                    ) {
+                      const field = e.currentTarget.elements.namedItem(
+                        'sources',
+                      ) as HTMLTextAreaElement
+                      field.setCustomValidity('请填写 1 到 6 个不同的材料名，每个不超过 120 字。')
+                      field.reportValidity()
+                      return
+                    }
+                    const id = crypto.randomUUID()
+                    if (
+                      save({
+                        id,
+                        title: title.trim(),
+                        goal: goal.trim(),
+                        sources: sourceNames.map((name) => ({ name, text: '' })),
+                        confirmed: false,
+                        attempt: null,
+                        run: null,
+                        issue: '',
+                        result: null,
+                        method: null,
+                        updated: Date.now(),
+                      })
+                    ) {
+                      setSel(id)
+                      setCreate(false)
+                      setTitle('')
+                      setGoal('')
+                      setNames('')
+                    }
+                  }}
+                >
+                  <label>
+                    事务名称
+                    <input
+                      required
+                      maxLength={120}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="例如：开源芯片资料摘录"
+                    />
+                  </label>
+                  <label>
+                    交办目标
+                    <textarea
+                      required
+                      maxLength={1500}
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value)}
+                      placeholder="这份简报给谁看，需要摘出什么？"
+                    />
+                  </label>
+                  <label>
+                    所需材料 · 每行一份，最多六份，名称不能重复
+                    <textarea
+                      required
+                      name="sources"
+                      onInput={(e) => e.currentTarget.setCustomValidity('')}
+                      maxLength={726}
+                      value={names}
+                      onChange={(e) => setNames(e.target.value)}
+                      placeholder={'Ibex 流水线说明\nEarl Grey 系统框图说明'}
+                    />
+                  </label>
+                  <button
+                    className="own-primary"
+                    disabled={!title.trim() || !goal.trim() || !names.trim()}
                   >
-                    <label>
-                      事务名称
-                      <input
-                        required
-                        maxLength={120}
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="例如：开源芯片资料摘录"
-                      />
-                    </label>
-                    <label>
-                      交办目标
-                      <textarea
-                        required
-                        maxLength={1500}
-                        value={goal}
-                        onChange={(e) => setGoal(e.target.value)}
-                        placeholder="这份简报给谁看，需要摘出什么？"
-                      />
-                    </label>
-                    <label>
-                      所需材料 · 每行一份，最多六份，名称不能重复
-                      <textarea
-                        required
-                        name="sources"
-                        onInput={(e) => e.currentTarget.setCustomValidity('')}
-                        maxLength={726}
-                        value={names}
-                        onChange={(e) => setNames(e.target.value)}
-                        placeholder={'Ibex 流水线说明\nEarl Grey 系统框图说明'}
-                      />
-                    </label>
-                    <button
-                      className="own-primary"
-                      disabled={!title.trim() || !goal.trim() || !names.trim()}
-                    >
-                      创建交办草案
-                    </button>
-                    <button type="button" onClick={() => setCreate(false)}>
-                      返回列表
-                    </button>
-                  </form>
-                ) : (
-                  <>
-                    <p>在右侧告诉 Owner 想调研什么。已有事务按当前状态列在这里。</p>
-                    <button onClick={() => setCreate(true)}>从已有材料做摘录</button>
-                    {!items.length && (
-                      <div className="own-empty">
-                        还没有事务。试着在右侧说：“帮我调研开源芯片项目”。
-                      </div>
-                    )}
-                    {[
-                      '等我确认',
-                      '等我提供资料',
-                      '需要处理',
-                      '进行中',
-                      '待交办',
-                      '核对执行状态',
-                      '待整理',
-                      '已交付',
-                    ].map((group) => {
-                      const list = items.filter((a) => next(a)[0] === group)
-                      return list.length ? (
-                        <section key={group}>
-                          <h3>
-                            {group}　{list.length}
-                          </h3>
-                          {list.map((a) => (
-                            <button className="own-row" key={a.id} onClick={() => setSel(a.id)}>
-                              <b>{a.title}</b>
-                              <span>{next(a)[1]}</span>
-                              <em>打开 ›</em>
-                            </button>
-                          ))}
-                        </section>
-                      ) : null
-                    })}
-                  </>
-                )}
-              </article>
-              {!create && <ResearchInbox begin={setSel} />}
-            </div>
-          ))}
-      </dialog>
-    </>
+                    创建交办草案
+                  </button>
+                  <button type="button" onClick={() => setCreate(false)}>
+                    返回列表
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <p>在右侧告诉 Owner 想调研什么。已有事务按当前状态列在这里。</p>
+                  <button onClick={() => setCreate(true)}>从已有材料做摘录</button>
+                  {!items.length && (
+                    <div className="own-empty">
+                      还没有事务。试着在右侧说：“帮我调研开源芯片项目”。
+                    </div>
+                  )}
+                  {[
+                    '等我确认',
+                    '等我提供资料',
+                    '需要处理',
+                    '待恢复',
+                    '进行中',
+                    '待交办',
+                    '核对执行状态',
+                    '待整理',
+                    '已交付',
+                  ].map((group) => {
+                    const list = items.filter((a) => next(a, active.has(a.id))[0] === group)
+                    return list.length ? (
+                      <section key={group}>
+                        <h3>
+                          {group}　{list.length}
+                        </h3>
+                        {list.map((a) => (
+                          <button className="own-row" key={a.id} onClick={() => setSel(a.id)}>
+                            <b>{a.title}</b>
+                            <span>{next(a, active.has(a.id))[1]}</span>
+                            <em>打开 ›</em>
+                          </button>
+                        ))}
+                      </section>
+                    ) : null
+                  })}
+                </>
+              )}
+            </article>
+            {!create && <ResearchInbox begin={setSel} />}
+          </div>
+        ))}
+    </section>
   )
 }

@@ -114,7 +114,7 @@ function getDefaultAgentApi(): ConversationRunAgentApi {
 }
 
 export interface ConversationRunController {
-  send: (content: string) => Promise<ConversationCommandResult>
+  send: (content: string, mode?: 'text-only-now') => Promise<ConversationCommandResult>
   sendQueued: (item: QueuedAgentMessage) => Promise<ConversationCommandResult>
   abort: () => Promise<ConversationCommandResult>
   stopAndSend: (content: string) => Promise<ConversationCommandResult>
@@ -138,6 +138,7 @@ export function createConversationRunController({
     content: string,
     queued?: QueuedAgentMessage,
     forceQueue = false,
+    textOnly = false,
   ): Promise<ConversationCommandResult> => {
     const store = getStore()
     const current = store.conversations[conversationId]
@@ -151,6 +152,14 @@ export function createConversationRunController({
         : current
     if (!conversation) return { status: 'ignored', reason: 'missing' }
     const images = conversation.pendingImages ?? []
+    if (
+      textOnly &&
+      (images.length || conversation.mountedResources.length || conversation.mountedSkills.length)
+    )
+      return {
+        status: 'failed',
+        error: '调研回合只接受事务中的文本资料，请先移除会话附件、资源或技能。',
+      }
     const imageBlock = !queued ? imageImportBlockReason(`local:${conversationId}`, images) : null
     if (imageBlock) return { status: 'failed', error: imageBlock }
     if (images.length && conversation.runtimeBinding?.kind === 'acp')
@@ -169,8 +178,9 @@ export function createConversationRunController({
         conversation.loading ||
         conversation.contextCompaction.status === 'compacting' ||
         conversation.queuedMessages?.length ||
-        conversation.messageQueuePauseReason)
+        (!textOnly && conversation.messageQueuePauseReason))
     ) {
+      if (textOnly) return { status: 'ignored', reason: 'busy' }
       const messageId = store.enqueueMessage(text, conversationId)
       return messageId
         ? { status: 'queued', messageId }
@@ -204,7 +214,7 @@ export function createConversationRunController({
       return { status: 'failed', error }
     }
 
-    if (!queued) store.setInput('', conversationId)
+    if (!queued && !textOnly) store.setInput('', conversationId)
     store.addUserMessage(
       text,
       conversationId,
@@ -229,6 +239,7 @@ export function createConversationRunController({
     ]
     if (!queued) store.clearTransientResources(conversationId, consumedIds)
     const restoreFailed = (): void => {
+      if (textOnly) return
       if (!queued) store.restoreFailedMessage(text, conversation, conversationId)
       store.setMessageQueuePauseReason('发送失败，请检查后继续队列', conversationId)
     }
@@ -243,6 +254,7 @@ export function createConversationRunController({
         },
         runId,
       )
+      if (textOnly) payload.toolAccess = 'none'
       if (images.length > 0) {
         const saved = await agentApi.saveMessageImages(conversationId, images).catch(() => ({
           success: false as const,
@@ -297,6 +309,7 @@ export function createConversationRunController({
   const guardedSend = async (
     content: string,
     item?: QueuedAgentMessage,
+    textOnly = false,
   ): Promise<ConversationCommandResult> => {
     // Enqueue remains available while an IPC acceptance is pending.
     if (item && pendingSends.has(conversationId)) return { status: 'ignored', reason: 'busy' }
@@ -304,14 +317,14 @@ export function createConversationRunController({
     if (ownsGuard) pendingSends.add(conversationId)
     if (item) getStore().setQueuedMessageDispatchId(item.id, conversationId)
     try {
-      return await send(content, item, !ownsGuard)
+      return await send(content, item, !ownsGuard, textOnly)
     } finally {
       if (ownsGuard) pendingSends.delete(conversationId)
       if (ownsGuard) getStore().setQueuedMessageDispatchId(null, conversationId)
     }
   }
   return {
-    send: (content) => guardedSend(content),
+    send: (content, mode) => guardedSend(content, undefined, mode === 'text-only-now'),
     sendQueued: (item) => guardedSend(item.content, item),
     supplement: async (content) => {
       const current = getStore().conversations[conversationId]

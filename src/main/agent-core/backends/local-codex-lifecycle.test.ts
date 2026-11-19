@@ -241,6 +241,25 @@ describe('Codex lifecycle and authorization', () => {
     complete()
     await run
   })
+  it('runs a text-only turn without a tool session, Studio server or native shell', async () => {
+    const { backend, host } = fixture()
+    const run = backend.sendMessage('研究已提供的资料', {
+      disableBuiltinTools: true,
+      allowedTools: [],
+    })
+    await started()
+    expect(host.createToolSession).not.toHaveBeenCalled()
+    expect(fake.messages.find((m) => m.method === 'thread/start')?.params).toMatchObject({
+      sandbox: 'read-only',
+      config: {
+        'features.shell_tool': false,
+        mcp_servers: { cclink_studio: { enabled: false }, external: { enabled: false } },
+      },
+    })
+    complete()
+    await run
+  })
+
   it('uses only Studio tools when native trusted reads would skip confirmation', async () => {
     const { backend, host } = fixture()
     host.allowsUnattendedNativeReads.mockReturnValue(false)

@@ -35,7 +35,7 @@ import { useBrowserViewLifecycle } from './components/workbench/use-browser-view
 import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { useAgentWebResourceLaunchRequests } from './bootstrap/use-agent-web-resource-launch-requests'
 import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
-import { OwnerEntry } from './features/owner/owner-panel'
+import { OwnerEntry, OwnerPanel } from './features/owner/owner-panel'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth } from './utils/panel-layout'
@@ -51,6 +51,7 @@ import { EditorDraftFailureBanner } from './features/markdown/EditorPersistenceS
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
+  const [ownerOpen, setOwnerOpen] = useState(false)
   const workspaceReady = useWorkspaceBootstrap()
   useComponentSetupOnboarding(workspaceReady)
   useWorkspaceStateFlush()
@@ -250,7 +251,18 @@ function MainLayout(): React.ReactElement {
 
   return (
     <div className="main-window">
-      <div className="app-topbar">
+      <div
+        className="app-topbar"
+        onClickCapture={(e) => {
+          if (
+            ownerOpen &&
+            e.target instanceof Element &&
+            e.target.closest('button') &&
+            !e.target.closest('[aria-controls="owner-board"]')
+          )
+            setOwnerOpen(false)
+        }}
+      >
         <div className="app-topbar-left">
           <button
             className={`app-topbar-icon ${sidebarVisible ? 'active' : ''}`}
@@ -283,7 +295,7 @@ function MainLayout(): React.ReactElement {
           <span>打开工作空间</span>
         </button>
         <div className="app-topbar-right">
-          <OwnerEntry />
+          <OwnerEntry open={ownerOpen} toggle={() => setOwnerOpen((v) => !v)} />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
             onClick={toggleUnifiedAgentPanel}
@@ -309,7 +321,8 @@ function MainLayout(): React.ReactElement {
           </button>
         </div>
       )}
-      <div className="main-area">
+      <OwnerPanel open={ownerOpen} close={() => setOwnerOpen(false)} />
+      <div className="main-area" style={ownerOpen ? { display: 'none' } : undefined}>
         <ActivityBar />
 
         <div

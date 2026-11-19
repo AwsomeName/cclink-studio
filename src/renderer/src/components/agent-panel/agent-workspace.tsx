@@ -76,17 +76,42 @@ export function AgentWorkspace(): React.ReactElement {
 
   return (
     <div className="agent-workspace" data-agent-navigation={listVisible ? 'list' : 'chat'}>
-      <header className="agent-workspace-header">
-        <button
-          type="button"
-          className="agent-workspace-new-conversation"
-          onClick={() => void newConversation()}
-        >
-          <IconRobot size={16} />
-          新建对话
-        </button>
+      <nav className="agent-workspace-header" aria-label="会话导航">
         <div className="agent-workspace-actions">
           <button
+            type="button"
+            className="agent-workspace-new-conversation"
+            onClick={() => void newConversation()}
+          >
+            <IconRobot size={16} />
+            新建对话
+          </button>
+          {!listVisible && workspace.kind !== 'remote' && summary && (
+            <button
+              className="agent-other-updates"
+              title={'其他会话动态：' + summary}
+              aria-label={'其他会话动态：' + summary}
+              data-compact={counts.some(({ count }) => count > 9) || undefined}
+              onClick={() => {
+                setUpdatesWorkspace(workspaceKey)
+                useUIStore.getState().showAgentSessions()
+              }}
+            >
+              <span className="agent-updates-total">
+                动态 {updates.length > 99 ? '99+' : updates.length}
+              </span>
+              <span className="agent-update-counts">
+                {counts.map(({ label, count }) => (
+                  <span className="agent-update-count" key={label}>
+                    <i data-status={label} />
+                    {count} {label}
+                  </span>
+                ))}
+              </span>
+            </button>
+          )}
+          <button
+            className="agent-workspace-switch"
             type="button"
             onClick={() => {
               setUpdatesWorkspace(null)
@@ -94,28 +119,11 @@ export function AgentWorkspace(): React.ReactElement {
               else useUIStore.getState().showAgentSessions()
             }}
           >
-            {listVisible ? <IconArrowLeft size={14} /> : <IconList size={15} />}
+            {listVisible ? <IconArrowLeft size={15} /> : <IconList size={15} />}
             {listVisible ? '返回会话' : '会话列表'}
           </button>
-          {!listVisible && workspace.kind !== 'remote' && summary && (
-            <button
-              className="agent-other-updates"
-              aria-label={'其他会话动态：' + summary}
-              onClick={() => {
-                setUpdatesWorkspace(workspaceKey)
-                useUIStore.getState().showAgentSessions()
-              }}
-            >
-              {counts.map(({ label, count }) => (
-                <span className="agent-update-count" key={label}>
-                  <i data-status={label} />
-                  {count} {label}
-                </span>
-              ))}
-            </button>
-          )}
         </div>
-      </header>
+      </nav>
       <div className="agent-workspace-body">
         <div className="agent-workspace-chat" hidden={listVisible} inert={listVisible}>
           <AgentPanel variant="side" />

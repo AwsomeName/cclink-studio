@@ -159,8 +159,9 @@ export class LocalCodexBackend implements IAgentBackend {
         ]),
       )
       config.mcp_servers = mcpServers
-      this.sessionToken = this.toolHost.createToolSession(this.context)
       const allowed = options.allowedTools
+      const noTools = options.disableBuiltinTools && allowed?.length === 0
+      if (!noTools) this.sessionToken = this.toolHost.createToolSession(this.context)
       const tools = filterToolsByScope(this.toolHost.getAllTools(), this.scope).filter(
         (tool) =>
           (!options.forceVisibleBrowser || tool.name !== 'browser_new_tab') &&
@@ -175,8 +176,8 @@ export class LocalCodexBackend implements IAgentBackend {
       this.allowedStudioTools = new Set(tools.map((tool) => tool.name))
       mcpServers.cclink_studio = {
         url: `http://127.0.0.1:${this.toolHost.getPort()}/mcp?session=${this.sessionToken}`,
-        enabled: true,
-        required: true,
+        enabled: !noTools,
+        required: !noTools,
         enabled_tools: tools.map((tool) => tool.name),
         tool_timeout_sec: 3600,
       }
@@ -253,9 +254,11 @@ export class LocalCodexBackend implements IAgentBackend {
       })
       if (
         status.nextCursor ||
-        !servers.some((entry) => entry.name === 'cclink_studio') ||
+        (!noTools && !servers.some((entry) => entry.name === 'cclink_studio')) ||
         servers.some(
-          (entry) => entry.name !== 'cclink_studio' && Object.keys(record(entry.tools)).length > 0,
+          (entry) =>
+            (noTools || entry.name !== 'cclink_studio') &&
+            Object.keys(record(entry.tools)).length > 0,
         )
       ) {
         throw new CodexRuntimeError(

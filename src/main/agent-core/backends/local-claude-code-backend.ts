@@ -509,33 +509,31 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         : {}),
       ...(options?.imageResearchPolicy ? { imageResearchPolicy: options.imageResearchPolicy } : {}),
     }
-    this.mcpSessionToken = this.toolHost.createToolSession(toolExecutionContext)
-    const mcpConfig = this.mcpClientMgr.composeMcpConfig(
-      this.toolHost.getPort(),
-      this.mcpSessionToken,
-    )
-    const configuredMcpServers = (
-      mcpConfig as {
-        mcpServers?: Record<string, McpServerConfig>
-      }
-    ).mcpServers
-    const internalMcpServer = configuredMcpServers?.[this.hostContext.mcpServerName]
-    // 外部 MCP 在统一授权 broker 完成前必须 fail closed。即使配置合成器误把外部
-    // server 放进结果，送入 SDK 的配置也只保留 Studio 自己的受控工具宿主。
+    const noTools = options?.disableBuiltinTools === true && options.allowedTools?.length === 0
     const mcpServers: Record<string, McpServerConfig> = Object.create(null)
-    if (internalMcpServer) {
-      // The SDK timeout covers both Studio's confirmation wait and the tool execution. Keep the
-      // server bound above the narrower per-capability limits so a verified result can return.
-      // External MCP servers are excluded above and never inherit this bound.
-      mcpServers[this.hostContext.mcpServerName] =
-        internalMcpServer.type === 'http'
-          ? {
-              ...internalMcpServer,
-              timeout: options?.articlePublishingPolicy
-                ? ARTICLE_PUBLISHING_MCP_TOOL_TIMEOUT_MS
-                : INTERNAL_MCP_TOOL_TIMEOUT_MS,
-            }
-          : internalMcpServer
+    if (!noTools) {
+      this.mcpSessionToken = this.toolHost.createToolSession(toolExecutionContext)
+      const config = this.mcpClientMgr.composeMcpConfig(
+        this.toolHost.getPort(),
+        this.mcpSessionToken,
+      )
+      // Only the Studio-owned MCP server participates in the authorization broker.
+      const internalMcpServer = (config as { mcpServers?: Record<string, McpServerConfig> })
+        .mcpServers?.[this.hostContext.mcpServerName]
+      if (internalMcpServer) {
+        // The SDK timeout covers both Studio's confirmation wait and the tool execution. Keep the
+        // server bound above the narrower per-capability limits so a verified result can return.
+        // External MCP servers are excluded above and never inherit this bound.
+        mcpServers[this.hostContext.mcpServerName] =
+          internalMcpServer.type === 'http'
+            ? {
+                ...internalMcpServer,
+                timeout: options?.articlePublishingPolicy
+                  ? ARTICLE_PUBLISHING_MCP_TOOL_TIMEOUT_MS
+                  : INTERNAL_MCP_TOOL_TIMEOUT_MS,
+              }
+            : internalMcpServer
+      }
     }
     const allowedTools = options?.allowedTools
       ? [...options.allowedTools]
@@ -605,7 +603,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     }
     sdkOptions.disallowedTools = [...CLAUDE_NATIVE_SCHEDULING_TOOLS]
     if (options?.forceVisibleBrowser || options?.disableBuiltinTools) {
-      sdkOptions.tools = ['WebFetch']
+      sdkOptions.tools = noTools ? [] : ['WebFetch']
       sdkOptions.disallowedTools.push(...VISIBLE_BROWSER_DISALLOWED_TOOLS)
     }
 

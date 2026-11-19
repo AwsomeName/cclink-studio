@@ -1172,6 +1172,17 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     })
   })
 
+  it('exposes neither SDK tools nor MCP servers on a text-only turn', async () => {
+    const { backend } = createBackendFixture()
+    await backend.sendMessage('核对证据', { disableBuiltinTools: true, allowedTools: [] })
+    expect(getLastQueryParams().options).toMatchObject({
+      tools: [],
+      allowedTools: [],
+      strictMcpConfig: true,
+    })
+    expect(Object.keys(getLastQueryParams().options.mcpServers ?? {})).toHaveLength(0)
+  })
+
   it.each([{}, { forceVisibleBrowser: true }, { disableBuiltinTools: true }])(
     'allows WebFetch through both SDK authorization entries with policy %j',
     async (options) => {

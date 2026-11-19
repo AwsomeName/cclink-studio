@@ -1,19 +1,11 @@
 .owner-dialog {
-  width: min(1280px, 96vw);
-  height: 90vh;
-  padding: 0;
-  color: var(--text-primary, #e4e8ed);
-  background: var(--bg-primary, #202226);
-  border: 1px solid var(--border-color, #596069);
-  border-radius: 7px;
-  overflow: hidden;
-}
-.owner-dialog[open] {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.owner-dialog::backdrop {
-  background: #0008;
+  background: var(--bg-primary, #202226);
+  color: var(--text-primary, #e4e8ed);
+  overflow: hidden;
 }
 .owner-dialog header,
 .own-actions,
@@ -165,9 +157,6 @@
   white-space: normal;
 }
 
-.owner-dialog {
-  margin: auto;
-}
 .owner-dialog [role='alert'] {
   overflow-wrap: anywhere;
 }
@@ -197,4 +186,23 @@
 }
 .own-legacy {
   overflow: auto;
+}
+.own-decision {
+  padding: 10px 14px;
+  margin: 8px 0;
+  border-left: 2px solid var(--border-color, #677380);
+  background: var(--bg-secondary);
+}
+.own-decision.more {
+  border-color: #c39251;
+}
+.own-decision.deliver {
+  border-color: #52977c;
+}
+.own-decision p {
+  margin: 5px 0 0;
+  line-height: 1.6;
+}
+.own-detail article small {
+  overflow-wrap: anywhere;
 }

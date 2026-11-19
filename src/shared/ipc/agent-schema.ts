@@ -197,6 +197,7 @@ export const agentSendMessageInputSchema = z.union([
   boundedTextSchema(MAX_MESSAGE_LENGTH).trim().min(1),
   z
     .object({
+      toolAccess: z.literal('none').optional(),
       message: boundedTextSchema(MAX_MESSAGE_LENGTH).trim().min(1),
       runtimeBinding: agentRuntimeBindingSchema.optional(),
       runId: boundedIdentifierSchema().optional(),

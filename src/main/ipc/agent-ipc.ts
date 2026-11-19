@@ -76,6 +76,7 @@ function normalizeSendMessageInput(input: AgentSendMessageInput): AgentSendMessa
       : undefined
   return {
     message: input.message,
+    toolAccess: input.toolAccess,
     runtimeBinding: input.runtimeBinding,
     runId: typeof input.runId === 'string' && input.runId.trim() ? input.runId.trim() : undefined,
     resources: Array.isArray(input.resources) ? input.resources : undefined,
@@ -301,6 +302,16 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
         error: '远程工作区不能交给本地 Agent IPC 执行；请从 CCLink 远程会话面板发送。',
       }
     }
+    if (
+      payload.toolAccess === 'none' &&
+      (!payload.runtimeBinding ||
+        payload.runtimeBinding.kind === 'acp' ||
+        payload.resources?.length ||
+        payload.images?.length ||
+        payload.skills?.length)
+    ) {
+      return { success: false, error: '纯文本回合需要 Claude Code 或 Codex，并且只能携带文本。' }
+    }
     const resolvedConversationId =
       typeof conversationId === 'string' ? conversationId : 'agent-default'
     let trustedWorkspaceRef: WorkspaceRef
@@ -324,6 +335,7 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
       payload.message,
       typeof conversationId === 'string' ? conversationId : undefined,
       {
+        ...(payload.toolAccess === 'none' ? { allowedTools: [], disableBuiltinTools: true } : {}),
         runId: payload.runId,
         runtimeBinding: payload.runtimeBinding,
         resources: payload.resources,

@@ -16,7 +16,7 @@
 
 ## 0.1 范围与验收
 
-**自研决定：** 不引入 AgentOp 或 pi-missions 的代码。参见[事务页设计、会话决策与六步效果图](../design/owner-0.1/README.md)、[AgentOp 页面与取舍](../research/owner-0.1/agentop.md)、[pi-missions 页面与取舍](../research/owner-0.1/pi-missions.md)。完整流程仍是设计目标。已实现对话协商、显式确认、会话 A 请求公开 README、比较写作、原文核对与简报导出；另保留已有材料摘录。
+**自研决定：** 不引入 AgentOp 或 pi-missions 的代码。参见[事务页设计、会话决策与六步效果图](../design/owner-0.1/README.md)、[AgentOp 页面与取舍](../research/owner-0.1/agentop.md)、[pi-missions 页面与取舍](../research/owner-0.1/pi-missions.md)。在 Studio 主窗口，用户确认调研目标与交付物，Owner 根据公开仓库证据决定首次取证、续用会话 A 补查或交付。可核对的来源包括 README、项目文档、示例与源码。看板保留决策理由、来源快照、逐项引文和可导出的报告。
 
 一个 Owner 只负责一件事务，可以是短期交付，也可以是长期跟进。一次会话够用就不拆；需要分工或接续时，由 Owner 开设、续用或结束执行会话，为每段会话指定问题、所需资源和预期结果，并核对交回的结果。**不做递归：Owner 不创建、不委派、不管理其他 Owner。**
 

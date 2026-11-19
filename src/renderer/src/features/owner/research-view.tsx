@@ -1,10 +1,18 @@
 import { useState, useSyncExternalStore, useRef, useEffect } from 'react'
+import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useAgentStore } from '../../stores/agent-store'
 import { useOwners } from './owner-store'
-import { discuss, research, interrupted, subscribeWork } from './research-work'
-import { freshResearch, researchStatus } from './research-model'
+import {
+  discuss,
+  research,
+  interrupted,
+  subscribeWork,
+  askOwner,
+  activeQuestion,
+} from './research-work'
+import { freshResearch } from './research-model'
 import { session } from './owner-agent'
-import type { Affair } from './affair'
+import { next, type Affair } from './affair'
 export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
   const [text, set] = useState('')
   function start() {
@@ -34,7 +42,7 @@ export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
   return (
     <aside className="own-start">
       <h2>Owner 主对话</h2>
-      <p>想让我调研什么？我会先和你确定范围和交付物，再派会话查公开仓库。</p>
+      <p>告诉我你想弄清什么、最后想拿到什么。我来选项目、派会话取证，并核对结果。</p>
       <label>
         交办一件新事务
         <textarea
@@ -56,18 +64,22 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     [text, set] = useState(''),
     [notice, setNotice] = useState(''),
     active = useSyncExternalStore(subscribeWork, () => !interrupted(a.id)),
+    questionId = useSyncExternalStore(subscribeWork, () => activeQuestion(a.id)),
     bottom = useRef<HTMLDivElement>(null)
-  const [label, detail] = researchStatus(r)
-  const waitingForReentry =
-    !active && ['planning', 'reading', 'writing', 'checking'].includes(r.phase)
+  const [label, detail] = next(a, active)
+  const title =
+    a.title === a.goal.slice(0, 60) ? a.title.split(/[，。；！？]/u)[0] || a.title : a.title
+  const waitingForReentry = label === '待恢复'
   const ready = !active && !a.confirmed && r.phase === 'ready' && !!r.plan
+  const workerRun = useAgentStore((s) => s.conversations[session(a, 'a')]?.activeRunId)
   const perms = useAgentStore((s) => s.pendingConfirmations)
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'nearest' })
-  }, [r.chat.length])
+  }, [r.chat.length, questionId])
+  const chatBusy = a.confirmed ? !!questionId : active
   function send() {
     const t = text.trim()
-    if (active || !t) return
+    if (chatBusy || !t) return
     set('')
     if (
       ready &&
@@ -82,20 +94,59 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     <>
       <article>
         <button onClick={back}>‹ 我的事务</button>
-        <h1>{a.title}</h1>
+        <h1>{title}</h1>
         <div className="own-call">
-          <small>{waitingForReentry ? '待恢复' : label}</small>
-          <h2>{waitingForReentry ? '上次操作中断，未自动重派' : a.issue || detail}</h2>
+          <small>{label}</small>
+          <h2>
+            {waitingForReentry
+              ? '上次操作中断，未自动重派'
+              : a.issue ||
+                (r.phase === 'reading' ? '取证中 · 已取得 ' + r.docs.length + ' 份原文' : detail)}
+          </h2>
         </div>
+        {!!r.decisions?.length && (
+          <section className="own-decisions">
+            <h3>Owner 的判断</h3>
+            {active && r.phase === 'reading' && workerRun && (
+              <small data-owner-worker-run={workerRun}>执行会话 A 正在选取本轮资料</small>
+            )}
+            {r.decisions.slice(-1).map((d, i) => (
+              <div key={i} className={'own-decision ' + d.kind}>
+                <b>
+                  {d.kind === 'deliver'
+                    ? '可以交付'
+                    : d.kind === 'more'
+                      ? '续用 A 补查'
+                      : '委派会话 A'}
+                </b>
+                <p>{d.reason}</p>
+              </div>
+            ))}
+            {r.decisions.length > 1 && (
+              <details>
+                <summary>之前的 {r.decisions.length - 1} 次判断</summary>
+                {r.decisions.slice(0, -1).map((d, i) => (
+                  <p key={i}>
+                    <b>{d.kind === 'read' ? '首次委派' : '续用 A 补查'}</b>　{d.reason}
+                  </p>
+                ))}
+              </details>
+            )}
+          </section>
+        )}
         {r.report && (
           <section>
             <h3>调研简报</h3>
-            <p>{r.report.conclusion}</p>
-            {r.report.items.map((it) => (
-              <div key={it.repo}>
+            <ConversationMarkdown source={r.report.conclusion} />
+            {r.report.items.map((it, i) => (
+              <div key={i}>
                 <h3>{it.repo}</h3>
                 <p>{it.finding}</p>
                 <blockquote>{it.quote}</blockquote>
+                <small>
+                  {it.url ?? r.docs.find((d) => d.repo === it.repo)?.url}
+                  {it.line ? '#L' + it.line : ''}
+                </small>
               </div>
             ))}
             <button
@@ -121,7 +172,8 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                           '\n\n> ' +
                           v.quote +
                           '\n\n' +
-                          r.docs.find((d) => d.repo === v.repo)?.url,
+                          (v.url ?? r.docs.find((d) => d.repo === v.repo)?.url) +
+                          (v.line ? '#L' + v.line : ''),
                       ),
                     ].join('\n\n'),
                   })
@@ -147,12 +199,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               {r.plan.output}
             </p>
             <p>
-              <b>官方仓库　</b>
+              <b>Owner 选取的项目　</b>
               {r.plan.repos.join('、')}
             </p>
-            <small>
-              资料入口：公开 GitHub README。比较依据是读取到的原文，不包含安装或仿真结果。
-            </small>
+            <small>Owner 可根据证据缺口检索项目仓库中的文档、示例和源码。</small>
           </>
         ) : (
           <p>等 Owner 把你的要求整理成范围和交付物。</p>
@@ -170,9 +220,11 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
         {r.docs.length > 0 && (
           <section>
             <h3>已获得的来源</h3>
-            {r.docs.map((d) => (
-              <details key={d.repo}>
-                <summary>{d.repo} · README</summary>
+            {r.docs.map((d, i) => (
+              <details key={i}>
+                <summary>
+                  {d.repo} · {d.path ?? 'README'}
+                </summary>
                 <p>{d.url}</p>
                 <small>
                   读取于 {new Date(d.at).toLocaleString()} · 内容版本 {d.sha.slice(0, 10)}
@@ -196,12 +248,37 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
       </article>
       <aside>
         <h2>Owner 主对话</h2>
-        <small>当前事务 · {a.title}</small>
+        <small>当前事务 · {title}</small>
         <div className="own-thread">
           {r.chat.map((m, i) => (
-            <div key={i}>
+            <div key={m.questionId ?? i}>
               <b>{m.who}</b>
-              <p>{m.text}</p>
+              <p>
+                {m.who === 'Owner' && m.text === r.report?.conclusion
+                  ? '调研简报已放在中间看板。已核对 ' +
+                    r.report.items.length +
+                    ' 条引文，可展开之前的判断回看补查原因。'
+                  : m.text}
+              </p>
+              {m.questionId &&
+                (m.answer ? (
+                  <div className="own-answer">
+                    <b>Owner</b>
+                    <p>{m.answer}</p>
+                  </div>
+                ) : m.questionId === questionId ? (
+                  <small role="status">已收到，等待 Owner 主会话答复…</small>
+                ) : (
+                  <div>
+                    <small>{m.answerError || '上次提问尚未取得答复。'}</small>
+                    <button
+                      disabled={!!questionId}
+                      onClick={() => void askOwner(a.id, m.text, m.questionId)}
+                    >
+                      重新询问
+                    </button>
+                  </div>
+                ))}
             </div>
           ))}
           <div ref={bottom} />
@@ -248,10 +325,12 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           value={text}
           maxLength={1500}
           onChange={(e) => set(e.target.value)}
-          placeholder={a.confirmed ? '询问本次调研…' : '调整对象、比较维度或交付形式…'}
+          placeholder={
+            a.confirmed ? '问 Owner 当前进展或补查原因…' : '调整对象、比较维度或交付形式…'
+          }
         />
-        <button disabled={active || !text.trim()} onClick={send}>
-          {active ? '正在处理这件事务' : '发送给 Owner'}
+        <button disabled={chatBusy || !text.trim()} onClick={send}>
+          {chatBusy ? '等待 Owner 答复' : '发送给 Owner'}
         </button>
       </aside>
     </>

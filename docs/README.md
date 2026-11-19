@@ -110,7 +110,7 @@
 - `docs/features/activity-bar-text-navigation-product-design.md`：2026-10-15 用户选定的文字横排导航目标；固定完整名称、稳定入口、状态区分、小窗口宽度取舍及 U1–U8 验收；源码已实现，真实 Electron 自动化通过，真人签收待执行。
 - `docs/features/activity-bar-text-navigation-development-plan.md`：已实施的最小导航方案；包含入口定向修复、完整手势提交、有效栏宽和精简计数夹具；验证见文字横排验收记录。
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。
-- [Owner 0.1（暂定名）](features/ai-employees.md)：一位 Owner 只负责一件事务，按需管理多个执行会话，不管理其他 Owner；开发版首个切片可交办资料摘录、补料并导出可核对的简报。
+- [Owner 0.1（暂定名）](features/ai-employees.md)：一位 Owner 只负责一件事务，按需管理多个执行会话，不管理其他 Owner；开发版可从右侧对话约定调研范围、委派 A 查公开仓库并交付附出处的简报。
 - [Owner 0.1 独立面板与六步效果图](design/owner-0.1/README.md)：用同一主对话和一段执行会话走通芯片调研的交办、核对、补查与交付；独立调研见 [AgentOp](research/owner-0.1/agentop.md) 和 [pi-missions](research/owner-0.1/pi-missions.md)。
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
 - `docs/features/ai-web-affairs-agent.md`：AI 网页事务代理人产品事实源；网站与账号按 ADR 0014

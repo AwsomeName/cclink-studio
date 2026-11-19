@@ -32,8 +32,11 @@ export function verify(a: Affair, data: unknown) {
     return hit
   })
 }
-export function next(a: Affair) {
-  if (a.research) return researchStatus(a.research)
+export function next(a: Affair, active = false) {
+  if (a.research)
+    return a.research.phase === 'error' && a.issue
+      ? ['需要处理', a.issue]
+      : researchStatus(a.research, active)
   if (!a.confirmed) return ['等我确认', '确认目标、资料清单与交付标准']
   const missing = a.sources.filter((s) => !s.text.trim())
   if (missing.length) return ['等我提供资料', '缺：' + missing.map((s) => s.name).join('、')]
