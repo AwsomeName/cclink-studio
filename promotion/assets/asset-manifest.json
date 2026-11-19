@@ -1,0 +1,207 @@
+{
+  "date": "2026-10-16",
+  "assets": [
+    {
+      "file": "assets/graphics/cover-wide.png",
+      "source": "assets/graphics/cover-wide.svg",
+      "kind": "editorial-graphic",
+      "width": 1600,
+      "height": 900,
+      "sha256": "2879afcd9e6e814b4d559d94817d9018c72034075290c28bd93d8bea9887c007"
+    },
+    {
+      "file": "assets/graphics/workflow.png",
+      "source": "assets/graphics/workflow.svg",
+      "kind": "editorial-graphic",
+      "width": 1600,
+      "height": 820,
+      "sha256": "39392073663de1365b1b1d19237fe2e61214f27de5ae2d48a6f1c95e6ebde071"
+    },
+    {
+      "file": "assets/graphics/capability-map.png",
+      "source": "assets/graphics/capability-map.svg",
+      "kind": "editorial-graphic",
+      "width": 1600,
+      "height": 1000,
+      "sha256": "fb8fead8fcee08627933471954fd8e205db0267be7652951a8b22edff6a1dd65"
+    },
+    {
+      "file": "assets/graphics/cover-square.png",
+      "source": "assets/graphics/cover-square.svg",
+      "kind": "editorial-graphic",
+      "width": 1080,
+      "height": 1080,
+      "sha256": "96c9046ce10a63d49f102638420de182a466272e709ff6b79360db9a5a3d3777"
+    },
+    {
+      "file": "assets/graphics/card-01-introduction.png",
+      "source": "assets/graphics/card-01-introduction.svg",
+      "kind": "editorial-graphic",
+      "width": 1080,
+      "height": 1440,
+      "sha256": "de404bd902f91b55291983fdd5dd51291b893405d91f5db6f548a630fe6ea3e2"
+    },
+    {
+      "file": "assets/graphics/card-02-workspace.png",
+      "source": "assets/graphics/card-02-workspace.svg",
+      "kind": "editorial-graphic",
+      "width": 1080,
+      "height": 1440,
+      "sha256": "2d1a5e462187e9371962806d3a7f75701bcbe68c921ca136174b587dd0d33cfe"
+    },
+    {
+      "file": "assets/graphics/card-03-get-started.png",
+      "source": "assets/graphics/card-03-get-started.svg",
+      "kind": "editorial-graphic",
+      "width": 1080,
+      "height": 1440,
+      "sha256": "6a20f1177d228f3fa6b96f5132c532558315fb234c4ec72fff9134374d2554ab"
+    },
+    {
+      "file": "assets/screenshots/studio-writing.jpg",
+      "kind": "real-studio-screenshot",
+      "capture": "native-window-cua",
+      "source": "demo-materials/从资料到初稿.md",
+      "width": 2800,
+      "height": 1740,
+      "sha256": "1045fe27c017175dab6d62385f7f88889a0f4ffc2c7a66dfb6c0c81ee0a11eb3"
+    },
+    {
+      "file": "assets/screenshots/studio-browser.jpg",
+      "kind": "real-studio-screenshot",
+      "capture": "native-window-cua",
+      "source": "demo-materials/reference.html",
+      "width": 2800,
+      "height": 1740,
+      "sha256": "6c72a9b76994ce63691f28d1dbd94b9dac79d26f365e7980fdaea2e8912dc93f"
+    },
+    {
+      "file": "01-wechat/images/cover-v2.png",
+      "source": "01-wechat/images/cover-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "wechat-v2",
+      "width": 1200,
+      "height": 675,
+      "sha256": "a325d34c21877e1ea18ea2310b1ccd7cb2e3da402befcdf96576e55043a8f99f"
+    },
+    {
+      "file": "01-wechat/images/workspace-guide-v2.png",
+      "source": "01-wechat/images/workspace-guide-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "wechat-v2",
+      "width": 1200,
+      "height": 1370,
+      "sha256": "85e094fc4cea53b2d6e257f1fb8a819177f578ab6c192994ba0c98e593c17059",
+      "inputSources": [
+        "assets/screenshots/studio-writing.jpg"
+      ],
+      "treatment": "Full unaltered screenshot with external area labels."
+    },
+    {
+      "file": "01-wechat/images/task-detail-v2.png",
+      "source": "01-wechat/images/task-detail-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "wechat-v2",
+      "width": 1200,
+      "height": 860,
+      "sha256": "55b06d60fb7b5a9fbf4ee445e3944aa4adbd64873430c5eb256fd5d4fb0b76a7",
+      "inputSources": [
+        "assets/screenshots/studio-writing.jpg"
+      ],
+      "treatment": "Labelled task-input viewport; original screenshot is preserved and no output or execution status is fabricated.",
+      "sourceCrops": [
+        [
+          2110,
+          1400,
+          680,
+          285
+        ]
+      ]
+    },
+    {
+      "file": "01-wechat/images/browser-detail-v2.png",
+      "source": "01-wechat/images/browser-detail-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "wechat-v2",
+      "width": 1200,
+      "height": 1170,
+      "sha256": "0f6aade279ff58067aaa503835dd90ccf921353a6ab47cebfd5ca0a6fc26335d",
+      "inputSources": [
+        "assets/screenshots/studio-browser.jpg"
+      ],
+      "treatment": "Labelled viewport retaining the original document/browser tabs and actual page.",
+      "sourceCrops": [
+        [
+          308,
+          88,
+          1788,
+          1070
+        ]
+      ]
+    },
+    {
+      "file": "01-wechat/images/workflow-v2.png",
+      "source": "01-wechat/images/workflow-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "wechat-v2",
+      "width": 1200,
+      "height": 1430,
+      "sha256": "f74bac2f98a522b920d60951498cad4d294cd313f9bb3059cad35d94efccb522"
+    },
+    {
+      "file": "02-open-source/images/cover-v2.png",
+      "source": "02-open-source/images/cover-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "open-source-v2",
+      "width": 1200,
+      "height": 675,
+      "sha256": "2b35366f085c5d0513b3efa67bdc0ab422a3487b9c70ab4f461fe9612293f2a9"
+    },
+    {
+      "file": "02-open-source/images/workbench-v2.png",
+      "source": "02-open-source/images/workbench-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "open-source-v2",
+      "width": 1200,
+      "height": 1370,
+      "sha256": "d44742e1ea5081835f5f625615d9e26a92dada8896606b22ed4e30f3487f068d",
+      "inputSources": [
+        "assets/screenshots/studio-writing.jpg"
+      ],
+      "treatment": "Full unaltered native screenshot with explanatory labels outside the screenshot."
+    },
+    {
+      "file": "02-open-source/images/architecture-v2.png",
+      "source": "02-open-source/images/architecture-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "open-source-v2",
+      "width": 1200,
+      "height": 1490,
+      "sha256": "9fe267b110a6afea659ca28ca269fe2c1330bb8f0dd2891084f9bad7209a1980",
+      "evidenceSources": [
+        "docs/architecture.md",
+        "docs/development.md"
+      ],
+      "treatment": "Explanatory diagram, not a runtime trace or new architecture proposal."
+    },
+    {
+      "file": "02-open-source/images/getting-started-v2.png",
+      "source": "02-open-source/images/getting-started-v2.svg",
+      "kind": "editorial-graphic",
+      "scope": "open-source-v2",
+      "width": 1200,
+      "height": 1550,
+      "sha256": "d1d1a04ac24913f11ad44bc6a7170b1d172e37fa0fa72a19bf5b8c902a944251",
+      "evidenceSources": [
+        "package.json",
+        ".github/workflows/ci.yml",
+        "README.md"
+      ],
+      "environment": {
+        "node": "22",
+        "pnpm": "11.5.0"
+      },
+      "treatment": "Instructions and environment declaration, not a fresh-install success report."
+    }
+  ]
+}

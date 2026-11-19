@@ -1,0 +1,105 @@
+{
+  "date": "2026-10-16",
+  "passed": true,
+  "results": [
+    {
+      "mode": "desktop",
+      "bodyFont": "18px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/cover-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workspace-guide-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/task-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/browser-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workflow-v2.png"
+        }
+      ],
+      "scrollWidth": 1280,
+      "titleHeight": 52.5,
+      "width": 1280
+    },
+    {
+      "mode": "mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/cover-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workspace-guide-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/task-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/browser-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workflow-v2.png"
+        }
+      ],
+      "scrollWidth": 390,
+      "titleHeight": 81,
+      "width": 390
+    },
+    {
+      "mode": "narrow-mobile",
+      "bodyFont": "17px",
+      "images": [
+        {
+          "loaded": true,
+          "src": "../assets/brand/app-icon.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/cover-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workspace-guide-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/task-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/browser-detail-v2.png"
+        },
+        {
+          "loaded": true,
+          "src": "images/workflow-v2.png"
+        }
+      ],
+      "scrollWidth": 320,
+      "titleHeight": 121.5,
+      "width": 320
+    }
+  ]
+}

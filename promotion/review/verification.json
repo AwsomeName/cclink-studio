@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-16",
+  "scope": "local-publicity-documents-and-images",
+  "passed": true,
+  "checkedReferences": 260,
+  "graphics": 16,
+  "realScreenshots": 2,
+  "drafts": [
+    {
+      "file": "01-wechat/article.md",
+      "cjkCharacters": 1280,
+      "embeddedImages": 5
+    },
+    {
+      "file": "02-open-source/article.md",
+      "cjkCharacters": 1320,
+      "embeddedImages": 4
+    },
+    {
+      "file": "03-website/copy.md",
+      "cjkCharacters": 459,
+      "embeddedImages": 3
+    },
+    {
+      "file": "04-social/copy.md",
+      "cjkCharacters": 457,
+      "embeddedImages": 4
+    }
+  ],
+  "errors": [],
+  "excluded": [
+    "Studio product acceptance",
+    "real model execution",
+    "platform upload or publication"
+  ]
+}
