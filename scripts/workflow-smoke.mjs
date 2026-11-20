@@ -71,7 +71,15 @@ async function runCheck(name, fn) {
   }
 }
 
+async function showProjectNavigation(page) {
+  await ensureSidebarVisible(page)
+  const back = page.locator('.sidebar-back')
+  if (await back.count()) await back.click()
+  await page.locator('.activity-bar').waitFor({ state: 'visible' })
+}
+
 async function clickByTitle(page, title) {
+  if (title === '文件') await showProjectNavigation(page)
   await page.locator(`[title="${title}"]`).first().click()
 }
 
@@ -1483,17 +1491,7 @@ async function main() {
 
   await runCheck('workbench frame context actions bind the intended target', async () => {
     await page.locator('.tab', { hasText: 'notes.md' }).first().click()
-    await ensureSidebarVisible(page)
-    const fileActivity = page.locator('.activity-bar-icon[title="文件"]').first()
-    if ((await fileActivity.getAttribute('aria-pressed')) !== 'true') {
-      await fileActivity.click()
-    }
-    await page.waitForFunction(
-      () =>
-        document.querySelector('.activity-bar-icon[title="文件"]')?.classList.contains('active'),
-      undefined,
-      { timeout: 10_000 },
-    )
+    await clickByTitle(page, '文件')
     const activeFileTree = page.locator('.sidebar .file-tree').first()
     await activeFileTree.waitFor({ timeout: 10_000 })
 
@@ -1598,6 +1596,7 @@ async function main() {
       'file copy did not generate a non-overwriting duplicate name',
     )
 
+    await showProjectNavigation(page)
     const activity = page.locator('.activity-bar-icon[title="文件"]').first()
     await verifyMouseAndKeyboardMenu(activity, 'activity.open')
     await openRendererContextMenu(activity)
@@ -1607,6 +1606,7 @@ async function main() {
     )
     await page.keyboard.press('Escape')
 
+    await clickByTitle(page, '文件')
     const sidebar = page.locator('.sidebar').first()
     const sidebarBox = await sidebar.boundingBox()
     assert(sidebarBox, 'sidebar bounds are unavailable')
@@ -1704,7 +1704,7 @@ async function main() {
       await page.keyboard.press('Escape')
     }
 
-    await ensureSidebarVisible(page)
+    await showProjectNavigation(page)
     const moreTools = page.locator('.activity-bar details.activity-more')
     if (!(await moreTools.evaluate((element) => element.open))) {
       await moreTools.locator('summary').click()

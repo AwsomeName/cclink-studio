@@ -268,9 +268,22 @@ async function openResourceSettings(page, title) {
   }
 }
 
+async function showProjectNavigation(page) {
+  const expand = page.locator('[title="展开左侧栏"]')
+  if (await expand.count()) await expand.click()
+  const back = page.locator('.sidebar-back')
+  if (await back.count()) await back.click()
+  await page.locator('.activity-bar').waitFor({ state: 'visible' })
+}
+
 async function clickByTitle(page, title) {
   if (title === '角色' || title === '网站与账号') {
     await openResourceSettings(page, title)
+    return
+  }
+  const panels = { 文件: 'files', 会话: 'sessions', Terminal: 'terminal', 事务: 'affairs' }
+  if (panels[title]) {
+    await ensureActivityPanel(page, panels[title], title)
     return
   }
   await page.locator(`[title="${title}"]`).first().click()
@@ -291,6 +304,7 @@ async function ensureActivityPanel(page, panelId, title) {
     return { activePanel, sidebarVisible }
   })
   if (state.activePanel !== panelId || !state.sidebarVisible) {
+    await showProjectNavigation(page)
     const bar = page.locator('.activity-bar')
     const more = bar.locator('details.activity-more')
     const button = bar.locator(`button[title="${title}"]`)
@@ -483,15 +497,19 @@ async function main() {
       return openWorkspaceRef({ kind: 'local', path })
     }, separationWorkspace)
     assert(workspaceOpened, 'navigation separation fixture workspace did not open')
+    await showProjectNavigation(page)
     const bar = page.locator('.activity-bar')
-    assert((await bar.locator('button').count()) === 12, 'navigation entries changed')
+    assert(
+      await bar.getByRole('button', { name: '项目首页', exact: true }).isVisible(),
+      'project home missing',
+    )
+    assert((await bar.locator('button').count()) === 11, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '全部工具']),
       'visible group headings missing',
     )
     const labels = [
-      '项目首页',
       '文件',
       '会话',
       '工具',
@@ -503,18 +521,16 @@ async function main() {
       '数据源',
       '视频创作',
       '硬件生产',
-      '项目设置',
     ]
     assert(
       JSON.stringify(await bar.locator('.activity-bar-label').allTextContents()) ===
         JSON.stringify(labels),
       'complete labels missing or reordered',
     )
-    const width = await page.evaluate(async () => {
-      const { ACTIVITY_BAR_WIDTH } = await import('/src/utils/panel-layout.ts')
+    const width = await page.evaluate(() => {
       return {
         actual: document.querySelector('.activity-bar').getBoundingClientRect().width,
-        reserved: ACTIVITY_BAR_WIDTH,
+        reserved: document.querySelector('#workspace-sidebar').getBoundingClientRect().width,
       }
     })
     assert(width.actual === width.reserved, `panel width mismatch: ${JSON.stringify(width)}`)
@@ -538,7 +554,6 @@ async function main() {
       ),
       'labels overlap icons or are clipped',
     )
-    await ensureActivityPanel(page, 'article-publishing', '文章发布')
     await bar.screenshot({ path: join(evidenceDir, 'navigation-dark.png') })
     await page.evaluate(async () => {
       const { useThemeStore } = await import('/src/stores/theme-store.ts')
@@ -615,13 +630,20 @@ async function main() {
     assert(reportPath, 'hardware report path missing after write')
     const reportText = await readFile(reportPath, 'utf8')
     assert(reportText.includes('硬件生产包检查报告'), 'hardware report content missing')
-    await page.setViewportSize({ width: 900, height: 560 })
+    await page.setViewportSize({ width: 900, height: 420 })
+    await showProjectNavigation(page)
+    const shortTools = bar.locator('details.activity-more')
+    if (!(await shortTools.evaluate((element) => element.open)))
+      await shortTools.locator('summary').click()
     try {
+      const navigationSize = await page.locator('.activity-bar-main').evaluate((el) => ({
+        scroll: el.scrollHeight,
+        client: el.clientHeight,
+        viewport: window.innerHeight,
+      }))
       assert(
-        await page
-          .locator('.activity-bar-main')
-          .evaluate((el) => el.scrollHeight > el.clientHeight),
-        'short window did not offer navigation scrolling',
+        navigationSize.scroll > navigationSize.client,
+        `short window did not offer navigation scrolling: ${JSON.stringify(navigationSize)}`,
       )
       await page.locator('.activity-bar-main').hover()
       await page.mouse.wheel(0, 1500)
@@ -633,9 +655,13 @@ async function main() {
           useUIStore.getState().activePanel === 'production' && useUIStore.getState().sidebarVisible
         )
       })
+      await showProjectNavigation(page)
+      const toolMenu = bar.locator('details.activity-more')
+      if (!(await toolMenu.evaluate((element) => element.open)))
+        await toolMenu.locator('summary').click()
       assert(
-        await bar.getByRole('button', { name: '硬件生产', pressed: true }).isVisible(),
-        'selection missing',
+        await bar.getByRole('button', { name: '硬件生产', exact: true }).isVisible(),
+        'hardware tool is unreachable after returning to project navigation',
       )
       await page.screenshot({ path: join(evidenceDir, 'short-window.png') })
       const video = bar.getByRole('button', { name: '视频创作', exact: true })
@@ -658,7 +684,7 @@ async function main() {
       const settings = page.getByRole('button', { name: 'Studio 设置', exact: true })
       const settingsBox = await settings.boundingBox()
       assert(
-        settingsBox && settingsBox.y + settingsBox.height <= 560,
+        settingsBox && settingsBox.y + settingsBox.height <= 420,
         'settings clipped below short viewport',
       )
       await settings.click()
@@ -1643,6 +1669,7 @@ async function main() {
   })
 
   await runCheck('right navigation switches conversations and reopens Agent', async () => {
+    await showProjectNavigation(page)
     const previousLeftLayout = await page.evaluate(async () => {
       const { useUIStore } = await import('/src/stores/ui-store.ts')
       const { activePanel, sidebarVisible, sidebarWidth } = useUIStore.getState()
@@ -1912,6 +1939,10 @@ async function main() {
     if ((await mountSkillButton.count()) > 0) {
       await mountSkillButton.click()
     }
+    const expandAgent = page.locator('[title="展开 Agent 面板"]')
+    if (await expandAgent.count()) await expandAgent.click()
+    const returnToConversation = page.getByRole('button', { name: '返回会话', exact: true })
+    if (await returnToConversation.count()) await returnToConversation.click()
     await page.locator('.agent-skill-chip', { hasText: '方案拷问' }).waitFor({
       state: 'visible',
       timeout: 10_000,
