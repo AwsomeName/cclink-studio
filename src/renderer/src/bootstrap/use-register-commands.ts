@@ -1,6 +1,7 @@
 import { createCompanyWorkspaceCommands } from '../features/company-workspace/company-workspace-commands'
 import { useEffect } from 'react'
 import { useCommandStore } from '../stores/command-store'
+import { useTabStore } from '../stores/tab-store'
 import { useUIStore } from '../stores/ui-store'
 import { createAgentCommands } from './commands/agent-commands'
 import { createBrowserCommands } from './commands/browser-commands'
@@ -26,7 +27,15 @@ export function useRegisterCommands(): void {
     registerCommands([
       ...createViewCommands({
         toggleSidebar,
-        toggleAgentPanel,
+        toggleAgentPanel: () => {
+          toggleAgentPanel()
+          const { activeTabId, setTabLayout } = useTabStore.getState()
+          if (activeTabId)
+            setTabLayout(
+              activeTabId,
+              useUIStore.getState().agentPanelVisible ? 'standard' : 'focus',
+            )
+        },
         focusAgentPanel: () => setAgentPanelMode('center', 'user'),
         resetAgentLayout,
       }),

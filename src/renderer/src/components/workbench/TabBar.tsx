@@ -1,4 +1,3 @@
-import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
 import {
   useCallback,
@@ -87,7 +86,6 @@ export function TabBar({
   onShowMenu,
   conversationDropActive,
 }: TabBarProps): React.ReactElement {
-  const agentMode = useUIStore((state) => state.agentPanelMode)
   const setAgentMode = useUIStore((state) => state.setAgentPanelMode)
   const layout = tabs.find((tab) => tab.id === activeTabId)?.workbenchLayout
   useEffect(() => {
@@ -374,26 +372,6 @@ export function TabBar({
         )}
       </div>
       <div className="tab-create-actions" role="group" aria-label="新建">
-        <select
-          aria-label="工作版面"
-          title="调整内容与 Agent 的版面，不切换项目或重载文件"
-          value={agentMode === 'hidden' ? 'focus' : 'standard'}
-          onChange={(event) => {
-            const mode = event.target.value === 'focus' ? 'focus' : 'standard'
-            if (activeTabId) useTabStore.getState().setTabLayout(activeTabId, mode)
-            setAgentMode(mode === 'focus' ? 'hidden' : 'right', 'user')
-          }}
-          style={{
-            background: 'var(--bg-secondary)',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 4,
-            maxWidth: 125,
-          }}
-        >
-          <option value="standard">内容与 Agent</option>
-          <option value="focus">专注内容</option>
-        </select>
         {/* 按各图标的轮廓留白校准到约 13px 可见高度，保持视觉居中。 */}
         <button
           type="button"

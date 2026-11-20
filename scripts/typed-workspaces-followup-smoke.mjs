@@ -105,11 +105,19 @@ const pass = (name) => {
   results.push(name)
   console.log('PASS', name)
 }
+async function setLayout(layout) {
+  const button = page.getByRole('button', { name: /^(展开|收起) Agent 面板$/ })
+  if (((await button.getAttribute('aria-pressed')) === 'true') !== (layout === 'standard'))
+    await button.click()
+  assert.equal(await page.locator('.tab-create-actions select').count(), 0)
+}
 let page
 async function file(name) {
   const target = page.locator('.file-tree-name').getByText(name, { exact: true })
-  if (!(await target.isVisible()))
+  if (!(await target.isVisible())) {
+    if (await page.locator('.sidebar-back').isVisible()) await page.locator('.sidebar-back').click()
     await page.getByRole('button', { name: '文件', exact: true }).click()
+  }
   await target.click()
 }
 async function running(title) {
@@ -172,7 +180,7 @@ try {
   assert.equal(await readFile(md, 'utf8'), originals.get(md))
   pass('Markdown 正文/源码共享原未保存内容与标签，原文件未写入')
   await page.getByLabel('打开方式', { exact: true }).selectOption('source')
-  await page.getByLabel('工作版面', { exact: true }).selectOption('standard')
+  await setLayout('standard')
   const agentPanel = page.locator('.agent-workspace')
   await agentPanel.waitFor()
   const agentWidth = (await agentPanel.boundingBox()).width
@@ -196,7 +204,7 @@ try {
     originalTabId,
   )
   pass('合并组合：Agent 列表/对话同宽切换、Owner 往返保留原 Markdown 标签和未保存内容')
-  await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
+  await setLayout('focus')
   await page.screenshot({ path: join(root, 'markdown-source.png') })
   await file('example.ts')
   assert.equal(await page.locator('.source-text-editor textarea').inputValue(), originals.get(ts))
@@ -315,7 +323,8 @@ try {
     task.definition.id + '.json',
   )
   originals.set(definitionPath, await readFile(definitionPath, 'utf8'))
-  if (!(await page.locator('.activity-more').getAttribute('open')))
+  if (await page.locator('.sidebar-back').isVisible()) await page.locator('.sidebar-back').click()
+  if (!(await page.locator('.activity-more').evaluate((el) => el.open)))
     await page.locator('.activity-more summary').click()
   await page.getByRole('button', { name: '定时任务', exact: true }).click()
   await page.getByText('模拟长整理任务', { exact: true }).first().click()
@@ -464,7 +473,7 @@ try {
   pass('重启保留等待人工事务原 ID/节点，未隐式执行')
   await file('版面验收.md')
   assert.equal(await page.getByLabel('打开方式', { exact: true }).inputValue(), 'source')
-  assert.equal(await page.getByLabel('工作版面', { exact: true }).inputValue(), 'focus')
+  await page.getByRole('button', { name: '展开 Agent 面板', pressed: false }).waitFor()
   assert.match(await page.locator('.source-text-editor textarea').inputValue(), /源码继续编辑/)
   pass('重启恢复标签打开方式、未保存正文与专注版面')
   for (const [path, content] of originals) assert.equal(await readFile(path, 'utf8'), content, path)

@@ -126,6 +126,12 @@ const git = async (cwd, args) =>
       env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
     })
   ).stdout.trim()
+async function setLayout(layout) {
+  const button = page.getByRole('button', { name: /^(展开|收起) Agent 面板$/ })
+  if (((await button.getAttribute('aria-pressed')) === 'true') !== (layout === 'standard'))
+    await button.click()
+  assert.equal(await page.locator('.tab-create-actions select').count(), 0)
+}
 let page
 const server = createServer((_request, response) => {
   response.setHeader('Content-Type', 'text/html; charset=utf-8')
@@ -343,11 +349,11 @@ try {
   await page.getByRole('button', { name: '文件', exact: true }).click()
   await page.locator('.file-tree-name').getByText('说明.md', { exact: true }).click()
   await page.locator('.tiptap[contenteditable="true"]').waitFor()
-  await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
+  await setLayout('focus')
   await page
     .locator('.tiptap[contenteditable="true"]')
     .fill('工程说明\n独立工程原文\n版面切换继续编辑')
-  await page.getByLabel('工作版面', { exact: true }).selectOption('standard')
+  await setLayout('standard')
   assert((await page.locator('.tiptap').innerText()).includes('版面切换继续编辑'))
   await page.getByRole('button', { name: '新建浏览器页', exact: true }).click()
   await page.locator('.browser-toolbar').waitFor()
@@ -368,7 +374,7 @@ try {
     await page.waitForTimeout(150)
   }
   for (const layout of ['focus', 'standard']) {
-    await page.getByLabel('工作版面', { exact: true }).selectOption(layout)
+    await setLayout(layout)
     await page.waitForTimeout(250)
     const evidence = await app.evaluate(async ({ webContents }, url) => {
       const content = webContents.getAllWebContents().find((content) => content.getURL() === url)
@@ -386,7 +392,7 @@ try {
   await page.locator('.model-viewer canvas').waitFor()
   await page.waitForFunction(() => !document.querySelector('.model-viewer-overlay'))
   assert.equal(await page.locator('.model-viewer-error').count(), 0)
-  await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
+  await setLayout('focus')
   await page.screenshot({ path: join(root, 'engineering-model-layout.png') })
   await activate(companyTab)
   await page.getByRole('button', { name: '项目首页', exact: true }).first().click()
