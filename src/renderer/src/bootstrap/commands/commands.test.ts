@@ -140,6 +140,13 @@ describe('bootstrap command modules', () => {
     })
     const createSession = vi.fn(async () => ({ id: 'remote-session' }))
     const showAgentChat = vi.fn()
+    const dispatchEvent = vi.fn()
+    let nextFrame: FrameRequestCallback | undefined
+    vi.stubGlobal('window', { dispatchEvent })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      nextFrame = callback
+      return 1
+    })
 
     vi.spyOn(useWorkspaceStore, 'getState').mockReturnValue({
       activeWorkspaceRef: workspaceRef,
@@ -159,8 +166,13 @@ describe('bootstrap command modules', () => {
 
       expect(createSession).toHaveBeenCalledWith(workspaceRef, '会话 · project')
       expect(showAgentChat).toHaveBeenCalledOnce()
+      expect(dispatchEvent).not.toHaveBeenCalled()
+      expect(nextFrame).toBeDefined()
+      nextFrame!(0)
+      expect(dispatchEvent).toHaveBeenCalledOnce()
     } finally {
       vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     }
   })
 
