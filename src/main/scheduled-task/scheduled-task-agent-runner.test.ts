@@ -154,6 +154,46 @@ describe('ScheduledTaskAgentRunner', () => {
     )
   })
 
+  it.each(['before', 'during'])(
+    'preserves an alternate diary name created %s generation',
+    async (when) => {
+      const folder = join(root, '个人计划/2026/07')
+      await mkdir(folder, { recursive: true })
+      const original = join(folder, '0729-周三.md')
+      const preserve = () => writeFile(original, '# 既有日记')
+      if (when === 'before') await preserve()
+      let complete: (event: AgentRuntimeEvent) => void
+      const send = vi.fn(async (ids: { conversationId: string; runId: string }) => {
+        await preserve()
+        complete({ ...ids, type: 'complete', data: { result: '# 新简报' } })
+      })
+      const runner = new ScheduledTaskAgentRunner({
+        onRuntimeEvent: (listener: typeof complete) => {
+          complete = listener
+          return () => {}
+        },
+        sendScheduledTaskMessage: send,
+      } as never)
+      const task = definition()
+      task.outputPolicy = {
+        directory: '个人计划/{year}/{month}',
+        fileNameTemplate: '{monthDay}_{weekday}.md',
+        mode: 'create-only',
+      }
+      await expect(
+        runner.run({
+          definition: task,
+          runId: 'test',
+          conversationId: 'test',
+          scheduledFor: Date.parse('2026-07-29T01:00:00Z'),
+        }),
+      ).rejects.toThrow('当天已有日记')
+      expect(send).toHaveBeenCalledTimes(when === 'before' ? 0 : 1)
+      expect(await readFile(original, 'utf8')).toBe('# 既有日记')
+      await expect(readFile(join(folder, '0729_周三.md'))).rejects.toMatchObject({ code: 'ENOENT' })
+    },
+  )
+
   it('refuses create-only collisions before starting Agent', async () => {
     await mkdir(join(root, 'docs/generated'), { recursive: true })
     await writeFile(

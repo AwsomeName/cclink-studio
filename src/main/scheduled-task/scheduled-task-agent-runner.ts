@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { AgentRuntimeEvent } from '../agent-core/runtime/agent-runtime'
 import type { AgentBridge } from '../agent/agent-bridge'
@@ -11,6 +11,8 @@ import {
   renderScheduledTaskFileName,
   renderScheduledTaskDirectory,
 } from '../../shared/scheduled-task/scheduled-task-file-name'
+
+import { diaryDateParts, diaryDayLocation } from '../../shared/personal-diary-source'
 
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const RUN_TIMEOUT_MS = 10 * 60 * 1000
@@ -72,13 +74,25 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     const { definition } = input
     const workspaceRoot = await realpath(definition.workspaceRef.path)
     const readRoots = await resolveReadRoots(definition, workspaceRoot)
-    const output = await resolveOutput(
-      definition,
-      workspaceRoot,
-      input.scheduledFor ?? Date.now(),
-      input.runId,
+    const occurrenceAt = input.scheduledFor ?? Date.now()
+    const output = await resolveOutput(definition, workspaceRoot, occurrenceAt, input.runId)
+    const day = diaryDayLocation(
+      diaryDateParts(definition.schedule.timezone, new Date(occurrenceAt)),
     )
+    const diaryOutput =
+      definition.schedule.kind === 'daily' &&
+      ['{monthDay}_{weekday}.md', '{monthDay}-{weekday}.md'].includes(
+        definition.outputPolicy.fileNameTemplate,
+      ) &&
+      ('/' + dirname(output.relativePath)).endsWith('/' + day.folder)
+    const checkDiaryCollision = async (): Promise<void> => {
+      if (!diaryOutput) return
+      const matches = (await readdir(output.canonicalDirectory)).filter(day.matchesName)
+      if (matches.length)
+        throw new Error('当天已有日记：' + matches.join('、') + '；请在日记列表打开原文。')
+    }
     await assertOutputDoesNotExist(output.absolutePath)
+    await checkDiaryCollision()
     assertNotCancelled(active)
 
     let generationError: string | undefined
@@ -160,6 +174,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     if (currentOutputDirectory !== output.canonicalDirectory) {
       throw new Error('输出目录在运行期间发生变化，已拒绝写入')
     }
+    await checkDiaryCollision()
     assertNotCancelled(active)
     await writeFile(output.absolutePath, markdown, {
       encoding: 'utf-8',

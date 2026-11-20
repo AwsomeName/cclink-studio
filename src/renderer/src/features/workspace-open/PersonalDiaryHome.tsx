@@ -37,7 +37,10 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [known, setKnown] = useState<WorkspaceStateLocalWorkspaceSummary[]>([])
   const [path, setPath] = useState('')
   const [directory, setDirectory] = useState(defaultDiaryDirectory)
-  const [files, setFiles] = useState<FsDirEntry[]>([])
+  const [files, setFiles] = useState<{ diaries: FsDirEntry[]; plans: FsDirEntry[] }>({
+    diaries: [],
+    plans: [],
+  })
   const [tasks, setTasks] = useState<ScheduledTaskSnapshot[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [error, setError] = useState('')
@@ -104,7 +107,7 @@ export function PersonalDiaryHome(): React.ReactElement {
     if (!source) return
     let alive = true
     setError('')
-    setFiles([])
+    setFiles({ diaries: [], plans: [] })
     setTasks([])
     setBusy(true)
     void (async () => {
@@ -120,25 +123,35 @@ export function PersonalDiaryHome(): React.ReactElement {
         source.workspacePath,
         source.projectId,
       )
-      const found: FsDirEntry[] = []
+      const diaries: FsDirEntry[] = []
+      const plans: FsDirEntry[] = []
+      const root = source.workspacePath + '/' + source.directory
       let visited = 0
-      const walk = async (dir: string, depth: number): Promise<void> => {
+      const walk = async (
+        dir: string,
+        section: 'root' | 'year' | 'month' | 'plans',
+      ): Promise<void> => {
         if (++visited > 150) throw new Error('目录过多，请连接更具体的个人资料目录')
         for (const entry of await window.cclinkStudio.fs.readDir(dir)) {
           if (entry.symbolicLink) continue
-          if (entry.type === 'file' && entry.name.toLowerCase().endsWith('.md')) found.push(entry)
-          else if (
-            entry.type === 'directory' &&
-            depth < 3 &&
-            !entry.name.endsWith('.assets') &&
-            !entry.name.startsWith('.')
-          )
-            await walk(entry.path, depth + 1)
-          if (found.length > 2000) throw new Error('资料超过 2000 份，请缩小连接目录')
+          if (entry.type === 'directory') {
+            if (section === 'root' && /^\d{4}$/.test(entry.name)) await walk(entry.path, 'year')
+            if (section === 'year' && /^(0[1-9]|1[0-2])(-(0[1-9]|1[0-2]))?$/.test(entry.name))
+              await walk(entry.path, 'month')
+            if ((section === 'root' || section === 'year') && entry.name === '周计划')
+              await walk(entry.path, 'plans')
+          } else if (entry.type === 'file' && entry.name.toLowerCase().endsWith('.md')) {
+            if (section === 'month') diaries.push(entry)
+            if (section === 'plans' || (section === 'root' && entry.name.includes('计划')))
+              plans.push(entry)
+          }
+          if (diaries.length + plans.length > 2000)
+            throw new Error('资料超过 2000 份，请缩小连接目录')
         }
       }
-      await walk(source.workspacePath + '/' + source.directory, 0)
-      if (alive) setFiles(found.sort((a, b) => b.path.localeCompare(a.path)))
+      await walk(root, 'root')
+      const byPath = (a: FsDirEntry, b: FsDirEntry): number => b.path.localeCompare(a.path)
+      if (alive) setFiles({ diaries: diaries.sort(byPath), plans: plans.sort(byPath) })
       const result = await window.cclinkStudio.scheduledTasks.inspect(source.workspacePath)
       if (!result.success) throw new Error(result.error?.message || '原任务读取失败')
       if (alive) {
@@ -254,14 +267,13 @@ export function PersonalDiaryHome(): React.ReactElement {
   }
   const day = diaryDateParts(source?.timezone ?? timezone, new Date(clock))
   const location = diaryDayLocation(day)
-  const diaries = files.filter((file) => /^\d{4}[_-]周.*\.md$/.test(file.name))
+  const { diaries, plans } = files
   const today = diaries.filter(
     (file) =>
       source &&
       location.matchesName(file.name) &&
       file.path === [source.workspacePath, source.directory, location.folder, file.name].join('/'),
   )
-  const plans = files.filter((file) => !diaries.includes(file))
   const shown = page === '今天' ? today : page === '日记' ? diaries : plans
   const selectedPreview =
     previewPath || (page === '今天' && today.length === 1 ? today[0].path : '')
@@ -439,7 +451,7 @@ export function PersonalDiaryHome(): React.ReactElement {
                   )
                   if (!result.success) throw new Error(result.error)
                   setSource(null)
-                  setFiles([])
+                  setFiles({ diaries: [], plans: [] })
                   setTasks([])
                 })
               }
