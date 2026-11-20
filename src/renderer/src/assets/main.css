@@ -497,6 +497,14 @@ input:focus {
   margin-left: auto;
 }
 
+.app-topbar-agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border-subtle);
+}
+
 .conversation-quick-switcher {
   position: relative;
   min-width: 0;
@@ -782,6 +790,15 @@ input:focus {
   border-color: var(--border-color);
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.app-topbar-conversation-list[aria-pressed='true'] {
+  background: var(--accent);
+  color: white;
+}
+
+.app-topbar-conversation-list[aria-pressed='true']:hover {
+  background: var(--accent-hover);
 }
 
 .app-topbar-icon:disabled {

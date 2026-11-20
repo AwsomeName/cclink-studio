@@ -62,7 +62,11 @@ try {
   await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page.locator('.activity-bar-icon[title="会话"]').click()
-  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .last()
+    .click()
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
   await page.getByRole('button', { name: /Codex（默认）/ }).waitFor()
   await page.keyboard.press('Escape')
@@ -115,7 +119,11 @@ try {
     { timeout: 15000 },
   )
   await send('只回复 CANCEL_RECOVERED，不调用工具。')
-  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .last()
+    .click()
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
   await page.getByRole('button', { name: /Claude Code（备选）/ }).click()
   await page.screenshot({ path: join(runDir, 'claude-choice.png') })

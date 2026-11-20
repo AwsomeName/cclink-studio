@@ -113,8 +113,16 @@ export function createAgentCommands(): Command[] {
           if (
             isWorkspaceTargetCurrent(target) &&
             useCclinkStore.getState().selectedSessionId === created.id
-          )
+          ) {
             useUIStore.getState().showAgentChat()
+            requestAnimationFrame(() => {
+              if (
+                isWorkspaceTargetCurrent(target) &&
+                useCclinkStore.getState().selectedSessionId === created.id
+              )
+                focusAgentComposer()
+            })
+          }
           return
         }
         const conversationId = useAgentStore.getState().createConversation({

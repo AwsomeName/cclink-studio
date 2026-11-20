@@ -184,10 +184,18 @@ try {
   const agentPanel = page.locator('.agent-workspace')
   await agentPanel.waitFor()
   const agentWidth = (await agentPanel.boundingBox()).width
-  await agentPanel.getByRole('button', { name: '会话列表', exact: true }).click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '会话列表', exact: true })
+    .click()
+  await page.screenshot({ path: join(root, 'editor-conversation-list.png') })
   assert.equal((await agentPanel.boundingBox()).width, agentWidth)
-  await agentPanel.getByRole('button', { name: '新建对话', exact: true }).click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .click()
   assert.equal((await agentPanel.boundingBox()).width, agentWidth)
+  await page.screenshot({ path: join(root, 'editor-new-conversation.png') })
   assert.match(await page.locator('.source-text-editor textarea').inputValue(), /源码继续编辑/)
   assert.equal(
     await page.locator('.tab.active').getAttribute('data-workbench-tab-id'),

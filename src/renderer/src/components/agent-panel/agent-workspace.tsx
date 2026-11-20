@@ -1,12 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { workspaceRefKey } from '@shared/workspace-ref'
-import {
-  useAgentStore,
-  useCommandStore,
-  useTabStore,
-  useUIStore,
-  useWorkspaceStore,
-} from '../../stores'
+import { useAgentStore, useTabStore, useUIStore, useWorkspaceStore } from '../../stores'
 import {
   conversationActivityBadge,
   getWorkspaceConversationGroups,
@@ -14,8 +8,6 @@ import {
   LocalSessionsList,
 } from '../../features/agent-conversations/local-session-sidebar'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
-import { IconList, IconRobot, IconArrowLeft } from '../common/Icons'
-import { useToastStore } from '../common/Toast'
 import { AgentPanel } from './AgentPanel'
 import './agent-workspace.css'
 
@@ -71,29 +63,11 @@ export function AgentWorkspace(): React.ReactElement {
       scrollRef.current.scrollTop = filter ? 0 : (listScrollPositions.get(workspaceKey) ?? 0)
   }, [workspaceKey, listVisible, filter])
 
-  const newConversation = async (): Promise<void> => {
-    const result = await useCommandStore.getState().executeCommand('agent.newConversation', {
-      source: 'toolbar',
-      target: { kind: 'layout', workspaceKey: workspaceRefKey(workspace), area: 'agent' },
-    })
-    if (!result.ok) useToastStore.getState().show(result.message ?? '新建会话失败', 'error')
-  }
-
   return (
     <div className="agent-workspace" data-agent-navigation={listVisible ? 'list' : 'chat'}>
-      <nav className="agent-workspace-header" aria-label="会话导航">
-        <div className="agent-workspace-actions">
-          <button
-            type="button"
-            className="agent-workspace-new-conversation"
-            aria-label="新建对话"
-            title="新建对话"
-            onClick={() => void newConversation()}
-          >
-            <IconRobot size={16} />
-            <span>新建对话</span>
-          </button>
-          {!listVisible && workspace.kind !== 'remote' && statuses.length > 0 && (
+      {!listVisible && workspace.kind !== 'remote' && statuses.length > 0 && (
+        <div className="agent-workspace-header">
+          <div className="agent-workspace-actions">
             <div
               className="agent-other-updates"
               role="group"
@@ -123,21 +97,9 @@ export function AgentWorkspace(): React.ReactElement {
                 )
               })}
             </div>
-          )}
-          <button
-            className="agent-workspace-switch"
-            type="button"
-            onClick={() => {
-              setSelection(null)
-              if (listVisible) useUIStore.getState().showAgentChat()
-              else useUIStore.getState().showAgentSessions()
-            }}
-          >
-            {listVisible ? <IconArrowLeft size={15} /> : <IconList size={15} />}
-            {listVisible ? '返回会话' : '会话列表'}
-          </button>
+          </div>
         </div>
-      </nav>
+      )}
       <div className="agent-workspace-body">
         <div className="agent-workspace-chat" hidden={listVisible} inert={listVisible}>
           <AgentPanel variant="side" />

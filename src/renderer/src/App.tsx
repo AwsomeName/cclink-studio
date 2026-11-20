@@ -9,7 +9,15 @@ import { AgentPanel } from './components/agent-panel/AgentPanel'
 import { AgentWorkspace } from './components/agent-panel/agent-workspace'
 import { StatusBar } from './components/status-bar/StatusBar'
 import { ResizeHandle, type PanelResizeEnd } from './components/common/ResizeHandle'
-import { IconPlus, IconSettings, IconPanelLeft, IconPanelRight } from './components/common/Icons'
+import { useToastStore } from './components/common/Toast'
+import {
+  IconNewConversation,
+  IconList,
+  IconPlus,
+  IconSettings,
+  IconPanelLeft,
+  IconPanelRight,
+} from './components/common/Icons'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { PanelErrorFallback } from './components/common/ErrorFallback'
 import { CommandPalette } from './components/command-palette/CommandPalette'
@@ -111,6 +119,12 @@ function MainLayout(): React.ReactElement {
   const agentInCenter = agentPanelMode === 'center'
   const agentInRight = agentPanelMode === 'right'
   const agentPanelVisible = agentPanelMode !== 'hidden'
+  const listVisible = agentInRight && agentContentMode === 'list'
+  function revealChatLayout(): void {
+    const { tabs, activeTabId, setTabLayout } = useTabStore.getState()
+    if (activeTabId && tabs.find((tab) => tab.id === activeTabId)?.workbenchLayout === 'focus')
+      setTabLayout(activeTabId, 'standard')
+  }
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const panelLayout = usePanelLayout(
     workspaceRefKey(activeWorkspaceRef),
@@ -323,14 +337,52 @@ function MainLayout(): React.ReactElement {
             <span>Studio 设置</span>
           </button>
           <OwnerEntry open={ownerOpen} toggle={() => setOwnerOpen((v) => !v)} />
-          <button
-            className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
-            aria-pressed={agentPanelVisible}
-            onClick={() => void executeCommand('workbench.toggleAgentPanel', { source: 'toolbar' })}
-            title={agentPanelVisible ? '收起 Agent 面板' : '展开 Agent 面板'}
-          >
-            <IconPanelRight size={15} />
-          </button>
+          <div className="app-topbar-agent-actions" role="group" aria-label="会话操作">
+            <button
+              type="button"
+              className="app-topbar-icon"
+              title="新建会话"
+              aria-label="新建会话"
+              onClick={async () => {
+                revealChatLayout()
+                const result = await executeCommand('agent.newConversation', {
+                  source: 'toolbar',
+                  target: {
+                    kind: 'layout',
+                    workspaceKey: workspaceRefKey(activeWorkspaceRef),
+                    area: 'agent',
+                  },
+                })
+                if (!result.ok)
+                  useToastStore.getState().show(result.message ?? '新建会话失败', 'error')
+              }}
+            >
+              <IconNewConversation size={16} />
+            </button>
+            <button
+              type="button"
+              className="app-topbar-icon app-topbar-conversation-list"
+              aria-pressed={listVisible}
+              title={listVisible ? '返回会话' : '会话列表'}
+              onClick={() => {
+                revealChatLayout()
+                if (listVisible) useUIStore.getState().showAgentChat()
+                else useUIStore.getState().showAgentSessions()
+              }}
+            >
+              <IconList size={16} />
+            </button>
+            <button
+              className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
+              aria-pressed={agentPanelVisible}
+              onClick={() =>
+                void executeCommand('workbench.toggleAgentPanel', { source: 'toolbar' })
+              }
+              title={agentPanelVisible ? '收起 Agent 面板' : '展开 Agent 面板'}
+            >
+              <IconPanelRight size={15} />
+            </button>
+          </div>
         </div>
       </div>
 
