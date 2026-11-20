@@ -47,9 +47,13 @@ export async function checkBrowserToolbar({
     browserTabId,
   )
   const actions = page.getByRole('group', { name: '新建', exact: true })
+  const creationLabels = await actions
+    .getByRole('button')
+    .evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label')))
   assert(
-    (await actions.getByRole('button').count()) === 3,
-    'creation strip must contain only Browser, MD and Terminal',
+    JSON.stringify(creationLabels) ===
+      JSON.stringify(['新建浏览器页', '新建 Markdown 草稿', '新建 Terminal', '新建远程桌面']),
+    `creation strip has unexpected actions: ${JSON.stringify(creationLabels)}`,
   )
 
   async function checkBounds() {
