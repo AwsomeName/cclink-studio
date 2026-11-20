@@ -1,3 +1,4 @@
+import { MarkdownOpenAs } from './ContentPresentationBar'
 import { type Editor, useEditorState } from '@tiptap/react'
 import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
 import { IconCheck, IconLink } from '../common/Icons'
@@ -7,6 +8,7 @@ import { effectiveBindingsForCommand } from '../../features/shortcuts/keybinding
 import type { EditorPersistenceStatusView } from '../../features/markdown/EditorPersistenceStatus'
 
 interface EditorToolbarProps {
+  tabId?: string
   editor: Editor | null
   filePath?: string
   dirty: boolean
@@ -68,6 +70,7 @@ export function resolveEditorSaveControl(
 }
 
 export function EditorToolbar({
+  tabId,
   editor,
   filePath,
   dirty,
@@ -208,6 +211,7 @@ export function EditorToolbar({
 
   return (
     <div className="editor-toolbar">
+      {tabId && <MarkdownOpenAs tabId={tabId} />}
       <div className="toolbar-group">
         <select
           className="toolbar-select heading"

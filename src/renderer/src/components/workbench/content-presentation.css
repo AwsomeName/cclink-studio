@@ -19,7 +19,7 @@
   gap: 6px;
   white-space: nowrap;
 }
-.content-presentation-bar select {
+.content-open-as {
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
