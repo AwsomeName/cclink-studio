@@ -32,7 +32,6 @@ describe('ActivityBar', () => {
     expect(markup).toContain('aria-label="项目功能"')
     expect(markup).toContain('aria-label="工具"')
     for (const label of [
-
       '文件',
       '会话',
       '浏览器',
@@ -43,7 +42,6 @@ describe('ActivityBar', () => {
       '数据源',
       '视频创作',
       '硬件生产',
-
     ])
       expect(markup).toContain(`title="${label}"`)
     expect(markup).toContain('项目首页</button>')

@@ -14,7 +14,7 @@ export function verify(a: Affair, data: unknown) {
   })
 }
 export function next(a: Affair, active = false) {
-  if (a.directory?.error) return ['需要处理', a.directory.error]
+  if (a.directory?.error) return ['待保存', a.directory.error]
   if (a.research)
     return a.research.phase === 'error' && a.issue
       ? ['需要处理', a.issue]

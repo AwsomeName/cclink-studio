@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { useAgentStore } from '../../stores/agent-store'
 import { createConversationRunController as controller } from '../agent-conversations/conversation-run-controller'
 import { ensureSession } from './owner-agent'
-import { acceptDirectory, useOwners } from './owner-store'
+import { acceptDirectory, keepUnacknowledged, useOwners } from './owner-store'
 import { checkReport, planSchema, type Research } from './research-model'
 import type { Affair } from './affair'
 
@@ -33,10 +33,7 @@ function change(id: string, fn: (r: Research, a: Affair) => void) {
           await window.cclinkStudio.ownerDirectories.save(next, prev.directory.revision),
         )
       } catch (e) {
-        acceptDirectory({
-          ...prev,
-          directory: { ...prev.directory, error: '事务保存未确认：' + String(e) },
-        })
+        keepUnacknowledged(next, e)
         throw e
       }
       if (receipt.directory?.error) throw Error(receipt.directory.error)

@@ -299,7 +299,9 @@ export function OwnerEntry({ open, toggle }: { open: boolean; toggle: () => void
   const count = useOwners(
     (s) =>
       s.items.filter((a) =>
-        ['等我确认', '等我提供资料', '需要处理', '待恢复'].includes(next(a, active.has(a.id))[0]),
+        ['等我确认', '等我提供资料', '待保存', '需要处理', '待恢复'].includes(
+          next(a, active.has(a.id))[0],
+        ),
       ).length,
   )
   return (
@@ -470,6 +472,7 @@ export function OwnerPanel({ open, close }: { open: boolean; close: () => void }
                   {[
                     '等我确认',
                     '等我提供资料',
+                    '待保存',
                     '需要处理',
                     '待恢复',
                     '进行中',

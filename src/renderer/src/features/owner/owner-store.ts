@@ -49,11 +49,36 @@ export function acceptDirectory(a: Affair) {
   }))
   return a
 }
+// Only used when IPC supplied no receipt. The main process may already have saved this change.
+const unacknowledged = new Map<string, Affair>()
+export function keepUnacknowledged(candidate: Affair, cause: unknown) {
+  unacknowledged.set(candidate.id, candidate)
+  return acceptDirectory({
+    ...candidate,
+    directory: { ...candidate.directory!, error: '事务保存未确认：' + String(cause) },
+  })
+}
+export async function retryDirectory(id: string) {
+  const api = window.cclinkStudio.ownerDirectories
+  const saved = await api.retry(id)
+  const candidate = unacknowledged.get(id)
+  if (!candidate) return acceptDirectory(saved)
+  const sameRecord = (a: Affair) => JSON.stringify(affair.parse({ ...a, updated: 0 }))
+  let result = saved
+  if (sameRecord(candidate) !== sameRecord(saved)) {
+    if (saved.directory?.error || saved.directory?.revision !== candidate.directory!.revision)
+      throw Error('目录中有另一版本，无法将其确认为本次保存的结果。')
+    result = await api.save(candidate, candidate.directory!.revision)
+  }
+  unacknowledged.delete(id)
+  return acceptDirectory(result)
+}
 export async function loadDirectories() {
   try {
     const { items, errors } = await window.cclinkStudio.ownerDirectories.list()
     for (const a of items) {
       const current = useOwners.getState().items.find((x) => x.id === a.id)
+      if (unacknowledged.has(a.id)) continue
       if ((current?.directory?.revision ?? 0) <= a.directory!.revision) acceptDirectory(a)
     }
     if (errors.length) useOwners.setState({ error: errors.join('；') })

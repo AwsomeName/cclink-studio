@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore, useRef, useEffect } from 'react'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useAgentStore } from '../../stores/agent-store'
-import { acceptDirectory } from './owner-store'
+import { acceptDirectory, retryDirectory } from './owner-store'
 import {
   discuss,
   research,
@@ -11,6 +11,7 @@ import {
   activeQuestion,
 } from './research-work'
 import { freshResearch } from './research-model'
+import { EvidencePreview, localReference, withLegacyAnchors } from './evidence-preview'
 import { session } from './owner-agent'
 import { next, type Affair } from './affair'
 export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
@@ -79,10 +80,11 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const r = a.research!,
     [text, set] = useState(''),
     [notice, setNotice] = useState(''),
-    [preview, setPreview] = useState<{ name: string; content: string } | null>(null),
+    [preview, setPreview] = useState<{ name: string; content: string; line?: number } | null>(null),
     active = useSyncExternalStore(subscribeWork, () => !interrupted(a.id)),
     questionId = useSyncExternalStore(subscribeWork, () => activeQuestion(a.id)),
     bottom = useRef<HTMLDivElement>(null)
+  const previewRequest = useRef(0)
   const [label, detail] = next(a, active)
   const title =
     a.title === a.goal.slice(0, 60) ? a.title.split(/[，。；！？]/u)[0] || a.title : a.title
@@ -94,10 +96,11 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     bottom.current?.scrollIntoView({ block: 'nearest' })
   }, [r.chat.length, questionId])
   const chatBusy = a.confirmed ? !!questionId : active
-  async function openFile(name: string) {
+  async function openFile(name: string, line?: number) {
+    const request = ++previewRequest.current
     try {
       const content = await window.cclinkStudio.ownerDirectories.preview(a.id, name)
-      setPreview({ name, content })
+      if (request === previewRequest.current) setPreview({ name, content, line })
     } catch (e) {
       setNotice(String(e))
     }
@@ -117,7 +120,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   }
   return (
     <>
-      <article data-owner-phase={r.phase} data-owner-id={a.id}>
+      <article
+        data-owner-phase={a.directory?.error ? 'pending-save' : r.phase}
+        data-owner-id={a.id}
+      >
         <button onClick={back}>‹ 我的事务</button>
         <h1>{title}</h1>
         {a.directory && (
@@ -136,12 +142,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               <p role="alert">
                 {a.directory.error}{' '}
                 <button
-                  onClick={() =>
-                    void window.cclinkStudio.ownerDirectories
-                      .retry(a.id)
-                      .then(acceptDirectory)
-                      .catch((e) => setNotice(String(e)))
-                  }
+                  onClick={() => void retryDirectory(a.id).catch((e) => setNotice(String(e)))}
                 >
                   重试保存文件
                 </button>
@@ -167,11 +168,31 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 )}
               </>
             )}
-            {preview && (
+            {preview && !a.directory.error && (
               <section>
                 <h3>{preview.name}</h3>
-                <button onClick={() => setPreview(null)}>关闭预览</button>
-                <ConversationMarkdown source={preview.content} />
+                <button
+                  onClick={() => {
+                    previewRequest.current++
+                    setPreview(null)
+                  }}
+                >
+                  关闭预览
+                </button>
+                {preview.name.startsWith('资料/') && a.directory.reportFile && (
+                  <button onClick={() => void openFile(a.directory!.reportFile!)}>返回报告</button>
+                )}
+                {preview.name.startsWith('资料/') ? (
+                  <EvidencePreview content={preview.content} line={preview.line} />
+                ) : (
+                  <ConversationMarkdown
+                    source={withLegacyAnchors(preview.content)}
+                    resolveLocalLink={(href) => {
+                      const target = localReference(preview.name, href, a.directory!.files)
+                      return target ? () => void openFile(target.name, target.line) : undefined
+                    }}
+                  />
+                )}
               </section>
             )}
           </section>
@@ -179,10 +200,14 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
         <div className="own-call">
           <small>{label}</small>
           <h2>
-            {waitingForReentry
-              ? '上次操作中断，未自动重派'
-              : a.issue ||
-                (r.phase === 'reading' ? '取证中 · 已取得 ' + r.docs.length + ' 份原文' : detail)}
+            {a.directory?.error
+              ? r.report
+                ? '引文已核对，报告待保存'
+                : '事务文件待保存'
+              : waitingForReentry
+                ? '上次操作中断，未自动重派'
+                : a.issue ||
+                  (r.phase === 'reading' ? '取证中 · 已取得 ' + r.docs.length + ' 份原文' : detail)}
           </h2>
         </div>
         {!!r.decisions?.length && (
@@ -195,7 +220,9 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               <div key={i} className={'own-decision ' + d.kind}>
                 <b>
                   {d.kind === 'deliver'
-                    ? '可以交付'
+                    ? a.directory?.error
+                      ? '报告待保存'
+                      : '可以交付'
                     : d.kind === 'more'
                       ? '续用 A 补查'
                       : '委派会话 A'}
@@ -330,15 +357,18 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
       <aside>
         <h2>Owner 主对话</h2>
         <small>当前事务 · {title}</small>
+        {a.directory?.error && <strong role="status">待保存 · 请在看板重试保存文件</strong>}
         <div className="own-thread">
           {r.chat.map((m, i) => (
             <div key={m.questionId ?? i}>
               <b>{m.who}</b>
               <p>
                 {m.who === 'Owner' && m.text === r.report?.conclusion
-                  ? '调研简报已放在中间看板。已核对 ' +
-                    r.report.items.length +
-                    ' 条引文，可展开之前的判断回看补查原因。'
+                  ? a.directory?.error
+                    ? '引文已核对。原报告待保存，重试时会直接写入这份报告。'
+                    : '调研简报已放在中间看板。已核对 ' +
+                      r.report.items.length +
+                      ' 条引文，可展开之前的判断回看补查原因。'
                   : m.text}
               </p>
               {m.questionId &&

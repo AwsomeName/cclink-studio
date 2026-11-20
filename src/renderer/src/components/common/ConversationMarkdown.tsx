@@ -33,17 +33,19 @@ const containerTags = new Map<string, keyof React.JSX.IntrinsicElements>([
 
 export function ConversationMarkdown({
   source,
+  resolveLocalLink,
   onOpenFilePath,
   commandContext,
 }: {
   source: string
+  resolveLocalLink?: (href: string) => (() => void) | undefined
   onOpenFilePath?: (path: string) => void
   commandContext?: ConversationCodeCommandContext
 }): React.ReactElement {
   const tokens = conversationMarkdown.parse(source, {})
   return (
     <div className="conversation-markdown">
-      {renderTokens(tokens, { onOpenFilePath, commandContext, source })}
+      {renderTokens(tokens, { onOpenFilePath, resolveLocalLink, commandContext, source })}
     </div>
   )
 }
@@ -64,6 +66,7 @@ function collectTokenText(token: Token): string[] {
 }
 
 interface ConversationMarkdownRenderOptions {
+  resolveLocalLink?: (href: string) => (() => void) | undefined
   onOpenFilePath?: (path: string) => void
   commandContext?: ConversationCodeCommandContext
   source: string
@@ -115,6 +118,18 @@ function renderContainerToken(
   if (token.type === 'link_open') {
     const href = normalizeConversationHttpUrl(token.attrGet('href'))
     if (!href) {
+      const openLocal = options.resolveLocalLink?.(token.attrGet('href') ?? '')
+      if (openLocal)
+        return (
+          <button
+            key={key}
+            type="button"
+            className="conversation-markdown-file-link"
+            onClick={openLocal}
+          >
+            {children}
+          </button>
+        )
       const filePath = normalizeConversationMarkdownFilePath(token.attrGet('href'))
       if (!filePath || !options.onOpenFilePath) return <span key={key}>{children}</span>
       return (
