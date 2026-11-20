@@ -103,6 +103,8 @@ export default defineConfig({
     },
   },
   renderer: {
+    // Match electron-vite's Chromium build baseline; noVNC requires top-level await.
+    optimizeDeps: { esbuildOptions: { target: 'chrome142' } },
     server: rendererServer,
     resolve: {
       alias: [
