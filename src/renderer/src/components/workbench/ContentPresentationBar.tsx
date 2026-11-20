@@ -20,6 +20,23 @@ export function ContentPresentationBar({ tab }: { tab?: Tab }): React.ReactEleme
   )
 }
 
+function openAs(tab: Tab, mode: string): void {
+  void useCommandStore
+    .getState()
+    .executeCommand(`workbench.openAs.${mode}`, {
+      source: 'toolbar',
+      target: {
+        kind: 'tab',
+        tabId: tab.id,
+        tabType: tab.type,
+        workspaceKey: tab.workspaceRef ? workspaceRefKey(tab.workspaceRef) : null,
+      },
+    })
+    .then((result) => {
+      if (!result.ok) useToastStore.getState().show(result.message ?? '打开方式切换失败', 'error')
+    })
+}
+
 function OpenAsSelect({
   tab,
   presentation,
@@ -34,21 +51,7 @@ function OpenAsSelect({
       value={presentation.selected}
       disabled={presentation.options.length < 2}
       onChange={(event) => {
-        void useCommandStore
-          .getState()
-          .executeCommand(`workbench.openAs.${event.target.value}`, {
-            source: 'toolbar',
-            target: {
-              kind: 'tab',
-              tabId: tab.id,
-              tabType: tab.type,
-              workspaceKey: tab.workspaceRef ? workspaceRefKey(tab.workspaceRef) : null,
-            },
-          })
-          .then((result) => {
-            if (!result.ok)
-              useToastStore.getState().show(result.message ?? '打开方式切换失败', 'error')
-          })
+        openAs(tab, event.target.value)
       }}
     >
       {presentation.options.map((option) => (
@@ -63,5 +66,14 @@ export function MarkdownOpenAs({ tabId }: { tabId: string }): React.ReactElement
   const tab = useTabStore((state) => state.tabs.find((item) => item.id === tabId))
   const presentation = tab && contentPresentation(tab)
   if (!tab || !presentation || presentation.options.length < 2) return null
-  return <OpenAsSelect tab={tab} presentation={presentation} />
+  const source = presentation.selected === 'source'
+  return (
+    <button
+      type="button"
+      className="markdown-mode-toggle"
+      onClick={() => openAs(tab, source ? 'markdown' : 'source')}
+    >
+      {source ? '切到正文' : '切到源码'}
+    </button>
+  )
 }

@@ -1063,3 +1063,12 @@
   font-size: 13px;
   gap: 8px;
 }
+
+.editor-toolbar .markdown-mode-toggle,
+.source-text-toolbar .markdown-mode-toggle {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}

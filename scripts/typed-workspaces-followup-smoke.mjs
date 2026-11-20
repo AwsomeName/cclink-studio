@@ -165,13 +165,13 @@ try {
   await file('版面验收.md')
   await page.locator('.tiptap[contenteditable="true"]').fill('尚未保存的版面验收')
   const originalTabId = await page.locator('.tab.active').getAttribute('data-workbench-tab-id')
-  await page.getByLabel('打开方式', { exact: true }).selectOption('source')
+  await page.getByRole('button', { name: '切到源码', exact: true }).click()
   assert.match(
     await page.locator('.source-text-editor textarea').inputValue(),
     /尚未保存的版面验收/,
   )
   await page.locator('.source-text-editor textarea').fill('# 源码继续编辑\n没有另建副本\n')
-  await page.getByLabel('打开方式', { exact: true }).selectOption('markdown')
+  await page.getByRole('button', { name: '切到正文', exact: true }).click()
   assert.match(await page.locator('.tiptap').innerText(), /源码继续编辑/)
   assert.equal(
     await page.locator('.tab.active').getAttribute('data-workbench-tab-id'),
@@ -179,7 +179,7 @@ try {
   )
   assert.equal(await readFile(md, 'utf8'), originals.get(md))
   pass('Markdown 正文/源码共享原未保存内容与标签，原文件未写入')
-  await page.getByLabel('打开方式', { exact: true }).selectOption('source')
+  await page.getByRole('button', { name: '切到源码', exact: true }).click()
   await setLayout('standard')
   const agentPanel = page.locator('.agent-workspace')
   await agentPanel.waitFor()
@@ -472,7 +472,7 @@ try {
   assert.equal(after.flow.nodes[0].status, 'waiting-human')
   pass('重启保留等待人工事务原 ID/节点，未隐式执行')
   await file('版面验收.md')
-  assert.equal(await page.getByLabel('打开方式', { exact: true }).inputValue(), 'source')
+  await page.getByRole('button', { name: '切到正文', exact: true }).waitFor()
   await page.getByRole('button', { name: '展开 Agent 面板', pressed: false }).waitFor()
   assert.match(await page.locator('.source-text-editor textarea').inputValue(), /源码继续编辑/)
   pass('重启恢复标签打开方式、未保存正文与专注版面')
