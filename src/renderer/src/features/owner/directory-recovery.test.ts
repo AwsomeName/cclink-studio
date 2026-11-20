@@ -1,7 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Affair } from './affair'
 import { freshResearch } from './research-model'
-import { keepUnacknowledged, retryDirectory } from './owner-store'
+import {
+  keepUnacknowledged,
+  retryDirectory,
+  hasDirectoryConflict,
+  useSavedDirectory,
+  useOwners,
+} from './owner-store'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -45,3 +51,40 @@ it.each([false, true])(
     if (!committed) expect(save).toHaveBeenCalledWith(candidate, 4)
   },
 )
+
+it('keeps divergent writes until the user chooses the committed directory version', async () => {
+  const id = crypto.randomUUID()
+  const draft: Affair = {
+    id,
+    title: 'Ibex',
+    goal: '查 RTL',
+    sources: [],
+    confirmed: false,
+    updated: 1,
+    attempt: null,
+    run: null,
+    issue: '',
+    result: null,
+    method: null,
+    research: freshResearch(),
+    directory: { path: '/sample', revision: 1, files: [] },
+  }
+  const latest = { ...draft, goal: '新版本', directory: { ...draft.directory!, revision: 2 } }
+  const save = vi.fn()
+  vi.stubGlobal('window', {
+    cclinkStudio: {
+      ownerDirectories: {
+        save,
+        retry: async () => latest,
+        list: async () => ({ items: [latest], errors: [] }),
+      },
+    },
+  })
+  keepUnacknowledged(draft, '保存回执丢失')
+  await expect(retryDirectory(id)).rejects.toThrow('另一版本')
+  expect(hasDirectoryConflict(id)).toBe(true)
+  expect(useOwners.getState().items.find((a) => a.id === id)?.goal).toBe('查 RTL')
+  expect(await useSavedDirectory(id)).toEqual(latest)
+  expect(hasDirectoryConflict(id)).toBe(false)
+  expect(save).not.toHaveBeenCalled()
+})

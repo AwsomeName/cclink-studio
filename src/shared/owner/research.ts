@@ -4,6 +4,7 @@ const phrase = z.string().trim().min(1).max(1200)
 export const planSchema = z.object({
   scope: phrase,
   output: phrase,
+  timing: phrase.optional(),
   repos: z
     .array(z.string().regex(publicRepoPattern))
     .min(1)
@@ -34,6 +35,20 @@ export const reportSchema = z.object({
     .min(1)
     .max(16),
 })
+export const researchRequest = z.object({
+  repo: z.string().regex(publicRepoPattern),
+  terms: z.array(z.string().regex(/^[a-z0-9_.+/-]{1,60}$/i)).max(8),
+})
+export const workerFilesSchema = z
+  .array(
+    z.object({
+      repo: z.string().regex(publicRepoPattern),
+      path: z.string().min(1).max(360),
+      anchor: z.string().max(120).optional(),
+      purpose: z.string().min(1).max(500),
+    }),
+  )
+  .max(4)
 export const researchSchema = z.object({
   plan: planSchema.nullable(),
   phase: z.enum(['draft', 'planning', 'ready', 'reading', 'writing', 'checking', 'done', 'error']),
@@ -51,7 +66,20 @@ export const researchSchema = z.object({
     .max(100),
   docs: z.array(sourceSchema).max(24),
   decisions: z
-    .array(z.object({ kind: z.enum(['read', 'more', 'deliver']), reason: phrase }))
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        kind: z.enum(['read', 'more', 'deliver']),
+        reason: phrase,
+        requests: z.array(researchRequest).min(1).max(4).optional(),
+        workerTicket: z.string().uuid().optional(),
+        workerFiles: workerFilesSchema.optional(),
+        filesProcessed: z.number().int().min(0).max(4).optional(),
+        collectionClosed: z.boolean().optional(),
+        workerRunId: z.string().min(1).max(240).optional(),
+        workerReturned: z.boolean().optional(),
+      }),
+    )
     .max(60)
     .optional(),
   report: reportSchema.nullable(),

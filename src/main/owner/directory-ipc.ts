@@ -13,6 +13,12 @@ export function registerOwnerDirectories(
   registerTrustedIpcContract(ownerDirectoryIpc.save, guard, (_e, a, revision) =>
     service.save(a, revision),
   )
+  registerTrustedIpcContract(ownerDirectoryIpc.confirm, guard, (_e, id, revision) =>
+    service.confirm(id, revision),
+  )
+  registerTrustedIpcContract(ownerDirectoryIpc.upgrade, guard, (_e, id, revision) =>
+    service.upgrade(id, revision),
+  )
   registerTrustedIpcContract(ownerDirectoryIpc.retry, guard, (_e, id) => service.retry(id))
   registerTrustedIpcContract(ownerDirectoryIpc.preview, guard, (_e, id, name) =>
     service.preview(id, name),

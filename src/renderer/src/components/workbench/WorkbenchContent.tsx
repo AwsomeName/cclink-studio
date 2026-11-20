@@ -1,3 +1,4 @@
+import { RemoteDesktopTab } from '../../features/remote-desktop/RemoteDesktopTab'
 import { CompanyWorkbench } from '../../features/company-workspace/CompanyWorkbench'
 import { WorkspaceHome } from '../../features/workspace-open/WorkspaceHome'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
@@ -87,6 +88,7 @@ export function WorkbenchContent({
   onCancelBrowserNavigation,
   contentRef,
 }: WorkbenchContentProps): React.ReactElement {
+  const tabs = useTabStore((s) => s.tabs)
   const conversationTarget = activeTab ? resolveConversationTab(activeTab) : null
   const contextMenuOpen = useContextMenuStore((state) => state.open)
   const browserPreviewDataUrl = useContextMenuStore((state) => state.browserPreviewDataUrl)
@@ -107,6 +109,11 @@ export function WorkbenchContent({
           <PanelErrorFallback error={error} retry={retry} title="Tab 内容" />
         )}
       >
+        {tabs
+          .filter((t) => t.type === 'remote-desktop')
+          .map((tab) => (
+            <RemoteDesktopTab key={tab.id} tab={tab} active={activeTab?.id === tab.id} />
+          ))}
         {(!activeTab || activeTab.type === 'workspace-home') &&
           activeWorkspaceRef.kind !== 'global' && (
             <WorkspaceHome

@@ -344,7 +344,9 @@ describe('workspace-transition', () => {
     const remoteTransition = await prepareWorkspaceRuntimeTransition(remoteRef)
     await applyWorkspaceRuntimeTransition(remoteTransition)
 
-    expect(useTabStore.getState().tabs).toEqual([])
+    expect(useTabStore.getState().tabs).toMatchObject([
+      { type: 'workspace-home', pinned: true, workspaceRef: remoteRef },
+    ])
     expect(
       Object.values(useAgentStore.getState().conversations).some(
         (conversation) => conversation.runtime.workspaceRef?.kind === 'remote',
@@ -509,7 +511,9 @@ describe('workspace-transition', () => {
       views: [{ tabId: 'browser-b', profileId: 'account-b-profile' }],
       activeTabId: null,
     })
-    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['browser-b', 'terminal-b'])
+    expect(
+      useTabStore.getState().tabs.map((tab) => (tab.type === 'workspace-home' ? tab.type : tab.id)),
+    ).toEqual(['workspace-home', 'browser-b', 'terminal-b'])
     expect(useTabStore.getState().tabs.find((tab) => tab.id === 'terminal-b')).toMatchObject({
       terminal: { status: 'exited', processId: undefined },
       terminalRecord: { status: 'exited', exitCode: 0, attachable: false },

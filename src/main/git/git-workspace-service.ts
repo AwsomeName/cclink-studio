@@ -113,7 +113,14 @@ export class GitWorkspaceService {
           : undefined,
       })
       // Register only a newly-created copy. Never initialize or migrate the connected old root.
-      if (result.newCopy) await this.workspaceStateService.getSnapshot(result.workspacePath)
+      if (result.newCopy) {
+        await this.workspaceStateService.getSnapshot(result.workspacePath)
+        const { settings } = await readWorkspaceSettings(result.workspacePath)
+        if (settings.type === 'diary' && settings.diary) {
+          const { directory, timezone } = settings.diary
+          result.diaryMapping = { directory, timezone }
+        }
+      }
       return result
     } finally {
       this.activeOperations.delete(key)

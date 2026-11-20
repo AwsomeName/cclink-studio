@@ -1,6 +1,8 @@
 import { useUIStore } from '../../stores/ui-store'
 import type { ActivityPanel } from '../../types'
 import {
+  defaultDiaryDirectory,
+  defaultDiaryTimezone,
   personalDiarySourceSchema,
   personalDiarySourceSection,
 } from '@shared/personal-diary-source'
@@ -189,11 +191,13 @@ export function WorkspaceSettingsForm(): React.ReactElement {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [useDiary, setUseDiary] = useState(false)
-  const [directory, setDirectory] = useState('日记')
+  const [directory, setDirectory] = useState(defaultDiaryDirectory)
+  const [timezone, setTimezone] = useState(defaultDiaryTimezone)
   useEffect(() => {
     setDraft(snapshot?.settings ?? null)
     setUseDiary(!!snapshot?.settings.diary)
-    setDirectory(snapshot?.settings.diary?.directory ?? '日记')
+    setDirectory(snapshot?.settings.diary?.directory ?? defaultDiaryDirectory)
+    setTimezone(snapshot?.settings.diary?.timezone ?? defaultDiaryTimezone)
     setError('')
     setNotice('')
   }, [snapshot])
@@ -209,7 +213,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       if (useDiary)
         settings.diary = {
           directory,
-          timezone: draft.diary?.timezone ?? 'Asia/Shanghai',
+          timezone,
           taskIds: draft.diary?.taskIds ?? [],
         }
       else delete settings.diary
@@ -270,6 +274,16 @@ export function WorkspaceSettingsForm(): React.ReactElement {
               <small>
                 只记录位置，不创建或移动目录；本机外部关联优先，需在资料接入页解除后才使用此目录。
               </small>
+            </label>
+          )}
+          {useDiary && (
+            <label>
+              日记时区
+              <input
+                aria-label="项目日记时区"
+                value={timezone}
+                onChange={(event) => setTimezone(event.target.value)}
+              />
             </label>
           )}
           <button

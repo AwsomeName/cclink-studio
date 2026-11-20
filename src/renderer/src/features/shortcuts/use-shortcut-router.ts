@@ -154,6 +154,8 @@ export function useShortcutRouter(): ShortcutHelpContext | null {
       if (event.key === 'Meta' || !event.metaKey) resetHold()
     }
     const route = (event: KeyboardEvent): void => {
+      if (event.target instanceof Element && event.target.closest('[data-remote-desktop-screen]'))
+        return
       inputRevision += 1
       if (consumeShortcutCaptureEvent(event)) {
         hold.release()

@@ -7,6 +7,12 @@ export const ownerDirectoryIpc = {
   save: defineIpcInvoke<[Affair, number], Affair>('owner-directory:save', (args) =>
     z.tuple([affair, z.number().int().nonnegative()]).parse(args),
   ),
+  confirm: defineIpcInvoke<[string, number], Affair>('owner-directory:confirm', (args) =>
+    z.tuple([id, z.number().int().positive()]).parse(args),
+  ),
+  upgrade: defineIpcInvoke<[string, number], Affair>('owner-directory:upgrade', (args) =>
+    z.tuple([id, z.number().int().positive()]).parse(args),
+  ),
   retry: defineIpcInvoke<[string], Affair>('owner-directory:retry', (args) =>
     z.tuple([id]).parse(args),
   ),

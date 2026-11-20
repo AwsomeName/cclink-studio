@@ -32,6 +32,15 @@ export function createTabCommands(): Command[] {
       action: () => openDefaultBrowserTab(useWorkspaceStore.getState().activeWorkspaceRef),
     },
     {
+      id: 'desktop.newTab',
+      label: '新建远程桌面',
+      category: 'Tab',
+      action: () =>
+        useTabStore
+          .getState()
+          .openTab({ type: 'remote-desktop', title: '远程桌面', icon: '🖥', forceNew: true }),
+    },
+    {
       id: 'terminal.newTab',
       label: '新建 Terminal',
       category: 'Terminal',
@@ -63,9 +72,10 @@ export function createTabCommands(): Command[] {
       enabled: (context) => {
         const { activeTabId, tabs } = useTabStore.getState()
         const tabId = context.target?.kind === 'tab' ? context.target.tabId : activeTabId
+        const tab = tabs.find((item) => item.id === tabId)
         return {
-          enabled: Boolean(tabId && tabs.some((tab) => tab.id === tabId)),
-          reason: '标签页已关闭',
+          enabled: Boolean(tab && tab.type !== 'workspace-home'),
+          reason: tab?.type === 'workspace-home' ? '项目首页始终固定' : '标签页已关闭',
         }
       },
       action: (context) => {

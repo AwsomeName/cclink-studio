@@ -26,6 +26,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
+      '@novnc/novnc':
+        specifier: 1.7.0
+        version: 1.7.0
       '@tencentcloud/chat':
         specifier: 3.6.6
         version: 3.6.6
@@ -845,6 +848,9 @@ packages:
 
   '@nodable/entities@2.1.1':
     resolution: {integrity: sha512-Pig3HxDIoMgjdEH8OCf/dkcTmLFjJRjWuq8jSnklu284/TKOPibSRERmOykiwmyXTtv61mP+44f3GMx0tLAyjg==}
+
+  '@novnc/novnc@1.7.0':
+    resolution: {integrity: sha512-ucEJOx4T2avIRCleodk7YobZj5O2Ga2AeLfQ69A/yjG9HHba2+PDgwSkN3FttrmG+70ZGx21sElNFouK13RzyA==}
 
   '@openai/codex@0.147.0':
     resolution: {integrity: sha512-EQLEXecAG2ptxI7UpBMo2TR/ga5596/c/OsYF/0LoUDh5JANZ7IoGqlzBEWbuEVQ76JePIbtTW/ihCkp1a7Z3w==}
@@ -4207,6 +4213,8 @@ snapshots:
     optional: true
 
   '@nodable/entities@2.1.1': {}
+
+  '@novnc/novnc@1.7.0': {}
 
   '@openai/codex@0.147.0':
     optionalDependencies:

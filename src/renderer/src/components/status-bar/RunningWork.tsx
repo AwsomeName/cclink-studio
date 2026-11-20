@@ -8,6 +8,7 @@ import {
 } from '../../utils/terminal-tab'
 import { useEffect, useRef, useState } from 'react'
 import { FloatingSurface } from '../common/FloatingSurface'
+import { IconList } from '../common/Icons'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
@@ -36,6 +37,7 @@ export function RunningWork(): React.ReactElement {
   const anchor = useRef<HTMLButtonElement>(null)
   const conversations = useAgentStore((state) => state.conversations)
   const running = Object.values(conversations).filter(conversationNeedsAttention)
+  const label = running.length ? `进行中的工作 · ${running.length} 个会话` : '进行中的工作'
   useEffect(() => {
     if (!open) return
     let alive = true
@@ -121,11 +123,16 @@ export function RunningWork(): React.ReactElement {
     <>
       <button
         ref={anchor}
-        className="status-bar-item"
+        type="button"
+        className="status-bar-item status-bar-running-work"
         onClick={() => setOpen((value) => !value)}
-        title="进行中的工作"
+        title={label}
+        aria-label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
       >
-        进行中的工作{running.length ? ` · ${running.length} 个会话` : ''}
+        <IconList size={12} />
+        <span className="status-bar-text">{label}</span>
       </button>
       <FloatingSurface
         anchorRef={anchor}

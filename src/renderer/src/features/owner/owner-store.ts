@@ -51,6 +51,17 @@ export function acceptDirectory(a: Affair) {
 }
 // Only used when IPC supplied no receipt. The main process may already have saved this change.
 const unacknowledged = new Map<string, Affair>()
+const conflicts = new Set<string>()
+export const hasDirectoryConflict = (id: string) => conflicts.has(id)
+export async function useSavedDirectory(id: string) {
+  if (!conflicts.has(id)) return
+  const { items } = await window.cclinkStudio.ownerDirectories.list()
+  const saved = items.find((item) => item.id === id)
+  if (!saved || saved.directory?.error) throw Error('目录版本仍未就绪，请先重试保存')
+  conflicts.delete(id)
+  unacknowledged.delete(id)
+  return acceptDirectory(saved)
+}
 export function keepUnacknowledged(candidate: Affair, cause: unknown) {
   unacknowledged.set(candidate.id, candidate)
   return acceptDirectory({
@@ -66,10 +77,16 @@ export async function retryDirectory(id: string) {
   const sameRecord = (a: Affair) => JSON.stringify(affair.parse({ ...a, updated: 0 }))
   let result = saved
   if (sameRecord(candidate) !== sameRecord(saved)) {
-    if (saved.directory?.error || saved.directory?.revision !== candidate.directory!.revision)
-      throw Error('目录中有另一版本，无法将其确认为本次保存的结果。')
+    if (saved.directory?.error) throw Error(saved.directory.error)
+    if (saved.directory?.revision !== candidate.directory!.revision) {
+      const reason = '目录中已有另一版本，本次未保存的修改仍保留在当前页面。'
+      conflicts.add(id)
+      keepUnacknowledged(candidate, reason)
+      throw Error(reason)
+    }
     result = await api.save(candidate, candidate.directory!.revision)
   }
+  conflicts.delete(id)
   unacknowledged.delete(id)
   return acceptDirectory(result)
 }

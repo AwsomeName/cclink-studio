@@ -42,6 +42,7 @@ export interface GitTransferSnapshot {
   localChanges: string
   diverged: boolean
   newCopy?: boolean
+  diaryMapping?: { directory: string; timezone: string }
 }
 
 export type GitTransferResult =

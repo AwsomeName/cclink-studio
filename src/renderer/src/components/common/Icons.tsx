@@ -46,6 +46,19 @@ export function IconNewConversation(p: IconProps = defaults): React.ReactElement
   )
 }
 
+export function IconHome(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="M1.8 7 8 2l6.2 5M3.5 6v7.5h9V6"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />,
+  )
+}
+
 export function IconList(p: IconProps = defaults): React.ReactElement {
   return I(
     p,

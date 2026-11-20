@@ -172,7 +172,11 @@ describe('workspace-runtime', () => {
       updatedAt: Date.now(),
     })
 
-    expect(useTabStore.getState().tabs.map((tab) => tab.type)).toEqual(['settings', 'browser'])
+    expect(useTabStore.getState().tabs.map((tab) => tab.type)).toEqual([
+      'workspace-home',
+      'settings',
+      'browser',
+    ])
     expect(useTabStore.getState().tabs.some((tab) => tab.id === 'browser-b')).toBe(true)
     expect(useTabStore.getState().activeTabId).toBe(
       useTabStore.getState().tabs.find((tab) => tab.type === 'settings')?.id,
@@ -268,14 +272,17 @@ describe('workspace-runtime', () => {
       }),
     )
 
-    expect(useTabStore.getState().tabs.map((tab) => tab.id)).toEqual(['detached-draft-a', 'file-b'])
+    expect(
+      useTabStore.getState().tabs.map((tab) => (tab.type === 'workspace-home' ? tab.type : tab.id)),
+    ).toEqual(['workspace-home', 'detached-draft-a', 'file-b'])
     expect(useTabStore.getState().activeTabId).toBe('file-b')
 
     hydrateRuntimeSections(workspaceSnapshot('/workspace/a', {}))
 
     expect(useTabStore.getState()).toMatchObject({
-      activeTabId: null,
+      activeTabId: useTabStore.getState().tabs[0].id,
       tabs: [
+        { type: 'workspace-home', pinned: true, workspaceRef: workspaceA },
         {
           id: 'detached-draft-a',
           workspaceRef: workspaceA,

@@ -161,7 +161,10 @@ describe('restoreWorkspaceState', () => {
     expect(deps.resolveWorkspacePath).toHaveBeenCalledWith('/workspace/a')
     expect(deps.getWorkspaceState).toHaveBeenCalledWith('/workspace/a')
     expect(deps.hydrateLayout).toHaveBeenCalledWith({ sidebarVisible: false })
-    expect(deps.hydrateTabs).toHaveBeenCalledWith({ activeTabId: 'doc' })
+    expect(deps.hydrateTabs).toHaveBeenCalledWith(
+      { activeTabId: 'doc' },
+      { kind: 'local', path: '/workspace/a' },
+    )
     expect(deps.initWorkspace).toHaveBeenCalled()
   })
 

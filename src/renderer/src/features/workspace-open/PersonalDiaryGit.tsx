@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import type { GitTransferInput, GitTransferSnapshot } from '@shared/git'
 import type { PersonalDiarySource } from '@shared/personal-diary-source'
 import {
+  defaultDiaryDirectory,
+  defaultDiaryTimezone,
   personalDiarySourceSchema,
   personalDiarySourceSection,
 } from '@shared/personal-diary-source'
@@ -23,7 +25,7 @@ export function PersonalDiaryGit({
   const [username, setUsername] = useState('')
   const [token, setToken] = useState('')
   const [keyPath, setKeyPath] = useState('')
-  const [directory, setDirectory] = useState(source?.directory ?? '000-个人计划')
+  const [directory, setDirectory] = useState(source?.directory ?? defaultDiaryDirectory)
   const [result, setResult] = useState<GitTransferSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -108,6 +110,10 @@ export function PersonalDiaryGit({
       })
       if (!value.success) throw Error(`[${value.error.code}] ${value.error.message}`)
       setToken('')
+      if (value.snapshot.newCopy)
+        setDirectory(
+          value.snapshot.diaryMapping?.directory ?? source?.directory ?? defaultDiaryDirectory,
+        )
       setResult(value.snapshot)
     } catch (e) {
       setError(String(e))
@@ -145,7 +151,7 @@ export function PersonalDiaryGit({
         workspacePath: result.workspacePath,
         projectId: root.projectId,
         directory,
-        timezone: source?.timezone ?? 'Asia/Shanghai',
+        timezone: result.diaryMapping?.timezone ?? source?.timezone ?? defaultDiaryTimezone,
         taskIds: [],
       })
       await window.cclinkStudio.fs.readDir(value.workspacePath + '/' + value.directory)
@@ -290,6 +296,7 @@ export function PersonalDiaryGit({
               </p>
               <p>
                 新日记与计划：{result.workspacePath + '/' + directory}
+                ，时区：{result.diaryMapping?.timezone ?? source?.timezone ?? defaultDiaryTimezone}
                 。附件继续使用副本内的相对引用；旧电脑绝对引用须另行核对。
               </p>
               <details>

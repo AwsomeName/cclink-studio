@@ -5620,6 +5620,29 @@ body.is-resizing-panels .main-area > div {
   scrollbar-width: none;
 }
 
+.tab-pin-overflow {
+  position: relative;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+.tab-pin-overflow.active {
+  box-shadow: inset 0 2px var(--accent);
+  color: var(--text-primary);
+}
+.tab-pin-overflow:focus-within {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+.tab-pin-overflow select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .tab-strip::-webkit-scrollbar {
   display: none;
 }
@@ -10158,6 +10181,7 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   color: white;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   align-items: center;
   padding: 0 12px;
   font-size: 12px;
@@ -10187,6 +10211,11 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.status-bar-left > .status-bar-running-work {
+  height: 100%;
+  min-width: 24px;
 }
 
 .status-bar-url {
@@ -10275,6 +10304,7 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 
 @container statusbar (max-width: 760px) {
   .status-bar-right > .status-bar-edition,
+  .status-bar-running-work .status-bar-text,
   .framework-diagnostics-status .status-bar-text,
   .status-bar-left > .status-bar-url {
     display: none;
@@ -11013,6 +11043,7 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   }
 }
 
+.status-bar-item.status-bar-running-work,
 .status-bar-item.framework-diagnostics-status {
   font: inherit;
   color: inherit;
@@ -11022,6 +11053,7 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
   white-space: nowrap;
 }
 
+.status-bar-item.status-bar-running-work:hover,
 .status-bar-item.framework-diagnostics-status:hover {
   background: rgba(255, 255, 255, 0.12);
 }

@@ -1,6 +1,7 @@
 import { ownerDirectoryIpc } from '../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../shared/ipc/owner-research'
 import { contextBridge, ipcRenderer } from 'electron'
+import { desktopApi } from './remote-desktop-api'
 import { localTtsApi } from './local-tts-api'
 import {
   authIpc,
@@ -412,6 +413,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
   articlePublishing: articlePublishingApi,
 
   gitBackup: gitBackupApi,
+  remoteDesktop: desktopApi,
   localTts: localTtsApi,
 
   hardware: hardwareApi,
@@ -450,6 +452,10 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     list: () => invokeIpcContract(ownerDirectoryIpc.list),
     save: (a: import('../shared/owner/affair').Affair, revision: number) =>
       invokeIpcContract(ownerDirectoryIpc.save, a, revision),
+    confirm: (id: string, revision: number) =>
+      invokeIpcContract(ownerDirectoryIpc.confirm, id, revision),
+    upgrade: (id: string, revision: number) =>
+      invokeIpcContract(ownerDirectoryIpc.upgrade, id, revision),
     retry: (id: string) => invokeIpcContract(ownerDirectoryIpc.retry, id),
     reveal: (id: string) => invokeIpcContract(ownerDirectoryIpc.reveal, id),
     preview: (id: string, name: string) => invokeIpcContract(ownerDirectoryIpc.preview, id, name),

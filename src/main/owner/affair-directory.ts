@@ -17,8 +17,10 @@ import { z } from 'zod'
 import { affair, type Affair, type AffairRecord } from '../../shared/owner/affair'
 import { additions, directoryFiles, shortName } from './directory-files'
 
+import { configurationFile, scheduleFile } from './affair-documents'
+
 const journalSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   revision: z.number().int().positive(),
   pending: z.boolean(),
   record: affair,
@@ -30,6 +32,7 @@ const intentSchema = z.object({
   revision: z.number().int().positive(),
   record: affair,
   error: z.string().optional(),
+  action: z.enum(['update', 'confirm']).optional(),
 })
 type Intent = z.infer<typeof intentSchema>
 const pendingError = (e: unknown) => '文件待保存：' + (e instanceof Error ? e.message : String(e))
@@ -44,6 +47,31 @@ async function regular(path: string) {
   } finally {
     await handle.close()
   }
+}
+function validateUpdate(a: AffairRecord, before?: AffairRecord, confirm = false) {
+  const r = a.research!
+  if (a.confirmed !== (before?.confirmed || confirm || false))
+    throw Error('需先确认当前版本的范围和交付物')
+  if (
+    a.confirmed &&
+    (!r.plan ||
+      JSON.stringify(r.plan) !== JSON.stringify(before?.research?.plan) ||
+      a.goal !== before?.goal)
+  )
+    throw Error('已确认的调研约定不能由普通更新改写')
+  if (
+    !a.confirmed &&
+    (r.docs.length ||
+      r.decisions?.length ||
+      r.report ||
+      ['checking', 'reading', 'writing', 'done'].includes(r.phase))
+  )
+    throw Error('确认前不能派工、取证或交付')
+  if (
+    r.docs.some((d) => !r.plan?.repos.includes(d.repo)) ||
+    r.decisions?.some((d) => d.requests?.some((request) => !r.plan?.repos.includes(request.repo)))
+  )
+    throw Error('取证对象超出已确认的仓库范围')
 }
 async function atomic(path: string, content: string, create = false) {
   const tmp = join(dirname(path), '.owner-' + randomUUID() + '.tmp')
@@ -132,15 +160,21 @@ export class AffairDirectoryService {
     return j
   }
   private view(path: string, j: Journal, error?: string): Affair {
-    const { reportFile, files } = directoryFiles(j.record, j.history)
+    const { reportFile, files } = directoryFiles(j.record, j.history, path, j.revision, j.version)
     return {
       ...j.record,
-      directory: { path, revision: j.revision, files: Object.keys(files), reportFile, error },
+      directory: {
+        path,
+        revision: j.revision,
+        files: Object.keys(files).filter((name) => Object.hasOwn(j.hashes, name)),
+        reportFile: reportFile && Object.hasOwn(j.hashes, reportFile) ? reportFile : undefined,
+        error,
+      },
     }
   }
   private async flush(path: string, j: Journal) {
     const marker = join(path, '.owner.json')
-    const { files, reportFile } = directoryFiles(j.record, j.history)
+    const { files, reportFile } = directoryFiles(j.record, j.history, path, j.revision, j.version)
     const publishing = reportFile && !j.hashes[reportFile]
     const hashes: Record<string, string> = {}
     try {
@@ -184,7 +218,7 @@ export class AffairDirectoryService {
   }
   private journal(record: AffairRecord, old?: Journal): Journal {
     return {
-      version: 1,
+      version: 2,
       record,
       revision: (old?.revision ?? 0) + 1,
       history: [...(old?.history ?? []), ...additions(old?.record, record)],
@@ -212,6 +246,15 @@ export class AffairDirectoryService {
       await this.location(record.id)
       let j = await this.load(path, record.id)
       if (j.revision === revision && !j.pending) {
+        // Older versions staged explicit user confirmation without an action field.
+        const legacyConfirmation =
+          intent.action === undefined &&
+          !j.record.confirmed &&
+          j.record.research?.phase === 'ready' &&
+          record.research?.phase === 'checking' &&
+          record.research.chat.at(-1)?.who === '你' &&
+          record.research.chat.at(-1)?.text === '确认目标和交付物，开始调研。'
+        validateUpdate(record, j.record, intent.action === 'confirm' || legacyConfirmation)
         j = this.journal(record, j)
         const body = JSON.stringify(j)
         if (Buffer.byteLength(body) > 12 * 1024 * 1024) throw Error('事务记录已达到保存上限')
@@ -237,7 +280,7 @@ export class AffairDirectoryService {
     return this.serial(async () => {
       if (!a.research) throw Error('当前仅支持调研事务目录')
       const record = affair.parse({ ...a, updated: Date.now() })
-      directoryFiles(record, [])
+      directoryFiles(record, [], '', revision + 1)
       if (revision === 0) {
         if (
           await lstat(join(this.registry, a.id)).then(
@@ -249,6 +292,7 @@ export class AffairDirectoryService {
           )
         )
           throw Error('事务已建档，请重新打开')
+        validateUpdate(record)
         const j = this.journal(record)
         if (Buffer.byteLength(JSON.stringify(j)) > 12 * 1024 * 1024)
           throw Error('事务记录已达到保存上限')
@@ -262,20 +306,40 @@ export class AffairDirectoryService {
         .catch(() => undefined)
       if (old && (old.pending || old.revision !== revision))
         throw Error('事务版本已变化，请恢复或重新打开')
-      const intent = { record, revision }
-      const body = JSON.stringify(intent)
-      if (Buffer.byteLength(body) > 12 * 1024 * 1024) throw Error('事务记录已达到保存上限')
-      this.unsaved.set(a.id, intent)
-      try {
-        await atomic(this.intentPath(a.id), body, true)
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
-          this.unsaved.delete(a.id)
-          throw Error('事务待保存，请重试原操作')
-        }
-        return this.pendingView(path, intent, pendingError(e))
+      if (old) validateUpdate(record, old.record)
+      return this.stage(path, { record, revision, action: 'update' })
+    })
+  }
+  private async stage(path: string, intent: Intent) {
+    const id = intent.record.id
+    const body = JSON.stringify(intent)
+    if (Buffer.byteLength(body) > 12 * 1024 * 1024) throw Error('事务记录已达到保存上限')
+    this.unsaved.set(id, intent)
+    try {
+      await atomic(this.intentPath(id), body, true)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'EEXIST') {
+        this.unsaved.delete(id)
+        throw Error('事务待保存，请重试原操作')
       }
-      return this.applyIntent(path, intent)
+      return this.pendingView(path, intent, pendingError(e))
+    }
+    return this.applyIntent(path, intent)
+  }
+  confirm(id: string, revision: number) {
+    return this.serial(async () => {
+      const path = await this.location(id)
+      const j = await this.load(path, id)
+      if (j.revision !== revision || j.pending || (await this.intent(id)))
+        throw Error('约定版本已变化，请重新查看并确认')
+      const record = j.record,
+        r = record.research!
+      if (record.confirmed || !r.plan || r.phase !== 'ready') throw Error('没有等待确认的调研约定')
+      record.confirmed = true
+      record.updated = Date.now()
+      r.phase = 'checking'
+      r.chat = [...r.chat, { who: '你' as const, text: '确认目标和交付物，开始调研。' }].slice(-100)
+      return this.stage(path, { revision, record, action: 'confirm' })
     })
   }
   retry(id: string) {
@@ -284,7 +348,19 @@ export class AffairDirectoryService {
       if (intent) return this.applyIntent((await this.binding(id)).path, intent)
       const path = await this.location(id)
       const j = await this.load(path, id)
-      return j.pending ? this.flush(path, j) : this.view(path, j)
+      if (j.pending) return this.flush(path, j)
+      return this.view(path, j)
+    })
+  }
+  upgrade(id: string, revision: number) {
+    return this.serial(async () => {
+      const path = await this.location(id)
+      const j = await this.load(path, id)
+      if (j.pending || (await this.intent(id))) throw Error('请先重试未完成的保存')
+      if (Object.hasOwn(j.hashes, configurationFile) && Object.hasOwn(j.hashes, scheduleFile))
+        return this.view(path, j)
+      if (revision !== j.revision) throw Error('事务版本已变化，请重新查看')
+      return this.stage(path, { revision, record: j.record, action: 'update' })
     })
   }
   list() {
@@ -321,7 +397,10 @@ export class AffairDirectoryService {
   async preview(id: string, name: string) {
     const path = await this.location(id),
       j = await this.load(path, id)
-    if (!Object.hasOwn(directoryFiles(j.record, j.history).files, name))
+    if (
+      !Object.hasOwn(j.hashes, name) ||
+      !Object.hasOwn(directoryFiles(j.record, j.history, path, j.revision, j.version).files, name)
+    )
       throw Error('文件不属于本事务')
     const file = join(path, name)
     if ((await realpath(file)) !== file) throw Error('文件已被替换')

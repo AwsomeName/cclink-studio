@@ -1,0 +1,69 @@
+.remote-desktop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  color: var(--text-primary);
+  background: var(--bg-workbench);
+}
+.remote-desktop[hidden],
+.remote-desktop-screen[hidden] {
+  display: none;
+}
+.remote-desktop-form {
+  margin: auto;
+  width: min(360px, 90%);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.remote-desktop-form h2,
+.remote-desktop-form p {
+  margin: 0;
+}
+.remote-desktop-form p,
+.remote-desktop-form summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.remote-desktop-form label {
+  display: grid;
+  gap: 5px;
+}
+.remote-desktop input,
+.remote-desktop button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 9px;
+}
+.remote-desktop button,
+.remote-desktop summary {
+  cursor: pointer;
+}
+.remote-desktop button.desktop-primary {
+  color: white;
+  background: #1862a2;
+}
+.remote-desktop-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 35px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.remote-desktop-bar strong {
+  margin-right: auto;
+}
+.remote-desktop-screen {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #171717;
+}

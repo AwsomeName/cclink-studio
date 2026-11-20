@@ -77,7 +77,9 @@ export function hydrateRuntimeSections(
     const preserveTabIds = Object.values(placements)
       .filter(isDetachedFromMain)
       .map((placement) => placement.tabId)
-    useTabStore.getState().hydrateFromWorkspaceState(scopedTabsSnapshot, { preserveTabIds })
+    useTabStore
+      .getState()
+      .hydrateFromWorkspaceState(scopedTabsSnapshot, { preserveTabIds, workspaceRef })
     useEditorStore
       .getState()
       .hydrateFromWorkspaceState(
