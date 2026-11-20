@@ -87,11 +87,6 @@ async function close() {
 async function company() {
   await page.getByRole('button', { name: '公司经营', exact: true }).click()
 }
-async function unfiled() {
-  await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
-  await page.getByRole('button', { name: '进入未归档', exact: true }).click()
-  await page.locator('.status-bar-workspace[title="未归档"]').waitFor()
-}
 async function companySnapshot(path) {
   return page.evaluate(
     (path) =>
@@ -209,7 +204,11 @@ try {
   await page.getByLabel('交付条件').fill('原记录可以下钻')
   await page.getByRole('button', { name: '创建并打开业务', exact: true }).click()
   await page.getByRole('heading', { name: '原有经营业务', exact: true }).waitFor()
-  await page.getByRole('button', { name: '新建对话', exact: true }).first().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .first()
+    .click()
   const conversations = await until(
     () => companySnapshot(oldCompany),
     (value) => value.success && value.data.conversations.length > 0,

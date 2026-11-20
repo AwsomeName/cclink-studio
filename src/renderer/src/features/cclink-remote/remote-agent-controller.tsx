@@ -21,6 +21,7 @@ import type { AgentMessage } from '../../types'
 import { useImageImport } from '../agent-conversations/use-image-import'
 import type { TransientImageAttachment } from '@shared/image-attachment'
 import { openRemoteFileFromConversation } from './remote-file-navigation'
+import { AGENT_FOCUS_COMPOSER_EVENT } from '../markdown/markdown-navigation'
 import { remoteAgentComposerKey } from './remote-message-queue-state'
 import {
   findReplyableRemoteQuestion,
@@ -150,6 +151,12 @@ export function RemoteAgentController({
     Record<string, { submitting: boolean; error: string | null }>
   >({})
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (variant !== 'side') return
+    const focus = (): void => inputRef.current?.focus()
+    window.addEventListener(AGENT_FOCUS_COMPOSER_EVENT, focus)
+    return () => window.removeEventListener(AGENT_FOCUS_COMPOSER_EVENT, focus)
+  }, [variant])
   const workspaceTarget = useMemo<WorkspaceTarget>(
     () => ({ ref: workspaceRef, generation: workspaceGeneration }),
     [workspaceGeneration, workspaceRef],

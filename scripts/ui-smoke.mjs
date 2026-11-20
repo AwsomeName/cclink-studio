@@ -1157,7 +1157,7 @@ async function main() {
   })
 
   await runCheck('local and remote use one Agent Panel and IME-safe Composer', async () => {
-    const panelToggle = page.locator('.app-topbar-right .app-topbar-icon')
+    const panelToggle = page.locator('.app-topbar-agent-actions button[title$="Agent 面板"]')
     if ((await panelToggle.getAttribute('title')) === '展开 Agent 面板') {
       await panelToggle.click()
     }
@@ -1684,10 +1684,10 @@ async function main() {
       'legacy conversation switcher is still rendered in the status bar',
     )
     assert(
-      (await page.locator('.app-topbar-right .app-topbar-icon').count()) === 1,
+      (await page.locator('.app-topbar-agent-actions button[title$="Agent 面板"]').count()) === 1,
       'Agent panel toggle is missing',
     )
-    const panelToggle = page.locator('.app-topbar-right .app-topbar-icon')
+    const panelToggle = page.locator('.app-topbar-agent-actions button[title$="Agent 面板"]')
     if ((await panelToggle.getAttribute('title')) === '收起 Agent 面板') {
       await panelToggle.click()
     }
@@ -1721,7 +1721,7 @@ async function main() {
     assert(await page.locator('.agent-workspace-chat').isVisible(), 'conversation chat is hidden')
     assert(
       (await page
-        .locator('.agent-workspace-actions')
+        .locator('.app-topbar-agent-actions')
         .evaluate((element) => getComputedStyle(element).webkitAppRegion)) !== 'drag',
       'conversation controls are part of the window drag region',
     )

@@ -62,7 +62,11 @@ try {
   await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
   await page.getByRole('button', { name: /本地文件夹/ }).click()
   await page.locator('.activity-bar-icon[title="会话"]').click()
-  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .last()
+    .click()
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
   assert.equal(await page.getByRole('button', { name: /^Codex ACP/ }).count(), 0)
   assert(
@@ -149,7 +153,11 @@ try {
   assert.equal(status.runtimeBinding.kind, 'codex')
   assert(status.sessionId)
   await page.screenshot({ path: join(runDir, 'acp-recovered.png') })
-  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .last()
+    .click()
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
   assert.equal(await page.getByRole('button', { name: /^Codex ACP/ }).count(), 0)
   assert(

@@ -71,7 +71,7 @@ export async function runAgentNavigationSmoke({ page, electronApp, resizeWindow,
     await ui('chat', 350)
     const swap = async (to) => {
       await page
-        .locator('.agent-workspace-header')
+        .locator('.app-topbar-agent-actions')
         .getByRole('button', { name: to === 'list' ? '会话列表' : '返回会话', exact: true })
         .click()
       await presentation(to)

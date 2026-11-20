@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdtemp, mkdir, realpath, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, writeFile, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
@@ -144,7 +144,9 @@ try {
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   pass('关联真实文件并通过原编辑器查看')
   // Create a real conversation using the production command, without sending a model request.
-  const newConversation = page.getByRole('button', { name: '新建对话', exact: true })
+  const newConversation = page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
   if (await newConversation.count()) await newConversation.first().click()
   const conversation = await until(
     async () =>

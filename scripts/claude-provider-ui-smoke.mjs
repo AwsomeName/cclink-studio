@@ -58,7 +58,11 @@ async function openSettings() {
 }
 async function newConversation(runtime = 'Codex') {
   await page.locator('.activity-bar-icon[title="会话"]').click()
-  await page.getByRole('button', { name: '新建对话', exact: true }).last().click()
+  await page
+    .locator('.app-topbar-agent-actions')
+    .getByRole('button', { name: '新建会话', exact: true })
+    .last()
+    .click()
   await page.locator('[data-agent-action="runtime"]:visible').last().click()
   assert(
     await page

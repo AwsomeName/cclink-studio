@@ -33,6 +33,19 @@ function I({ size = 16, className, style }: IconProps, path: React.ReactNode): R
 
 /* ====== Activity Bar 图标 ====== */
 
+export function IconNewConversation(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="M3 2.5h10a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7l-4 3v-3a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1ZM6 7h4M8 5v4"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+    />,
+  )
+}
+
 export function IconList(p: IconProps = defaults): React.ReactElement {
   return I(
     p,
