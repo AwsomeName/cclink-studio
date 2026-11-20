@@ -206,3 +206,28 @@
 .own-detail article small {
   overflow-wrap: anywhere;
 }
+
+.owner-dialog .own-source-lines {
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre;
+  font-family: monospace;
+}
+.own-source-lines mark,
+.own-source-lines > div {
+  display: block;
+  min-width: max-content;
+}
+.own-source-lines span {
+  display: inline-block;
+  min-width: 5ch;
+  margin-right: 1ch;
+  text-align: right;
+  opacity: 0.65;
+  user-select: none;
+}
+.own-source-lines mark {
+  color: inherit;
+  background-color: color-mix(in srgb, currentColor 17%, transparent);
+  box-shadow: inset 3px 0 currentColor;
+}

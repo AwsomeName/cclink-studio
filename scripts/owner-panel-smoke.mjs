@@ -1,5 +1,6 @@
 // Real Electron, disposable app profile. Defaults to the current out/ build.
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -77,7 +78,16 @@ try {
       if (process.env.OWNER_RESEARCH_SHOTS)
         await page.screenshot({ path: join(process.env.OWNER_RESEARCH_SHOTS, name + '.png') })
     }
-    const startPage = page
+    const recovery = process.argv.includes('--save-recovery')
+    const observeRuns = () =>
+      page.evaluate(() => {
+        window.ownerSmokeRuns = new Set()
+        window.cclinkStudio.agent.onRunStatus((run) => {
+          if (/^owner-.*-a$/.test(run.conversationId)) window.ownerSmokeRuns.add(run.runId)
+        })
+      })
+    await observeRuns()
+    let startPage = page
     const state = () =>
       page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
     await page
@@ -107,6 +117,7 @@ try {
     await confirm.waitFor()
     assert.equal((await state()).research.docs.length, 0)
     await snap('adaptive-01-plan')
+    if (recovery) await writeFile(join(folder, '交付物'), '验收专用文件占位', { flag: 'wx' })
     await confirm.click()
     const deadline = Date.now() + 450000
     let workerRun
@@ -148,12 +159,61 @@ try {
 
     await page.waitForFunction(
       () =>
-        ['done', 'error'].includes(
+        ['done', 'pending-save', 'error'].includes(
           document.querySelector('[data-owner-phase]')?.dataset.ownerPhase,
         ),
       null,
       { timeout: 450000 },
     )
+    if (recovery) {
+      const pending = await state()
+      assert.ok(pending.directory.error)
+      assert.equal(pending.research.phase, 'done', pending.issue)
+      assert.equal(await page.locator('.own-call small').innerText(), '待保存')
+      await page
+        .locator('.own-thread')
+        .getByText(/原报告待保存/)
+        .waitFor()
+      assert.equal(await page.getByRole('button', { name: '打开交付物' }).count(), 0)
+      const original = pending.research.report
+      const runs = await page.evaluate(() => [...window.ownerSmokeRuns])
+      assert.ok(runs.includes(workerRun.runId))
+      console.log('待保存，已收到原生 A 运行', runs)
+      await snap('01-pending-board-chat')
+      await click('‹ 我的事务')
+      await page.getByRole('heading', { name: /^待保存/ }).waitFor()
+      await snap('02-pending-list')
+      await app.close()
+      app = null
+      await launch()
+      startPage = page
+      await observeRuns()
+      await page.getByRole('heading', { name: /^待保存/ }).waitFor()
+      await page.locator('.own-row').first().click()
+      assert.deepEqual((await state()).research.report, original)
+      const blocker = join(folder, '交付物')
+      assert.equal(await readFile(blocker, 'utf8'), '验收专用文件占位')
+      await rm(blocker)
+      await click('重试保存文件')
+      await page.getByRole('button', { name: '打开交付物' }).waitFor()
+      const saved = await state()
+      assert.deepEqual(saved.research, pending.research)
+      assert.deepEqual(await page.evaluate(() => [...window.ownerSmokeRuns]), [])
+      const bytes = await readFile(join(folder, saved.directory.reportFile), 'utf8')
+      assert.ok(bytes.startsWith(original.conclusion + '\n\n'))
+      for (const item of original.items) {
+        assert.ok(bytes.includes(item.finding))
+        assert.ok(bytes.includes('> ' + item.quote.replaceAll('\n', '\n> ')))
+      }
+      console.log(
+        '重启并重试，原报告一致，新增 A 运行 0，落盘 SHA-256',
+        createHash('sha256').update(bytes).digest('hex'),
+      )
+      await click('‹ 我的事务')
+      await page.getByRole('heading', { name: /^已交付/ }).waitFor()
+      await snap('03-delivered-list')
+      await page.locator('.own-row').first().click()
+    }
     const a = await state()
     assert.equal(a.research.phase, 'done', a.issue)
     assert.equal(
@@ -185,9 +245,34 @@ try {
     )
     assert.ok(raw.some((content) => content.includes('rtl/') && content.includes('always_ff')))
     for (const link of report.matchAll(/\[本地证据\]\(\.\.\/(.*?)\)/g))
-      assert.ok(await readFile(join(folder, decodeURI(link[1])), 'utf8'))
+      assert.ok(await readFile(join(folder, decodeURI(link[1].split('#')[0])), 'utf8'))
     await click('打开交付物')
     await page.getByRole('heading', { name: a.directory.reportFile, exact: true }).waitFor()
+    const refs = [...report.matchAll(/\[本地证据\]\(\.\.\/(.*?)(?:#L(\d+))?\)/g)]
+    const isRtl = (link) => link[2] && /\.sv\.md$/.test(decodeURI(link[1]))
+    const assignment = refs.findIndex(
+      (link, i) => isRtl(link) && /<=/.test(a.research.report.items[i].quote),
+    )
+    const rtl = assignment >= 0 ? assignment : refs.findIndex(isRtl)
+    assert.ok(rtl >= 0)
+    const ref = refs[rtl],
+      sourceFile = decodeURI(ref[1]),
+      line = Number(ref[2])
+    const refButton = page.getByRole('button', { name: '本地证据', exact: true }).nth(rtl)
+    await refButton.scrollIntoViewIfNeeded()
+    await snap('04-card-reference')
+    await refButton.click()
+    const mark = page.locator('mark[data-source-line="' + line + '"]')
+    await mark.waitFor()
+    const disk = await readFile(join(folder, sourceFile), 'utf8')
+    const start = Number(/片段起始行 (\d+)/.exec(disk)[1])
+    const excerpt = disk.split(/^`{3,}text\r?\n/m)[1].split('\n')[line - start]
+    assert.ok(excerpt.trim())
+    assert.ok((await mark.textContent()).endsWith(excerpt))
+    await page.getByRole('heading', { name: sourceFile, exact: true }).waitFor()
+    await snap('05-rtl-line')
+    console.log('引用打开', sourceFile, 'L' + line, excerpt)
+    await click('返回报告')
     await click('关闭预览')
     console.log(
       '成品',

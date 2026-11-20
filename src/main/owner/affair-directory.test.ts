@@ -61,7 +61,7 @@ it('stores evidence before delivery, preserves an edited file and finishes pendi
   expect(pending.directory!.error).toContain('其他修改')
   expect(await readFile(target, 'utf8')).toBe('用户已有文件')
   const restarted = service()
-  expect((await restarted.list()).items[0].directory!.error).toContain('中断')
+  expect((await restarted.list()).items[0].directory!.error).toContain('其他修改')
   await rename(target, target + '.bak')
   const done = await restarted.retry(affair.id)
   expect(done.directory!.error).toBeUndefined()
@@ -75,4 +75,50 @@ it('keeps independent directory identities for equal titles and refuses unknown 
   const next = await store.save({ ...affair, id: randomUUID() }, 0)
   expect(first.directory!.path).not.toBe(next.directory!.path)
   await expect(store.preview(affair.id, '.owner.json')).rejects.toThrow('不属于')
+})
+
+it('recovers the exact final report when the destination journal was unreadable before saving', async () => {
+  const { service, affair } = await setup()
+  const first = await service().save(affair, 0)
+  const folder = first.directory!.path
+  const marker = join(folder, '.owner.json')
+  const repo = 'lowRISC/ibex'
+  const url = 'https://github.com/lowRISC/ibex/blob/' + '1'.repeat(40) + '/rtl/example.sv'
+  affair.confirmed = true
+  affair.research = {
+    ...affair.research!,
+    plan: { scope: '寄存器', output: '入门卡', repos: [repo] },
+    phase: 'done',
+    docs: [
+      {
+        repo,
+        url,
+        at: 1,
+        path: 'rtl/example.sv',
+        sha: 'a'.repeat(40),
+        startLine: 90,
+        text: 'always_ff @(posedge clk)\n  q <= d;',
+      },
+    ],
+    report: {
+      conclusion: '# 入门卡\n\n示例寄存器',
+      items: [{ repo, url, finding: '更新赋值', quote: 'q <= d;' }],
+    },
+  }
+  await rename(marker, marker + '.bak')
+  await mkdir(marker)
+  const blocked = await service().save(affair, first.directory!.revision)
+  expect(blocked.directory?.error).toBeTruthy()
+  const restarted = service()
+  expect((await restarted.list()).items[0].research).toEqual(blocked.research)
+  expect((await restarted.retry(affair.id)).directory?.error).toBeTruthy()
+  await rm(marker, { recursive: true })
+  await rename(marker + '.bak', marker)
+  const saved = await restarted.retry(affair.id)
+  expect(saved.directory?.error).toBeUndefined()
+  expect(saved.research).toEqual(affair.research)
+  expect(await readFile(join(folder, saved.directory!.reportFile!), 'utf8')).toContain(
+    '[本地证据](../' + encodeURI('资料/01-example.sv.md') + '#L91)',
+  )
+  expect(await service().retry(affair.id)).toEqual(saved)
 })

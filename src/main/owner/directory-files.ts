@@ -87,6 +87,7 @@ export function directoryFiles(a: AffairRecord, history: History) {
         item.quote.replaceAll('\n', '\n> ') +
         '\n\n[本地证据](../' +
         encodeURI(names[hit]) +
+        (item.line ? '#L' + item.line : '') +
         ') · [仓库原文](' +
         item.url +
         (item.line ? '#L' + item.line : '') +

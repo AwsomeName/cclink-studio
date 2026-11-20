@@ -105,7 +105,10 @@ describe('shell context commands', () => {
       target: { kind: 'activity', activityId: 'settings' },
     })
     expect(useTabStore.getState().getActiveTab()?.type).toBe('settings')
-    expect(useUIStore.getState()).toMatchObject({ activePanel: 'workspace-home', sidebarVisible: false })
+    expect(useUIStore.getState()).toMatchObject({
+      activePanel: 'workspace-home',
+      sidebarVisible: false,
+    })
     for (const activityId of ['unknown', 'toString'])
       expect(() =>
         command.action({ source: 'context-menu', target: { kind: 'activity', activityId } }),
