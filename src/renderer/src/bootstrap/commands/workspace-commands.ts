@@ -1,3 +1,4 @@
+import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
 import type { Command } from '../../stores/command-store'
 import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
 import {
@@ -7,12 +8,8 @@ import {
 import { useFsStore } from '../../stores/fs-store'
 import { createOperationsDraft } from '../../features/article-publishing/create-operations-draft'
 import { createPersonalNote } from '../../features/workspace-open/WorkspaceHome'
-import {
-  useFixedSpacesStore,
-  openPersonalSpace,
-} from '../../features/workspace-open/fixed-spaces-store'
+import { openPersonalSpace } from '../../features/workspace-open/fixed-spaces-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { openCompanyWorkspace } from '../../features/company-workspace/company-workspace-commands'
 import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
 
 export function createWorkspaceCommands(): Command[] {
@@ -25,20 +22,12 @@ export function createWorkspaceCommands(): Command[] {
     },
     {
       id: 'workspace.home',
-      label: '打开当前工作台',
+      label: '打开项目首页',
       category: '工作空间',
       action: () => {
         const ref = useWorkspaceStore.getState().activeWorkspaceRef
         if (ref.kind === 'global') return openPersonalSpace()
-        if (
-          ref.kind === 'local' &&
-          (useWorkspaceStore.getState().settingsSnapshot?.settings.type === 'company' ||
-            (!useWorkspaceStore.getState().settingsSnapshot &&
-              ref.path === useFixedSpacesStore.getState().spaces?.company?.workspacePath))
-        ) {
-          openCompanyWorkspace()
-          return
-        }
+        useDiaryNavigation.getState().setPage('今天')
         showWorkspaceHome(ref)
       },
     },

@@ -78,7 +78,7 @@ describe('shell context commands', () => {
     expect(useUIStore.getState()).toMatchObject(
       activityId === 'sessions'
         ? {
-            activePanel: 'files',
+            activePanel: 'workspace-home',
             sidebarVisible: true,
             agentPanelMode: 'right',
             agentContentMode: 'list',
@@ -105,7 +105,7 @@ describe('shell context commands', () => {
       target: { kind: 'activity', activityId: 'settings' },
     })
     expect(useTabStore.getState().getActiveTab()?.type).toBe('settings')
-    expect(useUIStore.getState()).toMatchObject({ activePanel: 'files', sidebarVisible: false })
+    expect(useUIStore.getState()).toMatchObject({ activePanel: 'workspace-home', sidebarVisible: false })
     for (const activityId of ['unknown', 'toString'])
       expect(() =>
         command.action({ source: 'context-menu', target: { kind: 'activity', activityId } }),

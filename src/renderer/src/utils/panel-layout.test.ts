@@ -4,13 +4,13 @@ import { clampPanelWidth, getPanelLayout } from './panel-layout'
 describe('panel width budget', () => {
   it.each([
     [1400, true, true, 250, 350, 250, 350],
-    [900, true, true, 250, 350, 212, 220],
+    [900, true, true, 250, 350, 250, 322],
     [900, true, false, 250, 350, 250, 0],
     [900, false, true, 250, 350, 0, 350],
-    [900, true, false, 500, 350, 436, 0],
+    [900, true, false, 500, 350, 500, 0],
     [900, false, false, 250, 350, 0, 0],
-    [848, true, true, 250, 350, 160, 220],
-    [800, true, true, 250, 350, 160, 220],
+    [848, true, true, 250, 350, 250, 270],
+    [800, true, true, 250, 350, 250, 222],
   ])(
     'allocates viewport %s, sidebar %s, right Agent %s',
     (viewportWidth, sidebarVisible, agentInRight, sidebarWidth, agentPanelWidth, left, right) => {
@@ -34,7 +34,7 @@ describe('panel width budget', () => {
       sidebarWidth: 250,
       agentPanelWidth: 350,
     }
-    expect(getPanelLayout(input)).toMatchObject({ sidebarWidth: 212, agentPanelWidth: 220 })
+    expect(getPanelLayout(input)).toMatchObject({ sidebarWidth: 250, agentPanelWidth: 322 })
     expect(input).toMatchObject({ sidebarWidth: 250, agentPanelWidth: 350 })
     expect(getPanelLayout({ ...input, viewportWidth: 1400 })).toMatchObject({
       sidebarWidth: 250,
@@ -52,8 +52,11 @@ describe('panel width budget', () => {
     }
     const expanded = getPanelLayout(input)
     const collapsed = getPanelLayout({ ...input, sidebarVisible: false }, expanded.agentPanelWidth)
-    expect(collapsed).toMatchObject({ sidebarWidth: 0, agentPanelWidth: 220 })
-    expect(getPanelLayout(input, collapsed.agentPanelWidth)).toEqual(expanded)
+    expect(collapsed).toMatchObject({ sidebarWidth: 0, agentPanelWidth: 322 })
+    expect(getPanelLayout(input, collapsed.agentPanelWidth)).toMatchObject({
+      sidebarWidth: expanded.sidebarWidth,
+      agentPanelWidth: expanded.agentPanelWidth,
+    })
     expect(input.agentPanelWidth).toBe(350)
     expect(getPanelLayout({ ...input, viewportWidth: 1400 }).agentPanelWidth).toBe(350)
   })
@@ -67,10 +70,10 @@ describe('panel width budget', () => {
       agentInRight: true,
     }
     const collapsed = getPanelLayout(input)
-    expect(collapsed.agentPanelWidth).toBe(528)
+    expect(collapsed.agentPanelWidth).toBe(576)
     const expanded = getPanelLayout({ ...input, sidebarVisible: true }, collapsed.agentPanelWidth)
-    expect(expanded).toMatchObject({ sidebarWidth: 160, agentPanelWidth: 528 })
-    expect(expanded.agentBounds.max).toBeGreaterThanOrEqual(528)
+    expect(expanded).toMatchObject({ sidebarWidth: 160, agentPanelWidth: 576 })
+    expect(expanded.agentBounds.max).toBeGreaterThanOrEqual(576)
     expect(input.sidebarWidth).toBe(250)
     expect(getPanelLayout({ ...input, sidebarVisible: true, viewportWidth: 1440 })).toMatchObject({
       sidebarWidth: 250,

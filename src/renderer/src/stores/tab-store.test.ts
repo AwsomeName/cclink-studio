@@ -841,6 +841,31 @@ describe('useTabStore', () => {
   })
 
   describe('hydrateFromWorkspaceState', () => {
+    it('restores the old project settings inside the existing home tab', () => {
+      useTabStore.getState().hydrateFromWorkspaceState({
+        tabs: [
+          { id: 'home', type: 'workspace-home', title: '工作台', icon: '⌂' },
+          {
+            id: 'settings',
+            type: 'settings',
+            title: '项目设置',
+            icon: '⚙',
+            settingsSection: 'workspace',
+          },
+          { id: 'studio', type: 'settings', title: 'Studio 设置', icon: '⚙' },
+        ],
+        activeTabId: 'settings',
+      })
+      const state = useTabStore.getState()
+      expect(state.tabs.map((tab) => tab.id)).toEqual(['home', 'studio'])
+      expect(state.getActiveTab()).toMatchObject({
+        id: 'home',
+        type: 'workspace-home',
+        title: '项目首页',
+        settingsSection: 'workspace',
+      })
+    })
+
     it('从工作台快照恢复 Tab 顺序和活跃 Tab', () => {
       useTabStore.getState().hydrateFromWorkspaceState({
         tabs: [

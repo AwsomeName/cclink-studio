@@ -1,3 +1,7 @@
+import { showWorkspaceHome } from './workspace-home-navigation'
+import { WorkspaceSettingsForm, openWorkspaceSettings } from './WorkspaceSettingsForm'
+import { workspaceTypeLabels } from '@shared/workspace-settings'
+import { IconSettings } from '../../components/common/Icons'
 import { HardwareProductionSection } from '../../components/sidebar/HardwareProductionSection'
 import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
 import { useUIStore } from '../../stores/ui-store'
@@ -27,7 +31,32 @@ export async function createPersonalNote(): Promise<void> {
   await useFsStore.getState().refreshWorkspace()
 }
 
-export function WorkspaceHome(): React.ReactElement {
+export function WorkspaceHome({ settings = false }: { settings?: boolean }): React.ReactElement {
+  const ref = useWorkspaceStore((s) => s.activeWorkspaceRef)
+  const config = useWorkspaceStore((s) => s.settingsSnapshot?.settings)
+  return (
+    <div className="project-home-shell">
+      <header className="project-home-header">
+        <h1>{config?.name ?? workspaceRefLabel(ref)}</h1>
+        <small>{config && workspaceTypeLabels[config.type]}</small>
+        {ref.kind === 'local' && (
+          <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>
+            <IconSettings size={14} />
+            {settings ? '返回首页' : '项目设置'}
+          </button>
+        )}
+      </header>
+      {settings ? (
+        <main className="project-settings-page">
+          <WorkspaceSettingsForm />
+        </main>
+      ) : (
+        <HomeContent />
+      )}
+    </div>
+  )
+}
+function HomeContent(): React.ReactElement {
   const activePanel = useUIStore((state) => state.activePanel)
   const settingsSnapshot = useWorkspaceStore((state) => state.settingsSnapshot)
   const ref = useWorkspaceStore((state) => state.activeWorkspaceRef)
@@ -84,8 +113,6 @@ export function WorkspaceHome(): React.ReactElement {
     )
   return (
     <div className="workspace-home">
-      <span className="workspace-home-eyebrow">{personal ? '个人工作台' : '工作空间'}</span>
-      <h1>{settingsSnapshot?.settings.name ?? workspaceRefLabel(ref)}</h1>
       {settingsSnapshot?.error && <p role="alert">{settingsSnapshot.error}</p>}
       {personal ? (
         <PersonalDiaryHome />

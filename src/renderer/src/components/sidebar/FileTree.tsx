@@ -163,6 +163,11 @@ export function FileTree(): React.ReactElement {
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [workspacePath])
+  const activeFile = useTabStore((s) => s.tabs.find((tab) => tab.id === s.activeTabId)?.filePath)
+  const highlightedPath = selectedPath ?? activeFile
+  useEffect(() => {
+    treeRef.current?.querySelector('.file-tree-item.selected')?.scrollIntoView({ block: 'nearest' })
+  }, [highlightedPath, tree])
 
   useEffect(() => {
     if (!workspacePath) return
@@ -358,6 +363,7 @@ export function FileTree(): React.ReactElement {
       }}
     >
       <div className="file-tree-toolbar">
+        <strong className="file-tree-title">文件</strong>
         <button
           className="file-tree-toolbar-btn"
           onClick={() => void refreshWorkspace()}
@@ -440,6 +446,7 @@ export function FileTree(): React.ReactElement {
           <FileTreeNodeView
             key={node.path}
             node={node}
+            highlightedPath={highlightedPath}
             depth={0}
             draggingPath={draggingPath}
             dropTargetPath={dropTargetPath}
@@ -477,6 +484,7 @@ export function FileTree(): React.ReactElement {
 /** 单个树节点 */
 function FileTreeNodeView({
   node,
+  highlightedPath,
   depth,
   draggingPath,
   dropTargetPath,
@@ -487,6 +495,7 @@ function FileTreeNodeView({
   onDirectoryDragOver,
   onDirectoryDrop,
 }: {
+  highlightedPath?: string | null
   node: FileTreeNode
   depth: number
   draggingPath: string | null
@@ -508,7 +517,6 @@ function FileTreeNodeView({
   const confirmNewFolder = useFsStore((s) => s.confirmNewFolder)
   const confirmNewFile = useFsStore((s) => s.confirmNewFile)
   const cancelEditing = useFsStore((s) => s.cancelEditing)
-  const selectedPath = useFsStore((s) => s.selectedPath)
   const setSelectedPath = useFsStore((s) => s.setSelectedPath)
 
   /** 重命名输入框（在此节点上） */
@@ -527,11 +535,12 @@ function FileTreeNodeView({
     <div className="file-tree-node">
       {/* 节点行 */}
       <div
-        className={`file-tree-item ${isDir ? 'directory' : 'file'} ${isRenaming ? 'renaming' : ''} ${selectedPath === node.path ? 'selected' : ''} ${draggingPath === node.path ? 'dragging' : ''} ${dropTargetPath === node.path ? 'drop-target' : ''}`}
+        className={`file-tree-item ${isDir ? 'directory' : 'file'} ${isRenaming ? 'renaming' : ''} ${highlightedPath === node.path ? 'selected' : ''} ${draggingPath === node.path ? 'dragging' : ''} ${dropTargetPath === node.path ? 'drop-target' : ''}`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         draggable={!isRenaming}
         role="treeitem"
         tabIndex={0}
+        aria-selected={highlightedPath === node.path}
         aria-expanded={isDir ? Boolean(node.expanded) : undefined}
         title={errorText ?? node.symbolicLink?.target ?? node.path}
         onDragStart={(event) => onDragStart(node, event)}
@@ -623,6 +632,7 @@ function FileTreeNodeView({
           {node.children.map((child) => (
             <FileTreeNodeView
               key={child.path}
+              highlightedPath={highlightedPath}
               node={child}
               depth={depth + 1}
               draggingPath={draggingPath}

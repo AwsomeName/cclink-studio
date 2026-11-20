@@ -1,4 +1,3 @@
-import { WorkspaceSettingsForm } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { CompanyWorkbench } from '../../features/company-workspace/CompanyWorkbench'
 import { WorkspaceHome } from '../../features/workspace-open/WorkspaceHome'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
@@ -109,7 +108,12 @@ export function WorkbenchContent({
         )}
       >
         {(!activeTab || activeTab.type === 'workspace-home') &&
-          activeWorkspaceRef.kind !== 'global' && <WorkspaceHome />}
+          activeWorkspaceRef.kind !== 'global' && (
+            <WorkspaceHome
+              key={activeTab?.id}
+              settings={activeTab?.settingsSection === 'workspace'}
+            />
+          )}
         {isBrowserTab && browserPreviewDataUrl && (
           <img
             className="browser-context-preview"
@@ -137,9 +141,7 @@ export function WorkbenchContent({
           <>
             {activeTab.type === 'settings' &&
               (activeTab.settingsSection === 'workspace' ? (
-                <main className="project-settings-page" key={activeTab.id}>
-                  <WorkspaceSettingsForm />
-                </main>
+                <WorkspaceHome settings />
               ) : (
                 <SettingsPage key={activeTab.id} initialSection={activeTab.settingsSection} />
               ))}

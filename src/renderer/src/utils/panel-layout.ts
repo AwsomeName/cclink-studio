@@ -5,9 +5,6 @@ export const MAX_SIDEBAR_WIDTH = 500
 export const MIN_AGENT_PANEL_WIDTH = 220
 export const MAX_AGENT_PANEL_WIDTH = 960
 
-// Keep aligned with the activity bar CSS; the real UI smoke checks both widths.
-export const ACTIVITY_BAR_WIDTH = 140
-export const COLLAPSED_ACTIVITY_BAR_WIDTH = 48
 const RESIZE_HANDLE_WIDTH = 4
 const MIN_WORKBENCH_WIDTH = 320
 
@@ -45,7 +42,6 @@ export function getPanelLayout(
   const agentMax = agentListOnly ? MAX_AGENT_LIST_WIDTH : MAX_AGENT_PANEL_WIDTH
   const budget =
     (Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0) -
-    (sidebarVisible ? ACTIVITY_BAR_WIDTH : COLLAPSED_ACTIVITY_BAR_WIDTH) -
     (Number(sidebarContentVisible) + Number(agentInRight)) * RESIZE_HANDLE_WIDTH -
     MIN_WORKBENCH_WIDTH
   const sidebarBounds = {

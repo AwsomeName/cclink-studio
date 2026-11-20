@@ -27,7 +27,7 @@ type StatusTarget = Extract<ContextTarget, { kind: 'status-item' }>
 type LayoutTarget = Extract<ContextTarget, { kind: 'layout' }>
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  'workspace-home': '工作台',
+  'workspace-home': '项目首页',
   'company-workspace': '公司经营',
   'company-accounts': '公司账目',
   'agent-roles': '角色',

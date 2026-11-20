@@ -1,12 +1,6 @@
-import {
-  useDiaryNavigation,
-  type DiaryPage,
-} from '../../features/workspace-open/personal-diary-navigation'
+import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
 import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
-import {
-  openCompanyWorkspace,
-  type CompanySection,
-} from '../../features/company-workspace/company-workspace-commands'
+import { openCompanyWorkspace } from '../../features/company-workspace/company-workspace-commands'
 import React, { useEffect, useState } from 'react'
 import {
   useUIStore,
@@ -15,7 +9,14 @@ import {
   useFsStore,
   useWorkspaceStore,
 } from '../../stores'
-import { openWorkspaceSettings } from '../../features/workspace-open/WorkspaceSettingsForm'
+import {
+  IconPencil,
+  IconClipboard,
+  IconClock,
+  IconDollar,
+  IconTool,
+  IconList,
+} from '../common/Icons'
 import type { ActivityPanel } from '../../types'
 import {
   ActivityAffairsIcon,
@@ -30,7 +31,6 @@ import {
   ActivityRolesIcon,
   ActivityScheduledTasksIcon,
   ActivitySessionsIcon,
-  ActivitySettingsIcon,
   ActivityTerminalIcon,
   ActivityVideoCreationIcon,
   ActivityWebAccountsIcon,
@@ -52,7 +52,7 @@ const MAIN_ICON_GROUPS: Array<{ id: string; label: string; items: ActivityBarIte
     id: 'work',
     label: '工作',
     items: [
-      { id: 'workspace-home', Icon: ActivityProjectsIcon, label: '工作台' },
+      { id: 'workspace-home', Icon: ActivityProjectsIcon, label: '项目首页' },
       { id: 'files', Icon: ActivityFilesIcon, label: '文件' },
       { id: 'sessions', Icon: ActivitySessionsIcon, label: '会话' },
       { id: 'browser', Icon: ActivityBrowserIcon, label: '浏览器' },
@@ -217,6 +217,11 @@ export function ActivityBar(): React.ReactElement {
           <span className="activity-bar-label" aria-hidden="true">
             {displayLabel ?? label}
           </span>
+          {id === 'files' && (
+            <span aria-hidden="true" className="activity-bar-jump">
+              ›
+            </span>
+          )}
           {id === 'scheduled-tasks' && scheduledRunCount > 0 && (
             <span
               className="activity-bar-badge"
@@ -234,61 +239,63 @@ export function ActivityBar(): React.ReactElement {
     <div className={`activity-bar${sidebarVisible ? '' : ' activity-bar-compact'}`}>
       <div className="activity-bar-main">
         <div className="activity-bar-group" role="group" aria-label="项目功能">
-          {workspaceType === 'diary' ? (
-            (['今天', '日记', '计划', '定时整理', '资料接入', 'Git'] as DiaryPage[]).map((page) => (
-              <button
-                key={page}
-                className={`activity-bar-icon ${!inSettings && activePanel === 'workspace-home' && diaryPage === page ? 'active' : ''}`}
-                onClick={() => {
-                  useDiaryNavigation.getState().setPage(page)
-                  showWorkspaceHome(activeRef)
-                }}
-                title={page}
-                aria-label={page}
-              >
-                <ActivityProjectsIcon size={18} />
-                <span className="activity-bar-label">{page}</span>
-              </button>
-            ))
-          ) : workspaceType === 'company' ? (
-            (
-              [
-                ['overview', '公司概览'],
-                ['projects', '业务项目'],
-                ['finance', '公司账目'],
-                ['operations', '运营内容'],
-              ] as [CompanySection, string][]
-            ).map(([section, label]) => (
-              <button
-                key={section}
-                className={`activity-bar-icon ${activeTab?.type === 'company-accounts' ? (section === 'finance' ? 'active' : '') : (activeTab?.type === 'company-workspace' && (activeTab.companyWorkspace?.section ?? 'overview') === section) || (activeTab?.type === 'workspace-home' && section === 'overview') ? 'active' : ''}`}
-                aria-pressed={
+          <button
+            className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && (workspaceType !== 'diary' || !!activeTab.settingsSection || diaryPage === '今天') ? 'active' : ''}`}
+            onClick={() => handleClick('workspace-home')}
+          >
+            <ActivityProjectsIcon size={18} />
+            项目首页
+          </button>
+          {workspaceType === 'diary' && (
+            <>
+              <div className="activity-bar-group-label">日记与计划</div>
+              {(['日记', '计划', '定时整理'] as const).map((page, index) => {
+                const Icon = [IconPencil, IconClipboard, IconClock][index]
+                return (
+                  <button
+                    key={page}
+                    className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && !activeTab.settingsSection && diaryPage === page ? 'active' : ''}`}
+                    onClick={() => {
+                      useDiaryNavigation.getState().setPage(page)
+                      showWorkspaceHome(activeRef)
+                    }}
+                  >
+                    <Icon size={18} />
+                    {page}
+                  </button>
+                )
+              })}
+            </>
+          )}
+          {workspaceType === 'company' && (
+            <>
+              <div className="activity-bar-group-label">公司经营</div>
+              {(
+                [
+                  ['projects', '业务项目', IconList],
+                  ['finance', '公司账目', IconDollar],
+                  ['operations', '运营内容', IconClipboard],
+                ] as const
+              ).map(([section, label, Icon]) => {
+                const selected =
                   activeTab?.type === 'company-accounts'
                     ? section === 'finance'
-                    : (activeTab?.type === 'company-workspace' &&
-                        (activeTab.companyWorkspace?.section ?? 'overview') === section) ||
-                      (activeTab?.type === 'workspace-home' && section === 'overview')
-                }
-                onClick={() => openCompanyWorkspace(section)}
-                title={label}
-                aria-label={label}
-              >
-                <ActivityCompanyAccountsIcon size={18} />
-                <span className="activity-bar-label">{label}</span>
-              </button>
-            ))
-          ) : (
-            <button
-              className={`activity-bar-icon ${!inSettings && activePanel === 'workspace-home' ? 'active' : ''}`}
-              onClick={() => handleClick('workspace-home')}
-              title="工作台"
-              aria-label="工作台"
-            >
-              <ActivityProjectsIcon size={18} />
-              <span className="activity-bar-label">
-                {workspaceType === 'electronics' ? '工程概览' : '项目首页'}
-              </span>
-            </button>
+                    : activeTab?.type === 'company-workspace' &&
+                      activeTab.companyWorkspace?.section === section
+                return (
+                  <button
+                    key={section}
+                    aria-label={label}
+                    aria-pressed={selected}
+                    className={`activity-bar-icon ${selected ? 'active' : ''}`}
+                    onClick={() => openCompanyWorkspace(section)}
+                  >
+                    <Icon size={18} />
+                    {label}
+                  </button>
+                )
+              })}
+            </>
           )}
           {workspaceType === 'electronics' && (
             <button
@@ -326,9 +333,20 @@ export function ActivityBar(): React.ReactElement {
           }}
         >
           <summary title="工具" aria-label="工具">
-            <ActivityProjectsIcon size={18} />
+            <IconTool size={18} />
             <span className="activity-bar-label">工具</span>
           </summary>
+          {workspaceType === 'diary' && (
+            <button
+              className="activity-bar-icon"
+              onClick={() => {
+                useDiaryNavigation.getState().setPage('Git')
+                showWorkspaceHome(activeRef)
+              }}
+            >
+              Git 更新
+            </button>
+          )}
           {renderGroup({
             id: 'tools',
             label: '全部工具',
@@ -342,22 +360,6 @@ export function ActivityBar(): React.ReactElement {
             ),
           })}
         </details>
-      </div>
-      <div className="activity-bar-bottom">
-        <button
-          type="button"
-          className={`activity-bar-icon ${inSettings && activeTab.settingsSection === 'workspace' ? 'active' : ''}`}
-          aria-pressed={inSettings && activeTab.settingsSection === 'workspace'}
-          onClick={openWorkspaceSettings}
-          disabled={activeRef.kind !== 'local'}
-          aria-label="当前项目设置"
-          title="当前项目设置"
-        >
-          <ActivitySettingsIcon size={18} />
-          <span className="activity-bar-label" aria-hidden="true">
-            项目设置
-          </span>
-        </button>
       </div>
     </div>
   )

@@ -359,3 +359,86 @@
 .diary-git details {
   margin: 12px 0;
 }
+
+.workspace-sidebar-shell {
+  flex-direction: column;
+  background: var(--bg-sidebar);
+}
+.workspace-sidebar-shell > .activity-bar {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--bg-sidebar);
+  padding: 10px 6px;
+}
+.workspace-sidebar-shell > .sidebar {
+  flex: 1;
+  min-height: 0;
+}
+.sidebar-back,
+.project-home-header button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+.sidebar-back {
+  text-align: left;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+  height: 38px;
+}
+.sidebar-back:hover,
+.project-home-header button:hover {
+  background: var(--bg-hover);
+}
+.activity-bar-main .activity-more {
+  width: 100%;
+}
+.activity-bar-group + .activity-bar-group {
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+.project-home-shell {
+  height: 100%;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+.project-home-shell > :last-child {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+.project-home-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+.project-home-header small {
+  color: var(--text-secondary);
+}
+.project-home-header button {
+  margin-left: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.project-home-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.file-tree-title {
+  margin-right: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+}

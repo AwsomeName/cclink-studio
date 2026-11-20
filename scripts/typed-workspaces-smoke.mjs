@@ -12,7 +12,13 @@ const workspace = join(root, 'home/woniu-forward')
 const profile = join(root, 'profile')
 const home = join(root, 'home')
 await Promise.all([workspace, profile, home].map((p) => mkdir(p, { recursive: true })))
-const now = new Date()
+const diaryDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date())
+const now = new Date(diaryDate + 'T12:00:00')
 const month = String(now.getMonth() + 1).padStart(2, '0')
 const day = month + String(now.getDate()).padStart(2, '0')
 const filename = day + '_周' + '日一二三四五六'[now.getDay()] + '.md'
@@ -128,7 +134,7 @@ try {
   const typed = join(home, '独立日记')
   const configFile = join(typed, '.cclink-studio/workspace-settings.json')
   assert.equal(JSON.parse(await readFile(configFile, 'utf8')).type, 'diary')
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
   await page.getByLabel('项目显示名称', { exact: true }).fill('旅行日记')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
@@ -151,7 +157,8 @@ try {
   await page.getByRole('button', { name: '我的空间', exact: true }).click()
   await page.getByRole('button', { name: '从空白日记开始', exact: true }).click()
   await page.getByRole('button', { name: '创建今日空白模板', exact: true }).waitFor()
-  await page.getByRole('button', { name: '资料接入', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByRole('button', { name: '接回本机原资料与任务', exact: true }).click()
   await page.getByLabel('原工作空间', { exact: true }).selectOption(workspace)
   await page.getByLabel('个人资料目录', { exact: true }).fill('000-个人计划')
   await page.getByRole('button', { name: '确认连接', exact: true }).click()
@@ -180,18 +187,14 @@ try {
     tasks.map((t) => t.definition.id).sort(),
   )
   assert(after.tasks.every((t) => !t.activation.enabled))
-  await page.getByRole('button', { name: '今天', exact: true }).click()
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
   await page.getByRole('article', { name: '日记正文预览' }).waitFor()
   const layout = await page
     .locator('.workspace-home')
     .evaluate((el) => ({ client: el.clientWidth, scroll: el.scrollWidth }))
   assert(layout.scroll <= layout.client + 1, JSON.stringify(layout))
-  assert.equal(
-    await page
-      .locator('#workspace-sidebar')
-      .evaluate((el) => Math.round(el.getBoundingClientRect().width)),
-    0,
-  )
+  assert.equal(await page.locator('#workspace-sidebar > .activity-bar').count(), 1)
+  assert.equal(await page.locator('#workspace-sidebar > .sidebar').count(), 0)
   await page.screenshot({ path: join(root, 'personal-home.png') })
   await page
     .locator('.personal-diary-home')
@@ -231,7 +234,8 @@ try {
   await page.screenshot({ path: join(root, 'restart-home.png') })
   // Real application creation in a second empty directory; the original source is untouched.
   await mkdir(join(workspace, '空白日记'))
-  await page.getByRole('button', { name: '资料接入', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByRole('button', { name: '接回本机原资料与任务', exact: true }).click()
   await page.getByLabel('个人资料目录', { exact: true }).fill('空白日记')
   await page.getByRole('button', { name: '确认连接', exact: true }).click()
   await page.getByRole('button', { name: '用“每日简报”准备今天', exact: true }).click()
@@ -265,7 +269,8 @@ try {
   assert.equal(again.created, false)
   assert.equal(await readFile(createdPath, 'utf8'), createdBytes)
   await page.screenshot({ path: join(root, 'prepared-today.png') })
-  await page.getByRole('button', { name: '资料接入', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByRole('button', { name: '接回本机原资料与任务', exact: true }).click()
   await page.getByLabel('个人资料目录', { exact: true }).fill('000-个人计划')
   await page.getByRole('button', { name: '确认连接', exact: true }).click()
 
@@ -310,7 +315,10 @@ try {
   await git(home, ['init', '--bare', '--initial-branch=main', remote])
   await git(seed, ['remote', 'add', 'origin', remote])
   await git(seed, ['push', '-u', 'origin', 'main'])
-  await page.getByRole('button', { name: 'Git', exact: true }).click()
+  if (await page.locator('.sidebar-back').isVisible()) await page.locator('.sidebar-back').click()
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByRole('button', { name: 'Git 配置与更新', exact: true }).click()
   await page.getByLabel('仓库地址', { exact: true }).fill(remote)
   await page.getByLabel('Git 分支', { exact: true }).fill('missing-branch')
   await page.getByRole('button', { name: '从 Git 拉取到新目录', exact: true }).click()
@@ -355,7 +363,10 @@ try {
   await git(seed, ['add', '.'])
   await git(seed, ['commit', '-m', 'Update diary'])
   await git(seed, ['push'])
-  await page.getByRole('button', { name: 'Git', exact: true }).click()
+  if (await page.locator('.sidebar-back').isVisible()) await page.locator('.sidebar-back').click()
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
+  await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByRole('button', { name: 'Git 配置与更新', exact: true }).click()
   await page.getByRole('button', { name: '检查远程更新', exact: true }).click()
   await page.getByRole('button', { name: '将已审阅更新拉取为新副本', exact: true }).waitFor()
   await page.waitForFunction(() =>

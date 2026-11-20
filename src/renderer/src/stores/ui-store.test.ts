@@ -338,7 +338,7 @@ describe('useUIStore', () => {
       })
     })
 
-    it('从工作台快照恢复布局状态，并把旧 Activity 入口迁移到文件', () => {
+    it('从工作台快照恢复布局状态，并把未知 Activity 入口迁移到项目导航', () => {
       useUIStore.getState().hydrateFromWorkspaceState({
         activePanel: 'android',
         sidebarVisible: false,
@@ -351,7 +351,7 @@ describe('useUIStore', () => {
       })
 
       const state = useUIStore.getState()
-      expect(state.activePanel).toBe('files')
+      expect(state.activePanel).toBe('workspace-home')
       expect(state.sidebarVisible).toBe(false)
       expect(state.agentPanelVisible).toBe(true)
       expect(state.sidebarWidth).toBe(320)
@@ -361,9 +361,9 @@ describe('useUIStore', () => {
       expect(state.agentPanelModeSource).toBe('user')
     })
 
-    it('非法面板回退到默认 files，避免恢复到不存在的 Activity', () => {
+    it('非法面板回退到项目导航，避免恢复到不存在的 Activity', () => {
       useUIStore.getState().hydrateFromWorkspaceState({ activePanel: 'missing' })
-      expect(useUIStore.getState().activePanel).toBe('files')
+      expect(useUIStore.getState().activePanel).toBe('workspace-home')
     })
 
     it('旧项目面板快照迁移到文件侧栏', () => {
