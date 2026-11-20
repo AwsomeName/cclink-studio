@@ -1046,6 +1046,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   return (
     <div className="markdown-editor-wrapper" ref={wrapperRef}>
       <EditorToolbar
+        tabId={tabId}
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}

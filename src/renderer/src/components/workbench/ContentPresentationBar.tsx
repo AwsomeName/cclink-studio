@@ -1,3 +1,4 @@
+import { useTabStore } from '../../stores/tab-store'
 import type { Tab } from '../../types'
 import { contentPresentation } from '../../utils/content-presentation'
 import { useCommandStore } from '../../stores/command-store'
@@ -12,37 +13,55 @@ export function ContentPresentationBar({ tab }: { tab?: Tab }): React.ReactEleme
     <div className="content-presentation-bar" role="region" aria-label="当前内容版面">
       <strong>{presentation.label}</strong>
       <label>
-        打开方式{' '}
-        <select
-          aria-label="打开方式"
-          value={presentation.selected}
-          disabled={presentation.options.length < 2}
-          onChange={(event) => {
-            void useCommandStore
-              .getState()
-              .executeCommand(`workbench.openAs.${event.target.value}`, {
-                source: 'toolbar',
-                target: {
-                  kind: 'tab',
-                  tabId: tab.id,
-                  tabType: tab.type,
-                  workspaceKey: tab.workspaceRef ? workspaceRefKey(tab.workspaceRef) : null,
-                },
-              })
-              .then((result) => {
-                if (!result.ok)
-                  useToastStore.getState().show(result.message ?? '打开方式切换失败', 'error')
-              })
-          }}
-        >
-          {presentation.options.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        打开方式 <OpenAsSelect tab={tab} presentation={presentation} />
       </label>
       <span title={presentation.detail}>{presentation.detail}</span>
     </div>
   )
+}
+
+function OpenAsSelect({
+  tab,
+  presentation,
+}: {
+  tab: Tab
+  presentation: NonNullable<ReturnType<typeof contentPresentation>>
+}): React.ReactElement {
+  return (
+    <select
+      className="content-open-as"
+      aria-label="打开方式"
+      value={presentation.selected}
+      disabled={presentation.options.length < 2}
+      onChange={(event) => {
+        void useCommandStore
+          .getState()
+          .executeCommand(`workbench.openAs.${event.target.value}`, {
+            source: 'toolbar',
+            target: {
+              kind: 'tab',
+              tabId: tab.id,
+              tabType: tab.type,
+              workspaceKey: tab.workspaceRef ? workspaceRefKey(tab.workspaceRef) : null,
+            },
+          })
+          .then((result) => {
+            if (!result.ok)
+              useToastStore.getState().show(result.message ?? '打开方式切换失败', 'error')
+          })
+      }}
+    >
+      {presentation.options.map((option) => (
+        <option key={option.id} value={option.id}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+export function MarkdownOpenAs({ tabId }: { tabId: string }): React.ReactElement | null {
+  const tab = useTabStore((state) => state.tabs.find((item) => item.id === tabId))
+  const presentation = tab && contentPresentation(tab)
+  if (!tab || !presentation || presentation.options.length < 2) return null
+  return <OpenAsSelect tab={tab} presentation={presentation} />
 }

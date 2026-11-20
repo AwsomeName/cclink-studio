@@ -1,3 +1,5 @@
+import { MarkdownOpenAs } from './ContentPresentationBar'
+import { isMarkdownPath } from '../../utils/content-presentation'
 import { useCommandStore } from '../../stores/command-store'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEditorStore } from '../../stores/editor-store'
@@ -335,9 +337,13 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
   return (
     <div className="markdown-editor-wrapper source-text-editor">
       <div className="source-text-toolbar">
-        <span className="source-text-mode">
-          {isHtmlFilePath(filePath) ? 'HTML 源码' : '文本 / 源码'}
-        </span>
+        {isMarkdownPath(filePath) ? (
+          <MarkdownOpenAs tabId={tabId} />
+        ) : (
+          <span className="source-text-mode">
+            {isHtmlFilePath(filePath) ? 'HTML 源码' : '文本 / 源码'}
+          </span>
+        )}
         <span className="source-text-path" title={filePath}>
           {filePath}
         </span>

@@ -1,3 +1,4 @@
+import { isMarkdownPath } from '../../utils/content-presentation'
 import { ContentPresentationBar } from './ContentPresentationBar'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useAgentStore, useBrowserStore, useTabStore, useWorkspaceStore } from '../../stores'
@@ -324,7 +325,9 @@ export function Workbench({
         conversationDropActive={conversationDropActive}
       />
 
-      <ContentPresentationBar tab={activeTab} />
+      {!(activeTab?.type === 'editor' && isMarkdownPath(activeTab.filePath)) && (
+        <ContentPresentationBar tab={activeTab} />
+      )}
 
       {isBrowserTab && activeTabId && (
         <BrowserToolbar
