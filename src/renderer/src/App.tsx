@@ -76,8 +76,8 @@ function MainLayout(): React.ReactElement {
   const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
-  const sidebarContentVisible =
-    sidebarVisible && activePanel !== 'company-workspace' && activePanel !== 'workspace-home'
+  const sidebarContentVisible = sidebarVisible
+  const showNavigation = activePanel === 'workspace-home' || activePanel === 'company-workspace'
   useEffect(() => {
     if (workspaceReady) return startMarkdownAutosave()
   }, [workspaceReady, activeWorkspaceRef])
@@ -356,8 +356,6 @@ function MainLayout(): React.ReactElement {
       )}
       <OwnerPanel open={ownerOpen} close={() => setOwnerOpen(false)} />
       <div className="main-area" style={ownerOpen ? { display: 'none' } : undefined}>
-        <ActivityBar />
-
         <div
           id="workspace-sidebar"
           className={`workspace-sidebar-shell ${sidebarContentVisible ? '' : 'collapsed'}`}
@@ -374,7 +372,19 @@ function MainLayout(): React.ReactElement {
           <ErrorBoundary
             fallback={(e, retry) => <PanelErrorFallback error={e} retry={retry} title="侧栏" />}
           >
-            <Sidebar />
+            {showNavigation ? (
+              <ActivityBar />
+            ) : (
+              <>
+                <button
+                  className="sidebar-back"
+                  onClick={() => useUIStore.getState().showPanel('workspace-home')}
+                >
+                  ‹　项目导航
+                </button>
+                <Sidebar />
+              </>
+            )}
           </ErrorBoundary>
         </div>
 

@@ -105,7 +105,7 @@ function isRestorableBrowserTab(tab: Tab): boolean {
 function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeTabId'> | null {
   if (!value || typeof value !== 'object') return null
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
-  const tabs = (parsed.tabs ?? [])
+  const restored = (parsed.tabs ?? [])
     .filter((tab): tab is Tab => Boolean(tab?.id && tab.type && tab.title && tab.icon))
     // 普通浏览使用默认 Session；Profile-only 或引用冲突的非法旧状态仍不得恢复。
     .filter(isRestorableBrowserTab)
@@ -122,12 +122,36 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
     )
     .map(normalizeFileTab)
     .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true))
+  const home =
+    restored.find((tab) => tab.type === 'workspace-home') ??
+    restored.find((tab) => tab.type === 'settings' && tab.settingsSection === 'workspace')
+  const isHome = (tab: Tab) =>
+    tab.type === 'workspace-home' ||
+    (tab.type === 'settings' && tab.settingsSection === 'workspace')
+  const activeHome = restored.find((tab) => tab.id === parsed.activeTabId && isHome(tab))
+  const tabs = restored.flatMap((tab): Tab[] =>
+    !isHome(tab)
+      ? [tab]
+      : tab.id === home?.id
+        ? [
+            {
+              ...tab,
+              type: 'workspace-home',
+              title: '项目首页',
+              icon: '⌂',
+              settingsSection: (activeHome ?? tab).settingsSection,
+            },
+          ]
+        : [],
+  )
   if (tabs.length === 0 && Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null }
   if (tabs.length === 0) return null
   const activeTabId =
-    parsed.activeTabId && tabs.some((tab) => tab.id === parsed.activeTabId)
-      ? parsed.activeTabId
-      : tabs[0].id
+    activeHome && home
+      ? home.id
+      : parsed.activeTabId && tabs.some((tab) => tab.id === parsed.activeTabId)
+        ? parsed.activeTabId
+        : tabs[0].id
   return { tabs, activeTabId }
 }
 
@@ -393,6 +417,7 @@ export const useTabStore = create<TabState>((set, get) => ({
                 tab.id === existing.id
                   ? {
                       ...tab,
+                      ...(type === 'workspace-home' ? { title, settingsSection } : {}),
                       companyWorkspace: companyWorkspace ?? tab.companyWorkspace,
                       companyAccounts: companyAccounts ?? tab.companyAccounts,
                     }

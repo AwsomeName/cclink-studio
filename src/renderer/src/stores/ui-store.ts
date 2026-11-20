@@ -94,7 +94,7 @@ interface UIState extends WorkspaceLayoutSnapshot {
 export const UI_DEFAULTS: Readonly<WorkspaceLayoutSnapshot> = {
   pinnedTools: [],
   toolsExpanded: false,
-  activePanel: 'files' as ActivityPanel,
+  activePanel: 'workspace-home' as ActivityPanel,
   sidebarVisible: true,
   agentPanelVisible: true,
   sidebarWidth: 250,

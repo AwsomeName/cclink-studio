@@ -32,7 +32,7 @@ describe('ActivityBar', () => {
     expect(markup).toContain('aria-label="项目功能"')
     expect(markup).toContain('aria-label="工具"')
     for (const label of [
-      '工作台',
+
       '文件',
       '会话',
       '浏览器',
@@ -43,9 +43,11 @@ describe('ActivityBar', () => {
       '数据源',
       '视频创作',
       '硬件生产',
-      '当前项目设置',
+
     ])
       expect(markup).toContain(`title="${label}"`)
+    expect(markup).toContain('项目首页</button>')
+    expect(markup).not.toContain('项目设置')
     expect(markup).not.toContain('title="网站与账号"')
     expect(markup).not.toContain('title="角色"')
     for (const label of ['公司经营', '公司账目', 'CCLink 远程', 'Studio 设置'])

@@ -13,7 +13,13 @@ const workspace = join(root, 'home/woniu-forward')
 let profile = join(root, 'profile')
 const home = join(root, 'home')
 await Promise.all([workspace, profile, home].map((p) => mkdir(p, { recursive: true })))
-const now = new Date()
+const diaryDate = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+}).format(new Date())
+const now = new Date(diaryDate + 'T12:00:00')
 const month = String(now.getMonth() + 1).padStart(2, '0')
 const day = month + String(now.getDate()).padStart(2, '0')
 const filename = day + '_周' + '日一二三四五六'[now.getDay()] + '.md'
@@ -36,6 +42,7 @@ for (const [path, content] of originals) await writeFile(path, content)
 await writeFile(
   join(profile, 'settings.json'),
   JSON.stringify({
+    markdownAutoSave: false,
     componentSetupPageSeenVersion: 2,
     claudeRuntimeSource: 'system',
     lastWorkspacePath: workspace,
@@ -89,6 +96,29 @@ async function launch() {
   return page
 }
 
+async function activate(tab) {
+  const path = await tab.getAttribute('data-project-path')
+  await tab.click()
+  await page.waitForFunction(
+    (path) =>
+      document
+        .querySelector('.project-strip-item[aria-current="page"]:enabled')
+        ?.getAttribute('data-project-path') === path,
+    path,
+  )
+}
+async function navigation() {
+  const back = page.locator('.sidebar-back')
+  if (await back.isVisible()) await back.click()
+}
+async function settings() {
+  await navigation()
+  await page.locator('.activity-bar').getByRole('button', { name: '项目首页', exact: true }).click()
+  await page
+    .locator('.project-home-header')
+    .getByRole('button', { name: '项目设置', exact: true })
+    .click()
+}
 const git = async (cwd, args) =>
   (
     await exec('git', ['-c', 'credential.helper=', ...args], {
@@ -154,22 +184,49 @@ try {
     const path = join(workspace, '.cclink-studio/scheduled-tasks', task.definition.id + '.json')
     originals.set(path, await readFile(path, 'utf8'))
   }
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('项目类型', { exact: true }).selectOption('diary')
   await page.getByLabel('项目内日记目录（随项目配置保存）', { exact: true }).check()
   await page.getByLabel('项目内日记目录', { exact: true }).fill('000-个人计划')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
-  await page.getByRole('button', { name: '今天', exact: true }).click()
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
-  await page.screenshot({ path: join(root, 'navigation-diary.png') })
-  const projectSettings = page
-    .locator('.activity-bar-bottom')
-    .getByRole('button', { name: '当前项目设置' })
+  await page.screenshot({ path: join(root, 'diary-navigation.png') })
+  const rail = page.locator('#workspace-sidebar')
+  const initialWidth = (await rail.boundingBox()).width
+  await rail.getByRole('button', { name: '文件', exact: true }).click()
+  assert.equal(await rail.locator('.activity-bar').count(), 0)
+  assert.equal((await rail.boundingBox()).width, initialWidth)
+  for (const dir of ['000-个人计划', String(now.getFullYear()), month]) {
+    const row = rail.getByRole('treeitem', { name: dir, exact: true })
+    const item = rail
+      .locator('.file-tree-item')
+      .filter({ has: page.locator('.file-tree-name').getByText(dir, { exact: true }) })
+    const target = (await row.count()) ? row : item
+    if ((await target.getAttribute('aria-expanded')) !== 'true') await target.click()
+  }
+  await page.screenshot({ path: join(root, 'diary-tree.png') })
+  await rail.locator('.file-tree-name').getByText(filename, { exact: true }).click()
+  const editor = page.locator('.tiptap[contenteditable="true"]')
+  await editor.waitFor()
+  await page.screenshot({ path: join(root, 'diary-edit.png') })
+  await editor.press('ControlOrMeta+End')
+  await editor.press('End')
+  await page.keyboard.insertText('（验收草稿）')
+  await navigation()
+  assert.match(await editor.innerText(), /验收草稿/)
+  await page.screenshot({ path: join(root, 'diary-back.png') })
+  await rail.getByRole('button', { name: '文件', exact: true }).click()
+  await rail.locator('.file-tree-item.selected').getByText(filename, { exact: true }).waitFor()
+  assert.match(await editor.innerText(), /验收草稿/)
+  await page.screenshot({ path: join(root, 'diary-return.png') })
+  await navigation()
+
   const studioSettings = page
     .locator('.app-topbar-right')
     .getByRole('button', { name: 'Studio 设置' })
-  await projectSettings.click()
+  await settings()
   await page.getByRole('heading', { name: '项目设置 · woniu-forward' }).waitFor()
   assert.equal(await page.locator('.settings-nav').count(), 0)
   await page.screenshot({ path: join(root, 'navigation-diary-settings.png') })
@@ -188,7 +245,7 @@ try {
   await git(workspace, ['init', '--initial-branch=main'])
   await git(workspace, ['config', 'user.name', 'Acceptance'])
   await git(workspace, ['config', 'user.email', 'test@example.invalid'])
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByRole('button', { name: '重新加载', exact: true }).click()
   await page.getByRole('button', { name: '将项目配置纳入 Git（仅暂存）', exact: true }).click()
   await page.getByText('项目设置：已纳入 Git', { exact: false }).waitFor()
@@ -205,7 +262,7 @@ try {
   // A company and a separate engineering project share files through links, not copies.
   const engineering = await createProject('electronics', '眼镜研发')
   await page.getByRole('heading', { name: '工程概览', exact: true }).waitFor()
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('固定浏览器', { exact: true }).check()
   await page.getByLabel('固定终端', { exact: true }).check()
   await page.getByRole('button', { name: 'terminal上移', exact: true }).click()
@@ -248,6 +305,7 @@ try {
   await page.getByRole('dialog').getByText('模拟公司', { exact: true }).click()
   await page.locator('.fixed-space-dialog footer button').last().click()
   await companyTab.waitFor()
+  await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.getByRole('button', { name: '创建业务项目', exact: true }).click()
   await page.getByLabel('业务项目名称', { exact: true }).fill('智能眼镜')
@@ -330,38 +388,58 @@ try {
   assert.equal(await page.locator('.model-viewer-error').count(), 0)
   await page.getByLabel('工作版面', { exact: true }).selectOption('focus')
   await page.screenshot({ path: join(root, 'engineering-model-layout.png') })
-  await companyTab.click()
-  await page.getByRole('button', { name: '公司概览', exact: true }).first().click()
+  await activate(companyTab)
+  await page.getByRole('button', { name: '项目首页', exact: true }).first().click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
   await page.screenshot({ path: join(root, 'navigation-company.png') })
+  await page
+    .locator('.project-strip')
+    .getByRole('button', { name: 'woniu-forward', exact: true })
+    .click()
+  await page.locator('.tab-title').getByText(filename, { exact: true }).click()
+  await navigation()
+  await rail.getByRole('button', { name: '文件', exact: true }).click()
+  await rail
+    .getByRole('treeitem', { selected: true })
+    .getByText(filename, { exact: true })
+    .waitFor()
+  assert.match(await editor.innerText(), /验收草稿/)
+  await page.screenshot({ path: join(root, 'diary-after-company.png') })
+  await activate(companyTab)
+  await page.waitForFunction(() =>
+    document.querySelector('.status-bar-workspace')?.textContent.includes('模拟公司'),
+  )
+  await navigation()
+
   assert.equal(await page.getByRole('button', { name: '定时整理', exact: true }).count(), 0)
-  await projectSettings.click()
+  await settings()
   await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
   await page.screenshot({ path: join(root, 'navigation-company-settings.png') })
   await studioSettings.click()
   await page.locator('.settings-nav').waitFor()
   assert.equal(await page.locator('.workspace-settings-form').count(), 0)
   await page.screenshot({ path: join(root, 'navigation-studio-settings.png') })
-  await projectSettings.click()
+  await settings()
   await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
   const diaryTab = page
     .locator('.project-strip')
     .getByRole('button', { name: 'woniu-forward', exact: true })
-  await diaryTab.click()
-  await projectSettings.click()
+  await activate(diaryTab)
+  await settings()
   await page.getByRole('heading', { name: '项目设置 · woniu-forward' }).waitFor()
   assert.equal(await page.getByRole('button', { name: '业务项目', exact: true }).count(), 0)
-  await page.getByRole('button', { name: '今天', exact: true }).click()
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
   await page.getByText('原日记保持不变', { exact: true }).waitFor()
   await page.screenshot({ path: join(root, 'navigation-diary.png') })
-  await companyTab.click()
-  await projectSettings.click()
+  await activate(companyTab)
+  await settings()
   await page.getByRole('heading', { name: '项目设置 · 模拟公司' }).waitFor()
   await writeFile(join(company, '公司模型.stl'), stl)
   await page.getByRole('button', { name: '文件', exact: true }).click()
   await page.locator('.file-tree-name').getByText('公司模型.stl', { exact: true }).click()
   await page.locator('.model-viewer canvas').waitFor()
   await page.waitForFunction(() => !document.querySelector('.model-viewer-overlay'))
+  await navigation()
   assert.equal(
     (await page.getByRole('button', { name: '业务项目', exact: true }).count()) > 0,
     true,
@@ -385,6 +463,7 @@ try {
     0,
   )
   for (const [path, bytes] of originals) assert.equal(await readFile(path, 'utf8'), bytes)
+  await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).click()
   await page.getByRole('button', { name: '新建工程并关联', exact: true }).click()
@@ -395,7 +474,11 @@ try {
   await form.getByRole('button', { name: '选择父目录', exact: true }).click()
   await form.getByRole('button', { name: '创建并打开', exact: true }).click()
   await page.getByRole('heading', { name: '工程概览', exact: true }).waitFor()
-  await companyTab.click()
+  await activate(companyTab)
+  await page.waitForFunction(() =>
+    document.querySelector('.status-bar-workspace')?.textContent.includes('模拟公司'),
+  )
+  await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).click()
   await page
@@ -404,26 +487,28 @@ try {
     .getByText('电源研发', { exact: true })
     .waitFor()
   // Fixed labels are shortcuts; explicitly changing the referenced type must change its home.
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('项目类型', { exact: true }).selectOption('general')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
-  await companyTab.click()
-  await page.getByRole('button', { name: '工作台', exact: true }).click()
+  await activate(companyTab)
+  await page.getByRole('button', { name: '项目首页', exact: true }).click()
   await page.getByRole('heading', { name: '模拟公司', exact: true }).waitFor()
   assert.equal(await page.getByRole('button', { name: '业务项目', exact: true }).count(), 0)
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('项目类型', { exact: true }).selectOption('company')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
-  await companyTab.click()
-  await page.getByRole('button', { name: '公司概览', exact: true }).first().click()
+  await activate(companyTab)
+  await page.getByRole('button', { name: '项目首页', exact: true }).first().click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
+  await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.locator('.company-link').getByText('智能眼镜', { exact: true }).waitFor()
   const secondCompany = await createProject('company', '第二家公司')
   await page.getByLabel('公司显示名称', { exact: true }).fill('第二家公司')
   await page.getByRole('button', { name: '开始使用', exact: true }).click()
+  await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   assert.equal(
     await page.locator('.company-link').getByText('智能眼镜', { exact: true }).count(),
@@ -457,7 +542,7 @@ try {
   const strip = page.locator('.project-strip')
   await strip.getByRole('button', { name: '我的空间', exact: true }).waitFor()
   assert.equal(await strip.getByRole('button', { name: '我的公司', exact: true }).count(), 0)
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('项目显示名称', { exact: true }).fill('我的日常')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   const pinned = strip.getByRole('button', { name: '我的日常', exact: true })
@@ -528,10 +613,11 @@ try {
     2,
   )
   await page.screenshot({ path: join(root, 'new-mac-tasks-paused.png') })
-  await page.getByRole('button', { name: '当前项目设置', exact: true }).click()
+  await settings()
   await page.getByLabel('项目显示名称', { exact: true }).fill('日常手记')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
+  await settings()
   await page.getByRole('button', { name: '设为默认项目', exact: true }).click()
   await page.getByText('已设为默认项目。', { exact: true }).waitFor()
   await page

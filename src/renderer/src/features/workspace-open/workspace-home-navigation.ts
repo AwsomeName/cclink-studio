@@ -7,6 +7,7 @@ import { useWorkspaceStore } from '../../stores/workspace-store'
 export function showWorkspaceHome(
   ref: WorkspaceRef,
   source: AgentPanelModeSource = 'user',
+  settingsSection?: 'workspace',
 ): boolean {
   if (
     ref.kind === 'global' ||
@@ -16,8 +17,12 @@ export function showWorkspaceHome(
   useUIStore.getState().showPanel('workspace-home')
   if (useUIStore.getState().agentPanelMode === 'center')
     useUIStore.getState().setAgentPanelMode('right', source)
-  useTabStore
-    .getState()
-    .openTab({ type: 'workspace-home', title: '工作台', icon: '⌂', workspaceRef: ref })
+  useTabStore.getState().openTab({
+    type: 'workspace-home',
+    title: '项目首页',
+    settingsSection,
+    icon: '⌂',
+    workspaceRef: ref,
+  })
   return true
 }

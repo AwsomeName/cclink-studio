@@ -14,7 +14,7 @@ import {
   type WorkspaceType,
 } from '@shared/workspace-settings'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { useTabStore } from '../../stores/tab-store'
+import { useToastStore } from '../../components/common/Toast'
 import { useDiaryNavigation } from './personal-diary-navigation'
 import { showWorkspaceHome } from './workspace-home-navigation'
 import { openWorkspaceRef } from './workspace-open-controller'
@@ -28,9 +28,7 @@ const descriptions: Record<WorkspaceType, string> = {
 }
 
 export function openWorkspaceSettings(): void {
-  useTabStore
-    .getState()
-    .openTab({ type: 'settings', title: '项目设置', icon: '⚙', settingsSection: 'workspace' })
+  showWorkspaceHome(useWorkspaceStore.getState().activeWorkspaceRef, 'user', 'workspace')
 }
 
 function TypeSelector({
@@ -222,7 +220,10 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       })
       if (useWorkspaceStore.getState().generation !== target) return
       await useWorkspaceStore.getState().refreshSettings()
-      setNotice('项目设置已保存；原文件与任务保持原位。')
+      if (useWorkspaceStore.getState().generation !== target) return
+      useDiaryNavigation.getState().setPage('今天')
+      showWorkspaceHome(ref)
+      useToastStore.getState().show('项目设置已保存；原文件与任务保持原位。', 'success')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -280,6 +281,16 @@ export function WorkspaceSettingsForm(): React.ReactElement {
             接回本机原资料与任务
           </button>
         </>
+      )}
+      {draft.type === 'diary' && (
+        <button
+          onClick={() => {
+            useDiaryNavigation.getState().setPage('Git')
+            showWorkspaceHome(ref)
+          }}
+        >
+          Git 配置与更新
+        </button>
       )}
       <div className="workspace-form-actions">
         <button
