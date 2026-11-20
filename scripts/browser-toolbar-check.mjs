@@ -233,13 +233,10 @@ export async function checkBrowserToolbar({
     await active.focus()
     await active.press('Home')
     await page.waitForFunction(() => {
-      const tabs = document.querySelectorAll('.tab-strip [role="tab"]')
-      return (
-        tabs[0].getAttribute('aria-selected') === 'true' &&
-        document.querySelector('.tab-strip').scrollLeft < 2
-      )
+      const first = document.querySelector('.tab-strip-shell [role="tab"]')
+      return first.getAttribute('aria-selected') === 'true'
     })
-    await page.locator('.tab-strip [aria-selected="true"]').press('End')
+    await page.locator('.tab-strip-shell [aria-selected="true"]').press('End')
     await page.waitForFunction(() => {
       const tabs = document.querySelectorAll('.tab-strip [role="tab"]')
       const strip = document.querySelector('.tab-strip').getBoundingClientRect()

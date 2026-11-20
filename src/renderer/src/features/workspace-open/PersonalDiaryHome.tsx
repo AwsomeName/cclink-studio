@@ -10,6 +10,9 @@ import {
 } from '@shared/scheduled-task/scheduled-task-file-name'
 import { useEffect, useState } from 'react'
 import {
+  defaultDiaryDirectory,
+  defaultDiaryTimezone,
+  diaryDayLocation,
   personalDiarySourceSchema,
   personalDiarySourceSection,
   type PersonalDiarySource,
@@ -33,7 +36,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [source, setSource] = useState<PersonalDiarySource | null>(null)
   const [known, setKnown] = useState<WorkspaceStateLocalWorkspaceSummary[]>([])
   const [path, setPath] = useState('')
-  const [directory, setDirectory] = useState('000-个人计划')
+  const [directory, setDirectory] = useState(defaultDiaryDirectory)
   const [files, setFiles] = useState<FsDirEntry[]>([])
   const [tasks, setTasks] = useState<ScheduledTaskSnapshot[]>([])
   const [selected, setSelected] = useState<string[]>([])
@@ -42,7 +45,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [preview, setPreview] = useState<DiaryDocument | null>(null)
   const [previewPath, setPreviewPath] = useState('')
   const [notice, setNotice] = useState('')
-  const [timezone, setTimezone] = useState('Asia/Shanghai')
+  const [timezone, setTimezone] = useState(defaultDiaryTimezone)
   const [busy, setBusy] = useState(true)
   const [revision, setRevision] = useState(0)
   const [clock, setClock] = useState(() => Date.now())
@@ -194,7 +197,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   const startBlank = async (): Promise<void> => {
     const ref = useWorkspaceStore.getState().activeWorkspaceRef
     if (ref.kind !== 'local') throw Error('请先进入我的空间')
-    await window.cclinkStudio.fs.mkdir(ref.path + '/日记')
+    await window.cclinkStudio.fs.mkdir(ref.path + '/' + defaultDiaryDirectory)
     const roots = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
     const root = roots.find((item) => item.workspacePath === ref.path)
     if (!root?.projectId) throw Error('个人空间身份不可用，请重新进入')
@@ -202,7 +205,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       version: 1,
       workspacePath: ref.path,
       projectId: root.projectId,
-      directory: '日记',
+      directory: defaultDiaryDirectory,
       timezone,
       taskIds: [],
     })
@@ -216,7 +219,10 @@ export function PersonalDiaryHome(): React.ReactElement {
       await window.cclinkStudio.workspaceState.saveSettings({
         workspacePath: ref.path,
         revision: config.revision,
-        settings: { ...config.settings, diary: { directory: '日记', timezone, taskIds: [] } },
+        settings: {
+          ...config.settings,
+          diary: { directory: defaultDiaryDirectory, timezone, taskIds: [] },
+        },
       })
       await useWorkspaceStore.getState().refreshSettings()
     }
@@ -247,10 +253,13 @@ export function PersonalDiaryHome(): React.ReactElement {
     if (task) useTabStore.getState().openTab(createScheduledTaskTab(ref.path, task))
   }
   const day = diaryDateParts(source?.timezone ?? timezone, new Date(clock))
-  const md = day.month + day.day
+  const location = diaryDayLocation(day)
   const diaries = files.filter((file) => /^\d{4}[_-]周.*\.md$/.test(file.name))
   const today = diaries.filter(
-    (file) => file.name.startsWith(md) && file.path.includes('/' + day.year + '/'),
+    (file) =>
+      source &&
+      location.matchesName(file.name) &&
+      file.path === [source.workspacePath, source.directory, location.folder, file.name].join('/'),
   )
   const plans = files.filter((file) => !diaries.includes(file))
   const shown = page === '今天' ? today : page === '日记' ? diaries : plans
@@ -295,27 +304,30 @@ export function PersonalDiaryHome(): React.ReactElement {
   }
   const prepareWithTask = async (task: ScheduledTaskSnapshot): Promise<void> => {
     if (!source) return
+    if (today.length > 1) throw Error('今天有多份日记，请在日记列表中选择原文件')
     if (today.length) {
       setPreviewPath(today[0].path)
       setNotice('今天已有日记，继续写原文件。')
       return
     }
+    const timestamp = Date.now()
+    const taskDay = diaryDayLocation(diaryDateParts(source.timezone, new Date(timestamp)))
     const definition = task.definition
     const output =
       renderScheduledTaskDirectory(
         definition.outputPolicy.directory,
-        Date.now(),
+        timestamp,
         definition.schedule.timezone,
       ) +
       '/' +
       renderScheduledTaskFileName({
         template: definition.outputPolicy.fileNameTemplate,
-        timestamp: Date.now(),
+        timestamp,
         timezone: definition.schedule.timezone,
         taskId: definition.id,
         runId: 'preview',
       })
-    const expected = `${source.directory}/${day.year}/${day.month}/${md}_${day.weekday}.md`
+    const expected = [source.directory, taskDay.folder, taskDay.filename].join('/')
     if (output !== expected)
       throw Error(
         `原任务输出为 ${output}，今日应为 ${expected}。请打开原任务核对输出目录和命名；未修改或运行原任务。目录可用 {year}/{month}，文件名可用 {monthDay}_{weekday}.md。`,
@@ -352,6 +364,7 @@ export function PersonalDiaryHome(): React.ReactElement {
           onConnected={(value) => {
             setPreviewPath('')
             setSource(value)
+            setTimezone(value.timezone)
             setPath(value.workspacePath)
             setDirectory(value.directory)
             setSelected([])

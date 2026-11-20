@@ -1,9 +1,15 @@
 import { z } from 'zod'
 import { useAgentStore } from '../../stores/agent-store'
 import { createConversationRunController as controller } from '../agent-conversations/conversation-run-controller'
-import { ensureSession } from './owner-agent'
-import { acceptDirectory, keepUnacknowledged, useOwners } from './owner-store'
-import { checkReport, planSchema, type Research } from './research-model'
+import { ensureSession, session } from './owner-agent'
+import { acceptDirectory, keepUnacknowledged, loadDirectories, useOwners } from './owner-store'
+import {
+  checkReport,
+  planSchema,
+  researchRequest,
+  workerFilesSchema,
+  type Research,
+} from './research-model'
 import type { Affair } from './affair'
 
 let busy: ReadonlySet<string> = new Set()
@@ -74,10 +80,18 @@ function run(a: Affair, mode: 'a' | 'main', task: string, question = false) {
   return turn
 }
 async function sendRun(a: Affair, mode: 'a' | 'main', task: string, question: boolean) {
+  if (mode === 'a' && (!current(a.id)?.confirmed || current(a.id)?.directory?.error))
+    throw Error('未取得生效约定，不能派工')
   const id = ensureSession(a, mode),
     ticket = crypto.randomUUID(),
     agent = useAgentStore.getState().conversations[id]
   if (agent.loading || agent.activeRunId) throw Error('原会话仍在运行。请等它结束后再继续。')
+  if (mode === 'a')
+    await change(a.id, (r) => {
+      const order = r.decisions?.at(-1)
+      if (!order || order.kind === 'deliver') throw Error('缺少待执行的委托')
+      order.workerTicket = ticket
+    })
   const res = await controller({ conversationId: id, getTabs: () => [] }).send(
     task +
       '\n只输出 JSON 对象，附上顶层字段 ticket="' +
@@ -91,15 +105,22 @@ async function sendRun(a: Affair, mode: 'a' | 'main', task: string, question: bo
     throw Error(res.status === 'failed' ? res.error : '会话没有接受委托：' + res.status)
   if (!question)
     await change(a.id, (r, v) => {
-      if (mode === 'a') event(r, '执行会话 A 已接收本轮委托')
+      if (mode === 'a') {
+        const order = r.decisions?.at(-1)
+        if (order && order.kind !== 'deliver') order.workerRunId = res.runId
+        event(r, '执行会话 A 已接收本轮委托')
+      }
       v.run = res.runId ?? null
     })
+  return awaitReceipt(id, res.runId, ticket)
+}
+async function awaitReceipt(id: string, runId: string, ticket: string) {
   const until = Date.now() + 180000
   while (Date.now() < until) {
     await new Promise((resolve) => setTimeout(resolve, 650))
-    const state = await window.cclinkStudio.agent.getRunStatus(id, res.runId)
-    if (!state || state.conversationId !== id || state.runId !== res.runId) continue
-    if (state.status === 'running' || state.status === 'cancelling') continue
+    const state = await window.cclinkStudio.agent.getRunStatus(id, runId)
+    if (!state || state.conversationId !== id || state.runId !== runId) continue
+    if (['starting', 'running', 'cancelling'].includes(state.status)) continue
     if (state.status !== 'succeeded')
       throw Error(state.errorMessage || '运行未完成：' + state.status)
     const c = useAgentStore.getState().conversations[id]
@@ -220,7 +241,7 @@ export async function discuss(id: string, text: string) {
     const out = await run(
       a,
       'main',
-      '你是负责开源项目调研的 Owner。根据用户原话和讨论提出或修订一份可执行约定，不开始调研。选择 1 至 4 个真实公开 GitHub 仓库的规范 owner/repo 名，若用户没指定，主动建议。用户只需定目标和交付物。由你决定选哪些项目、查阅概览、官方仓库文档或源码以及证据标准，不向用户索要材料或检索步骤。能力是只读公开 GitHub 仓库，不承诺实跑。若用户给了具体目标就保留其粒度，不擅自扩张交付。若关键信息不足可先提问并令 plan=null。返回 {reply:"简短说明建议和要用户确认的地方",plan:{scope:"具体范围和比较维度",output:"交付物和判断标准",repos:["组织/项目"]}}。用户询问不等于批准。\n' +
+      '你是负责开源项目调研的 Owner。根据用户原话和讨论提出或修订一份可执行约定，不开始调研。选择 1 至 4 个真实公开 GitHub 仓库的规范 owner/repo 名，若用户没指定，主动建议。用户只需定目标和交付物。由你决定选哪些项目、查阅概览、官方仓库文档或源码以及证据标准，不向用户索要材料或检索步骤。能力是只读公开 GitHub 仓库，不承诺实跑。若用户给了具体目标就保留其粒度，不擅自扩张交付。若关键信息不足可先提问并令 plan=null。返回 {reply:"简短说明建议和要用户确认的地方",plan:{scope:"具体范围和比较维度",output:"交付物和判断标准",timing:"仅在用户提出时记录时间要求，否则省略；说明只支持按回执推进",repos:["组织/项目"]}}。用户询问不等于批准。\n' +
         JSON.stringify({ previous: r.plan, goal: a.goal, dialog: r.chat.slice(-10) }),
     )
     const reply = z.string().min(1).max(3200).parse(out.reply),
@@ -233,95 +254,115 @@ export async function discuss(id: string, text: string) {
     })
   })
 }
-const requestSchema = z.object({
-  repo: z.string(),
-  terms: z.array(z.string().regex(/^[a-z0-9_.+/-]{1,60}$/i)).max(8),
-})
 const instruction = z.object({
   reason: z.string().trim().min(1).max(1200),
-  requests: z.array(requestSchema).min(1).max(4),
+  requests: z.array(researchRequest).min(1).max(4),
 })
 type Instruction = z.infer<typeof instruction>
 
-function decision(r: Research, kind: 'read' | 'more' | 'deliver', reason: string) {
-  r.decisions = [...(r.decisions ?? []), { kind, reason }].slice(-60)
+function decision(
+  r: Research,
+  kind: 'read' | 'more' | 'deliver',
+  reason: string,
+  requests?: Instruction['requests'],
+) {
+  r.decisions = [
+    ...(r.decisions ?? []),
+    { id: crypto.randomUUID(), kind, reason, ...(requests && { requests }) },
+  ].slice(-60)
 }
 function remember(id: string, message: string) {
   return change(id, (r) => event(r, message))
 }
 
 // The Owner chooses the research question and search terms. A chooses documents from the real tree.
-async function collect(a: Affair, order: Instruction) {
+type Decision = NonNullable<Research['decisions']>[number]
+export function unfinishedWorker(r: Research) {
+  const last = r.decisions?.at(-1)
+  if (last?.kind === 'deliver' || last?.collectionClosed) return
+  if (
+    last?.workerTicket ||
+    (last?.workerRunId && (r.phase === 'reading' || r.phase === 'error' || !last.workerReturned))
+  )
+    return last
+}
+async function collect(a: Affair, order: Instruction, prior?: Decision) {
   const { plan, docs } = current(a.id)!.research!
   const revision = (repo: string) =>
     current(a.id)!
       .research!.docs.find((d) => d.repo === repo && /\/blob\/[a-f0-9]{40}\//i.test(d.url))
       ?.url.split('/blob/')[1]
       ?.split('/')[0] ?? ''
-  const candidates: { repo: string; paths: string[] }[] = []
-  for (const { repo, terms } of order.requests) {
-    if (!plan!.repos.includes(repo)) throw Error('取证对象超出本次计划：' + repo)
-    if (!terms.length) {
-      candidates.push({ repo, paths: ['@README'] })
-      continue
+  async function selectFiles() {
+    const candidates: { repo: string; paths: string[] }[] = []
+    for (const { repo, terms } of order.requests) {
+      if (!plan!.repos.includes(repo)) throw Error('取证对象超出本次计划：' + repo)
+      if (!terms.length) {
+        candidates.push({ repo, paths: ['@README'] })
+        continue
+      }
+      const index = await window.cclinkStudio.ownerResearch.findPaths(repo, terms, revision(repo))
+      if (!index.ok) {
+        await remember(a.id, index.error)
+        continue
+      }
+      candidates.push({ repo, paths: index.paths })
+      await remember(
+        a.id,
+        repo +
+          ' · 检索 ' +
+          terms.join(' / ') +
+          '，找到 ' +
+          index.paths.length +
+          ' 个候选文件' +
+          (index.truncated ? '（部分目录）' : ''),
+      )
     }
-    const index = await window.cclinkStudio.ownerResearch.findPaths(repo, terms, revision(repo))
-    if (!index.ok) {
-      await remember(a.id, index.error)
-      continue
+    if (!candidates.some((c) => c.paths.length)) {
+      if (prior) throw Error('无法核对原委托的候选文件，请恢复来源后再继续。')
+      await remember(a.id, '此次目录检索没有取得可选文件')
+      return []
     }
-    candidates.push({ repo, paths: index.paths })
-    await remember(
-      a.id,
-      repo +
-        ' · 检索 ' +
-        terms.join(' / ') +
-        '，找到 ' +
-        index.paths.length +
-        ' 个候选文件' +
-        (index.truncated ? '（部分目录）' : ''),
+    const result = prior
+      ? await awaitReceipt(session(a, 'a'), prior.workerRunId!, prior.workerTicket!)
+      : await run(
+          a,
+          'a',
+          '你是本事务唯一执行会话 A。为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
+            JSON.stringify({
+              goal: a.goal,
+              plan,
+              order,
+              candidates,
+              alreadyRead: docs.map((d) => [
+                d.repo,
+                d.path,
+                d.startLine,
+                (d.startLine ?? 1) + d.text.split('\n').length - 1,
+              ]),
+              locationHints: current(a.id)!
+                .research!.log.filter((l) => l.startsWith('文件内定位 '))
+                .slice(-10),
+            }),
+        )
+    const files = workerFilesSchema.parse(result.files)
+    const selected = files.filter((file) =>
+      candidates.some((c) => c.repo === file.repo && c.paths.includes(file.path)),
     )
+    await change(a.id, (r) => {
+      const dispatch = r.decisions?.at(-1)
+      if (!dispatch?.workerRunId) throw Error('缺少本轮委托的运行记录')
+      dispatch.workerReturned = true
+      dispatch.workerFiles = selected
+      for (const file of files)
+        if (!selected.includes(file)) event(r, 'A 选择的路径未在该仓库的目录中找到：' + file.path)
+    })
+    return selected
   }
-  if (!candidates.some((c) => c.paths.length)) {
-    await remember(a.id, '此次目录检索没有取得可选文件')
-    return
-  }
-  const result = await run(
-    a,
-    'a',
-    '你是本事务唯一执行会话 A。为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
-      JSON.stringify({
-        goal: a.goal,
-        plan,
-        order,
-        candidates,
-        alreadyRead: docs.map((d) => [
-          d.repo,
-          d.path,
-          d.startLine,
-          (d.startLine ?? 1) + d.text.split('\n').length - 1,
-        ]),
-        locationHints: current(a.id)!
-          .research!.log.filter((l) => l.startsWith('文件内定位 '))
-          .slice(-10),
-      }),
-  )
-  const files = z
-    .array(
-      z.object({
-        repo: z.string(),
-        path: z.string(),
-        anchor: z.string().max(120).optional(),
-        purpose: z.string().min(1).max(500),
-      }),
-    )
-    .max(4)
-    .parse(result.files)
-  for (const file of files) {
-    if (!candidates.some((c) => c.repo === file.repo && c.paths.includes(file.path))) {
-      await remember(a.id, 'A 选择的路径未在该仓库的目录中找到：' + file.path)
-      continue
-    }
+  const files = prior?.workerFiles ?? (await selectFiles())
+  for (let index = prior?.filesProcessed ?? 0; index < files.length; index++) {
+    const file = files[index]
+    if (!plan!.repos.includes(file.repo)) throw Error('取证对象超出本次计划：' + file.repo)
     await remember(
       a.id,
       'A 查 ' + file.repo + '/' + file.path.replace('@README', 'README') + ' · ' + file.purpose,
@@ -333,10 +374,14 @@ async function collect(a: Affair, order: Instruction) {
       revision(file.repo),
     )
     if (!got.ok) {
-      await remember(a.id, got.error)
+      await change(a.id, (r) => {
+        event(r, got.error)
+        r.decisions!.at(-1)!.filesProcessed = index + 1
+      })
       continue
     }
     await change(a.id, (r) => {
+      r.decisions!.at(-1)!.filesProcessed = index + 1
       if (got.locations?.length)
         event(r, '文件内定位 ' + file.repo + '/' + file.path + ' · ' + got.locations.join(' | '))
       if (got.matchedAnchor === false)
@@ -397,12 +442,74 @@ async function restoreSourceLines(a: Affair) {
     })
   }
 }
-export async function research(id: string) {
+export async function confirmResearch(a: Affair) {
+  if (a.confirmed || a.research?.phase !== 'ready') return
+  if (a.directory) {
+    let saved: Affair
+    try {
+      saved = await window.cclinkStudio.ownerDirectories.confirm(a.id, a.directory.revision)
+    } catch (e) {
+      await loadDirectories()
+      throw e
+    }
+    acceptDirectory(saved)
+    if (saved.directory?.error) return
+  } else {
+    await change(a.id, (r, draft) => {
+      if (!r.plan || r.phase !== 'ready') throw Error('请先确认当前的调研约定')
+      draft.confirmed = true
+      say(r, '你', '确认目标和交付物，开始调研。')
+    })
+  }
+  await research(a.id)
+}
+
+async function finishCollection(id: string) {
+  await change(id, (r) => {
+    const order = r.decisions?.at(-1)
+    if (order && order.kind !== 'deliver') order.collectionClosed = true
+    r.phase = 'checking'
+    event(r, 'Owner 按交付目标复核 A 取得的资料')
+  })
+}
+
+export async function research(id: string, reassign = false) {
+  const initial = current(id)
+  if (!initial?.confirmed || !initial.research || initial.directory?.error) return
   await work(id, async () => {
+    const prior = unfinishedWorker(initial.research!)
+    if (prior) {
+      const conversationId = session(initial, 'a')
+      if (reassign) {
+        const status = await window.cclinkStudio.agent.getStatus(conversationId)
+        const run =
+          prior.workerRunId &&
+          (await window.cclinkStudio.agent.getRunStatus(conversationId, prior.workerRunId))
+        if (status.busy || (run && ['starting', 'running', 'cancelling'].includes(run.status)))
+          throw Error('会话 A 的原运行仍在执行，请先核对原回执。')
+        await change(id, (r) => {
+          r.decisions!.at(-1)!.collectionClosed = true
+          event(r, '用户决定重新取证，结束对原委托回执的等待')
+        })
+      } else {
+        if (!prior.requests || (!prior.workerFiles && (!prior.workerTicket || !prior.workerRunId)))
+          throw Error('无法唯一核对原委托回执，未重派 A。可核对原运行后再决定是否重新取证。')
+        if (
+          !prior.workerFiles &&
+          !(await window.cclinkStudio.agent.getRunStatus(conversationId, prior.workerRunId!))
+        )
+          throw Error('未找到原运行，已保留委托；请核对后决定是否重新取证。')
+        await change(id, (r, a) => {
+          a.issue = ''
+          r.phase = 'reading'
+          event(r, '恢复原委托，沿用会话 A 的回执')
+        })
+        await collect(initial, { reason: prior.reason, requests: prior.requests }, prior)
+        await finishCollection(id)
+      }
+    }
     const a = await change(id, (r, a) => {
       if (!r.plan || r.report) throw Error('没有可执行的调研约定')
-      if (!a.confirmed) say(r, '你', '确认目标和交付物，开始调研。')
-      a.confirmed = true
       a.issue = ''
       r.phase = 'checking'
       event(r, 'Owner 按已确认的交付物核对当前证据')
@@ -418,7 +525,7 @@ export async function research(id: string) {
         'main',
         '你是本事务 Owner。依据目标和约定的交付物，自行判断下一步，逐项核对原始资料，只把给定文本当证据。按信息依赖分批：若后续要查哪个细节取决于对现有材料的判断，先查清前一个问题，看过证据再给 A 下一项委托。可以一次并查独立的问题。概览或目录不能证明具体实现、实跑结果或输出等；需要时定向续用 A 查官方仓库的文档、示例或源码。不要因只是重述同一证据而反复检索。' +
           lookupFormat +
-          ' 若本次目标已充分得到支持，返回 {action:"deliver",reason:"逐项解释哪些出处解决了什么问题，注明判断边界",conclusion:"按约定样式写成可直接阅读的中文 Markdown 成品",items:[{repo:"原样仓库名",url:"实际证据的完整原样URL，行号由系统按引文定位",finding:"该来源支持的具体结论",quote:"该来源逐字原文的连续短句，6至160字符，无省略号"}]}。每个关键结论应有自己的证据项。每份原文提供 startLine 时即为该片段首行在源文件的真实行号，交付时由 Studio 将逐字引文自动定位到具体源文件行，不要为了数行再次取证。所有必须项均有直接证据才交付，不得降级必交项。不要把代码标识符的字面出现当作行为证明。确实没有途径继续时返回 {action:"blocked",reason:"尚缺什么及原因"}。\n' +
+          ' 若本次目标已充分得到支持，返回 {action:"deliver",reason:"逐项解释哪些出处解决了什么问题，注明判断边界",conclusion:"按约定样式写成可直接阅读的中文 Markdown 成品",items:[{repo:"原样仓库名",url:"实际证据的完整原样URL，行号由系统按引文定位",finding:"该来源支持的具体结论",quote:"该来源逐字原文的连续短句，6至160字符，无省略号"}]}。用 1 至 16 条证据覆盖关键结论。每份原文提供 startLine 时即为该片段首行在源文件的真实行号，交付时由 Studio 将逐字引文自动定位到具体源文件行，不要为了数行再次取证。所有必须项均有直接证据才交付，不得降级必交项。不要把代码标识符的字面出现当作行为证明。确实没有途径继续时返回 {action:"blocked",reason:"尚缺什么及原因"}。\n' +
           JSON.stringify({
             goal: a.goal,
             plan: state.plan,
@@ -464,15 +571,19 @@ export async function research(id: string) {
       if (out.action !== 'read') throw Error('未收到可执行的取证或交付决定')
       if (rounds++ >= 5) throw Error('本轮核对仍缺证据：' + reason)
       const order = instruction.parse(out)
+      if (order.requests.some((request) => !state.plan!.repos.includes(request.repo)))
+        throw Error('取证对象超出已确认的仓库范围')
       await change(id, (r) => {
-        decision(r, r.decisions?.length || r.docs.length ? 'more' : 'read', reason)
+        decision(
+          r,
+          r.decisions?.some((d) => d.workerRunId) || r.docs.length ? 'more' : 'read',
+          reason,
+          order.requests,
+        )
         r.phase = 'reading'
       })
       await collect(a, order)
-      await change(id, (r) => {
-        r.phase = 'checking'
-        event(r, 'Owner 按交付目标复核 A 取得的资料')
-      })
+      await finishCollection(id)
       correction = ''
     }
   })

@@ -11,7 +11,7 @@ import {
 } from '../utils/workspace-state'
 import { syncWorkbenchTabProjection } from '../utils/workbench-tab-model'
 import { workspaceRefFromKey } from '../utils/conversation-workspace'
-import { workspaceRefKey } from '@shared/workspace-ref'
+import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import { isHtmlFilePath } from '../utils/html-files'
 import { isValidBrowserTabMode } from '../features/browser/browser-tab-mode'
 
@@ -102,6 +102,15 @@ function isRestorableBrowserTab(tab: Tab): boolean {
   return isValidBrowserTabMode(tab)
 }
 
+function tabGroup(tab: Tab): number {
+  if (tab.type === 'workspace-home') return 0
+  return tab.pinned ? 1 : 2
+}
+
+function compareTabGroups(a: Tab, b: Tab): number {
+  return tabGroup(a) - tabGroup(b)
+}
+
 function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeTabId'> | null {
   if (!value || typeof value !== 'object') return null
   const parsed = value as { tabs?: Tab[]; activeTabId?: string | null }
@@ -121,7 +130,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
           Boolean(tab.articlePublishing.affairId)),
     )
     .map(normalizeFileTab)
-    .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true))
+
   const home =
     restored.find((tab) => tab.type === 'workspace-home') ??
     restored.find((tab) => tab.type === 'settings' && tab.settingsSection === 'workspace')
@@ -137,6 +146,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
             {
               ...tab,
               type: 'workspace-home',
+              pinned: true,
               title: '项目首页',
               icon: '⌂',
               settingsSection: (activeHome ?? tab).settingsSection,
@@ -144,6 +154,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
           ]
         : [],
   )
+  tabs.sort(compareTabGroups)
   if (tabs.length === 0 && Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null }
   if (tabs.length === 0) return null
   const activeTabId =
@@ -275,6 +286,7 @@ interface TabState {
   reorderTabs: (fromId: string, toId: string) => void
   /** 更新 Tab 标题 */
   setEditorPresentation: (id: string, mode: 'markdown' | 'source') => void
+  setDesktopTarget: (id: string, title: string, target: NonNullable<Tab['desktopTarget']>) => void
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
@@ -320,7 +332,10 @@ interface TabState {
   /** 获取当前活跃 Tab */
   getActiveTab: () => Tab | undefined
   /** 从主进程 WorkspaceState 恢复 Tab 列表；独立窗口持有的 Tab 可跨项目切换保留。 */
-  hydrateFromWorkspaceState: (value: unknown, options?: { preserveTabIds?: string[] }) => void
+  hydrateFromWorkspaceState: (
+    value: unknown,
+    options?: { preserveTabIds?: string[]; workspaceRef?: WorkspaceRef },
+  ) => void
 }
 
 export const useTabStore = create<TabState>((set, get) => ({
@@ -399,7 +414,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       }
 
       // forceNew 跳过允许多开的 Tab 去重
-      if (!forceNew) {
+      if (!forceNew || type === 'workspace-home') {
         if (
           type === 'company-accounts' ||
           type === 'company-workspace' ||
@@ -616,7 +631,10 @@ export const useTabStore = create<TabState>((set, get) => ({
         companyAccounts,
       }
       return {
-        tabs: [...state.tabs, newTab],
+        tabs:
+          type === 'workspace-home'
+            ? [{ ...newTab, pinned: true }, ...state.tabs]
+            : [...state.tabs, newTab],
         activeTabId: newTab.id,
       }
     })
@@ -674,6 +692,7 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   closeTab: (id) => {
     set((state) => {
+      if (state.tabs.some((tab) => tab.id === id && tab.type === 'workspace-home')) return state
       const tabs = state.tabs.filter((t) => t.id !== id)
       // 如果关闭的是当前 Tab，切换到最后一个剩余 Tab
       const activeTabId =
@@ -685,8 +704,8 @@ export const useTabStore = create<TabState>((set, get) => ({
   setTabPinned: (id, pinned) =>
     set((state) => ({
       tabs: state.tabs
-        .map((tab) => (tab.id === id ? { ...tab, pinned } : tab))
-        .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)),
+        .map((tab) => (tab.id === id && tab.type !== 'workspace-home' ? { ...tab, pinned } : tab))
+        .sort(compareTabGroups),
     })),
 
   activateTab: (id) => set({ activeTabId: id }),
@@ -697,7 +716,7 @@ export const useTabStore = create<TabState>((set, get) => ({
       const fromIdx = state.tabs.findIndex((t) => t.id === fromId)
       const toIdx = state.tabs.findIndex((t) => t.id === toId)
       if (fromIdx === -1 || toIdx === -1) return state
-      if (Boolean(state.tabs[fromIdx].pinned) !== Boolean(state.tabs[toIdx].pinned)) return state
+      if (tabGroup(state.tabs[fromIdx]) !== tabGroup(state.tabs[toIdx])) return state
       const next = [...state.tabs]
       const [moved] = next.splice(fromIdx, 1)
       next.splice(toIdx, 0, moved)
@@ -709,6 +728,14 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === id && tab.type === 'editor' ? { ...tab, editorPresentation: mode } : tab,
+      ),
+    })),
+  setDesktopTarget: (id, title, target) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id && tab.type === 'remote-desktop'
+          ? { ...tab, title, desktopTarget: target }
+          : tab,
       ),
     })),
   updateTabTitle: (id, title) =>
@@ -918,13 +945,22 @@ export const useTabStore = create<TabState>((set, get) => ({
       const preservedDetachedTabs = state.tabs.filter(
         (tab) => isProjectTab(tab) && preserveTabIds.has(tab.id) && !incomingIds.has(tab.id),
       )
-      const tabs = [...globalTabs, ...preservedDetachedTabs, ...next.tabs].sort(
-        (a, b) => Number(b.pinned === true) - Number(a.pinned === true),
-      )
+      const tabs = [...globalTabs, ...preservedDetachedTabs, ...next.tabs].sort(compareTabGroups)
+      const ref = options?.workspaceRef
+      if (ref && ref.kind !== 'global' && !tabs.some((tab) => tab.type === 'workspace-home')) {
+        tabs.unshift({
+          id: generateTabId(),
+          type: 'workspace-home',
+          title: '项目首页',
+          icon: '⌂',
+          pinned: true,
+          workspaceRef: ref,
+        })
+      }
       const activeTabId =
         state.activeTabId && globalTabs.some((tab) => tab.id === state.activeTabId)
           ? state.activeTabId
-          : (next.activeTabId ?? globalTabs[0]?.id ?? null)
+          : (next.activeTabId ?? globalTabs[0]?.id ?? tabs[0]?.id ?? null)
       return { tabs, activeTabId }
     })
   },

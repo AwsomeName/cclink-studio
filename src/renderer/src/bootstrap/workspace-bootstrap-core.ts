@@ -26,7 +26,7 @@ export interface WorkspaceBootstrapDeps {
     complete: () => Promise<void>
   }
   hydrateBrowserTabs: (value: unknown) => void
-  hydrateTabs: (value: unknown) => void
+  hydrateTabs: (value: unknown, ref: WorkspaceRef) => void
   hydrateEditorDrafts: (value: unknown) => void
   hydrateFileTree: (value: unknown) => void
   hydrateAgentConversations: (
@@ -134,7 +134,7 @@ export async function restoreWorkspaceState(
     deps.hydrateBrowserTabs(
       scopeWorkspaceBrowserSnapshot(sections.browserTabs ?? { tabs: {} }, scopedTabsSnapshot),
     )
-    deps.hydrateTabs(scopedTabsSnapshot)
+    deps.hydrateTabs(scopedTabsSnapshot, workspaceRef)
     deps.hydrateEditorDrafts(
       scopeWorkspaceEditorDraftSnapshot(sections.editorDrafts ?? { files: {} }, workspaceRef),
     )

@@ -97,6 +97,7 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@novnc/novnc": "1.7.0",
     "@tencentcloud/chat": "3.6.6",
     "@yume-chan/adb": "^2.6.0",
     "@yume-chan/adb-scrcpy": "^2.3.2",

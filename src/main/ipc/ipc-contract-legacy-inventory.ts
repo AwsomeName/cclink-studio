@@ -1,3 +1,4 @@
+import { desktopIpc } from '../../shared/ipc/remote-desktop'
 import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../../shared/ipc/owner-research'
 import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
@@ -114,6 +115,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitions: ownerResearchIpc,
     handlerFiles: ['src/main/owner/read-public-readme.ts'],
     preloadFiles: ['src/preload/index.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'RemoteDesktop',
+    definitionFile: 'src/shared/ipc/remote-desktop.ts',
+    definitionName: 'desktopIpc',
+    definitions: desktopIpc,
+    handlerFiles: ['src/main/remote-desktop/desktop-runtime.ts'],
+    preloadFiles: ['src/preload/remote-desktop-api.ts'],
   }),
   ...expandInvokeGroup({
     owner: 'LocalTts',

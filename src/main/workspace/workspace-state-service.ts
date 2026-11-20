@@ -1,4 +1,6 @@
 import {
+  defaultDiaryDirectory,
+  defaultDiaryTimezone,
   personalDiarySourceSchema,
   personalDiarySourceSection,
   type DiaryDocumentInput,
@@ -725,9 +727,18 @@ export class WorkspaceStateService {
     const root = join(parent, value.directoryName)
     await mkdir(root) // exclusive: an existing destination is never merged or removed
     try {
+      const settings = value.settings
+      if (settings.type === 'diary' && !settings.diary) {
+        await mkdir(join(root, defaultDiaryDirectory))
+        settings.diary = {
+          directory: defaultDiaryDirectory,
+          timezone: defaultDiaryTimezone,
+          taskIds: [],
+        }
+      }
       const saved = await this.saveWorkspaceSettings({
         workspacePath: root,
-        settings: value.settings,
+        settings,
         revision: null,
       })
       await this.getSnapshot(root)

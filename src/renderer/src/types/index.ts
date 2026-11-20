@@ -39,6 +39,7 @@ export type TabType =
   | 'settings'
   | 'preview'
   | 'file-preview'
+  | 'remote-desktop'
   | 'android'
   | 'model'
   | 'conversation'
@@ -160,6 +161,7 @@ export interface WebAffairDraftState {
 
 /** Workbench Tab */
 export interface Tab {
+  desktopTarget?: { host: string; port: number }
   /** Local presentation preference, persisted by the existing Tab owner. */
   workbenchLayout?: 'standard' | 'focus'
   editorPresentation?: 'markdown' | 'source'

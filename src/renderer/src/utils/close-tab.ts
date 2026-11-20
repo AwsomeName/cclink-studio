@@ -303,7 +303,7 @@ async function closeWebResourceDraft(tab: Tab): Promise<boolean> {
 
 export async function closeTabWithDraftPolicy(tabId: string): Promise<boolean> {
   const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
-  if (!tab) return false
+  if (!tab || tab.type === 'workspace-home') return false
 
   if (resolveConversationTab(tab)) {
     return closeConversationView(tab)

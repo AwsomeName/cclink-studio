@@ -53,7 +53,55 @@ const a = '处理器采用两级流水线。',
   b = '系统芯片集成存储器和外设。'
 try {
   await launch()
-  if (process.argv.includes('--interruption')) {
+  if (process.argv.includes('--worker-recovery')) {
+    await page
+      .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
+      .fill('调研 lowRISC/ibex，用官方 README 写一张项目定位卡，附一条原文出处。')
+    await click('发给 Owner')
+    const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
+    await confirm.waitFor({ timeout: 150000 })
+    const state = () =>
+      page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
+    const blocker = join((await state()).directory.path, '资料')
+    await writeFile(blocker, '验收专用占位', { flag: 'wx' })
+    await confirm.click()
+    await page.locator('[data-owner-phase="pending-save"]').waitFor({ timeout: 180000 })
+    const pending = await state()
+    const order = pending.research.decisions.at(-1)
+    assert.ok(order.workerRunId && order.workerFiles?.length && order.filesProcessed)
+    await app.close()
+    app = null
+    await launch()
+    await page.locator('.own-row').click()
+    await page.evaluate(() => {
+      window.ownerSmokeRuns = new Set()
+      window.cclinkStudio.agent.onRunStatus((run) => {
+        if (/^owner-.*-a$/.test(run.conversationId)) window.ownerSmokeRuns.add(run.runId)
+      })
+    })
+    assert.equal(await readFile(blocker, 'utf8'), '验收专用占位')
+    await rm(blocker)
+    await click('重试保存文件')
+    await click('核对原委托并继续')
+    await page.waitForFunction(
+      async () => {
+        const a = (await window.cclinkStudio.ownerDirectories.list()).items[0]
+        return a.research.decisions[0].collectionClosed
+      },
+      null,
+      { timeout: 90000 },
+    )
+    const restored = await state()
+    assert.equal(restored.research.decisions[0].workerRunId, order.workerRunId)
+    assert.equal(restored.research.decisions[0].filesProcessed, order.workerFiles.length)
+    assert.ok(restored.research.docs.length >= pending.research.docs.length)
+    assert.deepEqual(await page.evaluate(() => [...window.ownerSmokeRuns]), [])
+    console.log(
+      'PASS 证据写入中断 → 重启 → 重试保存 → 沿用原 A 回执完成取证',
+      order.workerRunId,
+      '新增 A 运行 0',
+    )
+  } else if (process.argv.includes('--interruption')) {
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
       .fill('帮我调研开源芯片 Ibex，给我一张源码入门卡。')
@@ -111,40 +159,68 @@ try {
     console.log('建档', folder)
     assert.deepEqual(
       (await readdir(folder)).filter((n) => !n.startsWith('.')).sort(),
-      ['事务.md', '工作记录.md'].sort(),
+      ['事务.md', '事务配置.md', '调度.md', '工作记录.md'].sort(),
     )
     assert.match(await readFile(join(folder, '事务.md'), 'utf8'), /Ibex/)
+    assert.deepEqual(await page.evaluate(() => [...window.ownerSmokeRuns]), [])
+    assert.match(await readFile(join(folder, '事务配置.md'), 'utf8'), /待确认草案/)
+    assert.match(await readFile(join(folder, '调度.md'), 'utf8'), /尚未派工/)
+    await page.getByText(/^事务文件 ·/).click()
+    await click('事务配置.md')
+    await page.getByRole('heading', { name: '事务配置.md', exact: true }).waitFor()
+    await click('关闭预览')
+    await click('调度.md')
+    const schedulePreview = page
+      .getByRole('heading', { name: '调度.md', exact: true })
+      .locator('..')
+    await schedulePreview
+      .getByText(/尚未派工/)
+      .first()
+      .waitFor()
     await confirm.waitFor()
     assert.equal((await state()).research.docs.length, 0)
     await snap('adaptive-01-plan')
     if (recovery) await writeFile(join(folder, '交付物'), '验收专用文件占位', { flag: 'wx' })
     await confirm.click()
-    const deadline = Date.now() + 450000
-    let workerRun
-    while (!workerRun && Date.now() < deadline) {
-      const sample = await page.evaluate(async () => {
-        const a = (await window.cclinkStudio.ownerDirectories.list()).items[0]
-        if (['done', 'error'].includes(a.research.phase))
-          return { status: a.research.phase, issue: a.issue }
-        const runId = document.querySelector('[data-owner-worker-run]')?.dataset.ownerWorkerRun
-        if (!runId || a.research.decisions?.at(-1)?.kind !== 'more') return null
-        return await window.cclinkStudio.agent.getRunStatus('owner-' + a.id + '-a', runId)
-      })
-      if (sample?.status === 'running') {
-        workerRun = sample
-        break
+    // Capture committed dispatch documents even when a native run finishes between UI polls.
+    const dispatches = new Map()
+    const readSchedule = async () => {
+      const deadline = Date.now() + 450000
+      while (Date.now() < deadline) {
+        const journal = JSON.parse(await readFile(join(folder, '.owner.json'), 'utf8'))
+        const r = journal.record.research
+        if (['done', 'error'].includes(r.phase)) return
+        const order = r.decisions?.at(-1)
+        if (!journal.pending && order?.workerRunId && !dispatches.has(order.workerRunId)) {
+          const md = await readFile(join(folder, '调度.md'), 'utf8')
+          if (md.includes('revision: ' + journal.revision + '\n')) {
+            assert.ok(md.includes(order.reason))
+            assert.ok(md.includes(order.workerRunId))
+            assert.match(md, /继续条件与下一步/)
+            dispatches.set(order.workerRunId, md)
+            console.log('已保存委托原因、运行和继续条件', order.kind, order.workerRunId)
+            if (order.kind === 'more' && process.env.OWNER_RESEARCH_SHOTS)
+              await writeFile(join(process.env.OWNER_RESEARCH_SHOTS, '补查中的调度.md'), md)
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      if (sample && ['done', 'error'].includes(sample.status))
-        throw Error(sample.issue || '事务已结束，未观察到执行中的补查')
-      await new Promise((resolve) => setTimeout(resolve, 150))
+      throw Error('等待调研终态超时')
     }
-    assert.ok(workerRun, '未观察到 A 的原生补查运行')
+    const capture = readSchedule()
+    // Keep a sampling failure observable at the join below while the UI assertions are running.
+    void capture.catch(() => {})
+    await page.waitForFunction(() => !!document.querySelector('[data-owner-worker-run]'), null, {
+      timeout: 150000,
+    })
+    await schedulePreview
+      .getByText(/首次委派 A/)
+      .first()
+      .waitFor()
+    await click('关闭预览')
     const beforeQuestion = await state()
-    const during = await readFile(join(folder, '工作记录.md'), 'utf8')
-    assert.match(during, /续用会话 A 补查/)
-    assert.ok((await readdir(join(folder, '资料'))).length > 0)
-    console.log('补查时已保存', await readdir(join(folder, '资料')))
-    const question = '为什么要让 A 补查？已取得的资料能说明什么，还缺什么？'
+    assert.match(await readFile(join(folder, '事务配置.md'), 'utf8'), /已确认的约定/)
+    const question = '为什么选择这些资料？目前还有哪些结论需要核对？'
     await page.getByLabel('和 Owner 沟通').fill(question)
     await click('发送给 Owner')
     await snap('adaptive-02-followup')
@@ -165,6 +241,8 @@ try {
       null,
       { timeout: 450000 },
     )
+    await capture
+    assert.ok(dispatches.size > 0)
     if (recovery) {
       const pending = await state()
       assert.ok(pending.directory.error)
@@ -177,7 +255,7 @@ try {
       assert.equal(await page.getByRole('button', { name: '打开交付物' }).count(), 0)
       const original = pending.research.report
       const runs = await page.evaluate(() => [...window.ownerSmokeRuns])
-      assert.ok(runs.includes(workerRun.runId))
+      for (const run of dispatches.keys()) assert.ok(runs.includes(run))
       console.log('待保存，已收到原生 A 运行', runs)
       await snap('01-pending-board-chat')
       await click('‹ 我的事务')
@@ -216,15 +294,18 @@ try {
     }
     const a = await state()
     assert.equal(a.research.phase, 'done', a.issue)
-    assert.equal(
-      await page.evaluate(
-        async ({ conversationId, runId }) =>
-          (await window.cclinkStudio.agent.getRunStatus(conversationId, runId))?.status,
-        workerRun,
-      ),
-      'succeeded',
-    )
-    assert.ok(a.research.decisions.some((d) => d.kind === 'more' && d.reason))
+    for (const order of a.research.decisions.filter((d) => d.workerRunId)) {
+      assert.equal(
+        await page.evaluate(
+          async ({ id, run }) =>
+            (await window.cclinkStudio.agent.getRunStatus('owner-' + id + '-a', run))?.status,
+          { id: a.id, run: order.workerRunId },
+        ),
+        'succeeded',
+      )
+      assert.equal(order.workerReturned, true)
+      assert.ok(dispatches.has(order.workerRunId), '该次真实派工有对应的落盘调度')
+    }
     assert.equal(a.research.decisions.at(-1).kind, 'deliver')
     assert.ok(a.research.docs.some((d) => d.path && !/^readme(\.md)?$/i.test(d.path)))
     assert.ok(
@@ -280,6 +361,7 @@ try {
       '已核对引文',
       a.research.report.items.length,
     )
+    assert.match(await readFile(join(folder, '调度.md'), 'utf8'), /无后续派工/)
     const count = a.research.report.items.length
     assert.equal(page, startPage)
     assert.equal((await app.windows()).length, 1)

@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+export const defaultDiaryDirectory = '个人计划'
+export const defaultDiaryTimezone = 'Asia/Shanghai'
+
 export const diaryRelativePathSchema = z
   .string()
   .min(1)
@@ -20,7 +23,7 @@ export const personalDiarySourceSchema = z
     directory: diaryRelativePathSchema,
     timezone: z
       .string()
-      .default('Asia/Shanghai')
+      .default(defaultDiaryTimezone)
       .refine((value) => {
         try {
           new Intl.DateTimeFormat('en', { timeZone: value })
@@ -72,5 +75,16 @@ export function diaryDateParts(
     month: get('month'),
     day: get('day'),
     weekday: new Intl.DateTimeFormat('zh-CN', { timeZone: timezone, weekday: 'short' }).format(now),
+  }
+}
+
+/** Paths relative to the configured diary directory, always using repository separators. */
+export function diaryDayLocation(date: ReturnType<typeof diaryDateParts>) {
+  const folder = date.year + '/' + date.month
+  const prefix = date.month + date.day
+  return {
+    folder,
+    filename: prefix + '_' + date.weekday + '.md',
+    matchesName: (name: string) => name.startsWith(prefix) && /^\d{4}[_-]周.*\.md$/.test(name),
   }
 }

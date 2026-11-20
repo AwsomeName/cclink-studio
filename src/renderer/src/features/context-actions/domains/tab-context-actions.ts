@@ -142,7 +142,9 @@ export function createTabContextCommands(): Command[] {
       },
       enabled: (context) => {
         const tabId = tabIdFromContext(context) ?? useTabStore.getState().activeTabId
-        return useTabStore.getState().tabs.some((tab) => tab.id === tabId)
+        return useTabStore
+          .getState()
+          .tabs.some((tab) => tab.id === tabId && tab.type !== 'workspace-home')
       },
       action: (context) => {
         const state = useTabStore.getState()

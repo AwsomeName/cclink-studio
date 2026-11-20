@@ -40,6 +40,10 @@
   height: 22px;
   flex-shrink: 0;
 }
+.status-bar-left > .tts-status-root:has(> .tts-status-title:only-child) {
+  flex: 0 0 auto;
+  min-width: 0;
+}
 .tts-status-root button:hover {
   background: rgb(255 255 255 / 15%);
 }

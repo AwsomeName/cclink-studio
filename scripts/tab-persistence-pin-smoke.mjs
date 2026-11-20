@@ -199,12 +199,70 @@ try {
   })
   await contextAction(editorId, 'tab.pin')
   await page.locator(`[data-workbench-tab-id="${editorId}"].pinned`).waitFor()
-  await page.evaluate(async () => {
+  const home = page.getByRole('tab', { name: '项目首页', exact: true })
+  await home.waitFor()
+  assert.equal(await home.locator('.tab-title, .tab-close').count(), 0)
+  const fixedPositions = () =>
+    page
+      .locator('.tab.pinned')
+      .evaluateAll((tabs) =>
+        tabs.map((tab) => [tab.dataset.workbenchTabId, tab.getBoundingClientRect().x]),
+      )
+  const pinsBefore = await fixedPositions()
+  assert.equal(pinsBefore[0][0], await home.getAttribute('data-workbench-tab-id'))
+  for (let index = 0; index < 12; index++) {
+    await page.getByRole('button', { name: '新建 Markdown 草稿', exact: true }).click()
+  }
+  const strip = page.locator('.tab-strip')
+  const endOffset = await strip.evaluate((el) => el.scrollLeft)
+  assert(endOffset > 240)
+  await page.locator('.tab-bar').screenshot({ path: join(runtime.runDir, 'tabs-at-end.png') })
+  await page.getByRole('button', { name: '向前滚动标签' }).click()
+  await page.waitForFunction(
+    (offset) => document.querySelector('.tab-strip').scrollLeft < offset - 100,
+    endOffset,
+  )
+  await page.waitForFunction(
+    (offset) => document.querySelector('.tab-strip').scrollLeft <= offset - 239,
+    endOffset,
+  )
+  await page
+    .locator('.tab-bar')
+    .screenshot({ path: join(runtime.runDir, 'tabs-scrolled-back.png') })
+  assert.deepEqual(await fixedPositions(), pinsBefore)
+  await home.click()
+  assert.equal(await home.getAttribute('aria-selected'), 'true')
+  await home.press('End')
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.tab-strip .tab:last-child').getAttribute('aria-selected') === 'true',
+  )
+  assert.deepEqual(await fixedPositions(), pinsBefore)
+  await page.screenshot({ path: join(runtime.runDir, 'fixed-and-scrolling-tabs.png') })
+  console.log(
+    'PASS home and both pins stay in place during horizontal scroll and keyboard navigation',
+  )
+  const extraIds = await page.evaluate(async () => {
     const { useTabStore } = await import('/src/stores/tab-store.ts')
-    useTabStore
-      .getState()
-      .openTab({ type: 'editor', title: '临时笔记', icon: '📄', forceNew: true })
+    const store = useTabStore.getState()
+    const ids = []
+    for (let index = 0; index < 32; index++) {
+      store.openTab({ type: 'editor', title: '溢出测试 ' + index, icon: '📄', forceNew: true })
+      const tabId = useTabStore.getState().activeTabId
+      store.setTabPinned(tabId, true)
+      ids.push(tabId)
+    }
+    return ids
   })
+  const morePins = page.getByRole('combobox', { name: '更多固定标签' })
+  await morePins.selectOption(extraIds.at(-1))
+  assert.equal(await morePins.inputValue(), extraIds.at(-1))
+  assert.equal((await fixedPositions())[0][1], pinsBefore[0][1])
+  assert((await strip.boundingBox()).width > 0)
+  await page.evaluate(async (ids) => {
+    const { useTabStore } = await import('/src/stores/tab-store.ts')
+    for (const id of ids) useTabStore.getState().setTabPinned(id, false)
+  }, extraIds)
   await contextAction(editorId, 'tab.close-others')
   assert((await tabSnapshot()).some((tab) => tab.id === id && tab.pinned))
   console.log('PASS browser and editor pin through real context menus; bulk close protects pins')
@@ -222,6 +280,10 @@ try {
   await startApp()
   await connect()
   await page.locator(`[data-workbench-tab-id="${id}"].pinned`).waitFor({ timeout: 20000 })
+  assert.equal(
+    await page.locator('.tab-strip-shell [role=tab]').first().getAttribute('aria-label'),
+    '项目首页',
+  )
   const restored = (await tabSnapshot()).find((tab) => tab.id === id)
   assert.equal(restored.browserProfile, binding.browserProfile)
   assert.deepEqual(restored.webResourceDraftRef, binding.webResourceDraftRef)

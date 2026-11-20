@@ -52,7 +52,8 @@ export function createWorkspaceBootstrapDeps(): WorkspaceBootstrapDeps {
     hydrateLayout: (value) => useUIStore.getState().hydrateFromWorkspaceState(value),
     createLayoutRestore: createWorkspaceLayoutRestore,
     hydrateBrowserTabs: (value) => useBrowserStore.getState().hydrateFromWorkspaceState(value),
-    hydrateTabs: (value) => useTabStore.getState().hydrateFromWorkspaceState(value),
+    hydrateTabs: (value, workspaceRef) =>
+      useTabStore.getState().hydrateFromWorkspaceState(value, { workspaceRef }),
     hydrateEditorDrafts: (value) => useEditorStore.getState().hydrateFromWorkspaceState(value),
     hydrateFileTree: (value) => useFsStore.getState().hydrateFromWorkspaceState(value),
     hydrateAgentConversations: (value, options) =>
@@ -107,7 +108,9 @@ export function useWorkspaceBootstrap(): boolean {
       if (
         result.canPersistRuntime &&
         result.workspacePath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath &&
-        useTabStore.getState().tabs.length === 0
+        useTabStore
+          .getState()
+          .tabs.every((tab) => tab.type === 'workspace-home' && !tab.settingsSection)
       ) {
         showWorkspaceHome({ kind: 'local', path: result.workspacePath! }, 'system')
       }

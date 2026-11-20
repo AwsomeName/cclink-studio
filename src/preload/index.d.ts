@@ -40,6 +40,7 @@ import type {
 } from '../shared/ipc/workbench-window'
 
 export interface CCLinkStudioAPI {
+  remoteDesktop: import('../shared/ipc/remote-desktop').DesktopApi
   localTts: import('../shared/local-tts').LocalTtsApi
   reportWorkbenchBounds: (bounds: BrowserWorkbenchBounds) => void
 
@@ -111,6 +112,8 @@ export interface CCLinkStudioAPI {
       a: import('../shared/owner/affair').Affair,
       revision: number,
     ) => Promise<import('../shared/owner/affair').Affair>
+    confirm: (id: string, revision: number) => Promise<import('../shared/owner/affair').Affair>
+    upgrade: (id: string, revision: number) => Promise<import('../shared/owner/affair').Affair>
     retry: (id: string) => Promise<import('../shared/owner/affair').Affair>
     reveal: (id: string) => Promise<void>
     preview: (id: string, name: string) => Promise<string>

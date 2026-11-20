@@ -1,4 +1,5 @@
 import { createCompanyWorkspaceRuntime } from '../company-workspace/company-workspace-runtime'
+import { createDesktopRuntime } from '../remote-desktop/desktop-runtime'
 import { createLocalTtsRuntime } from '../local-tts/local-tts-runtime'
 import type { CclinkStudioRuntimeState } from './app-runtime'
 import { ServiceRegistry } from './service-registry'
@@ -54,6 +55,7 @@ export function createRuntimeServiceRegistry(
   })
   registry.register(createCompanyWorkspaceRuntime(runtime))
   registry.register(createLocalTtsRuntime(runtime))
+  registry.register(createDesktopRuntime(runtime))
   registry.register({
     name: 'automation-runtime',
     start: () => bootstrapAutomationRuntime(runtime),

@@ -68,7 +68,7 @@ await writeFile(
 const launcher = join(root, 'launch.cjs')
 await writeFile(
   launcher,
-  `const {app}=require('electron'); app.setPath('home',${JSON.stringify(home)});app.setPath('documents',${JSON.stringify(home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('out/main/index.js'))});`,
+  `const {app}=require('electron'); app.setPath('home',${JSON.stringify(home)});app.setPath('documents',${JSON.stringify(home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve(process.env.CCLINK_TYPED_SMOKE_BUILD || 'out', 'main/index.js'))});`,
 )
 let app
 async function launch() {
@@ -133,12 +133,17 @@ try {
   await page.locator('.personal-diary-home').waitFor()
   const typed = join(home, '独立日记')
   const configFile = join(typed, '.cclink-studio/workspace-settings.json')
-  assert.equal(JSON.parse(await readFile(configFile, 'utf8')).type, 'diary')
+  const typedSettings = JSON.parse(await readFile(configFile, 'utf8'))
+  assert.equal(typedSettings.type, 'diary')
+  assert.equal(typedSettings.diary.directory, '个人计划')
+  assert.equal(typedSettings.diary.timezone, 'Asia/Shanghai')
   await page.getByRole('button', { name: '项目设置', exact: true }).click()
+  await page.getByLabel('项目日记时区', { exact: true }).fill('Asia/Tokyo')
   await page.getByLabel('项目显示名称', { exact: true }).fill('旅行日记')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
   await page.getByText('项目设置已保存；原文件与任务保持原位。', { exact: true }).waitFor()
   assert.equal(JSON.parse(await readFile(configFile, 'utf8')).name, '旅行日记')
+  assert.equal(JSON.parse(await readFile(configFile, 'utf8')).diary.timezone, 'Asia/Tokyo')
   await page.screenshot({ path: join(root, 'workspace-settings.png') })
   const collision = await page.evaluate(async (parent) => {
     try {
@@ -288,9 +293,15 @@ try {
   await git(seed, ['init', '--initial-branch=main'])
   await git(seed, ['config', 'user.name', 'Diary Acceptance'])
   await git(seed, ['config', 'user.email', 'diary@example.invalid'])
-  await mkdir(join(seed, directory), { recursive: true })
-  await writeFile(join(seed, directory, filename), '# 远程日记\n远程初版正文\n')
+  const portable = { directory: '旅行手记', timezone: 'Asia/Hong_Kong' }
+  const copyDirectory = join(portable.directory, String(now.getFullYear()), month)
+  await mkdir(join(seed, copyDirectory), { recursive: true })
+  await writeFile(join(seed, copyDirectory, filename), '# 远程日记\n远程初版正文\n')
   await mkdir(join(seed, '.cclink-studio/shared/scheduled-tasks'), { recursive: true })
+  await writeFile(
+    join(seed, '.cclink-studio/workspace-settings.json'),
+    JSON.stringify({ version: 1, name: '旅行手记', type: 'diary', diary: portable }),
+  )
   const def = tasks[1].definition
   const shared = Object.fromEntries(
     [
@@ -347,7 +358,10 @@ try {
           )
         ).sections.personalDiarySource,
     )
-  const firstCopy = (await getSource()).workspacePath
+  const firstSource = await getSource()
+  assert.equal(firstSource.directory, portable.directory)
+  assert.equal(firstSource.timezone, portable.timezone)
+  const firstCopy = firstSource.workspacePath
   assert.notEqual(firstCopy, workspace)
   const sharedTasks = await page.evaluate(
     (path) => window.cclinkStudio.scheduledTasks.inspect(path),
@@ -358,8 +372,8 @@ try {
   assert.equal(sharedTasks.tasks[0].definition.id, def.id)
   assert.equal(sharedTasks.tasks[0].activation.enabled, false)
   await page.screenshot({ path: join(root, 'git-cloned.png') })
-  await writeFile(join(seed, directory, filename), '# 远程日记\n远程更新后的正文\n')
-  await writeFile(join(seed, directory, '新增计划.md'), '# 远程新增计划\n')
+  await writeFile(join(seed, copyDirectory, filename), '# 远程日记\n远程更新后的正文\n')
+  await writeFile(join(seed, copyDirectory, '新增计划.md'), '# 远程新增计划\n')
   await git(seed, ['add', '.'])
   await git(seed, ['commit', '-m', 'Update diary'])
   await git(seed, ['push'])
@@ -375,7 +389,7 @@ try {
     ),
   )
   assert.equal(
-    await readFile(join(firstCopy, directory, filename), 'utf8'),
+    await readFile(join(firstCopy, copyDirectory, filename), 'utf8'),
     '# 远程日记\n远程初版正文\n',
   )
   await page.screenshot({ path: join(root, 'git-review.png') })
@@ -417,7 +431,7 @@ try {
   const secondCopy = (await getSource()).workspacePath
   assert.notEqual(secondCopy, firstCopy)
   assert.equal(
-    await readFile(join(firstCopy, directory, filename), 'utf8'),
+    await readFile(join(firstCopy, copyDirectory, filename), 'utf8'),
     '# 远程日记\n远程初版正文\n',
   )
   for (const [path, content] of originals) assert.equal(await readFile(path, 'utf8'), content)

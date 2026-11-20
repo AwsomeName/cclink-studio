@@ -10,7 +10,8 @@ import electronPath from 'electron'
 const repository = resolve(import.meta.dirname, '..')
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:5173'
 const temporary = await mkdtemp(join(tmpdir(), 'studio-clock-'))
-const evidence = join(repository, 'docs/testing/status-bar-clock')
+const evidence =
+  process.env.CCLINK_STUDIO_SMOKE_EVIDENCE_DIR || join(repository, 'docs/testing/status-bar-clock')
 await mkdir(evidence, { recursive: true })
 await mkdir(join(temporary, 'profile'))
 await mkdir(join(temporary, 'home'))
@@ -59,11 +60,15 @@ try {
   })
   await page.locator('.status-bar-url').waitFor()
   await page.evaluate(async () => {
+    const { useAgentStore } = await import('/src/stores/agent-store.ts')
     const { useGitStore } = await import('/src/stores/git-store.ts')
     const { useUpdateStore } = await import('/src/stores/update-store.ts')
     const { useBrowserStore } = await import('/src/stores/browser-store.ts')
     const { useTabStore } = await import('/src/stores/tab-store.ts')
     const { useFsStore } = await import('/src/stores/fs-store.ts')
+    const agent = useAgentStore.getState()
+    const conversationId = agent.createConversation({ activate: false })
+    agent.setLoading(true, conversationId)
     useGitStore.setState({
       loadWorkspace: async () => {},
       refresh: async () => {},
@@ -111,7 +116,8 @@ try {
       },
     }))
   })
-  for (const width of [1400, 1125, 1124, 1100, 900, 785, 784, 760, 640, 480]) {
+  const runningWork = page.getByRole('button', { name: '进行中的工作 · 1 个会话', exact: true })
+  for (const width of [1470, 1400, 1125, 1124, 1100, 900, 785, 784, 760, 640, 480]) {
     await app.evaluate(
       ({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setContentSize(width, 780),
       width,
@@ -122,7 +128,7 @@ try {
     const layout = await page.evaluate(() => {
       const box = (node) => {
         const r = node.getBoundingClientRect()
-        return { left: r.left, right: r.right, width: r.width }
+        return { left: r.left, right: r.right, width: r.width, top: r.top, bottom: r.bottom }
       }
       const bar = document.querySelector('.status-bar')
       const clock = document.querySelector('.status-bar-clock')
@@ -143,6 +149,12 @@ try {
       }
     })
     assert.equal(layout.height, 22)
+    for (const item of [layout.clock, ...layout.sides.flatMap((side) => side.items)]) {
+      assert(
+        item.top >= layout.bar.top - 0.5 && item.bottom <= layout.bar.bottom + 0.5,
+        JSON.stringify(layout),
+      )
+    }
     assert(
       Math.abs((layout.clock.left + layout.clock.right) / 2 - layout.viewport / 2) < 1,
       JSON.stringify(layout),
@@ -150,6 +162,7 @@ try {
     assert.equal(layout.full, width > 1124)
     assert.equal(await page.locator('.status-bar-edition').isVisible(), width > 784)
     assert.equal(await page.locator('.status-bar-url').isVisible(), width > 784)
+    assert(await runningWork.isVisible())
     for (const side of layout.sides) {
       assert(side.side === 'left' ? side.right < layout.clock.left : side.left > layout.clock.right)
       let previous = side.left
@@ -162,6 +175,10 @@ try {
       await page.screenshot({ path: join(evidence, `width-${width}.png`) })
     pass(`width ${width}: centered, 22px high, correct format, long labels contained`)
   }
+  await runningWork.click()
+  await page.getByRole('dialog').getByRole('heading', { name: '进行中的工作' }).waitFor()
+  await page.keyboard.press('Escape')
+  pass('running work remains accessible at the narrowest width')
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0].setContentSize(900, 780),
   )

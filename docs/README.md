@@ -112,7 +112,7 @@
 - `docs/features/activity-bar-text-navigation-development-plan.md`：已实施的最小导航方案；包含入口定向修复、完整手势提交、有效栏宽和精简计数夹具；验证见文字横排验收记录。
 - `docs/features/agent-role-configuration.md`：Agent 角色中心事实源；包含已实现待异机验收的会话配置、全局单例配置页、运行回执和 Session 隔离，Skill / `SOUL.md` 内容扩展，以及 AI 员工暂停后的 R0-R4 角色开发里程碑。
 - [Owner 0.1（暂定名）](features/ai-employees.md)：一位 Owner 只负责一件事务，按需管理多个执行会话，不管理其他 Owner；开发版可从右侧对话约定调研范围、委派 A 查公开仓库并交付附出处的简报。
-- [Owner 0.1 独立面板与六步效果图](design/owner-0.1/README.md)：用同一主对话和一段执行会话走通芯片调研的交办、核对、补查与交付；独立调研见 [AgentOp](research/owner-0.1/agentop.md) 和 [pi-missions](research/owner-0.1/pi-missions.md)。
+- [Owner 工作模式、固定侧栏与存储设计](design/owner-0.1/workbench-mode.md) · [事务流程与六步效果图](design/owner-0.1/README.md)：用同一主对话和一段执行会话走通芯片调研的交办、核对、补查与交付；独立调研见 [AgentOp](research/owner-0.1/agentop.md) 和 [pi-missions](research/owner-0.1/pi-missions.md)。
 - `docs/features/agent-profiles.md`：v0.1.14 旧角色方案的兼容与迁移说明。
 - `docs/features/ai-web-affairs-agent.md`：AI 网页事务代理人产品事实源；网站与账号按 ADR 0014
   全局管理，事务继续属于项目，Agent 账号执行按 ADR 0016 使用明确任务、显式账号和人工接管。

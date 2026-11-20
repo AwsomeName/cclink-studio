@@ -1,11 +1,18 @@
 import { useState, useSyncExternalStore, useRef, useEffect } from 'react'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useAgentStore } from '../../stores/agent-store'
-import { acceptDirectory, retryDirectory } from './owner-store'
+import {
+  acceptDirectory,
+  retryDirectory,
+  hasDirectoryConflict,
+  useSavedDirectory,
+} from './owner-store'
 import {
   discuss,
+  confirmResearch,
   research,
   interrupted,
+  unfinishedWorker,
   subscribeWork,
   askOwner,
   activeQuestion,
@@ -80,11 +87,20 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const r = a.research!,
     [text, set] = useState(''),
     [notice, setNotice] = useState(''),
-    [preview, setPreview] = useState<{ name: string; content: string; line?: number } | null>(null),
+    [selection, setSelection] = useState<{ name: string; line?: number } | null>(null),
+    [loaded, setLoaded] = useState<{ name: string; revision: number; content: string } | null>(
+      null,
+    ),
     active = useSyncExternalStore(subscribeWork, () => !interrupted(a.id)),
     questionId = useSyncExternalStore(subscribeWork, () => activeQuestion(a.id)),
     bottom = useRef<HTMLDivElement>(null)
-  const previewRequest = useRef(0)
+  const draftVersion = useRef<number | undefined>(undefined)
+  const revision = a.directory?.revision
+  const saveError = a.directory?.error
+  const preview =
+    selection && loaded?.name === selection.name && loaded.revision === revision
+      ? { ...selection, content: loaded.content }
+      : null
   const [label, detail] = next(a, active)
   const title =
     a.title === a.goal.slice(0, 60) ? a.title.split(/[，。；！？]/u)[0] || a.title : a.title
@@ -96,26 +112,43 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     bottom.current?.scrollIntoView({ block: 'nearest' })
   }, [r.chat.length, questionId])
   const chatBusy = a.confirmed ? !!questionId : active
-  async function openFile(name: string, line?: number) {
-    const request = ++previewRequest.current
-    try {
-      const content = await window.cclinkStudio.ownerDirectories.preview(a.id, name)
-      if (request === previewRequest.current) setPreview({ name, content, line })
-    } catch (e) {
-      setNotice(String(e))
+  useEffect(() => {
+    if (!selection || saveError || revision === undefined) return
+    let active = true
+    window.cclinkStudio.ownerDirectories
+      .preview(a.id, selection.name)
+      .then((content) => {
+        if (active) setLoaded({ name: selection.name, revision, content })
+      })
+      .catch((e) => {
+        if (active) {
+          setLoaded(null)
+          setNotice(String(e))
+        }
+      })
+    return () => {
+      active = false
     }
+  }, [a.id, revision, saveError, selection])
+  function openFile(name: string, line?: number) {
+    setSelection({ name, line })
   }
   function send() {
     const t = text.trim()
     if (chatBusy || !t) return
-    set('')
     if (
-      ready &&
-      /^(确认|同意|可以|好的)[，,。！!\s]*(开始调研|按这个范围开始|开始)?[。！!\s]*$/.test(t)
+      !a.confirmed &&
+      /^(确认范围和交付物[，, ]*开始调研|确认[，, ]*开始调研)[。！! ]*$/.test(t)
     ) {
-      void research(a.id)
+      if (!ready || draftVersion.current !== (revision ?? a.updated)) {
+        setNotice('调研约定已更新，请查看当前范围和交付物，再点击确认。')
+        return
+      }
+      set('')
+      void confirmResearch(a).catch((e) => setNotice(String(e)))
       return
     }
+    set('')
     void discuss(a.id, t)
   }
   return (
@@ -146,10 +179,30 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 >
                   重试保存文件
                 </button>
+                {hasDirectoryConflict(a.id) && (
+                  <button
+                    onClick={() => void useSavedDirectory(a.id).catch((e) => setNotice(String(e)))}
+                  >
+                    放弃本次未保存修改，载入目录版本
+                  </button>
+                )}
               </p>
             )}
             {!a.directory.error && (
               <>
+                {(!a.directory.files.includes('调度.md') ||
+                  !a.directory.files.includes('事务配置.md')) && (
+                  <button
+                    onClick={() =>
+                      void window.cclinkStudio.ownerDirectories
+                        .upgrade(a.id, a.directory!.revision)
+                        .then(acceptDirectory)
+                        .catch((e) => setNotice(String(e)))
+                    }
+                  >
+                    补齐配置与调度文档
+                  </button>
+                )}
                 <details>
                   <summary>事务文件 · {a.directory.files.length}</summary>
                   {a.directory.files.map((name) => (
@@ -173,8 +226,8 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 <h3>{preview.name}</h3>
                 <button
                   onClick={() => {
-                    previewRequest.current++
-                    setPreview(null)
+                    setSelection(null)
+                    setLoaded(null)
                   }}
                 >
                   关闭预览
@@ -310,6 +363,12 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               <b>Owner 选取的项目　</b>
               {r.plan.repos.join('、')}
             </p>
+            {r.plan.timing && (
+              <p>
+                <b>时间约定　</b>
+                {r.plan.timing}
+              </p>
+            )}
             <small>Owner 可根据证据缺口检索项目仓库中的文档、示例和源码。</small>
           </>
         ) : (
@@ -350,8 +409,11 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 : discuss(a.id, '请根据刚才的要求重新提出调研约定。'))
             }
           >
-            从这里继续
+            {unfinishedWorker(r) ? '核对原委托并继续' : '从这里继续'}
           </button>
+        )}
+        {r.phase === 'error' && !a.directory?.error && !active && unfinishedWorker(r) && (
+          <button onClick={() => void research(a.id, true)}>结束等待，授权 Owner 重新取证</button>
         )}
       </article>
       <aside>
@@ -426,7 +488,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             </div>
           ))}
         {ready && !a.directory?.error && (
-          <button className="own-primary" onClick={() => void research(a.id)}>
+          <button
+            className="own-primary"
+            onClick={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
+          >
             确认范围和交付物，开始调研
           </button>
         )}
@@ -435,7 +500,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           aria-label="和 Owner 沟通"
           value={text}
           maxLength={1500}
-          onChange={(e) => set(e.target.value)}
+          onChange={(e) => {
+            if (!text.trim()) draftVersion.current = revision ?? a.updated
+            set(e.target.value)
+          }}
           placeholder={
             a.confirmed ? '问 Owner 当前进展或补查原因…' : '调整对象、比较维度或交付形式…'
           }

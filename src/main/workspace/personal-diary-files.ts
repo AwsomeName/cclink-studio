@@ -3,6 +3,7 @@ import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import {
   diaryDateParts,
+  diaryDayLocation,
   diaryDocumentInputSchema,
   type DiaryDocument,
   type DiaryDocumentInput,
@@ -46,12 +47,10 @@ export async function accessDiaryDocument(
       [...source.directory.split('/'), date.year, date.month],
       true,
     )
-    const prefix = date.month + date.day
-    const existing = (await readdir(folder)).filter((name) =>
-      new RegExp(`^${prefix}[_-]周.*\\.md$`).test(name),
-    )
+    const location = diaryDayLocation(date)
+    const existing = (await readdir(folder)).filter(location.matchesName)
     if (existing.length > 1) throw Error('今天有多份日记，请在日记列表中选择原文件')
-    path = join(folder, existing[0] ?? `${prefix}_${date.weekday}.md`)
+    path = join(folder, existing[0] ?? location.filename)
     if (!existing.length) {
       const template = `# ${date.year}-${date.month}-${date.day} ${date.weekday}\n\n今日体重：\n昨日睡眠：\n昨日花销：\nAI 剩余额度：\n昨日办公地点：\n昨日运动：\n昨日收入：\n昨日身体情况：\n\n## 昨日总结\n\n\n## 今日待做\n\n\n## 强调事项\n\n\n## 今日打卡\n\n<!-- 按时间、事项、详细记录；尚未填写的事实保持空白。 -->\n`
       try {

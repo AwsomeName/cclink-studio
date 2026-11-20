@@ -163,7 +163,9 @@ export function Workbench({
   )
 
   const createTab = useCallback(
-    async (commandId: 'browser.newTab' | 'workbench.newTab' | 'terminal.newTab'): Promise<void> => {
+    async (
+      commandId: 'browser.newTab' | 'workbench.newTab' | 'terminal.newTab' | 'desktop.newTab',
+    ): Promise<void> => {
       const result = await executeCommand(commandId, { source: 'toolbar' })
       if (!result.ok) {
         showToast(result.message ?? '新建失败，请重试', 'error')
@@ -320,6 +322,7 @@ export function Workbench({
         onDetach={handleDetachTab}
         onNewDocument={() => void createTab('workbench.newTab')}
         onNewBrowser={() => void createTab('browser.newTab')}
+        onNewDesktop={() => void createTab('desktop.newTab')}
         onNewTerminal={() => void createTab('terminal.newTab')}
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
         conversationDropActive={conversationDropActive}

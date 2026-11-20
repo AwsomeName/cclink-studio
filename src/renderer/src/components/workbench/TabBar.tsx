@@ -15,7 +15,9 @@ import {
   IconClose,
   IconFile,
   IconGlobe,
+  IconHome,
   IconTerminal,
+  IconMonitor,
 } from '../common/Icons'
 import { BrowserFavicon } from '../common/BrowserFavicon'
 import { useBrowserStore } from '../../stores/browser-store'
@@ -42,13 +44,14 @@ function getPointerDropTabId(clientX: number, clientY: number): string | null {
   const tab = document
     .elementFromPoint(clientX, clientY)
     ?.closest<HTMLElement>('[data-workbench-tab-id]')
-  return tab?.dataset.workbenchTabId ?? null
+  return tab?.dataset.homeTab ? null : (tab?.dataset.workbenchTabId ?? null)
 }
 
 function WorkbenchTabIcon({ tab }: { tab: Tab }): React.ReactElement {
   const faviconUrl = useBrowserStore((state) =>
     tab.type === 'browser' ? state.tabs[tab.id]?.faviconUrl : null,
   )
+  if (tab.type === 'workspace-home') return <IconHome size={16} />
   if (tab.type === 'browser') return <BrowserFavicon src={faviconUrl} size={14} />
   return <>{tab.icon || TAB_ICONS[tab.type]}</>
 }
@@ -65,6 +68,7 @@ interface TabBarProps {
   onDetach: (tabId: string) => void
   onNewDocument: () => void
   onNewBrowser: () => void
+  onNewDesktop: () => void
   onNewTerminal: () => void
   onShowMenu: (tabId: string, x: number, y: number, focusReturn: HTMLElement) => void
   conversationDropActive: boolean
@@ -82,6 +86,7 @@ export function TabBar({
   onDetach,
   onNewDocument,
   onNewBrowser,
+  onNewDesktop,
   onNewTerminal,
   onShowMenu,
   conversationDropActive,
@@ -97,7 +102,25 @@ export function TabBar({
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState({ before: false, after: false })
-  const tabOrderKey = JSON.stringify(tabs.map((tab) => tab.id))
+  const pinned = tabs.filter((tab) => tab.pinned)
+  const ordinary = tabs.filter((tab) => !tab.pinned)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const [shellWidth, setShellWidth] = useState(Infinity)
+  useLayoutEffect(() => {
+    const shell = shellRef.current
+    if (!shell) return
+    const measure = (): void => setShellWidth(shell.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(shell)
+    return () => observer.disconnect()
+  }, [])
+  // Keep one ordinary tab and its scroll controls reachable in a narrow workbench.
+  const slots = Math.max(1, Math.floor((shellWidth - (ordinary.length ? 148 : 0)) / 40))
+  const visiblePins = pinned.length > slots ? pinned.slice(0, Math.max(1, slots - 1)) : pinned
+  const extraPins = pinned.slice(visiblePins.length)
+  const activeExtraPin = extraPins.find((tab) => tab.id === activeTabId)
+  const tabOrderKey = JSON.stringify(ordinary.map((tab) => tab.id))
 
   useLayoutEffect(() => {
     const strip = stripRef.current
@@ -155,7 +178,12 @@ export function TabBar({
 
   const handlePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, tab: Tab): void => {
-      if (event.button !== 0 || (event.target as Element).closest('.tab-close')) return
+      if (
+        tab.type === 'workspace-home' ||
+        event.button !== 0 ||
+        (event.target as Element).closest('.tab-close')
+      )
+        return
       pointerDragRef.current = {
         tab,
         pointerId: event.pointerId,
@@ -252,101 +280,135 @@ export function TabBar({
     return () => window.removeEventListener('keydown', handleDragCancel, true)
   }, [onDetachDragCancel, resetPointerDrag])
 
+  function renderTab(tab: Tab): React.ReactElement {
+    const title =
+      tab.type === 'browser'
+        ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
+        : tab.title
+    const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
+    return (
+      <div
+        key={tab.id}
+        data-workbench-tab-id={tab.id}
+        data-home-tab={tab.type === 'workspace-home' || undefined}
+        className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+        role="tab"
+        title={tab.type === 'workspace-home' ? '项目首页' : label}
+        aria-label={tab.type === 'workspace-home' ? '项目首页' : label}
+        tabIndex={activeTabId === tab.id ? 0 : -1}
+        aria-selected={activeTabId === tab.id}
+        onPointerDown={(event) => handlePointerDown(event, tab)}
+        onPointerMove={handlePointerMove}
+        onPointerUp={(event) => finishPointerDrag(event, false)}
+        onPointerCancel={(event) => finishPointerDrag(event, true)}
+        onClick={(event) => {
+          if (suppressClickTabIdRef.current === tab.id) {
+            suppressClickTabIdRef.current = null
+            event.preventDefault()
+            return
+          }
+          onActivate(tab.id)
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
+        }}
+        onKeyDown={(event) => {
+          if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(event.key)) {
+            event.preventDefault()
+            const index = tabs.findIndex((item) => item.id === tab.id)
+            const nextIndex =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? tabs.length - 1
+                  : event.key === 'ArrowLeft'
+                    ? (index - 1 + tabs.length) % tabs.length
+                    : event.key === 'ArrowRight'
+                      ? (index + 1) % tabs.length
+                      : index
+            const next = tabs[nextIndex]
+            if (next) {
+              onActivate(next.id)
+              const element = Array.from(
+                tabBarRef.current?.querySelectorAll<HTMLElement>('[data-workbench-tab-id]') ?? [],
+              ).find((child) => (child as HTMLElement).dataset.workbenchTabId === next.id)
+              ;(
+                element ??
+                shellRef.current?.querySelector<HTMLSelectElement>('.tab-pin-overflow select')
+              )?.focus({ preventScroll: true })
+            }
+            return
+          }
+          if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+          event.preventDefault()
+          const rect = event.currentTarget.getBoundingClientRect()
+          onShowMenu(
+            tab.id,
+            rect.left + Math.min(24, rect.width / 2),
+            rect.top + Math.min(24, rect.height),
+            event.currentTarget,
+          )
+        }}
+      >
+        <span className="tab-icon">
+          <WorkbenchTabIcon tab={tab} />
+        </span>
+        {!tab.pinned && <span className="tab-title">{title}</span>}
+        {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
+        {!tab.pinned && (
+          <span
+            className="tab-close"
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose(tab.id)
+            }}
+          >
+            <IconClose size={12} />
+          </span>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       ref={tabBarRef}
       className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}
     >
-      <div className="tab-strip-shell">
-        <div className="tab-strip" ref={stripRef} role="tablist" aria-label="工作台标签">
-          {tabs.map((tab) => {
-            const title =
-              tab.type === 'browser'
-                ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
-                : tab.title
-            const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
-            return (
-              <div
-                key={tab.id}
-                data-workbench-tab-id={tab.id}
-                className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
-                role="tab"
-                title={label}
-                aria-label={label}
-                tabIndex={activeTabId === tab.id ? 0 : -1}
-                aria-selected={activeTabId === tab.id}
-                onPointerDown={(event) => handlePointerDown(event, tab)}
-                onPointerMove={handlePointerMove}
-                onPointerUp={(event) => finishPointerDrag(event, false)}
-                onPointerCancel={(event) => finishPointerDrag(event, true)}
-                onClick={(event) => {
-                  if (suppressClickTabIdRef.current === tab.id) {
-                    suppressClickTabIdRef.current = null
-                    event.preventDefault()
-                    return
-                  }
-                  onActivate(tab.id)
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
-                }}
-                onKeyDown={(event) => {
-                  if (
-                    ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(event.key)
-                  ) {
-                    event.preventDefault()
-                    const index = tabs.findIndex((item) => item.id === tab.id)
-                    const nextIndex =
-                      event.key === 'Home'
-                        ? 0
-                        : event.key === 'End'
-                          ? tabs.length - 1
-                          : event.key === 'ArrowLeft'
-                            ? (index - 1 + tabs.length) % tabs.length
-                            : event.key === 'ArrowRight'
-                              ? (index + 1) % tabs.length
-                              : index
-                    const next = tabs[nextIndex]
-                    if (next) {
-                      onActivate(next.id)
-                      const element = Array.from(stripRef.current?.children ?? []).find(
-                        (child) => (child as HTMLElement).dataset.workbenchTabId === next.id,
-                      )
-                      ;(element as HTMLElement | undefined)?.focus({ preventScroll: true })
-                    }
-                    return
-                  }
-                  if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
-                  event.preventDefault()
-                  const rect = event.currentTarget.getBoundingClientRect()
-                  onShowMenu(
-                    tab.id,
-                    rect.left + Math.min(24, rect.width / 2),
-                    rect.top + Math.min(24, rect.height),
-                    event.currentTarget,
-                  )
-                }}
-              >
-                <span className="tab-icon">
-                  <WorkbenchTabIcon tab={tab} />
-                </span>
-                {!tab.pinned && <span className="tab-title">{title}</span>}
-                {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
-                {!tab.pinned && (
-                  <span
-                    className="tab-close"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onClose(tab.id)
-                    }}
-                  >
-                    <IconClose size={12} />
-                  </span>
-                )}
-              </div>
-            )
-          })}
+      <div className="tab-strip-shell" ref={shellRef} role="tablist" aria-label="工作台标签">
+        {visiblePins.map(renderTab)}
+        {extraPins.length > 0 && (
+          <label
+            className={`tab-pin-overflow ${activeExtraPin ? 'active' : ''}`}
+            title={activeExtraPin ? `更多固定标签 · ${activeExtraPin.title}` : '更多固定标签'}
+          >
+            <span aria-hidden="true">
+              {activeExtraPin ? <WorkbenchTabIcon tab={activeExtraPin} /> : '•••'}
+            </span>
+            <select
+              aria-label="更多固定标签"
+              value={activeExtraPin?.id ?? ''}
+              onContextMenu={(event) => {
+                if (!activeExtraPin) return
+                event.preventDefault()
+                onShowMenu(activeExtraPin.id, event.clientX, event.clientY, event.currentTarget)
+              }}
+              onChange={(event) => onActivate(event.target.value)}
+            >
+              <option value="" disabled>
+                更多固定标签
+              </option>
+              {extraPins.map((tab) => (
+                <option key={tab.id} value={tab.id}>
+                  {tab.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div className="tab-strip" ref={stripRef}>
+          {ordinary.map(renderTab)}
         </div>
         {(overflow.before || overflow.after) && (
           <div className="tab-scroll-actions" aria-label="滚动标签">
@@ -399,6 +461,15 @@ export function TabBar({
           onClick={onNewTerminal}
         >
           <IconTerminal size={17} />
+        </button>
+        <button
+          type="button"
+          className="tab-create-button"
+          title="新建远程桌面"
+          aria-label="新建远程桌面"
+          onClick={onNewDesktop}
+        >
+          <IconMonitor size={16} />
         </button>
       </div>
       {conversationDropActive && (

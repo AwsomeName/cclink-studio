@@ -2,6 +2,14 @@ import { basename } from 'node:path'
 import { checkReport, researchStatus } from '../../shared/owner/research'
 import type { AffairRecord } from '../../shared/owner/affair'
 
+import {
+  documentHeader,
+  configurationDocument,
+  configurationFile,
+  scheduleDocument,
+  scheduleFile,
+} from './affair-documents'
+
 export const shortName = (value: string) =>
   Array.from(
     value
@@ -25,7 +33,14 @@ export function additions(before: AffairRecord | undefined, next: AffairRecord) 
   while (overlap && !previous.slice(-overlap).every((v, i) => v === r.log[i])) overlap--
   entries.push(...r.log.slice(overlap))
   const d = r.decisions?.at(-1)
-  if (d && JSON.stringify(r.decisions) !== JSON.stringify(prev?.decisions))
+  const last = prev?.decisions?.at(-1)
+  if (
+    d &&
+    (d.id !== last?.id ||
+      d.reason !== last?.reason ||
+      d.kind !== last?.kind ||
+      r.decisions?.length !== prev?.decisions?.length)
+  )
     entries.push(
       { read: '委派会话 A', more: '续用会话 A 补查', deliver: 'Owner 判定可以交付' }[d.kind] +
         '：' +
@@ -34,7 +49,13 @@ export function additions(before: AffairRecord | undefined, next: AffairRecord) 
   return entries.map((text) => ({ at: next.updated, text }))
 }
 
-export function directoryFiles(a: AffairRecord, history: History) {
+export function directoryFiles(
+  a: AffairRecord,
+  history: History,
+  path: string,
+  revision: number,
+  format: 1 | 2 = 2,
+) {
   const r = a.research!
   if ((r.phase === 'done') !== !!r.report || (r.report && !a.confirmed))
     throw Error('交付状态与已确认的报告不符')
@@ -104,7 +125,7 @@ export function directoryFiles(a: AffairRecord, history: History) {
     '\n'
   files['事务.md'] =
     [
-      '# ' + a.title,
+      format === 1 ? '# ' + a.title : documentHeader('owner-affair', a.id, revision, a.title),
       '## 目标',
       a.goal,
       '## ' + (a.confirmed ? '已确认的约定' : '待确认的约定'),
@@ -114,9 +135,15 @@ export function directoryFiles(a: AffairRecord, history: History) {
       '## 最近一次记录的状态',
       status + ' · ' + (a.issue || detail),
       r.decisions?.at(-1)?.reason,
-      reportFile ? '[打开交付物](' + encodeURI(reportFile) + ')' : '[查看工作记录](工作记录.md)',
+      format === 2 && '[事务配置](事务配置.md) · [当前调度](调度.md) · [工作记录](工作记录.md)',
+      format === 1 && !reportFile && '[查看工作记录](工作记录.md)',
+      reportFile && '[打开交付物](' + encodeURI(reportFile) + ')',
     ]
       .filter(Boolean)
       .join('\n\n') + '\n'
+  if (format === 2) {
+    files[configurationFile] = configurationDocument(a, path, revision)
+    files[scheduleFile] = scheduleDocument(a, revision)
+  }
   return { files, reportFile }
 }
