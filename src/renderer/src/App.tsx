@@ -68,7 +68,6 @@ function MainLayout(): React.ReactElement {
   const setSidebarWidth = useUIStore((s) => s.setSidebarWidth)
   const setAgentPanelWidth = useUIStore((s) => s.setAgentPanelWidth)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
-  const toggleAgentPanel = useUIStore((s) => s.toggleAgentPanel)
   const workspaceLoading = useFsStore((s) => s.loading)
   const workspacePicking = useFsStore((s) => s.picking)
   const workspaceError = useFsStore((s) => s.error)
@@ -239,11 +238,6 @@ function MainLayout(): React.ReactElement {
     [setSidebarWidth, setAgentPanelWidth],
   )
 
-  const toggleUnifiedAgentPanel = useCallback(() => {
-    // 顶栏按钮只负责展开/收起右侧面板；center 仅由无 Tab 的系统落地页使用。
-    toggleAgentPanel('right')
-  }, [toggleAgentPanel])
-
   if (!workspaceReady || !workbenchWindowReady) {
     return <LoadingScreen />
   }
@@ -331,7 +325,8 @@ function MainLayout(): React.ReactElement {
           <OwnerEntry open={ownerOpen} toggle={() => setOwnerOpen((v) => !v)} />
           <button
             className={`app-topbar-icon ${agentPanelVisible ? 'active' : ''}`}
-            onClick={toggleUnifiedAgentPanel}
+            aria-pressed={agentPanelVisible}
+            onClick={() => void executeCommand('workbench.toggleAgentPanel', { source: 'toolbar' })}
             title={agentPanelVisible ? '收起 Agent 面板' : '展开 Agent 面板'}
           >
             <IconPanelRight size={15} />
