@@ -132,7 +132,8 @@ export function DiarySetupWizard({
         fixed = await ws.confirmDiaryRoot(owner, target)
       } else
         fixed = await ws.initializePersonalSpace(mode === 'default' && !preview ? null : preview)
-      useFixedSpacesStore.setState({ spaces: fixed, firstUse: false })
+      // Stay open until tasks and today's draft are set up, so any failure is shown here.
+      useFixedSpacesStore.setState({ spaces: fixed })
       const root = fixed.personal!.workspacePath
       const settings = (await ws.getSettings(root)).settings
       const directory = settings.diary?.directory ?? preview?.directory ?? '个人计划'
@@ -321,6 +322,8 @@ export function DiarySetupWizard({
             <dd>{preview?.directory ?? '个人计划'}</dd>
             <dt>同步</dt>
             <dd>{sync === 'later' ? '稍后连接' : '使用 Git 仓库'}</dd>
+            <dt>时区</dt>
+            <dd>{defaultDiaryTimezone}（已有项目沿用其设置；可在项目设置修改）</dd>
             <dt>AI</dt>
             <dd>{ai?.state === 'ready' ? '本机 AI 就绪' : '—'}</dd>
           </dl>
@@ -334,7 +337,7 @@ export function DiarySetupWizard({
                   setChoice({ ...choice, daily: { ...choice.daily, enable: e.target.checked } })
                 }
               />
-              每日起草 · 每天自动生成当天草稿
+              每日起草 · 每天自动生成当天草稿（项目已有该任务时沿用原时间）
               <input
                 aria-label="每日起草时间"
                 type="time"

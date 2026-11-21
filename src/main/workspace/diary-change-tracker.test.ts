@@ -72,6 +72,15 @@ describe('diary change reports', () => {
     expect(await tracker.afterRun({ runId: 'r2' })).toBeNull()
   })
 
+  it('reports nothing when the snapshot is bounded, instead of claiming deletions', async () => {
+    const project = join(root, 'project')
+    await writeFile(join(project, '个人计划/大文件.md'), 'x'.repeat(600 * 1024))
+    const tracker = new DiaryChangeTracker(join(root, 'reports.json'))
+    await tracker.beforeRun({ conversationId: 'c', runId: 'big', workspacePath: project })
+    await writeFile(join(project, '个人计划/2026/11/1121_周六.md'), '改动')
+    expect(await tracker.afterRun({ runId: 'big' })).toBeNull()
+  })
+
   it('keeps context around changes', () => {
     expect(diffLines('a\nb\nc\nd\ne\nf', 'a\nb\nc\nX\ne\nf').diff).toEqual([
       '  b',

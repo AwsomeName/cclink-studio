@@ -112,6 +112,16 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [revision, setRevision] = useState(0)
   const [clock, setClock] = useState(() => Date.now())
   const [month, setMonth] = useState('')
+  const [aiProblem, setAiProblem] = useState('')
+  useEffect(() => {
+    void window.cclinkStudio.agent
+      .getCapabilities()
+      .then((items) => {
+        const backend = items.find((item) => item.name === 'agent-backend')
+        setAiProblem(backend && backend.state !== 'ready' ? backend.reason || backend.state : '')
+      })
+      .catch(() => {})
+  }, [revision])
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 60000)
     return () => window.clearInterval(timer)
@@ -122,6 +132,8 @@ export function PersonalDiaryHome(): React.ReactElement {
   useEffect(() => {
     let alive = true
     setBusy(true)
+    // Wait for this project's settings: a missing or stale snapshot must not look "unset".
+    if (ownerPath && config?.workspacePath !== ownerPath) return
     void (async () => {
       const [items, snapshot] = await Promise.all([
         window.cclinkStudio.workspaceState.listLocalWorkspaces(),
@@ -166,7 +178,7 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => {
       alive = false
     }
-  }, [ownerPath, config?.revision])
+  }, [ownerPath, config?.revision, config?.workspacePath])
   useEffect(() => {
     if (!source) return
     let alive = true
@@ -277,7 +289,10 @@ export function PersonalDiaryHome(): React.ReactElement {
     dayKey(daily.latestRun.scheduledFor ?? daily.latestRun.createdAt) === todayKey
       ? daily.latestRun
       : undefined
-  const weeklyPlans = files.plans.filter((file) => file.path.includes('/周计划/'))
+  // Mixed naming (第47周.md, 2026-11-23-周复盘.md): newest by modification time.
+  const weeklyPlans = files.plans
+    .filter((file) => file.path.includes('/周计划/'))
+    .sort((a, b) => b.modifiedAt - a.modifiedAt)
   const longTermPlans = files.plans.filter(
     (file) => source && file.path === `${source.workspacePath}/${source.directory}/${file.name}`,
   )
@@ -410,6 +425,14 @@ export function PersonalDiaryHome(): React.ReactElement {
               {file.name}
             </button>
           ))}
+        </div>
+      )}
+      {!today.length && source && aiProblem && (
+        <div className="diary-card" role="alert">
+          <b>本机 AI 不可用，今天的草稿无法自动生成</b>
+          <p className="muted">
+            {aiProblem}。请在 Studio 设置的 Agent 中修复；修复后会按时起草，也可现在起草。
+          </p>
         </div>
       )}
       {!today.length && source && (

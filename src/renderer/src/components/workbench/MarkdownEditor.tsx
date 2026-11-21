@@ -624,6 +624,8 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
   const switchedToSourceRef = useRef(false)
   useEffect(() => {
     if (!parseBlockedReason || switchedToSourceRef.current) return
+    // Scoped to diary projects; other Studio documents keep their protected preview.
+    if (useWorkspaceStore.getState().settingsSnapshot?.settings.type !== 'diary') return
     const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
     if (!tab) return
     switchedToSourceRef.current = true

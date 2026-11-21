@@ -12,6 +12,11 @@ const safeFlags = [
   'protocol.ext.allow=never',
   '-c',
   'submodule.recurse=false',
+  // No SSH agent, system credential store or default identity: remotes needing a key fail here.
+  '-c',
+  `core.sshCommand=ssh -F ${nullPath} -o BatchMode=yes -o IdentityAgent=none -o IdentitiesOnly=yes -o IdentityFile=${nullPath} -o IgnoreUnknown=UseKeychain -o UseKeychain=no`,
+  '-c',
+  'credential.helper=',
 ]
 
 export interface FastForwardResult {

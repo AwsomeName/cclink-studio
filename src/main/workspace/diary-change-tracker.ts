@@ -10,9 +10,10 @@ import { readWorkspaceSettings } from './workspace-settings-files'
 
 const MAX_FILES = 5000
 const MAX_FILE_BYTES = 512 * 1024
+const MAX_TOTAL_BYTES = 32 * 1024 * 1024
 const MAX_REPORTS = 30
 
-type Snapshot = Map<string, { hash: string; content: string }>
+type Snapshot = Map<string, { hash: string; content: string }> & { complete?: boolean }
 interface StoredReport extends DiaryChangeReport {
   /** Exact contents needed to undo; never sent to the renderer. */
   restore: Array<{ path: string; before: string | null; afterHash: string | null }>
@@ -55,6 +56,8 @@ export class DiaryChangeTracker {
     if (!run) return null
     this.active.delete(input.runId)
     const after = await snapshot(run.workspacePath)
+    // A bounded snapshot cannot tell "deleted" from "not scanned": report nothing then.
+    if (!run.before.complete || !after.complete) return null
     const files: DiaryChangeReport['files'] = []
     const restore: StoredReport['restore'] = []
     for (const path of new Set([...run.before.keys(), ...after.keys()])) {
@@ -155,15 +158,25 @@ function publicReport(report: StoredReport): DiaryChangeReport {
 
 async function snapshot(root: string): Promise<Snapshot> {
   const result: Snapshot = new Map()
+  result.complete = true
+  let total = 0
   const walk = async (dir: string): Promise<void> => {
-    if (result.size >= MAX_FILES) return
+    if (result.size >= MAX_FILES || total > MAX_TOTAL_BYTES) {
+      result.complete = false
+      return
+    }
     for (const entry of await readdir(dir, { withFileTypes: true }).catch(() => [])) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) await walk(path)
       else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
         const info = await lstat(path).catch(() => null)
-        if (!info || info.size > MAX_FILE_BYTES) continue
+        if (!info) continue
+        if (info.size > MAX_FILE_BYTES) {
+          result.complete = false
+          continue
+        }
+        total += info.size
         const content = await readFile(path, 'utf8').catch(() => null)
         if (content === null) continue
         result.set(relative(root, path).split(sep).join('/'), { hash: hash(content), content })

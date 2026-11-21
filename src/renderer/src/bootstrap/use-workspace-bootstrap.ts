@@ -101,8 +101,7 @@ export function useWorkspaceBootstrap(): boolean {
       await window.cclinkStudio.workspaceState
         .ensurePersonalSpace()
         .then((spaces) => {
-          // A new user starts at first use; nothing is created until confirmation.
-          useFixedSpacesStore.setState({ spaces, firstUse: !spaces.personal })
+          useFixedSpacesStore.setState({ spaces })
         })
         .catch(async (error) => {
           console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error)
@@ -110,10 +109,20 @@ export function useWorkspaceBootstrap(): boolean {
           const spaces = await window.cclinkStudio.workspaceState.getFixedSpaces().catch(() => null)
           if (spaces?.personal)
             useFixedSpacesStore.setState({
+              spaces,
               relocate: { previousPath: spaces.personal.workspacePath, error: String(error) },
             })
         })
       const result = await runWorkspaceBootstrapOnce()
+      // A new user with nothing to restore starts at first use; nothing exists until confirmed.
+      const fixedState = useFixedSpacesStore.getState()
+      if (
+        fixedState.spaces &&
+        !fixedState.spaces.personal &&
+        !fixedState.relocate &&
+        !result.workspacePath
+      )
+        useFixedSpacesStore.setState({ firstUse: true })
       if (
         result.canPersistRuntime &&
         result.workspacePath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath &&
