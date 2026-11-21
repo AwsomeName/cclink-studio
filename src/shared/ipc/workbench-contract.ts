@@ -194,6 +194,7 @@ const diaryRootPreviewSchema = z
     directory: z.string().max(1024),
     latestFile: z.string().max(4096).nullable(),
     diaryCount: z.number().int().min(0).optional(),
+    isGitRepository: z.boolean().optional(),
     revision: z.string().max(128).nullable(),
     projectId: z.string().max(128).nullable(),
   })
@@ -223,6 +224,10 @@ export const workspaceStateIpcContracts = {
   ),
   confirmDiaryRoot: bindIpcParser(workspaceStateIpc.confirmDiaryRoot, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0]), diaryRootPreviewSchema.parse(args[1])),
+  ),
+  describeDefaultPersonalSpace: bindLegacyNoArgs(workspaceStateIpc.describeDefaultPersonalSpace),
+  initializePersonalSpace: bindIpcParser(workspaceStateIpc.initializePersonalSpace, (args) =>
+    ipcArgs(args[0] === null ? null : diaryRootPreviewSchema.parse(args[0])),
   ),
   inspectPersonalRelocation: bindIpcParser(workspaceStateIpc.inspectPersonalRelocation, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),

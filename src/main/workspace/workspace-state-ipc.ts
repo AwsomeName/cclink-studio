@@ -179,6 +179,21 @@ export function registerWorkspaceStateIpc(
     },
   )
   registerTrustedIpcContract(
+    workspaceStateIpcContracts.describeDefaultPersonalSpace,
+    trustedRendererGuard,
+    () => workspaceStateService.describeDefaultPersonalSpace(),
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.initializePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      if (preview) assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      const fixed = await workspaceStateService.initializePersonalSpace(preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
     workspaceStateIpcContracts.inspectPersonalRelocation,
     trustedRendererGuard,
     (event, path) => {
@@ -205,6 +220,7 @@ export function registerWorkspaceStateIpc(
     async (event) => {
       const fixed = await workspaceStateService.ensurePersonalSpace(
         settingsService?.getAll().defaultWorkspacePath,
+        { createDefault: false },
       )
       if (fixed.personal) grant(event.sender, [fixed.personal.workspacePath])
       return fixed
@@ -288,8 +304,11 @@ export function registerWorkspaceStateIpc(
         if (!settingsService) throw new Error('设置服务当前不可用')
         const fixed = await workspaceStateService.ensurePersonalSpace(
           settingsService.getAll().defaultWorkspacePath,
+          { createDefault: false },
         )
-        const workspacePath = fixed.personal!.workspacePath
+        // Not set up yet: start without a workspace; the renderer shows first use (D2).
+        if (!fixed.personal) return { success: true, workspacePath: null }
+        const workspacePath = fixed.personal.workspacePath
         fileService?.registerKnownWorkspaces(event.sender.id, [workspacePath])
         fileService?.registerPickerSelection(event.sender.id, [workspacePath], 'workspace')
         return { success: true, workspacePath }

@@ -3,6 +3,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -149,6 +150,40 @@ describe('fixed personal/company spaces preserve original data', () => {
       '# 原文\n',
     )
     await expect(service.ensurePersonalSpace()).resolves.toEqual(relocated)
+  })
+
+  it('creates nothing before first-use confirmation, then binds the default or chosen folder', async () => {
+    const unbound = await service.ensurePersonalSpace('', { createDefault: false })
+    expect(unbound.personal).toBeNull()
+    const described = await service.describeDefaultPersonalSpace()
+    expect(described).toEqual({
+      path: join(paths.root, 'CCLink Studio', '我的空间'),
+      exists: false,
+    })
+    await expect(readdir(described.path)).rejects.toMatchObject({ code: 'ENOENT' })
+    const fixed = await service.initializePersonalSpace(null)
+    expect(fixed.personal).toMatchObject({
+      workspacePath: described.path,
+      diaryRootConfirmed: true,
+    })
+    expect((await service.getWorkspaceSettings(described.path)).settings).toMatchObject({
+      type: 'diary',
+      diary: { directory: '个人计划' },
+    })
+    await expect(service.initializePersonalSpace(null)).rejects.toThrow('已设置')
+  })
+
+  it('initializes an existing folder in place after review', async () => {
+    const root = join(paths.root, '旧日记')
+    await mkdir(join(root, '000-个人计划', '2026', '11'), { recursive: true })
+    await writeFile(join(root, '000-个人计划', '2026', '11', '1120_周五.md'), '原文')
+    const preview = await service.inspectDiaryRoot(root)
+    expect(preview).toMatchObject({ directory: '000-个人计划', diaryCount: 1, projectId: null })
+    const fixed = await service.initializePersonalSpace(preview)
+    expect(fixed.personal).toMatchObject({ workspacePath: root, diaryRootConfirmed: true })
+    expect(await readFile(join(root, '000-个人计划', '2026', '11', '1120_周五.md'), 'utf8')).toBe(
+      '原文',
+    )
   })
 
   it('initializes once, keeps company lazy and survives restart', async () => {

@@ -79,6 +79,8 @@ import { WorkbenchTabModel } from '../workbench/workbench-tab-model'
 import { registerWorkbenchTabModelIpc } from '../workbench/workbench-tab-model-ipc'
 import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 import { CompanyAccountsService } from '../company-accounts/company-accounts-service'
+import { GitExecutor } from '../git-backup/git-executor'
+import { fastForwardIfClean } from '../git/git-fast-forward'
 import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
@@ -149,7 +151,12 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   }
   console.log('[CCLink Studio] 工作台状态服务已初始化')
 
+  const draftSyncRunner = new GitExecutor({ isolatedConfig: true, timeoutMs: 20_000 })
   runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService, {
+    // Best effort, no stored credentials: public or local remotes fast-forward before a draft.
+    beforeDiaryDraft: async (root) => {
+      await fastForwardIfClean(draftSyncRunner, root, { fetch: true })
+    },
     getLocalOwnerKey: async () => {
       const identity = await runtime.localIdentityService?.ensureIdentity()
       return identity ? `local:${identity.localId}` : null
@@ -298,6 +305,7 @@ export async function bootstrapMainProcessServices(
     new AffairDirectoryService(join(app.getPath('userData'), 'owner-directories'), async () => {
       const spaces = await runtime.workspaceStateService!.ensurePersonalSpace(
         runtime.settingsService?.getAll().defaultWorkspacePath,
+        { createDefault: false },
       )
       if (!spaces.personal) throw Error('请先设置个人空间目录')
       return spaces.personal.workspacePath

@@ -897,7 +897,15 @@ export class WorkspaceStateService {
       throw new Error('原公司数据库不可用；请恢复原公司资料，不会创建空公司替代')
   }
 
-  async ensurePersonalSpace(legacyDefaultPath = ''): Promise<FixedSpaces> {
+  /**
+   * Returns the bound personal space. With `createDefault: false` (every app entry point), an
+   * unbound space stays unbound so first use writes nothing until the user confirms (D2).
+   */
+  async ensurePersonalSpace(
+    legacyDefaultPath = '',
+    options: { createDefault?: boolean } = {},
+  ): Promise<FixedSpaces> {
+    const createDefault = options.createDefault ?? true
     return this.fixedOperation(async () => {
       const fixed = this.getFixedSpaces()
       if (fixed.personal) {
@@ -910,6 +918,7 @@ export class WorkspaceStateService {
         if (candidate.state === 'empty' && candidate.projectId)
           personal = { workspacePath: candidate.workspacePath, projectId: candidate.projectId }
       }
+      if (!personal && !createDefault) return fixed
       if (!personal)
         personal = await this.inspectFixedIdentity(
           await this.ensureDefaultWorkspace('', '我的空间'),
@@ -950,6 +959,38 @@ export class WorkspaceStateService {
       value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
     const parsed = personalDiarySourceSchema.safeParse(value)
     return parsed.success ? parsed.data : null
+  }
+
+  /** The default personal folder shown on first use; nothing is created here. */
+  async describeDefaultPersonalSpace(): Promise<{ path: string; exists: boolean }> {
+    const home = await realpath(app.getPath('home'))
+    const path = join(home, 'CCLink Studio', '我的空间')
+    const exists = Boolean((await lstat(path).catch(() => null))?.isDirectory())
+    return { path, exists }
+  }
+
+  /**
+   * First-use confirmation for an unbound personal space. The default folder is created only
+   * here; an existing folder must match the reviewed preview. Settings are written by
+   * confirmDiaryRoot under the same checks as an existing binding.
+   */
+  async initializePersonalSpace(preview: DiaryRootPreview | null): Promise<FixedSpaces> {
+    const root = await this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      if (fixed.personal) throw Error('我的空间已设置，请刷新后重试')
+      const target = preview
+        ? await this.resolveLocalWorkspacePath(preview.workspacePath)
+        : await this.ensureDefaultWorkspace('', '我的空间')
+      await this.getSnapshot(target)
+      const personal = await this.inspectFixedIdentity(target)
+      if (fixed.company) this.assertIndependent(personal, fixed.company)
+      await this.commitFixedSpaces({ ...fixed, personal })
+      return target
+    })
+    const checked = preview
+      ? { ...preview, projectId: (await this.inspectDiaryRoot(root)).projectId }
+      : await this.inspectDiaryRoot(root)
+    return this.confirmDiaryRoot(root, checked)
   }
 
   async inspectDiaryRoot(path: string): Promise<DiaryRootPreview> {
@@ -994,6 +1035,7 @@ export class WorkspaceStateService {
         return {
           workspacePath: root,
           directory,
+          isGitRepository: entries.some((e) => e.name === '.git' && e.isDirectory()),
           latestFile: null,
           diaryCount: 0,
           revision: current.revision,
@@ -1005,6 +1047,7 @@ export class WorkspaceStateService {
     return {
       workspacePath: root,
       directory,
+      isGitRepository: entries.some((e) => e.name === '.git' && e.isDirectory()),
       latestFile: scanned.latestFile,
       diaryCount: scanned.diaryCount,
       revision: current.revision,

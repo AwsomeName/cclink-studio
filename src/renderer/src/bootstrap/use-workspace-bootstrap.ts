@@ -101,7 +101,8 @@ export function useWorkspaceBootstrap(): boolean {
       await window.cclinkStudio.workspaceState
         .ensurePersonalSpace()
         .then((spaces) => {
-          useFixedSpacesStore.setState({ spaces })
+          // A new user starts at first use; nothing is created until confirmation.
+          useFixedSpacesStore.setState({ spaces, firstUse: !spaces.personal })
         })
         .catch(async (error) => {
           console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error)

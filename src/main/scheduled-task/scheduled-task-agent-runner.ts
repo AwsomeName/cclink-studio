@@ -31,6 +31,14 @@ export interface ScheduledTaskAgentRunResult {
 
 class ScheduledTaskCancelledError extends Error {}
 
+/** Nothing was generated on purpose (e.g. today's diary already exists); not a failure. */
+export class ScheduledTaskSkippedError extends Error {}
+
+export interface ScheduledTaskAgentRunnerOptions {
+  /** Daily diary drafts sync first so two devices never generate two drafts for one day. */
+  beforeDiaryDraft?: (workspaceRoot: string) => Promise<void>
+}
+
 export interface ScheduledTaskRunExecutor {
   run(input: ScheduledTaskAgentRunInput): Promise<ScheduledTaskAgentRunResult>
   cancel(runId: string): Promise<void>
@@ -47,7 +55,10 @@ interface ActiveAgentRun {
 export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
   private readonly active = new Map<string, ActiveAgentRun>()
 
-  constructor(private readonly agentBridge: AgentBridge) {}
+  constructor(
+    private readonly agentBridge: AgentBridge,
+    private readonly options: ScheduledTaskAgentRunnerOptions = {},
+  ) {}
 
   async run(input: ScheduledTaskAgentRunInput): Promise<ScheduledTaskAgentRunResult> {
     const active: ActiveAgentRun = {
@@ -87,12 +98,29 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
       ('/' + dirname(output.relativePath)).endsWith('/' + day.folder)
     const checkDiaryCollision = async (): Promise<void> => {
       if (!diaryOutput) return
-      const matches = (await readdir(output.canonicalDirectory)).filter(day.matchesName)
+      const matches = (await readdir(output.canonicalDirectory).catch(() => [] as string[])).filter(
+        day.matchesName,
+      )
       if (matches.length)
-        throw new Error('当天已有日记：' + matches.join('、') + '；请在日记列表打开原文。')
+        throw new ScheduledTaskSkippedError(
+          '当天已有日记：' + matches.join('、') + '，未生成新草稿',
+        )
     }
-    await assertOutputDoesNotExist(output.absolutePath)
+    if (diaryOutput && this.options.beforeDiaryDraft) {
+      const before = await readdir(output.canonicalDirectory).catch(() => [] as string[])
+      await this.options
+        .beforeDiaryDraft(workspaceRoot)
+        .catch((error) => console.warn('[ScheduledTask] 起草前同步未完成，继续本机生成:', error))
+      const after = (await readdir(output.canonicalDirectory).catch(() => [] as string[])).filter(
+        day.matchesName,
+      )
+      if (after.some((name) => !before.includes(name)))
+        throw new ScheduledTaskSkippedError(
+          '远端已有当天日记（' + after.join('、') + '），已同步到本机，未重复生成',
+        )
+    }
     await checkDiaryCollision()
+    await assertOutputDoesNotExist(output.absolutePath)
     assertNotCancelled(active)
 
     let generationError: string | undefined

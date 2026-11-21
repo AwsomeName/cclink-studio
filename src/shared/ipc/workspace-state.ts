@@ -207,6 +207,7 @@ export interface DiaryRootPreview {
   latestFile: string | null
   /** Dated diary Markdown files found under YYYY/MM; read-only preview. */
   diaryCount?: number
+  isGitRepository?: boolean
   revision: string | null
   projectId: string | null
 }
@@ -251,6 +252,8 @@ export interface WorkspaceStateApiContract {
   getFixedSpaces: () => Promise<FixedSpaces>
   inspectDiaryRoot: (path: string) => Promise<DiaryRootPreview>
   confirmDiaryRoot: (owner: string, preview: DiaryRootPreview) => Promise<FixedSpaces>
+  describeDefaultPersonalSpace: () => Promise<{ path: string; exists: boolean }>
+  initializePersonalSpace: (preview: DiaryRootPreview | null) => Promise<FixedSpaces>
   inspectPersonalRelocation: (path: string) => Promise<PersonalRelocationPreview>
   relocatePersonalSpace: (preview: PersonalRelocationPreview) => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
@@ -298,6 +301,12 @@ export const workspaceStateIpc = {
   inspectDiaryRoot: defineIpcCall<[string], DiaryRootPreview>('workspaceState:inspectDiaryRoot'),
   confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
     'workspaceState:confirmDiaryRoot',
+  ),
+  describeDefaultPersonalSpace: defineIpcCall<[], { path: string; exists: boolean }>(
+    'workspaceState:describeDefaultPersonalSpace',
+  ),
+  initializePersonalSpace: defineIpcCall<[DiaryRootPreview | null], FixedSpaces>(
+    'workspaceState:initializePersonalSpace',
   ),
   inspectPersonalRelocation: defineIpcCall<[string], PersonalRelocationPreview>(
     'workspaceState:inspectPersonalRelocation',

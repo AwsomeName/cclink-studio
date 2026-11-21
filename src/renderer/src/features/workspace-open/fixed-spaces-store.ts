@@ -16,7 +16,9 @@ export const useFixedSpacesStore = create<{
   spaces: FixedSpaces | null
   setup: { section: CompanySection; generation: number; error?: string } | null
   relocate: { previousPath: string; error: string } | null
-}>(() => ({ spaces: null, setup: null, relocate: null }))
+  /** My Space is not set up yet: the first-use wizard is shown; nothing exists on disk. */
+  firstUse: boolean
+}>(() => ({ spaces: null, setup: null, relocate: null, firstUse: false }))
 
 export async function refreshFixedSpaces(): Promise<FixedSpaces> {
   const spaces = await window.cclinkStudio.workspaceState.getFixedSpaces()
@@ -46,7 +48,10 @@ export async function openPersonalSpace(): Promise<void> {
   useFixedSpacesStore.setState({ spaces })
   if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
   const path = spaces.personal?.workspacePath
-  if (!path) throw new Error('我的空间当前不可用')
+  if (!path) {
+    useFixedSpacesStore.setState({ firstUse: true })
+    return
+  }
   const ref = { kind: 'local' as const, path }
   await openWorkspaceRef(ref)
   showWorkspaceHome(ref)

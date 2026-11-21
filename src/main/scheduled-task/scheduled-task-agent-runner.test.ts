@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRuntimeEvent } from '../agent-core/runtime/agent-runtime'
 import type { ScheduledTaskDefinition } from '../../shared/scheduled-task/scheduled-task-types'
-import { ScheduledTaskAgentRunner } from './scheduled-task-agent-runner'
+import { ScheduledTaskAgentRunner, ScheduledTaskSkippedError } from './scheduled-task-agent-runner'
 
 let root = ''
 
@@ -193,6 +193,32 @@ describe('ScheduledTaskAgentRunner', () => {
       await expect(readFile(join(folder, '0729_周三.md'))).rejects.toMatchObject({ code: 'ENOENT' })
     },
   )
+
+  it("skips without generating when the pre-draft sync brings in today's diary", async () => {
+    const folder = join(root, '个人计划/2026/07')
+    await mkdir(folder, { recursive: true })
+    const send = vi.fn()
+    const runner = new ScheduledTaskAgentRunner(
+      { onRuntimeEvent: () => () => {}, sendScheduledTaskMessage: send } as never,
+      { beforeDiaryDraft: async () => writeFile(join(folder, '0729_周三.md'), '# 另一台设备') },
+    )
+    const task = definition()
+    task.outputPolicy = {
+      directory: '个人计划/{year}/{month}',
+      fileNameTemplate: '{monthDay}_{weekday}.md',
+      mode: 'create-only',
+    }
+    const run = runner.run({
+      definition: task,
+      runId: 'sync',
+      conversationId: 'sync',
+      scheduledFor: Date.parse('2026-07-29T01:00:00Z'),
+    })
+    await expect(run).rejects.toBeInstanceOf(ScheduledTaskSkippedError)
+    await expect(run).rejects.toThrow('远端已有当天日记')
+    expect(send).not.toHaveBeenCalled()
+    expect(await readFile(join(folder, '0729_周三.md'), 'utf8')).toBe('# 另一台设备')
+  })
 
   it('refuses create-only collisions before starting Agent', async () => {
     await mkdir(join(root, 'docs/generated'), { recursive: true })

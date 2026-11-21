@@ -48,6 +48,8 @@ import type { AgentBridge } from '../agent/agent-bridge'
 import { calculateNextRunAt } from '../../shared/scheduled-task/schedule-calculator'
 import {
   ScheduledTaskAgentRunner,
+  ScheduledTaskSkippedError,
+  type ScheduledTaskAgentRunnerOptions,
   type ScheduledTaskRunExecutor,
 } from './scheduled-task-agent-runner'
 import { ScheduledTaskRunStore } from './scheduled-task-run-store'
@@ -91,6 +93,7 @@ interface ScheduledTaskServiceOptions {
   homePath?: string
   now?: () => number
   runExecutor?: ScheduledTaskRunExecutor
+  beforeDiaryDraft?: ScheduledTaskAgentRunnerOptions['beforeDiaryDraft']
 }
 
 class ScheduledTaskServiceError extends Error {
@@ -105,6 +108,7 @@ class ScheduledTaskServiceError extends Error {
 }
 
 export class ScheduledTaskService {
+  private readonly beforeDiaryDraft?: ScheduledTaskAgentRunnerOptions['beforeDiaryDraft']
   private readonly activationFilePath: string
   private readonly activationBackupPath: string
   private readonly activationTempPath: string
@@ -143,6 +147,7 @@ export class ScheduledTaskService {
     this.now = options.now ?? Date.now
     this.runStore = new ScheduledTaskRunStore(join(root, 'runs.json'))
     this.runExecutor = options.runExecutor ?? null
+    this.beforeDiaryDraft = options.beforeDiaryDraft
   }
 
   async load(): Promise<void> {
@@ -183,7 +188,9 @@ export class ScheduledTaskService {
       this.lastRuntimeErrorWorkspacePath = null
       return
     }
-    this.runExecutor ??= new ScheduledTaskAgentRunner(agentBridge)
+    this.runExecutor ??= new ScheduledTaskAgentRunner(agentBridge, {
+      beforeDiaryDraft: this.beforeDiaryDraft,
+    })
     this.runtimeState = 'ready'
     this.runtimeStartedAt = this.now()
     this.lastRuntimeError = undefined
@@ -735,7 +742,10 @@ export class ScheduledTaskService {
         if (!this.runStore.findOccurrence(key)) {
           if (
             definition.schedule.kind !== 'once' &&
-            timestamp - scheduledFor <= activation.catchUpPolicy.windowMinutes * 60_000
+            (timestamp - scheduledFor <= activation.catchUpPolicy.windowMinutes * 60_000 ||
+              // A missed daily diary draft is still useful later the same day.
+              (isDailyDiaryDraft(definition) &&
+                sameScheduleDay(definition.schedule.timezone, scheduledFor, timestamp)))
           ) {
             const run = await this.claimRun(
               definition,
@@ -1047,7 +1057,13 @@ export class ScheduledTaskService {
       }
     } catch (error) {
       const current = this.runStore.get(run.id)
-      if (current?.status === 'running') {
+      if (current?.status === 'running' && error instanceof ScheduledTaskSkippedError) {
+        await this.updateRun(current, {
+          status: 'skipped',
+          currentStep: error.message,
+          finishedAt: this.now(),
+        })
+      } else if (current?.status === 'running') {
         await this.updateRun(current, {
           status: 'failed',
           currentStep: '运行失败',
@@ -2144,4 +2160,26 @@ function findUnsupportedCapability(instruction: string): string | null {
     [/(?:运行|执行|调用|使用|查询).{0,16}(?:数据源|database|数据库)/i, '数据源'],
   ]
   return patterns.find(([pattern]) => pattern.test(instruction))?.[1] ?? null
+}
+
+/** The built-in daily draft shape: daily schedule writing the dated diary file for the day. */
+export function isDailyDiaryDraft(definition: ScheduledTaskDefinition): boolean {
+  return (
+    definition.schedule.kind === 'daily' &&
+    ['{monthDay}_{weekday}.md', '{monthDay}-{weekday}.md'].includes(
+      definition.outputPolicy.fileNameTemplate,
+    ) &&
+    /\{year\}\/\{month\}$/.test(definition.outputPolicy.directory)
+  )
+}
+
+function sameScheduleDay(timezone: string, left: number, right: number): boolean {
+  const day = (value: number): string =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(value))
+  return day(left) === day(right)
 }
