@@ -6,6 +6,7 @@ import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/wor
 import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
 import { applyMacServerModifiers } from './mac-keys'
+import { createDesktopDiagnostics } from './desktop-diagnostics'
 import './remote-desktop.css'
 
 type Phase = 'idle' | 'connecting' | 'credentials' | 'connected' | 'ended'
@@ -27,9 +28,14 @@ export function RemoteDesktopTab({
   const client = useRef<RFB | null>(null)
   const generation = useRef(0)
   const handshakeTimer = useRef<number | undefined>(undefined)
+  const releaseDiagnostics = useRef<(() => void) | undefined>(undefined)
+  const activeRef = useRef(active)
+  activeRef.current = active
   const stop = (): void => {
     generation.current++
     window.clearTimeout(handshakeTimer.current)
+    releaseDiagnostics.current?.()
+    releaseDiagnostics.current = undefined
     const rfb = client.current
     client.current = null
     rfb?.disconnect()
@@ -74,7 +80,16 @@ export function RemoteDesktopTab({
       const channel = new DesktopChannel(input)
       const rfb = new Viewer(target.current, channel, { shared: true })
       client.current = rfb
-      if (!applyMacServerModifiers(rfb)) console.warn('[RemoteDesktop] 无法校正 Mac 修饰键映射')
+      const diag = createDesktopDiagnostics(`${input.host}:${input.port}`)
+      diag.stage('connecting')
+      const unwatch = diag.watchInput(target.current, () => activeRef.current)
+      releaseDiagnostics.current = () => {
+        unwatch()
+        diag.summary('closed')
+      }
+      if (!applyMacServerModifiers(rfb, diag.keysymSent)) {
+        console.warn('[RemoteDesktop] 无法校正 Mac 修饰键映射')
+      }
       rfb.scaleViewport = fit
       rfb.viewOnly = !active
       const on = (name: string, fn: (e: Event) => void): void => {
@@ -91,6 +106,7 @@ export function RemoteDesktopTab({
       on('credentialsrequired', (e) => {
         window.clearTimeout(handshakeTimer.current)
         const fields = (e as CustomEvent<{ types: string[] }>).detail.types
+        diag.stage(`credentials required: ${fields.join(',')}`)
         if (fields.some((field) => !['username', 'password'].includes(field))) {
           fail('此屏幕共享认证方式暂不支持。')
           return
@@ -100,16 +116,26 @@ export function RemoteDesktopTab({
         setUsernameRequired(fields.includes('username'))
         setPhase('credentials')
       })
-      on('securityfailure', () => {
+      on('securityfailure', (e) => {
+        const detail = (e as CustomEvent<{ status?: number; reason?: string }>).detail
+        diag.stage(`security failure status=${detail?.status} reason=${detail?.reason ?? ''}`)
         disconnectMessage = '屏幕共享认证失败，请检查账号、密码和共享权限。'
       })
-      on('serververification', () => fail('该服务器要求额外的身份验证，本次连接已结束。'))
+      on('serververification', () => {
+        diag.stage('server verification requested')
+        fail('该服务器要求额外的身份验证，本次连接已结束。')
+      })
       on('connect', () => {
         window.clearTimeout(handshakeTimer.current)
         disconnectMessage = '与远端桌面的连接已中断。'
+        const canvas = target.current?.querySelector('canvas')
+        diag.stage(
+          `connected framebuffer=${canvas?.width}x${canvas?.height} viewOnly=${rfb.viewOnly}`,
+        )
         setPhase('connected')
       })
-      on('disconnect', () => {
+      on('disconnect', (e) => {
+        diag.stage(`disconnect clean=${(e as CustomEvent<{ clean?: boolean }>).detail?.clean}`)
         client.current = null
         fail(disconnectMessage)
       })
