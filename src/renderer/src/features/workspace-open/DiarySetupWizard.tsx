@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DiaryRootPreview } from '@shared/ipc/workspace-state'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
-import { defaultDiaryTimezone, diaryDateParts } from '@shared/personal-diary-source'
+import { defaultDiaryTimezone } from '@shared/personal-diary-source'
 import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
@@ -9,7 +9,6 @@ import { useDiaryNavigation } from './personal-diary-navigation'
 import {
   defaultBuiltInChoice,
   ensureBuiltInDiaryTasks,
-  findDailyDraft,
   type BuiltInTaskChoice,
 } from './diary-builtin-tasks'
 
@@ -44,6 +43,9 @@ export function DiarySetupWizard({
   const [token, setToken] = useState('')
   const [destination, setDestination] = useState('')
   const [ai, setAi] = useState<AgentCapabilityStatus | null>(null)
+  const [probe, setProbe] = useState<{ ok: boolean; error?: string; elapsedMs: number } | null>(
+    null,
+  )
   const [choice, setChoice] = useState<BuiltInTaskChoice>(defaultBuiltInChoice)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -77,8 +79,12 @@ export function DiarySetupWizard({
     else if (sync === 'repository') setSync('later')
   }, [preview?.isGitRepository])
   const checkAi = async (): Promise<void> => {
+    setProbe(null)
     const capabilities = await window.cclinkStudio.agent.getCapabilities()
-    setAi(capabilities.find((item) => item.name === 'agent-backend') ?? null)
+    const backend = capabilities.find((item) => item.name === 'agent-backend') ?? null
+    setAi(backend)
+    // Installed is not enough: a short real generation proves login and quota.
+    if (backend?.state === 'ready') setProbe(await window.cclinkStudio.agent.probeRuntime())
   }
   useEffect(() => {
     if (step === 2) run(checkAi)
@@ -121,7 +127,7 @@ export function DiarySetupWizard({
   const canNext = [
     mode === 'default' ? Boolean(defaultInfo) : Boolean(preview),
     sync !== 'clone',
-    ai?.state === 'ready',
+    ai?.state === 'ready' && probe?.ok === true,
     true,
   ][step]
   const confirm = (): void =>
@@ -139,23 +145,7 @@ export function DiarySetupWizard({
       const directory = settings.diary?.directory ?? preview?.directory ?? '个人计划'
       const timezone = settings.diary?.timezone ?? defaultDiaryTimezone
       await ensureBuiltInDiaryTasks(root, directory, timezone, choice)
-      // Past today's draft time: generate now instead of waiting for tomorrow.
-      const now = diaryDateParts(timezone, new Date())
-      const clock = new Intl.DateTimeFormat('en-GB', {
-        timeZone: timezone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      }).format(new Date())
-      if (choice.daily.enable && clock >= choice.daily.time && now) {
-        const listed = await window.cclinkStudio.scheduledTasks.list(root)
-        const daily = listed.success ? findDailyDraft(listed.tasks) : undefined
-        if (daily)
-          await window.cclinkStudio.scheduledTasks.runNow({
-            workspacePath: root,
-            taskId: daily.definition.id,
-          })
-      }
+      // Enabling the daily draft after today's time makes the scheduler draft today once.
       await openPersonalSpace()
       const active = useWorkspaceStore.getState().activeWorkspaceRef
       if (owner && owner !== root && active.kind === 'local' && active.path !== owner)
@@ -300,6 +290,19 @@ export function DiarySetupWizard({
               本机 AI · {ai?.state === 'ready' ? '就绪' : ai ? `不可用（${ai.state}）` : '检测中…'}
             </b>
             {ai?.reason && <p className="muted">{ai.reason}</p>}
+            {ai?.state === 'ready' && (
+              <p
+                className={probe?.ok ? 'muted' : ''}
+                role={probe && !probe.ok ? 'alert' : undefined}
+              >
+                测试：生成一句话 ·{' '}
+                {!probe
+                  ? '进行中…'
+                  : probe.ok
+                    ? `通过 · ${Math.round(probe.elapsedMs / 1000)} 秒`
+                    : `未通过：${probe.error}`}
+              </p>
+            )}
             <button disabled={busy} onClick={() => run(checkAi)}>
               重新检测
             </button>

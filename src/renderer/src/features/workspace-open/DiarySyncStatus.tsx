@@ -20,6 +20,12 @@ export function DiarySyncStatus({
     | { kind: 'none' }
     | { kind: 'ok'; snapshot: GitTransferSnapshot; fetched: boolean }
   >({ kind: 'loading' })
+  // Re-check while Today stays open; the fetch itself is throttled to every 15 minutes.
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => setTick((value) => value + 1), AUTO_FETCH_MS)
+    return () => window.clearInterval(timer)
+  }, [])
   useEffect(() => {
     let alive = true
     void (async () => {
@@ -45,7 +51,7 @@ export function DiarySyncStatus({
     return () => {
       alive = false
     }
-  }, [workspacePath])
+  }, [workspacePath, tick])
   if (state.kind === 'loading') return <p className="muted">正在检查同步…</p>
   if (state.kind === 'none')
     return (

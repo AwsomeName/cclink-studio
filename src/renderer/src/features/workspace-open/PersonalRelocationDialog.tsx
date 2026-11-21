@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { PersonalRelocationPreview } from '@shared/ipc/workspace-state'
+import type { DiaryRootPreview, PersonalRelocationPreview } from '@shared/ipc/workspace-state'
 import { useFixedSpacesStore, openPersonalSpace } from './fixed-spaces-store'
 import { useFloatingSurfaceRegistration } from '../../components/common/floating-surface-registry'
 import { useEscapeDismiss } from '../../components/common/dismissable-layer'
@@ -16,12 +16,15 @@ export function PersonalRelocationDialog(): React.ReactElement | null {
   const request = useFixedSpacesStore((state) => state.relocate)
   const [preview, setPreview] = useState<PersonalRelocationPreview | null>(null)
   const [choice, setChoice] = useState<'' | 'candidate'>('')
+  /** 改用其他目录: a different diary folder, used when the old one is gone for good. */
+  const [other, setOther] = useState<DiaryRootPreview | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const close = (): void => {
     if (busy) return
     setPreview(null)
+    setOther(null)
     setChoice('')
     setError('')
     useFixedSpacesStore.setState({ relocate: null })
@@ -55,6 +58,34 @@ export function PersonalRelocationDialog(): React.ReactElement | null {
       useFixedSpacesStore.setState({ relocate: null })
       setPreview(null)
       setChoice('')
+      await openPersonalSpace()
+    } catch (failure) {
+      setError(ipcMessage(failure))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function chooseOther(): Promise<void> {
+    setError('')
+    const result = await window.cclinkStudio.dialog.showOpenDialog({
+      selectDirectory: true,
+      title: '选择要改用的日记目录',
+    })
+    if (result.canceled || !result.filePaths[0]) return
+    setPreview(null)
+    try {
+      setOther(await window.cclinkStudio.workspaceState.inspectDiaryRoot(result.filePaths[0]))
+    } catch (failure) {
+      setError(ipcMessage(failure))
+    }
+  }
+  async function useOther(): Promise<void> {
+    if (!other) return
+    setBusy(true)
+    try {
+      await window.cclinkStudio.workspaceState.replaceUnavailablePersonalSpace(other)
+      useFixedSpacesStore.setState({ relocate: null })
+      setOther(null)
       await openPersonalSpace()
     } catch (failure) {
       setError(ipcMessage(failure))
@@ -105,6 +136,22 @@ export function PersonalRelocationDialog(): React.ReactElement | null {
           preview?.previousState === 'other' ? '此位置现有内容不属于原项目' : '目录不存在或已移动',
         )}
         {preview && row('移动后的位置', preview.candidate.workspacePath, preview.candidate, '')}
+        {other && (
+          <div className="relocation-side" aria-label="改用其他目录">
+            <strong>改用其他目录</strong>
+            <p className="fixed-space-path">{other.workspacePath}</p>
+            <p>
+              日记目录 · {other.directory}　日记 {other.diaryCount ?? 0} 篇　最近 ·{' '}
+              {other.latestFile ?? '暂无'}
+            </p>
+            <p>
+              「我的空间」将改用此目录。上次位置的项目若以后找回，可在历史项目中打开，其中的私有任务不会自动接回。
+            </p>
+            <button className="primary" disabled={busy} onClick={() => void useOther()}>
+              确认改用此目录
+            </button>
+          </div>
+        )}
         {preview && both && (
           <div className="fixed-space-candidates">
             <p>两个位置都有日记。原位置的文件不会被移动、合并或删除；请确认之后使用哪一份。</p>
@@ -126,6 +173,9 @@ export function PersonalRelocationDialog(): React.ReactElement | null {
         <footer>
           <button onClick={close} disabled={busy}>
             取消，保留原绑定
+          </button>
+          <button disabled={busy} onClick={() => void chooseOther()}>
+            改用其他目录…
           </button>
           <button disabled={busy} onClick={() => void choose()}>
             {preview ? '重新选择…' : '选择项目文件夹'}

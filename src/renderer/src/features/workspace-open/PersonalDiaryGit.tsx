@@ -13,6 +13,7 @@ import { useGitStore } from '../../stores/git-store'
 import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useOpenProjectsStore } from '../../stores/open-projects-store'
+import { askAi } from './diary-ai'
 
 export function PersonalDiaryGit({
   source,
@@ -42,6 +43,21 @@ export function PersonalDiaryGit({
   const [confirmed, setConfirmed] = useState(false)
   const [copyReview, setCopyReview] = useState<string[]>([])
   const [reviewError, setReviewError] = useState('')
+  /** Files changed by AI conversation runs (not undone): labelled before upload (§11). */
+  const [aiPaths, setAiPaths] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!source) return
+    void window.cclinkStudio.workspaceState
+      .listDiaryChanges(source.workspacePath)
+      .then((reports) =>
+        setAiPaths(
+          new Set(
+            reports.filter((r) => !r.undone).flatMap((r) => r.files.map((file) => file.path)),
+          ),
+        ),
+      )
+      .catch(() => {})
+  }, [source, result])
   useEffect(() => {
     let alive = true
     setCopyReview([])
@@ -301,9 +317,30 @@ export function PersonalDiaryGit({
             {result.diffTruncated && <p>差异过长，显示前 128 KB；请在原仓库核对全文后再切换。</p>}
           </details>
           <h4>当前本地改动</h4>
-          <pre>{result.localChanges || '工作目录干净'}</pre>
+          <pre>
+            {result.localChanges
+              ? result.localChanges
+                  .split('\n')
+                  .map((line) => {
+                    const path = line.slice(3).replace(/^"|"$/g, '')
+                    return aiPaths.has(path) ? `${line}  · AI 修改` : line
+                  })
+                  .join('\n')
+              : '工作目录干净'}
+          </pre>
           {result.diverged && (
-            <p role="alert">本地有未上传提交或历史分叉，已阻止快捷更新；请在原仓库处理分支。</p>
+            <div role="alert">
+              <p>本地有未上传提交或历史分叉，已阻止快捷更新；本地内容不会丢失。</p>
+              <button
+                onClick={() =>
+                  askAi(
+                    `我的空间 ${result.workspacePath} 的 Git 本地与远端（${result.branch}）分叉。请先说明双方各自的改动和冲突文件，提出合并方案，等我确认后再执行；不要强制推送、重置或丢弃任何一方的内容，完成后说明改了什么。`,
+                  )
+                }
+              >
+                让 AI 帮我合并…
+              </button>
+            </div>
           )}
           {!result.newCopy && result.head === result.target && (
             <p role="status">本地已是远端最新版本。</p>

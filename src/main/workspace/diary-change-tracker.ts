@@ -13,10 +13,18 @@ const MAX_FILE_BYTES = 512 * 1024
 const MAX_TOTAL_BYTES = 32 * 1024 * 1024
 const MAX_REPORTS = 30
 
-type Snapshot = Map<string, { hash: string; content: string }> & { complete?: boolean }
+/** Text files keep content for diff and undo; other or oversized files only size and time. */
+type Entry = { hash: string; content: string | null; size: number }
+type Snapshot = Map<string, Entry> & { complete?: boolean }
+const TEXT_EXTENSIONS = /\.(md|markdown|txt|csv|json|ya?ml)$/i
 interface StoredReport extends DiaryChangeReport {
   /** Exact contents needed to undo; never sent to the renderer. */
-  restore: Array<{ path: string; before: string | null; afterHash: string | null }>
+  restore: Array<{
+    path: string
+    before: string | null
+    afterHash: string | null
+    binary?: boolean
+  }>
 }
 
 const hash = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -64,7 +72,16 @@ export class DiaryChangeTracker {
       const old = run.before.get(path)
       const next = after.get(path)
       if (old?.hash === next?.hash) continue
-      const { diff, added, removed } = diffLines(old?.content ?? '', next?.content ?? '')
+      const binary = (old && old.content === null) || (next && next.content === null)
+      const { diff, added, removed } = binary
+        ? {
+            diff: [
+              `（附件或大文件，${old ? old.size : 0} → ${next ? next.size : 0} 字节；不显示差异）`,
+            ],
+            added: 0,
+            removed: 0,
+          }
+        : diffLines(old?.content ?? '', next?.content ?? '')
       files.push({
         path,
         status: !old ? 'added' : !next ? 'deleted' : 'modified',
@@ -72,7 +89,12 @@ export class DiaryChangeTracker {
         added,
         removed,
       })
-      restore.push({ path, before: old?.content ?? null, afterHash: next?.hash ?? null })
+      restore.push({
+        path,
+        before: binary ? null : (old?.content ?? null),
+        afterHash: next?.hash ?? null,
+        ...(binary ? { binary: true } : {}),
+      })
     }
     if (!files.length) return null
     const report: StoredReport = {
@@ -107,6 +129,11 @@ export class DiaryChangeTracker {
     const result: DiaryUndoResult = { restored: [], skipped: [] }
     for (const file of report.restore) {
       const target = join(report.workspacePath, file.path)
+      // Attachment contents were not copied before the run, so they cannot be restored.
+      if (file.binary) {
+        result.skipped.push(file.path)
+        continue
+      }
       const current = await readFile(target, 'utf8').catch(() => null)
       if ((current === null ? null : hash(current)) !== file.afterHash) {
         result.skipped.push(file.path)
@@ -169,17 +196,18 @@ async function snapshot(root: string): Promise<Snapshot> {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
       const path = join(dir, entry.name)
       if (entry.isDirectory()) await walk(path)
-      else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+      else if (entry.isFile()) {
         const info = await lstat(path).catch(() => null)
         if (!info) continue
-        if (info.size > MAX_FILE_BYTES) {
-          result.complete = false
+        const key = relative(root, path).split(sep).join('/')
+        if (!TEXT_EXTENSIONS.test(entry.name) || info.size > MAX_FILE_BYTES) {
+          result.set(key, { hash: `${info.size}:${info.mtimeMs}`, content: null, size: info.size })
           continue
         }
         total += info.size
         const content = await readFile(path, 'utf8').catch(() => null)
         if (content === null) continue
-        result.set(relative(root, path).split(sep).join('/'), { hash: hash(content), content })
+        result.set(key, { hash: hash(content), content, size: info.size })
       }
     }
   }

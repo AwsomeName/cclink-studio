@@ -257,6 +257,7 @@ export interface WorkspaceStateApiContract {
   listDiaryChanges: (workspacePath: string) => Promise<DiaryChangeReport[]>
   undoDiaryChange: (reportId: string) => Promise<DiaryUndoResult>
   initializePersonalSpace: (preview: DiaryRootPreview | null) => Promise<FixedSpaces>
+  replaceUnavailablePersonalSpace: (preview: DiaryRootPreview) => Promise<FixedSpaces>
   inspectPersonalRelocation: (path: string) => Promise<PersonalRelocationPreview>
   relocatePersonalSpace: (preview: PersonalRelocationPreview) => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
@@ -312,6 +313,9 @@ export const workspaceStateIpc = {
   undoDiaryChange: defineIpcCall<[string], DiaryUndoResult>('workspaceState:undoDiaryChange'),
   initializePersonalSpace: defineIpcCall<[DiaryRootPreview | null], FixedSpaces>(
     'workspaceState:initializePersonalSpace',
+  ),
+  replaceUnavailablePersonalSpace: defineIpcCall<[DiaryRootPreview], FixedSpaces>(
+    'workspaceState:replaceUnavailablePersonalSpace',
   ),
   inspectPersonalRelocation: defineIpcCall<[string], PersonalRelocationPreview>(
     'workspaceState:inspectPersonalRelocation',

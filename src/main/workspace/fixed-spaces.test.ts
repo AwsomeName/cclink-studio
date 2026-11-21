@@ -173,6 +173,24 @@ describe('fixed personal/company spaces preserve original data', () => {
     await expect(service.initializePersonalSpace(null)).rejects.toThrow('已设置')
   })
 
+  it('replaces an unavailable binding with another reviewed folder, never a valid one', async () => {
+    const first = join(paths.root, '原日记')
+    await mkdir(first)
+    await service.initializePersonalSpace(await service.inspectDiaryRoot(first))
+    const other = join(paths.root, '新目录')
+    await mkdir(join(other, '个人计划'), { recursive: true })
+    await expect(
+      service.initializePersonalSpace(await service.inspectDiaryRoot(other), {
+        replaceUnavailable: true,
+      }),
+    ).rejects.toThrow('仍然可用')
+    await rm(first, { recursive: true })
+    const fixed = await service.initializePersonalSpace(await service.inspectDiaryRoot(other), {
+      replaceUnavailable: true,
+    })
+    expect(fixed.personal).toMatchObject({ workspacePath: other, diaryRootConfirmed: true })
+  })
+
   it('initializes an existing folder in place after review', async () => {
     const root = join(paths.root, '旧日记')
     await mkdir(join(root, '000-个人计划', '2026', '11'), { recursive: true })

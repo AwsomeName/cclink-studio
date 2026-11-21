@@ -22,7 +22,7 @@ try {
   await wizard.getByText('稍后连接').waitFor()
   await page.screenshot({ path: join(shots, 'v2-first-02-sync.png') })
   await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText(/就绪|不可用/).waitFor({ timeout: 30000 })
+  await wizard.getByText(/测试：生成一句话 · (通过|未通过)/).waitFor({ timeout: 120000 })
   await page.screenshot({ path: join(shots, 'v2-first-03-ai.png') })
   await wizard.getByRole('button', { name: '下一步' }).click()
   await wizard.getByText('自动整理（本设备）').waitFor()

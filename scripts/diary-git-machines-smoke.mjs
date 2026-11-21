@@ -103,7 +103,7 @@ try {
   await wizard.getByRole('button', { name: '克隆到所选空目录' }).click()
   await wizard.getByText('使用该目录已有的 Git 仓库').waitFor({ timeout: 60000 })
   await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText('本机 AI · 就绪').waitFor({ timeout: 30000 })
+  await wizard.getByText(/测试：生成一句话 · 通过/).waitFor({ timeout: 120000 })
   await wizard.getByRole('button', { name: '下一步' }).click()
   await wizard.getByText(chosen, { exact: true }).waitFor()
   await wizard.getByLabel('每日起草时间').fill('23:59')

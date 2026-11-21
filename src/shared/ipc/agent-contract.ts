@@ -194,6 +194,7 @@ export const agentIpcContracts = {
   listSkills: bindNoArgsIpc(agentIpc.listSkills),
   closeConversation: bindConversation(agentIpc.closeConversation),
   getCapabilities: bindNoArgsIpc(agentIpc.getCapabilities),
+  probeRuntime: bindNoArgsIpc(agentIpc.probeRuntime),
   listToolModules: bindNoArgsIpc(agentIpc.listToolModules),
   setToolModuleEnabled: bindIpcParser(agentIpc.setToolModuleEnabled, (args) => {
     requireArgs(args, 2, agentIpc.setToolModuleEnabled.channel)

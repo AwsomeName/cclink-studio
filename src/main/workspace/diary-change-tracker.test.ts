@@ -72,13 +72,25 @@ describe('diary change reports', () => {
     expect(await tracker.afterRun({ runId: 'r2' })).toBeNull()
   })
 
-  it('reports nothing when the snapshot is bounded, instead of claiming deletions', async () => {
+  it('reports attachments and large files without diff, and leaves them on undo', async () => {
     const project = join(root, 'project')
     await writeFile(join(project, '个人计划/大文件.md'), 'x'.repeat(600 * 1024))
     const tracker = new DiaryChangeTracker(join(root, 'reports.json'))
-    await tracker.beforeRun({ conversationId: 'c', runId: 'big', workspacePath: project })
+    await tracker.beforeRun({ conversationId: 'c', runId: 'att', workspacePath: project })
     await writeFile(join(project, '个人计划/2026/11/1121_周六.md'), '改动')
-    expect(await tracker.afterRun({ runId: 'big' })).toBeNull()
+    await mkdir(join(project, '个人计划/2026/11/1121_周六.assets'))
+    await writeFile(join(project, '个人计划/2026/11/1121_周六.assets/图.png'), 'PNG')
+    const report = await tracker.afterRun({ runId: 'att' })
+    expect(report?.files.map((f) => [f.path, f.status])).toEqual([
+      ['个人计划/2026/11/1121_周六.assets/图.png', 'added'],
+      ['个人计划/2026/11/1121_周六.md', 'added'],
+    ])
+    expect(report?.files[0].diff[0]).toContain('附件')
+    const undo = await tracker.undo(report!.id)
+    expect(undo).toEqual({
+      restored: ['个人计划/2026/11/1121_周六.md'],
+      skipped: ['个人计划/2026/11/1121_周六.assets/图.png'],
+    })
   })
 
   it('keeps context around changes', () => {

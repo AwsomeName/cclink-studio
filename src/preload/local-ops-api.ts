@@ -72,6 +72,8 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
     invokeIpcContract(workspaceStateIpc.describeDefaultPersonalSpace),
   initializePersonalSpace: (preview) =>
     invokeIpcContract(workspaceStateIpc.initializePersonalSpace, preview),
+  replaceUnavailablePersonalSpace: (preview) =>
+    invokeIpcContract(workspaceStateIpc.replaceUnavailablePersonalSpace, preview),
   inspectPersonalRelocation: (path) =>
     invokeIpcContract(workspaceStateIpc.inspectPersonalRelocation, path),
   relocatePersonalSpace: (preview) =>

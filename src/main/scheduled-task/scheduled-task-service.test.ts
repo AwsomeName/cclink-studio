@@ -712,6 +712,32 @@ describe('ScheduledTaskService', () => {
     await nextDay.stopRuntime()
   })
 
+  it('drafts today once when the daily diary task is enabled after its time', async () => {
+    const now = Date.parse('2026-07-29T10:00:00.000Z')
+    const run = vi.fn(async () => ({
+      artifact: { relativePath: '个人计划/2026/07/0729_周三.md', bytes: 8, sha256: 'e'.repeat(64) },
+    }))
+    const service = createService({ run, cancel: vi.fn(async () => {}) }, () => now)
+    await service.load()
+    await service.startRuntime({} as never)
+    const saved = await service.save({
+      ...createInput(true),
+      schedule: { kind: 'daily', time: '07:30', timezone: 'UTC' },
+      outputPolicy: {
+        directory: '个人计划/{year}/{month}',
+        fileNameTemplate: '{monthDay}_{weekday}.md',
+        mode: 'create-only',
+      },
+    })
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    // Re-enabling the same day does not queue a second draft.
+    await service.setEnabled({ workspacePath, taskId: saved.task!.definition.id, enabled: true })
+    const history = await service.listRuns(workspacePath, saved.task!.definition.id)
+    expect(history.runs).toHaveLength(1)
+    expect(history.runs[0]).toMatchObject({ trigger: 'catch-up' })
+    await service.stopRuntime()
+  })
+
   it('shares only a portable definition and requires device B to confirm each revision', async () => {
     const workspaceB = join(tempDir, 'workspace-b')
     const userDataB = join(tempDir, 'user-data-b')

@@ -235,6 +235,10 @@ export const workspaceStateIpcContracts = {
   initializePersonalSpace: bindIpcParser(workspaceStateIpc.initializePersonalSpace, (args) =>
     ipcArgs(args[0] === null ? null : diaryRootPreviewSchema.parse(args[0])),
   ),
+  replaceUnavailablePersonalSpace: bindIpcParser(
+    workspaceStateIpc.replaceUnavailablePersonalSpace,
+    (args) => ipcArgs(diaryRootPreviewSchema.parse(args[0])),
+  ),
   inspectPersonalRelocation: bindIpcParser(workspaceStateIpc.inspectPersonalRelocation, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
   ),

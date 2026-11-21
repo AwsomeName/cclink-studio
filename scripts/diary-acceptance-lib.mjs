@@ -99,7 +99,7 @@ export async function firstUse(s, { directory, dailyTime = '23:59', shot } = {})
   }
   if (shot) await page.screenshot({ path: shot })
   for (let i = 0; i < 2; i++) await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText('本机 AI · 就绪').waitFor({ timeout: 30000 })
+  await wizard.getByText(/测试：生成一句话 · 通过/).waitFor({ timeout: 120000 })
   await wizard.getByRole('button', { name: '下一步' }).click()
   await wizard.getByLabel('每日起草时间').fill(dailyTime)
   await wizard.getByRole('button', { name: '确认并开始' }).click()

@@ -974,10 +974,25 @@ export class WorkspaceStateService {
    * here; an existing folder must match the reviewed preview. Settings are written by
    * confirmDiaryRoot under the same checks as an existing binding.
    */
-  async initializePersonalSpace(preview: DiaryRootPreview | null): Promise<FixedSpaces> {
+  async initializePersonalSpace(
+    preview: DiaryRootPreview | null,
+    options: { replaceUnavailable?: boolean } = {},
+  ): Promise<FixedSpaces> {
     const root = await this.fixedOperation(async () => {
       const fixed = this.getFixedSpaces()
-      if (fixed.personal) throw Error('我的空间已设置，请刷新后重试')
+      if (fixed.personal && !options.replaceUnavailable) throw Error('我的空间已设置，请刷新后重试')
+      if (fixed.personal && options.replaceUnavailable) {
+        // Only a binding that no longer proves its identity may be replaced (§13 改用其他目录).
+        const stillValid = await this.inspectFixedIdentity(
+          fixed.personal.workspacePath,
+          fixed.personal.projectId,
+        ).then(
+          () => true,
+          () => false,
+        )
+        if (stillValid) throw Error('上次的项目目录仍然可用，请在项目设置中更换目录')
+        if (!preview) throw Error('请选择要改用的目录')
+      }
       const target = preview
         ? await this.resolveLocalWorkspacePath(preview.workspacePath)
         : await this.ensureDefaultWorkspace('', '我的空间')

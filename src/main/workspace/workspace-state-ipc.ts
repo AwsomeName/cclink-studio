@@ -216,6 +216,18 @@ export function registerWorkspaceStateIpc(
     },
   )
   registerTrustedIpcContract(
+    workspaceStateIpcContracts.replaceUnavailablePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      const fixed = await workspaceStateService.initializePersonalSpace(preview, {
+        replaceUnavailable: true,
+      })
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
     workspaceStateIpcContracts.inspectPersonalRelocation,
     trustedRendererGuard,
     (event, path) => {

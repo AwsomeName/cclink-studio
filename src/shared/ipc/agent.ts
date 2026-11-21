@@ -247,6 +247,9 @@ export const agentIpc = {
   listSkills: defineIpcCall<[], AgentSkillSummary[]>('agent:listSkills'),
   closeConversation: defineIpcCall<[conversationId: string], void>('agent:closeConversation'),
   getCapabilities: defineIpcCall<[], AgentCapabilityStatus[]>('agent:getCapabilities'),
+  probeRuntime: defineIpcCall<[], { ok: boolean; error?: string; elapsedMs: number }>(
+    'agent:probeRuntime',
+  ),
   listToolModules: defineIpcCall<[], AgentToolModuleStatus[]>('agent:listToolModules'),
   setToolModuleEnabled: defineIpcCall<[moduleId: string, enabled: boolean], AgentCommandResult>(
     'agent:setToolModuleEnabled',

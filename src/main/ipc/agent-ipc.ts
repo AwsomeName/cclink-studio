@@ -582,6 +582,28 @@ export function registerAgentIpc(deps: AgentIpcDeps): void {
     return deps.getCapabilities?.() ?? []
   })
 
+  handle(agentIpc.probeRuntime, async () => {
+    const agentBridge = requireAgentBridge()
+    const started = Date.now()
+    if (!agentBridge) return { ok: false, error: 'Agent 后端未就绪', elapsedMs: 0 }
+    try {
+      const text = await agentBridge.requestInternalText({
+        purpose: 'runtime-probe',
+        prompt: '这是连通性测试。只回复两个字：可用',
+        timeoutMs: 90_000,
+      })
+      return text.trim()
+        ? { ok: true, elapsedMs: Date.now() - started }
+        : { ok: false, error: 'AI 没有返回内容', elapsedMs: Date.now() - started }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        elapsedMs: Date.now() - started,
+      }
+    }
+  })
+
   handle(agentIpc.listToolModules, () => deps.getToolModules?.() ?? [])
 
   handle(agentIpc.setToolModuleEnabled, (_event, moduleId, enabled) => {

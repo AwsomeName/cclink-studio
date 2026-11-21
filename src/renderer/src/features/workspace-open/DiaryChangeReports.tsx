@@ -35,7 +35,7 @@ export function DiaryChangeReports({
     setMessage(
       `已撤销 ${result.restored.length} 个文件` +
         (result.skipped.length
-          ? `；${result.skipped.join('、')} 在 AI 修改后又被改过，未撤销`
+          ? `；未撤销 ${result.skipped.join('、')}（附件无法撤销，或在 AI 修改后又被改过）`
           : ''),
     )
     setRefresh((value) => value + 1)

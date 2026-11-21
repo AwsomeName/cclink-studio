@@ -22,13 +22,10 @@ import type { FsDirEntry } from '@shared/ipc/fs'
 import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { useAgentStore } from '../../stores/agent-store'
-import { useUIStore } from '../../stores/ui-store'
-import { AGENT_FOCUS_COMPOSER_EVENT } from '../markdown/markdown-navigation'
+import { askAi, editRule } from './diary-ai'
 import {
   createScheduledTaskTab,
   describeSchedule,
-  formatNextRun,
 } from '../scheduled-tasks/scheduled-task-view-model'
 import {
   defaultBuiltInChoice,
@@ -73,15 +70,20 @@ export function classifyDiary(rel: string): { year: string; month: string; day: 
   return match ? { year: match[1], month: match[3], day: match[4] } : null
 }
 
-function askAi(text: string): void {
-  useUIStore.getState().setAgentPanelMode('right', 'user')
-  useAgentStore.getState().setInput(text)
-  window.setTimeout(() => {
-    window.dispatchEvent(new Event(AGENT_FOCUS_COMPOSER_EVENT))
-    // Continue typing after the prefilled file reference.
-    const input = document.activeElement
-    if (input instanceof HTMLTextAreaElement) input.setSelectionRange(text.length, text.length)
-  }, 50)
+/** Next run in the task's own timezone, labelled when it differs from this computer. */
+function formatNextInZone(value: number | null, timezone: string): string {
+  if (value === null) return '未安排'
+  const text = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: timezone,
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+  return timezone === Intl.DateTimeFormat().resolvedOptions().timeZone
+    ? text
+    : `${text}（${timezone}）`
 }
 
 export function PersonalDiaryHome(): React.ReactElement {
@@ -407,7 +409,7 @@ export function PersonalDiaryHome(): React.ReactElement {
             <button className="primary" onClick={() => openFile(today[0])}>
               继续写
             </button>
-            <button onClick={() => askAi(`请修改今天的日记 ${today[0].path}：`)}>
+            <button onClick={() => askAi(`${editRule}请修改今天的日记 ${today[0].path}：`)}>
               让 AI 修改…
             </button>
           </div>
@@ -466,7 +468,8 @@ export function PersonalDiaryHome(): React.ReactElement {
               </b>
               <p className="muted">
                 将写入 {source.directory}/{location.folder}/{location.filename}
-                {' · '}下次 {formatNextRun(daily.activation.nextRunAt)}
+                {' · '}下次{' '}
+                {formatNextInZone(daily.activation.nextRunAt, daily.definition.schedule.timezone)}
               </p>
               <button disabled={busy} onClick={() => act(draftNow)}>
                 现在起草
@@ -657,7 +660,7 @@ export function PersonalDiaryHome(): React.ReactElement {
             {task.activation.enabled &&
             (task.definition.source === 'local' ||
               task.activation.confirmedExecutionDigest === task.definition.executionDigest)
-              ? `本机已启用 · 下次 ${formatNextRun(task.activation.nextRunAt)}`
+              ? `本机已启用 · 下次 ${formatNextInZone(task.activation.nextRunAt, task.definition.schedule.timezone)}`
               : task.activation.enabled
                 ? '定义已变化，待重新确认'
                 : '本机未启用'}
@@ -747,7 +750,8 @@ export function PersonalDiaryHome(): React.ReactElement {
         />
       ) : (
         <>
-          {page === '今天' && todayView}
+          {/* Until a legacy link is migrated, only the migration prompt acts on it. */}
+          {page === '今天' && !(legacyLink && ownerPath === fixedPath) && todayView}
           {page === '日记' && historyView}
           {page === '计划' && plansView}
           {page === '定时整理' && tasksView}
@@ -762,7 +766,9 @@ export function PersonalDiaryHome(): React.ReactElement {
                 >
                   打开原文
                 </button>
-                <button onClick={() => askAi(`请修改 ${preview.path}：`)}>让 AI 修改…</button>
+                <button onClick={() => askAi(`${editRule}请修改 ${preview.path}：`)}>
+                  让 AI 修改…
+                </button>
               </header>
               <ConversationMarkdown source={preview.content} />
               {preview.truncated && <p>正文较长，显示前 128 KB；打开原文可查看全文。</p>}

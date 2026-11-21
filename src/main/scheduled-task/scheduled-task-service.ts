@@ -458,6 +458,7 @@ export class ScheduledTaskService {
         this.activationFile.activations[activationKey(context.workspaceId, definition.id)] =
           activation
         await this.writeActivationFile()
+        await this.catchUpTodayDraft(definition, context.workspaceId, activation)
         this.armScheduler()
         this.notifyChanged(context.workspacePath)
         return {
@@ -489,6 +490,7 @@ export class ScheduledTaskService {
         this.activationFile.activations[activationKey(context.workspaceId, definition.id)] =
           activation
         await this.writeActivationFile()
+        await this.catchUpTodayDraft(definition, context.workspaceId, activation)
         this.armScheduler()
         this.notifyChanged(context.workspacePath)
         return {
@@ -712,6 +714,32 @@ export class ScheduledTaskService {
   async flush(): Promise<void> {
     await this.mutationQueue.catch(() => {})
     if (!this.runStoreLoadError) await this.runStore.flush()
+  }
+
+  /**
+   * Enabling the daily diary draft after today's time still produces today's draft (once);
+   * the runner skips when today's diary already exists.
+   */
+  private async catchUpTodayDraft(
+    definition: ScheduledTaskDefinition,
+    workspaceId: string,
+    activation: ScheduledTaskActivation,
+  ): Promise<void> {
+    if (!activation.enabled || !isDailyDiaryDraft(definition) || this.runtimeState !== 'ready')
+      return
+    if (!isActivationRunnable(activation, definition)) return
+    const timestamp = this.now()
+    const occurrence = calculateNextRunAt(definition.schedule, timestamp - 86_400_000)
+    if (
+      occurrence === null ||
+      occurrence > timestamp ||
+      !sameScheduleDay(definition.schedule.timezone, occurrence, timestamp)
+    )
+      return
+    const key = occurrenceKey(workspaceId, definition.id, occurrence)
+    if (this.runStore.findOccurrence(key)) return
+    const run = await this.claimRun(definition, workspaceId, 'catch-up', occurrence, key)
+    this.queueRun(run)
   }
 
   private async reconcileMissedOccurrences(): Promise<void> {
