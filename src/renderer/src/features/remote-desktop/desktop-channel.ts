@@ -27,7 +27,8 @@ export class DesktopChannel {
         if (!bytes) break
         if (this.readyState === 'open') this.onmessage?.({ data: bytes })
       }
-    } catch {
+    } catch (error) {
+      console.warn('[RemoteDesktop] channel error', String(error))
       this.onerror?.()
     }
     this.close()
@@ -37,9 +38,14 @@ export class DesktopChannel {
     void this.api
       .write(this.input.sessionId, bytes)
       .then((ok) => {
-        if (!ok) this.close()
+        if (ok) return
+        console.warn('[RemoteDesktop] write rejected by main process; closing channel')
+        this.close()
       })
-      .catch(() => this.close())
+      .catch((error) => {
+        console.warn('[RemoteDesktop] write failed; closing channel', String(error))
+        this.close()
+      })
   }
   close(): void {
     if (this.readyState === 'closed') return

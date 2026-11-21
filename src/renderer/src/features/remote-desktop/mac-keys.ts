@@ -19,11 +19,17 @@ type KeyHandler = (
 ) => void
 
 /** Pinned to noVNC 1.7.0 internals; returns false when the hook is missing. */
-export function applyMacServerModifiers(rfb: RFB): boolean {
+export function applyMacServerModifiers(
+  rfb: RFB,
+  onSent?: (keysym: number, down: boolean) => void,
+): boolean {
   const keyboard = (rfb as unknown as { _keyboard?: { onkeyevent?: KeyHandler } })._keyboard
   const forward = keyboard?.onkeyevent
   if (!keyboard || typeof forward !== 'function') return false
-  keyboard.onkeyevent = (keysym, code, down, numlock, capslock) =>
-    forward(MAC_SERVER_MODIFIERS[code] ?? keysym, code, down, numlock, capslock)
+  keyboard.onkeyevent = (keysym, code, down, numlock, capslock) => {
+    const mapped = MAC_SERVER_MODIFIERS[code] ?? keysym
+    onSent?.(mapped, down)
+    forward(mapped, code, down, numlock, capslock)
+  }
   return true
 }
