@@ -165,11 +165,14 @@ try {
     assert.deepEqual(await page.evaluate(() => [...window.ownerSmokeRuns]), [])
     assert.match(await readFile(join(folder, '事务配置.md'), 'utf8'), /待确认草案/)
     assert.match(await readFile(join(folder, '调度.md'), 'utf8'), /尚未派工/)
-    await page.getByText(/^事务文件 ·/).click()
-    await click('事务配置.md')
+    // Fixed Owner sidebar: 208px, documents open as center tabs, main chat stays on the right.
+    const side = page.locator('nav.own-side')
+    assert.equal(Math.round((await side.boundingBox()).width), 208)
+    await side.getByRole('button', { name: '事务配置.md', exact: true }).click()
     await page.getByRole('heading', { name: '事务配置.md', exact: true }).waitFor()
-    await click('关闭预览')
-    await click('调度.md')
+    await page.getByRole('heading', { name: 'Owner 主对话' }).waitFor()
+    await click('关闭 事务配置.md')
+    await side.getByRole('button', { name: '调度.md', exact: true }).click()
     const schedulePreview = page
       .getByRole('heading', { name: '调度.md', exact: true })
       .locator('..')
@@ -217,7 +220,7 @@ try {
       .getByText(/首次委派 A/)
       .first()
       .waitFor()
-    await click('关闭预览')
+    await click('关闭 调度.md')
     const beforeQuestion = await state()
     assert.match(await readFile(join(folder, '事务配置.md'), 'utf8'), /已确认的约定/)
     const question = '为什么选择这些资料？目前还有哪些结论需要核对？'
@@ -353,8 +356,31 @@ try {
     await page.getByRole('heading', { name: sourceFile, exact: true }).waitFor()
     await snap('05-rtl-line')
     console.log('引用打开', sourceFile, 'L' + line, excerpt)
+    await page.getByRole('heading', { name: 'Owner 主对话' }).waitFor()
+    assert.ok(await page.getByLabel('和 Owner 沟通').isVisible())
     await click('返回报告')
-    await click('关闭预览')
+    await page.getByRole('heading', { name: a.directory.reportFile, exact: true }).waitFor()
+    await click('关闭 ' + a.directory.reportFile.split('/').pop())
+    await click('关闭 ' + sourceFile.split('/').pop())
+    await page.locator('[data-owner-phase]').waitFor()
+
+    // Read-only source directory for this affair only: pick, browse, preview, persist, revoke.
+    const notes = join(dir, 'ibex-notes')
+    await mkdir(join(notes, 'rtl'), { recursive: true })
+    await writeFile(join(notes, '验证笔记.md'), '# 验证笔记\n\n取指级有效位需对照 RTL。\n')
+    await writeFile(join(notes, 'rtl', 'if_note.sv'), 'line one\n// 验收笔记：有效位输出\n')
+    await app.evaluate(({ dialog }, notes) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [notes] })
+    }, notes)
+    await page.getByRole('button', { name: /配置参考目录/ }).click()
+    await side.getByRole('button', { name: /^[▸▾] ibex-notes$/ }).waitFor()
+    await side.getByRole('button', { name: /^▸ rtl\/$/ }).click()
+    await side.getByRole('button', { name: 'if_note.sv', exact: true }).click()
+    await page.getByRole('heading', { name: 'ibex-notes/rtl/if_note.sv', exact: true }).waitFor()
+    await page.locator('.own-doc').getByText('// 验收笔记：有效位输出').waitFor()
+    await snap('06-source-directory')
+    assert.deepEqual((await readdir(notes)).sort(), ['rtl', '验证笔记.md'].sort())
+    console.log('参考目录已授权并可只读预览', notes)
     console.log(
       '成品',
       join(folder, a.directory.reportFile),
@@ -372,6 +398,16 @@ try {
     await launch()
     await page.locator('.own-row').first().click()
     assert.equal(await page.locator('.own-detail article blockquote').count(), count)
+    const restoredSide = page.locator('nav.own-side')
+    await restoredSide.getByRole('button', { name: /^[▸▾] ibex-notes$/ }).waitFor()
+    await page.getByRole('button', { name: /撤销本事务对「ibex-notes」/ }).click()
+    await page.waitForFunction(() => !document.querySelector('[data-owner-grant]'))
+    const grants = await page.evaluate(
+      async (id) => window.cclinkStudio.ownerSources.list(id),
+      a.id,
+    )
+    assert.deepEqual(grants, [])
+    console.log('重启后参考目录授权仍在，撤销后不再列出')
     assert.equal(await page.locator('.own-answer p').first().innerText(), answer)
     console.log(
       'PASS single Studio window → goal → evidence review → same A follows up → sourced delivery → restored',

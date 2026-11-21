@@ -1,5 +1,6 @@
 import { ownerDirectoryIpc } from '../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../shared/ipc/owner-research'
+import { ownerSourceIpc } from '../shared/ipc/owner-source'
 import { contextBridge, ipcRenderer } from 'electron'
 import { desktopApi } from './remote-desktop-api'
 import { localTtsApi } from './local-tts-api'
@@ -459,6 +460,15 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     retry: (id: string) => invokeIpcContract(ownerDirectoryIpc.retry, id),
     reveal: (id: string) => invokeIpcContract(ownerDirectoryIpc.reveal, id),
     preview: (id: string, name: string) => invokeIpcContract(ownerDirectoryIpc.preview, id, name),
+  },
+  ownerSources: {
+    list: (id: string) => invokeIpcContract(ownerSourceIpc.list, id),
+    add: (id: string) => invokeIpcContract(ownerSourceIpc.add, id),
+    revoke: (id: string, grantId: string) => invokeIpcContract(ownerSourceIpc.revoke, id, grantId),
+    entries: (id: string, grantId: string, rel: string) =>
+      invokeIpcContract(ownerSourceIpc.entries, id, grantId, rel),
+    read: (id: string, grantId: string, rel: string) =>
+      invokeIpcContract(ownerSourceIpc.read, id, grantId, rel),
   },
   ownerResearch: {
     findPaths: (repo: string, terms: string[], ref: string) =>

@@ -15,7 +15,7 @@ import {
   normalizeClaudeRuntimeSettingsUpdate,
   type AppSettings,
 } from './types'
-import { PERMISSION_MODES } from '../../shared/settings-constants'
+import { CLOCK_TIME_ZONES, PERMISSION_MODES } from '../../shared/settings-constants'
 import type { SettingsSecretKey } from '../../shared/ipc/settings'
 import type { SettingsSecretStatus } from '../../shared/ipc/settings'
 import type { ClaudeConnectionInput } from '../../shared/ipc/settings'
@@ -34,6 +34,7 @@ const MESHY_CREDENTIAL_ID = 'extension:meshy:default'
 
 /** 每个 key 的合法值集合（用于校验 IPC 传入的数据；数值/字符串字段不在此列） */
 const VALID_VALUES: Record<string, Set<string>> = {
+  clockTimeZone: new Set(CLOCK_TIME_ZONES),
   startupWorkspaceTarget: new Set(['resume', 'default', 'unfiled']),
   updateTrack: new Set<string>(['stable', 'beta']),
   backendType: new Set<string>(['claude-code']),
@@ -335,7 +336,7 @@ export class SettingsService {
       }
       // 对有枚举约束的字段做值校验；其他数值/字符串字段跳过枚举检查。
       const validSet = VALID_VALUES[key]
-      if (validSet && typeof val === 'string' && !validSet.has(val)) {
+      if (validSet && !validSet.has(val as string)) {
         console.warn(`[SettingsService] 忽略无效值: ${key}=${val}`)
         continue
       }
@@ -430,7 +431,7 @@ export class SettingsService {
         continue
       }
       const validSet = VALID_VALUES[key]
-      if (validSet && typeof val === 'string' && !validSet.has(val)) {
+      if (validSet && !validSet.has(val as string)) {
         console.warn(`[SettingsService] 加载配置时忽略无效值: ${key}=${val}`)
         continue
       }

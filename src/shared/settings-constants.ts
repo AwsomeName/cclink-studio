@@ -175,6 +175,8 @@ export interface AppSettings {
 
   /** 应用缩放级别（Electron webFrame zoom level, 0 = 100%） */
   appZoomLevel: number
+  /** 状态栏使用的 IANA 时区，system 表示跟随系统 */
+  clockTimeZone: string
 
   // ─── 工作区 ───
 
@@ -253,6 +255,8 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
   custom: { label: '自定义', anthropicBaseUrl: '', openaiBaseUrl: '', defaultModel: '' },
 }
 
+export const CLOCK_TIME_ZONES = ['system', 'UTC', ...Intl.supportedValuesOf('timeZone')]
+
 /** 默认设置值（唯一权威来源） */
 export const DEFAULT_SETTINGS: AppSettings = {
   componentSetupPageSeenVersion: 0,
@@ -296,6 +300,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   // 外观
   appZoomLevel: 0,
+  clockTimeZone: 'system',
 
   // 工作区
   lastWorkspacePath: '',

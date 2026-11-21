@@ -118,6 +118,24 @@ export interface CCLinkStudioAPI {
     reveal: (id: string) => Promise<void>
     preview: (id: string, name: string) => Promise<string>
   }
+  ownerSources: {
+    list: (id: string) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[]>
+    add: (id: string) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[] | null>
+    revoke: (
+      id: string,
+      grantId: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[]>
+    entries: (
+      id: string,
+      grantId: string,
+      rel: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourceEntry[]>
+    read: (
+      id: string,
+      grantId: string,
+      rel: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourceFile>
+  }
   ownerResearch: {
     findPaths: (
       repo: string,
