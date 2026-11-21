@@ -24,6 +24,11 @@ import { useBrowserStore } from '../../stores/browser-store'
 import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
 import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detach-drag'
+import { RemoteDesktopTabControls } from '../../features/remote-desktop/desktop-controls'
+import {
+  isDesktopSessionLive,
+  useDesktopSessionStore,
+} from '../../features/remote-desktop/desktop-session-store'
 
 const TAB_ICONS: Record<string, string> = {
   browser: '🌐',
@@ -103,6 +108,9 @@ export function TabBar({
   const stripRef = useRef<HTMLDivElement>(null)
   const [overflow, setOverflow] = useState({ before: false, after: false })
   const pinned = tabs.filter((tab) => tab.pinned)
+  const desktopSessions = useDesktopSessionStore((state) => state.sessions)
+  const isLiveDesktop = (tab: Tab): boolean =>
+    tab.type === 'remote-desktop' && isDesktopSessionLive(desktopSessions[tab.id])
   const ordinary = tabs.filter((tab) => !tab.pinned)
   const shellRef = useRef<HTMLDivElement>(null)
   const [shellWidth, setShellWidth] = useState(Infinity)
@@ -117,7 +125,10 @@ export function TabBar({
   }, [])
   // Keep one ordinary tab and its scroll controls reachable in a narrow workbench.
   const slots = Math.max(1, Math.floor((shellWidth - (ordinary.length ? 148 : 0)) / 40))
-  const visiblePins = pinned.length > slots ? pinned.slice(0, Math.max(1, slots - 1)) : pinned
+  // A live remote desktop pin is wider (status dot and view-mode button): count it as two slots.
+  const pinUnits = pinned.reduce((sum, tab) => sum + (isLiveDesktop(tab) ? 2 : 1), 0)
+  const visiblePins =
+    pinUnits > slots ? takePins(pinned, Math.max(1, slots - 1), isLiveDesktop) : pinned
   const extraPins = pinned.slice(visiblePins.length)
   const activeExtraPin = extraPins.find((tab) => tab.id === activeTabId)
   const tabOrderKey = JSON.stringify(ordinary.map((tab) => tab.id))
@@ -291,7 +302,7 @@ export function TabBar({
         key={tab.id}
         data-workbench-tab-id={tab.id}
         data-home-tab={tab.type === 'workspace-home' || undefined}
-        className={`tab ${tab.pinned ? 'pinned' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+        className={`tab ${tab.pinned ? 'pinned' : ''} ${isLiveDesktop(tab) ? 'remote-desktop-live' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
         role="tab"
         title={tab.type === 'workspace-home' ? '项目首页' : label}
         aria-label={tab.type === 'workspace-home' ? '项目首页' : label}
@@ -355,6 +366,7 @@ export function TabBar({
           <WorkbenchTabIcon tab={tab} />
         </span>
         {!tab.pinned && <span className="tab-title">{title}</span>}
+        {tab.type === 'remote-desktop' && <RemoteDesktopTabControls tab={tab} />}
         {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}
         {!tab.pinned && (
           <span
@@ -479,4 +491,16 @@ export function TabBar({
       )}
     </div>
   )
+}
+
+function takePins(pins: Tab[], units: number, wide: (tab: Tab) => boolean): Tab[] {
+  const visible: Tab[] = []
+  let used = 0
+  for (const tab of pins) {
+    const cost = wide(tab) ? 2 : 1
+    if (visible.length > 0 && used + cost > units) break
+    visible.push(tab)
+    used += cost
+  }
+  return visible
 }

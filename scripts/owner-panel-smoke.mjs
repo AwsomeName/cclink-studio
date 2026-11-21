@@ -99,6 +99,23 @@ try {
     await page.getByRole('button', { name: '确认约定，开始' }).waitFor()
     assert.match(await page.locator('[data-owner-chips]').innerText(), /待确认|等我确认/)
     await snap('v2-03-agreement')
+    // Copy Owner diagnostics from the title row: this affair's facts, no chat or evidence text.
+    const clip = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    await click('⧉ 复制 Owner 诊断')
+    const pop = page.getByRole('dialog', { name: 'Owner 诊断复制结果' })
+    await pop.getByText(/已复制到剪贴板/).waitFor()
+    let report = await clip()
+    assert.ok(report.startsWith('# Owner 诊断'), report.slice(0, 80))
+    assert.ok(report.includes('事务 ID：' + affair.id))
+    assert.ok(report.includes('等你确认约定'))
+    assert.ok(!/\/Users\/[^/~]/.test(report), '本机用户名已替换')
+    const ownerReply = (
+      await page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
+    ).research.chat.find((m) => m.who === 'Owner')?.text
+    if (ownerReply) assert.ok(!report.includes(ownerReply.slice(0, 20)), '不含聊天正文')
+    await snap('v2-10-diagnostics-copied')
+    await pop.getByRole('button', { name: '关闭' }).click()
+    console.log('诊断已复制', Buffer.byteLength(report), 'bytes')
     // Grant the registered directory through the two-step confirmation.
     await side.getByRole('button', { name: /配置参考目录/ }).click()
     await page.getByRole('button', { name: '📁 ' + notes }).click()
@@ -110,11 +127,115 @@ try {
     await page.getByRole('heading', { name: /^等我确认/ }).waitFor()
     assert.match(await page.getByRole('button', { name: /^◈ Owner/ }).innerText(), /1 等你/)
     await snap('v2-02-list')
+    // Force a save conflict on confirmation: no dispatch, problem card offers retry and copy.
+    await page.locator('.own-row').first().click()
+    await writeFile(join(affair.directory.path, '事务配置.md'), '\n用户手改', { flag: 'a' })
+    await page.getByRole('button', { name: '确认约定，开始' }).click()
+    await page.locator('[data-owner-phase="pending-save"]').waitFor({ timeout: 30000 })
+    const card = page.locator('.own-call')
+    await card.getByRole('button', { name: '重试保存文件' }).waitFor()
+    await card.getByRole('button', { name: '⧉ 复制 Owner 诊断' }).click()
+    await page
+      .getByRole('dialog', { name: 'Owner 诊断复制结果' })
+      .getByText(/已复制到剪贴板/)
+      .waitFor()
+    report = await clip()
+    assert.match(report, /待保存：.*事务配置\.md/)
+    assert.deepEqual(
+      (
+        await page.evaluate(
+          async () => (await window.cclinkStudio.ownerDirectories.list()).items[0],
+        )
+      ).research.decisions ?? [],
+      [],
+    )
+    await snap('v2-12-diagnostics-on-failure')
+    console.log('保存冲突时从问题卡片复制诊断，未派工')
+    await page
+      .getByRole('dialog', { name: 'Owner 诊断复制结果' })
+      .getByRole('button', { name: '关闭' })
+      .click()
+    await page.locator('nav.own-side').getByRole('button', { name: '‹ 我的事务' }).click()
     await side.getByRole('button', { name: '⚙ Owner 设置' }).click()
     await page.locator('[data-owner-root="chip-notes"]').getByText('已授权给 1 件事务').waitFor()
     console.log(
       'PASS v2 entry → settings → hand-over at chosen location → agreement → grant → list',
     )
+  } else if (process.argv.includes('--sessions')) {
+    // Independent subtasks should go to separate execution sessions; dependent ones continue.
+    const shots = process.env.OWNER_V2_SHOTS
+    const snap = async (name) => shots && page.screenshot({ path: join(shots, name + '.png') })
+    const state = () =>
+      page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
+    await page
+      .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
+      .fill(
+        '对比开源 RISC-V 处理器 lowRISC/ibex 和 openhwgroup/cva6：两个项目各自的定位，以及各自默认流水线分几级、各级负责什么。交付一张中文对比简报，结论附官方仓库原文出处。',
+      )
+    await click('交给 Owner')
+    await page.getByRole('button', { name: '确认约定，开始' }).waitFor({ timeout: 150000 })
+    await click('确认约定，开始')
+    let midShot = false
+    await page
+      .waitForFunction(
+        () =>
+          ['done', 'error', 'pending-save'].includes(
+            document.querySelector('[data-owner-phase]')?.dataset.ownerPhase,
+          ),
+        null,
+        { timeout: 900000, polling: 2000 },
+      )
+      .catch((e) => {
+        throw e
+      })
+    const a = await state()
+    const r = a.research
+    console.log('阶段', r.phase, a.issue || '')
+    console.log(
+      '执行会话',
+      JSON.stringify((r.workers ?? []).map((w) => [w.key, w.purpose, w.reason, w.agent])),
+    )
+    for (const d of r.decisions ?? [])
+      console.log(
+        '判断',
+        d.kind,
+        d.worker ?? '-',
+        d.workerChoice ?? '-',
+        '|',
+        (d.choiceReason ?? '').slice(0, 60),
+        '| 完成标准:',
+        (d.doneWhen ?? '').slice(0, 60),
+        '| 验收:',
+        d.verdict ? (d.verdict.met ? '满足' : '未满足 ' + d.verdict.note.slice(0, 40)) : '-',
+      )
+    await page.locator('[data-owner-sessions]').scrollIntoViewIfNeeded()
+    await snap('v2-13-sessions')
+    const schedule = await readFile(join(a.directory.path, '调度.md'), 'utf8')
+    const work = await readFile(join(a.directory.path, '工作记录.md'), 'utf8')
+    assert.equal(r.phase, 'done', a.issue)
+    assert.ok((r.workers ?? []).length >= 2, '独立子任务应分配到不同执行会话')
+    assert.ok(r.decisions.some((d) => d.workerChoice === 'new' && d.worker !== 'a'))
+    assert.ok(r.decisions.filter((d) => d.kind !== 'deliver').every((d) => d.ask && d.doneWhen))
+    assert.ok(
+      r.decisions.some((d) => d.verdict),
+      '至少一次按完成标准验收',
+    )
+    for (const w of r.workers) {
+      assert.ok(w.agent, '新会话记录了启动前选用的 Agent')
+      const runs = r.decisions.filter((d) => (d.worker ?? 'a') === w.key && d.workerRunId)
+      for (const d of runs)
+        assert.equal(
+          await page.evaluate(
+            async ({ c, run }) => (await window.cclinkStudio.agent.getRunStatus(c, run))?.status,
+            { c: 'owner-' + a.id + '-' + w.key, run: d.workerRunId },
+          ),
+          'succeeded',
+        )
+    }
+    assert.match(work, /新开执行会话 B/)
+    assert.match(schedule, /本步问题|## 执行会话/)
+    void midShot
+    console.log('PASS independent subtasks → separate sessions with dispatch sheets and verdicts')
   } else if (process.argv.includes('--worker-recovery')) {
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
@@ -279,7 +400,7 @@ try {
       timeout: 150000,
     })
     await schedulePreview
-      .getByText(/首次委派 A/)
+      .getByText(/新开执行会话|委派会话/)
       .first()
       .waitFor()
     await click('关闭 调度.md')

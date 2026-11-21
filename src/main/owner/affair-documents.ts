@@ -1,5 +1,11 @@
 import type { AffairRecord } from '../../shared/owner/affair'
-import type { Research } from '../../shared/owner/research'
+import {
+  decisionTitle,
+  decisionWorker,
+  workerLabel,
+  workersOf,
+  type Research,
+} from '../../shared/owner/research'
 
 export const configurationFile = '事务配置.md'
 export const scheduleFile = '调度.md'
@@ -59,10 +65,14 @@ function dispatchState(r: Research, confirmed: boolean, issue: string) {
   if (r.phase === 'reading') {
     const d = r.decisions?.at(-1)
     if (d?.workerReturned)
-      return ['Studio · 读取原文', 'A 已返回选取的资料。', '资料返回后由 Owner 核对原文。']
+      return [
+        'Studio · 读取原文',
+        '执行会话 ' + workerLabel(decisionWorker(d)) + ' 已返回选取的资料。',
+        '资料返回后由 Owner 按完成标准核对原文。',
+      ]
     if (d?.workerRunId)
       return [
-        '会话 A · 已接收委托',
+        '执行会话 ' + workerLabel(decisionWorker(d)) + ' · 已接收委托',
         '等待本轮结构化回执。',
         '收到匹配的会话回执后，读取 A 选取的原文并交给 Owner 核对。',
       ]
@@ -75,11 +85,11 @@ function dispatchState(r: Research, confirmed: boolean, issue: string) {
     return [
       'Owner · 准备取证',
       '查找本轮委托所需的候选资料。',
-      '找到候选文件后交给会话 A；找不到则由 Owner 复核缺口。',
+      '找到候选文件后交给本步的执行会话；找不到则由 Owner 复核缺口。',
     ]
   }
   if (r.phase === 'writing')
-    return ['会话 A · 整理结果', '等待原会话交回结果。', 'Owner 逐项核对后决定补查或交付。']
+    return ['执行会话 · 整理结果', '等待原会话交回结果。', 'Owner 逐项核对后决定补查或交付。']
   return [
     'Owner · 核对证据',
     '对照已确认的目标、交付标准与现有原文。',
@@ -101,10 +111,8 @@ export function scheduleDocument(a: AffairRecord, revision: number) {
       '## 最近记录的步骤',
       actor + '　·　' + waiting,
       decision && '## Owner 的判断',
-      decision &&
-        { read: '首次委派 A', more: '续用 A 补查', deliver: '交付依据' }[decision.kind] +
-          '：' +
-          decision.reason,
+      decision && decisionTitle(decision) + '：' + decision.reason,
+      decision?.choiceReason && '会话选择：' + decision.choiceReason,
       assignment && '## 最近一次委托',
       assignment !== decision && assignment?.reason,
       assignment?.requests
@@ -112,7 +120,22 @@ export function scheduleDocument(a: AffairRecord, revision: number) {
           (request) => '- ' + request.repo + ' · ' + (request.terms.join('、') || '项目 README'),
         )
         .join('\n'),
-      assignment?.workerRunId && '会话：owner-' + a.id + '-a　·　运行：' + assignment.workerRunId,
+      assignment?.ask && '本步问题：' + assignment.ask,
+      assignment?.deliverable && '要交回：' + assignment.deliverable,
+      assignment?.doneWhen && '完成标准：' + assignment.doneWhen,
+      assignment?.verdict &&
+        '验收：' + (assignment.verdict.met ? '满足' : '未满足') + ' · ' + assignment.verdict.note,
+      assignment?.workerRunId &&
+        '会话：owner-' +
+          a.id +
+          '-' +
+          decisionWorker(assignment) +
+          '　·　运行：' +
+          assignment.workerRunId,
+      workersOf(r).length > 0 && '## 执行会话',
+      workersOf(r)
+        .map((w) => '- ' + workerLabel(w.key) + '：' + w.purpose + '（' + w.reason + '）')
+        .join('\n'),
       '## 继续条件与下一步',
       next,
       '## 触发方式',

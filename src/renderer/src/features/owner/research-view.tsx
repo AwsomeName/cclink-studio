@@ -20,7 +20,16 @@ import {
 import { freshResearch } from './research-model'
 import { OwnerSidebar } from './owner-sidebar'
 import { OwnerDocument } from './owner-document'
-import { AgreementCard, DeliveryCard, StatusChips, StepCard, Timeline } from './owner-board'
+import { CopyOwnerDiagnostics } from './owner-diagnostics-button'
+import {
+  AgreementCard,
+  DeliveryCard,
+  SessionsCard,
+  StatusChips,
+  StepCard,
+  Timeline,
+} from './owner-board'
+import { currentWorker } from './owner-status'
 import { BOARD, ownerView, tabKey, tabTitle, useOwnerView } from './owner-view-store'
 import { session } from './owner-agent'
 import { next, type Affair } from './affair'
@@ -122,8 +131,9 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
     a.title === a.goal.slice(0, 60) ? a.title.split(/[，。；！？]/u)[0] || a.title : a.title
   const waitingForReentry = label === '待恢复'
   const ready = !active && !a.confirmed && r.phase === 'ready' && !!r.plan
-  const workerRun = useAgentStore((s) => s.conversations[session(a, 'a')]?.activeRunId)
-  const workerLoading = useAgentStore((s) => s.conversations[session(a, 'a')]?.loading)
+  const workerKey = currentWorker(a)
+  const workerRun = useAgentStore((s) => s.conversations[session(a, workerKey)]?.activeRunId)
+  const workerLoading = useAgentStore((s) => s.conversations[session(a, workerKey)]?.loading)
   const sourceGrants = useSourceGrantCount(a.id, !!a.directory && !a.directory.error)
   const perms = useAgentStore((s) => s.pendingConfirmations)
   useEffect(() => {
@@ -194,13 +204,14 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           data-owner-id={a.id}
         >
           <small className="own-crumb">Owner　›　{title}</small>
-          <h1>{title}</h1>
+          <div className="own-title-row">
+            <h1>{title}</h1>
+            <span className="own-flex" />
+            <CopyOwnerDiagnostics a={a} active={active} workerLoading={!!workerLoading} />
+          </div>
           {a.directory?.error && (
             <p role="alert">
               {a.directory.error}{' '}
-              <button onClick={() => void retryDirectory(a.id).catch((e) => setNotice(String(e)))}>
-                重试保存文件
-              </button>
               {hasDirectoryConflict(a.id) && (
                 <button
                   onClick={() => void useSavedDirectory(a.id).catch((e) => setNotice(String(e)))}
@@ -241,6 +252,17 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                         ? '取证中 · 已取得 ' + r.docs.length + ' 份原文'
                         : detail)}
               </h2>
+              <div className="own-card-actions">
+                {a.directory?.error && (
+                  <button
+                    className="own-primary"
+                    onClick={() => void retryDirectory(a.id).catch((e) => setNotice(String(e)))}
+                  >
+                    重试保存文件
+                  </button>
+                )}
+                <CopyOwnerDiagnostics a={a} active={active} workerLoading={!!workerLoading} />
+              </div>
             </div>
           )}
           {!a.confirmed && (
@@ -251,6 +273,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               confirm={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
             />
           )}
+          <SessionsCard a={a} running={workerLoading ? workerKey : undefined} />
           <StepCard
             a={a}
             workerRun={active && r.phase === 'reading' ? (workerRun ?? undefined) : undefined}
@@ -425,9 +448,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           <div ref={bottom} />
         </div>
         {perms
-          .filter(
-            (p) => p.conversationId === session(a, 'main') || p.conversationId === session(a, 'a'),
-          )
+          .filter((p) => !!p.conversationId?.startsWith('owner-' + a.id + '-'))
           .map((p) => (
             <div key={p.id}>
               <b>

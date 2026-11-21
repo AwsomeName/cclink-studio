@@ -163,6 +163,8 @@ export interface WebAffairDraftState {
 export interface Tab {
   /** Remote desktop Tabs reference a Studio-local device; host/port are legacy, migrated on open. */
   desktopTarget?: { deviceId?: string; host?: string; port?: number }
+  /** Remote desktop scaling, persisted per Tab. Fullscreen is session-only and never persisted. */
+  desktopView?: 'fit' | 'original'
   /** Local presentation preference, persisted by the existing Tab owner. */
   workbenchLayout?: 'standard' | 'focus'
   editorPresentation?: 'markdown' | 'source'

@@ -298,7 +298,20 @@ export async function bootstrapMainProcessServices(
     runtime.mainWindow,
   )
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
-  registerOwnerReadme(runtime.trustedRendererGuard)
+  registerOwnerReadme(runtime.trustedRendererGuard, async () => {
+    const bridge = runtime.agentBridge
+    if (!bridge) return { ok: false, error: 'Agent 服务未就绪' }
+    try {
+      const selected = await bridge.selectAgentForNewSession()
+      const kind = selected.binding.kind
+      if (kind !== 'codex' && kind !== 'claude-code')
+        return { ok: false, error: '不支持的 Agent：' + kind }
+      console.info('[Owner] 新会话选用 Agent', { kind, reason: selected.reason })
+      return { ok: true, kind, reason: selected.reason }
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
   const ownerRegistry = join(app.getPath('userData'), 'owner-directories')
   const personalSpace = async () => {
     const spaces = await runtime.workspaceStateService!.ensurePersonalSpace(

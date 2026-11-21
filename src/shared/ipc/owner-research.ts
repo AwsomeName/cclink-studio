@@ -1,4 +1,4 @@
-import { defineIpcInvoke } from './contract'
+import { defineIpcInvoke, defineNoArgsIpc } from './contract'
 
 // Only public repository coordinates cross this boundary. The main process owns all URLs.
 export const publicRepoPattern = /^[a-z\d](?:[a-z\d-]{0,38})\/[a-z\d][a-z\d._-]{0,99}$/i
@@ -20,7 +20,12 @@ export type ReadmeResult =
       matchedAnchor?: boolean
     }
   | { ok: false; error: string }
+export type OwnerAgentChoice =
+  | { ok: true; kind: 'codex' | 'claude-code'; reason: string }
+  | { ok: false; error: string }
 export const ownerResearchIpc = {
+  /** Startup readiness probe for a new Owner session (ADR 0023); sends no task content. */
+  selectAgent: defineNoArgsIpc<OwnerAgentChoice>('owner-research:select-agent'),
   readReadme: defineIpcInvoke<[string], ReadmeResult>(
     'owner-research:read-public-readme',
     (args) => {

@@ -1,3 +1,4 @@
+import type { OwnerAgentChoice } from '../../shared/ipc/owner-research'
 import { sourceWindow } from './source-window'
 import {
   ownerResearchIpc,
@@ -9,12 +10,44 @@ import {
   type TrustedRendererGuard,
 } from '../ipc/trusted-renderer-guard'
 
+const GITHUB_HEADERS = {
+  Accept: 'application/vnd.github+json',
+  'User-Agent': 'CCLink-Studio-Research',
+}
+/**
+ * A renamed or transferred repository answers with a redirect to /repositories/<id>/…, the
+ * same repository by numeric ID. Follow exactly one such hop on api.github.com; refuse others.
+ */
+export function renamedRepositoryTarget(location: string | null, base: string) {
+  if (!location) return
+  try {
+    const url = new URL(location, base)
+    if (
+      url.protocol === 'https:' &&
+      url.host === 'api.github.com' &&
+      /^\/repositories\/\d+(\/|$)/.test(url.pathname)
+    )
+      return url.toString()
+  } catch {
+    return
+  }
+}
 async function github(repo: string, suffix: string, limit: number) {
-  const response = await fetch('https://api.github.com/repos/' + repo + suffix, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CCLink-Studio-Research' },
-    redirect: 'error',
+  const first = 'https://api.github.com/repos/' + repo + suffix
+  let response = await fetch(first, {
+    headers: GITHUB_HEADERS,
+    redirect: 'manual',
     signal: AbortSignal.timeout(20000),
   })
+  if ([301, 302, 307, 308].includes(response.status)) {
+    const target = renamedRepositoryTarget(response.headers.get('location'), first)
+    if (!target) throw Error('GitHub 返回了不受信任的跳转（HTTP ' + response.status + '）')
+    response = await fetch(target, {
+      headers: GITHUB_HEADERS,
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    })
+  }
   if (!response.ok || !response.body) throw Error('GitHub HTTP ' + response.status)
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
@@ -34,6 +67,17 @@ async function github(repo: string, suffix: string, limit: number) {
 function failure(repo: string, e: unknown) {
   return { ok: false as const, error: repo + '：' + (e instanceof Error ? e.message : String(e)) }
 }
+// Canonical owner/name per requested name, so a renamed repository's links still verify.
+const canonical = new Map<string, string>()
+async function canonicalName(repo: string) {
+  const known = canonical.get(repo.toLowerCase())
+  if (known) return known
+  const data = await github(repo, '', 256 * 1024)
+  if (typeof data.full_name !== 'string' || !/^[\w.-]+\/[\w.-]+$/.test(data.full_name))
+    throw Error('没有取得仓库名称')
+  canonical.set(repo.toLowerCase(), data.full_name)
+  return data.full_name as string
+}
 async function read(repo: string, path?: string, anchor = '', ref = ''): Promise<ReadmeResult> {
   try {
     const commit = ref || (await github(repo, '/commits?per_page=1', 256 * 1024))[0]?.sha
@@ -50,9 +94,11 @@ async function read(repo: string, path?: string, anchor = '', ref = ''): Promise
       typeof data.content !== 'string' ||
       !/^[0-9a-f]{40}$/i.test(data.sha) ||
       typeof data.html_url !== 'string' ||
-      !data.html_url
-        .toLowerCase()
-        .startsWith('https://github.com/' + repo.toLowerCase() + '/blob/' + commit + '/')
+      !(await Promise.all([repo, canonicalName(repo).catch(() => repo)])).some((name) =>
+        data.html_url
+          .toLowerCase()
+          .startsWith('https://github.com/' + name.toLowerCase() + '/blob/' + commit + '/'),
+      )
     )
       throw Error('来源与请求不匹配')
     const raw = new TextDecoder('utf-8', { fatal: true }).decode(
@@ -71,7 +117,14 @@ async function read(repo: string, path?: string, anchor = '', ref = ''): Promise
     return failure(repo, e)
   }
 }
-export function registerOwnerReadme(guard: TrustedRendererGuard) {
+export function registerOwnerReadme(
+  guard: TrustedRendererGuard,
+  selectAgent: () => Promise<OwnerAgentChoice> = async () => ({
+    ok: false,
+    error: 'Agent 服务未就绪',
+  }),
+) {
+  registerTrustedIpcContract(ownerResearchIpc.selectAgent, guard, () => selectAgent())
   registerTrustedIpcContract(ownerResearchIpc.readReadme, guard, (_e, repo) => read(repo))
   registerTrustedIpcContract(ownerResearchIpc.readFile, guard, (_e, repo, path, anchor, ref) =>
     read(repo, path === '@README' ? undefined : path, anchor, ref),

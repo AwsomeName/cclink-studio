@@ -30,6 +30,7 @@ import { StatusBarClock } from './StatusBarClock'
 import { GitOperationDialog } from './GitOperationDialog'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
+import { RemoteDesktopStatusItem } from '../../features/remote-desktop/desktop-controls'
 
 export function StatusBar(): React.ReactElement {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId))
@@ -132,6 +133,8 @@ export function StatusBar(): React.ReactElement {
             contextProps={statusContextProps('git')}
           />
           <TtsStatusPlayer />
+
+          {activeTab?.type === 'remote-desktop' && <RemoteDesktopStatusItem tab={activeTab} />}
 
           {/* 浏览器 URL（截断显示） */}
           {activeTab?.type === 'browser' && currentUrl && (
