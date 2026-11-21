@@ -5,6 +5,7 @@ import {
 } from '../../shared/personal-diary-source'
 import { workspaceStateIpcContracts } from '../../shared/ipc/workbench-contract'
 import { WorkspaceStateService } from './workspace-state-service'
+import type { DiaryChangeTracker } from './diary-change-tracker'
 import {
   registerTrustedIpcContract,
   type TrustedRendererGuard,
@@ -23,6 +24,7 @@ export function registerWorkspaceStateIpc(
   fileService?: FileService,
   getCompanyService?: () => CompanyWorkspaceService | null,
   assertDiarySourceChange?: (previous: PersonalDiarySource) => Promise<void>,
+  getDiaryChangeTracker?: () => DiaryChangeTracker | null,
 ): void {
   const cleanupBoundSenders = new WeakSet<WebContents>()
   const bindCapabilityCleanup = (sender: WebContents): void => {
@@ -176,6 +178,26 @@ export function registerWorkspaceStateIpc(
       const fixed = await workspaceStateService.confirmDiaryRoot(owner, preview)
       grant(event.sender, [fixed.personal!.workspacePath])
       return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.listDiaryChanges,
+    trustedRendererGuard,
+    async (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return (await getDiaryChangeTracker?.()?.list(path)) ?? []
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.undoDiaryChange,
+    trustedRendererGuard,
+    async (event, id) => {
+      const tracker = getDiaryChangeTracker?.()
+      if (!tracker) throw Error('改动记录当前不可用')
+      const report = (await tracker.listAll()).find((item) => item.id === id)
+      if (!report) throw Error('改动报告不存在')
+      assertWorkspaceAccess(event.sender.id, report.workspacePath)
+      return tracker.undo(id)
     },
   )
   registerTrustedIpcContract(

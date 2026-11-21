@@ -307,6 +307,20 @@ export class AgentBridge {
   }
 
   /** 发送用户消息 */
+  private runObserver: {
+    beforeRun(input: {
+      conversationId: string
+      runId: string
+      workspacePath?: string
+    }): Promise<void>
+    afterRun(input: { runId: string }): Promise<unknown>
+  } | null = null
+
+  /** Observes user conversation runs (not scheduled tasks), e.g. diary change reports. */
+  setRunObserver(observer: AgentBridge['runObserver']): void {
+    this.runObserver = observer
+  }
+
   async sendMessage(
     message: string,
     conversationId = DEFAULT_CONVERSATION_ID,
@@ -342,6 +356,10 @@ export class AgentBridge {
         runId,
         workspaceKey,
       })
+      if (context?.workspaceRef?.kind === 'local')
+        await this.runObserver
+          ?.beforeRun({ conversationId, runId, workspacePath: context.workspaceRef.path })
+          .catch((error) => console.warn('[AgentBridge] 运行前改动快照失败:', error))
       // Publish canonical ownership before probing or streaming.
       this.forwardRunStatus(startedRun)
       if (preparation) {
@@ -1182,6 +1200,10 @@ export class AgentBridge {
       this.trustedClaudeSessions.delete(event.conversationId)
       void this.runtimeStateStore.clearSession(event.conversationId)
     }
+    if ((event.type === 'complete' || event.type === 'error') && event.runId)
+      void this.runObserver
+        ?.afterRun({ runId: event.runId })
+        .catch((error) => console.warn('[AgentBridge] 运行后改动报告失败:', error))
     if ((event.type === 'complete' || event.type === 'error') && event.runId) {
       const tracked = this.runtimeStateStore.getRun(event.conversationId, event.runId)
       if (tracked) {

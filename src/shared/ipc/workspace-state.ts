@@ -4,6 +4,7 @@ import type {
   WorkspaceSettingsSnapshot,
 } from '../workspace-settings'
 import type { DiaryDocument, DiaryDocumentInput } from '../personal-diary-source'
+import type { DiaryChangeReport, DiaryUndoResult } from '../diary-change-report'
 import type { WorkspaceConversationSnapshotSummary } from '../workspace-conversation-diagnostics'
 import { defineIpcCall } from './contract'
 import { installImpactSchema, type UpdateInstallImpact } from '../update/update-contract'
@@ -253,6 +254,8 @@ export interface WorkspaceStateApiContract {
   inspectDiaryRoot: (path: string) => Promise<DiaryRootPreview>
   confirmDiaryRoot: (owner: string, preview: DiaryRootPreview) => Promise<FixedSpaces>
   describeDefaultPersonalSpace: () => Promise<{ path: string; exists: boolean }>
+  listDiaryChanges: (workspacePath: string) => Promise<DiaryChangeReport[]>
+  undoDiaryChange: (reportId: string) => Promise<DiaryUndoResult>
   initializePersonalSpace: (preview: DiaryRootPreview | null) => Promise<FixedSpaces>
   inspectPersonalRelocation: (path: string) => Promise<PersonalRelocationPreview>
   relocatePersonalSpace: (preview: PersonalRelocationPreview) => Promise<FixedSpaces>
@@ -302,6 +305,8 @@ export const workspaceStateIpc = {
   confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
     'workspaceState:confirmDiaryRoot',
   ),
+  listDiaryChanges: defineIpcCall<[string], DiaryChangeReport[]>('workspaceState:listDiaryChanges'),
+  undoDiaryChange: defineIpcCall<[string], DiaryUndoResult>('workspaceState:undoDiaryChange'),
   describeDefaultPersonalSpace: defineIpcCall<[], { path: string; exists: boolean }>(
     'workspaceState:describeDefaultPersonalSpace',
   ),

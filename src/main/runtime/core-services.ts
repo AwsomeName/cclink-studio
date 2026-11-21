@@ -81,6 +81,7 @@ import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 import { CompanyAccountsService } from '../company-accounts/company-accounts-service'
 import { GitExecutor } from '../git-backup/git-executor'
 import { fastForwardIfClean } from '../git/git-fast-forward'
+import { DiaryChangeTracker } from '../workspace/diary-change-tracker'
 import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
@@ -151,6 +152,9 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   }
   console.log('[CCLink Studio] 工作台状态服务已初始化')
 
+  runtime.diaryChangeTracker = new DiaryChangeTracker(
+    join(app.getPath('userData'), 'diary-change-reports.json'),
+  )
   const draftSyncRunner = new GitExecutor({ isolatedConfig: true, timeoutMs: 20_000 })
   runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService, {
     // Best effort, no stored credentials: public or local remotes fast-forward before a draft.
@@ -261,6 +265,7 @@ export async function bootstrapMainProcessServices(
       )
         throw Error('原关联仍有启用或运行的任务，请先在原任务中暂停并核对输出位置')
     },
+    () => runtime.diaryChangeTracker,
   )
   registerWorkbenchTabModelIpc(
     runtime.workbenchTabModel!,

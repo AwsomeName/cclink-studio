@@ -1,5 +1,6 @@
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
+import { DiaryChangeReports } from './DiaryChangeReports'
 import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
@@ -467,6 +468,12 @@ export function PersonalDiaryHome(): React.ReactElement {
             </>
           )}
         </div>
+      )}
+      {source && (
+        <DiaryChangeReports
+          workspacePath={source.workspacePath}
+          onOpen={(path) => openFile({ path, name: path.split('/').pop()! })}
+        />
       )}
       <h3>本周计划</h3>
       {weeklyPlan ? (

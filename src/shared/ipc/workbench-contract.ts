@@ -226,6 +226,12 @@ export const workspaceStateIpcContracts = {
     ipcArgs(absolutePathSchema.parse(args[0]), diaryRootPreviewSchema.parse(args[1])),
   ),
   describeDefaultPersonalSpace: bindLegacyNoArgs(workspaceStateIpc.describeDefaultPersonalSpace),
+  listDiaryChanges: bindIpcParser(workspaceStateIpc.listDiaryChanges, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  undoDiaryChange: bindIpcParser(workspaceStateIpc.undoDiaryChange, (args) =>
+    ipcArgs(z.string().uuid().parse(args[0])),
+  ),
   initializePersonalSpace: bindIpcParser(workspaceStateIpc.initializePersonalSpace, (args) =>
     ipcArgs(args[0] === null ? null : diaryRootPreviewSchema.parse(args[0])),
   ),
