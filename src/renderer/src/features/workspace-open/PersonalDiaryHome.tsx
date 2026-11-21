@@ -357,6 +357,8 @@ export function PersonalDiaryHome(): React.ReactElement {
     )
   if (!source && !busy && !error && ownerPath && ownerPath === fixedPath)
     return <DiarySetupWizard owner={ownerPath} />
+  if (page === '更换目录' && ownerPath && ownerPath === fixedPath)
+    return <DiaryRootSetup owner={ownerPath} cancel={() => setPage('今天')} />
 
   const weeklyPlan = weeklyPlans[0]
   const draftRunning = dailyRun && ['queued', 'running'].includes(dailyRun.status)
