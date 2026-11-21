@@ -76,7 +76,12 @@ export function classifyDiary(rel: string): { year: string; month: string; day: 
 function askAi(text: string): void {
   useUIStore.getState().setAgentPanelMode('right', 'user')
   useAgentStore.getState().setInput(text)
-  window.setTimeout(() => window.dispatchEvent(new Event(AGENT_FOCUS_COMPOSER_EVENT)), 50)
+  window.setTimeout(() => {
+    window.dispatchEvent(new Event(AGENT_FOCUS_COMPOSER_EVENT))
+    // Continue typing after the prefilled file reference.
+    const input = document.activeElement
+    if (input instanceof HTMLTextAreaElement) input.setSelectionRange(text.length, text.length)
+  }, 50)
 }
 
 export function PersonalDiaryHome(): React.ReactElement {
@@ -429,7 +434,11 @@ export function PersonalDiaryHome(): React.ReactElement {
           ) : daily?.activation.enabled ? (
             <>
               <b>
-                {daily.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''}{' '}
+                {daily.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''}
+                {daily.definition.schedule.timezone !==
+                Intl.DateTimeFormat().resolvedOptions().timeZone
+                  ? `（${daily.definition.schedule.timezone}）`
+                  : ''}{' '}
                 自动生成今天的草稿
               </b>
               <p className="muted">

@@ -34,11 +34,17 @@ try {
   await wizard.waitFor({ state: 'detached', timeout: 30000 })
   assert.equal(await s.fixedRoot(), defaultDir)
   const tasks = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), defaultDir)
-  result.tasks = tasks.tasks.map((t) => ({ title: t.definition.title, enabled: t.activation.enabled }))
+  result.tasks = tasks.tasks.map((t) => ({
+    title: t.definition.title,
+    enabled: t.activation.enabled,
+  }))
   assert.deepEqual(result.tasks.map((t) => t.title).sort(), ['每周复盘', '每日起草'].sort())
   assert(result.tasks.every((t) => t.enabled))
   const home = page.locator('.personal-diary-home')
-  await home.getByText(/AI 正在起草|自动生成今天的草稿|今天的日记/).first().waitFor()
+  await home
+    .getByText(/AI 正在起草|自动生成今天的草稿|今天的日记/)
+    .first()
+    .waitFor()
   await page.screenshot({ path: join(shots, 'v2-today-drafting.png') })
   await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 5 * 60_000 })
   await page.screenshot({ path: join(shots, 'v2-today-generated.png') })

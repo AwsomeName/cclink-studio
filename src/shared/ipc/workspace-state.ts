@@ -305,11 +305,11 @@ export const workspaceStateIpc = {
   confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
     'workspaceState:confirmDiaryRoot',
   ),
-  listDiaryChanges: defineIpcCall<[string], DiaryChangeReport[]>('workspaceState:listDiaryChanges'),
-  undoDiaryChange: defineIpcCall<[string], DiaryUndoResult>('workspaceState:undoDiaryChange'),
   describeDefaultPersonalSpace: defineIpcCall<[], { path: string; exists: boolean }>(
     'workspaceState:describeDefaultPersonalSpace',
   ),
+  listDiaryChanges: defineIpcCall<[string], DiaryChangeReport[]>('workspaceState:listDiaryChanges'),
+  undoDiaryChange: defineIpcCall<[string], DiaryUndoResult>('workspaceState:undoDiaryChange'),
   initializePersonalSpace: defineIpcCall<[DiaryRootPreview | null], FixedSpaces>(
     'workspaceState:initializePersonalSpace',
   ),

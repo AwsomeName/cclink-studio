@@ -637,7 +637,10 @@
   margin-left: 8px;
 }
 .diary-diff {
-  font: 12px/1.6 ui-monospace, Menlo, monospace;
+  font:
+    12px/1.6 ui-monospace,
+    Menlo,
+    monospace;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
@@ -652,4 +655,15 @@
 }
 .diary-diff .del {
   background: rgba(224, 108, 108, 0.18);
+}
+.personal-diary-home .diary-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.personal-diary-home .diary-card > b,
+.personal-diary-home .diary-card > p,
+.personal-diary-home .diary-card > .diary-change-file,
+.personal-diary-home .diary-card > .workspace-home-record {
+  flex-basis: 100%;
 }

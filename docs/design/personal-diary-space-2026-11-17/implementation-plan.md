@@ -65,6 +65,40 @@
 - 发布、真实资料推送、在用户设备上启用任务均未执行。
 
 
+## 2026-11-21 第二版实现与真实应用验收
+
+按 [产品逻辑第二版](product-logic.md) 实现，分支 `codex/diary-first-use`。验收使用真实 Electron、隔离用户目录、模拟正文、本机 Codex 登录和测试目录内的本地 bare Git 远端；系统目录选择对话框由脚本给出结果。
+
+### 用户现在能做什么
+
+| 流程 | 实测结果 | 证据 |
+| --- | --- | --- |
+| 新用户首次启动 | 直接出现四步首次使用；默认目录在确认前不存在。确认后创建目录、项目设置和「每日起草」「每周复盘」两个共享任务，并在本设备启用。已过起草时间时立即生成今天的草稿，首页显示章节摘要。 | [目录](acceptance/v2-first-01-directory.png) · [同步](acceptance/v2-first-02-sync.png) · [AI](acceptance/v2-first-03-ai.png) · [确认](acceptance/v2-first-04-confirm.png) · [自动草稿](acceptance/v2-today-generated.png) |
+| 选择已有目录 | 只读识别日记目录、篇数、最近一篇和是否为 Git 仓库，确认后原位使用。 | [已有目录](acceptance/v2-first-existing.png) |
+| 今天 · 等待自动起草 | 显示起草时间与时区、将写入的路径；可现在起草、空白模板或修改时间。同步状态自动检查。 | [等待](acceptance/v2-today-waiting.png) |
+| 起草前同步 | 另一台设备已推送当天日记时，点击「现在起草」先快进拉取，运行记为「跳过：远端已有当天日记，已同步到本机，未重复生成」，首页显示拉取到的日记。 | [同步后](acceptance/v2-today-synced.png) |
+| AI 修改与撤销 | 点击「让 AI 修改…」，在会话中提出修改要求；真实 Codex 修改当天日记后，首页出现改动报告（文件、+/−、差异），「撤销本次修改」恢复原文。 | [改动报告](acceptance/v2-ai-change-report.png) · [撤销后](acceptance/v2-ai-change-undone.png) |
+| 历史 | 按年月翻页；同日下划线与短横线两份分别列出；合并月份 `07-08` 的文件归入七月；无日期文稿归入「未识别日期」；项目记录不计入。 | [历史](acceptance/v2-history.png) |
+| 含原始 HTML 的日记 | 打开后自动切到源码编辑，不再拒绝。 | [源码模式](acceptance/v2-html-source.png) |
+| 计划与定时整理 | 计划分周计划与长期计划；定时整理直接列出全部任务，无「关联」勾选，显示本机启用与下次时间、最近运行与产物。 | [计划](acceptance/v2-plans.png) · [定时整理](acceptance/v2-tasks.png) |
+| 原位更新 | 检查远程更新列出新增文件；审阅后「拉取并更新」在原目录快进，项目目录不变。有未提交文件时按钮不可用。 | [审阅](acceptance/v2-git-review.png) · [拉取后](acceptance/v2-git-pulled.png) · [被阻止](acceptance/v2-git-blocked.png) |
+| 换电脑 | 新设备首次使用第 2 步克隆到所选空目录，确认后「我的空间」即该目录，不创建默认目录。正文、附件恢复；两个内置任务按确认启用，其他共享任务本机未启用；重启保持；随后原位拉取 A 的新日记。 | [克隆](acceptance/v2-machine-b-clone.png) · [确认](acceptance/v2-machine-b-confirm.png) · [任务](acceptance/v2-machine-b-tasks.png) · [正文](acceptance/v2-machine-b-diary.png) · [拉取](acceptance/v2-machine-b-pulled.png) |
+| 目录移动 | 启动即进入重新定位，身份不符被拒绝，两侧对比后恢复（沿用第二批实现，本批在新流程上复验）。 | [两侧](acceptance/relocate-both-sides.png) · [恢复](acceptance/relocate-restored.png) |
+
+### 工程门禁
+
+`pnpm verify` 全部通过（4103 项单测、格式、ESLint、边界校验、生产构建）。新增单测覆盖：确认前不建目录、初始化默认与已有目录、当天补起草与次日不补、起草前同步后跳过、原位快进与阻止条件、AI 改动报告与撤销（含再次修改的文件不撤销）。真实应用脚本：`diary-v2-first-use-smoke`、`diary-v2-daily-smoke`、`diary-relocation-smoke`、`diary-git-machines-smoke`、`diary-tasks-smoke`（后三者及 v2 daily 需本机 Codex 登录）。
+
+### 仍未完成或未验证
+
+- 物理第二台 Mac 与真实私有远端未验收；自动检查与起草前同步不保存认证，私有 HTTPS 远端只能手动检查。
+- AI 修改多个文件前「先列清单再确认」未单独实现，依赖 Agent 权限确认；改动报告只跟踪项目内 Markdown，不含图片等附件。
+- 首次使用的 AI 检测只读取运行时状态，未做设计中的短测试；登录过期可能在首次起草时才暴露。
+- 旧版外部关联的迁移提示卡为新代码，新流程下无法通过界面构造旧绑定，本批未在真实应用复验。
+- 定时整理中的「下次运行」按电脑本地时区显示，任务时区不同时与「HH:MM（时区）自动生成」并列可能造成理解成本。
+- AI 查阅全部日记依赖会话以项目为工作区，未验收引用可点击打开。
+- 会话「保存到项目」、上传时标注 AI 修改来源、冲突时 AI 合并均未实现。
+
 ## 2026-11-21 按第二版设计核对代码
 
 依据 [产品逻辑第二版](product-logic.md) 与 [第二版效果图](mockups-v2.html)，核对分支 `codex/diary-first-use`（`0967ba59`）。「有」指真实应用中已验收；「部分」指有底层能力但产品行为不符；「无」指未实现。

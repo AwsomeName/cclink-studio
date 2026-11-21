@@ -41,13 +41,13 @@ const root = await makeRoot('.cclink-relocate-')
     await page.getByLabel('使用移动后的位置（带有原项目身份）').check()
     await page.screenshot({ path: join(shots, 'relocate-both-sides.png') })
     await confirm.click()
-    await page.locator('.personal-diary-home h2').filter({ hasText: '今天' }).waitFor()
+    await page.locator('.personal-diary-home h2').first().waitFor()
     assert.equal(await s.fixedRoot(), moved)
     await page.screenshot({ path: join(shots, 'relocate-restored.png') })
     await s.close()
     await s.launch()
     await s.page.locator(`.project-strip-item[data-project-path="${moved}"]`).click()
-    await s.page.locator('.personal-diary-home h2').filter({ hasText: '今天' }).waitFor()
+    await s.page.locator('.personal-diary-home h2').first().waitFor()
     assert.equal(await s.fixedRoot(), moved)
     assert.equal(
       await readFile(join(moved, '000-个人计划/2026/11/1120_周五.md'), 'utf8'),
@@ -55,61 +55,6 @@ const root = await makeRoot('.cclink-relocate-')
     )
     assert.deepEqual(await readdir(join(original, '个人计划', '2026', '12')), ['1201_周二.md'])
     console.log('PASS relocate', { moved, note })
-  } catch (e) {
-    await s.fail(e)
-  } finally {
-    await s.close()
-  }
-}
-
-// 2. Legacy external link while the default folder also has diaries: user must pick one side.
-{
-  const s = await makeHome(root, 'compare')
-  const external = join(s.home, '模拟原项目')
-  await writeDiary(external, '000-个人计划', '2026/11/1120_周五.md', '# 外部\n')
-  try {
-    const page = await s.launch()
-    await page.getByRole('button', { name: '我的空间', exact: true }).first().click()
-    await page.getByRole('heading', { name: '确认本地项目目录' }).waitFor()
-    const owner = await s.fixedRoot()
-    const ownerNote = await writeDiary(
-      owner,
-      '个人计划',
-      '2026/11/1118_周三.md',
-      '# 默认目录里的\n',
-    )
-    await s.pickDirectory(external)
-    await page.getByRole('button', { name: '选择已有目录…' }).click()
-    await page.getByText('两个位置都有日记').waitFor()
-    await page.evaluate(async (path) => {
-      const ws = window.cclinkStudio.workspaceState
-      await ws.get(path)
-      const { projectId } = (await ws.listLocalWorkspaces()).find((w) => w.workspacePath === path)
-      const owner = (await ws.getFixedSpaces()).personal.workspacePath
-      const r = await ws.setSection(owner, 'personalDiarySource', {
-        version: 1,
-        workspacePath: path,
-        projectId,
-        directory: '000-个人计划',
-        timezone: 'Asia/Shanghai',
-        taskIds: [],
-      })
-      if (!r.success) throw Error(r.error)
-    }, external)
-    await s.close()
-    await s.launch()
-    await s.page.getByRole('button', { name: '我的空间', exact: true }).first().click()
-    await s.page.getByRole('button', { name: '将原资料目录用作项目目录' }).click()
-    await s.page.getByText('两个位置都有日记').waitFor()
-    const confirm = s.page.getByRole('button', { name: '确认并进入项目' })
-    assert.equal(await confirm.isDisabled(), true)
-    await s.page.getByRole('radio', { name: /改用原资料目录/ }).check()
-    await s.page.screenshot({ path: join(shots, 'legacy-both-sides.png') })
-    await confirm.click()
-    await s.page.locator('.personal-diary-home h2').filter({ hasText: '今天' }).waitFor()
-    assert.equal(await s.fixedRoot(), external)
-    assert.equal(await readFile(ownerNote, 'utf8'), '# 默认目录里的\n')
-    console.log('PASS compare', { owner, external })
   } catch (e) {
     await s.fail(e)
   } finally {

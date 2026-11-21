@@ -19,7 +19,11 @@ export async function makeHome(root, scenario, { appHome } = {}) {
   await mkdir(profile, { recursive: true })
   await writeFile(
     join(profile, 'settings.json'),
-    JSON.stringify({ componentSetupPageSeenVersion: 2, claudeRuntimeSource: 'system' }),
+    JSON.stringify({
+      componentSetupPageSeenVersion: 2,
+      claudeRuntimeSource: 'system',
+      permissionMode: 'auto',
+    }),
   )
   const launcher = join(home, 'launch.cjs')
   await writeFile(
@@ -78,14 +82,30 @@ export async function writeDiary(projectRoot, diaryDir, rel, body) {
   return file
 }
 
-export async function confirmExisting(s, directory, shot) {
+/**
+ * Completes the four-step first use. `directory` picks an existing folder (else the default);
+ * `dailyTime` defaults late so confirming does not start an immediate AI draft.
+ */
+export async function firstUse(s, { directory, dailyTime = '23:59', shot } = {}) {
   const page = s.page
-  await page.getByRole('button', { name: '我的空间', exact: true }).first().click()
-  await page.getByRole('heading', { name: '确认本地项目目录' }).waitFor()
-  await s.pickDirectory(directory)
-  await page.getByRole('button', { name: '选择已有目录…' }).click()
-  await page.getByText(/最近日记/).waitFor()
+  const wizard = page.getByRole('dialog', { name: '设置我的空间' })
+  if (!(await wizard.isVisible().catch(() => false)))
+    await page.getByRole('button', { name: '我的空间', exact: true }).first().click()
+  await wizard.getByText('1 选择目录').waitFor()
+  if (directory) {
+    await s.pickDirectory(directory)
+    await wizard.getByRole('button', { name: '选择文件夹…' }).click()
+    await wizard.getByText(directory, { exact: true }).waitFor()
+  }
   if (shot) await page.screenshot({ path: shot })
-  await page.getByRole('button', { name: '确认并进入项目' }).click()
-  await page.locator('.personal-diary-home h2').filter({ hasText: '今天' }).waitFor()
+  for (let i = 0; i < 2; i++) await wizard.getByRole('button', { name: '下一步' }).click()
+  await wizard.getByText('本机 AI · 就绪').waitFor({ timeout: 30000 })
+  await wizard.getByRole('button', { name: '下一步' }).click()
+  await wizard.getByLabel('每日起草时间').fill(dailyTime)
+  await wizard.getByRole('button', { name: '确认并开始' }).click()
+  await wizard.waitFor({ state: 'detached', timeout: 30000 })
+  await page.locator('.personal-diary-home h2').first().waitFor()
 }
+
+/** Back-compat name used by older scenarios. */
+export const confirmExisting = (s, directory, shot) => firstUse(s, { directory, shot })

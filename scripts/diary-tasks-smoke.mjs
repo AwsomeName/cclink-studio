@@ -88,11 +88,7 @@ async function editRequirement(title, requirement, { enable = false, time } = {}
     .getByRole('button', { name: '定时整理', exact: true })
     .first()
     .click()
-  await page
-    .locator('.workspace-home-record')
-    .filter({ hasText: title })
-    .getByRole('button', { name: '打开原任务与历史' })
-    .click()
+  await page.locator('.diary-task-row').filter({ hasText: title }).click()
   const box = page.getByLabel('任务内容')
   await box.waitFor()
   await box.fill(requirement)
@@ -125,7 +121,7 @@ try {
     }, input)
   const weeklyId = await seed({
     workspacePath: project,
-    title: '每周复盘',
+    title: '验收周复盘',
     instruction: '总结上周，写本周计划。',
     schedule: { kind: 'weekly', time: '21:00', weekdays: [weekdayIndex()], timezone: TZ },
     resources: [{ kind: 'workspace' }, { kind: 'directory', path: D }],
@@ -139,7 +135,7 @@ try {
   })
   const dailyId = await seed({
     workspacePath: project,
-    title: '每日简报',
+    title: '验收每日简报',
     instruction: '准备今天的日记。',
     schedule: { kind: 'daily', time: '07:30', timezone: TZ },
     resources: [{ kind: 'workspace' }, { kind: 'directory', path: D }],
@@ -151,25 +147,8 @@ try {
     definitionSource: 'shared',
     enable: false,
   })
-  // Link both on the diary page; linking never enables or runs them.
-  await page
-    .locator('.workspace-sidebar-shell')
-    .getByRole('button', { name: '定时整理', exact: true })
-    .first()
-    .click()
-  for (const t of ['每周复盘', '每日简报'])
-    await page
-      .locator('.workspace-home-record')
-      .filter({ hasText: t })
-      .getByRole('checkbox')
-      .check()
-  await page.getByRole('button', { name: '保存任务关联', exact: true }).click()
-  await page.waitForTimeout(500)
-  const linked = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), project)
-  assert(linked.tasks.every((t) => !t.activation.enabled))
-
   // Weekly: user-written section requirements, saved and reopened verbatim.
-  await editRequirement('每周复盘', WEEKLY_REQ)
+  await editRequirement('验收周复盘', WEEKLY_REQ)
   await page.screenshot({ path: join(shots, 'tasks-weekly-requirement.png') })
   const reopened = await page.evaluate(
     ({ p, id }) => window.cclinkStudio.scheduledTasks.get(p, id),
@@ -181,11 +160,7 @@ try {
     .getByRole('button', { name: '定时整理', exact: true })
     .first()
     .click()
-  await page
-    .locator('.workspace-home-record')
-    .filter({ hasText: '每周复盘' })
-    .getByRole('button', { name: '打开原任务与历史' })
-    .click()
+  await page.locator('.diary-task-row').filter({ hasText: '验收周复盘' }).click()
   assert.equal(await page.getByLabel('任务内容').inputValue(), WEEKLY_REQ)
 
   // Weekly manual run (enabling is required for shared definitions on this device).
@@ -214,7 +189,7 @@ try {
 
   // Daily: requirements + scheduled time in ~2 minutes, enabled on this test device only.
   const dailyAt = nowPlus(2)
-  await editRequirement('每日简报', DAILY_REQ, { enable: true, time: hhmm(dailyAt) })
+  await editRequirement('验收每日简报', DAILY_REQ, { enable: true, time: hhmm(dailyAt) })
   const dailyDef = await page.evaluate(
     ({ p, id }) => window.cclinkStudio.scheduledTasks.get(p, id),
     { p: project, id: dailyId },
@@ -223,7 +198,7 @@ try {
   assert.equal(dailyDef.task.activation.enabled, true, JSON.stringify(dailyDef.task.activation))
   // Weekly scheduled occurrence ~4 minutes out.
   const weeklyAt = nowPlus(4)
-  await editRequirement('每周复盘', WEEKLY_REQ, { enable: true, time: hhmm(weeklyAt) })
+  await editRequirement('验收周复盘', WEEKLY_REQ, { enable: true, time: hhmm(weeklyAt) })
   const dailyScheduled = await waitRun(dailyId, (r) => r.trigger === 'scheduled')
   assert.equal(dailyScheduled.status, 'completed', JSON.stringify(dailyScheduled.error))
   const ds = await readFile(join(project, dailyScheduled.artifact.relativePath), 'utf8')
@@ -246,15 +221,11 @@ try {
     .getByRole('button', { name: '定时整理', exact: true })
     .first()
     .click()
-  await page
-    .locator('.workspace-home-record')
-    .filter({ hasText: '每日简报' })
-    .getByRole('button', { name: '打开原任务与历史' })
-    .click()
+  await page.locator('.diary-task-row').filter({ hasText: '验收每日简报' }).click()
   await page.getByRole('button', { name: '立即运行', exact: true }).click()
   const dailyManual = await waitRun(dailyId, (r) => r.trigger === 'manual', 3 * 60_000)
   result.dailyManual = { status: dailyManual.status, error: dailyManual.error?.message }
-  assert.notEqual(dailyManual.status, 'completed')
+  assert.notEqual(dailyManual.status, 'completed') // skipped: today's diary already exists
   assert.equal(await readFile(join(project, dailyScheduled.artifact.relativePath), 'utf8'), ds)
   await page.screenshot({ path: join(shots, 'tasks-daily-history.png') })
 
@@ -278,11 +249,7 @@ try {
     .getByRole('button', { name: '定时整理', exact: true })
     .first()
     .click()
-  await page
-    .locator('.workspace-home-record')
-    .filter({ hasText: '每周复盘' })
-    .getByRole('button', { name: '打开原任务与历史' })
-    .click()
+  await page.locator('.diary-task-row').filter({ hasText: '验收周复盘' }).click()
   await page.screenshot({ path: join(shots, 'tasks-weekly-history.png') })
   // Leave the isolated test tasks disabled.
   for (const id of [dailyId, weeklyId])
