@@ -1,3 +1,4 @@
+import { DiaryRootSetup } from './DiaryRootSetup'
 import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
@@ -33,6 +34,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   const ownerRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const ownerPath = ownerRef.kind === 'local' ? ownerRef.path : null
   const config = useWorkspaceStore((state) => state.settingsSnapshot)
+  const fixedPath = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
   const [source, setSource] = useState<PersonalDiarySource | null>(null)
   const [known, setKnown] = useState<WorkspaceStateLocalWorkspaceSummary[]>([])
   const [path, setPath] = useState('')
@@ -50,6 +52,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [notice, setNotice] = useState('')
   const [timezone, setTimezone] = useState(defaultDiaryTimezone)
   const [busy, setBusy] = useState(true)
+  const [reviewRoot, setReviewRoot] = useState(false)
   const [revision, setRevision] = useState(0)
   const [clock, setClock] = useState(() => Date.now())
   useEffect(() => {
@@ -68,6 +71,7 @@ export function PersonalDiaryHome(): React.ReactElement {
         let value = snapshot.sections[personalDiarySourceSection]
         if (
           value === undefined &&
+          !useFixedSpacesStore.getState().spaces?.personal?.diaryRootConfirmed &&
           ownerPath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
         )
           value = (await window.cclinkStudio.workspaceState.get(null)).sections[
@@ -354,6 +358,16 @@ export function PersonalDiaryHome(): React.ReactElement {
     )
     setRevision((value) => value + 1)
   }
+  if (reviewRoot && source && ownerPath && ownerPath === fixedPath)
+    return (
+      <DiaryRootSetup
+        owner={ownerPath}
+        initialRoot={source.workspacePath}
+        cancel={() => setReviewRoot(false)}
+      />
+    )
+  if (!source && !busy && !error && ownerPath && ownerPath === fixedPath)
+    return <DiaryRootSetup owner={ownerPath} />
   return (
     <section className="personal-diary-home">
       <h2>
@@ -365,6 +379,9 @@ export function PersonalDiaryHome(): React.ReactElement {
           资料来源：{source.workspacePath}/{source.directory}{' '}
           <button onClick={() => setRevision((value) => value + 1)}>刷新</button>
         </p>
+      )}
+      {source && ownerPath === fixedPath && source.workspacePath !== ownerPath && (
+        <button onClick={() => setReviewRoot(true)}>将原资料目录用作项目目录</button>
       )}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}

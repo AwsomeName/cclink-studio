@@ -116,7 +116,7 @@ try {
     originals.set(p, await readFile(p, 'utf8'))
   }
   await page.getByRole('button', { name: '我的空间', exact: true }).click()
-  await page.getByRole('button', { name: '从空白日记开始', exact: true }).click()
+  await page.getByRole('button', { name: '确认并进入项目', exact: true }).click()
   await page.getByRole('button', { name: '创建今日空白模板', exact: true }).waitFor()
   await page.getByRole('button', { name: '资料接入', exact: true }).click()
   await page.getByLabel('原工作空间', { exact: true }).selectOption(workspace)

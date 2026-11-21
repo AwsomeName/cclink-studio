@@ -46,6 +46,7 @@ export function registerWorkspaceStateIpc(
     ]
     if (
       value === undefined &&
+      !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
       workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
     )
       value = (await workspaceStateService.getSnapshot(null)).sections[personalDiarySourceSection]
@@ -103,6 +104,7 @@ export function registerWorkspaceStateIpc(
       let override = state.sections[personalDiarySourceSection]
       if (
         override === undefined &&
+        !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
         input.workspacePath === workspaceStateService.getFixedSpaces().personal?.workspacePath
       )
         override = (await workspaceStateService.getSnapshot(null)).sections[
@@ -155,6 +157,27 @@ export function registerWorkspaceStateIpc(
     fileService?.registerKnownWorkspaces(sender.id, paths)
     fileService?.registerPickerSelection(sender.id, paths, 'workspace')
   }
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.inspectDiaryRoot,
+    trustedRendererGuard,
+    (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.inspectDiaryRoot(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.confirmDiaryRoot,
+    trustedRendererGuard,
+    async (event, owner, preview) => {
+      assertWorkspaceAccess(event.sender.id, owner)
+      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      if (owner !== preview.workspacePath)
+        await guardDiaryChange(await previousDiarySource(owner), null)
+      const fixed = await workspaceStateService.confirmDiaryRoot(owner, preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
   registerTrustedIpcContract(workspaceStateIpcContracts.getFixedSpaces, trustedRendererGuard, () =>
     workspaceStateService.getFixedSpaces(),
   )

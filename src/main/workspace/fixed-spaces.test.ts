@@ -87,6 +87,26 @@ describe('fixed personal/company spaces preserve original data', () => {
     ).rejects.toThrow()
   })
 
+  it('rejects a changed settings revision, a linked diary folder and a duplicate project identity before binding', async () => {
+    const fixed = await service.ensurePersonalSpace()
+    const owner = fixed.personal!.workspacePath
+    const root = join(paths.root, '模拟旧资料')
+    await mkdir(root)
+    const inspected = await service.inspectDiaryRoot(root)
+    await service.saveWorkspaceSettings({
+      workspacePath: root,
+      revision: null,
+      settings: { version: 1, name: 'changed', type: 'general' },
+    })
+    await expect(service.confirmDiaryRoot(owner, inspected)).rejects.toThrow('变化')
+    await symlink(owner, join(root, '个人计划'))
+    await expect(service.inspectDiaryRoot(root)).rejects.toThrow('符号链接')
+    const duplicate = join(paths.root, '重复身份')
+    await cp(owner, duplicate, { recursive: true })
+    await expect(service.inspectDiaryRoot(duplicate)).rejects.toThrow('冲突')
+    expect(service.getFixedSpaces()).toEqual(fixed)
+  })
+
   it('initializes once, keeps company lazy and survives restart', async () => {
     const [a, b] = await Promise.all([service.ensurePersonalSpace(), service.ensurePersonalSpace()])
     expect(a).toEqual(b)

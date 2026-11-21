@@ -195,11 +195,20 @@ export interface DefaultWorkspaceResult {
 }
 
 export interface FixedSpaceRef {
+  diaryRootConfirmed?: boolean
   /** Legacy company bindings require their original database; explicit project shortcuts may not. */
   requireCompanyData?: boolean
   workspacePath: string
   projectId: string
 }
+export interface DiaryRootPreview {
+  workspacePath: string
+  directory: string
+  latestFile: string | null
+  revision: string | null
+  projectId: string | null
+}
+
 export interface FixedSpaces {
   version: 1
   personal: FixedSpaceRef | null
@@ -230,6 +239,8 @@ export interface WorkspaceStateApiContract {
   diaryDocument: (input: DiaryDocumentInput) => Promise<DiaryDocument>
   verifyLocalIdentity: (path: string, projectId: string) => Promise<void>
   getFixedSpaces: () => Promise<FixedSpaces>
+  inspectDiaryRoot: (path: string) => Promise<DiaryRootPreview>
+  confirmDiaryRoot: (owner: string, preview: DiaryRootPreview) => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
   listCompanySpaces: () => Promise<CompanySpaceCandidate[]>
   inspectCompanySpace: (workspacePath: string) => Promise<CompanySpaceCandidate>
@@ -272,6 +283,10 @@ export const workspaceStateIpc = {
   diaryDocument: defineIpcCall<[DiaryDocumentInput], DiaryDocument>('workspaceState:diaryDocument'),
   verifyLocalIdentity: defineIpcCall<[string, string], void>('workspaceState:verifyLocalIdentity'),
   getFixedSpaces: defineIpcCall<[], FixedSpaces>('workspaceState:getFixedSpaces'),
+  inspectDiaryRoot: defineIpcCall<[string], DiaryRootPreview>('workspaceState:inspectDiaryRoot'),
+  confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
+    'workspaceState:confirmDiaryRoot',
+  ),
   ensurePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:ensurePersonalSpace'),
   listCompanySpaces: defineIpcCall<[], CompanySpaceCandidate[]>('workspaceState:listCompanySpaces'),
   inspectCompanySpace: defineIpcCall<[workspacePath: string], CompanySpaceCandidate>(

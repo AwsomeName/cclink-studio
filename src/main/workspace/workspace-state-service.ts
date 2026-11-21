@@ -18,6 +18,7 @@ import { accessDiaryDocument } from './personal-diary-files'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import {
+  access,
   copyFile,
   lstat,
   mkdir,
@@ -29,9 +30,11 @@ import {
   stat,
   writeFile,
 } from 'fs/promises'
+import { constants } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { isDeepStrictEqual } from 'node:util'
 import type {
+  DiaryRootPreview,
   FixedSpaceRef,
   FixedSpaces,
   CompanySpaceCandidate,
@@ -752,7 +755,10 @@ export class WorkspaceStateService {
     const snapshot = await this.getSnapshot(input.workspacePath ?? null)
     let value = snapshot.sections[personalDiarySourceSection]
     if (value === undefined && input.workspacePath) {
-      if (this.getFixedSpaces().personal?.workspacePath === input.workspacePath)
+      if (
+        !this.getFixedSpaces().personal?.diaryRootConfirmed &&
+        this.getFixedSpaces().personal?.workspacePath === input.workspacePath
+      )
         value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
       if (!value) {
         const config = await this.getWorkspaceSettings(input.workspacePath)
@@ -932,6 +938,142 @@ export class WorkspaceStateService {
     )
       throw new Error('原公司数据库不可用；请定位原公司资料，不会创建空公司替代')
     return verified.workspacePath
+  }
+
+  private async previousFixedDiarySource() {
+    const personal = this.getFixedSpaces().personal
+    if (!personal) return null
+    const snapshot = await this.getSnapshot(personal.workspacePath)
+    let value = snapshot.sections[personalDiarySourceSection]
+    if (value === undefined && !personal.diaryRootConfirmed)
+      value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
+    const parsed = personalDiarySourceSchema.safeParse(value)
+    return parsed.success ? parsed.data : null
+  }
+
+  async inspectDiaryRoot(path: string): Promise<DiaryRootPreview> {
+    const root = await this.resolveLocalWorkspacePath(path)
+    const current = await readWorkspaceSettings(root)
+    if (current.error || ['company', 'electronics'].includes(current.settings.type))
+      throw Error(current.error || '此目录已有其他项目类型，请选择日记项目目录')
+    const entries = await readdir(root, { withFileTypes: true })
+    let projectId: string | null = null
+    if (entries.some((e) => e.name === PROJECT_METADATA_DIR)) {
+      const metadata = join(root, PROJECT_METADATA_DIR)
+      if (!(await lstat(metadata)).isDirectory()) throw Error('项目元数据目录不可用')
+      if ((await readdir(metadata)).includes(PROJECT_MANIFEST_FILE)) {
+        projectId = (await this.inspectFixedIdentity(root)).projectId
+        const candidate = await this.inspectCompanySpace(root)
+        if (candidate.state === 'unavailable')
+          throw Error(candidate.error || '公司资料状态不可读取')
+        if (candidate.state === 'company') throw Error('此目录已有公司资料')
+      }
+    }
+    const directory =
+      current.settings.diary?.directory ??
+      (entries.some((e) => e.name === defaultDiaryDirectory)
+        ? defaultDiaryDirectory
+        : entries.some((e) => e.name === '000-个人计划')
+          ? '000-个人计划'
+          : defaultDiaryDirectory)
+    const base = join(root, directory)
+    let latestFile: string | null = null
+    let folder = root
+    for (const part of directory.split('/')) {
+      folder = join(folder, part)
+      const info = await lstat(folder).catch((e: NodeJS.ErrnoException) => {
+        if (e.code !== 'ENOENT') throw e
+        return null
+      })
+      if (
+        !info &&
+        folder === base &&
+        directory === defaultDiaryDirectory &&
+        !current.settings.diary
+      )
+        return { workspacePath: root, directory, latestFile, revision: current.revision, projectId }
+      if (!info?.isDirectory()) throw Error('日记目录不存在或包含符号链接：' + folder)
+    }
+    const subdirs = async (parent: string, pattern: RegExp) =>
+      (await readdir(parent, { withFileTypes: true }))
+        .filter((e) => e.isDirectory() && pattern.test(e.name))
+        .map((e) => e.name)
+        .sort()
+        .reverse()
+    for (const year of await subdirs(base, /^\d{4}$/)) {
+      for (const month of await subdirs(join(base, year), /^(0[1-9]|1[0-2])(-(0[1-9]|1[0-2]))?$/)) {
+        const names = (await readdir(join(base, year, month), { withFileTypes: true }))
+          .filter((e) => e.isFile() && /^\d{4}[_-].+\.md$/i.test(e.name))
+          .map((e) => e.name)
+          .sort()
+        if (names.length) {
+          latestFile = [year, month, names[names.length - 1]].join('/')
+          break
+        }
+      }
+      if (latestFile) break
+    }
+    return { workspacePath: root, directory, latestFile, revision: current.revision, projectId }
+  }
+
+  async confirmDiaryRoot(owner: string, preview: DiaryRootPreview): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      if (fixed.personal?.workspacePath !== owner) throw Error('默认项目已切换，请重新打开项目首页')
+      const checked = await this.inspectDiaryRoot(preview.workspacePath)
+      if (
+        checked.revision !== preview.revision ||
+        checked.projectId !== preview.projectId ||
+        checked.directory !== preview.directory
+      )
+        throw Error('项目资料已变化，请重新选择目录')
+      const root = checked.workspacePath
+      await access(root, constants.W_OK | constants.X_OK)
+      await access(join(root, checked.directory), constants.W_OK | constants.X_OK).catch(
+        (error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw Error('日记目录不可写，请检查目录权限')
+        },
+      )
+      const previous = await this.previousFixedDiarySource()
+      const legacy = previous?.workspacePath === root ? previous : null
+      if (
+        legacy &&
+        (legacy.projectId !== checked.projectId || legacy.directory !== checked.directory)
+      )
+        throw Error('原关联的身份或日记子目录与所选目录不一致，请在项目设置中核对')
+      if (fixed.company)
+        this.assertIndependent(
+          { workspacePath: root, projectId: checked.projectId ?? '' },
+          fixed.company,
+        )
+      const snapshot = await this.getSnapshot(root)
+      const override = snapshot.sections[personalDiarySourceSection]
+      if (override && personalDiarySourceSchema.parse(override).workspacePath !== root)
+        throw Error('所选项目仍关联了其他资料目录，请先在原项目中核对')
+      const personal = await this.inspectFixedIdentity(root, checked.projectId ?? undefined)
+      const current = await readWorkspaceSettings(root)
+      if (current.revision !== checked.revision) throw Error('项目设置已变化，请重新选择目录')
+      if (!current.settings.diary || current.settings.type !== 'diary') {
+        if (!current.settings.diary && checked.directory === defaultDiaryDirectory)
+          await mkdir(join(root, checked.directory)).catch((e) => {
+            if (e.code !== 'EEXIST') throw e
+          })
+        const diary = current.settings.diary ?? {
+          directory: checked.directory,
+          timezone: legacy?.timezone ?? defaultDiaryTimezone,
+          taskIds: legacy?.taskIds ?? [],
+        }
+        await this.saveWorkspaceSettings({
+          workspacePath: root,
+          revision: current.revision,
+          settings: { ...current.settings, type: 'diary', diary },
+        })
+      }
+      return this.commitFixedSpaces({
+        ...fixed,
+        personal: { ...personal, diaryRootConfirmed: true },
+      })
+    })
   }
 
   async setPersonalSpace(path: string): Promise<FixedSpaces> {

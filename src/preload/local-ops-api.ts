@@ -63,6 +63,9 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
   verifyLocalIdentity: (path, id) =>
     invokeIpcContract(workspaceStateIpc.verifyLocalIdentity, path, id),
   getFixedSpaces: () => invokeIpcContract(workspaceStateIpc.getFixedSpaces),
+  inspectDiaryRoot: (path) => invokeIpcContract(workspaceStateIpc.inspectDiaryRoot, path),
+  confirmDiaryRoot: (owner, preview) =>
+    invokeIpcContract(workspaceStateIpc.confirmDiaryRoot, owner, preview),
   ensurePersonalSpace: () => invokeIpcContract(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: () => invokeIpcContract(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: (path) => invokeIpcContract(workspaceStateIpc.inspectCompanySpace, path),

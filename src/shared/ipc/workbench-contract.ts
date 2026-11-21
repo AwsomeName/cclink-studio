@@ -207,6 +207,24 @@ export const workspaceStateIpcContracts = {
     ipcArgs(absolutePathSchema.parse(args[0]), z.string().min(1).max(128).parse(args[1])),
   ),
   getFixedSpaces: bindLegacyNoArgs(workspaceStateIpc.getFixedSpaces),
+  inspectDiaryRoot: bindIpcParser(workspaceStateIpc.inspectDiaryRoot, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  confirmDiaryRoot: bindIpcParser(workspaceStateIpc.confirmDiaryRoot, (args) =>
+    ipcArgs(
+      absolutePathSchema.parse(args[0]),
+      z
+        .object({
+          workspacePath: absolutePathSchema,
+          directory: z.string().max(1024),
+          latestFile: z.string().max(4096).nullable(),
+          revision: z.string().max(128).nullable(),
+          projectId: z.string().max(128).nullable(),
+        })
+        .strict()
+        .parse(args[1]),
+    ),
+  ),
   ensurePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: bindLegacyNoArgs(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: bindIpcParser(workspaceStateIpc.inspectCompanySpace, (args) =>
