@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import type RFB from '@novnc/novnc'
+import type { DesktopCredential, RemoteDesktopDevice } from '@shared/ipc/remote-desktop'
 import type { Tab } from '../../types'
 import { useTabStore } from '../../stores/tab-store'
 import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
@@ -7,10 +8,14 @@ import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
 import { applyMacServerModifiers } from './mac-keys'
 import { installMacWheel } from './mac-scroll'
+import { installNoVncProbe } from './novnc-probe'
 import { createDesktopDiagnostics } from './desktop-diagnostics'
 import './remote-desktop.css'
 
 type Phase = 'idle' | 'connecting' | 'credentials' | 'connected' | 'ended'
+const NEW_DEVICE = ''
+const api = (): typeof window.cclinkStudio.remoteDesktop => window.cclinkStudio.remoteDesktop
+
 export function RemoteDesktopTab({
   tab,
   active,
@@ -18,6 +23,8 @@ export function RemoteDesktopTab({
   tab: Tab
   active: boolean
 }): React.ReactElement {
+  const [devices, setDevices] = useState<RemoteDesktopDevice[] | null>(null)
+  const [deviceId, setDeviceId] = useState(tab.desktopTarget?.deviceId ?? NEW_DEVICE)
   const [name, setName] = useState(tab.title === '远程桌面' ? '' : tab.title)
   const [host, setHost] = useState(tab.desktopTarget?.host ?? '')
   const [port, setPort] = useState(tab.desktopTarget?.port ?? 5900)
@@ -30,18 +37,72 @@ export function RemoteDesktopTab({
   const generation = useRef(0)
   const handshakeTimer = useRef<number | undefined>(undefined)
   const releaseDiagnostics = useRef<(() => void) | undefined>(undefined)
+  const sessionRef = useRef<string | null>(null)
+  /** Credentials typed with "remember" ticked; saved only after the RFB session connects. */
+  const pendingRemember = useRef<DesktopCredential | null>(null)
+  /** Devices whose saved password was rejected; skip autofill until the user saves a new one. */
+  const rejectedSaved = useRef(new Set<string>())
   const activeRef = useRef(active)
   activeRef.current = active
+  const selected = devices?.find((device) => device.id === deviceId)
+
   const stop = (): void => {
     generation.current++
     window.clearTimeout(handshakeTimer.current)
     releaseDiagnostics.current?.()
     releaseDiagnostics.current = undefined
+    pendingRemember.current = null
+    sessionRef.current = null
     const rfb = client.current
     client.current = null
     rfb?.disconnect()
   }
   useEffect(() => stop, [])
+
+  const fillFrom = (device: RemoteDesktopDevice): void => {
+    setDeviceId(device.id)
+    setName(device.name)
+    setHost(device.host)
+    setPort(device.port)
+  }
+
+  // Load the Studio-local catalog; migrate a legacy Tab that still stores host/port.
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        let list = await api().listDevices()
+        const legacy = tab.desktopTarget
+        if (!legacy?.deviceId && legacy?.host) {
+          const migrated = await api().saveDevice({
+            id: null,
+            name: tab.title.trim() || legacy.host,
+            host: legacy.host,
+            port: legacy.port ?? 5900,
+          })
+          useTabStore.getState().setDesktopTarget(tab.id, migrated.name, { deviceId: migrated.id })
+          list = await api().listDevices()
+          if (!cancelled) fillFrom(migrated)
+        } else if (legacy?.deviceId) {
+          const known = list.find((device) => device.id === legacy.deviceId)
+          if (!cancelled && known) fillFrom(known)
+          else if (!cancelled) {
+            setDeviceId(NEW_DEVICE)
+            setMessage('本机未配置这台设备，请填写地址后连接。')
+          }
+        }
+        if (!cancelled) setDevices(list)
+      } catch (error) {
+        console.warn('[RemoteDesktop] 读取远程设备列表失败', String(error))
+        if (!cancelled) setDevices([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // Runs once per Tab; later changes go through this component.
+  }, [tab.id])
+
   useLayoutEffect(() => {
     const rfb = client.current
     if (rfb) {
@@ -52,20 +113,27 @@ export function RemoteDesktopTab({
       rfb.scaleViewport = fit
     }
   }, [active, fit, phase])
+
+  const refreshDevices = async (): Promise<void> => {
+    try {
+      setDevices(await api().listDevices())
+    } catch {
+      /* keep the previous list */
+    }
+  }
+
+  const forgetSaved = async (): Promise<void> => {
+    if (!selected) return
+    await api().forgetCredential(selected.id)
+    rejectedSaved.current.delete(selected.id)
+    await refreshDevices()
+    setMessage('已删除本机保存的密码。')
+  }
+
   const begin = async (event: FormEvent): Promise<void> => {
     event.preventDefault()
     stop()
     const attempt = generation.current
-    const title = name.trim() || host.trim()
-    const input = {
-      sessionId: crypto.randomUUID(),
-      tabId: tab.id,
-      workspaceKey: getWorkspaceStateKey(),
-      ownerKey: getWorkspaceStateOwnerKey(),
-      host: host.trim(),
-      port,
-    }
-    useTabStore.getState().setDesktopTarget(tab.id, title, { host: input.host, port })
     setPhase('connecting')
     setMessage('')
     const fail = (explanation: string): void => {
@@ -74,23 +142,53 @@ export function RemoteDesktopTab({
       setMessage(explanation)
       setPhase('ended')
     }
+    let device: RemoteDesktopDevice
+    try {
+      device = await api().saveDevice({
+        id: deviceId || null,
+        name: name.trim() || host.trim(),
+        host: host.trim(),
+        port,
+      })
+    } catch {
+      fail('设备地址无效，请检查主机名、IP 和端口。')
+      return
+    }
+    if (generation.current !== attempt) return
+    fillFrom(device)
+    void refreshDevices()
+    useTabStore.getState().setDesktopTarget(tab.id, device.name, { deviceId: device.id })
+    const sessionId = crypto.randomUUID()
+    const input = {
+      sessionId,
+      tabId: tab.id,
+      workspaceKey: getWorkspaceStateKey(),
+      ownerKey: getWorkspaceStateOwnerKey(),
+      deviceId: device.id,
+    }
     try {
       const [{ default: Viewer }] = await Promise.all([
         import('@novnc/novnc'),
         flushPendingWorkbenchTabWrites(),
       ])
       if (generation.current !== attempt || !target.current) return
+      sessionRef.current = sessionId
       const channel = new DesktopChannel(input)
       const rfb = new Viewer(target.current, channel, { shared: true })
       client.current = rfb
-      const diag = createDesktopDiagnostics(`${input.host}:${input.port}`)
+      const diag = createDesktopDiagnostics(`${device.host}:${device.port}`)
       diag.stage('connecting')
       const unwatch = diag.watchInput(target.current, () => activeRef.current)
       const unwheel = installMacWheel(rfb, target.current, diag.wheelSteps)
       if (!unwheel) console.warn('[RemoteDesktop] 无法校正触控板滚动步长')
+      const unprobe = installNoVncProbe(rfb, diag)
+      if (!unprobe) console.warn('[RemoteDesktop] 无法安装画面性能探针')
+      // macOS hides the pointer while typing and then sends a transparent cursor shape.
+      rfb.showDotCursor = true
       releaseDiagnostics.current = () => {
         unwatch()
         unwheel?.()
+        unprobe?.()
         diag.summary('closed')
       }
       if (!applyMacServerModifiers(rfb, diag.keysymSent)) {
@@ -104,12 +202,24 @@ export function RemoteDesktopTab({
         })
       }
       let disconnectMessage = '未能建立桌面连接，请检查地址、屏幕共享设置和认证方式。'
+      channel.onrefused = (reason) => {
+        diag.stage(`open refused: ${reason}`)
+        disconnectMessage =
+          reason === 'device-missing'
+            ? '本机未找到这台设备，请重新填写地址。'
+            : '当前标签无法连接，请切回该标签后重试。'
+      }
       handshakeTimer.current = window.setTimeout(
         () => fail('握手超时，请检查目标 Mac 是否已唤醒并开启屏幕共享。'),
         20000,
       )
 
+      let usedSaved = false
+      let credentialsHandled = false
       on('credentialsrequired', (e) => {
+        // noVNC re-emits this while waiting for more bytes; handle it once per attempt.
+        if (credentialsHandled) return
+        credentialsHandled = true
         window.clearTimeout(handshakeTimer.current)
         const fields = (e as CustomEvent<{ types: string[] }>).detail.types
         diag.stage(`credentials required: ${fields.join(',')}`)
@@ -120,12 +230,38 @@ export function RemoteDesktopTab({
         // macOS Screen Sharing drops an unanswered auth challenge after a few minutes.
         disconnectMessage = '等待认证期间远端已关闭连接，请重新连接后再输入凭据。'
         setUsernameRequired(fields.includes('username'))
-        setPhase('credentials')
+        const showForm = (): void => {
+          if (generation.current === attempt) setPhase('credentials')
+        }
+        if (!device.savedCredential || rejectedSaved.current.has(device.id)) {
+          showForm()
+          return
+        }
+        void api()
+          .savedCredential(sessionId)
+          .then((saved) => {
+            if (generation.current !== attempt) return
+            if (!saved) {
+              diag.stage('saved credential unavailable; asking user')
+              showForm()
+              return
+            }
+            usedSaved = true
+            diag.stage('using saved credential')
+            armAuthTimeout()
+            rfb.sendCredentials(fields.includes('username') ? saved : { password: saved.password })
+          })
+          .catch(showForm)
       })
       on('securityfailure', (e) => {
         const detail = (e as CustomEvent<{ status?: number; reason?: string }>).detail
         diag.stage(`security failure status=${detail?.status} reason=${detail?.reason ?? ''}`)
-        disconnectMessage = '屏幕共享认证失败，请检查账号、密码和共享权限。'
+        if (usedSaved) {
+          rejectedSaved.current.add(device.id)
+          disconnectMessage = '已保存的密码未通过认证，请重新连接并手动输入。'
+        } else {
+          disconnectMessage = '屏幕共享认证失败，请检查账号、密码和共享权限。'
+        }
       })
       on('serververification', () => {
         diag.stage('server verification requested')
@@ -138,6 +274,18 @@ export function RemoteDesktopTab({
         diag.stage(
           `connected framebuffer=${canvas?.width}x${canvas?.height} viewOnly=${rfb.viewOnly}`,
         )
+        const remember = pendingRemember.current
+        pendingRemember.current = null
+        if (remember) {
+          void api()
+            .rememberCredential(sessionId, remember)
+            .then((ok) => {
+              diag.stage(ok ? 'credential saved on this Mac' : 'credential not saved')
+              if (ok) rejectedSaved.current.delete(device.id)
+              return refreshDevices()
+            })
+            .catch(() => diag.stage('credential save failed'))
+        }
         setPhase('connected')
       })
       on('disconnect', (e) => {
@@ -150,23 +298,31 @@ export function RemoteDesktopTab({
       fail('无法启动远程桌面，请重新连接。')
     }
   }
-  function authenticate(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    const form = event.currentTarget
-    const fields = new FormData(form)
-    const credentials = {
-      password: String(fields.get('password') ?? ''),
-      ...(usernameRequired ? { username: String(fields.get('username') ?? '') } : {}),
-    }
-    form.reset()
-    setPhase('connecting')
+
+  function armAuthTimeout(): void {
+    window.clearTimeout(handshakeTimer.current)
     handshakeTimer.current = window.setTimeout(() => {
       stop()
       setPhase('ended')
       setMessage('认证响应超时，请重新连接。')
     }, 20000)
+  }
+
+  function authenticate(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    const form = event.currentTarget
+    const fields = new FormData(form)
+    const password = String(fields.get('password') ?? '')
+    const username = String(fields.get('username') ?? '')
+    const credentials = usernameRequired ? { username, password } : { password }
+    pendingRemember.current =
+      fields.get('remember') === 'on' && username && password ? { username, password } : null
+    form.reset()
+    setPhase('connecting')
+    armAuthTimeout()
     client.current?.sendCredentials(credentials)
   }
+
   const busy = phase !== 'idle' && phase !== 'ended'
   return (
     <section className="remote-desktop" hidden={!active} aria-label="远程桌面">
@@ -200,6 +356,31 @@ export function RemoteDesktopTab({
         <form className="remote-desktop-form" onSubmit={begin}>
           <h2>连接 Mac 桌面</h2>
           <p>在目标 Mac 的「系统设置 → 通用 → 共享」中开启屏幕共享，通过可信网络连接。</p>
+          {devices && devices.length > 0 && (
+            <label>
+              本机设备
+              <select
+                value={deviceId}
+                onChange={(e) => {
+                  const next = devices.find((device) => device.id === e.target.value)
+                  if (next) fillFrom(next)
+                  else {
+                    setDeviceId(NEW_DEVICE)
+                    setName('')
+                    setHost('')
+                    setPort(5900)
+                  }
+                }}
+              >
+                {devices.map((device) => (
+                  <option key={device.id} value={device.id}>
+                    {device.name} · {device.host}
+                  </option>
+                ))}
+                <option value={NEW_DEVICE}>新设备…</option>
+              </select>
+            </label>
+          )}
           <label>
             设备名称
             <input
@@ -231,6 +412,14 @@ export function RemoteDesktopTab({
               onChange={(e) => setPort(Number(e.target.value))}
             />
           </details>
+          {selected?.savedCredential && (
+            <p className="remote-desktop-saved">
+              本机已保存这台设备的密码，连接时自动使用。
+              <button type="button" onClick={() => void forgetSaved()}>
+                删除已保存的密码
+              </button>
+            </p>
+          )}
           {message && <p role="status">{message}</p>}
           <button className="desktop-primary">{phase === 'ended' ? '重新连接' : '连接'}</button>
         </form>
@@ -238,7 +427,7 @@ export function RemoteDesktopTab({
       {phase === 'credentials' && (
         <form className="remote-desktop-form" onSubmit={authenticate} autoComplete="off">
           <h2>屏幕共享认证</h2>
-          <p>{host} · 凭据仅用于本次连接。</p>
+          <p>{name.trim() || host} · 输入目标 Mac 上的账号和密码。</p>
           {usernameRequired && (
             <label>
               Mac 用户名
@@ -249,6 +438,12 @@ export function RemoteDesktopTab({
             密码
             <input name="password" required type="password" autoComplete="off" />
           </label>
+          {usernameRequired && (
+            <label className="remote-desktop-check">
+              <input type="checkbox" name="remember" />
+              在本机记住密码（连接成功后保存到 Studio 本地凭证文件，不进入项目）
+            </label>
+          )}
           <button className="desktop-primary">确认连接</button>
         </form>
       )}

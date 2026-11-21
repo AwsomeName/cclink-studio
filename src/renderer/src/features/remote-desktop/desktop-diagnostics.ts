@@ -9,6 +9,9 @@ export interface DesktopDiagnostics {
   stage(message: string): void
   keysymSent(keysym: number, down: boolean): void
   wheelSteps(steps: number): void
+  /** Wheel steps since the last call; feeds the periodic perf line. */
+  takeWheelSteps(): number
+  log(...values: unknown[]): void
   watchInput(screen: HTMLElement, isActive: () => boolean): () => void
   summary(reason: string): void
 }
@@ -41,6 +44,7 @@ export function createDesktopDiagnostics(endpoint: string): DesktopDiagnostics {
     wheelSteps: 0,
   }
   let inputLines = 0
+  let wheelWindow = 0
   const log = (...values: unknown[]): void => {
     const t = ((performance.now() - started) / 1000).toFixed(1)
     console.log('[RemoteDesktop]', `+${t}s`, ...values)
@@ -62,7 +66,14 @@ export function createDesktopDiagnostics(endpoint: string): DesktopDiagnostics {
     },
     wheelSteps(steps) {
       counts.wheelSteps += steps
+      wheelWindow += steps
     },
+    takeWheelSteps() {
+      const steps = wheelWindow
+      wheelWindow = 0
+      return steps
+    },
+    log,
     watchInput(screen, isActive) {
       const onKey = (e: KeyboardEvent): void => {
         if (!isActive()) return

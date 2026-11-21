@@ -1,7 +1,7 @@
 // Real Electron, disposable app profile. Defaults to the current out/ build.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, writeFile, readFile, rm, readdir } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm, readdir, realpath } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron } from 'playwright-core'
@@ -42,6 +42,8 @@ async function launch() {
 }
 const click = (t) => page.getByRole('button', { name: t, exact: true }).click()
 async function start(title, ai) {
+  if (!(await page.getByRole('button', { name: '从已有材料做摘录' }).isVisible()))
+    await page.locator('nav.own-side').getByRole('button', { name: '＋ 交办新事务' }).click()
   await click('从已有材料做摘录')
   await page.getByLabel('事务名称').fill(title)
   await page.getByLabel('交办目标').fill('为同事整理两份芯片说明中的架构原文')
@@ -53,11 +55,71 @@ const a = '处理器采用两级流水线。',
   b = '系统芯片集成存储器和外设。'
 try {
   await launch()
-  if (process.argv.includes('--worker-recovery')) {
+  if (process.argv.includes('--v2')) {
+    // Owner v2 pages from an empty profile: entry, settings, hand-over, agreement, list, grant.
+    const shots = process.env.OWNER_V2_SHOTS
+    const snap = async (name) => shots && page.screenshot({ path: join(shots, name + '.png') })
+    const side = page.locator('nav.own-side')
+    await page.getByRole('heading', { name: '交给 Owner 一件事' }).waitFor()
+    await side.getByText('还没有事务').waitFor()
+    assert.equal(Math.round((await side.boundingBox()).width), 208)
+    assert.match(await page.locator('.own-compose-bar small').innerText(), /我的空间.*Owner 事务/)
+    await snap('v2-01-entry-empty')
+    // Settings: choose another save location and register a reference directory.
+    await mkdir(join(dir, 'research-out'))
+    await mkdir(join(dir, 'chip-notes', 'ibex'), { recursive: true })
+    const out = await realpath(join(dir, 'research-out')),
+      notes = await realpath(join(dir, 'chip-notes'))
+    await writeFile(join(notes, 'ibex', '验证笔记.md'), '# 验证笔记\n')
+    await app.evaluate(
+      ({ dialog }, paths) => {
+        const queue = [...paths]
+        dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [queue.shift()] })
+      },
+      [out, notes],
+    )
+    await side.getByRole('button', { name: '⚙ Owner 设置' }).click()
+    await page.getByRole('heading', { name: 'Owner 设置' }).waitFor()
+    await click('更改…')
+    await page.locator('[data-owner-save-location="' + out + '"]').waitFor()
+    await click('＋ 登记目录…')
+    await page.locator('[data-owner-root="chip-notes"]').getByText('未授权').waitFor()
+    await snap('v2-09-settings')
+    await side.getByRole('button', { name: '＋ 交办新事务' }).click()
+    assert.match(await page.locator('.own-compose-bar small').innerText(), /research-out/)
+    await page
+      .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
+      .fill('调研开源芯片 Ibex，交付一张有源码依据的中文入门卡。')
+    await click('交给 Owner')
+    await page.locator('[data-owner-agreement]').waitFor({ timeout: 150000 })
+    const affair = await page.evaluate(
+      async () => (await window.cclinkStudio.ownerDirectories.list()).items[0],
+    )
+    assert.ok(affair.directory.path.startsWith(out + '/'), affair.directory.path)
+    await page.getByRole('button', { name: '确认约定，开始' }).waitFor()
+    assert.match(await page.locator('[data-owner-chips]').innerText(), /待确认|等我确认/)
+    await snap('v2-03-agreement')
+    // Grant the registered directory through the two-step confirmation.
+    await side.getByRole('button', { name: /配置参考目录/ }).click()
+    await page.getByRole('button', { name: '📁 ' + notes }).click()
+    await page.locator('[data-owner-candidate="' + notes + '"]').waitFor()
+    await snap('v2-08-grant')
+    await click('允许本事务只读')
+    await side.getByRole('button', { name: /^[▸▾] chip-notes$/ }).waitFor()
+    await side.getByRole('button', { name: '‹ 我的事务' }).click()
+    await page.getByRole('heading', { name: /^等我确认/ }).waitFor()
+    assert.match(await page.getByRole('button', { name: /^◈ Owner/ }).innerText(), /1 等你/)
+    await snap('v2-02-list')
+    await side.getByRole('button', { name: '⚙ Owner 设置' }).click()
+    await page.locator('[data-owner-root="chip-notes"]').getByText('已授权给 1 件事务').waitFor()
+    console.log(
+      'PASS v2 entry → settings → hand-over at chosen location → agreement → grant → list',
+    )
+  } else if (process.argv.includes('--worker-recovery')) {
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
       .fill('调研 lowRISC/ibex，用官方 README 写一张项目定位卡，附一条原文出处。')
-    await click('发给 Owner')
+    await click('交给 Owner')
     const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
     await confirm.waitFor({ timeout: 150000 })
     const state = () =>
@@ -105,13 +167,13 @@ try {
     await page
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
       .fill('帮我调研开源芯片 Ibex，给我一张源码入门卡。')
-    await click('发给 Owner')
+    await click('交给 Owner')
     await page.getByText('Owner 正在整理范围和交付物', { exact: true }).waitFor()
     await app.close()
     app = null
     await launch()
-    await page.getByRole('heading', { name: /^待恢复/ }).waitFor()
-    assert.match(await page.getByRole('button', { name: /^◈ Owner/ }).innerText(), /1 待处理/)
+    await page.getByRole('heading', { name: /^需要我处理/ }).waitFor()
+    assert.match(await page.getByRole('button', { name: /^◈ Owner/ }).innerText(), /1 等你/)
     await page.locator('.own-row').click()
     await page.getByText('待恢复', { exact: true }).waitFor()
     await click('从这里继续')
@@ -143,7 +205,7 @@ try {
       .fill(
         '开源芯片 Ibex 调研。请交付一张中文《Ibex 源码入门卡》，用这个标题。先从项目定位和默认流水线各级职责中选出适合初读的一级，再沿你选的级追到一处真实寄存器，用 RTL 中的更新条件和赋值解释它何时更新。',
       )
-    await click('发给 Owner')
+    await click('交给 Owner')
     const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
     await page.waitForFunction(
       () =>
@@ -262,14 +324,14 @@ try {
       console.log('待保存，已收到原生 A 运行', runs)
       await snap('01-pending-board-chat')
       await click('‹ 我的事务')
-      await page.getByRole('heading', { name: /^待保存/ }).waitFor()
+      await page.getByRole('heading', { name: /^需要我处理/ }).waitFor()
       await snap('02-pending-list')
       await app.close()
       app = null
       await launch()
       startPage = page
       await observeRuns()
-      await page.getByRole('heading', { name: /^待保存/ }).waitFor()
+      await page.getByRole('heading', { name: /^需要我处理/ }).waitFor()
       await page.locator('.own-row').first().click()
       assert.deepEqual((await state()).research.report, original)
       const blocker = join(folder, '交付物')
@@ -363,6 +425,8 @@ try {
     await click('关闭 ' + a.directory.reportFile.split('/').pop())
     await click('关闭 ' + sourceFile.split('/').pop())
     await page.locator('[data-owner-phase]').waitFor()
+    await page.locator('[data-owner-delivery]').waitFor()
+    await snap('06-delivered-board')
 
     // Read-only source directory for this affair only: pick, browse, preview, persist, revoke.
     const notes = join(dir, 'ibex-notes')
@@ -373,6 +437,11 @@ try {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [notes] })
     }, notes)
     await page.getByRole('button', { name: /配置参考目录/ }).click()
+    await page
+      .getByRole('dialog', { name: '授权本事务只读目录' })
+      .getByText('含子目录 · 2 个文件')
+      .waitFor()
+    await click('允许本事务只读')
     await side.getByRole('button', { name: /^[▸▾] ibex-notes$/ }).waitFor()
     await side.getByRole('button', { name: /^▸ rtl\/$/ }).click()
     await side.getByRole('button', { name: 'if_note.sv', exact: true }).click()

@@ -7,6 +7,7 @@ declare module '@novnc/novnc' {
     )
     scaleViewport: boolean
     viewOnly: boolean
+    showDotCursor: boolean
     disconnect(): void
     blur(): void
     focus(options?: FocusOptions): void

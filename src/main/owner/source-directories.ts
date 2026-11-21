@@ -4,6 +4,7 @@ import { basename, dirname, join, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type {
+  OwnerSourceCandidate,
   OwnerSourceEntry,
   OwnerSourceFile,
   OwnerSourceGrant,
@@ -41,7 +42,14 @@ export class OwnerSourceDirectories {
     private readonly registry: string,
     private readonly affairs: { location(id: string): Promise<string> },
     private readonly pick: () => Promise<string | undefined>,
+    private readonly registered: (rootId: string) => Promise<{ path: string }> = async () => {
+      throw Error('没有已登记的目录')
+    },
   ) {}
+  private readonly candidates = new Map<
+    string,
+    { affairId: string; path: string; dev: number; ino: number; label: string; at: number }
+  >()
 
   private serial<T>(fn: () => Promise<T>) {
     const job = this.tail.then(fn, fn)
@@ -104,14 +112,17 @@ export class OwnerSourceDirectories {
     return this.views(await this.load(id))
   }
 
-  /** Opens the system directory picker; returns null when the user cancels. */
-  add(id: string) {
+  /**
+   * Step 1 of a grant: choose a directory (system picker, or one registered in Owner settings)
+   * and describe its exact scope. Nothing is readable until `confirm` with the returned token.
+   */
+  prepare(id: string, rootId?: string): Promise<OwnerSourceCandidate | null> {
     return this.serial(async () => {
       const affairPath = await this.affairs.location(id)
       const grants = await this.load(id)
       if (grants.length >= MAX_SOURCE_GRANTS)
         throw Error('每件事务最多授权 ' + MAX_SOURCE_GRANTS + ' 个参考目录')
-      const picked = await this.pick()
+      const picked = rootId ? (await this.registered(rootId)).path : await this.pick()
       if (!picked) return null
       const path = await realpath(picked)
       const stat = await lstat(path)
@@ -120,22 +131,72 @@ export class OwnerSourceDirectories {
       if (path === affairPath || affairPath.startsWith(path + sep))
         throw Error('不能把包含本事务目录的位置设为参考目录')
       const existing = grants.find((g) => g.dev === stat.dev && g.ino === stat.ino)
-      if (existing) return this.views(grants)
-      const next = [
-        ...grants,
-        {
-          id: randomUUID(),
-          label: basename(path) || path,
-          path,
-          dev: stat.dev,
-          ino: stat.ino,
-          grantedAt: Date.now(),
-        },
-      ]
+      const { files, truncated } = await countFiles(path)
+      const token = randomUUID()
+      const label = basename(path) || path
+      for (const [key, c] of this.candidates)
+        if (Date.now() - c.at > 10 * 60_000) this.candidates.delete(key)
+      this.candidates.set(token, {
+        affairId: id,
+        path,
+        dev: stat.dev,
+        ino: stat.ino,
+        label,
+        at: Date.now(),
+      })
+      return { token, path, label, files, truncated, alreadyGranted: !!existing }
+    })
+  }
+
+  /** Step 2: the user confirmed the exact scope shown for this token. */
+  confirm(id: string, token: string) {
+    return this.serial(async () => {
+      await this.affairs.location(id)
+      const c = this.candidates.get(token)
+      this.candidates.delete(token)
+      if (!c || c.affairId !== id) throw Error('授权确认已失效，请重新选择目录')
+      const stat = await lstat(c.path)
+      if (!stat.isDirectory() || stat.dev !== c.dev || stat.ino !== c.ino)
+        throw Error('目录在确认前已被移动或替换，请重新选择')
+      const grants = await this.load(id)
+      if (grants.some((g) => g.dev === c.dev && g.ino === c.ino)) return this.views(grants)
+      if (grants.length >= MAX_SOURCE_GRANTS)
+        throw Error('每件事务最多授权 ' + MAX_SOURCE_GRANTS + ' 个参考目录')
+      const grant = {
+        id: randomUUID(),
+        label: c.label,
+        path: c.path,
+        dev: c.dev,
+        ino: c.ino,
+        grantedAt: Date.now(),
+      }
+      const next = [...grants, grant]
       await this.store(id, next)
-      console.log('[Owner] 已授权只读参考目录', { affairId: id, grantId: next.at(-1)!.id })
+      console.log('[Owner] 已授权只读参考目录', { affairId: id, grantId: grant.id })
       return this.views(next)
     })
+  }
+
+  /** Test and legacy helper: pick and confirm in one step. */
+  async add(id: string) {
+    const candidate = await this.prepare(id)
+    return candidate ? this.confirm(id, candidate.token) : null
+  }
+
+  /** How many affairs hold a grant on this directory identity (for Owner settings). */
+  async grantedAffairs(dev: number, ino: number) {
+    const names = await readdir(this.registry).catch((e) => {
+      if (missing(e)) return [] as string[]
+      throw e
+    })
+    let count = 0
+    for (const name of names) {
+      const match = /^([0-9a-f-]{36})\.sources\.json$/.exec(name)
+      if (!match) continue
+      const grants = await this.load(match[1]).catch(() => [])
+      if (grants.some((g) => g.dev === dev && g.ino === ino)) count++
+    }
+    return count
   }
 
   revoke(id: string, grantId: string) {
@@ -207,4 +268,19 @@ export class OwnerSourceDirectories {
       await handle.close()
     }
   }
+}
+
+async function countFiles(root: string, limit = 5000) {
+  let files = 0
+  const queue = [root]
+  while (queue.length) {
+    const dir = queue.shift()!
+    const items = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const item of items) {
+      if (item.name.startsWith('.') || item.isSymbolicLink()) continue
+      if (item.isDirectory()) queue.push(join(dir, item.name))
+      else if (item.isFile() && ++files >= limit) return { files, truncated: true }
+    }
+  }
+  return { files, truncated: false }
 }

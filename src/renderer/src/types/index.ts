@@ -161,7 +161,8 @@ export interface WebAffairDraftState {
 
 /** Workbench Tab */
 export interface Tab {
-  desktopTarget?: { host: string; port: number }
+  /** Remote desktop Tabs reference a Studio-local device; host/port are legacy, migrated on open. */
+  desktopTarget?: { deviceId?: string; host?: string; port?: number }
   /** Local presentation preference, persisted by the existing Tab owner. */
   workbenchLayout?: 'standard' | 'focus'
   editorPresentation?: 'markdown' | 'source'

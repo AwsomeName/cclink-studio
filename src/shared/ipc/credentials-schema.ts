@@ -1,7 +1,7 @@
 import type { CredentialKind, SetCredentialInput } from './credentials'
 
 const CREDENTIAL_ID_PATTERN =
-  /^(?:(agent|git|data-source|extension|mcp):[A-Za-z0-9][A-Za-z0-9._:-]{0,126}|browser-http-auth:[a-f0-9]{64})$/
+  /^(?:(agent|git|data-source|extension|mcp):[A-Za-z0-9][A-Za-z0-9._:-]{0,126}|browser-http-auth:[a-f0-9]{64}|remote-desktop:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/
 const FIELD_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/
 const CREDENTIAL_KINDS = new Set<CredentialKind>(['api-key', 'token', 'basic', 'bearer', 'generic'])
 const MAX_FIELD_LENGTH = 65_536
@@ -43,7 +43,8 @@ export function parseSetCredentialInput(value: unknown): SetCredentialInput {
     const fieldName = parseCredentialFieldName(field)
     if (typeof rawValue !== 'string') throw new Error('凭证字段值必须是字符串')
     const exactBasicField =
-      id.startsWith('browser-http-auth:') && ['username', 'password'].includes(fieldName)
+      (id.startsWith('browser-http-auth:') || id.startsWith('remote-desktop:')) &&
+      ['username', 'password'].includes(fieldName)
     const normalized = exactBasicField ? rawValue : rawValue.trim()
     if (
       (!normalized && !(exactBasicField && fieldName === 'password')) ||
