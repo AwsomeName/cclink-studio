@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { OwnerPreferencesView } from '@shared/ipc/owner-preferences'
 import { next, type Affair } from './affair'
+import { decisionWorker, workerLabel, workersOf } from './research-model'
 
 // List groups. Only the first three need the user; Owner working on its own never counts.
 export const GROUPS = [
@@ -24,6 +25,11 @@ export const waitsForMe = (a: Affair, active: boolean) =>
   GROUPS.find((g) => g.key === groupOf(a, active))!.waits
 
 const workerRuns = (a: Affair) => a.research?.decisions?.filter((d) => d.workerRunId) ?? []
+/** The execution session of the latest dispatch; 'a' for legacy single-session records. */
+export const currentWorker = (a: Affair) => {
+  const d = a.research?.decisions?.filter((x) => x.kind !== 'deliver').at(-1)
+  return d ? decisionWorker(d) : 'a'
+}
 
 /** Second line of a list row: what Owner is doing, or what was delivered. */
 export function rowMeta(a: Affair, active: boolean): string {
@@ -66,20 +72,29 @@ export function statusChips(a: Affair, active: boolean, workerLoading: boolean) 
             draft: '整理约定',
             planning: '整理约定',
             ready: '等你确认约定',
-            reading: last?.workerRunId && !last.workerReturned ? '等 A 交回' : '派工',
+            reading:
+              last?.workerRunId && !last.workerReturned
+                ? '等 ' + workerLabel(decisionWorker(last)) + ' 交回'
+                : '派工',
             checking: last ? '核对证据' : '准备派工',
             writing: '写入交付物',
             done: '无后续派工',
             error: '已停下',
           } as const
         )[r.phase]
-  const runs = workerRuns(a)
+  const key = currentWorker(a)
+  const runs = workerRuns(a).filter((d) => decisionWorker(d) === key)
   const lastRun = runs.at(-1)
+  const sessions = workersOf(r).length
+  const prefix = sessions ? workerLabel(key) + ' · ' : ''
   const worker = workerLoading
-    ? '第 ' + Math.max(runs.length, 1) + ' 次运行 · 运行中'
+    ? prefix + '第 ' + Math.max(runs.length, 1) + ' 次运行 · 运行中'
     : !runs.length
-      ? '尚未派工'
-      : '第 ' +
+      ? sessions
+        ? prefix + '尚未运行'
+        : '尚未派工'
+      : prefix +
+        '第 ' +
         runs.length +
         ' 次运行 · ' +
         (lastRun?.workerReturned ? '已完成' : lastRun?.collectionClosed ? '已结束' : '未交回')

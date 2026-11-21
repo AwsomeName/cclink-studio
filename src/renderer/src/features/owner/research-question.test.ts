@@ -21,6 +21,7 @@ vi.mock('./owner-store', () => ({
 }))
 vi.mock('./owner-agent', () => ({
   ensureSession: (_a: Affair, mode: string) => mode,
+  prepareSession: async (_a: Affair, mode: string) => ({ id: mode }),
   session: (_a: Affair, mode: string) => mode,
 }))
 vi.mock('../agent-conversations/conversation-run-controller', () => ({

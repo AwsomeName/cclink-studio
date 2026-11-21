@@ -1,5 +1,6 @@
 import type { Affair } from './affair'
 import { statusChips } from './owner-status'
+import { decisionWorker, workerLabel, workersOf } from './research-model'
 
 const short = (s: string, n = 90) => (s.length > n ? s.slice(0, n) + '…' : s)
 
@@ -24,7 +25,7 @@ export function StatusChips({
         <b>{c.owner}</b>
       </span>
       <span className={'own-chip' + (workerLoading ? ' blue' : '')}>
-        <span>执行会话 A</span>
+        <span>执行会话</span>
         <b>{c.worker}</b>
       </span>
     </div>
@@ -92,34 +93,128 @@ export function AgreementCard({
   )
 }
 
-/** What Owner is working on right now: question, who, why, what came back. */
+/** Execution sessions of this affair: what each is responsible for, why it exists, where it is. */
+export function SessionsCard({ a, running }: { a: Affair; running?: string }) {
+  const r = a.research!
+  const workers = workersOf(r)
+  if (!workers.length) return null
+  const decisions = r.decisions ?? []
+  return (
+    <div className="own-card" data-owner-sessions>
+      <h3>
+        执行会话 · {workers.length}
+        <small>按依赖分配：连续的续用，独立的新开；同一时间只运行一个</small>
+      </h3>
+      <table className="own-sess">
+        <thead>
+          <tr>
+            <th>会话</th>
+            <th>负责什么</th>
+            <th>状态</th>
+            <th>Agent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {workers.map((w) => {
+            const mine = decisions.filter(
+              (d) => d.kind !== 'deliver' && decisionWorker(d) === w.key,
+            )
+            const runs = mine.filter((d) => d.workerRunId).length
+            const continued = mine.filter((d) => d.workerChoice === 'continue').length
+            const last = mine.filter((d) => d.workerRunId).at(-1)
+            const newest = mine.at(-1)
+            const state =
+              running === w.key
+                ? { text: '第 ' + Math.max(runs, 1) + ' 次运行 · 运行中', tone: 'run' }
+                : newest && !newest.workerRunId && newest.collectionClosed
+                  ? { text: '最近一轮未派出（检索失败）', tone: 'warn' }
+                  : !runs
+                    ? { text: '尚未运行', tone: 'q' }
+                    : last?.verdict
+                      ? last.verdict.met
+                        ? { text: '已验收 · ' + runs + ' 次运行', tone: 'ok' }
+                        : { text: '验收未通过 · 待补查', tone: 'warn' }
+                      : last?.workerReturned
+                        ? { text: '已交回 · 待验收', tone: 'run' }
+                        : { text: runs + ' 次运行 · 未交回', tone: 'q' }
+            return (
+              <tr key={w.key} data-owner-session={w.key}>
+                <td className="own-sess-key">{workerLabel(w.key)}</td>
+                <td>
+                  {w.purpose}
+                  <small>
+                    {w.reason}
+                    {continued ? ' · 续用 ' + continued + ' 次' : ''}
+                  </small>
+                </td>
+                <td>
+                  <span className={'own-st ' + state.tone}>{state.text}</span>
+                </td>
+                <td>
+                  {w.agent === 'codex' ? 'Codex' : w.agent === 'claude-code' ? 'Claude Code' : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** The current dispatch decision: which session and why, plus the dispatch sheet. */
 export function StepCard({ a, workerRun }: { a: Affair; workerRun?: string }) {
   const r = a.research!
   const d = r.decisions?.at(-1)
   if (!a.confirmed || !d || r.phase === 'done') return null
+  if (d.kind === 'deliver')
+    return (
+      <div className="own-card blue" data-owner-step>
+        <h3>当前步骤 · 写入交付物</h3>
+        <p>{d.reason}</p>
+      </div>
+    )
+  const key = decisionWorker(d)
+  const label = workerLabel(key)
+  const worker = workersOf(r).find((w) => w.key === key)
   const looking = d.workerFiles?.length
     ? d.workerFiles.map((f) => f.repo + ' · ' + f.path + '：' + f.purpose)
     : (d.requests?.map((q) => q.repo + (q.terms.length ? ' · 检索 ' + q.terms.join('、') : '')) ??
       [])
-  const returned = d.workerReturned ? '已交回' : workerRun || d.workerRunId ? '执行中' : '尚未派出'
+  const progress = d.workerReturned ? '已交回' : workerRun || d.workerRunId ? '执行中' : '尚未派出'
   return (
     <div className="own-card blue" data-owner-step>
       <h3>
-        当前步骤 ·{' '}
-        {d.kind === 'deliver' ? '写入交付物' : d.kind === 'more' ? '定向补查' : '首次取证'}
-        <small>第 {r.decisions!.length} 次判断</small>
+        派工判断 · 第 {r.decisions!.length} 次
+        <small>{d.choiceReason ? '已写入 调度.md' : ''}</small>
       </h3>
+      {d.workerChoice && (
+        <div className="own-pick" data-owner-choice={d.workerChoice}>
+          <b>{d.workerChoice === 'new' ? '✓ 新开 ' + label : '✓ 续用 ' + label}</b>
+          <span>{d.choiceReason}</span>
+        </div>
+      )}
       <dl className="own-kv">
-        <dt>负责</dt>
+        <dt>交给</dt>
         <dd>
-          {d.kind === 'deliver'
-            ? 'Owner（写入并逐条核对引用）'
-            : d.kind === 'more'
-              ? '执行会话 A（续用：目标、权限、上下文都没变）'
-              : '执行会话 A（首次委派）'}
+          执行会话 {label}
+          {worker ? '（负责：' + worker.purpose + '）' : ''}
+          {worker?.agent ? ' · ' + (worker.agent === 'codex' ? 'Codex' : 'Claude Code') : ''}
         </dd>
-        <dt>为什么</dt>
-        <dd>{d.reason}</dd>
+        <dt>本步问题</dt>
+        <dd>{d.ask ?? d.reason}</dd>
+        {d.deliverable && (
+          <>
+            <dt>要交回</dt>
+            <dd>{d.deliverable}</dd>
+          </>
+        )}
+        {d.doneWhen && (
+          <>
+            <dt>完成标准</dt>
+            <dd>{d.doneWhen}</dd>
+          </>
+        )}
         {looking.length > 0 && (
           <>
             <dt>本轮查找</dt>
@@ -130,16 +225,11 @@ export function StepCard({ a, workerRun }: { a: Affair; workerRun?: string }) {
             </dd>
           </>
         )}
-        {d.kind !== 'deliver' && (
-          <>
-            <dt>A 的进度</dt>
-            <dd>
-              {returned}
-              {workerRun && <span data-owner-worker-run={workerRun} />}
-              　· 已存证据 {r.docs.length} 份
-            </dd>
-          </>
-        )}
+        <dt>进度</dt>
+        <dd>
+          {progress}
+          {workerRun && <span data-owner-worker-run={workerRun} />}　· 已存证据 {r.docs.length} 份
+        </dd>
       </dl>
     </div>
   )
@@ -202,12 +292,24 @@ export function Timeline({ a, active }: { a: Affair; active: boolean }) {
     steps.push({
       state: done ? 'ok' : 'now',
       title:
-        d.kind === 'read'
-          ? '派 A 首次取证'
-          : d.kind === 'more'
-            ? 'Owner 判断证据不足 → 续用 A 补查'
-            : '写入交付物并逐条核对引用',
-      hint: short(d.reason),
+        d.kind === 'deliver'
+          ? '写入交付物并逐条核对引用'
+          : (d.workerChoice === 'new' || (d.kind === 'read' && !d.workerChoice)
+              ? '新开 '
+              : '续用 ') +
+            workerLabel(decisionWorker(d)) +
+            '：' +
+            short(d.ask ?? d.reason, 60),
+      hint:
+        d.kind === 'deliver'
+          ? short(d.reason)
+          : [
+              d.choiceReason && short(d.choiceReason, 80),
+              d.verdict &&
+                (d.verdict.met ? '验收通过' : '验收未通过：' + short(d.verdict.note, 60)),
+            ]
+              .filter(Boolean)
+              .join(' · ') || short(d.reason),
     })
   })
   if (a.confirmed && !decisions.some((d) => d.kind === 'deliver'))

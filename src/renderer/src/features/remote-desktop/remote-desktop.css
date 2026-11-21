@@ -50,17 +50,6 @@
   color: white;
   background: #1862a2;
 }
-.remote-desktop-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 35px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--border-color);
-}
-.remote-desktop-bar strong {
-  margin-right: auto;
-}
 .remote-desktop-screen {
   flex: 1;
   min-height: 0;
@@ -96,4 +85,162 @@
 .remote-desktop-saved button {
   font-size: 12px;
   padding: 2px 8px;
+}
+.remote-desktop-actions {
+  display: flex;
+  gap: 8px;
+}
+.remote-desktop-actions .desktop-primary {
+  flex: 1;
+}
+.remote-desktop.fullscreen {
+  position: fixed;
+  inset: 0;
+  /* Above workbench chrome (<=1500) but below noVNC's drag-capture layer (10000): the capture
+     layer must receive mouseup, or noVNC never releases it and blocks the whole window. */
+  z-index: 9990;
+}
+.remote-desktop-reveal-zone {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  z-index: 2;
+}
+.remote-desktop-fullscreen-bar {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  transform: translate(-50%, -100%);
+  transition: transform 120ms ease-out;
+}
+.remote-desktop-fullscreen-bar.revealed {
+  transform: translate(-50%, 0);
+}
+.remote-desktop-fullscreen-bar button {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.remote-desktop kbd,
+.remote-desktop-menu kbd {
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.remote-desktop button.danger,
+.remote-desktop-menu button.danger {
+  color: var(--color-error, #e5534b);
+}
+.remote-desktop-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+}
+.remote-desktop-dot.connected {
+  background: #3fb950;
+}
+.remote-desktop-dot.pending {
+  background: #58a6ff;
+}
+.remote-desktop-dot.interrupted {
+  background: #d29922;
+}
+.remote-desktop-tab-mode-wrap {
+  display: inline-flex;
+}
+.remote-desktop-tab-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 18px;
+  padding: 0 3px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.remote-desktop-tab-mode:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+}
+.tab.pinned.remote-desktop-live {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 40px;
+  max-width: none;
+  gap: 5px;
+  padding: 0 7px;
+}
+.tab .remote-desktop-dot,
+.tab .remote-desktop-tab-mode-wrap {
+  margin-left: 4px;
+}
+.tab.pinned .remote-desktop-dot,
+.tab.pinned .remote-desktop-tab-mode-wrap {
+  margin-left: 0;
+}
+.remote-desktop-menu {
+  min-width: 180px;
+  padding: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.remote-desktop-menu button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.remote-desktop-menu button:hover:not(:disabled) {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+}
+.remote-desktop-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.remote-desktop-menu kbd {
+  margin-left: auto;
+}
+.remote-desktop-menu-check {
+  display: inline-flex;
+  width: 12px;
+}
+.remote-desktop-menu-title {
+  padding: 5px 8px 4px;
+  color: var(--text-secondary);
+}
+.remote-desktop-menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-color);
+}
+.status-bar-item.remote-desktop-status {
+  gap: 5px;
+}
+.status-bar-item.remote-desktop-status.interrupted {
+  background: rgba(210, 153, 34, 0.35);
 }

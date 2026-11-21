@@ -1,13 +1,17 @@
 import { z } from 'zod'
 import { useAgentStore } from '../../stores/agent-store'
 import { createConversationRunController as controller } from '../agent-conversations/conversation-run-controller'
-import { ensureSession, session } from './owner-agent'
+import { prepareSession, session } from './owner-agent'
 import { acceptDirectory, keepUnacknowledged, loadDirectories, useOwners } from './owner-store'
 import {
   checkReport,
   planSchema,
   researchRequest,
   workerFilesSchema,
+  decisionWorker,
+  workerLabel,
+  workersOf,
+  assignWorker,
   type Research,
 } from './research-model'
 import type { Affair } from './affair'
@@ -64,8 +68,8 @@ function say(r: Research, who: '你' | 'Owner', text: string) {
 }
 // A works independently. Questions and decisions share the affair's one native Owner chat.
 const ownerTurns = new Map<string, Promise<void>>()
-function run(a: Affair, mode: 'a' | 'main', task: string, question = false) {
-  if (mode === 'a') return sendRun(a, mode, task, false)
+function run(a: Affair, mode: string, task: string, question = false) {
+  if (mode !== 'main') return sendRun(a, mode, task, false)
   const turn = (ownerTurns.get(a.id) ?? Promise.resolve()).then(() =>
     sendRun(a, mode, task, question),
   )
@@ -79,14 +83,27 @@ function run(a: Affair, mode: 'a' | 'main', task: string, question = false) {
   })
   return turn
 }
-async function sendRun(a: Affair, mode: 'a' | 'main', task: string, question: boolean) {
-  if (mode === 'a' && (!current(a.id)?.confirmed || current(a.id)?.directory?.error))
+async function sendRun(a: Affair, mode: string, task: string, question: boolean) {
+  if (mode !== 'main' && (!current(a.id)?.confirmed || current(a.id)?.directory?.error))
     throw Error('未取得生效约定，不能派工')
-  const id = ensureSession(a, mode),
-    ticket = crypto.randomUUID(),
+  const { id, created } = await prepareSession(a, mode)
+  const ticket = crypto.randomUUID(),
     agent = useAgentStore.getState().conversations[id]
+  if (created && mode !== 'main')
+    await change(a.id, (r) => {
+      const w = r.workers?.find((x) => x.key === mode)
+      if (w) w.agent = created
+      event(
+        r,
+        '执行会话 ' +
+          workerLabel(mode) +
+          ' 使用 ' +
+          (created === 'codex' ? 'Codex' : 'Claude Code') +
+          '（启动前检查可用）',
+      )
+    })
   if (agent.loading || agent.activeRunId) throw Error('原会话仍在运行。请等它结束后再继续。')
-  if (mode === 'a')
+  if (mode !== 'main')
     await change(a.id, (r) => {
       const order = r.decisions?.at(-1)
       if (!order || order.kind === 'deliver') throw Error('缺少待执行的委托')
@@ -103,12 +120,13 @@ async function sendRun(a: Affair, mode: 'a' | 'main', task: string, question: bo
     throw Error('会话正在运行、压缩或已有排队消息。待会话空闲后可重试。')
   if (res.status !== 'accepted' || !res.runId)
     throw Error(res.status === 'failed' ? res.error : '会话没有接受委托：' + res.status)
+  console.info('[Owner] 会话已接收', { affairId: a.id, session: mode, runId: res.runId })
   if (!question)
     await change(a.id, (r, v) => {
-      if (mode === 'a') {
+      if (mode !== 'main') {
         const order = r.decisions?.at(-1)
         if (order && order.kind !== 'deliver') order.workerRunId = res.runId
-        event(r, '执行会话 A 已接收本轮委托')
+        event(r, '执行会话 ' + workerLabel(mode) + ' 已接收本轮委托')
       }
       v.run = res.runId ?? null
     })
@@ -151,6 +169,10 @@ async function work(id: string, fn: () => Promise<void>) {
   try {
     await fn()
   } catch (e) {
+    console.warn('[Owner] 执行停止', {
+      affairId: id,
+      error: e instanceof Error ? e.message : String(e),
+    })
     if (current(id)?.directory?.error) return
     await change(id, (r, a) => {
       r.phase = r.report ? 'done' : 'error'
@@ -258,6 +280,28 @@ const instruction = z.object({
   reason: z.string().trim().min(1).max(1200),
   requests: z.array(researchRequest).min(1).max(4),
 })
+const clip = (n: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .transform((v) => v.slice(0, n))
+const dispatchSheet = z.object({
+  worker: z.union([
+    z.object({
+      use: z
+        .string()
+        .regex(/^[a-hA-H]$/)
+        .transform((v) => v.toLowerCase()),
+    }),
+    z.object({ new: clip(300) }),
+  ]),
+  workerReason: clip(600),
+  ask: clip(600),
+  deliverable: clip(600),
+  doneWhen: clip(600),
+})
+const verdictSchema = z.object({ met: z.boolean(), note: clip(600) })
 type Instruction = z.infer<typeof instruction>
 
 function decision(
@@ -265,18 +309,25 @@ function decision(
   kind: 'read' | 'more' | 'deliver',
   reason: string,
   requests?: Instruction['requests'],
+  extra: Partial<Decision> = {},
 ) {
   r.decisions = [
     ...(r.decisions ?? []),
-    { id: crypto.randomUUID(), kind, reason, ...(requests && { requests }) },
+    { id: crypto.randomUUID(), kind, reason, ...(requests && { requests }), ...extra },
   ].slice(-60)
 }
+
 function remember(id: string, message: string) {
   return change(id, (r) => event(r, message))
 }
 
 // The Owner chooses the research question and search terms. A chooses documents from the real tree.
 type Decision = NonNullable<Research['decisions']>[number]
+/** The latest dispatch that came back and still needs Owner's acceptance. */
+export function lastDispatch(r: Research) {
+  const d = r.decisions?.filter((x) => x.kind !== 'deliver' && x.workerReturned).at(-1)
+  return d && !d.verdict ? d : undefined
+}
 export function unfinishedWorker(r: Research) {
   const last = r.decisions?.at(-1)
   if (last?.kind === 'deliver' || last?.collectionClosed) return
@@ -288,6 +339,9 @@ export function unfinishedWorker(r: Research) {
 }
 async function collect(a: Affair, order: Instruction, prior?: Decision) {
   const { plan, docs } = current(a.id)!.research!
+  const sheet = prior ?? current(a.id)!.research!.decisions?.at(-1)
+  const key = sheet ? decisionWorker(sheet) : 'a'
+  const worker = workersOf(current(a.id)!.research!).find((w) => w.key === key)
   const revision = (repo: string) =>
     current(a.id)!
       .research!.docs.find((d) => d.repo === repo && /\/blob\/[a-f0-9]{40}\//i.test(d.url))
@@ -324,11 +378,24 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
       return []
     }
     const result = prior
-      ? await awaitReceipt(session(a, 'a'), prior.workerRunId!, prior.workerTicket!)
+      ? await awaitReceipt(session(a, key), prior.workerRunId!, prior.workerTicket!)
       : await run(
           a,
-          'a',
-          '你是本事务唯一执行会话 A。为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
+          key,
+          '你是本事务的执行会话 ' +
+            workerLabel(key) +
+            (worker ? '，负责：' + worker.purpose : '') +
+            '。' +
+            (sheet?.ask
+              ? '本步问题：' +
+                sheet.ask +
+                '。要交回：' +
+                sheet.deliverable +
+                '。完成标准：' +
+                sheet.doneWhen +
+                '。'
+              : '') +
+            '为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
             JSON.stringify({
               goal: a.goal,
               plan,
@@ -420,7 +487,9 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
   }
 }
 const lookupFormat =
-  '取证返回 {action:"read",reason:"用中文说明已有证据、还差哪项证据、为什么查它",requests:[{repo:"计划中的原样仓库名",terms:["用于匹配文件路径的英文关键词"]}]}。terms 为空数组表示读项目根 README。多个 terms 按命中数量排序，使用具体的文件或模块名。'
+  '取证返回 {action:"read",reason:"用中文说明已有证据、还差哪项证据、为什么查它",requests:[{repo:"计划中的原样仓库名",terms:["用于匹配文件路径的英文关键词"]}],worker:{use:"已有执行会话的字母"} 或 {new:"新会话负责什么，一句话"},workerReason:"为什么续用或新开",ask:"本步问题",deliverable:"要交回什么",doneWhen:"怎样算完成，可逐项核对"}。terms 为空数组表示读项目根 README。多个 terms 按命中数量排序，使用具体的文件或模块名。' +
+  '分配执行会话：本步依赖某个会话已读到的内容或结论（例如沿它读过的文档继续追源码）时续用该会话；本步与已有会话的工作互不依赖（例如另一个项目、另一类问题）时新开会话，不把无关上下文堆进同一个会话。workers 列出已有会话及各自负责什么。' +
+  '若 lastDispatch 存在且尚无 verdict，必须给出 verdict:{met:true或false,note:"按该派工单 doneWhen 逐项说明满足或缺什么"}。'
 
 // Older snapshots store their bytes and blob hash but lack the line offset.
 async function restoreSourceLines(a: Affair) {
@@ -479,14 +548,18 @@ export async function research(id: string, reassign = false) {
   await work(id, async () => {
     const prior = unfinishedWorker(initial.research!)
     if (prior) {
-      const conversationId = session(initial, 'a')
+      const conversationId = session(initial, decisionWorker(prior))
       if (reassign) {
         const status = await window.cclinkStudio.agent.getStatus(conversationId)
         const run =
           prior.workerRunId &&
           (await window.cclinkStudio.agent.getRunStatus(conversationId, prior.workerRunId))
         if (status.busy || (run && ['starting', 'running', 'cancelling'].includes(run.status)))
-          throw Error('会话 A 的原运行仍在执行，请先核对原回执。')
+          throw Error(
+            '执行会话 ' +
+              workerLabel(decisionWorker(prior)) +
+              ' 的原运行仍在执行，请先核对原回执。',
+          )
         await change(id, (r) => {
           r.decisions!.at(-1)!.collectionClosed = true
           event(r, '用户决定重新取证，结束对原委托回执的等待')
@@ -502,7 +575,7 @@ export async function research(id: string, reassign = false) {
         await change(id, (r, a) => {
           a.issue = ''
           r.phase = 'reading'
-          event(r, '恢复原委托，沿用会话 A 的回执')
+          event(r, '恢复原委托，沿用执行会话 ' + workerLabel(decisionWorker(prior)) + ' 的回执')
         })
         await collect(initial, { reason: prior.reason, requests: prior.requests }, prior)
         await finishCollection(id)
@@ -523,13 +596,15 @@ export async function research(id: string, reassign = false) {
       const out = await run(
         a,
         'main',
-        '你是本事务 Owner。依据目标和约定的交付物，自行判断下一步，逐项核对原始资料，只把给定文本当证据。按信息依赖分批：若后续要查哪个细节取决于对现有材料的判断，先查清前一个问题，看过证据再给 A 下一项委托。可以一次并查独立的问题。概览或目录不能证明具体实现、实跑结果或输出等；需要时定向续用 A 查官方仓库的文档、示例或源码。不要因只是重述同一证据而反复检索。' +
+        '你是本事务 Owner。依据目标和约定的交付物，自行判断下一步，逐项核对原始资料，只把给定文本当证据。按信息依赖分批：若后续要查哪个细节取决于对现有材料的判断，先查清前一个问题，看过证据再派下一项委托。可以一次并查独立的问题。概览或目录不能证明具体实现、实跑结果或输出等；需要时派执行会话定向查官方仓库的文档、示例或源码。不要因只是重述同一证据而反复检索。' +
           lookupFormat +
           ' 若本次目标已充分得到支持，返回 {action:"deliver",reason:"逐项解释哪些出处解决了什么问题，注明判断边界",conclusion:"按约定样式写成可直接阅读的中文 Markdown 成品",items:[{repo:"原样仓库名",url:"实际证据的完整原样URL，行号由系统按引文定位",finding:"该来源支持的具体结论",quote:"该来源逐字原文的连续短句，6至160字符，无省略号"}]}。用 1 至 16 条证据覆盖关键结论。每份原文提供 startLine 时即为该片段首行在源文件的真实行号，交付时由 Studio 将逐字引文自动定位到具体源文件行，不要为了数行再次取证。所有必须项均有直接证据才交付，不得降级必交项。不要把代码标识符的字面出现当作行为证明。确实没有途径继续时返回 {action:"blocked",reason:"尚缺什么及原因"}。\n' +
           JSON.stringify({
             goal: a.goal,
             plan: state.plan,
             prior: state.decisions,
+            workers: workersOf(state).map(({ key, purpose }) => ({ key, purpose })),
+            lastDispatch: lastDispatch(state),
             activity: state.log.slice(-20),
             evidence: state.docs.map(({ repo, path, url, text, startLine }) => ({
               repo,
@@ -542,6 +617,20 @@ export async function research(id: string, reassign = false) {
           }),
       )
       const reason = z.string().trim().min(1).max(1200).parse(out.reason)
+      const verdict = verdictSchema.safeParse(out.verdict)
+      if (verdict.success && lastDispatch(current(id)!.research!))
+        await change(id, (r) => {
+          const d = lastDispatch(r)
+          if (!d) return
+          r.decisions!.find((x) => x.id === d.id)!.verdict = verdict.data
+          event(
+            r,
+            '验收执行会话 ' +
+              workerLabel(decisionWorker(d)) +
+              '：' +
+              (verdict.data.met ? '满足完成标准' : '未满足 · ' + verdict.data.note),
+          )
+        })
       if (out.action === 'deliver') {
         try {
           if (
@@ -569,16 +658,56 @@ export async function research(id: string, reassign = false) {
       }
       if (out.action === 'blocked') throw Error(reason)
       if (out.action !== 'read') throw Error('未收到可执行的取证或交付决定')
+      // A malformed dispatch goes back to Owner as a correction instead of failing the affair.
+      const parsedOrder = instruction.safeParse(out)
+      const outOfScope =
+        parsedOrder.success &&
+        parsedOrder.data.requests.some((request) => !state.plan!.repos.includes(request.repo))
+      if (!parsedOrder.success || outOfScope) {
+        correction = outOfScope
+          ? '取证对象超出已确认的仓库范围，只能查：' + state.plan!.repos.join('、')
+          : '派工单无效：每次最多 4 个检索请求，必须给出 requests；多个独立问题请分多次派给不同会话。'
+        await remember(id, '派工未通过校验：' + correction)
+        if (++invalid >= 3) throw Error(correction)
+        continue
+      }
       if (rounds++ >= 5) throw Error('本轮核对仍缺证据：' + reason)
-      const order = instruction.parse(out)
-      if (order.requests.some((request) => !state.plan!.repos.includes(request.repo)))
-        throw Error('取证对象超出已确认的仓库范围')
+      const order = parsedOrder.data
+      const parsedSheet = dispatchSheet.safeParse(out)
+      // Older replies without a sheet continue the most recent session, as before.
+      const sheet = parsedSheet.success
+        ? parsedSheet.data
+        : {
+            worker: workersOf(state).length
+              ? { use: decisionWorker(lastDispatch(state) ?? {}) }
+              : { new: '取证' },
+            workerReason: '未给出会话分配，沿用上一会话',
+            ask: reason.slice(0, 600),
+            deliverable: '与本步问题直接相关的原文片段',
+            doneWhen: '本步问题有可定位到原文的证据',
+          }
       await change(id, (r) => {
+        const { key, choice } = assignWorker(r, sheet)
         decision(
           r,
           r.decisions?.some((d) => d.workerRunId) || r.docs.length ? 'more' : 'read',
           reason,
           order.requests,
+          {
+            worker: key,
+            workerChoice: choice,
+            choiceReason: sheet.workerReason,
+            ask: sheet.ask,
+            deliverable: sheet.deliverable,
+            doneWhen: sheet.doneWhen,
+          },
+        )
+        event(
+          r,
+          (choice === 'new' ? '新开执行会话 ' : '续用执行会话 ') +
+            workerLabel(key) +
+            '：' +
+            sheet.workerReason,
         )
         r.phase = 'reading'
       })

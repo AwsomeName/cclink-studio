@@ -3,6 +3,7 @@
  *
  * 提供窗口相关的 IPC channel：
  * - window:toggleFullscreen — 切换全屏
+ * - window:setFullscreen    — 设置全屏并返回之前的状态
  * - window:toggleDevtools   — 切换开发者工具
  * - window:reload           — 重新加载窗口
  * - window:focusRenderer    — 从内嵌视图把原生焦点切回工作台
@@ -62,6 +63,17 @@ export function registerWindowIpc(
     mainWindow.setFullScreen(!mainWindow.isFullScreen())
     return { success: true, fullscreen: mainWindow.isFullScreen() }
   })
+
+  registerTrustedIpcContract(
+    windowIpc.setFullscreen,
+    trustedRendererGuard,
+    (_event, fullscreen) => {
+      if (mainWindow.isDestroyed()) return { success: false }
+      const previous = mainWindow.isFullScreen()
+      if (previous !== fullscreen) mainWindow.setFullScreen(fullscreen)
+      return { success: true, fullscreen, previous }
+    },
+  )
 
   /** 切换开发者工具 */
   registerTrustedIpcContract(windowIpc.toggleDevtools, trustedRendererGuard, () => {

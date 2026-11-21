@@ -10,9 +10,16 @@ import { applyMacServerModifiers } from './mac-keys'
 import { installMacWheel } from './mac-scroll'
 import { installNoVncProbe } from './novnc-probe'
 import { createDesktopDiagnostics } from './desktop-diagnostics'
+import {
+  registerDesktopController,
+  useDesktopSessionStore,
+  type DesktopPhase,
+  type DesktopSessionController,
+} from './desktop-session-store'
+import { DESKTOP_FULLSCREEN_SHORTCUT } from './desktop-controls'
 import './remote-desktop.css'
 
-type Phase = 'idle' | 'connecting' | 'credentials' | 'connected' | 'ended'
+type Phase = DesktopPhase
 const NEW_DEVICE = ''
 const api = (): typeof window.cclinkStudio.remoteDesktop => window.cclinkStudio.remoteDesktop
 
@@ -31,7 +38,13 @@ export function RemoteDesktopTab({
   const [phase, setPhase] = useState<Phase>('idle')
   const [message, setMessage] = useState('')
   const [usernameRequired, setUsernameRequired] = useState(false)
-  const [fit, setFit] = useState(true)
+  const fit = (tab.desktopView ?? 'fit') === 'fit'
+  const [fullscreen, setFullscreen] = useState(false)
+  const [interrupted, setInterrupted] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+  /** Resolves to the native window fullscreen state before we entered; null when not entered. */
+  const windowWasFullscreen = useRef<Promise<boolean | null> | null>(null)
+  const revealTimer = useRef<number | undefined>(undefined)
   const target = useRef<HTMLDivElement>(null)
   const client = useRef<RFB | null>(null)
   const generation = useRef(0)
@@ -74,15 +87,22 @@ export function RemoteDesktopTab({
         let list = await api().listDevices()
         const legacy = tab.desktopTarget
         if (!legacy?.deviceId && legacy?.host) {
-          const migrated = await api().saveDevice({
-            id: null,
-            name: tab.title.trim() || legacy.host,
-            host: legacy.host,
-            port: legacy.port ?? 5900,
-          })
-          useTabStore.getState().setDesktopTarget(tab.id, migrated.name, { deviceId: migrated.id })
-          list = await api().listDevices()
-          if (!cancelled) fillFrom(migrated)
+          try {
+            const migrated = await api().saveDevice({
+              id: null,
+              name: tab.title.trim() || legacy.host,
+              host: legacy.host,
+              port: legacy.port ?? 5900,
+            })
+            useTabStore
+              .getState()
+              .setDesktopTarget(tab.id, migrated.name, { deviceId: migrated.id })
+            list = await api().listDevices()
+            if (!cancelled) fillFrom(migrated)
+          } catch (error) {
+            // Keep the legacy address in the form so the user can correct it and connect.
+            console.warn('[RemoteDesktop] 旧标签地址迁移失败', String(error))
+          }
         } else if (legacy?.deviceId) {
           const known = list.find((device) => device.id === legacy.deviceId)
           if (!cancelled && known) fillFrom(known)
@@ -110,9 +130,10 @@ export function RemoteDesktopTab({
       rfb.viewOnly = !active
       // Keys only reach the remote when the canvas has focus; take it on connect/return.
       if (active && phase === 'connected') rfb.focus({ preventScroll: true })
-      rfb.scaleViewport = fit
+      // Fullscreen always scales the remote screen to the display.
+      rfb.scaleViewport = fit || fullscreen
     }
-  }, [active, fit, phase])
+  }, [active, fit, fullscreen, phase])
 
   const refreshDevices = async (): Promise<void> => {
     try {
@@ -130,15 +151,21 @@ export function RemoteDesktopTab({
     setMessage('已删除本机保存的密码。')
   }
 
-  const begin = async (event: FormEvent): Promise<void> => {
-    event.preventDefault()
+  const connect = async (event?: FormEvent): Promise<void> => {
+    event?.preventDefault()
+    if (!host.trim()) {
+      setMessage('请填写主机名或 IP。')
+      return
+    }
     stop()
     const attempt = generation.current
+    setInterrupted(false)
     setPhase('connecting')
     setMessage('')
     const fail = (explanation: string): void => {
       if (generation.current !== attempt) return
       stop()
+      setInterrupted(true)
       setMessage(explanation)
       setPhase('ended')
     }
@@ -303,6 +330,7 @@ export function RemoteDesktopTab({
     window.clearTimeout(handshakeTimer.current)
     handshakeTimer.current = window.setTimeout(() => {
       stop()
+      setInterrupted(true)
       setPhase('ended')
       setMessage('认证响应超时，请重新连接。')
     }, 20000)
@@ -323,28 +351,152 @@ export function RemoteDesktopTab({
     client.current?.sendCredentials(credentials)
   }
 
+  function disconnect(): void {
+    stop()
+    setInterrupted(false)
+    setMessage('已断开，远端应用仍在运行。')
+    setPhase('ended')
+  }
+
+  function enterFullscreen(): void {
+    if (phase !== 'connected' || fullscreen) return
+    setFullscreen(true)
+    setRevealed(false)
+    windowWasFullscreen.current = window.cclinkStudio.window
+      .setFullscreen(true)
+      .then((result) => result.previous ?? null)
+      .catch(() => null)
+  }
+
+  function exitFullscreen(): void {
+    setFullscreen(false)
+    setRevealed(false)
+    restoreWindow()
+  }
+
+  /** Undo our native fullscreen, unless the user already had the window fullscreen before. */
+  function restoreWindow(): void {
+    const pending = windowWasFullscreen.current
+    windowWasFullscreen.current = null
+    // Awaiting the enter request also covers an exit that races ahead of it.
+    void pending?.then((previous) => {
+      if (previous === false) void window.cclinkStudio.window.setFullscreen(false)
+    })
+  }
+  const restoreWindowRef = useRef(restoreWindow)
+  restoreWindowRef.current = restoreWindow
+  // Closing the Tab or switching workspace while fullscreen must not strand the window.
+  useEffect(() => () => restoreWindowRef.current(), [])
+
+  // The reveal zone is thin; hide the bar shortly after the pointer leaves zone and bar alike.
+  const showBar = (): void => {
+    window.clearTimeout(revealTimer.current)
+    setRevealed(true)
+  }
+  const hideBarSoon = (): void => {
+    window.clearTimeout(revealTimer.current)
+    revealTimer.current = window.setTimeout(() => setRevealed(false), 400)
+  }
+  useEffect(() => () => window.clearTimeout(revealTimer.current), [])
+
+  // Controller for the status bar and tab bar; refreshed every render so it sees current state.
+  const controllerImpl = useRef<DesktopSessionController | null>(null)
+  controllerImpl.current = {
+    setView: (view) => useTabStore.getState().setDesktopView(tab.id, view),
+    setFullscreen: (on) => (on ? enterFullscreen() : exitFullscreen()),
+    reconnect: () => void connect(),
+    disconnect,
+  }
+  useEffect(
+    () =>
+      registerDesktopController(tab.id, {
+        setView: (view) => controllerImpl.current?.setView(view),
+        setFullscreen: (on) => controllerImpl.current?.setFullscreen(on),
+        reconnect: () => controllerImpl.current?.reconnect(),
+        disconnect: () => controllerImpl.current?.disconnect(),
+      }),
+    [tab.id],
+  )
+
+  const publish = useDesktopSessionStore((state) => state.publish)
+  useEffect(() => {
+    publish(tab.id, {
+      phase,
+      deviceName: name.trim() || host.trim() || '远程桌面',
+      endpoint: `${host.trim()}:${port}`,
+      interrupted,
+      fullscreen,
+    })
+  }, [publish, tab.id, phase, name, host, port, interrupted, fullscreen])
+  useEffect(() => () => publish(tab.id, null), [publish, tab.id])
+
+  // Leave fullscreen whenever the session is no longer usable or the Tab is hidden.
+  useEffect(() => {
+    if (fullscreen && (phase !== 'connected' || !active)) exitFullscreen()
+    // exitFullscreen only touches refs and state setters.
+  }, [fullscreen, phase, active])
+
+  const fullscreenRef = useRef(fullscreen)
+  fullscreenRef.current = fullscreen
+  // ⌃⌥⌘F is the one chord Studio keeps; capture it before noVNC forwards it to the remote.
+  useEffect(() => {
+    const screen = target.current
+    if (!screen) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey && event.altKey && event.metaKey && event.code === 'KeyF')) return
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.type === 'keydown' && !event.repeat)
+        controllerImpl.current?.setFullscreen(!fullscreenRef.current)
+    }
+    screen.addEventListener('keydown', onKey, true)
+    screen.addEventListener('keyup', onKey, true)
+    return () => {
+      screen.removeEventListener('keydown', onKey, true)
+      screen.removeEventListener('keyup', onKey, true)
+    }
+  }, [])
   const busy = phase !== 'idle' && phase !== 'ended'
   return (
-    <section className="remote-desktop" hidden={!active} aria-label="远程桌面">
-      {busy && (
-        <div className="remote-desktop-bar">
-          <span role="status">
-            {phase === 'connected' ? '已连接' : phase === 'credentials' ? '等待认证' : '正在连接'}
-          </span>
-          <strong>{tab.title}</strong>
-          {phase === 'connected' && (
-            <button onClick={() => setFit(!fit)}>{fit ? '适应窗口' : '原始大小'}</button>
-          )}
-          <button
-            onClick={() => {
-              stop()
-              setMessage('已断开，远端应用仍在运行。')
-              setPhase('ended')
-            }}
-          >
-            {phase === 'connected' ? '断开' : '取消'}
+    <section
+      className={`remote-desktop ${fullscreen ? 'fullscreen' : ''}`}
+      hidden={!active}
+      aria-label="远程桌面"
+    >
+      {phase === 'connecting' && (
+        <div className="remote-desktop-form" role="status">
+          <h2>正在连接 {name.trim() || host}</h2>
+          <p>
+            {host}:{port}
+          </p>
+          <button type="button" onClick={disconnect}>
+            取消
           </button>
         </div>
+      )}
+      {fullscreen && (
+        <>
+          <div
+            className="remote-desktop-reveal-zone"
+            aria-hidden="true"
+            onMouseEnter={showBar}
+            onMouseLeave={hideBarSoon}
+          />
+          <div
+            className={`remote-desktop-fullscreen-bar ${revealed ? 'revealed' : ''}`}
+            onMouseEnter={showBar}
+            onMouseLeave={hideBarSoon}
+          >
+            <span className="remote-desktop-dot connected" aria-hidden="true" />
+            <span>{name.trim() || host} · 已连接</span>
+            <button type="button" onClick={() => exitFullscreen()}>
+              退出全屏 <kbd>{DESKTOP_FULLSCREEN_SHORTCUT}</kbd>
+            </button>
+            <button type="button" className="danger" onClick={disconnect}>
+              断开
+            </button>
+          </div>
+        </>
       )}
       <div
         className="remote-desktop-screen"
@@ -353,7 +505,7 @@ export function RemoteDesktopTab({
         hidden={phase !== 'connected'}
       />
       {!busy && (
-        <form className="remote-desktop-form" onSubmit={begin}>
+        <form className="remote-desktop-form" onSubmit={(event) => void connect(event)}>
           <h2>连接 Mac 桌面</h2>
           <p>在目标 Mac 的「系统设置 → 通用 → 共享」中开启屏幕共享，通过可信网络连接。</p>
           {devices && devices.length > 0 && (
@@ -444,7 +596,12 @@ export function RemoteDesktopTab({
               在本机记住密码（连接成功后保存到 Studio 本地凭证文件，不进入项目）
             </label>
           )}
-          <button className="desktop-primary">确认连接</button>
+          <div className="remote-desktop-actions">
+            <button type="button" onClick={disconnect}>
+              取消
+            </button>
+            <button className="desktop-primary">确认连接</button>
+          </div>
         </form>
       )}
     </section>

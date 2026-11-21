@@ -723,6 +723,146 @@
         font-size: 11px;
         color: #ffffff40;
       }
+
+      .diag {
+        border-style: dashed;
+      }
+      .callout {
+        position: absolute;
+        border: 2px dashed #f0a35b;
+        border-radius: 8px;
+        pointer-events: none;
+      }
+      .callnote {
+        position: absolute;
+        background: #f0a35b;
+        color: #1b1c1f;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 9px;
+        border-radius: 5px;
+        white-space: nowrap;
+      }
+      .pop {
+        position: absolute;
+        width: 420px;
+        background: #26282c;
+        border: 1px solid #4a4f57;
+        border-radius: 9px;
+        padding: 14px 16px;
+        box-shadow: 0 18px 50px #000b;
+        font-size: 13px;
+        z-index: 3;
+      }
+      .pop h4 {
+        margin: 0 0 6px;
+        font-size: 14px;
+        color: var(--green);
+      }
+      .pop ul {
+        margin: 4px 0 10px;
+        padding-left: 18px;
+        color: #c9ced5;
+      }
+      .pop li {
+        margin: 2px 0;
+      }
+      .pop .k {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      .sess {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .sess th {
+        text-align: left;
+        font-weight: 500;
+        color: var(--muted);
+        font-size: 12px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #3a3e45;
+      }
+      .sess td {
+        padding: 8px;
+        border-bottom: 1px solid #2e3136;
+        vertical-align: top;
+      }
+      .sess .nm {
+        font-weight: 700;
+        color: var(--blue2);
+      }
+      .sess .why {
+        display: block;
+        font-size: 12px;
+        color: var(--dim);
+        margin-top: 2px;
+      }
+      .st {
+        display: inline-block;
+        font-size: 11.5px;
+        padding: 1px 7px;
+        border-radius: 10px;
+        border: 1px solid #3a3e45;
+        background: #2b2e33;
+        white-space: nowrap;
+      }
+      .st.run {
+        color: var(--blue2);
+        border-color: #2f5476;
+        background: #1f2e3e;
+      }
+      .st.ok {
+        color: var(--green);
+        border-color: #2e5a45;
+        background: #1f3329;
+      }
+      .st.q {
+        color: var(--muted);
+      }
+      .pick {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin: 6px 0 12px;
+      }
+      .pick div {
+        border: 1px solid #3a3e45;
+        border-radius: 6px;
+        padding: 9px 11px;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .pick div.on {
+        border-color: #4a76a3;
+        background: #1f2e3e;
+        color: #d6e6f4;
+      }
+      .pick b {
+        display: block;
+        color: var(--ink);
+        font-size: 13px;
+        margin-bottom: 2px;
+      }
+      .order {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+      }
+      .order li {
+        display: grid;
+        grid-template-columns: 92px 1fr;
+        gap: 12px;
+        padding: 5px 0;
+        border-top: 1px solid #2e3136;
+      }
+      .order li span:first-child {
+        color: var(--muted);
+      }
     </style>
   </head>
   <body>
@@ -1555,6 +1695,551 @@
       </div>
       <div class="status">
         <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>10 复制 Owner 诊断 · 按钮位置</h2>
+      <p>放在事务看板标题行右侧：只针对当前这件事务，任何状态都在同一位置。列表层和设置页不放。</p>
+    </div>
+    <section class="win" id="s10">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">进行中 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">3</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <div class="row">
+              <h1>开源芯片 Ibex 调研</h1>
+              <span class="sp"></span><span class="btn diag">⧉ 复制 Owner 诊断</span>
+            </div>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等 A 交回</b></span
+              ><span class="chip blue"
+                ><span class="k">执行会话 A</span><b>第 2 次运行 · 运行中</b></span
+              >
+            </div>
+            <div class="card blue">
+              <h3>当前步骤 · 定向补查 <small>第 2 次判断</small></h3>
+              <dl class="kv">
+                <dt>负责</dt>
+                <dd>执行会话 A（续用）</dd>
+                <dt>为什么</dt>
+                <dd>流水线文档说明了两级分工，但没有写有效位的更新条件，需要 RTL 原文。</dd>
+                <dt>A 的进度</dt>
+                <dd>执行中 · 已存证据 2 份</dd>
+              </dl>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok"><b>约定 v1 已确认</b><span class="hint">10:02</span></li>
+              <li class="ok"><b>派 A 首次取证</b><span class="hint">运行完成 · 2 份证据</span></li>
+              <li class="now">
+                <b>Owner 判断证据不足 → 续用 A 补查</b><span class="hint">缺寄存器更新条件</span>
+              </li>
+              <li class="todo"><b>写入交付物并逐条核对引用</b></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>为什么还要查源码？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>约定要求解释寄存器何时更新，这只能看 RTL。A 正在取 ibex_if_stage.sv。</p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>框架日志</span
+        ><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+      <div class="callout" style="left: 818px; top: 162px; width: 156px; height: 50px"></div>
+      <div class="callnote" style="left: 792px; top: 218px">新增：只复制这件事务的诊断</div>
+    </section>
+
+    <div class="cap">
+      <h2>11 点击后 · 复制结果</h2>
+      <p>一键复制成纯文本，点完就近显示复制了什么、没复制什么；可展开查看全文再发给别人。</p>
+    </div>
+    <section class="win" id="s11">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">进行中 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">3</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <div class="row">
+              <h1>开源芯片 Ibex 调研</h1>
+              <span class="sp"></span
+              ><span class="btn diag" style="border-color: #7cc8a0; color: #7cc8a0">✓ 已复制</span>
+            </div>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等 A 交回</b></span
+              ><span class="chip blue"
+                ><span class="k">执行会话 A</span><b>第 2 次运行 · 运行中</b></span
+              >
+            </div>
+            <div class="card blue">
+              <h3>当前步骤 · 定向补查 <small>第 2 次判断</small></h3>
+              <dl class="kv">
+                <dt>负责</dt>
+                <dd>执行会话 A（续用）</dd>
+                <dt>为什么</dt>
+                <dd>流水线文档说明了两级分工，但没有写有效位的更新条件，需要 RTL 原文。</dd>
+                <dt>A 的进度</dt>
+                <dd>执行中 · 已存证据 2 份</dd>
+              </dl>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok"><b>约定 v1 已确认</b><span class="hint">10:02</span></li>
+              <li class="ok"><b>派 A 首次取证</b><span class="hint">运行完成 · 2 份证据</span></li>
+              <li class="now">
+                <b>Owner 判断证据不足 → 续用 A 补查</b><span class="hint">缺寄存器更新条件</span>
+              </li>
+              <li class="todo"><b>写入交付物并逐条核对引用</b></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>为什么还要查源码？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>约定要求解释寄存器何时更新，这只能看 RTL。A 正在取 ibex_if_stage.sv。</p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>框架日志</span
+        ><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+      <div class="pop" style="left: 786px; top: 192px">
+        <h4>✓ 已复制到剪贴板 · 约 14 KB</h4>
+        <div class="k">包含</div>
+        <ul>
+          <li>事务 ID、修订号、三种状态、保存位置</li>
+          <li>约定（范围、交付物、来源）与确认时间</li>
+          <li>每次派工：原因、会话与运行 ID、终态、交回证据</li>
+          <li>执行记录、失败原因与待保存文件</li>
+          <li>最近 50 条相关框架日志（Owner / Agent / 文件）</li>
+        </ul>
+        <div class="k">不包含</div>
+        <ul>
+          <li>聊天全文、证据原文、本地参考目录内容</li>
+          <li>令牌、密钥；本机路径中的用户名已替换为 ~</li>
+        </ul>
+        <div class="row">
+          <span class="sp"></span><span class="btn sm">查看全文</span
+          ><span class="btn sm">关闭</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="cap">
+      <h2>12 出问题时 · 就近复制</h2>
+      <p>待保存、需要处理、待恢复时，问题卡片里并排放「复制 Owner 诊断」，不用找标题行。</p>
+    </div>
+    <section class="win" id="s12">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner· <b>1 等你</b></span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">待保存</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">3</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <div class="row">
+              <h1>开源芯片 Ibex 调研</h1>
+              <span class="sp"></span><span class="btn diag">⧉ 复制 Owner 诊断</span>
+            </div>
+            <div class="chips">
+              <span class="chip amber"><span class="k">事务</span><b>待保存</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等待重试保存</b></span
+              ><span class="chip green"
+                ><span class="k">执行会话 A</span><b>第 2 次运行 · 已完成</b></span
+              >
+            </div>
+            <div class="card amber">
+              <h3>交付物待保存</h3>
+              <dl class="kv">
+                <dt>原因</dt>
+                <dd>文件已有其他修改，请先保留或移走该文件再重试：交付物/Ibex 源码入门卡.md</dd>
+                <dt>已保留</dt>
+                <dd>核对过的报告与 12 条引文，重试只写原稿，不会重派 A</dd>
+              </dl>
+              <div class="row" style="margin-top: 12px">
+                <span class="btn pri">重试保存文件</span
+                ><span class="btn diag">⧉ 复制 Owner 诊断</span><span class="sp"></span
+                ><span class="hint">出问题时卡片里也有同一个按钮</span>
+              </div>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok"><b>约定 v1 已确认</b></li>
+              <li class="ok"><b>派 A 首次取证</b></li>
+              <li class="ok"><b>续用 A 补查</b></li>
+              <li class="now"><b>交付物待保存</b><span class="hint">写入被阻止 · 10:14</span></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg">
+              <b>Owner</b>
+              <p>引文已核对。原报告待保存，重试时会直接写入这份报告。</p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>框架日志</span
+        ><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+      <div class="callout" style="left: 368px; top: 364px; width: 156px; height: 50px"></div>
+    </section>
+
+    <div class="cap">
+      <h2>13 执行会话 · 看板上的分工</h2>
+      <p>
+        看板列出每个执行会话负责什么、为什么新开或续用、运行到哪、用的哪个 Agent。右侧始终是 Owner。
+      </p>
+    </div>
+    <section class="win" id="s13">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › Ibex 与 CVA6 对比简报</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">Ibex 与 CVA6 对比简报</div>
+          <div class="sub">进行中 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">6</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main" style="overflow: hidden">
+            <div class="crumbs">Owner › Ibex 与 CVA6 对比简报</div>
+            <div class="row">
+              <h1>Ibex 与 CVA6 对比简报</h1>
+              <span class="sp"></span><span class="btn">⧉ 复制 Owner 诊断</span>
+            </div>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等 B 交回</b></span
+              ><span class="chip blue"
+                ><span class="k">执行会话</span><b>B 运行中 · C 排队</b></span
+              >
+            </div>
+            <div class="card">
+              <h3>
+                执行会话 · 3 <small>按依赖分配：连续的续用，独立的新开；同一时间只运行一个</small>
+              </h3>
+              <table class="sess">
+                <tr>
+                  <th style="width: 44px">会话</th>
+                  <th>负责什么</th>
+                  <th style="width: 150px">状态</th>
+                  <th style="width: 86px">Agent</th>
+                </tr>
+                <tr>
+                  <td class="nm">A</td>
+                  <td>
+                    Ibex：项目定位、默认流水线、取指级寄存器的 RTL<span class="why"
+                      >首次开设 · 之后续用 2 次：追 RTL 依赖它已读的流水线文档</span
+                    >
+                  </td>
+                  <td><span class="st ok">已完成 · 3 次运行</span></td>
+                  <td>Codex</td>
+                </tr>
+                <tr>
+                  <td class="nm">B</td>
+                  <td>
+                    CVA6：项目定位与流水线各级职责<span class="why"
+                      >新开：与 A 的 Ibex 工作互不依赖，不共用上下文</span
+                    >
+                  </td>
+                  <td><span class="st run">第 1 次运行 · 运行中</span></td>
+                  <td>Codex</td>
+                </tr>
+                <tr>
+                  <td class="nm">C</td>
+                  <td>
+                    两个项目的许可证与可再分发条款<span class="why"
+                      >新开：独立核对，不依赖 A、B 的结论</span
+                    >
+                  </td>
+                  <td><span class="st q">排队 · 等 B 结束</span></td>
+                  <td>启动前选择</td>
+                </tr>
+              </table>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok">
+                <b>约定 v1 已确认</b><span class="hint">对比两项目定位与流水线，附许可证说明</span>
+              </li>
+              <li class="ok"><b>派 A：Ibex 定位与流水线</b><span class="hint">新开 A</span></li>
+              <li class="ok">
+                <b>续用 A：沿取指级追 RTL</b><span class="hint">依赖 A 已读的流水线文档</span>
+              </li>
+              <li class="now">
+                <b>派 B：CVA6 定位与流水线</b><span class="hint">新开 B · 与 Ibex 工作无依赖</span>
+              </li>
+              <li class="todo"><b>派 C：许可证核对</b><span class="hint">新开 C · 排队</span></li>
+              <li class="todo"><b>写入对比简报并逐条核对引用</b></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「Ibex 与 CVA6 对比简报」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>为什么 CVA6 不交给 A 接着查？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                A 的上下文全是 Ibex 的流水线和 RTL，CVA6 用不上这些，混在一起只会干扰。CVA6
+                是独立的子任务，所以新开 B；以后 Ibex 再要补查，还交给 A。
+              </p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>框架日志</span
+        ><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>14 派工判断 · 续用还是新开</h2>
+      <p>
+        每次派工都写明交给哪个会话、为什么，以及本步问题、可用资料、交回要求和完成标准；验收按这张派工单逐项进行。
+      </p>
+    </div>
+    <section class="win" id="s14">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › Ibex 与 CVA6 对比简报</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">Ibex 与 CVA6 对比简报</div>
+          <div class="sub">进行中 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">6</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main" style="overflow: hidden">
+            <div class="crumbs">Owner › Ibex 与 CVA6 对比简报</div>
+            <div class="row">
+              <h1>Ibex 与 CVA6 对比简报</h1>
+              <span class="sp"></span><span class="btn">⧉ 复制 Owner 诊断</span>
+            </div>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等 B 交回</b></span
+              ><span class="chip blue"
+                ><span class="k">执行会话</span><b>B 运行中 · C 排队</b></span
+              >
+            </div>
+            <div class="card blue">
+              <h3>派工判断 · 第 3 次 <small>10:21 · 已写入 调度.md</small></h3>
+              <div class="pick">
+                <div><b>续用 A</b>A 的上下文是 Ibex 流水线与 RTL，本步用不上</div>
+                <div class="on"><b>✓ 新开 B</b>本步与 A 的工作互不依赖，单独开会话</div>
+              </div>
+              <ul class="order">
+                <li>
+                  <span>交给</span><span>执行会话 B（新开）· Agent：Codex，启动前已检查可用</span>
+                </li>
+                <li>
+                  <span>本步问题</span
+                  ><span>CVA6 的项目定位是什么？默认流水线分几级、各级负责什么？</span>
+                </li>
+                <li>
+                  <span>可用资料</span
+                  ><span>openhwgroup/cva6 官方仓库的 README 与文档，只读；不编译、不仿真</span>
+                </li>
+                <li>
+                  <span>要交回</span><span>每个结论对应的文件路径与原文片段，固定到同一提交</span>
+                </li>
+                <li>
+                  <span>完成标准</span
+                  ><span
+                    >定位 1 条、各级职责齐全；每条都有可定位到行的原文；与 Ibex 的结论分开记录</span
+                  >
+                </li>
+                <li>
+                  <span>之后</span
+                  ><span>B 交回后按完成标准逐项验收；不够就续用 B 补查，不交给 A</span>
+                </li>
+              </ul>
+            </div>
+            <div class="card">
+              <h3>对照：上一次为什么续用 A <small>第 2 次判断</small></h3>
+              <p style="margin: 0; font-size: 13px; color: #c9ced5">
+                沿取指级追 RTL 依赖 A 刚读过的流水线文档和选中的那一级，留在 A
+                里上下文有用，所以续用 A。
+              </p>
+            </div>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「Ibex 与 CVA6 对比简报」</div>
+          <div class="msgs">
+            <div class="msg sys">派工判断：新开 B · CVA6 定位与流水线</div>
+            <div class="msg me">
+              <b>你</b>
+              <p>B 交回的东西不够怎么办？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                我按派工单的完成标准逐项核对，缺哪条就写明，再续用 B 补查——它已经读过 CVA6
+                的文档。只有出现与 B 无关的新问题才会另开会话。
+              </p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>框架日志</span
+        ><span>CCLink Studio</span>
       </div>
       <span class="wm">效果图 · 示意</span>
     </section>

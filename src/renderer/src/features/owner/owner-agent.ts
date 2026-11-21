@@ -3,8 +3,39 @@ import { createConversationRunController as controller } from '../agent-conversa
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
 import { verify, type Affair } from './affair'
 import { useOwners } from './owner-store'
-export const session = (a: Affair, mode: 'main' | 'a') => 'owner-' + a.id + '-' + mode
-export function ensureSession(a: Affair, mode: 'main' | 'a') {
+/** 'main' is the Owner itself; single lowercase letters are execution sessions (A, B, …). */
+export type OwnerSessionMode = 'main' | string
+export const session = (a: Pick<Affair, 'id'>, mode: OwnerSessionMode) =>
+  'owner-' + a.id + '-' + mode
+const label = (mode: OwnerSessionMode) => (mode === 'main' ? 'Owner' : '执行 ' + mode.toUpperCase())
+
+/**
+ * Returns the native conversation for this Owner session, creating it on first use with an
+ * Agent chosen by Studio's startup readiness check (Codex first, Claude Code as fallback).
+ * Existing conversations keep their engine; nothing migrates mid-run.
+ */
+export async function prepareSession(
+  a: Affair,
+  mode: OwnerSessionMode,
+): Promise<{ id: string; created?: 'codex' | 'claude-code' }> {
+  const store = useAgentStore.getState(),
+    id = session(a, mode),
+    c = store.conversations[id]
+  if (c?.archivedAt) throw Error('关联会话已归档，请先恢复该会话。')
+  if (c) return { id }
+  const choice = await window.cclinkStudio.ownerResearch.selectAgent()
+  if (!choice.ok) throw Error('没有可用的 Agent：' + choice.error)
+  if (useAgentStore.getState().conversations[id]) return { id }
+  store.createConversation({
+    id,
+    activate: false,
+    runtime: createConversationRuntimeForWorkspace({ kind: 'global' }),
+    runtimeBinding: { kind: choice.kind },
+  })
+  store.renameConversation(id, label(mode) + ' · ' + a.title)
+  return { id, created: choice.kind }
+}
+export function ensureSession(a: Affair, mode: OwnerSessionMode) {
   const store = useAgentStore.getState(),
     id = session(a, mode),
     c = store.conversations[id]
@@ -15,7 +46,7 @@ export function ensureSession(a: Affair, mode: 'main' | 'a') {
       activate: false,
       runtime: createConversationRuntimeForWorkspace({ kind: 'global' }),
     })
-    store.renameConversation(id, (mode === 'main' ? 'Owner' : '执行 A') + ' · ' + a.title)
+    store.renameConversation(id, label(mode) + ' · ' + a.title)
   }
   return id
 }

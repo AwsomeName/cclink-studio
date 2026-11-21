@@ -287,6 +287,7 @@ interface TabState {
   /** 更新 Tab 标题 */
   setEditorPresentation: (id: string, mode: 'markdown' | 'source') => void
   setDesktopTarget: (id: string, title: string, target: NonNullable<Tab['desktopTarget']>) => void
+  setDesktopView: (id: string, view: NonNullable<Tab['desktopView']>) => void
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
@@ -728,6 +729,12 @@ export const useTabStore = create<TabState>((set, get) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === id && tab.type === 'editor' ? { ...tab, editorPresentation: mode } : tab,
+      ),
+    })),
+  setDesktopView: (id, view) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id && tab.type === 'remote-desktop' ? { ...tab, desktopView: view } : tab,
       ),
     })),
   setDesktopTarget: (id, title, target) =>

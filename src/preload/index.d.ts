@@ -157,6 +157,7 @@ export interface CCLinkStudioAPI {
     ) => Promise<import('../shared/ipc/owner-source').OwnerSourceFile>
   }
   ownerResearch: {
+    selectAgent: () => Promise<import('../shared/ipc/owner-research').OwnerAgentChoice>
     findPaths: (
       repo: string,
       terms: string[],

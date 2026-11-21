@@ -10,6 +10,11 @@ export interface ToggleFullscreenResult extends WindowOperationResult {
   fullscreen?: boolean
 }
 
+export interface SetFullscreenResult extends ToggleFullscreenResult {
+  /** Window state before this call, so a caller can restore what the user had. */
+  previous?: boolean
+}
+
 export interface ShortcutCaptureGuardInput {
   sessionId: string
   active: boolean
@@ -53,6 +58,7 @@ export function parseShortcutCaptureInputEvent(value: unknown): ShortcutCaptureI
 
 export interface WindowApiContract {
   toggleFullscreen: () => Promise<ToggleFullscreenResult>
+  setFullscreen: (fullscreen: boolean) => Promise<SetFullscreenResult>
   toggleDevtools: () => Promise<WindowOperationResult>
   reload: () => Promise<WindowOperationResult>
   requestClose: () => Promise<WindowOperationResult>
@@ -63,6 +69,12 @@ export interface WindowApiContract {
 
 export const windowIpc = {
   toggleFullscreen: defineNoArgsIpc<ToggleFullscreenResult>('window:toggleFullscreen'),
+  setFullscreen: defineIpcInvoke<[boolean], SetFullscreenResult>('window:setFullscreen', (args) => {
+    if (args.length !== 1 || typeof args[0] !== 'boolean') {
+      throw new Error('window:setFullscreen 需要 1 个布尔参数')
+    }
+    return [args[0]]
+  }),
   toggleDevtools: defineNoArgsIpc<WindowOperationResult>('window:toggleDevtools'),
   reload: defineNoArgsIpc<WindowOperationResult>('window:reload'),
   requestClose: defineNoArgsIpc<WindowOperationResult>('window:requestClose'),

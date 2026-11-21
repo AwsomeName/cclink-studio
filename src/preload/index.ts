@@ -484,6 +484,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       invokeIpcContract(ownerSourceIpc.read, id, grantId, rel),
   },
   ownerResearch: {
+    selectAgent: () => invokeIpcContract(ownerResearchIpc.selectAgent),
     findPaths: (repo: string, terms: string[], ref: string) =>
       invokeIpcContract(ownerResearchIpc.findPaths, repo, terms, ref),
     readFile: (repo: string, path: string, anchor: string, ref: string) =>

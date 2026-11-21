@@ -49,6 +49,17 @@ export const workerFilesSchema = z
     }),
   )
   .max(4)
+// Execution sessions: lowercase keys map to native conversations owner-<id>-<key>; 'a' is the legacy A.
+export const workerKey = z.string().regex(/^[a-h]$/)
+export const workerSchema = z.object({
+  key: workerKey,
+  purpose: z.string().trim().min(1).max(300),
+  reason: z.string().max(600),
+  openedAt: z.number(),
+  agent: z.enum(['codex', 'claude-code']).optional(),
+})
+export type Worker = z.infer<typeof workerSchema>
+export const workerLabel = (key: string) => key.toUpperCase()
 export const researchSchema = z.object({
   plan: planSchema.nullable(),
   phase: z.enum(['draft', 'planning', 'ready', 'reading', 'writing', 'checking', 'done', 'error']),
@@ -78,11 +89,22 @@ export const researchSchema = z.object({
         collectionClosed: z.boolean().optional(),
         workerRunId: z.string().min(1).max(240).optional(),
         workerReturned: z.boolean().optional(),
+        /** Which execution session this dispatch went to, and why it was continued or opened. */
+        worker: workerKey.optional(),
+        workerChoice: z.enum(['new', 'continue']).optional(),
+        choiceReason: z.string().max(600).optional(),
+        /** Dispatch sheet: the question, what to hand back, and when the step counts as done. */
+        ask: z.string().max(600).optional(),
+        deliverable: z.string().max(600).optional(),
+        doneWhen: z.string().max(600).optional(),
+        /** Owner's acceptance of this dispatch against doneWhen, recorded at the next judgment. */
+        verdict: z.object({ met: z.boolean(), note: z.string().max(600) }).optional(),
       }),
     )
     .max(60)
     .optional(),
   report: reportSchema.nullable(),
+  workers: z.array(workerSchema).max(8).optional(),
 })
 export type Research = z.infer<typeof researchSchema>
 export function checkReport(r: Research, raw: unknown) {
@@ -141,4 +163,58 @@ export function researchStatus(r: Research, active: boolean): [string, string] {
     case 'error':
       return ['需要处理', '上一步没有完成，已保留现有资料']
   }
+}
+
+/** Sessions of an affair, including the implicit legacy A from older records. */
+export function workersOf(r: Research): Worker[] {
+  if (r.workers?.length) return r.workers
+  return r.decisions?.some((d) => d.workerRunId || d.workerTicket)
+    ? [{ key: 'a', purpose: '取证', reason: '旧版记录：单一执行会话', openedAt: 0 }]
+    : []
+}
+export const decisionWorker = (d: { worker?: string }) => d.worker ?? 'a'
+
+/** One-line label for a decision, shared by the board, work log and schedule document. */
+export function decisionTitle(d: {
+  kind: 'read' | 'more' | 'deliver'
+  worker?: string
+  workerChoice?: 'new' | 'continue'
+}) {
+  if (d.kind === 'deliver') return 'Owner 判定可以交付'
+  const key = workerLabel(decisionWorker(d))
+  if (d.workerChoice === 'new') return '新开执行会话 ' + key
+  if (d.workerChoice === 'continue') return '续用执行会话 ' + key
+  return d.kind === 'read' ? '委派会话 A' : '续用会话 A 补查'
+}
+
+/**
+ * Applies Owner's session choice: continue an existing execution session whose context the
+ * step depends on, or open a new one for independent work. Returns the chosen key.
+ */
+export function assignWorker(
+  r: Research,
+  sheet: { worker: { use: string } | { new: string }; workerReason: string; ask: string },
+  now = Date.now(),
+): { key: string; choice: 'new' | 'continue' } {
+  const workers = workersOf(r)
+  if ('use' in sheet.worker) {
+    const key = sheet.worker.use
+    if (workers.some((w) => w.key === key)) {
+      if (!r.workers?.length) r.workers = workers.map((w) => ({ ...w }))
+      return { key, choice: 'continue' }
+    }
+    if (workers.length) throw Error('续用的执行会话不存在：' + workerLabel(key))
+  }
+  if (workers.length >= 8) throw Error('本事务的执行会话已达上限 8 个，请续用已有会话')
+  const key = 'abcdefgh'[workers.length]
+  r.workers = [
+    ...workers,
+    {
+      key,
+      purpose: 'new' in sheet.worker ? sheet.worker.new : sheet.ask.slice(0, 300),
+      reason: sheet.workerReason,
+      openedAt: now,
+    },
+  ]
+  return { key, choice: 'new' }
 }

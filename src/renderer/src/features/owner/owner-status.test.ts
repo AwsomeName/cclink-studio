@@ -47,7 +47,7 @@ describe('Owner list groups and status chips', () => {
     expect(statusChips(waiting, true, true)).toMatchObject({
       state: '进行中',
       owner: '等 A 交回',
-      worker: '第 1 次运行 · 运行中',
+      worker: 'A · 第 1 次运行 · 运行中',
     })
     const checking = base(
       { confirmed: true },
@@ -59,7 +59,7 @@ describe('Owner list groups and status chips', () => {
     )
     expect(statusChips(checking, true, false)).toMatchObject({
       owner: '核对证据',
-      worker: '第 1 次运行 · 已完成',
+      worker: 'A · 第 1 次运行 · 已完成',
     })
     expect(statusChips(base({}, { plan, phase: 'ready' }), false, false)).toMatchObject({
       tone: 'amber',

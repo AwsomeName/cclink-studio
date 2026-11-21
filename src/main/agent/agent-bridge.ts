@@ -1713,6 +1713,20 @@ export class AgentBridge {
     return preparation
   }
 
+  /**
+   * Startup readiness for a brand-new Studio-owned session (Owner execution sessions).
+   * Same probe as automatic tasks; it only picks the engine for a conversation that has no
+   * native session yet and never moves an existing one.
+   */
+  async selectAgentForNewSession(): Promise<{ binding: AgentRuntimeBinding; reason: string }> {
+    const controller = new AbortController()
+    return selectAutomaticTaskAgent({
+      workspacePath: this.getWorkspacePath?.() || undefined,
+      claudeConfig: this.defaultAgentConfig,
+      signal: controller.signal,
+    })
+  }
+
   private automaticTaskBinding(conversationId: string): AgentRuntimeBinding {
     const current = this.conversationRuntimeBindings.get(conversationId)
     if (current) return current

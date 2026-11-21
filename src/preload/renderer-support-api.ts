@@ -26,6 +26,7 @@ import { invokeIpcContract } from './ipc-contract-client'
 
 export const windowApi: WindowApiContract = {
   toggleFullscreen: () => invokeIpcContract(windowIpc.toggleFullscreen),
+  setFullscreen: (fullscreen) => invokeIpcContract(windowIpc.setFullscreen, fullscreen),
   toggleDevtools: () => invokeIpcContract(windowIpc.toggleDevtools),
   reload: () => invokeIpcContract(windowIpc.reload),
   requestClose: () => invokeIpcContract(windowIpc.requestClose),

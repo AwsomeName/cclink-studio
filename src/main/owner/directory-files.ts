@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { checkReport, researchStatus } from '../../shared/owner/research'
+import { checkReport, decisionTitle, researchStatus } from '../../shared/owner/research'
 import type { AffairRecord } from '../../shared/owner/affair'
 
 import {
@@ -41,11 +41,20 @@ export function additions(before: AffairRecord | undefined, next: AffairRecord) 
       d.kind !== last?.kind ||
       r.decisions?.length !== prev?.decisions?.length)
   )
+    entries.push(decisionTitle(d) + '：' + (d.choiceReason ? d.choiceReason + '；' : '') + d.reason)
+  // Acceptance of the previous dispatch is recorded once, when the verdict first appears.
+  for (const x of r.decisions ?? []) {
+    if (!x.verdict) continue
+    const before = prev?.decisions?.find((p) => p.id === x.id)
+    if (before?.verdict) continue
     entries.push(
-      { read: '委派会话 A', more: '续用会话 A 补查', deliver: 'Owner 判定可以交付' }[d.kind] +
+      '验收' +
+        decisionTitle(x).replace(/^(新开|续用)/, '') +
         '：' +
-        d.reason,
+        (x.verdict.met ? '满足完成标准' : '未满足 · ') +
+        (x.verdict.met ? '' : x.verdict.note),
     )
+  }
   return entries.map((text) => ({ at: next.updated, text }))
 }
 
