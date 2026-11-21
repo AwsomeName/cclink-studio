@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>Owner 产品设计 v2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      :root {
+        color-scheme: dark;
+        --bg: #1e1f22;
+        --pane: #232428;
+        --side: #1b1c1f;
+        --edge: #34373c;
+        --ink: #e6e8eb;
+        --muted: #9aa1ab;
+        --dim: #737a84;
+        --blue: #3d8fd6;
+        --blue2: #7cbcf2;
+        --amber: #e0b36d;
+        --green: #7cc8a0;
+        --red: #e08a7a;
+        --chip: #2b2e33;
+      }
+      body {
+        margin: 0;
+        background: #101113;
+        color: var(--ink);
+        font:
+          14px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          'PingFang SC',
+          'Helvetica Neue',
+          sans-serif;
+      }
+      .cap {
+        max-width: 1340px;
+        margin: 40px auto 10px;
+        color: #c9cdd3;
+      }
+      .cap h2 {
+        margin: 0 0 4px;
+        font-size: 20px;
+      }
+      .cap p {
+        margin: 0;
+        color: #8f96a0;
+      }
+      .win {
+        width: 1340px;
+        height: 860px;
+        margin: 0 auto 24px;
+        display: grid;
+        grid-template-rows: 44px 44px 1fr 24px;
+        background: var(--bg);
+        border: 1px solid #000;
+        overflow: hidden;
+        position: relative;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 10px;
+        background: #202124;
+        border-bottom: 1px solid var(--edge);
+        font-size: 13px;
+        color: #c3c7cd;
+      }
+      .top .ws {
+        padding: 6px 12px;
+        border-radius: 5px;
+      }
+      .top .ws.on {
+        background: #26364a;
+        color: #dbe9f7;
+        border: 1px solid #35567a;
+      }
+      .top .sp {
+        flex: 1;
+      }
+      .top .ob {
+        padding: 5px 12px;
+        border: 1px solid #474b52;
+        border-radius: 5px;
+        color: #e8eaed;
+      }
+      .top .ob.on {
+        background: #26364a;
+        border-color: #4a76a3;
+      }
+      .top .ob b {
+        color: var(--amber);
+        font-weight: 600;
+      }
+      .obar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--edge);
+        font-size: 14px;
+      }
+      .obar .crumb {
+        color: var(--muted);
+      }
+      .obar .sp {
+        flex: 1;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid #4a4f57;
+        border-radius: 5px;
+        font-size: 13px;
+        color: var(--ink);
+        background: transparent;
+        white-space: nowrap;
+      }
+      .btn.pri {
+        background: var(--blue);
+        border-color: var(--blue);
+        color: #fff;
+      }
+      .btn.sm {
+        padding: 3px 9px;
+        font-size: 12px;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 12px;
+        background: #0f6fb8;
+        color: #e9f3fb;
+        font-size: 12px;
+      }
+      .status .sp {
+        flex: 1;
+      }
+      .body {
+        display: grid;
+        min-height: 0;
+      }
+      .b2 {
+        grid-template-columns: 208px 1fr;
+      }
+      .b3 {
+        grid-template-columns: 208px minmax(0, 1fr) 340px;
+      }
+      .side {
+        background: var(--side);
+        border-right: 1px solid var(--edge);
+        padding: 12px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        font-size: 13px;
+        min-height: 0;
+      }
+      .side .it {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 4px;
+        color: #cfd3d8;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .side .it.on {
+        background: #26364a;
+        box-shadow: inset 2px 0 var(--blue2);
+        color: #fff;
+      }
+      .side .it .n {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      .side .it .n.hot {
+        color: #1e1f22;
+        background: var(--amber);
+        border-radius: 8px;
+        padding: 0 6px;
+        font-weight: 600;
+      }
+      .side h4 {
+        margin: 14px 8px 4px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--dim);
+        letter-spacing: 0.02em;
+      }
+      .side .back {
+        color: var(--blue2);
+      }
+      .side .ttl {
+        padding: 6px 8px 2px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .side .sub {
+        padding: 0 8px 6px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .side .ind {
+        padding-left: 22px;
+      }
+      .side .ind2 {
+        padding-left: 34px;
+      }
+      .side .foot {
+        margin-top: auto;
+        border-top: 1px solid var(--edge);
+        padding-top: 8px;
+      }
+      .side .note {
+        padding: 2px 8px;
+        font-size: 11px;
+        color: var(--dim);
+      }
+      .center {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+      }
+      .tabs {
+        display: flex;
+        height: 34px;
+        border-bottom: 1px solid var(--edge);
+        background: #1b1c1f;
+        font-size: 12.5px;
+        flex-shrink: 0;
+      }
+      .tabs span {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+        border-right: 1px solid var(--edge);
+        color: #a7adb5;
+      }
+      .tabs span.on {
+        background: var(--bg);
+        color: #fff;
+        box-shadow: inset 0 2px var(--blue2);
+      }
+      .tabs i {
+        font-style: normal;
+        color: var(--dim);
+      }
+      .main {
+        padding: 22px 34px;
+        overflow: hidden;
+        flex: 1;
+      }
+      .main h1 {
+        margin: 2px 0 6px;
+        font-size: 24px;
+      }
+      .main .lead {
+        color: var(--muted);
+        margin: 0 0 14px;
+      }
+      .crumbs {
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .chips {
+        display: flex;
+        gap: 8px;
+        margin: 10px 0 16px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 12px;
+        background: var(--chip);
+        font-size: 12px;
+        color: #c9ced5;
+        border: 1px solid #3a3e45;
+      }
+      .chip b {
+        font-weight: 600;
+        color: #fff;
+      }
+      .chip.amber {
+        border-color: #6c5530;
+        background: #3a3020;
+      }
+      .chip.amber b {
+        color: var(--amber);
+      }
+      .chip.green {
+        border-color: #2e5a45;
+        background: #1f3329;
+      }
+      .chip.green b {
+        color: var(--green);
+      }
+      .chip.blue {
+        border-color: #2f5476;
+        background: #1f2e3e;
+      }
+      .chip.blue b {
+        color: var(--blue2);
+      }
+      .chip .k {
+        color: var(--dim);
+      }
+      .card {
+        border: 1px solid #3a3e45;
+        border-radius: 7px;
+        background: var(--pane);
+        padding: 14px 18px;
+        margin-bottom: 14px;
+      }
+      .card.amber {
+        border-color: #6c5530;
+        box-shadow: inset 3px 0 var(--amber);
+      }
+      .card.blue {
+        box-shadow: inset 3px 0 var(--blue2);
+      }
+      .card.green {
+        border-color: #2e5a45;
+        box-shadow: inset 3px 0 var(--green);
+      }
+      .card h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .card h3 small {
+        font-weight: 400;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 82px 1fr;
+        gap: 6px 14px;
+        font-size: 13px;
+      }
+      .kv dt {
+        color: var(--muted);
+      }
+      .kv dd {
+        margin: 0;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .sp {
+        flex: 1;
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .tl {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+      }
+      .tl li {
+        position: relative;
+        padding: 0 0 12px 22px;
+      }
+      .tl li:before {
+        content: '';
+        position: absolute;
+        left: 5px;
+        top: 6px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #5d646e;
+      }
+      .tl li:after {
+        content: '';
+        position: absolute;
+        left: 8.5px;
+        top: 16px;
+        bottom: 0;
+        width: 1px;
+        background: #3a3e45;
+      }
+      .tl li:last-child:after {
+        display: none;
+      }
+      .tl li.ok:before {
+        background: var(--green);
+      }
+      .tl li.now:before {
+        background: var(--blue2);
+        box-shadow: 0 0 0 3px #7cbcf233;
+      }
+      .tl li.todo:before {
+        background: transparent;
+        border: 1px solid #6b727c;
+      }
+      .tl b {
+        font-weight: 600;
+      }
+      .tl .hint {
+        display: block;
+      }
+      .chat {
+        border-left: 1px solid var(--edge);
+        display: flex;
+        flex-direction: column;
+        padding: 16px 18px;
+        min-height: 0;
+        background: #202124;
+      }
+      .chat h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+      .chat .bind {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin: 2px 0 12px;
+      }
+      .msgs {
+        flex: 1;
+        overflow: hidden;
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .msg b {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }
+      .msg.me p {
+        background: #26364a;
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      .msg p {
+        margin: 0;
+      }
+      .msg.sys {
+        font-size: 12px;
+        color: var(--dim);
+        border-left: 2px solid #3a3e45;
+        padding-left: 8px;
+      }
+      .input {
+        border: 1px solid #444951;
+        border-radius: 6px;
+        padding: 10px;
+        color: var(--dim);
+        font-size: 13px;
+        height: 64px;
+        margin-top: 10px;
+      }
+      .list .grp {
+        margin: 18px 0 6px;
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .list .grp .c {
+        color: var(--dim);
+      }
+      .lrow {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 2px 16px;
+        padding: 11px 14px;
+        border: 1px solid #33363b;
+        border-radius: 6px;
+        background: var(--pane);
+        margin-bottom: 8px;
+      }
+      .lrow .t {
+        font-weight: 600;
+      }
+      .lrow .s {
+        grid-column: 1;
+        color: #c4c9cf;
+        font-size: 13px;
+      }
+      .lrow .m {
+        grid-column: 1;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .lrow .r {
+        grid-row: 1/4;
+        grid-column: 2;
+        align-self: center;
+        text-align: right;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .lrow.amber {
+        box-shadow: inset 3px 0 var(--amber);
+      }
+      .lrow.amber .s {
+        color: var(--amber);
+      }
+      .compose {
+        border: 1px solid #4a4f57;
+        border-radius: 8px;
+        background: var(--pane);
+        padding: 14px;
+      }
+      .compose .ta {
+        height: 86px;
+        color: #c7ccd2;
+        font-size: 15px;
+      }
+      .three {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 20px;
+      }
+      .three .card {
+        margin: 0;
+      }
+      .three h3 {
+        font-size: 14px;
+      }
+      .three p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .num {
+        display: inline-flex;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        align-items: center;
+        justify-content: center;
+        background: #2f3a47;
+        color: var(--blue2);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .opt {
+        border: 1px solid #444951;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 2px 12px;
+        align-items: center;
+      }
+      .opt b {
+        font-size: 13.5px;
+      }
+      .opt span {
+        grid-column: 1;
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+      .opt .btn {
+        grid-row: 1/3;
+        grid-column: 2;
+      }
+      pre.code {
+        margin: 0;
+        font:
+          12.5px/1.6 ui-monospace,
+          Menlo,
+          monospace;
+        background: #18191c;
+        border: 1px solid #33363b;
+        border-radius: 6px;
+        padding: 8px 0;
+        overflow: hidden;
+      }
+      pre.code div {
+        padding: 0 12px;
+        white-space: pre;
+      }
+      pre.code span {
+        display: inline-block;
+        width: 38px;
+        color: #5f6670;
+        text-align: right;
+        margin-right: 14px;
+      }
+      pre.code .hl {
+        background: #3d8fd62b;
+        box-shadow: inset 3px 0 var(--blue2);
+      }
+      .md h2 {
+        font-size: 18px;
+        margin: 14px 0 6px;
+      }
+      .md p {
+        margin: 0 0 8px;
+        color: #d3d7dc;
+        font-size: 13.5px;
+      }
+      .ref {
+        color: var(--blue2);
+        font-size: 12.5px;
+      }
+      .set {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 4px 24px;
+        padding: 14px 0;
+        border-bottom: 1px solid #2e3136;
+      }
+      .set h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .set .d {
+        grid-column: 2;
+      }
+      .set .hint {
+        grid-column: 2;
+      }
+      .box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #3a3e45;
+        border-radius: 5px;
+        padding: 7px 10px;
+        font-size: 13px;
+        background: #1b1c1f;
+        margin-bottom: 6px;
+      }
+      .chk {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 1px solid #5c636c;
+        border-radius: 3px;
+        vertical-align: -2px;
+        margin-right: 6px;
+      }
+      .chk.on {
+        background: var(--blue);
+        border-color: var(--blue);
+      }
+      .banner {
+        border: 1px solid #2f5476;
+        background: #1f2e3e;
+        border-radius: 6px;
+        padding: 9px 12px;
+        font-size: 13px;
+        color: #cfe3f5;
+        margin-bottom: 6px;
+      }
+      .shade {
+        position: absolute;
+        inset: 44px 0 24px 0;
+        background: #0009;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal {
+        width: 520px;
+        background: #26282c;
+        border: 1px solid #4a4f57;
+        border-radius: 10px;
+        padding: 20px 22px;
+        box-shadow: 0 20px 60px #000a;
+      }
+      .modal h3 {
+        margin: 0 0 12px;
+        font-size: 17px;
+      }
+      .modal .kv {
+        grid-template-columns: 92px 1fr;
+        margin-bottom: 12px;
+      }
+      .modal ul {
+        margin: 4px 0 12px;
+        padding-left: 18px;
+        font-size: 13px;
+        color: #c9ced5;
+      }
+      .modal li {
+        margin: 3px 0;
+      }
+      .tag {
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: #2b2e33;
+        color: var(--muted);
+        border: 1px solid #3a3e45;
+      }
+      .wm {
+        position: absolute;
+        right: 14px;
+        bottom: 30px;
+        font-size: 11px;
+        color: #ffffff40;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ===== 公共片段说明：顶栏 / Owner 条 / 状态栏在每屏重复，便于单屏截图 ===== -->
+
+    <div class="cap" id="c1">
+      <h2>01 入口 · 第一次进入（零事务）</h2>
+      <p>顶栏右上「Owner」进入。列表层左侧是固定侧栏，中间直接交办；列表层没有跨事务聊天框。</p>
+    </div>
+    <section class="win" id="s1">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务</span><span class="sp"></span
+        ><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b2">
+        <nav class="side">
+          <div class="it on">◈ 我的事务</div>
+          <div class="note" style="padding-top: 6px">还没有事务</div>
+          <h4>　</h4>
+          <div class="it">＋ 交办新事务</div>
+          <div class="foot"><div class="it">⚙ Owner 设置</div></div>
+        </nav>
+        <div class="center">
+          <div class="main" style="padding: 46px 120px">
+            <h1 style="font-size: 28px">交给 Owner 一件事</h1>
+            <p class="lead" style="font-size: 15px">
+              Owner
+              是这件事的负责人：先和你约定目标与交付物，再自己安排会话去查、用证据核对、交付成品。你只在需要决定时出面。
+            </p>
+            <div class="compose">
+              <div class="ta">调研开源芯片 Ibex，交付一张有源码依据的中文入门卡</div>
+              <div class="row">
+                <span class="hint">保存到　我的空间 / Owner 事务 / ‹事务名›</span
+                ><span class="ref">　更改本次位置</span><span class="sp"></span
+                ><span class="btn pri">交给 Owner</span>
+              </div>
+            </div>
+            <div class="three">
+              <div class="card">
+                <h3><span class="num">1</span>先约定，确认一次</h3>
+                <p>Owner 把目标整理成范围、交付物、验收依据和时间限制。你确认后才开始派工。</p>
+              </div>
+              <div class="card">
+                <h3><span class="num">2</span>它推进，只在必要时找你</h3>
+                <p>
+                  查资料、补查、续用会话都由 Owner 决定。改约定、要你提供资料或授权时才停下来问。
+                </p>
+              </div>
+              <div class="card">
+                <h3><span class="num">3</span>按证据交付</h3>
+                <p>成品写入磁盘、每条引用核对通过才算交付；点引用能回到原文那一行。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="status">
+        <span>本地 · 我的空间</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>02 列表 · 我的事务</h2>
+      <p>
+        先列需要你处理的，再列进行中、已交付。每行一句话说清「等你什么 / Owner 在做什么 /
+        交付了什么」。顶栏数字只计真正等你的事务。
+      </p>
+    </div>
+    <section class="win" id="s2">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner · <b>2 等你</b></span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务</span><span class="sp"></span
+        ><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b2">
+        <nav class="side">
+          <div class="it on">◈ 全部事务<span class="n">4</span></div>
+          <div class="it ind">等我确认<span class="n hot">1</span></div>
+          <div class="it ind">等我提供资料<span class="n hot">1</span></div>
+          <div class="it ind">进行中<span class="n">1</span></div>
+          <div class="it ind">已交付<span class="n">1</span></div>
+          <h4>　</h4>
+          <div class="it">＋ 交办新事务</div>
+          <div class="foot"><div class="it">⚙ Owner 设置</div></div>
+        </nav>
+        <div class="center">
+          <div class="main list">
+            <div class="row">
+              <h1>我的事务</h1>
+              <span class="sp"></span><span class="btn pri">＋ 交办新事务</span>
+            </div>
+            <div class="grp">等我确认 <span class="c">1</span></div>
+            <div class="lrow amber">
+              <span class="t">芯片资料引用范围</span
+              ><span class="s">待你决定：白皮书原文能否放进离线资料包？两个选项</span
+              ><span class="m">Owner 已暂停派工，等你选择</span
+              ><span class="r">10 分钟前<br />打开 ›</span>
+            </div>
+            <div class="grp">等我提供资料 <span class="c">1</span></div>
+            <div class="lrow amber">
+              <span class="t">RISC-V 课程讲义整理</span
+              ><span class="s">缺：第 3 讲实验指导 PDF（第 2 版）</span
+              ><span class="m">其余 5 讲已核对；收到后先核对来源再续派</span
+              ><span class="r">昨天<br />打开 ›</span>
+            </div>
+            <div class="grp">进行中 <span class="c">1</span></div>
+            <div class="lrow">
+              <span class="t">开源芯片 Ibex 调研</span
+              ><span class="s">Owner 正在核对 A 交回的取指级 RTL 片段</span
+              ><span class="m">执行会话 A · 第 2 次运行已完成 · 还剩：写入入门卡</span
+              ><span class="r">3 分钟前<br />打开 ›</span>
+            </div>
+            <div class="grp">已交付 <span class="c">1</span></div>
+            <div class="lrow">
+              <span class="t">CVA6 与 Ibex 对比简报</span
+              ><span class="s">交付物/对比简报.md · 12 条引文已核对</span
+              ><span class="m">11/19 交付 · 无后续派工</span
+              ><span class="r">11/19<br />打开 ›</span>
+            </div>
+            <p class="hint" style="margin-top: 14px">
+              Owner 自己在补查不算等你；会话结束、仅有新消息也不产生待办。
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="status">
+        <span>本地 · 我的空间</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>03 交办后 · 约定卡（等你确认一次）</h2>
+      <p>发出目标立刻建档。中间是带版本的约定卡，右侧是这件事务的 Owner 主对话。确认前不派工。</p>
+    </div>
+    <section class="win" id="s3">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner · <b>1 等你</b></span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">待确认</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <h1>开源芯片 Ibex 调研</h1>
+            <div class="chips">
+              <span class="chip amber"><span class="k">事务</span><b>待确认</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等你确认约定</b></span
+              ><span class="chip"><span class="k">执行会话</span><b>尚未派工</b></span>
+            </div>
+            <div class="card amber">
+              <h3>调研约定 · 第 1 版 <small>确认后生效，之后常规补查不再问你</small></h3>
+              <dl class="kv">
+                <dt>目标</dt>
+                <dd>
+                  交付一张中文《Ibex 源码入门卡》：从默认流水线选一级，追到一处真实寄存器，用 RTL
+                  解释它何时更新。
+                </dd>
+                <dt>范围</dt>
+                <dd>只读 lowRISC/ibex 官方仓库的 README、文档与 RTL；静态阅读，不编译、不仿真。</dd>
+                <dt>交付物</dt>
+                <dd>交付物/Ibex 源码入门卡.md</dd>
+                <dt>验收依据</dt>
+                <dd>每个结论附固定提交的原文引用；寄存器的更新条件、赋值与复位都有 RTL 行号。</dd>
+                <dt>时间限制</dt>
+                <dd>无硬截止 · 无投入上限</dd>
+                <dt>可用来源</dt>
+                <dd>公开 GitHub 仓库 · 本地参考目录：无</dd>
+                <dt>保存位置</dt>
+                <dd>我的空间 / Owner 事务 / 开源芯片 Ibex 调研 /</dd>
+              </dl>
+              <div class="row" style="margin-top: 14px">
+                <span class="btn pri">确认约定，开始</span><span class="btn">在右侧继续讨论</span
+                ><span class="sp"></span><span class="hint">已写入 事务配置.md（待确认草案）</span>
+              </div>
+            </div>
+            <h3 style="font-size: 15px; margin: 18px 0 10px">接下来</h3>
+            <ul class="tl">
+              <li class="todo">
+                <b>派执行会话 A 查项目定位与流水线职责</b><span class="hint">确认后开始</span>
+              </li>
+              <li class="todo"><b>按证据缺口补查 RTL</b></li>
+              <li class="todo"><b>写入入门卡并逐条核对引用</b></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>调研开源芯片 Ibex，交付一张有源码依据的中文入门卡。</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                我建议只查 lowRISC/ibex
+                官方仓库，约定已放在中间。有两点我按默认处理：只做静态阅读，不编译仿真；不设截止时间。要调整直接告诉我。
+              </p>
+            </div>
+            <div class="msg sys">已建档：我的空间 / Owner 事务 / 开源芯片 Ibex 调研</div>
+          </div>
+          <div class="input">调整范围、交付物或时间…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>04 执行中 · Owner 自己推进</h2>
+      <p>
+        三种状态分开：事务、Owner
+        当前动作、执行会话真实运行。当前步骤写清问题、负责人、为什么、交回了什么。右侧随时问，不打断工作。
+      </p>
+    </div>
+    <section class="win" id="s4">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">进行中 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▾ 资料/<span class="n">3</span></div>
+          <div class="it ind">01-README.md</div>
+          <div class="it ind">02-pipeline_details.rst.md</div>
+          <div class="it ind">03-ibex_if_stage.sv.md</div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <h1>开源芯片 Ibex 调研</h1>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip blue"><span class="k">Owner</span><b>核对中</b></span
+              ><span class="chip green"
+                ><span class="k">执行会话 A</span><b>第 2 次运行 · 已完成</b></span
+              >
+            </div>
+            <div class="card blue">
+              <h3>当前步骤 · 核对取指级有效位 <small>步骤 3 / 4</small></h3>
+              <dl class="kv">
+                <dt>问题</dt>
+                <dd>取指级何时把新指令标记为 ID 级有效？</dd>
+                <dt>负责</dt>
+                <dd>执行会话 A（续用：目标、权限、上下文都没变）</dd>
+                <dt>为什么</dt>
+                <dd>流水线文档说明了两级分工，但没有写有效位的更新条件，需要 RTL 原文。</dd>
+                <dt>A 交回</dt>
+                <dd><span class="ref">资料/03-ibex_if_stage.sv.md · L610–624</span></dd>
+                <dt>Owner 核对</dt>
+                <dd>
+                  下一状态表达式 ✓　时钟沿采样 ✓　复位行为
+                  <span style="color: var(--blue2)">核对中…</span>
+                </dd>
+              </dl>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok">
+                <b>约定 v1 已确认</b><span class="hint">10:02 · 你确认 · 写入 事务配置.md</span>
+              </li>
+              <li class="ok">
+                <b>派 A：项目定位与流水线职责</b><span class="hint">运行完成 · 交回 2 份证据</span>
+              </li>
+              <li class="ok">
+                <b>Owner 判断：缺寄存器更新条件 → 续用 A 补查 RTL</b
+                ><span class="hint">理由与问题已写入 调度.md</span>
+              </li>
+              <li class="now">
+                <b>A 交回 RTL 片段，Owner 核对中</b
+                ><span class="hint">不满足会写明缺哪条并再补查，不来问你</span>
+              </li>
+              <li class="todo"><b>写入入门卡并逐条核对引用</b></li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>为什么还要查源码？文档不够吗？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                文档能说明 IF 和 ID/EX 各管什么，但约定要求解释寄存器“何时更新”，这只能看 RTL。A
+                已交回 <code>ibex_if_stage.sv</code> 第 610–624
+                行，我正在核对复位分支，核对完就写入门卡。
+              </p>
+            </div>
+          </div>
+          <div class="input">问 Owner 当前进展或原因…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>05 等你决定 · 待决卡</h2>
+      <p>
+        只有会改变交付或约定的问题才问你。写明为什么问、已查事实、每个选项的影响。只有明确选择才算决定。
+      </p>
+    </div>
+    <section class="win" id="s5">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner · <b>2 等你</b></span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 芯片资料引用范围</span><span class="sp"></span
+        ><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">芯片资料引用范围</div>
+          <div class="sub">等你决定 · 约定 v1</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">4</span></div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 芯片资料引用范围</div>
+            <h1>芯片资料引用范围</h1>
+            <div class="chips">
+              <span class="chip amber"><span class="k">事务</span><b>等你决定</b></span
+              ><span class="chip"><span class="k">Owner</span><b>已暂停派工</b></span
+              ><span class="chip"><span class="k">执行会话 A</span><b>无运行</b></span>
+            </div>
+            <div class="card amber">
+              <h3>需要你决定：白皮书原文能否放进离线资料包？</h3>
+              <dl class="kv">
+                <dt>为什么问你</dt>
+                <dd>
+                  约定要求资料包离线可读原文。两份白皮书都找到了官方链接，但没找到允许随包分发原文的依据。这会改变交付物，Owner
+                  不能自己定。
+                </dd>
+                <dt>已查事实</dt>
+                <dd>
+                  Ibex 文档为 Apache-2.0，可随包分发；Earl Grey 白皮书页面未注明许可。<span
+                    class="ref"
+                    >　查看 2 份证据</span
+                  >
+                </dd>
+              </dl>
+              <div class="opt">
+                <b>A　只附链接，保留离线摘要</b
+                ><span>影响：可以继续交付；离线时只能读摘要，原文需联网。约定升为 v2。</span
+                ><span class="btn pri">选择 A</span>
+              </div>
+              <div class="opt">
+                <b>B　保留原文要求，我来提供授权材料</b
+                ><span>影响：事务转为「等我提供资料」；收到并核对材料前不派工。</span
+                ><span class="btn">选择 B</span>
+              </div>
+              <p class="hint" style="margin: 10px 0 0">
+                阅读、提问、返回列表都不算决定。另一窗口改了约定时，这张卡会失效并显示差异。
+              </p>
+            </div>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「芯片资料引用范围」</div>
+          <div class="msgs">
+            <div class="msg sys">待你决定：白皮书原文能否放进离线资料包？</div>
+            <div class="msg me">
+              <b>你</b>
+              <p>只放链接的话，离线还能看什么？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                离线能看到每份资料的中文摘要、章节位置和我核对过的结论；要读白皮书原文需要联网打开链接。选
+                A 后我会核验链接和摘要，再交付。
+              </p>
+            </div>
+          </div>
+          <div class="input">讨论选项，或补充你的考虑…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>06 交付 · 成品与核对结果</h2>
+      <p>
+        写入磁盘、引用全部核对通过才显示已交付。看板给出核对结果和打开方式，工作记录可回看每次判断。
+      </p>
+    </div>
+    <section class="win" id="s6">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">已交付 · 11/21 10:14</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▸ 资料/<span class="n">4</span></div>
+          <div class="it">▾ 交付物/<span class="n">1</span></div>
+          <div class="it ind">Ibex 源码入门卡.md</div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <div class="crumbs">Owner › 开源芯片 Ibex 调研</div>
+            <h1>开源芯片 Ibex 调研</h1>
+            <div class="chips">
+              <span class="chip green"><span class="k">事务</span><b>已交付</b></span
+              ><span class="chip"><span class="k">Owner</span><b>无后续派工</b></span
+              ><span class="chip"><span class="k">执行会话 A</span><b>2 次运行 · 均已完成</b></span>
+            </div>
+            <div class="card green">
+              <h3>交付物</h3>
+              <div class="row" style="padding: 6px 0 10px; border-bottom: 1px solid #33363b">
+                <span>📄 交付物/Ibex 源码入门卡.md</span><span class="sp"></span
+                ><span class="btn pri">打开入门卡</span><span class="btn">打开事务目录</span>
+              </div>
+              <dl class="kv" style="margin-top: 12px">
+                <dt>引用核对</dt>
+                <dd>13 / 13 条引文与证据原文逐字一致，均指向固定提交 3d524f19</dd>
+                <dt>验收依据</dt>
+                <dd>寄存器更新条件 ✓　赋值 ✓　复位 ✓　流水线职责 ✓</dd>
+                <dt>文件</dt>
+                <dd>写入后已核验 · 证据快照 4 份在 资料/</dd>
+                <dt>说明</dt>
+                <dd>静态阅读，未编译、未仿真（按约定）</dd>
+              </dl>
+            </div>
+            <h3 style="font-size: 15px; margin: 16px 0 10px">事务进度</h3>
+            <ul class="tl">
+              <li class="ok"><b>约定 v1 已确认</b><span class="hint">10:02</span></li>
+              <li class="ok">
+                <b>派 A：项目定位与流水线职责</b><span class="hint">2 份证据</span>
+              </li>
+              <li class="ok">
+                <b>续用 A 补查 RTL</b><span class="hint">缺寄存器更新条件 · 2 份证据</span>
+              </li>
+              <li class="ok">
+                <b>写入入门卡，13 条引用核对通过</b><span class="hint">10:14 · 已交付</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                入门卡已写入交付物目录，13
+                条引用都核对过原文。点卡片里的“本地证据”可以直接看到对应的 RTL 行。
+              </p>
+            </div>
+          </div>
+          <div class="input">追问结论，或提出新要求…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>07 文档标签 · 引用定位到原文</h2>
+      <p>
+        侧栏文件和成品里的“本地证据”都在中间开标签。证据滚到并高亮引用行；右侧仍是同一个 Owner。
+      </p>
+    </div>
+    <section class="win" id="s7">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">已交付</div>
+          <div class="it">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="it">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="it">▾ 资料/<span class="n">4</span></div>
+          <div class="it ind">01-README.md</div>
+          <div class="it ind">02-pipeline_details.rst.md</div>
+          <div class="it ind on">03-ibex_if_stage.sv.md</div>
+          <div class="it ind">04-ibex_if_stage.sv.md</div>
+          <div class="it">▾ 交付物/<span class="n">1</span></div>
+          <div class="it ind">Ibex 源码入门卡.md</div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs">
+            <span>▤ 事务进度</span><span>Ibex 源码入门卡.md <i>×</i></span
+            ><span class="on">03-ibex_if_stage.sv.md <i>×</i></span>
+          </div>
+          <div class="main">
+            <div class="crumbs">资料 / 本地证据快照</div>
+            <div class="row">
+              <h1 style="font-size: 20px">lowRISC/ibex · rtl/ibex_if_stage.sv</h1>
+              <span class="sp"></span><span class="btn">‹ 返回入门卡</span>
+            </div>
+            <p class="hint" style="margin: 0 0 10px">
+              固定提交 3d524f19 · 读取于 11/21 10:06 · 引用位置 L614　<span class="ref"
+                >仓库原文 ↗</span
+              >
+            </p>
+            <pre
+              class="code"
+            ><div><span>608</span>  // Note that the current instruction is squashed by the incoming pc_set_i</div><div><span>609</span>  // Valid is held until it is explicitly cleared</div><div><span>610</span>  assign instr_valid_id_d = (if_instr_valid &amp; id_in_ready_i &amp; ~pc_set_i) |</div><div><span>611</span>                            (instr_valid_id_q &amp; ~instr_valid_clear_i);</div><div><span>612</span>  assign instr_new_id_d   = if_instr_valid &amp; id_in_ready_i &amp; ~pc_set_i;</div><div><span>613</span></div><div class="hl"><span>614</span>  always_ff @(posedge clk_i or negedge rst_ni) begin</div><div><span>615</span>    if (!rst_ni) begin</div><div><span>616</span>      instr_valid_id_q &lt;= 1'b0;</div><div><span>617</span>      instr_new_id_q   &lt;= 1'b0;</div><div><span>618</span>    end else begin</div><div><span>619</span>      instr_valid_id_q &lt;= instr_valid_id_d;</div><div><span>620</span>      instr_new_id_q   &lt;= instr_new_id_d;</div><div><span>621</span>    end</div><div><span>622</span>  end</div><div><span>623</span></div><div><span>624</span>  assign instr_valid_id_o = instr_valid_id_q;</div></pre>
+            <div class="md" style="margin-top: 14px">
+              <h2>入门卡中引用这一行的结论</h2>
+              <p>
+                复位释放后，每个 clk_i 上升沿，instr_valid_id_q 采样
+                instr_valid_id_d；复位为低时异步清零。
+              </p>
+            </div>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg">
+              <b>Owner</b>
+              <p>入门卡已写入交付物目录，13 条引用都核对过原文。</p>
+            </div>
+            <div class="msg me">
+              <b>你</b>
+              <p>第 616 行为什么复位时不用等时钟？</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>
+                敏感列表里有 <code>negedge rst_ni</code>，所以复位拉低时立即进入 616–617
+                行清零，属于异步复位。这一点卡片的“复位单独看”一节有引用。
+              </p>
+            </div>
+          </div>
+          <div class="input">问这段源码或这张卡…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>08 授权一个本地目录给这件事务</h2>
+      <p>
+        从侧栏「配置参考目录…」选目录后，先说明准确范围再授权。只读、仅本事务、可撤销；登记或偏好都不等于授权。
+      </p>
+    </div>
+    <section class="win" id="s8">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner</span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">我的事务 › 开源芯片 Ibex 调研</span
+        ><span class="sp"></span><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b3">
+        <nav class="side">
+          <div class="it back">‹ 我的事务</div>
+          <div class="ttl">开源芯片 Ibex 调研</div>
+          <div class="sub">进行中</div>
+          <div class="it on">▤ 事务进度</div>
+          <h4>本事务可读目录</h4>
+          <div class="note">尚未授权目录</div>
+          <div class="it on">▱ 配置参考目录…</div>
+          <h4>已落地文档</h4>
+          <div class="it">事务.md</div>
+          <div class="it">事务配置.md</div>
+          <div class="it">调度.md</div>
+          <div class="it">工作记录.md</div>
+          <div class="foot"><div class="it">▱ 事务保存位置</div></div>
+        </nav>
+        <div class="center">
+          <div class="tabs"><span class="on">▤ 事务进度</span></div>
+          <div class="main">
+            <h1>开源芯片 Ibex 调研</h1>
+            <div class="chips">
+              <span class="chip blue"><span class="k">事务</span><b>进行中</b></span
+              ><span class="chip"><span class="k">Owner</span><b>等回执</b></span
+              ><span class="chip blue"><span class="k">执行会话 A</span><b>运行中</b></span>
+            </div>
+          </div>
+        </div>
+        <aside class="chat">
+          <h2>Owner 主对话</h2>
+          <div class="bind">只关联「开源芯片 Ibex 调研」</div>
+          <div class="msgs">
+            <div class="msg me">
+              <b>你</b>
+              <p>再看看我自己的验证笔记。</p>
+            </div>
+            <div class="msg">
+              <b>Owner</b>
+              <p>需要你在左侧选择具体目录并授权，单凭这句话我不能读你的磁盘。</p>
+            </div>
+          </div>
+          <div class="input">…</div>
+        </aside>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <div class="shade">
+        <div class="modal">
+          <h3>允许本事务只读这个目录？</h3>
+          <dl class="kv">
+            <dt>目录</dt>
+            <dd>~/Documents/芯片验证笔记/ibex <span class="tag">含子目录 · 37 个文件</span></dd>
+            <dt>只授权给</dt>
+            <dd>开源芯片 Ibex 调研</dd>
+            <dt>方式</dt>
+            <dd>只读 · 可随时撤销</dd>
+          </dl>
+          <b style="font-size: 13px">授权后会发生</b>
+          <ul>
+            <li>Owner 可以让执行会话读取其中的文件片段</li>
+            <li>被选中的片段会交给本事务使用的模型处理</li>
+            <li>引用到的片段存成证据快照，撤销后原报告仍可回查</li>
+          </ul>
+          <b style="font-size: 13px">不会发生</b>
+          <ul>
+            <li>不写入、不删除、不移动这个目录里的任何文件</li>
+            <li>其他事务看不到；修改约定或手改文档都不能扩大范围</li>
+          </ul>
+          <div class="row">
+            <span class="sp"></span><span class="btn">取消</span
+            ><span class="btn pri">允许本事务只读</span>
+          </div>
+        </div>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+
+    <div class="cap">
+      <h2>09 Owner 设置</h2>
+      <p>只定默认值和偏好，不授予权限。从列表层侧栏底部进入。</p>
+    </div>
+    <section class="win" id="s9">
+      <div class="top">
+        <span class="ws on">▦ 我的空间</span><span class="ws">▦ woniu-forward</span
+        ><span class="ws">▦ air-app</span><span class="ws">＋ 新建 / 打开</span
+        ><span class="sp"></span><span class="ws">⚙ Studio 设置</span
+        ><span class="ob on">◈ Owner · <b>2 等你</b></span>
+      </div>
+      <div class="obar">
+        <b>◈ Owner</b><span class="crumb">Owner 设置</span><span class="sp"></span
+        ><span class="btn">返回工作台</span>
+      </div>
+      <div class="body b2">
+        <nav class="side">
+          <div class="it">◈ 全部事务<span class="n">4</span></div>
+          <div class="it ind">等我确认<span class="n hot">1</span></div>
+          <div class="it ind">等我提供资料<span class="n hot">1</span></div>
+          <div class="it ind">进行中<span class="n">1</span></div>
+          <div class="it ind">已交付<span class="n">1</span></div>
+          <h4>　</h4>
+          <div class="it">＋ 交办新事务</div>
+          <div class="foot"><div class="it on">⚙ Owner 设置</div></div>
+        </nav>
+        <div class="center">
+          <div class="main" style="max-width: 900px">
+            <h1>Owner 设置</h1>
+            <div class="banner">
+              这里只设定默认值，不授予任何权限。读取本地目录必须在具体事务里单独授权。
+            </div>
+            <div class="set">
+              <h3>新事务保存位置</h3>
+              <div class="d">
+                <div class="box">
+                  📁 我的空间 / Owner 事务<span class="sp"></span><span class="btn sm">更改…</span>
+                </div>
+              </div>
+              <div class="hint">
+                只影响以后新建的事务，已有事务不搬动。交办时回显实际位置，也可单次另选。
+              </div>
+            </div>
+            <div class="set">
+              <h3>常用参考目录</h3>
+              <div class="d">
+                <div class="box">
+                  📁 ~/Documents/芯片验证笔记<span class="tag">已登记 · 已授权给 1 件事务</span
+                  ><span class="sp"></span><span class="btn sm">移除</span>
+                </div>
+                <div class="box">
+                  📁 ~/Documents/RISC-V 课程<span class="tag">已登记 · 未授权</span
+                  ><span class="sp"></span><span class="btn sm">移除</span>
+                </div>
+                <span class="btn sm">＋ 登记目录…</span>
+              </div>
+              <div class="hint">
+                登记后只出现在授权时的候选列表；要在具体事务里选择并授权后才能读取。
+              </div>
+            </div>
+            <div class="set">
+              <h3>常用来源</h3>
+              <div class="d">
+                <span class="chk on"></span>官方 GitHub 仓库　　<span class="chk on"></span
+                >官方文档站　　<span class="chk"></span>论文与第三方博客
+              </div>
+              <div class="hint">Owner 拟约定时优先采用；具体范围仍以每件事务确认的约定为准。</div>
+            </div>
+            <div class="set">
+              <h3>交付格式</h3>
+              <div class="d">中文 Markdown；结论附固定版本原文引用</div>
+            </div>
+            <div class="set" style="border: 0">
+              <h3>需要我时提醒</h3>
+              <div class="d">
+                <span class="chk on"></span>顶栏计数　　<span class="chk on"></span
+                >系统通知　　<span class="chk"></span>声音
+              </div>
+              <div class="hint">只在等你确认或等你提供资料时提醒；Owner 自己补查不提醒。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="status">
+        <span>本地 · Owner</span><span class="sp"></span><span>CCLink Studio</span>
+      </div>
+      <span class="wm">效果图 · 示意</span>
+    </section>
+  </body>
+</html>

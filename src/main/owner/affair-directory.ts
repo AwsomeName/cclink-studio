@@ -100,6 +100,8 @@ export class AffairDirectoryService {
   constructor(
     private readonly registry: string,
     private readonly personal: () => Promise<string>,
+    /** Owner settings may choose another parent; when absent, 我的空间/Owner 事务 is used. */
+    private readonly parent?: () => Promise<{ path: string }>,
   ) {}
   private serial<T>(fn: () => Promise<T>) {
     const job = this.tail.then(fn, fn)
@@ -108,7 +110,9 @@ export class AffairDirectoryService {
   }
   private async bind(j: Journal) {
     const a = j.record
-    const root = join(await realpath(await this.personal()), 'Owner 事务')
+    const root = this.parent
+      ? (await this.parent()).path
+      : join(await realpath(await this.personal()), 'Owner 事务')
     await directory(root)
     const title = shortName(a.title.split(/[，。；！？]/u)[0])
     await mkdir(this.registry, { recursive: true, mode: 0o700 })

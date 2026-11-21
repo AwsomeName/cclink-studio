@@ -1,6 +1,7 @@
 import { ownerDirectoryIpc } from '../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../shared/ipc/owner-research'
 import { ownerSourceIpc } from '../shared/ipc/owner-source'
+import { ownerPreferencesIpc } from '../shared/ipc/owner-preferences'
 import { contextBridge, ipcRenderer } from 'electron'
 import { desktopApi } from './remote-desktop-api'
 import { localTtsApi } from './local-tts-api'
@@ -461,9 +462,21 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
     reveal: (id: string) => invokeIpcContract(ownerDirectoryIpc.reveal, id),
     preview: (id: string, name: string) => invokeIpcContract(ownerDirectoryIpc.preview, id, name),
   },
+  ownerPreferences: {
+    get: () => invokeIpcContract(ownerPreferencesIpc.get),
+    register: (purpose: 'reference' | 'output') =>
+      invokeIpcContract(ownerPreferencesIpc.register, purpose),
+    remove: (id: string) => invokeIpcContract(ownerPreferencesIpc.remove, id),
+    setDefaultParent: (id: string | null) =>
+      invokeIpcContract(ownerPreferencesIpc.setDefaultParent, id),
+    update: (change: import('../shared/ipc/owner-preferences').OwnerPreferenceUpdate) =>
+      invokeIpcContract(ownerPreferencesIpc.update, change),
+  },
   ownerSources: {
     list: (id: string) => invokeIpcContract(ownerSourceIpc.list, id),
-    add: (id: string) => invokeIpcContract(ownerSourceIpc.add, id),
+    prepare: (id: string, rootId: string | null) =>
+      invokeIpcContract(ownerSourceIpc.prepare, id, rootId),
+    confirm: (id: string, token: string) => invokeIpcContract(ownerSourceIpc.confirm, id, token),
     revoke: (id: string, grantId: string) => invokeIpcContract(ownerSourceIpc.revoke, id, grantId),
     entries: (id: string, grantId: string, rel: string) =>
       invokeIpcContract(ownerSourceIpc.entries, id, grantId, rel),

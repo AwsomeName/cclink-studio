@@ -4,9 +4,9 @@ import type RFB from '@novnc/novnc'
 // discarding the remainder. A Mac trackpad swipe therefore loses most of its
 // distance and scrolls very slowly on macOS Screen Sharing. This handler keeps
 // the remainder and converts every STEP_PX into a click (capped per event).
-const STEP_PX = 12
+const STEP_PX = 6
 const LINE_PX = 19
-const MAX_STEPS_PER_EVENT = 12
+const MAX_STEPS_PER_EVENT = 24
 
 // VNC button masks: 8 up, 16 down, 32 left, 64 right.
 const UP = 1 << 3

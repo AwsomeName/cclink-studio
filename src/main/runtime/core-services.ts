@@ -47,7 +47,12 @@ import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { AffairDirectoryService } from '../owner/affair-directory'
-import { registerOwnerDirectories, registerOwnerSources } from '../owner/directory-ipc'
+import {
+  registerOwnerDirectories,
+  registerOwnerPreferences,
+  registerOwnerSources,
+} from '../owner/directory-ipc'
+import { OwnerPreferences } from '../owner/owner-preferences'
 import { OwnerSourceDirectories } from '../owner/source-directories'
 import { registerOwnerReadme } from '../owner/read-public-readme'
 import { registerModelUsageIpc } from '../usage/model-usage-ipc'
@@ -295,30 +300,50 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
   registerOwnerReadme(runtime.trustedRendererGuard)
   const ownerRegistry = join(app.getPath('userData'), 'owner-directories')
-  const ownerAffairs = new AffairDirectoryService(ownerRegistry, async () => {
+  const personalSpace = async () => {
     const spaces = await runtime.workspaceStateService!.ensurePersonalSpace(
       runtime.settingsService?.getAll().defaultWorkspacePath,
     )
     if (!spaces.personal) throw Error('请先设置个人空间目录')
     return spaces.personal.workspacePath
-  })
-  registerOwnerDirectories(runtime.trustedRendererGuard, ownerAffairs)
-  registerOwnerSources(
-    runtime.trustedRendererGuard,
-    new OwnerSourceDirectories(ownerRegistry, ownerAffairs, async () => {
-      const window = runtime.mainWindow
-      const options = {
-        title: '选择本事务的只读参考目录',
-        buttonLabel: '允许本事务只读此目录',
-        properties: ['openDirectory' as const],
-      }
-      const result =
-        window && !window.isDestroyed()
-          ? await dialog.showOpenDialog(window, options)
-          : await dialog.showOpenDialog(options)
-      return result.canceled ? undefined : result.filePaths[0]
-    }),
+  }
+  const pickDirectory = async (title: string, buttonLabel: string) => {
+    const window = runtime.mainWindow
+    const options = {
+      title,
+      buttonLabel,
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+    }
+    const result =
+      window && !window.isDestroyed()
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options)
+    return result.canceled ? undefined : result.filePaths[0]
+  }
+  // Sources and preferences reference each other lazily: grants count for settings,
+  // registered directories as grant candidates.
+  let ownerSources: OwnerSourceDirectories | null = null
+  const ownerPreferences = new OwnerPreferences(
+    ownerRegistry,
+    personalSpace,
+    (purpose) =>
+      purpose === 'output'
+        ? pickDirectory('选择新事务的保存位置', '设为保存位置')
+        : pickDirectory('登记常用参考目录', '登记此目录'),
+    (dev, ino) => ownerSources?.grantedAffairs(dev, ino) ?? Promise.resolve(0),
   )
+  const ownerAffairs = new AffairDirectoryService(ownerRegistry, personalSpace, () =>
+    ownerPreferences.affairParent(),
+  )
+  ownerSources = new OwnerSourceDirectories(
+    ownerRegistry,
+    ownerAffairs,
+    () => pickDirectory('选择本事务的只读参考目录', '选择此目录'),
+    (rootId) => ownerPreferences.reference(rootId),
+  )
+  registerOwnerDirectories(runtime.trustedRendererGuard, ownerAffairs)
+  registerOwnerSources(runtime.trustedRendererGuard, ownerSources)
+  registerOwnerPreferences(runtime.trustedRendererGuard, ownerPreferences)
   registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
 
   runtime.mediaProjectIpcUnsubscribe?.()

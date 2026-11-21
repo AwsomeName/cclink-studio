@@ -118,9 +118,29 @@ export interface CCLinkStudioAPI {
     reveal: (id: string) => Promise<void>
     preview: (id: string, name: string) => Promise<string>
   }
+  ownerPreferences: {
+    get: () => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView>
+    register: (
+      purpose: 'reference' | 'output',
+    ) => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView | null>
+    remove: (id: string) => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView>
+    setDefaultParent: (
+      id: string | null,
+    ) => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView>
+    update: (
+      change: import('../shared/ipc/owner-preferences').OwnerPreferenceUpdate,
+    ) => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView>
+  }
   ownerSources: {
     list: (id: string) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[]>
-    add: (id: string) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[] | null>
+    prepare: (
+      id: string,
+      rootId: string | null,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourceCandidate | null>
+    confirm: (
+      id: string,
+      token: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[]>
     revoke: (
       id: string,
       grantId: string,

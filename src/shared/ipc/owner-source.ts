@@ -11,6 +11,14 @@ export type OwnerSourceGrant = {
   /** Present when the bound directory is missing, moved or replaced; reads are refused. */
   error?: string
 }
+export type OwnerSourceCandidate = {
+  token: string
+  path: string
+  label: string
+  files: number
+  truncated: boolean
+  alreadyGranted: boolean
+}
 export type OwnerSourceEntry = { name: string; dir: boolean; size?: number }
 export type OwnerSourceFile = { content: string; size: number }
 
@@ -32,8 +40,12 @@ export const ownerSourceIpc = {
   list: defineIpcInvoke<[string], OwnerSourceGrant[]>('owner-source:list', (args) =>
     z.tuple([affairId]).parse(args),
   ),
-  add: defineIpcInvoke<[string], OwnerSourceGrant[] | null>('owner-source:add', (args) =>
-    z.tuple([affairId]).parse(args),
+  prepare: defineIpcInvoke<[string, string | null], OwnerSourceCandidate | null>(
+    'owner-source:prepare',
+    (args) => z.tuple([affairId, z.string().uuid().nullable()]).parse(args),
+  ),
+  confirm: defineIpcInvoke<[string, string], OwnerSourceGrant[]>('owner-source:confirm', (args) =>
+    z.tuple([affairId, z.string().uuid()]).parse(args),
   ),
   revoke: defineIpcInvoke<[string, string], OwnerSourceGrant[]>('owner-source:revoke', (args) =>
     z.tuple([affairId, grantId]).parse(args),

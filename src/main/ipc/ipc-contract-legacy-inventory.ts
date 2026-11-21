@@ -2,6 +2,7 @@ import { desktopIpc } from '../../shared/ipc/remote-desktop'
 import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../../shared/ipc/owner-research'
 import { ownerSourceIpc } from '../../shared/ipc/owner-source'
+import { ownerPreferencesIpc } from '../../shared/ipc/owner-preferences'
 import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
 import { localTtsIpc } from '../../shared/local-tts'
 import { articlePublishingIpc } from '../../shared/article-publishing/article-publishing'
@@ -106,6 +107,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitionFile: 'src/shared/ipc/owner-directory.ts',
     definitionName: 'ownerDirectoryIpc',
     definitions: ownerDirectoryIpc,
+    handlerFiles: ['src/main/owner/directory-ipc.ts'],
+    preloadFiles: ['src/preload/index.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'OwnerPreferences',
+    definitionFile: 'src/shared/ipc/owner-preferences.ts',
+    definitionName: 'ownerPreferencesIpc',
+    definitions: ownerPreferencesIpc,
     handlerFiles: ['src/main/owner/directory-ipc.ts'],
     preloadFiles: ['src/preload/index.ts'],
   }),

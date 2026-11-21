@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { OwnerSourceEntry, OwnerSourceGrant } from '@shared/ipc/owner-source'
+import type {
+  OwnerSourceCandidate,
+  OwnerSourceEntry,
+  OwnerSourceGrant,
+} from '@shared/ipc/owner-source'
+import type { OwnerRoot } from '@shared/ipc/owner-preferences'
 import type { Affair } from './affair'
 import { BOARD, ownerView, tabKey, useOwnerView } from './owner-view-store'
 
@@ -109,17 +114,43 @@ export function OwnerSidebar({
       live = false
     }
   }, [a.id, canUseDirectory])
-  async function addSource() {
+  const [grant, setGrant] = useState<
+    | { step: 'choose'; roots: OwnerRoot[] }
+    | { step: 'confirm'; candidate: OwnerSourceCandidate }
+    | null
+  >(null)
+  async function prepare(rootId: string | null) {
     setBusy(true)
     setSourceError('')
     try {
-      const next = await window.cclinkStudio.ownerSources.add(a.id)
-      if (next) {
-        setGrants(next)
-        const added = next.at(-1)
-        if (added) setExpanded((v) => ({ ...v, ['grant:' + added.id]: true }))
-      }
+      const candidate = await window.cclinkStudio.ownerSources.prepare(a.id, rootId)
+      setGrant(candidate ? { step: 'confirm', candidate } : null)
     } catch (e) {
+      setGrant(null)
+      setSourceError(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function addSource() {
+    setSourceError('')
+    const roots = await window.cclinkStudio.ownerPreferences
+      .get()
+      .then((p) => p.roots.filter((r) => r.purpose === 'reference' && !r.error))
+      .catch(() => [])
+    if (roots.length) setGrant({ step: 'choose', roots })
+    else await prepare(null)
+  }
+  async function confirmGrant(token: string) {
+    setBusy(true)
+    try {
+      const next = await window.cclinkStudio.ownerSources.confirm(a.id, token)
+      setGrants(next)
+      const added = next.at(-1)
+      if (added) setExpanded((v) => ({ ...v, ['grant:' + added.id]: true }))
+      setGrant(null)
+    } catch (e) {
+      setGrant(null)
       setSourceError(String(e))
     } finally {
       setBusy(false)
@@ -208,7 +239,7 @@ export function OwnerSidebar({
             </div>
           ))}
           <button className="own-side-item" disabled={busy} onClick={() => void addSource()}>
-            ▱ {busy ? '等待选择目录…' : '配置参考目录…'}
+            ▱ {busy && !grant ? '等待选择目录…' : '配置参考目录…'}
           </button>
           <small className="own-side-note">只读，仅本事务可见；Owner 取证暂不读取本地目录。</small>
           {sourceError && (
@@ -260,6 +291,77 @@ export function OwnerSidebar({
           <small className="own-side-note" title={a.directory.path}>
             {a.directory.path}
           </small>
+        </div>
+      )}
+      {grant && (
+        <div className="own-shade" role="dialog" aria-modal="true" aria-label="授权本事务只读目录">
+          <div className="own-modal">
+            {grant.step === 'choose' ? (
+              <>
+                <h3>选择要给本事务只读的目录</h3>
+                <p className="own-hint">来自 Owner 设置里登记的常用目录；登记本身不授予权限。</p>
+                {grant.roots.map((r) => (
+                  <button
+                    key={r.id}
+                    className="own-box own-box-button"
+                    disabled={busy}
+                    onClick={() => void prepare(r.id)}
+                  >
+                    📁 {r.path}
+                  </button>
+                ))}
+                <div className="own-modal-actions">
+                  <button disabled={busy} onClick={() => void prepare(null)}>
+                    选择其他目录…
+                  </button>
+                  <span className="own-flex" />
+                  <button onClick={() => setGrant(null)}>取消</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3>允许本事务只读这个目录？</h3>
+                <dl className="own-kv">
+                  <dt>目录</dt>
+                  <dd data-owner-candidate={grant.candidate.path}>
+                    {grant.candidate.path}{' '}
+                    <span className="own-tag">
+                      含子目录 · {grant.candidate.files}
+                      {grant.candidate.truncated ? '+' : ''} 个文件
+                    </span>
+                  </dd>
+                  <dt>只授权给</dt>
+                  <dd>{title}</dd>
+                  <dt>方式</dt>
+                  <dd>只读 · 可随时撤销</dd>
+                </dl>
+                <b>授权后会发生</b>
+                <ul>
+                  <li>你可以在侧栏浏览这个目录，并在中间只读预览文本文件</li>
+                  <li>当前开发版的 Owner 和执行会话还不会读取这里的文件</li>
+                </ul>
+                <b>不会发生</b>
+                <ul>
+                  <li>不写入、不删除、不移动这个目录里的任何文件</li>
+                  <li>其他事务看不到；修改约定或手改文档都不能扩大范围</li>
+                </ul>
+                {grant.candidate.alreadyGranted && (
+                  <p className="own-hint">本事务已授权过这个目录。</p>
+                )}
+                <div className="own-modal-actions">
+                  <span className="own-flex" />
+                  <button onClick={() => setGrant(null)}>取消</button>
+                  <button
+                    className="own-primary"
+                    disabled={busy}
+                    onClick={() => void confirmGrant(grant.candidate.token)}
+                  >
+                    允许本事务只读
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </nav>

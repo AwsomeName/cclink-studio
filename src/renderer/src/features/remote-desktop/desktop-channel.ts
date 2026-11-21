@@ -1,4 +1,4 @@
-import type { DesktopConnection } from '@shared/ipc/remote-desktop'
+import type { DesktopConnection, DesktopOpenResult } from '@shared/ipc/remote-desktop'
 
 // noVNC accepts a WebSocket-shaped binary channel. The bounded IPC bridge avoids
 // an externally reachable listener and keeps the renderer's network CSP intact.
@@ -10,12 +10,18 @@ export class DesktopChannel {
   onclose: ((event: CloseEvent) => void) | null = null
   onmessage: ((event: { data: Uint8Array }) => void) | null = null
   onerror: (() => void) | null = null
+  /** Called when main refuses to open (unknown device, tab mismatch, busy). */
+  onrefused: ((reason: Extract<DesktopOpenResult, { ok: false }>['reason']) => void) | null = null
   private readonly api = window.cclinkStudio.remoteDesktop
   constructor(private readonly input: DesktopConnection) {}
   async start(): Promise<void> {
     const id = this.input.sessionId
     try {
-      if (!(await this.api.open(this.input))) throw new Error('open')
+      const opened = await this.api.open(this.input)
+      if (!opened.ok) {
+        this.onrefused?.(opened.reason)
+        throw new Error(`open refused: ${opened.reason}`)
+      }
       if (this.readyState === 'closed') {
         await this.api.close(id)
         return

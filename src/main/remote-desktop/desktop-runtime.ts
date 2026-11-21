@@ -1,23 +1,31 @@
+import { app } from 'electron'
 import { createConnection, type Socket } from 'node:net'
-import { desktopIpc } from '../../shared/ipc/remote-desktop'
+import { join } from 'node:path'
+import { desktopIpc, type RemoteDesktopDevice } from '../../shared/ipc/remote-desktop'
 import {
   registerTrustedIpcContract,
   TrustedIpcRegistrationScope,
 } from '../ipc/trusted-renderer-guard'
 import type { CclinkStudioRuntimeState } from '../runtime/app-runtime'
 import type { RuntimeService } from '../runtime/service-registry'
+import { RemoteDesktopDeviceStore, type StoredDesktopDevice } from './device-store'
 
 interface Session {
   socket: Socket
   chunks: AsyncIterator<Buffer>
   tabId: string
+  deviceId: string
   verified: boolean
   reading: boolean
   senderId: number
+  savedCredentialUsed: boolean
 }
+
+export const remoteDesktopCredentialId = (deviceId: string): string => `remote-desktop:${deviceId}`
 
 export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): RuntimeService {
   const sessions = new Map<string, Session>()
+  let store: RemoteDesktopDeviceStore | undefined
   let dispose: (() => void) | undefined
   const close = (id: string): void => {
     sessions.get(id)?.socket.destroy()
@@ -26,12 +34,37 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
   const clear = (): void => {
     for (const id of sessions.keys()) close(id)
   }
+  const credentials = () => {
+    const service = runtime.credentialService
+    return service && service.getStatus().status === 'ready' ? service : null
+  }
+  const project = (device: StoredDesktopDevice): RemoteDesktopDevice => {
+    let savedCredential = false
+    try {
+      savedCredential = Boolean(
+        credentials()?.resolveCredential(remoteDesktopCredentialId(device.id))?.password,
+      )
+    } catch {
+      /* credential file unavailable: report as not saved */
+    }
+    return {
+      id: device.id,
+      name: device.name,
+      host: device.host,
+      port: device.port,
+      savedCredential,
+      updatedAt: device.updatedAt,
+    }
+  }
   return {
     name: 'remote-desktop',
     start() {
       const trusted = runtime.trustedRendererGuard
       const wc = runtime.mainWindow?.webContents
       if (!trusted || !wc) return
+      const devices = (store ??= new RemoteDesktopDeviceStore(
+        join(app.getPath('userData'), 'remote-desktop'),
+      ))
       const registrations = new TrustedIpcRegistrationScope()
       const guard = {
         assert: trusted.assert.bind(trusted),
@@ -53,6 +86,18 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
         wc.removeListener('destroyed', reset)
         registrations.dispose()
       }
+      registerTrustedIpcContract(desktopIpc.listDevices, guard, async () =>
+        (await devices.list()).sort((a, b) => b.updatedAt - a.updatedAt).map(project),
+      )
+      registerTrustedIpcContract(desktopIpc.saveDevice, guard, async (_event, input) =>
+        project(await devices.save(input)),
+      )
+      registerTrustedIpcContract(desktopIpc.forgetCredential, guard, async (_event, deviceId) => {
+        const device = await devices.get(deviceId)
+        if (!device) return null
+        await credentials()?.removeCredential(remoteDesktopCredentialId(deviceId))
+        return project(device)
+      })
       registerTrustedIpcContract(desktopIpc.open, guard, async (event, input) => {
         const revision = generation
         const projection = await runtime.workbenchTabModel?.getProjection(
@@ -69,17 +114,19 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
           !target ||
           typeof target !== 'object' ||
           Array.isArray(target) ||
-          target.host !== input.host ||
-          target.port !== input.port
+          target.deviceId !== input.deviceId
         )
-          return false
+          return { ok: false, reason: 'tab-mismatch' } as const
+        const device = await devices.get(input.deviceId)
+        if (!device) return { ok: false, reason: 'device-missing' } as const
         if (
+          generation !== revision ||
           sessions.has(input.sessionId) ||
           sessions.size >= 8 ||
           [...sessions.values()].some((s) => s.tabId === input.tabId)
         )
-          return false
-        const socket = createConnection({ host: input.host, port: input.port })
+          return { ok: false, reason: 'busy' } as const
+        const socket = createConnection({ host: device.host, port: device.port })
         socket.setNoDelay(true)
         socket.setTimeout(12000, () => socket.destroy())
         socket.on('error', () => socket.destroy())
@@ -87,14 +134,45 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
           socket,
           chunks: socket[Symbol.asyncIterator](),
           tabId: input.tabId,
+          deviceId: device.id,
           verified: false,
           reading: false,
           senderId: event.sender.id,
+          savedCredentialUsed: false,
         }
         socket.once('close', () => {
           if (sessions.get(input.sessionId) === session) sessions.delete(input.sessionId)
         })
         sessions.set(input.sessionId, session)
+        return { ok: true, host: device.host, port: device.port } as const
+      })
+      registerTrustedIpcContract(desktopIpc.savedCredential, guard, (event, id) => {
+        const session = sessions.get(id)
+        // Only for an open RFB session of this sender, and only once: a failed autofill falls
+        // back to manual entry instead of retrying the same password.
+        if (!session?.verified || session.senderId !== event.sender.id) return null
+        if (session.savedCredentialUsed) return null
+        session.savedCredentialUsed = true
+        try {
+          const fields = credentials()?.resolveCredential(
+            remoteDesktopCredentialId(session.deviceId),
+          )
+          return fields?.username && fields.password
+            ? { username: fields.username, password: fields.password }
+            : null
+        } catch {
+          return null
+        }
+      })
+      registerTrustedIpcContract(desktopIpc.rememberCredential, guard, async (event, id, input) => {
+        const session = sessions.get(id)
+        const service = credentials()
+        if (!session?.verified || session.senderId !== event.sender.id || !service) return false
+        await service.setCredential({
+          id: remoteDesktopCredentialId(session.deviceId),
+          kind: 'basic',
+          fields: { username: input.username, password: input.password },
+        })
         return true
       })
       registerTrustedIpcContract(desktopIpc.read, guard, async (event, id) => {

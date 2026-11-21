@@ -20,6 +20,7 @@ import {
 import { freshResearch } from './research-model'
 import { OwnerSidebar } from './owner-sidebar'
 import { OwnerDocument } from './owner-document'
+import { AgreementCard, DeliveryCard, StatusChips, StepCard, Timeline } from './owner-board'
 import { BOARD, ownerView, tabKey, tabTitle, useOwnerView } from './owner-view-store'
 import { session } from './owner-agent'
 import { next, type Affair } from './affair'
@@ -85,6 +86,25 @@ export function ResearchInbox({ begin }: { begin: (id: string) => void }) {
     </aside>
   )
 }
+function useSourceGrantCount(id: string, enabled: boolean) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) return
+    let live = true
+    const refresh = () =>
+      window.cclinkStudio.ownerSources
+        .list(id)
+        .then((g) => live && setCount(g.filter((x) => !x.error).length))
+        .catch(() => {})
+    void refresh()
+    const timer = setInterval(refresh, 4000)
+    return () => {
+      live = false
+      clearInterval(timer)
+    }
+  }, [id, enabled])
+  return count
+}
 export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const r = a.research!,
     [text, set] = useState(''),
@@ -103,6 +123,8 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const waitingForReentry = label === '待恢复'
   const ready = !active && !a.confirmed && r.phase === 'ready' && !!r.plan
   const workerRun = useAgentStore((s) => s.conversations[session(a, 'a')]?.activeRunId)
+  const workerLoading = useAgentStore((s) => s.conversations[session(a, 'a')]?.loading)
+  const sourceGrants = useSourceGrantCount(a.id, !!a.directory && !a.directory.error)
   const perms = useAgentStore((s) => s.pendingConfirmations)
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'nearest' })
@@ -203,64 +225,46 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 补齐配置与调度文档
               </button>
             )}
-          <div className="own-call">
-            <small>{label}</small>
-            <h2>
-              {a.directory?.error
-                ? r.report
-                  ? '引文已核对，报告待保存'
-                  : '事务文件待保存'
-                : waitingForReentry
-                  ? '上次操作中断，未自动重派'
-                  : a.issue ||
-                    (r.phase === 'reading'
-                      ? '取证中 · 已取得 ' + r.docs.length + ' 份原文'
-                      : detail)}
-            </h2>
-          </div>
-          {!!r.decisions?.length && (
-            <section className="own-decisions">
-              <h3>Owner 的判断</h3>
-              {active && r.phase === 'reading' && workerRun && (
-                <small data-owner-worker-run={workerRun}>执行会话 A 正在选取本轮资料</small>
-              )}
-              {r.decisions.slice(-1).map((d, i) => (
-                <div key={i} className={'own-decision ' + d.kind}>
-                  <b>
-                    {d.kind === 'deliver'
-                      ? a.directory?.error
-                        ? '报告待保存'
-                        : '可以交付'
-                      : d.kind === 'more'
-                        ? '续用 A 补查'
-                        : '委派会话 A'}
-                  </b>
-                  <p>{d.reason}</p>
-                </div>
-              ))}
-              {r.decisions.length > 1 && (
-                <details>
-                  <summary>之前的 {r.decisions.length - 1} 次判断</summary>
-                  {r.decisions.slice(0, -1).map((d, i) => (
-                    <p key={i}>
-                      <b>{d.kind === 'read' ? '首次委派' : '续用 A 补查'}</b>　{d.reason}
-                    </p>
-                  ))}
-                </details>
-              )}
-            </section>
+          <StatusChips a={a} active={active} workerLoading={!!workerLoading} />
+          {['待保存', '需要处理', '待恢复'].includes(label) && (
+            <div className="own-call">
+              <small>{label}</small>
+              <h2>
+                {a.directory?.error
+                  ? r.report
+                    ? '引文已核对，报告待保存'
+                    : '事务文件待保存'
+                  : waitingForReentry
+                    ? '上次操作中断，未自动重派'
+                    : a.issue ||
+                      (r.phase === 'reading'
+                        ? '取证中 · 已取得 ' + r.docs.length + ' 份原文'
+                        : detail)}
+              </h2>
+            </div>
           )}
-          {a.directory?.reportFile && !a.directory.error && (
-            <section className="own-deliverable">
-              <h3>交付物</h3>
-              <div>
-                <span>{a.directory.reportFile.replace(/^交付物\//, '')}</span>
-                <button className="own-primary" onClick={() => openFile(a.directory!.reportFile!)}>
-                  打开交付物
-                </button>
-              </div>
-            </section>
+          {!a.confirmed && (
+            <AgreementCard
+              a={a}
+              ready={ready && !a.directory?.error}
+              sourceGrants={sourceGrants}
+              confirm={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
+            />
           )}
+          <StepCard
+            a={a}
+            workerRun={active && r.phase === 'reading' ? (workerRun ?? undefined) : undefined}
+          />
+          <DeliveryCard
+            a={a}
+            openReport={() => openFile(a.directory!.reportFile!)}
+            reveal={() =>
+              void window.cclinkStudio.ownerDirectories
+                .reveal(a.id)
+                .catch((e) => setNotice(String(e)))
+            }
+          />
+          <Timeline a={a} active={active} />
           {r.report && !a.directory?.error && (
             <section>
               <h3>调研简报</h3>
@@ -314,45 +318,42 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               </button>
             </section>
           )}
-          <h3>{a.confirmed ? '已确认的调研约定' : '调研约定'}</h3>
-          {r.plan ? (
-            <>
-              <p>
-                <b>范围　</b>
-                {r.plan.scope}
-              </p>
-              <p>
-                <b>交付　</b>
-                {r.plan.output}
-              </p>
-              <p>
-                <b>Owner 选取的项目　</b>
-                {r.plan.repos.join('、')}
-              </p>
-              {r.plan.timing && (
-                <p>
-                  <b>时间约定　</b>
-                  {r.plan.timing}
-                </p>
-              )}
-              <small>Owner 可根据证据缺口检索项目仓库中的文档、示例和源码。</small>
-            </>
-          ) : (
-            <p>等 Owner 把你的要求整理成范围和交付物。</p>
+          {a.confirmed && (
+            <details className="own-more">
+              <summary>已确认的调研约定</summary>
+              <AgreementCard a={a} ready={false} sourceGrants={sourceGrants} confirm={() => {}} />
+            </details>
+          )}
+          {!!r.decisions?.length && (
+            <details className="own-more">
+              <summary>Owner 的全部判断 · {r.decisions.length}</summary>
+              {r.decisions.map((d, i) => (
+                <div key={i} className={'own-decision ' + d.kind}>
+                  <b>
+                    {d.kind === 'read'
+                      ? '首次委派'
+                      : d.kind === 'more'
+                        ? '续用 A 补查'
+                        : '可以交付'}
+                  </b>
+                  <p>{d.reason}</p>
+                </div>
+              ))}
+            </details>
           )}
           {r.log.length > 0 && (
-            <section>
-              <h3>执行进展</h3>
+            <details className="own-more">
+              <summary>执行记录 · {r.log.length}</summary>
               <ol className="own-progress">
                 {r.log.map((l, i) => (
                   <li key={i}>{l}</li>
                 ))}
               </ol>
-            </section>
+            </details>
           )}
           {r.docs.length > 0 && (
-            <section>
-              <h3>已获得的来源</h3>
+            <details className="own-more">
+              <summary>已获得的来源 · {r.docs.length}</summary>
               {r.docs.map((d, i) => (
                 <details key={i}>
                   <summary>
@@ -365,7 +366,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                   <pre>{d.text}</pre>
                 </details>
               ))}
-            </section>
+            </details>
           )}
           {(r.phase === 'error' || waitingForReentry) && !a.directory?.error && !active && (
             <button

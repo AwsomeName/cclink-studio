@@ -67,3 +67,33 @@
   overflow: hidden;
   background: #171717;
 }
+.remote-desktop select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px 9px;
+}
+.remote-desktop-form label.remote-desktop-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.remote-desktop-check input {
+  margin-top: 2px;
+  padding: 0;
+}
+.remote-desktop-saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.remote-desktop-saved button {
+  font-size: 12px;
+  padding: 2px 8px;
+}

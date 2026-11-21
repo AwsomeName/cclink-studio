@@ -2,6 +2,8 @@ import { shell } from 'electron'
 import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
 import { ownerSourceIpc } from '../../shared/ipc/owner-source'
 import type { OwnerSourceDirectories } from './source-directories'
+import { ownerPreferencesIpc } from '../../shared/ipc/owner-preferences'
+import type { OwnerPreferences } from './owner-preferences'
 import {
   registerTrustedIpcContract,
   type TrustedRendererGuard,
@@ -32,7 +34,12 @@ export function registerOwnerDirectories(
 }
 export function registerOwnerSources(guard: TrustedRendererGuard, sources: OwnerSourceDirectories) {
   registerTrustedIpcContract(ownerSourceIpc.list, guard, (_e, id) => sources.list(id))
-  registerTrustedIpcContract(ownerSourceIpc.add, guard, (_e, id) => sources.add(id))
+  registerTrustedIpcContract(ownerSourceIpc.prepare, guard, (_e, id, rootId) =>
+    sources.prepare(id, rootId ?? undefined),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.confirm, guard, (_e, id, token) =>
+    sources.confirm(id, token),
+  )
   registerTrustedIpcContract(ownerSourceIpc.revoke, guard, (_e, id, grant) =>
     sources.revoke(id, grant),
   )
@@ -41,5 +48,18 @@ export function registerOwnerSources(guard: TrustedRendererGuard, sources: Owner
   )
   registerTrustedIpcContract(ownerSourceIpc.read, guard, (_e, id, grant, rel) =>
     sources.read(id, grant, rel),
+  )
+}
+export function registerOwnerPreferences(guard: TrustedRendererGuard, prefs: OwnerPreferences) {
+  registerTrustedIpcContract(ownerPreferencesIpc.get, guard, () => prefs.get())
+  registerTrustedIpcContract(ownerPreferencesIpc.register, guard, (_e, purpose) =>
+    prefs.register(purpose),
+  )
+  registerTrustedIpcContract(ownerPreferencesIpc.remove, guard, (_e, id) => prefs.remove(id))
+  registerTrustedIpcContract(ownerPreferencesIpc.setDefaultParent, guard, (_e, id) =>
+    prefs.setDefaultParent(id),
+  )
+  registerTrustedIpcContract(ownerPreferencesIpc.update, guard, (_e, change) =>
+    prefs.update(change),
   )
 }
