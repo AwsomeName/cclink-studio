@@ -18,10 +18,13 @@ export function PersonalDiaryGit({
   source,
   ownerPath,
   onConnected,
+  onUpdated,
 }: {
   ownerPath: string | null
   source: PersonalDiarySource | null
   onConnected: (value: PersonalDiarySource) => void
+  /** Files changed in place (a pull); the home page re-reads diaries. */
+  onUpdated?: () => void
 }): React.ReactElement {
   const [url, setUrl] = useState('')
   const [branch, setBranch] = useState('')
@@ -112,7 +115,7 @@ export function PersonalDiaryGit({
         token: token || undefined,
         sshKeyPath: keyPath || undefined,
         ...(action === 'clone' && destination ? { destination } : {}),
-        ...(action === 'update-copy'
+        ...(action === 'update-copy' || action === 'pull'
           ? { expectedHead: result?.head, expectedTarget: result?.target }
           : {}),
       })
@@ -123,6 +126,7 @@ export function PersonalDiaryGit({
           value.snapshot.diaryMapping?.directory ?? source?.directory ?? defaultDiaryDirectory,
         )
       setResult(value.snapshot)
+      if (action === 'pull') onUpdated?.()
     } catch (e) {
       setError(String(e))
       setToken('')
@@ -301,19 +305,37 @@ export function PersonalDiaryGit({
           {result.diverged && (
             <p role="alert">本地有未上传提交或历史分叉，已阻止快捷更新；请在原仓库处理分支。</p>
           )}
+          {!result.newCopy && result.head === result.target && (
+            <p role="status">本地已是远端最新版本。</p>
+          )}
           {!result.newCopy && (
-            <button
-              disabled={
-                busy ||
-                result.head === result.target ||
-                !!result.localChanges ||
-                result.diverged ||
-                result.diffTruncated
-              }
-              onClick={() => void execute('update-copy')}
-            >
-              将已审阅更新拉取为新副本
-            </button>
+            <div className="diary-actions">
+              <button
+                className="primary"
+                disabled={
+                  busy ||
+                  result.head === result.target ||
+                  !!result.localChanges ||
+                  result.diverged ||
+                  result.diffTruncated
+                }
+                onClick={() => void execute('pull')}
+              >
+                拉取并更新
+              </button>
+              <button
+                disabled={
+                  busy ||
+                  result.head === result.target ||
+                  !!result.localChanges ||
+                  result.diverged ||
+                  result.diffTruncated
+                }
+                onClick={() => void execute('update-copy')}
+              >
+                另存远端版本为独立副本
+              </button>
+            </div>
           )}
           {result.newCopy && (
             <div className="diary-source-form">

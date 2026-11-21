@@ -99,6 +99,33 @@ describe('Git diary transfer using real repositories', () => {
     expect(await git(first.workspacePath, ['rev-parse', 'HEAD'])).toBe(preview.head)
     expect(await git(second.workspacePath, ['remote', 'get-url', 'origin'])).toBe(remote)
   }, 20000)
+  it('pulls a reviewed update in place by fast-forward and refuses dirty or unreviewed moves', async () => {
+    const { seed, remote, git, context } = await fixture()
+    const local = await transferRepository({ action: 'clone', url: remote }, context)
+    await writeFile(join(seed, '日记.md'), 'updated')
+    await git(seed, ['commit', '-am', 'update'])
+    await git(seed, ['push'])
+    const preview = await transferRepository(
+      { action: 'fetch', workspacePath: local.workspacePath },
+      context,
+    )
+    const pull = {
+      action: 'pull' as const,
+      workspacePath: local.workspacePath,
+      expectedHead: preview.head,
+      expectedTarget: preview.target,
+    }
+    await expect(transferRepository({ ...pull, expectedHead: undefined }, context)).rejects.toThrow(
+      '审阅',
+    )
+    await writeFile(join(local.workspacePath, '草稿.md'), '本机')
+    await expect(transferRepository(pull, context)).rejects.toThrow('未更新')
+    await rm(join(local.workspacePath, '草稿.md'))
+    const pulled = await transferRepository(pull, context)
+    expect(pulled.workspacePath).toBe(local.workspacePath)
+    expect(pulled.head).toBe(preview.target)
+    expect(await readFile(join(local.workspacePath, '日记.md'), 'utf8')).toBe('updated')
+  }, 20000)
   it('rejects embedded credentials, implicit SSH identity, invalid options and cloned private runtime data', async () => {
     const { seed, remote, git, context } = await fixture()
     await expect(

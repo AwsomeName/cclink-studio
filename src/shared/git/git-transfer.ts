@@ -6,7 +6,7 @@ const bounded = z
   .refine((value) => !/[\0\r\n]/.test(value))
 export const gitTransferInputSchema = z
   .object({
-    action: z.enum(['clone', 'inspect', 'fetch', 'update-copy']),
+    action: z.enum(['clone', 'inspect', 'fetch', 'update-copy', 'pull']),
     workspacePath: bounded.optional(),
     url: bounded.optional(),
     destinationParent: bounded.optional(),

@@ -1,6 +1,7 @@
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
+import { DiarySyncStatus } from './DiarySyncStatus'
 import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
@@ -484,6 +485,10 @@ export function PersonalDiaryHome(): React.ReactElement {
       ) : (
         <p className="muted">还没有周计划；每周复盘会生成下周计划。</p>
       )}
+      <h3>同步</h3>
+      {source && (
+        <DiarySyncStatus workspacePath={source.workspacePath} onOpenGit={() => setPage('Git')} />
+      )}
     </div>
   )
   const [shownYear, shownMonthNumber] = shownMonth.split('-')
@@ -704,6 +709,7 @@ export function PersonalDiaryHome(): React.ReactElement {
             setSource(value)
             setPage('今天')
           }}
+          onUpdated={() => setRevision((value) => value + 1)}
         />
       ) : (
         <>

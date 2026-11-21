@@ -7,6 +7,7 @@ import { lstat, mkdir, mkdtemp, readdir, realpath, readFile, writeFile } from 'n
 import { dirname, join, relative, isAbsolute } from 'node:path'
 import type { GitTransferInput, GitTransferSnapshot } from '../../shared/git'
 import type { GitExecutor, GitAuthentication } from '../git-backup/git-executor'
+import { fastForwardIfClean } from './git-fast-forward'
 
 export interface TransferContext {
   runner: Pick<GitExecutor, 'run'>
@@ -276,6 +277,30 @@ export async function transferRepository(
     await run(path, ['merge-base', '--is-ancestor', head, target])
   } catch {
     diverged = true
+  }
+  if (input.action === 'pull') {
+    // In place, fast-forward only, exactly the reviewed head → target (D4).
+    if (!input.expectedHead || !input.expectedTarget) throw Error('请先检查远程更新并审阅差异')
+    if (fullDiff.length > diff.length)
+      throw Error('正文差异超过预览范围，请完整审阅后通过 Git 变更面板处理')
+    const moved = await fastForwardIfClean(context.runner, path, {
+      expectedHead: input.expectedHead,
+      expectedTarget: input.expectedTarget,
+    })
+    if (moved.outcome === 'blocked') throw Error(`未更新，原资料已保留：${moved.reason}`)
+    return {
+      workspacePath: path,
+      remoteUrl: url,
+      branch,
+      head: moved.head ?? target,
+      target,
+      changes,
+      diff,
+      diffTruncated: false,
+      localChanges: '',
+      diverged: false,
+      checkedAt: new Date().toISOString(),
+    }
   }
   if (input.action === 'update-copy') {
     if (head !== input.expectedHead || target !== input.expectedTarget)
