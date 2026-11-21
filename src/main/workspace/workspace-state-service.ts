@@ -35,6 +35,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { isDeepStrictEqual } from 'node:util'
 import type {
   DiaryRootPreview,
+  PersonalRelocationPreview,
   FixedSpaceRef,
   FixedSpaces,
   CompanySpaceCandidate,
@@ -977,7 +978,6 @@ export class WorkspaceStateService {
           ? '000-个人计划'
           : defaultDiaryDirectory)
     const base = join(root, directory)
-    let latestFile: string | null = null
     let folder = root
     for (const part of directory.split('/')) {
       folder = join(folder, part)
@@ -991,29 +991,25 @@ export class WorkspaceStateService {
         directory === defaultDiaryDirectory &&
         !current.settings.diary
       )
-        return { workspacePath: root, directory, latestFile, revision: current.revision, projectId }
+        return {
+          workspacePath: root,
+          directory,
+          latestFile: null,
+          diaryCount: 0,
+          revision: current.revision,
+          projectId,
+        }
       if (!info?.isDirectory()) throw Error('日记目录不存在或包含符号链接：' + folder)
     }
-    const subdirs = async (parent: string, pattern: RegExp) =>
-      (await readdir(parent, { withFileTypes: true }))
-        .filter((e) => e.isDirectory() && pattern.test(e.name))
-        .map((e) => e.name)
-        .sort()
-        .reverse()
-    for (const year of await subdirs(base, /^\d{4}$/)) {
-      for (const month of await subdirs(join(base, year), /^(0[1-9]|1[0-2])(-(0[1-9]|1[0-2]))?$/)) {
-        const names = (await readdir(join(base, year, month), { withFileTypes: true }))
-          .filter((e) => e.isFile() && /^\d{4}[_-].+\.md$/i.test(e.name))
-          .map((e) => e.name)
-          .sort()
-        if (names.length) {
-          latestFile = [year, month, names[names.length - 1]].join('/')
-          break
-        }
-      }
-      if (latestFile) break
+    const scanned = await scanDiaryEntries(base)
+    return {
+      workspacePath: root,
+      directory,
+      latestFile: scanned.latestFile,
+      diaryCount: scanned.diaryCount,
+      revision: current.revision,
+      projectId,
     }
-    return { workspacePath: root, directory, latestFile, revision: current.revision, projectId }
   }
 
   async confirmDiaryRoot(owner: string, preview: DiaryRootPreview): Promise<FixedSpaces> {
@@ -1073,6 +1069,70 @@ export class WorkspaceStateService {
         ...fixed,
         personal: { ...personal, diaryRootConfirmed: true },
       })
+    })
+  }
+
+  /**
+   * Relocation is only offered when the bound folder no longer proves the same identity.
+   * The candidate must carry the original project identity; nothing is written here.
+   */
+  async inspectPersonalRelocation(path: string): Promise<PersonalRelocationPreview> {
+    const personal = this.getFixedSpaces().personal
+    if (!personal) throw Error('我的空间尚未初始化')
+    const previousPath = personal.workspacePath
+    let previous: PersonalRelocationPreview['previous'] = null
+    let previousState: PersonalRelocationPreview['previousState'] = 'missing'
+    const previousInfo = await lstat(previousPath).catch(() => null)
+    if (previousInfo?.isDirectory()) {
+      const sameIdentity = await this.inspectFixedIdentity(previousPath, personal.projectId).then(
+        () => true,
+        () => false,
+      )
+      if (sameIdentity) throw Error('上次的项目目录仍然可用，无需重新定位')
+      previousState = 'other'
+      const settings = await readWorkspaceSettings(previousPath).catch(() => null)
+      const directory = settings?.settings.diary?.directory ?? defaultDiaryDirectory
+      const base = join(previousPath, directory)
+      const scanned = (await lstat(base).catch(() => null))?.isDirectory()
+        ? await scanDiaryEntries(base).catch(() => ({ latestFile: null, diaryCount: 0 }))
+        : { latestFile: null, diaryCount: 0 }
+      previous = { directory, ...scanned }
+    }
+    const root = await this.resolveLocalWorkspacePath(path)
+    if (root === previousPath) throw Error('请选择移动后的新位置')
+    const manifest = await this.readProjectManifestFile(
+      join(root, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
+    )
+    if (manifest.status !== 'ok' || manifest.value.projectId !== personal.projectId)
+      throw Error('所选目录不是原来的日记项目（项目身份不一致），原绑定保持不变')
+    const candidate = await this.inspectDiaryRoot(root)
+    if (candidate.projectId !== personal.projectId)
+      throw Error('所选目录不是原来的日记项目（项目身份不一致），原绑定保持不变')
+    return { previousPath, previousState, previous, candidate }
+  }
+
+  async relocatePersonalSpace(preview: PersonalRelocationPreview): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
+      const fixed = this.getFixedSpaces()
+      if (!fixed.personal || fixed.personal.workspacePath !== preview.previousPath)
+        throw Error('默认项目已变化，请重新打开我的空间')
+      const checked = await this.inspectPersonalRelocation(preview.candidate.workspacePath)
+      if (
+        checked.previousState !== preview.previousState ||
+        checked.candidate.revision !== preview.candidate.revision ||
+        checked.candidate.directory !== preview.candidate.directory ||
+        checked.candidate.latestFile !== preview.candidate.latestFile
+      )
+        throw Error('两个位置的资料已变化，请重新核对')
+      const root = checked.candidate.workspacePath
+      await access(root, constants.W_OK | constants.X_OK)
+      if (fixed.company)
+        this.assertIndependent(
+          { workspacePath: root, projectId: fixed.personal.projectId },
+          fixed.company,
+        )
+      const personal = await this.inspectFixedIdentity(root, fixed.personal.projectId)
+      return this.commitFixedSpaces({ ...fixed, personal: { ...fixed.personal, ...personal } })
     })
   }
 
@@ -1857,7 +1917,17 @@ export class WorkspaceStateService {
       try {
         const candidatePath = await realpath(candidate.workspacePath)
         const info = await stat(candidatePath)
-        if (info.isDirectory() && candidatePath !== workspacePath) return candidatePath
+        if (!info.isDirectory() || candidatePath === workspacePath) continue
+        // A folder recreated at the old path without this identity is not a copy.
+        const manifest = await this.readProjectManifestFile(
+          join(candidatePath, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
+        )
+        if (
+          manifest.status === 'missing' ||
+          (manifest.status === 'ok' && manifest.value.projectId !== projectId)
+        )
+          continue
+        return candidatePath
       } catch {
         // 原路径不存在时视为项目移动，不视为复制。
       }
@@ -2191,4 +2261,29 @@ function removeLegacyBrowserBookmarks(value: unknown): unknown {
   const next = { ...(value as Record<string, unknown>) }
   delete next.bookmarks
   return next
+}
+
+/** Read-only count of dated diary Markdown under YYYY/MM (including merged MM-MM months). */
+async function scanDiaryEntries(
+  base: string,
+): Promise<{ latestFile: string | null; diaryCount: number }> {
+  const subdirs = async (parent: string, pattern: RegExp): Promise<string[]> =>
+    (await readdir(parent, { withFileTypes: true }))
+      .filter((e) => e.isDirectory() && pattern.test(e.name))
+      .map((e) => e.name)
+      .sort()
+      .reverse()
+  let latestFile: string | null = null
+  let diaryCount = 0
+  for (const year of await subdirs(base, /^\d{4}$/)) {
+    for (const month of await subdirs(join(base, year), /^(0[1-9]|1[0-2])(-(0[1-9]|1[0-2]))?$/)) {
+      const names = (await readdir(join(base, year, month), { withFileTypes: true }))
+        .filter((e) => e.isFile() && /^\d{4}[_-].+\.md$/i.test(e.name))
+        .map((e) => e.name)
+        .sort()
+      diaryCount += names.length
+      if (names.length && !latestFile) latestFile = [year, month, names[names.length - 1]].join('/')
+    }
+  }
+  return { latestFile, diaryCount }
 }

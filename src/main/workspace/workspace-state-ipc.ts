@@ -178,6 +178,24 @@ export function registerWorkspaceStateIpc(
       return fixed
     },
   )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.inspectPersonalRelocation,
+    trustedRendererGuard,
+    (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.inspectPersonalRelocation(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.relocatePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      assertWorkspaceAccess(event.sender.id, preview.candidate.workspacePath)
+      const fixed = await workspaceStateService.relocatePersonalSpace(preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
   registerTrustedIpcContract(workspaceStateIpcContracts.getFixedSpaces, trustedRendererGuard, () =>
     workspaceStateService.getFixedSpaces(),
   )

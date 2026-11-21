@@ -107,6 +107,50 @@ describe('fixed personal/company spaces preserve original data', () => {
     expect(service.getFixedSpaces()).toEqual(fixed)
   })
 
+  it('relocates a moved diary project by identity and shows material left at the old path', async () => {
+    const root = join(paths.root, '原日记')
+    await mkdir(join(root, '个人计划', '2026', '11'), { recursive: true })
+    const note = join(root, '个人计划', '2026', '11', '1120_周五.md')
+    await writeFile(note, '# 原文\n')
+    const fixed = await service.ensurePersonalSpace()
+    await service.confirmDiaryRoot(
+      fixed.personal!.workspacePath,
+      await service.inspectDiaryRoot(root),
+    )
+    const bound = service.getFixedSpaces().personal!
+    await expect(service.inspectPersonalRelocation(root)).rejects.toThrow('仍然可用')
+    const moved = join(paths.root, '移动后', '原日记')
+    await mkdir(join(paths.root, '移动后'))
+    await rename(root, moved)
+    await expect(service.ensurePersonalSpace()).rejects.toThrow()
+    const stranger = join(paths.root, '别的项目')
+    await mkdir(stranger)
+    await service.getSnapshot(stranger)
+    await expect(service.inspectPersonalRelocation(stranger)).rejects.toThrow('身份不一致')
+    const missing = await service.inspectPersonalRelocation(moved)
+    expect(missing).toMatchObject({ previousState: 'missing', previous: null })
+    expect(missing.candidate).toMatchObject({ diaryCount: 1, latestFile: '2026/11/1120_周五.md' })
+    // Something new appears at the old path: both sides are shown and nothing is merged.
+    await mkdir(join(root, '个人计划', '2026', '12'), { recursive: true })
+    await writeFile(join(root, '个人计划', '2026', '12', '1201_周二.md'), '# 新位置以外\n')
+    await expect(service.relocatePersonalSpace(missing)).rejects.toThrow('已变化')
+    const both = await service.inspectPersonalRelocation(moved)
+    expect(both).toMatchObject({
+      previousState: 'other',
+      previous: { diaryCount: 1, latestFile: '2026/12/1201_周二.md' },
+    })
+    expect(service.getFixedSpaces().personal).toEqual(bound)
+    const relocated = await service.relocatePersonalSpace(both)
+    expect(relocated.personal).toEqual({ ...bound, workspacePath: moved })
+    // Opening the moved copy must keep its identity even though the old folder exists again.
+    await service.getSnapshot(moved)
+    expect(await service.getLocalProjectId(moved)).toBe(bound.projectId)
+    expect(await readFile(join(moved, '个人计划', '2026', '11', '1120_周五.md'), 'utf8')).toBe(
+      '# 原文\n',
+    )
+    await expect(service.ensurePersonalSpace()).resolves.toEqual(relocated)
+  })
+
   it('initializes once, keeps company lazy and survives restart', async () => {
     const [a, b] = await Promise.all([service.ensurePersonalSpace(), service.ensurePersonalSpace()])
     expect(a).toEqual(b)

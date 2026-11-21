@@ -205,8 +205,18 @@ export interface DiaryRootPreview {
   workspacePath: string
   directory: string
   latestFile: string | null
+  /** Dated diary Markdown files found under YYYY/MM; read-only preview. */
+  diaryCount?: number
   revision: string | null
   projectId: string | null
+}
+/** Moved personal project: previous binding versus the folder the user picked. */
+export interface PersonalRelocationPreview {
+  previousPath: string
+  /** missing: folder gone; other: folder exists but no longer carries this project identity. */
+  previousState: 'missing' | 'other'
+  previous: { directory: string; latestFile: string | null; diaryCount: number } | null
+  candidate: DiaryRootPreview
 }
 
 export interface FixedSpaces {
@@ -241,6 +251,8 @@ export interface WorkspaceStateApiContract {
   getFixedSpaces: () => Promise<FixedSpaces>
   inspectDiaryRoot: (path: string) => Promise<DiaryRootPreview>
   confirmDiaryRoot: (owner: string, preview: DiaryRootPreview) => Promise<FixedSpaces>
+  inspectPersonalRelocation: (path: string) => Promise<PersonalRelocationPreview>
+  relocatePersonalSpace: (preview: PersonalRelocationPreview) => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
   listCompanySpaces: () => Promise<CompanySpaceCandidate[]>
   inspectCompanySpace: (workspacePath: string) => Promise<CompanySpaceCandidate>
@@ -286,6 +298,12 @@ export const workspaceStateIpc = {
   inspectDiaryRoot: defineIpcCall<[string], DiaryRootPreview>('workspaceState:inspectDiaryRoot'),
   confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
     'workspaceState:confirmDiaryRoot',
+  ),
+  inspectPersonalRelocation: defineIpcCall<[string], PersonalRelocationPreview>(
+    'workspaceState:inspectPersonalRelocation',
+  ),
+  relocatePersonalSpace: defineIpcCall<[PersonalRelocationPreview], FixedSpaces>(
+    'workspaceState:relocatePersonalSpace',
   ),
   ensurePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:ensurePersonalSpace'),
   listCompanySpaces: defineIpcCall<[], CompanySpaceCandidate[]>('workspaceState:listCompanySpaces'),

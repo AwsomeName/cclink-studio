@@ -103,7 +103,15 @@ export function useWorkspaceBootstrap(): boolean {
         .then((spaces) => {
           useFixedSpacesStore.setState({ spaces })
         })
-        .catch((error) => console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error))
+        .catch(async (error) => {
+          console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error)
+          // A bound folder that no longer proves its identity goes straight to relocation.
+          const spaces = await window.cclinkStudio.workspaceState.getFixedSpaces().catch(() => null)
+          if (spaces?.personal)
+            useFixedSpacesStore.setState({
+              relocate: { previousPath: spaces.personal.workspacePath, error: String(error) },
+            })
+        })
       const result = await runWorkspaceBootstrapOnce()
       if (
         result.canPersistRuntime &&

@@ -66,6 +66,10 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
   inspectDiaryRoot: (path) => invokeIpcContract(workspaceStateIpc.inspectDiaryRoot, path),
   confirmDiaryRoot: (owner, preview) =>
     invokeIpcContract(workspaceStateIpc.confirmDiaryRoot, owner, preview),
+  inspectPersonalRelocation: (path) =>
+    invokeIpcContract(workspaceStateIpc.inspectPersonalRelocation, path),
+  relocatePersonalSpace: (preview) =>
+    invokeIpcContract(workspaceStateIpc.relocatePersonalSpace, preview),
   ensurePersonalSpace: () => invokeIpcContract(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: () => invokeIpcContract(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: (path) => invokeIpcContract(workspaceStateIpc.inspectCompanySpace, path),
