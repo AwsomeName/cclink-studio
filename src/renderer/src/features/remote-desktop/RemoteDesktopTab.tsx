@@ -6,6 +6,7 @@ import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/wor
 import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
 import { applyMacServerModifiers } from './mac-keys'
+import { installMacWheel } from './mac-scroll'
 import { createDesktopDiagnostics } from './desktop-diagnostics'
 import './remote-desktop.css'
 
@@ -46,6 +47,8 @@ export function RemoteDesktopTab({
     if (rfb) {
       if (!active) rfb.blur()
       rfb.viewOnly = !active
+      // Keys only reach the remote when the canvas has focus; take it on connect/return.
+      if (active && phase === 'connected') rfb.focus({ preventScroll: true })
       rfb.scaleViewport = fit
     }
   }, [active, fit, phase])
@@ -83,8 +86,11 @@ export function RemoteDesktopTab({
       const diag = createDesktopDiagnostics(`${input.host}:${input.port}`)
       diag.stage('connecting')
       const unwatch = diag.watchInput(target.current, () => activeRef.current)
+      const unwheel = installMacWheel(rfb, target.current, diag.wheelSteps)
+      if (!unwheel) console.warn('[RemoteDesktop] 无法校正触控板滚动步长')
       releaseDiagnostics.current = () => {
         unwatch()
+        unwheel?.()
         diag.summary('closed')
       }
       if (!applyMacServerModifiers(rfb, diag.keysymSent)) {

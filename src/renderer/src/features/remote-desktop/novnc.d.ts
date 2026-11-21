@@ -9,6 +9,7 @@ declare module '@novnc/novnc' {
     viewOnly: boolean
     disconnect(): void
     blur(): void
+    focus(options?: FocusOptions): void
     sendCredentials(credentials: { username?: string; password: string }): void
   }
 }
