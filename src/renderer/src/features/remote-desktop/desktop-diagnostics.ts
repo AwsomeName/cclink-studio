@@ -8,6 +8,7 @@ const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Fn'])
 export interface DesktopDiagnostics {
   stage(message: string): void
   keysymSent(keysym: number, down: boolean): void
+  wheelSteps(steps: number): void
   watchInput(screen: HTMLElement, isActive: () => boolean): () => void
   summary(reason: string): void
 }
@@ -37,6 +38,7 @@ export function createDesktopDiagnostics(endpoint: string): DesktopDiagnostics {
     imeOrComposing: 0,
     sentDown: 0,
     sentUp: 0,
+    wheelSteps: 0,
   }
   let inputLines = 0
   const log = (...values: unknown[]): void => {
@@ -57,6 +59,9 @@ export function createDesktopDiagnostics(endpoint: string): DesktopDiagnostics {
       else counts.sentUp++
       const kind = keysym < 0xff00 ? 'char' : `0x${keysym.toString(16)}`
       inputLog('sent', down ? 'down' : 'up', kind)
+    },
+    wheelSteps(steps) {
+      counts.wheelSteps += steps
     },
     watchInput(screen, isActive) {
       const onKey = (e: KeyboardEvent): void => {
