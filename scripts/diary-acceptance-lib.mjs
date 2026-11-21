@@ -13,7 +13,7 @@ export async function makeRoot(prefix) {
   return root
 }
 
-export async function makeHome(root, scenario) {
+export async function makeHome(root, scenario, { appHome } = {}) {
   const home = join(root, scenario)
   const profile = join(home, 'profile')
   await mkdir(profile, { recursive: true })
@@ -24,7 +24,7 @@ export async function makeHome(root, scenario) {
   const launcher = join(home, 'launch.cjs')
   await writeFile(
     launcher,
-    `const {app}=require('electron'); app.setPath('home',${JSON.stringify(home)});app.setPath('documents',${JSON.stringify(home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('.cache/diary-build/main/index.js'))});`,
+    `const {app}=require('electron'); app.setPath('home',${JSON.stringify(appHome ?? home)});app.setPath('documents',${JSON.stringify(appHome ?? home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('.cache/diary-build/main/index.js'))});`,
   )
   const session = { home, profile, app: null, page: null }
   session.launch = async (extraEnv = {}) => {

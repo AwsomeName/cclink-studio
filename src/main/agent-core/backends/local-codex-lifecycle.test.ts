@@ -241,6 +241,25 @@ describe('Codex lifecycle and authorization', () => {
     complete()
     await run
   })
+  it('reports only the final agent message as the result and separates narration in the text', async () => {
+    const { backend, events } = fixture()
+    const run = backend.sendMessage('写周复盘', { disableBuiltinTools: true, allowedTools: [] })
+    await started()
+    const delta = (itemId: string, value: string) =>
+      fake.incoming?.({
+        method: 'item/agentMessage/delta',
+        params: { threadId: 'native-thread', itemId, delta: value },
+      })
+    delta('narration', '我会读取上周日记。')
+    delta('final', '## 上周进展\n')
+    delta('final', '完成测试。')
+    complete()
+    await run
+    const done = events.mock.calls.find(([type]) => type === 'complete')?.[1]
+    expect(done.result).toBe('## 上周进展\n完成测试。')
+    expect(done.event.text).toBe('我会读取上周日记。\n\n## 上周进展\n完成测试。')
+  })
+
   it('runs a text-only turn without a tool session, Studio server or native shell', async () => {
     const { backend, host } = fixture()
     const run = backend.sendMessage('研究已提供的资料', {

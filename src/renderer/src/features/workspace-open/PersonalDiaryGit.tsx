@@ -10,6 +10,9 @@ import {
 } from '@shared/personal-diary-source'
 import { openWorkspaceRef } from './workspace-open-controller'
 import { useGitStore } from '../../stores/git-store'
+import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useOpenProjectsStore } from '../../stores/open-projects-store'
 
 export function PersonalDiaryGit({
   source,
@@ -25,6 +28,10 @@ export function PersonalDiaryGit({
   const [username, setUsername] = useState('')
   const [token, setToken] = useState('')
   const [keyPath, setKeyPath] = useState('')
+  const [destination, setDestination] = useState('')
+  const fixedOwner = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
+  /** The fixed project switches its single directory; other projects keep the legacy link. */
+  const switchesProject = Boolean(ownerPath && ownerPath === fixedOwner)
   const [directory, setDirectory] = useState(source?.directory ?? defaultDiaryDirectory)
   const [result, setResult] = useState<GitTransferSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
@@ -104,6 +111,7 @@ export function PersonalDiaryGit({
         username,
         token: token || undefined,
         sshKeyPath: keyPath || undefined,
+        ...(action === 'clone' && destination ? { destination } : {}),
         ...(action === 'update-copy'
           ? { expectedHead: result?.head, expectedTarget: result?.target }
           : {}),
@@ -129,6 +137,20 @@ export function PersonalDiaryGit({
     try {
       if (useTabStore.getState().tabs.some((tab) => tab.dirty))
         throw Error('有未保存内容，请先保存或取消修改；副本已准备，关联未切换。')
+      if (switchesProject && ownerPath) {
+        // Main re-checks identity, settings revision and that old tasks are paused before binding.
+        const preview = await window.cclinkStudio.workspaceState.inspectDiaryRoot(
+          result.workspacePath,
+        )
+        await window.cclinkStudio.workspaceState.confirmDiaryRoot(ownerPath, preview)
+        await openPersonalSpace()
+        // The previous folder stays on disk and in 历史项目; only its tab is closed.
+        const active = useWorkspaceStore.getState().activeWorkspaceRef
+        if (active.kind === 'local' && active.path !== ownerPath)
+          useOpenProjectsStore.getState().removeProject(ownerPath)
+        await useWorkspaceStore.getState().refreshSettings()
+        return
+      }
       if (source) {
         const previous = await window.cclinkStudio.scheduledTasks.inspect(source.workspacePath)
         if (!previous.success) throw Error('原任务状态读取失败，保持旧关联')
@@ -224,8 +246,24 @@ export function PersonalDiaryGit({
             />
           </label>
         </details>
+        <div className="diary-git-destination">
+          <span>本地目的地：{destination || '未选择（将另建独立副本）'}</span>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void window.cclinkStudio.dialog
+                .showOpenDialog({ selectDirectory: true, title: '选择用于拉取的空目录' })
+                .then((picked) => {
+                  if (!picked.canceled && picked.filePaths[0]) setDestination(picked.filePaths[0])
+                })
+                .catch((e) => setError(String(e)))
+            }
+          >
+            选择空目录…
+          </button>
+        </div>
         <button disabled={busy || !url} onClick={() => void execute('clone')}>
-          从 Git 拉取到新目录
+          {destination ? '拉取到所选空目录' : '从 Git 拉取到新目录'}
         </button>
       </div>
       {source && (
@@ -279,18 +317,28 @@ export function PersonalDiaryGit({
           )}
           {result.newCopy && (
             <div className="diary-source-form">
-              <label>
-                新副本的个人资料目录
-                <input
-                  aria-label="副本个人资料目录"
-                  value={directory}
-                  onChange={(e) => setDirectory(e.target.value)}
-                />
-              </label>
-              <p>
-                切换只改变首页来源。当前关联的 {source?.taskIds.length ?? 0}{' '}
-                项原任务需重新核对。旧目录的私有任务、运行历史、未上传文件不会跟来；旧任务仍按旧设置运行。新副本的共享任务需要在本设备重新确认，任务关联需重新选择。
-              </p>
+              {switchesProject ? (
+                <p>
+                  确认后「我的空间」改用 {result.workspacePath}
+                  ：首页、文件树、会话、终端与任务都从这里打开。原目录 {source?.workspacePath}{' '}
+                  的文件、未上传内容和私有任务原样保留；仓库带来的共享任务在本机默认停用，需逐项确认启用。
+                </p>
+              ) : (
+                <label>
+                  新副本的个人资料目录
+                  <input
+                    aria-label="副本个人资料目录"
+                    value={directory}
+                    onChange={(e) => setDirectory(e.target.value)}
+                  />
+                </label>
+              )}
+              {!switchesProject && (
+                <p>
+                  切换只改变首页来源。当前关联的 {source?.taskIds.length ?? 0}{' '}
+                  项原任务需重新核对。旧目录的私有任务、运行历史、未上传文件不会跟来；旧任务仍按旧设置运行。新副本的共享任务需要在本设备重新确认，任务关联需重新选择。
+                </p>
+              )}
               <p>
                 旧日记与计划：{source ? source.workspacePath + '/' + source.directory : '尚未关联'}
               </p>

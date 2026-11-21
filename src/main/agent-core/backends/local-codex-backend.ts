@@ -65,6 +65,9 @@ export class LocalCodexBackend implements IAgentBackend {
   private nativeToolsAllowed = true
   private items = new Map<string, Record<string, unknown>>()
   private currentText = ''
+  /** Final answer only: the last agent message item, matching Claude Code's `result`. */
+  private finalText = ''
+  private textItemId: unknown = null
   private allowedStudioTools = new Set<string>()
   private runDone: Promise<void> | null = null
   private diagnostic: CodexRuntimeDiagnostic | undefined
@@ -103,6 +106,8 @@ export class LocalCodexBackend implements IAgentBackend {
     let succeeded = false
     this.cancelled = false
     this.currentText = ''
+    this.finalText = ''
+    this.textItemId = null
     this.items.clear()
     this.cwd = resolve(options.workspacePath || this.getWorkspacePath?.() || tmpdir())
     const unattendedReads = this.toolHost.allowsUnattendedNativeReads()
@@ -318,7 +323,7 @@ export class LocalCodexBackend implements IAgentBackend {
       this.handler?.('complete', {
         protocol: 'studio-agent-event-v1',
         event: { type: 'complete', sessionId: this.sessionId, text: this.currentText },
-        result: this.currentText,
+        result: this.finalText || this.currentText,
         session_id: this.sessionId,
         is_error: false,
       })
@@ -373,7 +378,14 @@ export class LocalCodexBackend implements IAgentBackend {
         this.turnId = text(record(params.turn).id)
         break
       case 'item/agentMessage/delta':
+        // Progress narration and the final answer arrive as separate message items.
+        if (params.itemId !== this.textItemId) {
+          if (this.currentText) this.currentText += '\n\n'
+          this.finalText = ''
+          this.textItemId = params.itemId
+        }
         this.currentText += text(params.delta)
+        this.finalText += text(params.delta)
         this.emit({ type: 'text-delta', messageId: params.itemId, text: text(params.delta) })
         break
       case 'item/reasoning/summaryTextDelta':

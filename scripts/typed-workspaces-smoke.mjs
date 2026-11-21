@@ -160,7 +160,8 @@ try {
   assert.equal(collision, true)
   assert.equal(JSON.parse(await readFile(configFile, 'utf8')).name, '旅行日记')
   await page.getByRole('button', { name: '我的空间', exact: true }).click()
-  await page.getByRole('button', { name: '从空白日记开始', exact: true }).click()
+  // First use confirms the default directory (no Git) before the diary home appears.
+  await page.getByRole('button', { name: '确认并进入项目', exact: true }).click()
   await page.getByRole('button', { name: '创建今日空白模板', exact: true }).waitFor()
   await page.getByRole('button', { name: '项目设置', exact: true }).click()
   await page.getByRole('button', { name: '接回本机原资料与任务', exact: true }).click()

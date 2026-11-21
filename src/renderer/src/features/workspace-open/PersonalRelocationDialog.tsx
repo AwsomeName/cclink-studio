@@ -106,20 +106,15 @@ export function PersonalRelocationDialog(): React.ReactElement | null {
         )}
         {preview && row('移动后的位置', preview.candidate.workspacePath, preview.candidate, '')}
         {preview && both && (
-          <div className="fixed-space-candidates" role="radiogroup" aria-label="两个位置都有日记">
+          <div className="fixed-space-candidates">
             <p>两个位置都有日记。原位置的文件不会被移动、合并或删除；请确认之后使用哪一份。</p>
             <label className={choice === 'candidate' ? 'selected' : ''}>
               <input
-                type="radio"
-                name="relocation-choice"
+                type="checkbox"
                 checked={choice === 'candidate'}
-                onChange={() => setChoice('candidate')}
+                onChange={(event) => setChoice(event.target.checked ? 'candidate' : '')}
               />
               使用移动后的位置（带有原项目身份）
-            </label>
-            <label>
-              <input type="radio" name="relocation-choice" checked={false} onChange={close} />
-              暂不改变，保留原绑定
             </label>
           </div>
         )}

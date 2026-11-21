@@ -15,7 +15,55 @@
 
 工程验证通过主进程与渲染层类型检查、Electron 构建及 28 项相关测试，覆盖确认时版本变化、链接目录与重复项目身份。复现命令为 `pnpm exec electron-vite build --outDir .cache/diary-build` 和 `node scripts/diary-first-use-smoke.mjs`。
 
-待继续验收旧根移走后的重新定位、双方均有资料时的核对、日常编辑与任务实际产物、指定空目录 Git 拉取和换机。上述 Git 流程验收止于配置页。
+首批当时待继续验收旧根移走后的重新定位、双方均有资料时的核对、日常编辑与任务实际产物、指定空目录 Git 拉取和换机。上述 Git 流程验收止于配置页。
+
+## 2026-11-21 第二批实测
+
+工作树 `codex/diary-first-use`，接续 `5b690862`。同样使用隔离用户目录、模拟正文和真实 Electron；系统目录选择对话框由脚本给出结果，其余读取、确认、切换、重启、文件、PTY、Git 进程和 Agent 运行均实际执行。Git 远端是测试目录内的本地 bare 仓库，没有推送到任何真实远端，也没有发布。
+
+### 用户现在能做什么
+
+| 流程 | 实测结果 | 证据 |
+| --- | --- | --- |
+| 原项目目录被移走后重启 | 启动直接弹出「重新定位日记项目」，显示上次位置；选身份不符的目录被拒绝，绑定不变。选移动后的目录后核对日记数和最近日记，确认后首页、文件树指向新位置，重启保持。 | [失联](acceptance/relocate-missing.png) · [恢复](acceptance/relocate-restored.png) |
+| 移动后原位置又出现别的日记 | 两侧并列显示路径、日记数、最近日记；未选择前确认按钮不可用。改用新位置后，原位置文件原样保留，没有移动或合并。 | [两侧核对](acceptance/relocate-both-sides.png) |
+| 旧版外部关联与默认目录都有日记 | 「将原资料目录用作项目目录」列出两侧，必须选择一侧；默认目录里的日记保持不变。 | [两侧选择](acceptance/legacy-both-sides.png) |
+| 今天无日记时新建 | 一次点击只建一份 `MMDD_周X.md`，再次准备返回同一文件。 | [今天](acceptance/daily-today.png) |
+| 历史与计划 | 日记列表包含合并月份 `07-08`、同日下划线与短横线两份，排除「项目记录」下的日期文件；计划页列出周计划和一日生活计划，不混入日记。 | [历史](acceptance/daily-history.png) · [计划](acceptance/daily-plans.png) |
+| 编辑与返回 | 「继续写原文」打开编辑标签，保存写回原 Markdown；切到文件树自动展开并选中该日记；切到普通项目再回来，编辑标签和正文仍在，文件树重新定位。 | [编辑](acceptance/daily-editing.png) · [文件树](acceptance/daily-file-tree.png) · [切项目后返回](acceptance/daily-return-after-switch.png) |
+| 在任务里写章节要求 | 在「每周复盘」「每日简报」的任务内容中写章节数、次序、标题取法、表格／清单格式和缺失事实写法，保存后重新打开逐字一致。 | [周任务要求](acceptance/tasks-weekly-requirement.png) |
+| 周复盘手动运行与到点运行 | 两次均由真实本机 Codex 完成，产物为三个二级章节「上周进展／遗留问题／本周计划（2026-11-16）」，遗留问题为三列表格，原因未知写「待核实」。 | [手动样例](acceptance/sample-weekly-manual.md) · [到点样例](acceptance/sample-weekly-scheduled.md) · [历史](acceptance/tasks-weekly-history.png) |
+| 每日简报到点运行与随后手动运行 | 到点运行写入当天 `MMDD_周X.md`，四个二级章节次序正确，今日待做为任务清单，今日打卡只保留表头；随后手动运行以「输出文件已存在，create-only 任务未覆盖它」失败，原文不变。 | [到点样例](acceptance/sample-daily-scheduled.md) · [历史](acceptance/tasks-daily-history.png) |
+| 已有匹配仓库 | 在已有 origin 的项目进入 Git 页，自动带出仓库地址和分支。 | [自动带出](acceptance/git-existing-origin.png) |
+| 新电脑首次使用，拉取到所选空目录 | 勾选 Git 后选择空目录，克隆直接落在该目录；核对目录、任务读取与输出后确认，「我的空间」改用该目录，原默认目录保留。正文、附件图片、两项共享任务恢复，两项任务在本机均为未启用；重启保持。 | [选择目的地](acceptance/git-clone-destination.png) · [核对](acceptance/git-clone-review.png) · [任务未启用](acceptance/git-machine-b-tasks.png) · [正文](acceptance/git-machine-b-diary.png) |
+| 安全更新 | 检查远程更新列出新增文件；有未提交内容时更新按钮不可用并显示本地改动；清理后把已审阅版本拉取为新副本，确认后切换，旧副本内容不变。 | [被阻止](acceptance/git-update-blocked.png) · [审阅](acceptance/git-update-review.png) · [切换后](acceptance/git-update-switched.png) |
+
+### 本批修复
+
+- 新增按项目身份重新定位：主进程只在原目录无法证明同一身份时提供；候选目录必须带原项目身份。原路径重建的无身份目录不再被当成复制件而触发身份分叉。
+- 首次确认或 Git 切换后，关闭被替换的默认目录标签；目录和文件保留在磁盘及历史项目中。
+- 「今日空白模板」原含 HTML 注释，编辑器因此拒绝编辑；改为纯 Markdown 提示行。
+- 文件树在打开编辑标签或重新加载项目后，自动展开祖先目录并选中当前文件。
+- Git 首次拉取可指定空目录；非空目录、用户目录外或符号链接目标被拒绝。日记固定项目的「确认改用此副本」改为切换项目目录，不再写旧版外部关联。
+- 本机 Codex 把进度旁白与最终回答拼成一行作为结果，周复盘首个二级标题因此失效（见 [修复前样例](acceptance/before-fix-weekly-manual.md)）。现在结果只取最后一条回答，完整文本按消息分段。
+
+### 工程门禁
+
+`pnpm verify` 的全部步骤逐项通过：边界校验、发布脚本测试、格式、ESLint、4095 项单测（含重新定位、克隆目的地、模板与 Codex 结果新增用例）和生产构建。真实 Electron 验收脚本：`scripts/diary-relocation-smoke.mjs`、`scripts/diary-daily-use-smoke.mjs`、`scripts/diary-tasks-smoke.mjs`（需本机 Codex 登录，消耗少量模型调用）、`scripts/diary-git-machines-smoke.mjs`，共用 `scripts/diary-acceptance-lib.mjs`。构建命令为 `pnpm exec electron-vite build --outDir .cache/diary-build`。
+
+### 仍未完成或未验证
+
+- 物理双机：换机以两个隔离 profile 和本地 bare 仓库模拟，未在第二台真实 Mac 和真实私有远端验收；认证失败、网络中断和真实账号推送均未覆盖。
+- 安全更新按产品方案拉取为独立新副本，副本位于 `~/CCLinkStudio-Git/diary-*/repository`，用户不能选位置；每次更新都会换项目目录。原位快进更新尚未设计，需产品确认。
+- 默认目录已含 Studio 元数据，不能作为空目标直接克隆；新电脑需另选空目录。矩阵中「默认目录 + Git 开启」的“空目标预览”尚未实现预览，仅在拉取后核对。
+- 模型内容：章节结构符合要求，但「上周」的含义随运行日期而异（周六运行时模型把本周一至周五当作上周或标注 9–15 日待核实），属于指令表述问题，需用户在任务内容中写明日期范围。仅验证了 Codex，未验证 Claude 后端。
+- 光标位置在切换项目后是否保留未做断言；编辑标签与正文已保留。
+- 重新定位界面未显示日记相对目录（选目录前未知），与效果图 17 略有差异。
+- `scripts/personal-diary-smoke.mjs` 仍依赖已不挂载的「资料接入」侧栏入口，自单栏导航改版后无法运行，本批未改写；其 Git 与任务覆盖已由新脚本替代，旧版外部关联的手动接入流程目前没有真实应用验收。
+- `scripts/typed-workspaces-smoke.mjs` 已按首次确认流程对齐，新建、改时区、重启部分通过；后续旧版「接回本机原资料与任务」步骤中，脚本填写个人资料目录时与字段预填竞争（得到 `000-个人计划空白日记`），未继续修复。
+- 回归：`diary-first-use-smoke`、`diary-relocation-smoke`、`diary-daily-use-smoke`、`diary-git-machines-smoke` 在最终构建上通过；`diary-tasks-smoke` 在 Codex 修复后的构建上通过。
+- 发布、真实资料推送、在用户设备上启用任务均未执行。
+
 
 ## 开工基线
 

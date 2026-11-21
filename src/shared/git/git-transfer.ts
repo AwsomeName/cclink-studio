@@ -10,6 +10,8 @@ export const gitTransferInputSchema = z
     workspacePath: bounded.optional(),
     url: bounded.optional(),
     destinationParent: bounded.optional(),
+    /** Clone only: the empty directory the user picked; the clone lands exactly here. */
+    destination: bounded.optional(),
     branch: z
       .string()
       .max(240)

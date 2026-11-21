@@ -37,6 +37,12 @@ export function registerGitIpc(
           !fileService?.canActivateWorkspace(event.sender.id, input.destinationParent)
         )
           throw Error('请通过目录选择器选择 Git 保存位置')
+        if (
+          input.destination &&
+          (input.action !== 'clone' ||
+            !fileService?.canActivateWorkspace(event.sender.id, input.destination))
+        )
+          throw Error('请通过目录选择器选择拉取的空目录')
         const result = await service.transfer(input)
         if (result.newCopy) {
           fileService?.registerKnownWorkspaces(event.sender.id, [result.workspacePath])

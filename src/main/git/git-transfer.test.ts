@@ -43,6 +43,29 @@ async function fixture() {
   return { seed, remote, git, context }
 }
 describe('Git diary transfer using real repositories', () => {
+  it('clones exactly into the chosen empty directory and refuses non-empty or outside targets', async () => {
+    const { remote, context } = await fixture()
+    const chosen = join(state.home, '新电脑', '我的空间')
+    await mkdir(chosen, { recursive: true })
+    const cloned = await transferRepository(
+      { action: 'clone', url: remote, destination: chosen },
+      context,
+    )
+    expect(cloned).toMatchObject({ workspacePath: chosen, newCopy: true, branch: 'main' })
+    expect(await readFile(join(chosen, '日记.md'), 'utf8')).toBe('original')
+    const busy = join(state.home, '已有内容')
+    await mkdir(busy)
+    await writeFile(join(busy, '原文.md'), '保留')
+    await expect(
+      transferRepository({ action: 'clone', url: remote, destination: busy }, context),
+    ).rejects.toThrow('不是空目录')
+    expect(await readFile(join(busy, '原文.md'), 'utf8')).toBe('保留')
+    const outside = await realpath(await mkdtemp(join(tmpdir(), 'outside-')))
+    roots.push(outside)
+    await expect(
+      transferRepository({ action: 'clone', url: remote, destination: outside }, context),
+    ).rejects.toThrow('用户目录')
+  })
   it('fetches and previews without changing originals, blocks dirty state and creates reviewed version in a separate copy', async () => {
     const { seed, remote, git, context } = await fixture()
     const first = await transferRepository({ action: 'clone', url: remote }, context)
