@@ -2000,6 +2000,8 @@ async function main() {
     await page.getByLabel('目标（每行一项）').fill('给出可执行的审阅意见')
     await page.getByLabel('行为规则（每行一项）').fill('先区分事实、推断和观点')
     await page.getByRole('button', { name: '创建角色' }).click()
+    // The draft heading is already visible before persistence completes.
+    await page.locator('[data-role-editor]').waitFor({ state: 'hidden', timeout: 10_000 })
     await page.getByRole('heading', { name: customRoleName, exact: true }).waitFor({
       state: 'visible',
       timeout: 10_000,
