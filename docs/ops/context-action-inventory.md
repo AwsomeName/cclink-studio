@@ -8,7 +8,7 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 
 当前维护门禁统计：
 
-- Renderer context-menu owner：20 个组件文件。
+- Renderer context-menu owner：21 个组件文件（含 1 个仅隔离右键冒泡的控件文件）。
 - Browser 原生菜单 owner：1 个主进程文件。
 - ContextMenu Store owner：1 个。
 - 结构化 `ContextTarget`：22 种，全部有 contribution 覆盖。
@@ -28,6 +28,8 @@ CCLink Studio 只有一个 renderer 菜单 Host、一个瞬时菜单 Store 和�
 | Status Bar    | `status-item` | `StatusBar.tsx`    | 复制具体状态、工作台诊断                                                                 |
 | 布局分隔条    | `layout`      | `ResizeHandle.tsx` | 重置尺寸、隐藏区域                                                                       |
 | 最近会话      | `thread`      | `ConversationQuickSwitcher.tsx` | 切换、拖入 Workbench、重命名、停止、诊断和关闭；与会话 Sidebar 共用命令          |
+
+远程桌面标签页显示方式控件：`src/renderer/src/features/remote-desktop/desktop-controls.tsx` 的 `onContextMenu` 仅阻止浮层右键事件经 React Portal 冒泡到 `TabBar`，避免误打开标签页菜单。显示方式由既有 `FloatingSurface` 左键菜单承载；该文件不展示右键菜单、不新增 `ContextTarget`、菜单 Host 或 Store，也不注册独立右键命令。
 
 ## 核心内容
 

@@ -27,6 +27,8 @@ const expectedRendererContextMenuOwners = new Set([
   'src/renderer/src/components/workbench/WorkbenchContent.tsx',
   'src/renderer/src/features/agent-conversations/local-session-sidebar.tsx',
   'src/renderer/src/features/agent-conversations/session-sidebar-primitives.tsx',
+  // Portaled view controls only stop propagation to the Workbench Tab menu.
+  'src/renderer/src/features/remote-desktop/desktop-controls.tsx',
 ])
 const expectedNativeMenuOwners = new Set(['src/main/browser/browser-context-menu.ts'])
 const expectedContextMenuStores = new Set([
