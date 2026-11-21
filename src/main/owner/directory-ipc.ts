@@ -1,5 +1,7 @@
 import { shell } from 'electron'
 import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
+import { ownerSourceIpc } from '../../shared/ipc/owner-source'
+import type { OwnerSourceDirectories } from './source-directories'
 import {
   registerTrustedIpcContract,
   type TrustedRendererGuard,
@@ -27,4 +29,17 @@ export function registerOwnerDirectories(
     const error = await shell.openPath(await service.location(id))
     if (error) throw Error(error)
   })
+}
+export function registerOwnerSources(guard: TrustedRendererGuard, sources: OwnerSourceDirectories) {
+  registerTrustedIpcContract(ownerSourceIpc.list, guard, (_e, id) => sources.list(id))
+  registerTrustedIpcContract(ownerSourceIpc.add, guard, (_e, id) => sources.add(id))
+  registerTrustedIpcContract(ownerSourceIpc.revoke, guard, (_e, id, grant) =>
+    sources.revoke(id, grant),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.entries, guard, (_e, id, grant, rel) =>
+    sources.entries(id, grant, rel),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.read, guard, (_e, id, grant, rel) =>
+    sources.read(id, grant, rel),
+  )
 }

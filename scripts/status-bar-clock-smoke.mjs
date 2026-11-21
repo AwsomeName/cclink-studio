@@ -1,4 +1,5 @@
 // Run with pnpm dev serving the current renderer; uses a disposable Electron profile.
+// Pass --timezone-only to verify the Settings selection and persistence across restart.
 // Long labels / update / toast are explicit UI fixtures, with no network or Git writes.
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
@@ -8,17 +9,22 @@ import { _electron } from 'playwright-core'
 import electronPath from 'electron'
 
 const repository = resolve(import.meta.dirname, '..')
+const timezoneOnly = process.argv.includes('--timezone-only')
 const rendererUrl = process.env.ELECTRON_RENDERER_URL || 'http://localhost:5173'
 const temporary = await mkdtemp(join(tmpdir(), 'studio-clock-'))
 const evidence =
-  process.env.CCLINK_STUDIO_SMOKE_EVIDENCE_DIR || join(repository, 'docs/testing/status-bar-clock')
+  process.env.CCLINK_STUDIO_SMOKE_EVIDENCE_DIR ||
+  join(repository, 'docs/testing', timezoneOnly ? 'status-bar-clock-timezone' : 'status-bar-clock')
 await mkdir(evidence, { recursive: true })
 await mkdir(join(temporary, 'profile'))
 await mkdir(join(temporary, 'home'))
 await mkdir(join(temporary, 'documents'))
 await writeFile(
   join(temporary, 'profile/settings.json'),
-  JSON.stringify({ componentSetupPageSeenVersion: 99 }),
+  JSON.stringify({
+    componentSetupPageSeenVersion: 99,
+    ...(timezoneOnly ? { startupWorkspaceTarget: 'unfiled' } : {}),
+  }),
 )
 await writeFile(
   join(temporary, 'launch.cjs'),
@@ -37,8 +43,8 @@ const pass = (check) => {
   checks.push(check)
   console.log('PASS', check)
 }
-try {
-  app = await _electron.launch({
+const launch = () =>
+  _electron.launch({
     executablePath: electronPath,
     args: [join(temporary, 'launch.cjs')],
     cwd: repository,
@@ -49,6 +55,59 @@ try {
       CCLINK_STUDIO_TEST_USER_DATA_PATH: join(temporary, 'profile'),
     },
   })
+const openClockSettings = async () => {
+  if (!(await page.locator('.settings-page').isVisible())) {
+    await page.locator('[title="Studio 设置"]').first().click()
+  }
+  await page.getByRole('button', { name: '外观', exact: true }).click()
+  const select = page.getByLabel('状态栏时区', { exact: true })
+  await select.waitFor()
+  return select
+}
+const simulateSeoulAtNewYear = async () => {
+  const session = await page.context().newCDPSession(page)
+  await session.send('Emulation.setTimezoneOverride', { timezoneId: 'Asia/Seoul' })
+  await page.clock.setFixedTime(new Date('2026-12-31T15:30:00Z'))
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+}
+const waitForClock = (text) =>
+  page.waitForFunction(
+    (text) => document.querySelector('.status-bar-clock')?.title.includes(text),
+    text,
+  )
+
+async function verifyTimeZoneSetting() {
+  app = await launch()
+  page = await app.firstWindow()
+  page.setDefaultTimeout(15000)
+  await simulateSeoulAtNewYear()
+  await waitForClock('2027/01/01 周五 · 00:30（Asia/Seoul）')
+  const timezone = await openClockSettings()
+  assert.equal(await timezone.inputValue(), 'system')
+  await timezone.selectOption('Asia/Shanghai')
+  await waitForClock('2026/12/31 周四 · 23:30（Asia/Shanghai）')
+  pass('choosing mainland China in Settings updates the clock across the date boundary')
+  await page
+    .getByRole('tab', { name: /Studio 设置/ })
+    .locator('.tab-close')
+    .click()
+  await page.locator('.settings-page').waitFor({ state: 'hidden' })
+  await app.close()
+
+  app = await launch()
+  page = await app.firstWindow()
+  page.setDefaultTimeout(15000)
+  await simulateSeoulAtNewYear()
+  await waitForClock('2026/12/31 周四 · 23:30（Asia/Shanghai）')
+  const restoredTimezone = await openClockSettings()
+  assert.equal(await restoredTimezone.inputValue(), 'Asia/Shanghai')
+  await restoredTimezone.selectOption('system')
+  await waitForClock('2027/01/01 周五 · 00:30（Asia/Seoul）')
+  pass('timezone survives an Electron restart and can be switched back to system time')
+}
+
+async function verifyClockLayout() {
+  app = await launch()
   page = await app.firstWindow()
   page.setDefaultTimeout(15000)
   await page.locator('.status-bar-clock').waitFor()
@@ -232,6 +291,11 @@ try {
   await page.clock.runFor(8100)
   await page.locator('.status-bar-clock').waitFor()
   pass('long toast replaces the clock within the center slot, then restores it')
+}
+
+try {
+  if (timezoneOnly) await verifyTimeZoneSetting()
+  else await verifyClockLayout()
   await writeFile(
     join(evidence, 'result.json'),
     JSON.stringify(

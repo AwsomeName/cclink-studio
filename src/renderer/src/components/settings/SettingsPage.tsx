@@ -11,6 +11,7 @@ import type { SettingsSecretStatus } from '@shared/ipc/settings'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
+  CLOCK_TIME_ZONES,
   MANAGED_CLAUDE_RUNTIME_VERSION,
 } from '@shared/settings-constants'
 import type {
@@ -109,9 +110,9 @@ const SETTINGS_SEARCH_INDEX: Array<{
   },
   {
     sectionId: 'appearance',
-    label: '主题与字号',
-    description: '调整桌面壳主题、界面字号和缩放。',
-    keywords: ['theme', 'font', 'zoom', '主题', '字号', '缩放'],
+    label: '主题、字号与时区',
+    description: '调整主题、界面字号、缩放和状态栏时钟时区。',
+    keywords: ['theme', 'font', 'zoom', 'timezone', '主题', '字号', '缩放', '时间', '时区'],
   },
   {
     sectionId: 'updates',
@@ -836,6 +837,31 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
                   </select>
                 </div>
               </div>
+
+              <SettingsRow settingKey="clockTimeZone" settings={settings} onReset={resetOne}>
+                <div className="settings-label">
+                  <label htmlFor="clock-time-zone">状态栏时区</label>
+                  <span className="settings-description">设置 Studio 状态栏显示的日期和时间。</span>
+                </div>
+                <div className="settings-control">
+                  <select
+                    id="clock-time-zone"
+                    className="settings-select"
+                    value={settings.clockTimeZone}
+                    onChange={(event) => update({ clockTimeZone: event.target.value })}
+                  >
+                    {CLOCK_TIME_ZONES.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone === 'system'
+                          ? '跟随系统'
+                          : zone === 'Asia/Shanghai'
+                            ? '中国大陆（Asia/Shanghai）'
+                            : zone}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </SettingsRow>
 
               <SettingsRow settingKey="appZoomLevel" settings={settings} onReset={resetOne}>
                 <div className="settings-label">

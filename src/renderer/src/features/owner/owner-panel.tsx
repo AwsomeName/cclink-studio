@@ -361,7 +361,7 @@ export function OwnerPanel({ open, close }: { open: boolean; close: () => void }
       {error && <p role="alert">{error}</p>}
       {open &&
         (selected ? (
-          <div className="own-detail">
+          <div className={selected.research ? 'own-detail own-work' : 'own-detail'}>
             {selected.research ? (
               <ResearchView a={selected} key={selected.id} back={() => setSel(null)} />
             ) : (

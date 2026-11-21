@@ -93,6 +93,8 @@ export function RemoteDesktopTab({
           fail('此屏幕共享认证方式暂不支持。')
           return
         }
+        // macOS Screen Sharing drops an unanswered auth challenge after a few minutes.
+        disconnectMessage = '等待认证期间远端已关闭连接，请重新连接后再输入凭据。'
         setUsernameRequired(fields.includes('username'))
         setPhase('credentials')
       })

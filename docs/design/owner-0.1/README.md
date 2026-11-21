@@ -1,6 +1,6 @@
 # Owner 0.1 · 事务工作模式
 
-2026-11-20 更新。下一版采用固定侧栏，复用 Studio 工作台。[布局、效果图、存储结构与确认交互](workbench-mode.md)是本轮设计入口。下文的六步原型保留事务流程，开发版现状单列如下。
+2026-11-21 更新。开发版已采用固定侧栏工作台（[真人验收步骤](../../testing/owner-workbench-sidebar.md)）。[布局、效果图、存储结构与确认交互](workbench-mode.md)是本轮设计入口。下文的六步原型保留事务流程，开发版现状单列如下。
 
 [Owner 定义](../../features/ai-employees.md)｜[新版 Studio 工作台](../workbench-modes-2026-11-18/product-design.md)｜[打开六步可点击原型](preview.html)。自研，不引入 [AgentOp](../../research/owner-0.1/agentop.md) 或 [pi-missions](../../research/owner-0.1/pi-missions.md) 代码。
 

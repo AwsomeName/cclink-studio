@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 
-const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-const pad = (value: number): string => String(value).padStart(2, '0')
+import { useSettingsStore } from '../../stores/settings-store'
 
 export function StatusBarClock(): React.ReactElement {
+  const clockTimeZone = useSettingsStore((state) => state.settings.clockTimeZone)
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -31,10 +31,24 @@ export function StatusBarClock(): React.ReactElement {
     }
   }, [])
 
-  const monthDay = `${pad(now.getMonth() + 1)}/${pad(now.getDate())}`
-  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`
-  const full = `${now.getFullYear()}/${monthDay} ${weekdays[now.getDay()]} · ${time}`
-  const description = `本机时间：${full}（${Intl.DateTimeFormat().resolvedOptions().timeZone}）`
+  const formatter = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: clockTimeZone === 'system' ? undefined : clockTimeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  const { year, month, day, weekday, hour, minute } = Object.fromEntries(
+    formatter.formatToParts(now).map(({ type, value }) => [type, value]),
+  )
+  const monthDay = `${month}/${day}`
+  const time = `${hour}:${minute}`
+  const full = `${year}/${monthDay} ${weekday} · ${time}`
+  const source = clockTimeZone === 'system' ? '本机时间' : '状态栏时间'
+  const description = `${source}：${full}（${formatter.resolvedOptions().timeZone}）`
 
   return (
     <time

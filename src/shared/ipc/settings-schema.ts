@@ -3,6 +3,7 @@ import type { AppSettings } from '../settings-constants'
 import {
   APP_ZOOM_LEVEL_MAX,
   APP_ZOOM_LEVEL_MIN,
+  CLOCK_TIME_ZONES,
   PERMISSION_MODES,
   SUPPORTED_AGENT_PROVIDERS,
 } from '../settings-constants'
@@ -53,6 +54,7 @@ const settingsUpdateSchema = z
     editorWordWrap: z.boolean(),
     markdownAutoSave: z.boolean(),
     editorLineNumbers: z.boolean(),
+    clockTimeZone: z.enum(CLOCK_TIME_ZONES),
     appZoomLevel: z.number().finite().min(APP_ZOOM_LEVEL_MIN).max(APP_ZOOM_LEVEL_MAX),
     recentWorkspacePaths: z.array(pathString).max(100),
     startupWorkspaceTarget: z.enum(['resume', 'default', 'unfiled']),

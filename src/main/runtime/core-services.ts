@@ -1,4 +1,4 @@
-import { app, shell, type Event } from 'electron'
+import { app, dialog, shell, type Event } from 'electron'
 import { join, resolve } from 'node:path'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
@@ -47,7 +47,8 @@ import { UpdateService } from '../update/update-service'
 import { ScheduledTaskService } from '../scheduled-task/scheduled-task-service'
 import { registerScheduledTaskIpc } from '../scheduled-task/scheduled-task-ipc'
 import { AffairDirectoryService } from '../owner/affair-directory'
-import { registerOwnerDirectories } from '../owner/directory-ipc'
+import { registerOwnerDirectories, registerOwnerSources } from '../owner/directory-ipc'
+import { OwnerSourceDirectories } from '../owner/source-directories'
 import { registerOwnerReadme } from '../owner/read-public-readme'
 import { registerModelUsageIpc } from '../usage/model-usage-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
@@ -293,14 +294,29 @@ export async function bootstrapMainProcessServices(
   )
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
   registerOwnerReadme(runtime.trustedRendererGuard)
-  registerOwnerDirectories(
+  const ownerRegistry = join(app.getPath('userData'), 'owner-directories')
+  const ownerAffairs = new AffairDirectoryService(ownerRegistry, async () => {
+    const spaces = await runtime.workspaceStateService!.ensurePersonalSpace(
+      runtime.settingsService?.getAll().defaultWorkspacePath,
+    )
+    if (!spaces.personal) throw Error('请先设置个人空间目录')
+    return spaces.personal.workspacePath
+  })
+  registerOwnerDirectories(runtime.trustedRendererGuard, ownerAffairs)
+  registerOwnerSources(
     runtime.trustedRendererGuard,
-    new AffairDirectoryService(join(app.getPath('userData'), 'owner-directories'), async () => {
-      const spaces = await runtime.workspaceStateService!.ensurePersonalSpace(
-        runtime.settingsService?.getAll().defaultWorkspacePath,
-      )
-      if (!spaces.personal) throw Error('请先设置个人空间目录')
-      return spaces.personal.workspacePath
+    new OwnerSourceDirectories(ownerRegistry, ownerAffairs, async () => {
+      const window = runtime.mainWindow
+      const options = {
+        title: '选择本事务的只读参考目录',
+        buttonLabel: '允许本事务只读此目录',
+        properties: ['openDirectory' as const],
+      }
+      const result =
+        window && !window.isDestroyed()
+          ? await dialog.showOpenDialog(window, options)
+          : await dialog.showOpenDialog(options)
+      return result.canceled ? undefined : result.filePaths[0]
     }),
   )
   registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
