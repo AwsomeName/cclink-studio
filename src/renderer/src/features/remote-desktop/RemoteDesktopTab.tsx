@@ -5,6 +5,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
+import { applyMacServerModifiers } from './mac-keys'
 import './remote-desktop.css'
 
 type Phase = 'idle' | 'connecting' | 'credentials' | 'connected' | 'ended'
@@ -73,6 +74,7 @@ export function RemoteDesktopTab({
       const channel = new DesktopChannel(input)
       const rfb = new Viewer(target.current, channel, { shared: true })
       client.current = rfb
+      if (!applyMacServerModifiers(rfb)) console.warn('[RemoteDesktop] 无法校正 Mac 修饰键映射')
       rfb.scaleViewport = fit
       rfb.viewOnly = !active
       const on = (name: string, fn: (e: Event) => void): void => {
