@@ -1,0 +1,56 @@
+[
+ {
+  "name": "dashboard-dark",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "dashboard-light",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "dashboard-notes",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "first-use",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "dashboard-1024",
+  "w": 1024,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "dashboard-narrow",
+  "w": 375,
+  "h": 812,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ }
+]

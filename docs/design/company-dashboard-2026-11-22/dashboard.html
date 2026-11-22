@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>公司首页效果稿</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --info: #5b4bc4; --info-soft: #ece9fb;
+  --note: #7a4dd8; --note-soft: #f1ebfd;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+    --note: #c3a6ff; --note-soft: #31284a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+  --note: #c3a6ff; --note-soft: #31284a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; min-height: 560px; }
+
+/* Project strip */
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.strip .proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.strip .proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.strip .spacer { flex: 1; }
+.badge-wait { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 11px; line-height: 17px; }
+
+.body { display: grid; grid-template-columns: 210px minmax(0, 1fr) 320px; min-height: 0; }
+
+/* Sidebar */
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .item .count { margin-left: auto; font-size: 11px; color: var(--faint); }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+.side hr { border: 0; border-top: 1px solid var(--border); margin: 10px 4px; }
+
+/* Center */
+.center { display: grid; grid-template-rows: 34px 1fr; min-width: 0; min-height: 0; }
+.tabs { display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--border); }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; border-right: 1px solid var(--border); color: var(--muted); }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.tabs .tools { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--muted); }
+
+.page { overflow: auto; padding: 18px 28px 40px; }
+.head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.head .type { font-size: 12px; color: var(--muted); padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; margin-left: 8px; vertical-align: 3px; }
+.head .sub { color: var(--muted); margin-top: 4px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: none; border-color: transparent; color: var(--accent); padding: 0 4px; }
+.month { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.col { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; position: relative; }
+.card > header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.card > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.card > header .n { color: var(--faint); font-weight: 400; }
+.card > header .right { margin-left: auto; display: flex; gap: 6px; }
+.card .foot { padding: 9px 14px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--border); }
+
+/* Needs-me rows */
+.row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 14px 11px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row .bar { align-self: stretch; border-radius: 0 3px 3px 0; }
+.row .title { font-weight: 600; overflow-wrap: anywhere; }
+.row .why { color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.row .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 5px; font-size: 12px; color: var(--faint); align-items: center; }
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-danger { background: var(--danger-soft); color: var(--danger); }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-info { background: var(--info-soft); color: var(--info); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+.b-warn { background: var(--warn); } .b-danger { background: var(--danger); } .b-info { background: var(--info); } .b-plain { background: var(--border); }
+
+/* Business table */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 500; font-size: 12px; color: var(--faint); }
+tr:last-child td { border-bottom: 0; }
+td .name { font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; }
+td .goal { color: var(--muted); font-size: 12px; margin-top: 2px; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pips { display: inline-flex; gap: 3px; margin-right: 6px; vertical-align: 1px; }
+.pips i { width: 8px; height: 8px; border-radius: 2px; background: var(--border); }
+.pips i.ok { background: var(--ok); } .pips i.wait { background: var(--warn); }
+
+/* Ledger */
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metric { padding: 12px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.metric:last-child { border-right: 0; }
+.metric .label { font-size: 12px; color: var(--muted); }
+.metric .value { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; }
+.ledger-extra { padding: 10px 14px; border-top: 1px solid var(--border); display: grid; gap: 7px; }
+.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.line .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+/* Generic list */
+.li { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.li:last-child { border-bottom: 0; }
+.li .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.li .top .t { font-weight: 600; }
+.li .top .when { margin-left: auto; font-size: 12px; color: var(--faint); }
+.li .sub { color: var(--muted); margin-top: 3px; font-size: 12.5px; overflow-wrap: anywhere; }
+
+/* Agent panel */
+.agent { background: var(--surface); border-left: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+.agent .top { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.agent .msgs { padding: 14px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+.ctx { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; color: var(--muted); font-size: 12px; }
+.ctx b { color: var(--text); font-weight: 600; }
+.sugg { display: grid; gap: 6px; }
+.sugg button { text-align: left; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.composer { margin: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg); }
+.composer .ph { color: var(--faint); min-height: 36px; }
+.composer .bar { display: flex; gap: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+
+/* Status bar */
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--statusbar); color: var(--on-accent); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.status .right { margin-left: auto; display: flex; gap: 16px; }
+
+/* Empty state */
+.empty { display: none; }
+body.first .full { display: none; }
+body.first .empty { display: block; }
+.empty-inline { display: none; }
+body.first .empty-inline { display: inline; }
+body.first .sugg.empty { display: grid; }
+.empty .card { max-width: 760px; }
+.empty .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.empty .step { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: grid; gap: 6px; align-content: start; }
+.empty .step b { font-size: 13.5px; }
+.empty .step p { margin: 0; color: var(--muted); font-size: 12.5px; }
+.empty .step .btn { justify-self: start; margin-top: 4px; }
+
+/* Annotations */
+.note { display: none; position: absolute; top: -9px; right: 10px; z-index: 2; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--note-soft); color: var(--note); border: 1px solid var(--note); white-space: nowrap; }
+body.notes .note { display: inline-block; }
+body.clean .review { display: none; }
+body.notes .card { outline: 1px dashed var(--note); outline-offset: 3px; }
+
+/* Review controls */
+.review { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+.review button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.review button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+.review .sep { width: 1px; background: var(--border); margin: 3px 2px; }
+
+/* Responsive */
+@media (max-width: 1280px) { .body { grid-template-columns: 190px minmax(0, 1fr) 280px; } }
+@media (max-width: 1120px) { .body { grid-template-columns: 190px minmax(0, 1fr); } .agent { display: none; } .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .body { grid-template-columns: minmax(0, 1fr); } .side { display: none; }
+  .strip .proj:not(.active):not(.keep) { display: none; }
+  .page { padding: 14px 16px 90px; }
+  .tabs .tools { display: none; }
+  .metrics { grid-template-columns: minmax(0, 1fr); } .metric { border-right: 0; border-bottom: 1px solid var(--border); }
+  .empty .steps { grid-template-columns: minmax(0, 1fr); }
+  .hide-narrow { display: none; }
+  .row { grid-template-columns: 4px minmax(0, 1fr); } .row > .btn { grid-column: 2; justify-self: start; }
+  .status .right, .status .hide-narrow { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3.5h-3v3.5H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="yuan" viewBox="0 0 16 16"><path d="M4 2.5 8 8l4-5.5M8 8v5.5M5 9h6M5 11.5h6"/></symbol>
+  <symbol id="send" viewBox="0 0 16 16"><rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h3"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="chat" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol>
+  <symbol id="tool" viewBox="0 0 16 16"><path d="M10 2.5a3 3 0 0 0-2.8 4.1L2.5 11.3l2.2 2.2 4.7-4.7A3 3 0 0 0 13.5 6l-1.8 1.8-1.9-.5-.5-1.9z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="owner" viewBox="0 0 16 16"><path d="M8 1.8 14 8l-6 6.2L2 8z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></symbol>
+  <symbol id="cal" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></symbol>
+  <symbol id="globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.8 2 1.8 9.6 0 11.6M8 2.2c-1.8 2-1.8 9.6 0 11.6"/></symbol>
+  <symbol id="term" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="m4.5 6.5 2 1.5-2 1.5M8 10h3"/></symbol>
+  <symbol id="ext" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="strip" aria-label="项目栏">
+    <button class="proj" aria-label="收起侧栏"><svg class="i"><use href="#panel"/></svg></button>
+    <button class="proj"><svg class="i"><use href="#grid"/></svg>我的空间</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#grid"/></svg>眼镜研发</button>
+    <button class="proj active"><svg class="i"><use href="#grid"/></svg>星河科技</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#plus"/></svg>新建 / 打开</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#clock"/></svg>历史项目</button>
+    <span class="spacer"></span>
+    <button class="proj hide-narrow"><svg class="i"><use href="#gear"/></svg>Studio 设置</button>
+    <button class="proj keep"><svg class="i"><use href="#owner"/></svg>Owner<span class="badge-wait">1 等你</span></button>
+  </nav>
+
+  <div class="body">
+    <aside class="side" aria-label="项目导航">
+      <button class="item active"><svg class="i"><use href="#home"/></svg>项目首页</button>
+      <div class="group">公司经营</div>
+      <button class="item"><svg class="i"><use href="#list"/></svg>业务项目<span class="count full">3</span></button>
+      <button class="item"><svg class="i"><use href="#yuan"/></svg>公司账目<span class="count full">12 待核对</span></button>
+      <button class="item"><svg class="i"><use href="#send"/></svg>运营内容</button>
+      <hr />
+      <div class="group">工作</div>
+      <button class="item"><svg class="i"><use href="#folder"/></svg>文件</button>
+      <button class="item"><svg class="i"><use href="#chat"/></svg>会话</button>
+      <button class="item"><svg class="i"><use href="#tool"/></svg>工具</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <div class="tab active" role="tab" aria-selected="true"><svg class="i"><use href="#home"/></svg>项目首页</div>
+        <div class="tools"><svg class="i"><use href="#globe"/></svg><svg class="i"><use href="#term"/></svg></div>
+      </div>
+
+      <div class="page">
+        <div class="head">
+          <div>
+            <h1>星河科技<span class="type">公司</span></h1>
+            <div class="sub full">2 件事需要你处理 · 2 件正在推进 · 数据更新于 11-22 09:41</div>
+            <div class="sub empty">还没有业务和账目。下面三步都可以跳过，用到时再补。</div>
+          </div>
+          <div class="right">
+            <span class="month full"><svg class="i"><use href="#cal"/></svg>2026-11</span>
+            <button class="btn"><svg class="i"><use href="#gear"/></svg>项目设置</button>
+          </div>
+        </div>
+
+        <!-- Populated dashboard -->
+        <div class="grid full">
+          <div class="col">
+            <section class="card" aria-labelledby="h-needs">
+              <span class="note">聚合视图 · 状态与动作回到原领域</span>
+              <header><h2 id="h-needs">需要我处理 <span class="n">2</span></h2></header>
+              <div class="row">
+                <span class="bar b-danger"></span>
+                <div>
+                  <div class="title">知乎账号登录失效，发布停在“提交前核验”</div>
+                  <div class="why">《AR 眼镜一代试戴记录》正文与 3 张图已填好，草稿已保存；需要你在原账号页面重新扫码。</div>
+                  <div class="meta"><span class="tag t-danger">需要我处理</span><span>运营 · 发布事务</span><span>AR 眼镜一代</span><span>知乎 @星河科技</span><span>11-22 09:12</span></div>
+                </div>
+                <button class="btn primary">打开发布事务</button>
+              </div>
+              <div class="row">
+                <span class="bar b-warn"></span>
+                <div>
+                  <div class="title">Owner 等你决定：调研范围要不要扩大到付费报告</div>
+                  <div class="why">公开资料只能确认 2 家竞品的屏幕方案；第 3 家需要付费报告。已查到的结论不受影响。</div>
+                  <div class="meta"><span class="tag t-warn">等你决定</span><span>Owner · OW-024 竞品显示方案调研</span><span>AR 眼镜一代</span><span>11-21 18:30</span></div>
+                </div>
+                <button class="btn">打开事务</button>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="h-biz">
+              <span class="note">公司领域唯一拥有：业务项目与关联</span>
+              <header><h2 id="h-biz">业务项目 <span class="n">3</span></h2><div class="right"><button class="btn"><svg class="i"><use href="#plus"/></svg>创建业务项目</button></div></header>
+              <table>
+                <thead><tr><th>业务</th><th>交付物</th><th class="hide-narrow">本月已确认支出</th><th class="hide-narrow">对外内容</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><button class="name">AR 眼镜一代</button><div class="goal">完成首轮试戴记录及产品介绍稿</div></td>
+                    <td><span class="pips"><i class="ok"></i><i class="ok"></i><i class="wait"></i><i></i></span>2 已验收 · 1 待验收 · 1 未完成</td>
+                    <td class="num hide-narrow">¥1,820.40</td>
+                    <td class="hide-narrow">1 已公开 · 1 卡住</td>
+                  </tr>
+                  <tr>
+                    <td><button class="name">11 月客户访谈</button><div class="goal">访谈 5 位试戴用户并整理需求</div></td>
+                    <td><span class="pips"><i class="ok"></i><i></i></span>1 已验收 · 1 未完成</td>
+                    <td class="num hide-narrow">¥0.00</td>
+                    <td class="hide-narrow">—</td>
+                  </tr>
+                  <tr>
+                    <td><button class="name">官网改版</button><div class="goal" style="color:var(--warn)">目标和交付物待补</div></td>
+                    <td><button class="btn ghost">补目标</button></td>
+                    <td class="num hide-narrow"><span style="color:var(--faint)">未关联账目归属</span></td>
+                    <td class="hide-narrow">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+          </div>
+
+          <div class="col">
+            <section class="card" aria-labelledby="h-ledger">
+              <span class="note">来源：公司账目 · 只计已确认</span>
+              <header><h2 id="h-ledger">2026-11 经营账</h2><div class="right"><button class="btn">打开账目</button></div></header>
+              <div class="metrics">
+                <div class="metric"><div class="label">已确认收入</div><div class="value">¥3,000.00</div></div>
+                <div class="metric"><div class="label">已确认支出</div><div class="value">¥1,820.40</div></div>
+                <div class="metric"><div class="label">净流入</div><div class="value">¥1,179.60</div></div>
+              </div>
+              <div class="ledger-extra">
+                <div class="line"><span class="tag t-warn">12 条待核对</span><span>不计入上方汇总</span><button class="btn ghost" style="margin-left:auto">去核对</button></div>
+                <div class="line"><span class="tag t-plain">资料可能未齐</span><span>已导入招商银行流水（至 11-20）；支付宝未导入</span></div>
+                <div class="line"><span>AR 眼镜一代 已确认支出</span><span class="v">¥1,820.40</span></div>
+              </div>
+              <div class="foot">净流入不等于利润；月份资料是否完整需要你核对。</div>
+            </section>
+
+            <section class="card" aria-labelledby="h-prog">
+              <span class="note">只读引用：Owner 事务 / 网页事务</span>
+              <header><h2 id="h-prog">正在推进 <span class="n">2</span></h2></header>
+              <div class="li">
+                <div class="top"><span class="tag t-info">Owner 执行中</span><span class="t">OW-025 眼镜一代 BOM 成本整理</span><span class="when">11-22 09:30</span></div>
+                <div class="sub">执行会话 A 第 2 轮补查：核对连接器与电池单价来源。业务：AR 眼镜一代</div>
+              </div>
+              <div class="li">
+                <div class="top"><span class="tag t-plain">等待外部</span><span class="t">B 站专栏《试戴一周》平台审核中</span><span class="when">提交于 11-21 16:02</span></div>
+                <div class="sub">提交回执已保存；只读检查结果，不自动重发。业务：AR 眼镜一代</div>
+              </div>
+            </section>
+            <section class="card" aria-labelledby="h-out">
+              <span class="note">来源：网页事务 · 只显示已核验结果</span>
+              <header><h2 id="h-out">对外结果</h2><div class="right"><button class="btn">运营内容</button></div></header>
+              <div class="li">
+                <div class="top"><span class="tag t-ok">已公开 · 已核验</span><span class="t">知乎《AR 眼镜一代设计手记》</span></div>
+                <div class="sub">公开页全文与 3 张图核验通过 · 11-18 10:24 <button class="btn ghost"><svg class="i"><use href="#ext"/></svg>公开链接</button></div>
+              </div>
+              <div class="li">
+                <div class="top"><span class="tag t-plain">草稿已保存</span><span class="t">CSDN《试戴记录》</span></div>
+                <div class="sub">尚未授权提交；草稿不算发布完成。</div>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <!-- First use -->
+        <div class="empty">
+          <section class="card" aria-labelledby="h-start">
+            <header><h2 id="h-start">从一件真实的事开始</h2></header>
+            <div class="steps">
+              <div class="step"><b>1 · 创建业务项目</b><p>一句话目标和一项能判断完成的交付物，例如“完成首轮试戴记录”。</p><button class="btn primary"><svg class="i"><use href="#plus"/></svg>创建业务项目</button></div>
+              <div class="step"><b>2 · 导入一个月的流水</b><p>银行或支付流水 CSV。账目只统计你确认过的记录。</p><button class="btn">导入账目资料</button></div>
+              <div class="step"><b>3 · 关联已有资料与会话</b><p>选文件或会话挂到业务上，AI 以后按这些材料工作。</p><button class="btn">关联资料</button></div>
+            </div>
+            <div class="foot">这里不显示 0 元、默认任务或进度。没有导入就写“尚未导入”。</div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <aside class="agent" aria-label="Agent">
+      <div class="top"><button class="btn primary">新建对话</button><span style="color:var(--muted)">会话列表</span></div>
+      <div class="msgs">
+        <div class="ctx">本次上下文：<b>星河科技 · 项目首页</b><br />选中某个业务或事项后，会话改为以它为上下文。已开始的运行不随选中项变化。</div>
+        <div class="sugg empty">
+          <button>帮我把“AR 眼镜一代”写成业务目标和交付物</button>
+          <button>我该从哪个月的流水开始导入？</button>
+        </div>
+        <div class="sugg full">
+          <button>本周有什么卡住了？</button>
+          <button>整理 11 月还没核对的账</button>
+          <button>交给 Owner：准备 AR 眼镜一代介绍稿</button>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="ph">继续提问，或用 @ 引用资源…</div>
+        <div class="bar"><span>本机 Codex ⌄</span><span>权限：自动 ⌄</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span class="full">进行中的工作 2</span><span class="empty-inline">进行中的工作</span><span class="hide-narrow">本地 · 星河科技</span><span class="hide-narrow">朗读</span>
+    <span class="right"><span>效果稿 · 数据为示意</span><span>CCLink Studio v0.2.14</span></span>
+  </footer>
+</div>
+
+<div class="review" role="toolbar" aria-label="评审控制">
+  <button data-state="full" aria-pressed="true">有数据</button>
+  <button data-state="first" aria-pressed="false">首次使用</button>
+  <span class="sep"></span>
+  <button data-notes aria-pressed="false">数据来源标注</button>
+  <span class="sep"></span>
+  <button data-theme-btn="light" aria-pressed="false">浅色</button>
+  <button data-theme-btn="dark" aria-pressed="false">深色</button>
+</div>
+
+<script>
+(function () {
+  var body = document.body, root = document.documentElement;
+  function press(sel, on) { document.querySelectorAll(sel).forEach(function (b) { b.setAttribute('aria-pressed', String(on(b))); }); }
+  document.querySelectorAll('[data-state]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      body.classList.toggle('first', b.dataset.state === 'first');
+      press('[data-state]', function (x) { return x === b; });
+    });
+  });
+  var notes = document.querySelector('[data-notes]');
+  notes.addEventListener('click', function () {
+    var on = body.classList.toggle('notes');
+    notes.setAttribute('aria-pressed', String(on));
+  });
+  function setTheme(t) {
+    root.setAttribute('data-theme', t);
+    press('[data-theme-btn]', function (x) { return x.dataset.themeBtn === t; });
+    try { localStorage.setItem('company-dashboard-theme', t); } catch (e) {}
+  }
+  document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+    b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('company-dashboard-theme'); } catch (e) {}
+  var params = new URLSearchParams(location.search);
+  setTheme(params.get('theme') || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  if (params.get('state') === 'first') document.querySelector('[data-state="first"]').click();
+  if (params.get('notes') === '1') notes.click();
+  if (params.get('clean') === '1') body.classList.add('clean');
+})();
+</script>
+</body>
+</html>
