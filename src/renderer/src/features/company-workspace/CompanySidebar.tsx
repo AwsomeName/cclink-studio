@@ -8,12 +8,13 @@ export function CompanySidebar(): React.ReactElement {
   const tab = useTabStore((state) => state.tabs.find((item) => item.id === state.activeTabId))
   const ref = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const boundCompany = useFixedSpacesStore((state) => state.spaces?.company)
+  const section = tab?.companyWorkspace?.section
   const current =
     tab?.type === 'company-accounts'
       ? 'finance'
-      : tab?.type === 'article-publishing'
-        ? 'operations'
-        : tab?.companyWorkspace?.section
+      : tab?.type === 'article-publishing' || section === 'operations'
+        ? 'promote'
+        : section
   return (
     <nav className="company-navigation" aria-label="公司经营导航">
       {companySections.map((section) => (

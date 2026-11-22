@@ -18,6 +18,13 @@ import { openConversationInWorkbench } from '../agent-conversations/conversation
 import { openCompanyWorkspace } from './company-workspace-commands'
 import './company-workspace.css'
 import { WorkspaceDataLocation } from '../workspace-open/WorkspaceDataLocation'
+import { CompanyHome } from './CompanyHome'
+import { CompanyPromote } from './CompanyPromote'
+import { CompanyCustomers } from './CompanyCustomers'
+import { useCompanyLedger, useCompanyWebAccounts } from './use-company-sources'
+import type { CompanyCaseFilter } from './company-home-model'
+import { resolveAndOpenWebResourceTab } from '../web-resources/web-resource-tab'
+import { createArticlePublishingDraftTab } from '../article-publishing/article-publishing-tab'
 const currentMonth = () => {
   const d = new Date()
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
@@ -93,6 +100,8 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
       window.removeEventListener('focus', load)
     }
   }, [load])
+  const ledgerSource = useCompanyLedger(month, ref?.kind === 'local' && Boolean(snapshot?.enabled))
+  const webAccounts = useCompanyWebAccounts(ref?.kind === 'local' ? ref : undefined)
   const run = async (
     operation: () => Promise<CompanyWorkspaceResult<CompanyWorkspaceSnapshot>>,
     after?: (next: CompanyWorkspaceSnapshot) => void,
@@ -122,7 +131,37 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
       </div>
     )
   const scope = { workspaceRef: ref, month }
-  const page = tab.companyWorkspace?.section ?? 'overview'
+  const rawPage = tab.companyWorkspace?.section ?? 'overview'
+  const page = rawPage === 'operations' ? 'promote' : rawPage
+  const caseFilter =
+    (tab.companyWorkspace?.caseFilter as CompanyCaseFilter | undefined) ?? 'waiting-me'
+  const now = Date.now()
+  const formatMoney = (minor: number) => money(minor, snapshot?.finance.currency ?? 'CNY')
+  const openPublication = (affairId: string, title: string) =>
+    useTabStore.getState().openTab({
+      type: 'article-publishing',
+      title: '发布 · ' + title,
+      icon: '📰',
+      workspaceRef: ref,
+      articlePublishing: { affairId },
+    })
+  const openAccount = (accountId: string) =>
+    void resolveAndOpenWebResourceTab(accountId, ref).catch((reason) =>
+      setError(reason instanceof Error ? reason.message : '账号页面打开失败'),
+    )
+  const openAccountSettings = () =>
+    useTabStore
+      .getState()
+      .openTab({ type: 'settings', title: '设置', icon: '⚙️', settingsSection: 'web-accounts' })
+  const caseRun = async (
+    operation: () => Promise<CompanyWorkspaceResult<CompanyWorkspaceSnapshot>>,
+  ): Promise<boolean> => {
+    let ok = false
+    await run(operation, () => {
+      ok = true
+    })
+    return ok
+  }
   const projects = snapshot?.projects ?? []
   const selectedId = tab.companyWorkspace?.businessId ?? businessChoice
   const business = projects.find((item) => item.id === selectedId)
@@ -323,12 +362,14 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
               <span>{snapshot.name} · 公司经营</span>
               <h1>
                 {page === 'overview'
-                  ? '公司总览'
+                  ? '项目首页'
                   : page === 'projects'
                     ? (business?.name ?? '业务项目')
-                    : page === 'operations'
-                      ? '运营内容'
-                      : '资料与会话'}
+                    : page === 'promote'
+                      ? '推广'
+                      : page === 'customers'
+                        ? '客户与售后'
+                        : '资料与会话'}
               </h1>
             </div>
             <div className="company-actions">
@@ -357,107 +398,42 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
           </header>
           {page === 'overview' && (
             <>
-              <section>
-                <h2>需要我处理</h2>
-                {visible
-                  .filter(
-                    (item) =>
-                      !item.goal ||
-                      !item.deliverable ||
-                      snapshot.links.some(
-                        (link) => link.businessId === item.id && link.availability !== 'available',
-                      ) ||
-                      (item.ledgerProjectId &&
-                        !snapshot.finance.projects.some((p) => p.id === item.ledgerProjectId)),
-                  )
-                  .map((item) => (
-                    <article className="company-row" key={item.id}>
-                      <div>
-                        <strong>{item.name}</strong>
-                        <p>
-                          {!item.goal || !item.deliverable
-                            ? '待补目标或交付条件'
-                            : '关联资料或账目归属需要检查'}
-                        </p>
-                      </div>
-                      <button onClick={() => selectBusiness(item.id)}>查看下一步</button>
-                    </article>
-                  ))}
-                {snapshot.finance.summary?.pendingCount ? (
-                  <article className="company-row">
-                    <div>
-                      <strong>{snapshot.finance.summary.pendingCount} 条账目待核对</strong>
-                      <p>未计入已确认汇总。</p>
-                    </div>
-                    <button onClick={() => openLedger()}>打开核对</button>
-                  </article>
-                ) : null}
-                {!visible.length && <p>先创建一件业务，再关联已有资料。</p>}
-              </section>
-              <section>
-                <div className="company-section-heading">
-                  <h2>业务项目</h2>
-                  <button
-                    onClick={() => {
-                      openCompanyWorkspace('projects')
-                      setCreating(true)
-                    }}
-                  >
-                    创建业务项目
-                  </button>
-                </div>
-                {visible.map((item) => (
-                  <article className="company-row" key={item.id}>
-                    <div>
-                      <button className="company-link" onClick={() => selectBusiness(item.id)}>
-                        {item.name}
-                      </button>
-                      <p>{item.goal || '目标待补充'}</p>
-                    </div>
-                    <span>
-                      {snapshot.links.filter((link) => link.businessId === item.id).length}{' '}
-                      项关联资料
-                    </span>
-                  </article>
-                ))}
-              </section>
-              <section>
-                <div className="company-section-heading">
-                  <h2>{month} 经营账</h2>
-                  <button onClick={() => openLedger()}>打开原始账目</button>
-                </div>
-                {snapshot.finance.summary ? (
-                  <div className="company-metrics">
-                    <div>
-                      已确认收入
-                      <strong>
-                        {money(snapshot.finance.summary.incomeMinor, snapshot.finance.currency)}
-                      </strong>
-                    </div>
-                    <div>
-                      已确认支出
-                      <strong>
-                        {money(snapshot.finance.summary.expenseMinor, snapshot.finance.currency)}
-                      </strong>
-                    </div>
-                    <div>
-                      净流入
-                      <strong>
-                        {money(snapshot.finance.summary.netMinor, snapshot.finance.currency)}
-                      </strong>
-                    </div>
-                  </div>
-                ) : (
-                  <p>
-                    {snapshot.finance.state === 'not-initialized'
-                      ? '尚未启用账目，可从财务导入资料。'
-                      : (snapshot.finance.issue ?? '财务暂不可用。')}
-                  </p>
-                )}
-                <p className="company-muted">
-                  仅统计已确认记录；月份资料是否完整仍需核对，净流入不等于利润。
-                </p>
-              </section>
+              <CompanyHome
+                snapshot={snapshot}
+                month={month}
+                money={formatMoney}
+                ledger={ledgerSource.ledger}
+                ledgerError={ledgerSource.error}
+                accounts={webAccounts.rows}
+                accountsError={webAccounts.error}
+                now={now}
+                actions={{
+                  openLedger,
+                  openBusiness: selectBusiness,
+                  createBusiness: () => {
+                    openCompanyWorkspace('projects')
+                    setCreating(true)
+                  },
+                  openCustomers: (filter) =>
+                    openCompanyWorkspace('customers', undefined, undefined, filter),
+                  openPromote: () => openCompanyWorkspace('promote'),
+                  openPublication,
+                  openAccount,
+                  openAccountSettings,
+                  confirmRecord: async (recordId, expectedVersion) => {
+                    try {
+                      const result = await window.cclinkStudio.companyAccounts.confirmRecord({
+                        recordId,
+                        expectedVersion,
+                      })
+                      await Promise.all([ledgerSource.reload(), load()])
+                      return result.success ? null : result.error.message + '，请打开核对补全'
+                    } catch (reason) {
+                      return reason instanceof Error ? reason.message : '确认失败'
+                    }
+                  },
+                }}
+              />
               <section className="company-actions">
                 <button
                   disabled={busy}
@@ -473,9 +449,43 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                 >
                   关闭公司视图
                 </button>
-                <span className="company-muted">保留业务、账目、文件与会话。</span>
+                <span className="company-muted">保留业务、账目、客户记录、文件与会话。</span>
               </section>
             </>
+          )}
+          {page === 'promote' && (
+            <CompanyPromote
+              snapshot={snapshot}
+              accounts={webAccounts.rows}
+              openPublication={openPublication}
+              createPublication={() =>
+                useTabStore.getState().openTab(createArticlePublishingDraftTab(ref))
+              }
+              openAccount={openAccount}
+              openAccountSettings={openAccountSettings}
+            />
+          )}
+          {page === 'customers' && (
+            <CompanyCustomers
+              cases={snapshot.cases}
+              businesses={projects}
+              filter={caseFilter}
+              busy={busy}
+              now={now}
+              setFilter={(filter) =>
+                openCompanyWorkspace('customers', undefined, undefined, filter)
+              }
+              create={(fields) =>
+                caseRun(() =>
+                  window.cclinkStudio.companyWorkspace.createCase({ ...scope, ...fields }),
+                )
+              }
+              update={(fields) =>
+                caseRun(() =>
+                  window.cclinkStudio.companyWorkspace.updateCase({ ...scope, ...fields }),
+                )
+              }
+            />
           )}
           {page === 'projects' && (
             <>
@@ -711,7 +721,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
               )}
             </>
           )}
-          {(page === 'operations' || page === 'knowledge') && (
+          {page === 'knowledge' && (
             <>
               <label>
                 业务项目
@@ -729,7 +739,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
               </label>
               {business ? (
                 <>
-                  {page === 'operations' ? (
+                  {(page as string) === 'operations' ? (
                     <>
                       {links
                         .filter((item) => item.kind === 'publishing')
@@ -764,10 +774,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                   <button onClick={() => selectBusiness(business.id)}>管理业务关联</button>
                 </>
               ) : (
-                <p>
-                  选择业务项目，查看它关联的
-                  {page === 'operations' ? '真实发布任务' : '文件与原有会话'}。
-                </p>
+                <p>选择业务项目，查看它关联的 文件与原有会话。</p>
               )}
             </>
           )}

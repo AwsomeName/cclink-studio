@@ -3,18 +3,29 @@ import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useUIStore } from '../../stores/ui-store'
 import { openBoundCompany } from '../workspace-open/fixed-spaces-store'
-export type CompanySection = 'overview' | 'projects' | 'finance' | 'operations' | 'knowledge'
-export const companySections: Array<{ id: CompanySection; label: string }> = [
-  { id: 'overview', label: '公司总览' },
-  { id: 'projects', label: '业务项目' },
-  { id: 'finance', label: '财务' },
-  { id: 'operations', label: '运营' },
-  { id: 'knowledge', label: '资料与会话' },
-]
+export type CompanySection =
+  | 'overview'
+  | 'projects'
+  | 'promote'
+  | 'customers'
+  | 'finance'
+  | 'knowledge'
+  /** Legacy name of `promote`; still accepted from restored tabs and old callers. */
+  | 'operations'
+export const companySections: Array<{ id: Exclude<CompanySection, 'operations'>; label: string }> =
+  [
+    { id: 'overview', label: '项目首页' },
+    { id: 'projects', label: '业务项目' },
+    { id: 'promote', label: '推广' },
+    { id: 'customers', label: '客户与售后' },
+    { id: 'finance', label: '公司账目' },
+    { id: 'knowledge', label: '资料与会话' },
+  ]
 export function openCompanyWorkspace(
   section: CompanySection = 'overview',
   businessId?: string,
   month?: string,
+  caseFilter?: string,
 ): void {
   const workspaceRef = useWorkspaceStore.getState().activeWorkspaceRef
   if (workspaceRef.kind !== 'local') throw new Error('请先打开本地工作空间')
@@ -44,7 +55,12 @@ export function openCompanyWorkspace(
       title: '公司经营',
       icon: '司',
       workspaceRef,
-      companyWorkspace: { section, businessId: businessId ?? null, month: selectedMonth },
+      companyWorkspace: {
+        section: section === 'operations' ? 'promote' : section,
+        businessId: businessId ?? null,
+        month: selectedMonth,
+        caseFilter,
+      },
     })
   }
 }

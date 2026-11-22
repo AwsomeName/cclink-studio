@@ -10,6 +10,9 @@ import type {
   CompanyConfigureInput,
   CompanyConversationSource,
   CompanyCreateBusinessInput,
+  CompanyCreateCaseInput,
+  CompanyCustomerCase,
+  CompanyUpdateCaseInput,
   CompanyLinkInput,
   CompanyPublishingSource,
   CompanyResourceLink,
@@ -31,6 +34,12 @@ interface Sources {
   changed?(workspaceId: string, revision: number): void
 }
 type Row = Record<string, unknown>
+const SCHEMA_VERSION = 2
+const SUPPORTED_VERSIONS = new Set([1, SCHEMA_VERSION])
+const MAX_CASES = 5000
+/** v2 adds locally recorded customer inquiries and after-sales cases. */
+const CUSTOMER_CASES_DDL =
+  "CREATE TABLE IF NOT EXISTS customer_cases(id TEXT PRIMARY KEY,version INTEGER NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('lead','after-sales')),status TEXT NOT NULL CHECK(status IN ('waiting-me','waiting-customer','resolved')),customer TEXT NOT NULL,channel TEXT NOT NULL,summary TEXT NOT NULL,order_ref TEXT NOT NULL,next_step TEXT NOT NULL,business_id TEXT REFERENCES business_projects(id),waiting_since TEXT,resolved_at TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);"
 export class CompanyWorkspaceError extends Error {
   constructor(
     readonly code: CompanyWorkspaceErrorCode,
@@ -57,7 +66,11 @@ export class CompanyWorkspaceService {
     }
     const db = new DatabaseSync(path, { readOnly: true })
     try {
-      if (Number((db.prepare('PRAGMA user_version').get() as Row).user_version) !== 1)
+      if (
+        !SUPPORTED_VERSIONS.has(
+          Number((db.prepare('PRAGMA user_version').get() as Row).user_version),
+        )
+      )
         throw new Error('公司数据版本不支持，原资料已保留')
       const row = db.prepare('SELECT workspace_id,name,enabled FROM settings WHERE id=1').get() as
         | Row
@@ -230,6 +243,92 @@ export class CompanyWorkspaceService {
       return this.snapshot(target, input.month)
     })
   }
+  createCase(
+    target: CompanyWorkspaceTarget,
+    input: CompanyCreateCaseInput,
+  ): Promise<CompanyWorkspaceSnapshot> {
+    return this.enqueue(async () => {
+      await this.mutate(target, (db) => {
+        if (input.businessId) this.business(db, input.businessId)
+        if (
+          Number((db.prepare('SELECT COUNT(*) AS n FROM customer_cases').get() as Row).n) >=
+          MAX_CASES
+        )
+          throw new CompanyWorkspaceError('CONFLICT', '客户记录数量已达本版上限')
+        const now = new Date().toISOString()
+        db.prepare(
+          'INSERT INTO customer_cases(id,version,kind,status,customer,channel,summary,order_ref,next_step,business_id,waiting_since,resolved_at,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(
+          randomUUID(),
+          1,
+          input.kind,
+          'waiting-me',
+          input.customer,
+          input.channel,
+          input.summary,
+          input.orderRef,
+          input.nextStep,
+          input.businessId,
+          now,
+          null,
+          now,
+          now,
+        )
+      })
+      return this.snapshot(target, input.month)
+    })
+  }
+  updateCase(
+    target: CompanyWorkspaceTarget,
+    input: CompanyUpdateCaseInput,
+  ): Promise<CompanyWorkspaceSnapshot> {
+    return this.enqueue(async () => {
+      await this.mutate(target, (db) => {
+        const before = db.prepare('SELECT * FROM customer_cases WHERE id=?').get(input.caseId) as
+          | Row
+          | undefined
+        if (!before) throw new CompanyWorkspaceError('NOT_FOUND', '客户记录不存在或不属于当前公司')
+        if (input.businessId) this.business(db, input.businessId)
+        const now = new Date().toISOString()
+        const previous = caseFromRow(before)
+        // Waiting time restarts only when the case newly becomes the user's turn.
+        const waitingSince =
+          input.status !== 'waiting-me'
+            ? null
+            : previous.status === 'waiting-me'
+              ? previous.waitingSince
+              : now
+        const resolvedAt =
+          input.status !== 'resolved'
+            ? null
+            : previous.status === 'resolved'
+              ? previous.resolvedAt
+              : now
+        const changed = db
+          .prepare(
+            'UPDATE customer_cases SET version=version+1,kind=?,status=?,customer=?,channel=?,summary=?,order_ref=?,next_step=?,business_id=?,waiting_since=?,resolved_at=?,updated_at=? WHERE id=? AND version=?',
+          )
+          .run(
+            input.kind,
+            input.status,
+            input.customer,
+            input.channel,
+            input.summary,
+            input.orderRef,
+            input.nextStep,
+            input.businessId,
+            waitingSince,
+            resolvedAt,
+            now,
+            input.caseId,
+            input.expectedVersion,
+          )
+        if (!Number(changed.changes))
+          throw new CompanyWorkspaceError('CONFLICT', '客户记录已变化，请刷新后重试')
+      })
+      return this.snapshot(target, input.month)
+    })
+  }
   private async verifyLedger(
     target: CompanyWorkspaceTarget,
     month: string,
@@ -266,7 +365,9 @@ export class CompanyWorkspaceService {
       try {
         db = new DatabaseSync(temporary)
         db.exec(
-          'BEGIN; CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1), workspace_id TEXT NOT NULL, enabled INTEGER NOT NULL, name TEXT NOT NULL, revision INTEGER NOT NULL); CREATE TABLE business_projects(id TEXT PRIMARY KEY,version INTEGER NOT NULL,name TEXT NOT NULL,goal TEXT NOT NULL,deliverable TEXT NOT NULL,due_date TEXT,ledger_project_id TEXT UNIQUE,archived INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE resource_links(id TEXT PRIMARY KEY,business_id TEXT NOT NULL REFERENCES business_projects(id),kind TEXT NOT NULL,target TEXT NOT NULL,size INTEGER,modified REAL,created_at TEXT NOT NULL,UNIQUE(business_id,kind,target)); PRAGMA user_version=1;',
+          'BEGIN; CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1), workspace_id TEXT NOT NULL, enabled INTEGER NOT NULL, name TEXT NOT NULL, revision INTEGER NOT NULL); CREATE TABLE business_projects(id TEXT PRIMARY KEY,version INTEGER NOT NULL,name TEXT NOT NULL,goal TEXT NOT NULL,deliverable TEXT NOT NULL,due_date TEXT,ledger_project_id TEXT UNIQUE,archived INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE resource_links(id TEXT PRIMARY KEY,business_id TEXT NOT NULL REFERENCES business_projects(id),kind TEXT NOT NULL,target TEXT NOT NULL,size INTEGER,modified REAL,created_at TEXT NOT NULL,UNIQUE(business_id,kind,target)); ' +
+            CUSTOMER_CASES_DDL +
+            ` PRAGMA user_version=${SCHEMA_VERSION};`,
         )
         db.prepare('INSERT INTO settings VALUES (1,?,0,?,0)').run(
           target.workspaceId,
@@ -287,11 +388,18 @@ export class CompanyWorkspaceService {
     const db = new DatabaseSync(path, { readOnly })
     try {
       db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=1000;')
-      if (Number((db.prepare('PRAGMA user_version').get() as Row).user_version) !== 1)
+      const version = Number((db.prepare('PRAGMA user_version').get() as Row).user_version)
+      if (!SUPPORTED_VERSIONS.has(version))
         throw new CompanyWorkspaceError('IO_ERROR', '公司数据版本不支持，原数据已保留')
       const settings = db.prepare('SELECT * FROM settings WHERE id=1').get() as Row | undefined
       if (!settings || settings.workspace_id !== workspaceId)
         throw new CompanyWorkspaceError('IO_ERROR', '公司数据与工作空间身份不一致，原数据已保留')
+      if (version < SCHEMA_VERSION && !readOnly)
+        db.exec(
+          'BEGIN IMMEDIATE; ' +
+            CUSTOMER_CASES_DDL +
+            ` PRAGMA user_version=${SCHEMA_VERSION}; COMMIT;`,
+        )
       return db
     } catch (error) {
       db.close()
@@ -352,6 +460,7 @@ export class CompanyWorkspaceService {
     let revision = 0
     let projects: CompanyBusiness[] = []
     let rows: Row[] = []
+    let cases: CompanyCustomerCase[] = []
     if (existsSync(path)) {
       const db = this.open(path, target.workspaceId, true)
       try {
@@ -369,6 +478,15 @@ export class CompanyWorkspaceService {
           .all() as Row[]
         if (projects.length > 500 || rows.length > 2000)
           throw new CompanyWorkspaceError('IO_ERROR', '公司资料超出本版范围，原数据已保留')
+        // A v1 database opened read-only has no case table until its first write migrates it.
+        if (Number((db.prepare('PRAGMA user_version').get() as Row).user_version) >= 2)
+          cases = (
+            db
+              .prepare(
+                "SELECT * FROM customer_cases ORDER BY status='resolved', COALESCE(waiting_since, updated_at), id LIMIT ?",
+              )
+              .all(MAX_CASES) as Row[]
+          ).map(caseFromRow)
       } finally {
         db.close()
       }
@@ -468,6 +586,7 @@ export class CompanyWorkspaceService {
       revision,
       projects,
       links,
+      cases,
       conversations,
       publications,
       sourceIssues: {
@@ -488,6 +607,29 @@ function businessFromRow(row: Row): CompanyBusiness {
     dueDate: row.due_date === null ? null : String(row.due_date),
     ledgerProjectId: row.ledger_project_id === null ? null : String(row.ledger_project_id),
     archived: Boolean(row.archived),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  }
+}
+function caseFromRow(row: Row): CompanyCustomerCase {
+  return {
+    id: String(row.id),
+    version: Number(row.version),
+    kind: row.kind === 'lead' ? 'lead' : 'after-sales',
+    status:
+      row.status === 'resolved'
+        ? 'resolved'
+        : row.status === 'waiting-customer'
+          ? 'waiting-customer'
+          : 'waiting-me',
+    customer: String(row.customer),
+    channel: String(row.channel),
+    summary: String(row.summary),
+    orderRef: String(row.order_ref),
+    nextStep: String(row.next_step),
+    businessId: row.business_id === null ? null : String(row.business_id),
+    waitingSince: row.waiting_since === null ? null : String(row.waiting_since),
+    resolvedAt: row.resolved_at === null ? null : String(row.resolved_at),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   }

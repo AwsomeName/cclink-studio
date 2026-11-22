@@ -11,11 +11,11 @@ import { IconGlobe, IconPlus } from '../../components/common/Icons'
 import {
   formatWebResourceLoginStatus,
   getWebResourceLoginStatus,
-  observeWebResourceLogin,
   WEB_PRINCIPAL_KIND_LABELS,
   type WebResourceLoginObservation,
 } from './web-resource-view-model'
 import { resolveAndOpenWebResourceTab } from './web-resource-tab'
+import { checkWebAccountLogins } from './web-account-login-check'
 import { observeWebResourcesChanged } from './web-resource-events'
 import { openWebAccountDraftTab } from './open-default-browser-tab'
 import type { WebServiceStartupFailure } from '@shared/web-service-startup'
@@ -104,26 +104,7 @@ export function WebResourcesSidebar({
     }
     setCheckingLogin(true)
     try {
-      const entries: Array<readonly [string, WebResourceLoginObservation]> = []
-      for (let index = 0; index < rows.length; index += 8) {
-        const batch = rows.slice(index, index + 8)
-        entries.push(
-          ...(await Promise.all(
-            batch.map(async ({ account, website }) => {
-              try {
-                const summary = await window.cclinkStudio.browser.getSessionDiagnostics({
-                  url: website.entryUrl,
-                  profileId: account.browserProfileId,
-                })
-                return [account.id, observeWebResourceLogin(summary)] as const
-              } catch {
-                return [account.id, { status: 'error' as const, checkedAt: Date.now() }] as const
-              }
-            }),
-          )),
-        )
-      }
-      setLoginStatuses(Object.fromEntries(entries))
+      setLoginStatuses(await checkWebAccountLogins(rows))
     } finally {
       setCheckingLogin(false)
     }

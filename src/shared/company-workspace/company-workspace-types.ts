@@ -10,6 +10,8 @@ import type {
   companyUpdateBusinessSchema,
   companyLinkSchema,
   companyUnlinkSchema,
+  companyCreateCaseSchema,
+  companyUpdateCaseSchema,
 } from './company-workspace-schema'
 
 export type CompanyWorkspaceScope = z.infer<typeof companyWorkspaceScopeSchema>
@@ -18,6 +20,28 @@ export type CompanyCreateBusinessInput = z.infer<typeof companyCreateBusinessSch
 export type CompanyUpdateBusinessInput = z.infer<typeof companyUpdateBusinessSchema>
 export type CompanyLinkInput = z.infer<typeof companyLinkSchema>
 export type CompanyUnlinkInput = z.infer<typeof companyUnlinkSchema>
+export type CompanyCreateCaseInput = z.infer<typeof companyCreateCaseSchema>
+export type CompanyUpdateCaseInput = z.infer<typeof companyUpdateCaseSchema>
+export type CompanyCustomerCaseKind = CompanyCreateCaseInput['kind']
+export type CompanyCustomerCaseStatus = CompanyUpdateCaseInput['status']
+/** A customer inquiry or after-sales case the user records locally; never synced or committed. */
+export interface CompanyCustomerCase {
+  id: string
+  version: number
+  kind: CompanyCustomerCaseKind
+  status: CompanyCustomerCaseStatus
+  customer: string
+  channel: string
+  summary: string
+  orderRef: string
+  nextStep: string
+  businessId: string | null
+  /** When the case last started waiting on the user; null unless status is waiting-me. */
+  waitingSince: string | null
+  resolvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
 export type CompanyWorkspaceErrorCode =
   | 'INVALID_INPUT'
   | 'WORKSPACE_DENIED'
@@ -58,7 +82,12 @@ export interface CompanyConversationSource {
 export interface CompanyPublishingSource {
   id: string
   title: string
+  /** Verified public-result status owned by WebAffair. */
   status: string
+  /** Execution status owned by WebAffair (for example waiting-human); absent for older sources. */
+  execution?: string
+  adapterId?: string
+  updatedAt?: string
   url?: string
   observedAt?: string
 }
@@ -69,6 +98,7 @@ export interface CompanyWorkspaceSnapshot {
   revision: number
   projects: CompanyBusiness[]
   links: CompanyResourceLink[]
+  cases: CompanyCustomerCase[]
   conversations: CompanyConversationSource[]
   publications: CompanyPublishingSource[]
   sourceIssues: { conversations?: string; publications?: string }

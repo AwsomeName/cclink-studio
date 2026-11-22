@@ -60,6 +60,33 @@ export const companyLinkSchema = companyWorkspaceScopeSchema
 export const companyUnlinkSchema = companyWorkspaceScopeSchema
   .extend({ businessId: id, linkId: id })
   .strict()
+export const companyCustomerCaseKindSchema = z.enum(['lead', 'after-sales'])
+export const companyCustomerCaseStatusSchema = z.enum([
+  'waiting-me',
+  'waiting-customer',
+  'resolved',
+])
+export const companyCustomerCaseFieldsSchema = z
+  .object({
+    kind: companyCustomerCaseKindSchema,
+    customer: z.string().trim().min(1).max(128),
+    channel: z.string().trim().max(64),
+    summary: z.string().trim().min(1).max(2000),
+    orderRef: z.string().trim().max(128),
+    nextStep: z.string().trim().max(500),
+    businessId: id.nullable(),
+  })
+  .strict()
+export const companyCreateCaseSchema = companyWorkspaceScopeSchema
+  .extend(companyCustomerCaseFieldsSchema.shape)
+  .strict()
+export const companyUpdateCaseSchema = companyCreateCaseSchema
+  .extend({
+    caseId: id,
+    expectedVersion: z.number().int().positive(),
+    status: companyCustomerCaseStatusSchema,
+  })
+  .strict()
 export const companyWorkspaceChangedSchema = z
   .object({ workspaceId: id, revision: z.number().int().nonnegative() })
   .strict()

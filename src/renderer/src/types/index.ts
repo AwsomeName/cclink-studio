@@ -224,9 +224,12 @@ export interface Tab {
     entry?: string
   }
   companyWorkspace?: {
-    section: 'overview' | 'projects' | 'operations' | 'knowledge'
+    /** `operations` is the pre-2026-11 name of `promote`, kept so restored tabs still open. */
+    section: 'overview' | 'projects' | 'promote' | 'customers' | 'operations' | 'knowledge'
     businessId: string | null
     month?: string
+    /** Customers & after-sales filter chosen from a home to-do. */
+    caseFilter?: string
   }
   companyAccounts?: { month: string; projectId: string | null }
   /** Terminal 工作现场；M6 先定义模型，不开放真实 shell */

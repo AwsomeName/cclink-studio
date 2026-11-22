@@ -59,7 +59,7 @@ async function enable(target = a): Promise<void> {
 }
 
 describe('company workspace first loop', () => {
-  it('enables only the three necessary tables and restores independently across workspaces', async () => {
+  it('enables only the necessary tables and restores independently across workspaces', async () => {
     expect((await service.getSnapshot(a, month)).enabled).toBe(false)
     await enable()
     const first = await service.createBusiness(a, create())
@@ -73,7 +73,8 @@ describe('company workspace first loop', () => {
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         .all()
         .map((row) => row.name),
-    ).toEqual(['business_projects', 'resource_links', 'settings'])
+    ).toEqual(['business_projects', 'customer_cases', 'resource_links', 'settings'])
+    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
     db.close()
     await service.dispose()
     service = new CompanyWorkspaceService(sources())
@@ -214,5 +215,93 @@ describe('company workspace first loop', () => {
     expect(snapshot.finance.state).toBe('unavailable')
     expect(snapshot.sourceIssues.publications).toBeTruthy()
     expect(snapshot.sourceIssues.conversations).toBeTruthy()
+  })
+  it('records customer cases locally and tracks how long each one has waited on the user', async () => {
+    await enable()
+    const business = (await service.createBusiness(a, create())).projects[0]
+    const caseInput = {
+      ...scope(),
+      kind: 'after-sales' as const,
+      customer: '周先生',
+      channel: '网店',
+      summary: '镜腿松动',
+      orderRef: 'XH-1108',
+      nextStep: '寄回换件',
+      businessId: business.id,
+    }
+    const created = await service.createCase(a, caseInput)
+    const first = created.cases[0]
+    expect(first).toMatchObject({ status: 'waiting-me', version: 1, businessId: business.id })
+    expect(first.waitingSince).toBe(first.createdAt)
+    expect((await service.getSnapshot(b, month)).cases).toHaveLength(0)
+    const edited = await service.updateCase(a, {
+      ...caseInput,
+      caseId: first.id,
+      expectedVersion: 1,
+      status: 'waiting-me',
+      nextStep: '确认地址后寄回换件',
+    })
+    expect(edited.cases[0].waitingSince).toBe(first.waitingSince)
+    const replied = await service.updateCase(a, {
+      ...caseInput,
+      caseId: first.id,
+      expectedVersion: 2,
+      status: 'waiting-customer',
+    })
+    expect(replied.cases[0]).toMatchObject({ waitingSince: null, resolvedAt: null })
+    const resolved = await service.updateCase(a, {
+      ...caseInput,
+      caseId: first.id,
+      expectedVersion: 3,
+      status: 'resolved',
+    })
+    expect(resolved.cases[0].resolvedAt).not.toBeNull()
+    await expect(
+      service.updateCase(a, {
+        ...caseInput,
+        caseId: first.id,
+        expectedVersion: 3,
+        status: 'waiting-me',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    await expect(
+      service.createCase(a, { ...caseInput, businessId: 'missing-business' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' })
+    await expect(
+      service.createCase(b, {
+        ...caseInput,
+        workspaceRef: { kind: 'local', path: b.workspacePath },
+        businessId: null,
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_ENABLED' })
+  })
+  it('reads v1 company data without cases and upgrades it on the next write', async () => {
+    await enable()
+    await service.createBusiness(a, create())
+    const path = join(a.workspacePath, '.cclink-studio/company-workspace/company.sqlite')
+    const db = new DatabaseSync(path)
+    db.exec('DROP TABLE customer_cases; PRAGMA user_version=1;')
+    db.close()
+    await expect(CompanyWorkspaceService.describeExisting(a)).resolves.toMatchObject({
+      enabled: true,
+    })
+    const before = await service.getSnapshot(a, month)
+    expect(before.projects).toHaveLength(1)
+    expect(before.cases).toEqual([])
+    const after = await service.createCase(a, {
+      ...scope(),
+      kind: 'lead',
+      customer: '王经理',
+      channel: '企业邮箱',
+      summary: '询价 50 副',
+      orderRef: '',
+      nextStep: '',
+      businessId: null,
+    })
+    expect(after.projects).toHaveLength(1)
+    expect(after.cases).toHaveLength(1)
+    const check = new DatabaseSync(path, { readOnly: true })
+    expect(check.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+    check.close()
   })
 })

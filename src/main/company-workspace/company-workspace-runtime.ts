@@ -64,6 +64,9 @@ export function createCompanyWorkspaceRuntime(runtime: CclinkStudioRuntimeState)
                 id: affair.id,
                 title: affair.title,
                 status: affair.articlePublishing!.publication.status,
+                execution: affair.articlePublishing!.execution.status,
+                adapterId: affair.articlePublishing!.adapterId,
+                updatedAt: affair.updatedAt,
                 url: affair.articlePublishing!.publication.url,
                 observedAt: affair.articlePublishing!.publication.observedAt,
               }))

@@ -80,4 +80,10 @@ export function registerCompanyWorkspaceIpc(
   handle(companyWorkspaceIpcContracts.unlinkResource, (service, target, input) =>
     service.unlinkResource(target, input),
   )
+  handle(companyWorkspaceIpcContracts.createCase, (service, target, input) =>
+    service.createCase(target, input),
+  )
+  handle(companyWorkspaceIpcContracts.updateCase, (service, target, input) =>
+    service.updateCase(target, input),
+  )
 }
