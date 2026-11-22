@@ -74,6 +74,14 @@ try {
     .click()
   await p.getByRole('button', { name: /打开已有项目/ }).click()
   await p.locator('.status-bar .diary-sync').waitFor({ state: 'detached' })
+  const activeWindow = await user.app.browserWindow(p)
+  await user.app.evaluate(({ app }) => app.focus({ steal: true }))
+  await activeWindow.evaluate((w) => {
+    w.show()
+    w.focus()
+  })
+  await until(() => p.evaluate(() => window.cclinkStudio.window.isForeground()))
+  await activeWindow.dispose()
   await publish('复测时间：上午十点\n')
   async function activate() {
     const w = await user.app.browserWindow(p)
