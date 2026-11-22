@@ -113,7 +113,7 @@ async function copyText(text: string, successMessage: string): Promise<void> {
   }
 }
 
-function removeTrashedTargets(trashedPaths: string[]): void {
+export function removeTrashedTargets(trashedPaths: string[]): void {
   const isTrashed = (path: string | undefined): boolean =>
     Boolean(
       path &&

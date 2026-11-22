@@ -57,7 +57,13 @@ export function parseScheduledTaskSchedule(value: unknown): ScheduledTaskSchedul
     return { kind: 'once', runAt: input.runAt, timezone }
   }
 
-  if (input.kind !== 'daily' && input.kind !== 'weekdays' && input.kind !== 'weekly') {
+  if (
+    input.kind !== 'daily' &&
+    input.kind !== 'weekdays' &&
+    input.kind !== 'weekly' &&
+    input.kind !== 'monthly' &&
+    input.kind !== 'yearly'
+  ) {
     throw new Error('执行周期无效')
   }
   const time = requireString(input.time, '执行时刻无效', 5)

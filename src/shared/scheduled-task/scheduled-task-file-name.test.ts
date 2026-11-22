@@ -39,3 +39,18 @@ it('renders dynamic directory by task timezone across year boundary without chan
     '个人/2026/11',
   )
 })
+
+it('names the next week by ISO week year and the next month by target calendar year', () => {
+  const input = {
+    timestamp: Date.parse('2024-12-29T13:00:00Z'),
+    timezone: 'Asia/Shanghai',
+    taskId: 'task',
+    runId: 'run',
+  }
+  expect(renderScheduledTaskFileName({ ...input, template: '{nextWeekYear}-W{nextWeek}.md' })).toBe(
+    '2025-W01.md',
+  )
+  expect(
+    renderScheduledTaskFileName({ ...input, template: '{nextMonthYear}/{nextMonth}/{nextYear}' }),
+  ).toBe('2025/2025-01/2025')
+})

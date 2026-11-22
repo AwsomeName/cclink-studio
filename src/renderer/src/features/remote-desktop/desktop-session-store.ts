@@ -14,11 +14,13 @@ export interface DesktopSessionView {
   /** The last connection ended unexpectedly (not by the user). */
   interrupted: boolean
   fullscreen: boolean
+  largePointer: boolean
 }
 
 export interface DesktopSessionController {
   setView(view: 'fit' | 'original'): void
   setFullscreen(fullscreen: boolean): void
+  setLargePointer(on: boolean): void
   reconnect(): void
   disconnect(): void
 }
@@ -45,7 +47,8 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set) => ({
         current.deviceName === view.deviceName &&
         current.endpoint === view.endpoint &&
         current.interrupted === view.interrupted &&
-        current.fullscreen === view.fullscreen
+        current.fullscreen === view.fullscreen &&
+        current.largePointer === view.largePointer
       )
         return state
       return { sessions: { ...state.sessions, [tabId]: view } }

@@ -13,6 +13,7 @@ export class DesktopChannel {
   /** Called when main refuses to open (unknown device, tab mismatch, busy). */
   onrefused: ((reason: Extract<DesktopOpenResult, { ok: false }>['reason']) => void) | null = null
   private readonly api = window.cclinkStudio.remoteDesktop
+  private pointerMessages?: Uint8Array[]
   constructor(private readonly input: DesktopConnection) {}
   async start(): Promise<void> {
     const id = this.input.sessionId
@@ -41,6 +42,11 @@ export class DesktopChannel {
   }
   send(bytes: Uint8Array): void {
     if (this.readyState !== 'open') return
+    if (this.pointerMessages) {
+      // noVNC reuses its send buffer immediately after send() returns.
+      this.pointerMessages.push(bytes.slice())
+      return
+    }
     void this.api
       .write(this.input.sessionId, bytes)
       .then((ok) => {
@@ -52,6 +58,25 @@ export class DesktopChannel {
         console.warn('[RemoteDesktop] write failed; closing channel', String(error))
         this.close()
       })
+  }
+  /** One wheel event produces a bounded burst of RFB presses and releases in the same JS turn. */
+  batchPointerInput(emit: () => void): void {
+    const messages: Uint8Array[] = []
+    this.pointerMessages = messages
+    try {
+      emit()
+    } finally {
+      this.pointerMessages = undefined
+      if (messages.length) {
+        const packet = new Uint8Array(messages.reduce((total, bytes) => total + bytes.length, 0))
+        let offset = 0
+        for (const bytes of messages) {
+          packet.set(bytes, offset)
+          offset += bytes.length
+        }
+        this.send(packet)
+      }
+    }
   }
   close(): void {
     if (this.readyState === 'closed') return

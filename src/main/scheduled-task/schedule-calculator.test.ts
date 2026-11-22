@@ -41,3 +41,18 @@ describe('calculateNextRunAt', () => {
     ).toBe(Date.parse('2026-03-08T07:00:00.000Z'))
   })
 })
+
+it('schedules leap month end and the following year end after the current occurrence', () => {
+  expect(
+    calculateNextRunAt(
+      { kind: 'monthly', time: '21:00', timezone: 'Asia/Shanghai' },
+      Date.parse('2024-02-01T00:00Z'),
+    ),
+  ).toBe(Date.parse('2024-02-29T13:00Z'))
+  expect(
+    calculateNextRunAt(
+      { kind: 'yearly', time: '21:00', timezone: 'Asia/Shanghai' },
+      Date.parse('2023-12-31T13:00Z'),
+    ),
+  ).toBe(Date.parse('2024-12-31T13:00Z'))
+})

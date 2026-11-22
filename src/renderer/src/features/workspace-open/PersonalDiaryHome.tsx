@@ -1,3 +1,4 @@
+import { DiaryPlans } from './DiaryPlans'
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
@@ -97,11 +98,9 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [files, setFiles] = useState<{
     diaries: DiaryEntry[]
     others: FsDirEntry[]
-    plans: FsDirEntry[]
   }>({
     diaries: [],
     others: [],
-    plans: [],
   })
   const [tasks, setTasks] = useState<ScheduledTaskSnapshot[]>([])
   const [error, setError] = useState('')
@@ -197,12 +196,11 @@ export function PersonalDiaryHome(): React.ReactElement {
       )
       const diaries: DiaryEntry[] = []
       const others: FsDirEntry[] = []
-      const plans: FsDirEntry[] = []
       const root = source.workspacePath + '/' + source.directory
       let visited = 0
       const walk = async (
         dir: string,
-        section: 'root' | 'year' | 'month' | 'plans',
+        section: 'root' | 'year' | 'month',
       ): Promise<void> => {
         if (++visited > 200) throw new Error('目录过多，请在项目设置中指定更具体的日记目录')
         const entries = await window.cclinkStudio.fs.readDir(dir).catch((e) => {
@@ -215,8 +213,6 @@ export function PersonalDiaryHome(): React.ReactElement {
             if (section === 'root' && /^\d{4}$/.test(entry.name)) await walk(entry.path, 'year')
             if (section === 'year' && /^(0[1-9]|1[0-2])(-(0[1-9]|1[0-2]))?$/.test(entry.name))
               await walk(entry.path, 'month')
-            if ((section === 'root' || section === 'year') && entry.name === '周计划')
-              await walk(entry.path, 'plans')
           } else if (entry.type === 'file' && entry.name.toLowerCase().endsWith('.md')) {
             if (section === 'month') {
               const rel = entry.path.slice(root.length + 1)
@@ -224,16 +220,15 @@ export function PersonalDiaryHome(): React.ReactElement {
               if (date) diaries.push({ ...entry, ...date, rel })
               else others.push(entry)
             }
-            if (section === 'plans' || section === 'root') plans.push(entry)
           }
-          if (diaries.length + plans.length > 5000) throw new Error('资料超过 5000 份')
+          if (diaries.length + others.length > 5000) throw new Error('资料超过 5000 份')
         }
       }
       await walk(root, 'root')
       const byPath = (a: FsDirEntry, b: FsDirEntry): number => b.path.localeCompare(a.path)
       const result = await window.cclinkStudio.scheduledTasks.list(source.workspacePath)
       if (!alive) return
-      setFiles({ diaries: diaries.sort(byPath), others, plans: plans.sort(byPath) })
+      setFiles({ diaries: diaries.sort(byPath), others })
       if (!result.success) throw new Error(result.error?.message || '任务读取失败')
       setTasks(result.tasks)
     })()
@@ -295,13 +290,6 @@ export function PersonalDiaryHome(): React.ReactElement {
     dayKey(daily.latestRun.scheduledFor ?? daily.latestRun.createdAt) === todayKey
       ? daily.latestRun
       : undefined
-  // Mixed naming (第47周.md, 2026-11-23-周复盘.md): newest by modification time.
-  const weeklyPlans = files.plans
-    .filter((file) => file.path.includes('/周计划/'))
-    .sort((a, b) => b.modifiedAt - a.modifiedAt)
-  const longTermPlans = files.plans.filter(
-    (file) => source && file.path === `${source.workspacePath}/${source.directory}/${file.name}`,
-  )
   const months = useMemo(() => {
     const keys = [...new Set(files.diaries.map((file) => `${file.year}-${file.month}`))]
     return keys.sort().reverse()
@@ -429,7 +417,6 @@ export function PersonalDiaryHome(): React.ReactElement {
   if (page === '更换目录' && ownerPath && ownerPath === fixedPath)
     return <DiaryRootSetup owner={ownerPath} cancel={() => setPage('今天')} />
 
-  const weeklyPlan = weeklyPlans[0]
   const draftRunning = dailyRun && ['queued', 'running'].includes(dailyRun.status)
   const todayView = (
     <div className="diary-today">
@@ -545,7 +532,7 @@ export function PersonalDiaryHome(): React.ReactElement {
               <b>还没有每日起草任务</b>
               <p className="muted">创建后每天自动生成当天草稿，并每周自动复盘。</p>
               <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
-                创建每日起草与每周复盘
+                创建每日起草与周期计划
               </button>
               <button disabled={busy} onClick={() => act(prepareBlank)}>
                 空白模板
@@ -561,14 +548,7 @@ export function PersonalDiaryHome(): React.ReactElement {
         />
       )}
       <h3>本周计划</h3>
-      {weeklyPlan ? (
-        <button className="workspace-home-record" onClick={() => openFile(weeklyPlan)}>
-          {weeklyPlan.name}
-          <span>打开 ›</span>
-        </button>
-      ) : (
-        <p className="muted">还没有周计划；每周复盘会生成下周计划。</p>
-      )}
+      <button onClick={() => setPage('计划')}>打开本周计划 ›</button>
       <h3>同步</h3>
       {source && (
         <DiarySyncStatus workspacePath={source.workspacePath} onOpenGit={() => setPage('Git')} />
@@ -644,49 +624,13 @@ export function PersonalDiaryHome(): React.ReactElement {
       )}
     </div>
   )
-  const plansView = (
-    <div className="diary-plans">
-      <h3>周计划</h3>
-      {!weeklyPlans.length && <p className="muted">还没有周计划。</p>}
-      {weeklyPlans.map((file, index) => (
-        <button
-          className="workspace-home-record"
-          key={file.path}
-          onClick={() => setPreviewPath(file.path)}
-        >
-          {file.name}
-          <span>{index === 0 ? '最近一份' : ''}</span>
-        </button>
-      ))}
-      <h3>长期计划</h3>
-      {!longTermPlans.length && <p className="muted">日记目录根下的 Markdown 会显示在这里。</p>}
-      {longTermPlans.map((file) => (
-        <button
-          className="workspace-home-record"
-          key={file.path}
-          onClick={() => setPreviewPath(file.path)}
-        >
-          {file.name}
-        </button>
-      ))}
-      <button
-        onClick={() =>
-          askAi(
-            `请根据最近一周的日记和上一份周计划，起草下周计划，存入 ${source?.directory}/${day.year}/周计划/：`,
-          )
-        }
-      >
-        AI 生成下周计划
-      </button>
-    </div>
-  )
   const tasksView = (
     <div className="diary-tasks">
       {!tasks.length && (
         <div className="diary-card">
           <b>还没有定时整理任务</b>
           <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
-            创建每日起草与每周复盘
+            创建每日起草与周期计划
           </button>
         </div>
       )}
@@ -804,7 +748,21 @@ export function PersonalDiaryHome(): React.ReactElement {
           {/* Until a legacy link is migrated, only the migration prompt acts on it. */}
           {page === '今天' && !(legacyLink && ownerPath === fixedPath) && todayView}
           {page === '日记' && historyView}
-          {page === '计划' && plansView}
+          {page === '计划' && source && source.workspacePath === ownerPath && (
+            <DiaryPlans
+              key={ownerPath}
+              workspace={ownerPath}
+              planDirectory={config?.settings.diary?.planDirectory ?? '计划'}
+              directory={source.directory}
+              timezone={timezone}
+              today={`${day.year}-${day.month}-${day.day}`}
+              diaries={files.diaries}
+              tasks={tasks}
+              openTask={openTask}
+              openFile={openFile}
+              refresh={() => setRevision((v) => v + 1)}
+            />
+          )}
           {page === '定时整理' && tasksView}
           {page !== '今天' && preview && (
             <article className="diary-preview" aria-label="日记正文预览">

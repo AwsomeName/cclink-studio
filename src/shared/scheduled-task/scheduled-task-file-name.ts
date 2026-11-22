@@ -17,7 +17,7 @@ export function renderScheduledTaskFileName(input: ScheduledTaskFileNameInput): 
     Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)),
   ).getUTCDay()
 
-  return input.template
+  return renderPlanTokens(input.template, parts)
     .replaceAll('{taskId}', input.taskId)
     .replaceAll('{runId}', input.runId)
     .replaceAll('{date}', date)
@@ -63,8 +63,37 @@ export function renderScheduledTaskDirectory(
   timezone: string,
 ): string {
   const parts = getZonedDateTimeParts(timestamp, timezone)
-  return template
+  return renderPlanTokens(template, parts)
     .replaceAll('{year}', parts.year)
     .replaceAll('{month}', parts.month)
     .replaceAll('{day}', parts.day)
+}
+
+export function isoWeek(date: Date): { year: number; week: string } {
+  const thursday = new Date(date)
+  thursday.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7))
+  thursday.setUTCHours(0, 0, 0, 0)
+  const year = thursday.getUTCFullYear()
+  const week = Math.ceil(((thursday.getTime() - Date.UTC(year, 0, 1)) / 86400000 + 1) / 7)
+  return { year, week: String(week).padStart(2, '0') }
+}
+
+function renderPlanTokens(
+  template: string,
+  parts: Record<'year' | 'month' | 'day', string>,
+): string {
+  const year = Number(parts.year)
+  const month = Number(parts.month)
+  const day = Number(parts.day)
+  const currentWeek = isoWeek(new Date(Date.UTC(year, month - 1, day)))
+  const nextWeek = isoWeek(new Date(Date.UTC(year, month - 1, day + 7)))
+  const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 7)
+  return template
+    .replaceAll('{isoYear}', String(currentWeek.year))
+    .replaceAll('{isoWeek}', currentWeek.week)
+    .replaceAll('{nextWeekYear}', String(nextWeek.year))
+    .replaceAll('{nextWeek}', nextWeek.week)
+    .replaceAll('{nextMonthYear}', nextMonth.slice(0, 4))
+    .replaceAll('{nextMonth}', nextMonth)
+    .replaceAll('{nextYear}', String(year + 1))
 }
