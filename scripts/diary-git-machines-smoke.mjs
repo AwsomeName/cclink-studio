@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { lstat, mkdir, readFile, writeFile, rm } from 'node:fs/promises'
+import { lstat, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeRoot, makeHome, writeDiary, firstUse, shots } from './diary-acceptance-lib.mjs'
 
@@ -138,30 +138,18 @@ try {
   await b.page.locator('.personal-diary-home h2').first().waitFor()
   assert.equal(await b.fixedRoot(), chosen)
 
-  // Machine A publishes; B reviews, is blocked by a local file, then pulls in place.
+  // Machine A publishes; B requests a sync in place.
   await writeDiary(projectA, D, '2026/11/1121_周六.md', '# 周六\n来自 A 的更新\n')
   await git(projectA, ['add', D])
   await git(projectA, ['commit', '-m', '新增周六'])
   await git(projectA, ['push'])
   const p = b.page
-  await nav(p, '项目首页')
+  await p.locator('.status-bar .diary-sync').click()
   await p
-    .locator('.diary-sync')
-    .getByRole('button', { name: /查看|连接/ })
+    .getByRole('region', { name: '我的空间同步' })
+    .getByRole('button', { name: '同步', exact: true })
     .click()
-  await p.getByRole('button', { name: '检查远程更新', exact: true }).click()
-  await p.getByText(/A\s+000-个人计划\/2026\/11\/1121_周六.md/).waitFor()
-  const localOnly = join(chosen, '本机草稿.md')
-  await writeFile(localOnly, '未提交')
-  await p.getByRole('button', { name: '检查远程更新', exact: true }).click()
-  await p.getByText('?? 本机草稿.md', { exact: false }).waitFor()
-  assert(await p.getByRole('button', { name: '拉取并更新', exact: true }).isDisabled())
-  await p.screenshot({ path: join(shots, 'v2-git-blocked.png') })
-  await rm(localOnly)
-  await p.getByRole('button', { name: '检查远程更新', exact: true }).click()
-  await p.getByText('工作目录干净').waitFor()
-  await p.getByRole('button', { name: '拉取并更新', exact: true }).click()
-  await p.getByText('本地已是远端最新版本。').waitFor()
+  await p.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
   assert.equal(await b.fixedRoot(), chosen)
   assert.equal(
     await readFile(join(chosen, D, '2026/11/1121_周六.md'), 'utf8'),

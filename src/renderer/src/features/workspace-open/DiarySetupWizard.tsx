@@ -1,3 +1,4 @@
+import { syncDiarySpace } from './DiarySyncStatus'
 import { useEffect, useState } from 'react'
 import type { DiaryRootPreview } from '@shared/ipc/workspace-state'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
@@ -146,6 +147,14 @@ export function DiarySetupWizard({
       const timezone = settings.diary?.timezone ?? defaultDiaryTimezone
       await ensureBuiltInDiaryTasks(root, directory, timezone, choice)
       // Enabling the daily draft after today's time makes the scheduler draft today once.
+      if (sync === 'repository') {
+        const inspected = await window.cclinkStudio.git.transfer({
+          action: 'inspect',
+          workspacePath: root,
+        })
+        if (inspected.success && inspected.snapshot.remoteUrl)
+          void syncDiarySpace(root, true, { url: inspected.snapshot.remoteUrl })
+      }
       await openPersonalSpace()
       const active = useWorkspaceStore.getState().activeWorkspaceRef
       if (owner && owner !== root && active.kind === 'local' && active.path !== owner)
@@ -219,7 +228,9 @@ export function DiarySetupWizard({
               />
               <span>
                 <b>使用该目录已有的 Git 仓库</b>
-                <span className="muted">远端与分支自动读取；更新和上传在项目设置的 Git 中审阅</span>
+                <span className="muted">
+                  确认后自动接收和上传。进入空间时同步，留在前台时每小时整点同步。
+                </span>
               </span>
             </label>
           )}
@@ -278,7 +289,7 @@ export function DiarySetupWizard({
             <input type="radio" checked={sync === 'later'} onChange={() => setSync('later')} />
             <span>
               <b>稍后连接</b>
-              <span className="muted">本地照常使用，以后在项目设置中连接</span>
+              <span className="muted">本地照常使用，以后在「同步」中填写项目地址</span>
             </span>
           </label>
         </div>

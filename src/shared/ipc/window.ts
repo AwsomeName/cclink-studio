@@ -62,6 +62,8 @@ export interface WindowApiContract {
   toggleDevtools: () => Promise<WindowOperationResult>
   reload: () => Promise<WindowOperationResult>
   requestClose: () => Promise<WindowOperationResult>
+  isForeground: () => Promise<boolean>
+  onForegroundChanged: (callback: (active: boolean) => void) => () => void
   focusRenderer: () => Promise<WindowOperationResult>
   setShortcutCaptureGuard: (input: ShortcutCaptureGuardInput) => Promise<WindowOperationResult>
   onShortcutCaptureInput: (callback: (event: ShortcutCaptureInputEvent) => void) => () => void
@@ -78,6 +80,7 @@ export const windowIpc = {
   toggleDevtools: defineNoArgsIpc<WindowOperationResult>('window:toggleDevtools'),
   reload: defineNoArgsIpc<WindowOperationResult>('window:reload'),
   requestClose: defineNoArgsIpc<WindowOperationResult>('window:requestClose'),
+  isForeground: defineNoArgsIpc<boolean>('window:isForeground'),
   focusRenderer: defineNoArgsIpc<WindowOperationResult>('window:focusRenderer'),
   setShortcutCaptureGuard: defineIpcInvoke<[ShortcutCaptureGuardInput], WindowOperationResult>(
     'window:setShortcutCaptureGuard',
@@ -105,5 +108,6 @@ export const windowIpc = {
 } as const
 
 export const windowIpcEvents = {
+  foregroundChanged: 'window:foregroundChanged',
   shortcutCaptureInput: 'window:shortcutCaptureInput',
 } as const

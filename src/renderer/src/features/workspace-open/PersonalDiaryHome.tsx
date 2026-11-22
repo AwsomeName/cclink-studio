@@ -1,7 +1,7 @@
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
-import { DiarySyncStatus } from './DiarySyncStatus'
+import { DiarySyncStatus, DiarySyncPage, useDiarySyncRevision } from './DiarySyncStatus'
 import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
@@ -111,7 +111,11 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(true)
   const [reviewRoot, setReviewRoot] = useState(false)
+  const syncedAt = useDiarySyncRevision(ownerPath)
   const [revision, setRevision] = useState(0)
+  useEffect(() => {
+    if (syncedAt) setRevision((r) => r + 1)
+  }, [syncedAt])
   const [clock, setClock] = useState(() => Date.now())
   const [month, setMonth] = useState('')
   const [aiProblem, setAiProblem] = useState('')
@@ -760,7 +764,9 @@ export function PersonalDiaryHome(): React.ReactElement {
           ? `${Number(day.month)}月${Number(day.day)}日 ${day.weekday}`
           : page === '日记'
             ? '历史日记'
-            : page}
+            : page === 'Git'
+              ? '同步'
+              : page}
       </h2>
       {legacyLink && source && ownerPath === fixedPath && (
         <div className="diary-card" role="status">
@@ -780,7 +786,9 @@ export function PersonalDiaryHome(): React.ReactElement {
           正在读取…
         </p>
       )}
-      {page === 'Git' ? (
+      {page === 'Git' && ownerPath && ownerPath === fixedPath ? (
+        <DiarySyncPage key={ownerPath} path={ownerPath} />
+      ) : page === 'Git' ? (
         <PersonalDiaryGit
           ownerPath={ownerPath}
           source={source}

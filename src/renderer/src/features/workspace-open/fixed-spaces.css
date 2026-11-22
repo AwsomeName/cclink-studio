@@ -667,3 +667,36 @@
 .personal-diary-home .diary-card > .workspace-home-record {
   flex-basis: 100%;
 }
+
+.diary-sync-panel {
+  max-width: 38rem;
+}
+.diary-sync-panel h3,
+.diary-sync-panel p {
+  margin: 0 0 0.5rem;
+}
+.diary-sync-panel pre,
+.diary-sync-panel textarea {
+  box-sizing: border-box;
+  padding: 0.7rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 4px;
+  font: inherit;
+}
+.diary-sync-panel pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.diary-sync-panel textarea {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+}
+.diary-sync-panel > button.primary {
+  justify-self: start;
+  align-self: flex-start;
+  width: fit-content;
+}

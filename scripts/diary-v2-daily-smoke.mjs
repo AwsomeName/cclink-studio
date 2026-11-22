@@ -125,6 +125,18 @@ try {
   await git(seed, ['push'])
   await nav('项目首页')
   await home.getByRole('button', { name: '现在起草' }).click()
+  await page.waitForFunction(async (root) => {
+    const service = window.cclinkStudio.scheduledTasks
+    const daily = (await service.list(root)).tasks.find((t) => t.definition.title === '每日起草')
+    return (await service.listRuns(root, daily.definition.id)).runs[0]?.status === 'skipped'
+  }, project)
+  await page.locator('.status-bar .diary-sync').click()
+  await page
+    .getByRole('region', { name: '我的空间同步' })
+    .getByRole('button', { name: '同步', exact: true })
+    .click()
+  await page.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
+  await nav('项目首页')
   await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 60000 })
   assert.equal(
     await readFile(join(project, D, todayRel), 'utf8'),
@@ -165,12 +177,12 @@ try {
   await git(seed, ['add', '.'])
   await git(seed, ['commit', '-m', 'thursday'])
   await git(seed, ['push'])
-  await home.locator('.diary-sync').getByRole('button', { name: '查看' }).click()
-  await home.getByRole('button', { name: '检查远程更新' }).click()
-  await home.getByText(/A\s+000-个人计划\/2026\/11\/1119_周四.md/).waitFor()
-  await page.screenshot({ path: join(shots, 'v2-git-review.png') })
-  await home.getByRole('button', { name: '拉取并更新' }).click()
-  await home.getByText('本地已是远端最新版本。').waitFor()
+  await page.locator('.status-bar .diary-sync').click()
+  await page
+    .getByRole('region', { name: '我的空间同步' })
+    .getByRole('button', { name: '同步', exact: true })
+    .click()
+  await page.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
   assert.equal(
     await readFile(join(project, D, '2026/11/1119_周四.md'), 'utf8'),
     '# 周四\n来自另一台设备\n',

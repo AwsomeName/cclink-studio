@@ -6,7 +6,7 @@ const bounded = z
   .refine((value) => !/[\0\r\n]/.test(value))
 export const gitTransferInputSchema = z
   .object({
-    action: z.enum(['clone', 'inspect', 'fetch', 'update-copy', 'pull']),
+    action: z.enum(['clone', 'inspect', 'fetch', 'update-copy', 'pull', 'diary-sync']),
     workspacePath: bounded.optional(),
     url: bounded.optional(),
     destinationParent: bounded.optional(),
@@ -17,6 +17,7 @@ export const gitTransferInputSchema = z
       .max(240)
       .regex(/^[A-Za-z0-9._/-]*$/)
       .optional(),
+    feedback: z.string().trim().max(2000).optional(),
     username: z.string().max(256).optional(),
     token: z.string().max(4096).optional(),
     sshKeyPath: bounded.optional(),
@@ -43,6 +44,7 @@ export interface GitTransferSnapshot {
   diffTruncated?: boolean
   localChanges: string
   diverged: boolean
+  conflict?: string
   newCopy?: boolean
   diaryMapping?: { directory: string; timezone: string }
 }

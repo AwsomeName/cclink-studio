@@ -1,3 +1,10 @@
+import {
+  DiarySyncStatus,
+  useDiarySyncSchedule,
+} from '../../features/workspace-open/DiarySyncStatus'
+import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-store'
+import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
+import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
 import { RunningWork } from './RunningWork'
 import { useEffect } from 'react'
 import { TtsStatusPlayer } from '../../features/local-tts/TtsStatusPlayer'
@@ -56,6 +63,16 @@ export function StatusBar(): React.ReactElement {
   const showContextMenu = useContextMenuStore((s) => s.show)
   const executeCommand = useCommandStore((s) => s.executeCommand)
 
+  const personal = useFixedSpacesStore((s) => s.spaces?.personal)
+  const diaryPath =
+    activeWorkspaceRef.kind === 'local' &&
+    personal?.diaryRootConfirmed &&
+    activeWorkspaceRef.path === personal.workspacePath &&
+    projectSettings?.settings.type === 'diary' &&
+    projectSettings.workspacePath === personal.workspacePath
+      ? personal.workspacePath
+      : null
+  useDiarySyncSchedule(diaryPath)
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
 
   useFloatingSurfaceRegistration(showGitDialog)
@@ -130,10 +147,20 @@ export function StatusBar(): React.ReactElement {
           </span>
 
           {projectSettings?.settings.type === 'diary' && <AiStatusBarItem />}
-          <GitStatusBarItem
-            workspacePath={workspacePath}
-            contextProps={statusContextProps('git')}
-          />
+          {diaryPath ? (
+            <DiarySyncStatus
+              workspacePath={diaryPath}
+              onOpenGit={() => {
+                useDiaryNavigation.getState().setPage('Git')
+                showWorkspaceHome(activeWorkspaceRef)
+              }}
+            />
+          ) : (
+            <GitStatusBarItem
+              workspacePath={workspacePath}
+              contextProps={statusContextProps('git')}
+            />
+          )}
           <TtsStatusPlayer />
 
           {activeTab?.type === 'remote-desktop' && <RemoteDesktopStatusItem tab={activeTab} />}

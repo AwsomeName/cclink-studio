@@ -36,7 +36,7 @@ export class ScheduledTaskSkippedError extends Error {}
 
 export interface ScheduledTaskAgentRunnerOptions {
   /** Daily diary drafts sync first so two devices never generate two drafts for one day. */
-  beforeDiaryDraft?: (workspaceRoot: string) => Promise<void>
+  beforeDiaryDraft?: (workspaceRoot: string, folder: string) => Promise<string[] | void>
 }
 
 export interface ScheduledTaskRunExecutor {
@@ -108,9 +108,11 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     }
     if (diaryOutput && this.options.beforeDiaryDraft) {
       const before = await readdir(output.canonicalDirectory).catch(() => [] as string[])
-      await this.options
-        .beforeDiaryDraft(workspaceRoot)
+      const remote = await this.options
+        .beforeDiaryDraft(workspaceRoot, dirname(output.relativePath))
         .catch((error) => console.warn('[ScheduledTask] 起草前同步未完成，继续本机生成:', error))
+      if (remote?.some(day.matchesName))
+        throw new ScheduledTaskSkippedError('其他设备已有当日日记，等待同步取回')
       const after = (await readdir(output.canonicalDirectory).catch(() => [] as string[])).filter(
         day.matchesName,
       )

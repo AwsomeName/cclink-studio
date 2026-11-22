@@ -89,3 +89,35 @@ export async function fastForwardIfClean(
   await run(['merge', '--ff-only', '--no-edit', target])
   return { outcome: 'updated', head: target, target }
 }
+
+/** Read remote filenames for deduplication without moving HEAD or writing diary content. */
+export async function remoteDiaryNames(
+  runner: Pick<GitExecutor, 'run'>,
+  root: string,
+  folder: string,
+  address?: string,
+): Promise<string[]> {
+  if (!(await lstat(join(root, '.git')).catch(() => null))?.isDirectory()) return []
+  const run = async (args: string[]) => (await runner.run(root, [...safeFlags, ...args])).stdout
+  const url = address || (await run(['remote', 'get-url', 'origin'])).trim()
+  if (!url.startsWith('/') && !/^https:\/\/[^/@?#]+\/[^?#]+$/.test(url)) return []
+  const branch = (await run(['symbolic-ref', '--short', 'HEAD'])).trim()
+  const ref =
+    (await run(['config', '--get', 'branch.' + branch + '.merge']).catch(() => '')).trim() || 'HEAD'
+  if (ref !== 'HEAD' && !ref.startsWith('refs/heads/')) return []
+  const line = (await run(['ls-remote', '--', url, ref])).trim()
+  const oid = line.split('\t')[0]
+  if (!/^[0-9a-f]{40,64}$/.test(oid)) return []
+  await run([
+    'fetch',
+    '--no-write-fetch-head',
+    '--no-tags',
+    '--no-recurse-submodules',
+    '--',
+    url,
+    oid,
+  ])
+  return (await run(['ls-tree', '--name-only', '-z', oid + ':' + folder]))
+    .split('\0')
+    .filter(Boolean)
+}

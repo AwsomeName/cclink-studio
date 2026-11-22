@@ -101,7 +101,7 @@
 <main id="shots"></main>
 
 <script>
-const NAV = ['今天', '日记', '计划', '定时整理', '|', '文件', '会话', '工具']
+const NAV = ['今天', '日记', '计划', '定时整理', '↻ 同步', '|', '文件', '会话', '工具']
 function side(on) {
   return '<div class="side"><div class="grp">我的空间</div>' + NAV.map(n => n === '|' ? '<div class="sep"></div>' :
     `<div class="it ${n === on ? 'on' : ''}">${n}</div>`).join('') + '</div>'
@@ -111,6 +111,8 @@ function shell({ nav = '今天', body, chat = '', status = 'ok', firstUse = fals
     ok: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
     ahead: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#f0c674"></i>远端有 2 项更新</span>',
     aiDown: '<span><i class="dot" style="background:#f29b9b"></i>AI 未登录</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
+    syncing: '<span>↻ 同步中…</span>',
+    paused: '<span>同步暂停 · 需要你的决定</span>',
     setup: '<span><i class="dot" style="background:#9aa0a8"></i>正在设置</span>',
     lost: '<span><i class="dot" style="background:#f29b9b"></i>项目目录失联</span>',
   }[status]
@@ -164,7 +166,7 @@ const SHOTS = [
 
   ['today-empty', '05 今天 · 等待自动起草', '每天定时自动生成，用户无需操作；到点前可选择现在起草或先用空白模板。',
     shell({ body: crumb('我的空间 / 今天', '项目设置') + '<h3 class="title">11月21日 周六</h3>' +
-      `<div class="card"><b>07:30 自动生成今天的草稿</b> <span class="tag ai">每日起草 · 本机已启用</span><div class="muted">将写入 000-个人计划/2026/11/1121_周六.md · 生成前先与远端同步</div>
+      `<div class="card"><b>07:30 自动生成今天的草稿</b> <span class="tag ai">每日起草 · 本机已启用</span><div class="muted">将写入 000-个人计划/2026/11/1121_周六.md · 生成前检查是否已有今天的日记</div>
        <div style="margin:8px 0" class="muted">起草依据：1120_周五.md · 第47周计划.md · 日记模板.md</div>
        <span class="btn">现在起草</span><span class="btn">空白模板</span> <span class="muted" style="font-size:12px">修改时间 ›</span></div>
        <h4>本周计划</h4><div class="row"><span>第47周计划.md</span><span class="r">打开 ›</span></div>
@@ -265,7 +267,7 @@ const SHOTS = [
        <h4>最近运行</h4>
        <div class="row"><span>每日起草 · <span style="color:#7fd6a8">完成</span></span><span class="r">11/21 07:30 · 1121_周六.md 打开 ›</span></div>
        <div class="row"><span>每周复盘 · <span style="color:#7fd6a8">完成</span></span><span class="r">11/16 21:00 · 第47周计划.md 打开 ›</span></div>
-       <div class="row"><span>每日起草 · <span class="muted">跳过</span></span><span class="r">11/19 · 远端已有当天日记（MacBook Air 生成），已拉取</span></div>` })],
+       <div class="row"><span>每日起草 · <span class="muted">跳过</span></span><span class="r">11/19 · 远端已有当天日记（MacBook Air 生成），等待空间同步取回</span></div>` })],
 
   ['task-detail', '15 任务详情 · 编辑要求', '用自然语言约定章节、次序、标题、格式、篇幅与缺失事实；可选参考提纲；保存影响以后的运行。',
     shell({ nav: '定时整理', body: crumb('我的空间 / 定时整理 / 每周复盘', '<span class="btn sm">立即运行</span><span class="btn sm">在此设备启用</span><span class="btn sm pri">保存</span>') + '<h3 class="title">每周复盘</h3>' +
@@ -276,27 +278,14 @@ const SHOTS = [
        <span class="k">共享</span><span>随项目共享（定义随 Git）· 本机启用单独确认</span></div>
        <h4>运行历史</h4><div class="row"><span>11/16 21:00 到点运行 · 完成</span><span class="r">第47周计划.md ›</span></div><div class="row"><span>11/15 10:12 手动运行 · 完成</span><span class="r">2026-11-15-周复盘.md ›</span></div>` })],
 
-  ['sync', '16 同步 · 检查与拉取', '自动检查只下载；拉取前展示文件变化与正文差异；干净且未分叉时原位快进。',
-    shell({ status: 'ahead', body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">同步</h3>' +
-      `<div class="field"><span class="k">远端</span><span>origin · github.com/…/woniu-forward · main</span><span class="k">本地</span><span>工作目录干净 · 未分叉</span></div>
-       <div class="card"><b>远端有 2 项更新</b> <span class="muted">· 来自 MacBook Air · 10:31</span>
-       <div class="diff"><span class="a">A 000-个人计划/2026/11/1121_周六.assets/现场.jpg</span><span>M 000-个人计划/2026/周计划/第47周计划.md</span></div>
-       <details open style="margin-top:6px"><summary class="muted">正文差异</summary><div class="diff"><span class="d">- 周三前确认固件签名</span><span class="a">+ 周三前确认固件签名（负责人：小王）</span></div></details>
-       <div style="margin-top:10px"><span class="btn pri">拉取并更新</span><span class="btn">稍后</span></div></div>` })],
+  ['sync', '16 同步 · 首次设置', '地址按空间保存。首次点击即开始同步，连接失败也不必重填地址。',
+    shell({ nav: '↻ 同步', status: 'setup', body: crumb('我的空间 / 同步') + '<h3 class="title">设置同步地址</h3><p>进入空间时自动接收和上传；留在前台，每小时整点再同步。</p><div class="field"><span class="k">Git 项目地址</span><span class="input">https://github.com/example/my-diary</span></div><span class="btn pri">保存并同步</span>' })],
 
-  ['upload', '17 同步 · 上传', '列出将提交的文件与 AI 修改来源；用户写提交说明后提交并推送；默认不自动上传。',
-    shell({ body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">上传本地改动</h3>' +
-      `<div class="card">${[['M', '2026/11/1121_周六.md', 'AI 修改 · 今日待做重排'], ['A', '2026/11/1121_周六.assets/板子.png', ''], ['M', '2026/11/1103_周二.md 等 6 个', 'AI 修改 · 样品A→样机A']].map(([k, f, n]) => `<div class="row"><span><span class="check on"></span>${k} ${f}</span><span class="r">${n}</span></div>`).join('')}
-       <div class="field"><span class="k">提交说明</span><span class="input">11/21 日记与样机改名</span></div>
-       <span class="btn pri">提交并上传</span><span class="btn">只提交</span></div>
-       <div class="muted">本机状态、运行记录、认证材料不会进入仓库。</div>` })],
+  ['upload', '17 同步 · 日常使用', '09:42 进入空间时已同步；10:00 空间仍在前台，底栏显示本轮进度。也可手动提前同步。',
+    shell({ nav: '↻ 同步', status: 'syncing', body: crumb('我的空间 / 同步') + '<h3 class="title">同步</h3><h4>我的日记</h4><div class="row">github.com/example/my-diary</div><p class="muted">上次同步　今天 09:42</p><span class="muted">正在同步…</span>' })],
 
-  ['conflict', '18 同步 · 冲突或分叉', '阻止拉取并列出冲突文件；引导到 Git 变更面板；可另存远端版本为独立副本对比。',
-    shell({ status: 'ahead', body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">同步</h3>' +
-      `<div class="card" style="border-color:#6a3a3f"><b>本地与远端都修改了同一天的日记，暂不能拉取</b>
-       <div class="diff"><span>UU 000-个人计划/2026/11/1121_周六.md</span></div>
-       <div class="muted">本地内容不会丢失。处理方式：</div>
-       <div style="margin-top:8px"><span class="btn pri">打开变更面板处理</span><span class="btn">让 AI 合并两份并给出改动报告</span><span class="btn">另存远端版本为副本</span></div></div>` })],
+  ['conflict', '18 同步 · 失败反馈', '只在需要处理时打开。填写决定后继续；断网只需恢复网络，无须填写反馈。',
+    shell({ nav: '↻ 同步', status: 'paused', body: crumb('我的空间 / 同步') + '<h3 class="title">同步暂停</h3><div class="card"><h4>周三的复测定在几点？</h4><p>《周六日记》里有两个时间，两份内容都已保留。</p><div class="row">这台电脑　上午 9 点</div><div class="row">另一份日记　下午 2 点</div><div class="field"><span class="k">告诉 AI 怎么处理</span><span class="input">定在下午 2 点。</span></div><span class="btn pri">继续同步</span></div>' })],
 
   ['relocate', '19 重新定位', '失联时直接进入；所选目录必须是原项目；原位置出现其他日记时两侧并列、由用户选择。',
     `<div class="modal">${shell({ status: 'lost', body: crumb('我的空间') + '<h3 class="title">今天</h3>' })}<div class="overlay"><div class="dialog">

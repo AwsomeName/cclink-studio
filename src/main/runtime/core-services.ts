@@ -87,7 +87,7 @@ import { registerWorkbenchTabModelIpc } from '../workbench/workbench-tab-model-i
 import { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 import { CompanyAccountsService } from '../company-accounts/company-accounts-service'
 import { GitExecutor } from '../git-backup/git-executor'
-import { fastForwardIfClean } from '../git/git-fast-forward'
+import { remoteDiaryNames } from '../git/git-fast-forward'
 import { DiaryChangeTracker } from '../workspace/diary-change-tracker'
 import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
 
@@ -164,9 +164,10 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
   )
   const draftSyncRunner = new GitExecutor({ isolatedConfig: true, timeoutMs: 20_000 })
   runtime.scheduledTaskService = new ScheduledTaskService(runtime.workspaceStateService, {
-    // Best effort, no stored credentials: public or local remotes fast-forward before a draft.
-    beforeDiaryDraft: async (root) => {
-      await fastForwardIfClean(draftSyncRunner, root, { fetch: true })
+    beforeDiaryDraft: async (root, folder) => {
+      const snapshot = await runtime.workspaceStateService!.getSnapshot(root)
+      const saved = snapshot.sections['personal-diary-sync'] as { remoteUrl?: string } | undefined
+      return remoteDiaryNames(draftSyncRunner, root, folder, saved?.remoteUrl)
     },
     getLocalOwnerKey: async () => {
       const identity = await runtime.localIdentityService?.ensureIdentity()
@@ -515,6 +516,14 @@ export async function bootstrapMainProcessServices(
 
   try {
     runtime.gitWorkspaceService = new GitWorkspaceService(runtime.workspaceStateService!, {
+      decide: async (prompt) => {
+        if (!runtime.agentBridge) throw Error('AI 未就绪，请稍后继续同步')
+        return runtime.agentBridge.requestInternalText({
+          purpose: 'diary-sync',
+          prompt,
+          timeoutMs: 90000,
+        })
+      },
       resolveAuthentication: async (remoteUrl) => {
         try {
           const parsed = new URL(remoteUrl)

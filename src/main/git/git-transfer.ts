@@ -7,11 +7,15 @@ import { lstat, mkdir, mkdtemp, readdir, realpath, readFile, writeFile } from 'n
 import { dirname, join, relative, isAbsolute } from 'node:path'
 import type { GitTransferInput, GitTransferSnapshot } from '../../shared/git'
 import type { GitExecutor, GitAuthentication } from '../git-backup/git-executor'
+import { syncDiary } from './sync-diary'
 import { fastForwardIfClean } from './git-fast-forward'
 
 export interface TransferContext {
   runner: Pick<GitExecutor, 'run'>
   authentication?: GitAuthentication
+  diary?: { directory: string; planDirectory?: string }
+  onDiaryAddress?: (url: string) => Promise<void>
+  decide?: (prompt: string) => Promise<string>
   copyRoot?: string
 }
 
@@ -204,6 +208,14 @@ export async function transferRepository(
     }
   }
   const path = await realpath(input.workspacePath!)
+  if (input.action === 'diary-sync') {
+    if (!context.diary) throw Error('请先完成我的空间设置')
+    const address = await validateUrl(input.url ?? '')
+    await context.onDiaryAddress?.(address)
+    if ((address.startsWith('ssh://') || address.startsWith('git@')) && !input.sshKeyPath)
+      throw Error('SSH 同步需要本次私钥路径')
+    return syncDiary(path, address, input, context, flags)
+  }
   const gitDirectory = join(path, '.git')
   if (!(await lstat(gitDirectory)).isDirectory() || (await realpath(gitDirectory)) !== gitDirectory)
     throw Error('此入口仅支持独立 Git 工作目录')
