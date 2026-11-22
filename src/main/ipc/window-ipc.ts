@@ -74,22 +74,34 @@ export function registerWindowIpc(
   mainWindow.on('hide', notify)
   registerTrustedIpcContract(windowIpc.isForeground, trustedRendererGuard, foreground)
 
-  /** 切换全屏 */
+  // macOS updates isFullScreen() asynchronously. If the user reverses direction
+  // during the animation, apply the latest request when the transition completes.
+  let requestedFullscreen: boolean | null = null
+  const setFullscreen = (fullscreen: boolean) => {
+    if (mainWindow.isDestroyed()) return { success: false }
+    const transitioning = requestedFullscreen !== null
+    const previous = requestedFullscreen ?? mainWindow.isFullScreen()
+    if (previous !== fullscreen) {
+      requestedFullscreen = fullscreen
+      if (!transitioning) mainWindow.setFullScreen(fullscreen)
+    }
+    return { success: true, fullscreen, previous }
+  }
+  const finishFullscreenTransition = (actual: boolean): void => {
+    if (requestedFullscreen === null) return
+    if (requestedFullscreen === actual) requestedFullscreen = null
+    else mainWindow.setFullScreen(requestedFullscreen)
+  }
+  mainWindow.on('enter-full-screen', () => finishFullscreenTransition(true))
+  mainWindow.on('leave-full-screen', () => finishFullscreenTransition(false))
+
   registerTrustedIpcContract(windowIpc.toggleFullscreen, trustedRendererGuard, () => {
     if (mainWindow.isDestroyed()) return { success: false }
-    mainWindow.setFullScreen(!mainWindow.isFullScreen())
-    return { success: true, fullscreen: mainWindow.isFullScreen() }
+    return setFullscreen(!(requestedFullscreen ?? mainWindow.isFullScreen()))
   })
 
-  registerTrustedIpcContract(
-    windowIpc.setFullscreen,
-    trustedRendererGuard,
-    (_event, fullscreen) => {
-      if (mainWindow.isDestroyed()) return { success: false }
-      const previous = mainWindow.isFullScreen()
-      if (previous !== fullscreen) mainWindow.setFullScreen(fullscreen)
-      return { success: true, fullscreen, previous }
-    },
+  registerTrustedIpcContract(windowIpc.setFullscreen, trustedRendererGuard, (_event, fullscreen) =>
+    setFullscreen(fullscreen),
   )
 
   /** 切换开发者工具 */

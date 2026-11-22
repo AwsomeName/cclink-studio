@@ -16,7 +16,6 @@ import {
   type DesktopPhase,
   type DesktopSessionController,
 } from './desktop-session-store'
-import { DESKTOP_FULLSCREEN_SHORTCUT } from './desktop-controls'
 import './remote-desktop.css'
 
 type Phase = DesktopPhase
@@ -42,12 +41,13 @@ export function RemoteDesktopTab({
   const [fullscreen, setFullscreen] = useState(false)
   const [largePointer, setLargePointer] = useState(true)
   const [interrupted, setInterrupted] = useState(false)
-  const [revealed, setRevealed] = useState(false)
   /** Resolves to the native window fullscreen state before we entered; null when not entered. */
   const windowWasFullscreen = useRef<Promise<boolean | null> | null>(null)
-  const revealTimer = useRef<number | undefined>(undefined)
   const target = useRef<HTMLDivElement>(null)
   const client = useRef<RFB | null>(null)
+  const submitCredentials = useRef<
+    ((credentials: { username?: string; password: string }) => void) | null
+  >(null)
   const generation = useRef(0)
   const handshakeTimer = useRef<number | undefined>(undefined)
   const releaseDiagnostics = useRef<(() => void) | undefined>(undefined)
@@ -63,6 +63,7 @@ export function RemoteDesktopTab({
   const stop = (): void => {
     generation.current++
     window.clearTimeout(handshakeTimer.current)
+    submitCredentials.current = null
     releaseDiagnostics.current?.()
     releaseDiagnostics.current = undefined
     pendingRemember.current = null
@@ -243,12 +244,13 @@ export function RemoteDesktopTab({
             : '当前标签无法连接，请切回该标签后重试。'
       }
       handshakeTimer.current = window.setTimeout(
-        () => fail('握手超时，请检查目标 Mac 是否已唤醒并开启屏幕共享。'),
+        () => fail('握手超时，请检查远端是否在线并已开启 VNC 屏幕共享。'),
         20000,
       )
 
       let usedSaved = false
       let credentialsHandled = false
+      let passwordOnly = false
       on('credentialsrequired', (e) => {
         // noVNC re-emits this while waiting for more bytes; handle it once per attempt.
         if (credentialsHandled) return
@@ -262,7 +264,13 @@ export function RemoteDesktopTab({
         }
         // macOS Screen Sharing drops an unanswered auth challenge after a few minutes.
         disconnectMessage = '等待认证期间远端已关闭连接，请重新连接后再输入凭据。'
+        passwordOnly = fields.length === 1 && fields[0] === 'password'
         setUsernameRequired(fields.includes('username'))
+        submitCredentials.current = (credentials) => {
+          disconnectMessage = '提交凭据后远端关闭了连接，未返回认证结果。'
+          armAuthTimeout()
+          rfb.sendCredentials(credentials)
+        }
         const showForm = (): void => {
           if (generation.current === attempt) setPhase('credentials')
         }
@@ -281,20 +289,25 @@ export function RemoteDesktopTab({
             }
             usedSaved = true
             diag.stage('using saved credential')
-            armAuthTimeout()
-            rfb.sendCredentials(fields.includes('username') ? saved : { password: saved.password })
+            submitCredentials.current?.(
+              fields.includes('username') ? saved : { password: saved.password },
+            )
           })
           .catch(showForm)
       })
       on('securityfailure', (e) => {
         const detail = (e as CustomEvent<{ status?: number; reason?: string }>).detail
-        diag.stage(`security failure status=${detail?.status} reason=${detail?.reason ?? ''}`)
+        const reason = detail?.reason?.trim().slice(0, 200)
+        diag.stage(`security failure status=${detail?.status} reason=${reason ?? ''}`)
         if (usedSaved) {
           rejectedSaved.current.add(device.id)
           disconnectMessage = '已保存的密码未通过认证，请重新连接并手动输入。'
+        } else if (passwordOnly) {
+          disconnectMessage = 'VNC 认证失败，请核对远端 VNC 服务配置的访问密码。'
         } else {
           disconnectMessage = '屏幕共享认证失败，请检查账号、密码和共享权限。'
         }
+        if (reason) disconnectMessage += ` 远端返回：${reason}`
       })
       on('serververification', () => {
         diag.stage('server verification requested')
@@ -353,8 +366,7 @@ export function RemoteDesktopTab({
       fields.get('remember') === 'on' && username && password ? { username, password } : null
     form.reset()
     setPhase('connecting')
-    armAuthTimeout()
-    client.current?.sendCredentials(credentials)
+    submitCredentials.current?.(credentials)
   }
 
   function disconnect(): void {
@@ -367,7 +379,6 @@ export function RemoteDesktopTab({
   function enterFullscreen(): void {
     if (phase !== 'connected' || fullscreen) return
     setFullscreen(true)
-    setRevealed(false)
     windowWasFullscreen.current = window.cclinkStudio.window
       .setFullscreen(true)
       .then((result) => result.previous ?? null)
@@ -376,7 +387,6 @@ export function RemoteDesktopTab({
 
   function exitFullscreen(): void {
     setFullscreen(false)
-    setRevealed(false)
     restoreWindow()
   }
 
@@ -393,17 +403,6 @@ export function RemoteDesktopTab({
   restoreWindowRef.current = restoreWindow
   // Closing the Tab or switching workspace while fullscreen must not strand the window.
   useEffect(() => () => restoreWindowRef.current(), [])
-
-  // The reveal zone is thin; hide the bar shortly after the pointer leaves zone and bar alike.
-  const showBar = (): void => {
-    window.clearTimeout(revealTimer.current)
-    setRevealed(true)
-  }
-  const hideBarSoon = (): void => {
-    window.clearTimeout(revealTimer.current)
-    revealTimer.current = window.setTimeout(() => setRevealed(false), 400)
-  }
-  useEffect(() => () => window.clearTimeout(revealTimer.current), [])
 
   // Controller for the status bar and tab bar; refreshed every render so it sees current state.
   const controllerImpl = useRef<DesktopSessionController | null>(null)
@@ -450,22 +449,46 @@ export function RemoteDesktopTab({
 
   const fullscreenRef = useRef(fullscreen)
   fullscreenRef.current = fullscreen
-  // ⌃⌥⌘F is the one chord Studio keeps; capture it before noVNC forwards it to the remote.
+  // Keep the local fullscreen shortcuts out of noVNC, including repeats after the mode changes.
   useEffect(() => {
     const screen = target.current
     if (!screen) return
+    let consumedCode: string | undefined
     const onKey = (event: KeyboardEvent): void => {
-      if (!(event.ctrlKey && event.altKey && event.metaKey && event.code === 'KeyF')) return
+      if (!activeRef.current) return
+      if (event.code === consumedCode && (event.type === 'keyup' || event.repeat)) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (event.type === 'keyup') consumedCode = undefined
+        return
+      }
+      if (event.type !== 'keydown' || event.repeat) return
+      if (event.code === consumedCode) consumedCode = undefined
+      if (
+        !fullscreenRef.current &&
+        !(event.target instanceof Node && screen.contains(event.target))
+      ) {
+        return
+      }
+      const exit =
+        fullscreenRef.current &&
+        event.code === 'Escape' &&
+        event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey
+      const toggle = event.ctrlKey && event.altKey && event.metaKey && event.code === 'KeyF'
+      if (!exit && !toggle) return
+      consumedCode = event.code
       event.preventDefault()
       event.stopPropagation()
-      if (event.type === 'keydown' && !event.repeat)
-        controllerImpl.current?.setFullscreen(!fullscreenRef.current)
+      controllerImpl.current?.setFullscreen(!fullscreenRef.current)
     }
-    screen.addEventListener('keydown', onKey, true)
-    screen.addEventListener('keyup', onKey, true)
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keyup', onKey, true)
     return () => {
-      screen.removeEventListener('keydown', onKey, true)
-      screen.removeEventListener('keyup', onKey, true)
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keyup', onKey, true)
     }
   }, [])
   const busy = phase !== 'idle' && phase !== 'ended'
@@ -487,28 +510,16 @@ export function RemoteDesktopTab({
         </div>
       )}
       {fullscreen && (
-        <>
-          <div
-            className="remote-desktop-reveal-zone"
-            aria-hidden="true"
-            onMouseEnter={showBar}
-            onMouseLeave={hideBarSoon}
-          />
-          <div
-            className={`remote-desktop-fullscreen-bar ${revealed ? 'revealed' : ''}`}
-            onMouseEnter={showBar}
-            onMouseLeave={hideBarSoon}
-          >
-            <span className="remote-desktop-dot connected" aria-hidden="true" />
-            <span>{name.trim() || host} · 已连接</span>
-            <button type="button" onClick={() => exitFullscreen()}>
-              退出全屏 <kbd>{DESKTOP_FULLSCREEN_SHORTCUT}</kbd>
-            </button>
-            <button type="button" className="danger" onClick={disconnect}>
-              断开
-            </button>
-          </div>
-        </>
+        <div className="remote-desktop-fullscreen-bar">
+          <span className="remote-desktop-dot connected" aria-hidden="true" />
+          <span className="remote-desktop-fullscreen-device">{name.trim() || host} · 已连接</span>
+          <button type="button" onClick={exitFullscreen} aria-keyshortcuts="Meta+Escape">
+            退出全屏 <kbd>⌘ Esc</kbd>
+          </button>
+          <button type="button" className="danger" onClick={disconnect}>
+            断开
+          </button>
+        </div>
       )}
       <div
         className="remote-desktop-screen"
@@ -519,8 +530,11 @@ export function RemoteDesktopTab({
       />
       {!busy && (
         <form className="remote-desktop-form" onSubmit={(event) => void connect(event)}>
-          <h2>连接 Mac 桌面</h2>
-          <p>在目标 Mac 的「系统设置 → 通用 → 共享」中开启屏幕共享，通过可信网络连接。</p>
+          <h2>连接 VNC 桌面</h2>
+          <p>
+            在远端开启 VNC 服务，通过可信网络连接。Mac 可在「系统设置 → 通用 →
+            共享」中开启屏幕共享。
+          </p>
           {devices && devices.length > 0 && (
             <label>
               本机设备
@@ -592,15 +606,20 @@ export function RemoteDesktopTab({
       {phase === 'credentials' && (
         <form className="remote-desktop-form" onSubmit={authenticate} autoComplete="off">
           <h2>屏幕共享认证</h2>
-          <p>{name.trim() || host} · 输入目标 Mac 上的账号和密码。</p>
+          <p>
+            {name.trim() || host} ·{' '}
+            {usernameRequired
+              ? '输入远端屏幕共享账号和密码。'
+              : '此服务仅要求密码。请输入远端 VNC 服务配置的访问密码。'}
+          </p>
           {usernameRequired && (
             <label>
-              Mac 用户名
+              用户名
               <input name="username" required autoComplete="off" />
             </label>
           )}
           <label>
-            密码
+            {usernameRequired ? '密码' : 'VNC 访问密码'}
             <input name="password" required type="password" autoComplete="off" />
           </label>
           {usernameRequired && (

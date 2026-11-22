@@ -106,35 +106,25 @@
      layer must receive mouseup, or noVNC never releases it and blocks the whole window. */
   z-index: 9990;
 }
-.remote-desktop-reveal-zone {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  z-index: 2;
-}
 .remote-desktop-fullscreen-bar {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  z-index: 3;
   display: flex;
+  flex: none;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 4px 10px;
   font-size: 12px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  transform: translate(-50%, -100%);
-  transition: transform 120ms ease-out;
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: no-drag;
 }
-.remote-desktop-fullscreen-bar.revealed {
-  transform: translate(-50%, 0);
+.remote-desktop-fullscreen-device {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .remote-desktop-fullscreen-bar button {
+  flex: none;
   padding: 3px 8px;
   font-size: 12px;
 }

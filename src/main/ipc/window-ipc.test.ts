@@ -28,6 +28,26 @@ describe('registerWindowIpc', () => {
     expect(webContents.focus).toHaveBeenCalledOnce()
   })
 
+  it('honors an exit requested while macOS is still entering fullscreen', () => {
+    const webContents = createWebContents()
+    const mainWindow = createMainWindow(webContents)
+    registerWindowIpc(mainWindow as never, createGuard(webContents) as never)
+    const set = mockIpcMain.handlers.get('window:setFullscreen')!
+    const sender = { sender: webContents }
+    expect(set(sender, true).previous).toBe(false)
+    expect(set(sender, false).previous).toBe(true)
+    expect(mainWindow.setFullScreen.mock.calls).toEqual([[true]])
+
+    const events = new Map(mainWindow.on.mock.calls)
+    mainWindow.isFullScreen.mockReturnValue(true)
+    events.get('enter-full-screen')!()
+    expect(mainWindow.setFullScreen.mock.calls).toEqual([[true], [false]])
+    mainWindow.isFullScreen.mockReturnValue(false)
+    events.get('leave-full-screen')!()
+    expect(set(sender, false).previous).toBe(false)
+    expect(mainWindow.setFullScreen).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects focus requests from another webContents', () => {
     const webContents = createWebContents()
     const mainWindow = createMainWindow(webContents)
@@ -98,7 +118,7 @@ function createWebContents() {
 function createMainWindow(webContents = createWebContents()) {
   return {
     webContents,
-    on: vi.fn(),
+    on: vi.fn<(_name: string, _handler: () => void) => void>(),
     isDestroyed: vi.fn(() => false),
     isFullScreen: vi.fn(() => false),
     setFullScreen: vi.fn(),
