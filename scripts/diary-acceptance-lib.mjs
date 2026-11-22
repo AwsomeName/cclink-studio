@@ -28,7 +28,7 @@ export async function makeHome(root, scenario, { appHome } = {}) {
   const launcher = join(home, 'launch.cjs')
   await writeFile(
     launcher,
-    `const {app}=require('electron'); app.setPath('home',${JSON.stringify(appHome ?? home)});app.setPath('documents',${JSON.stringify(appHome ?? home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve('.cache/diary-build/main/index.js'))});`,
+    `const {app}=require('electron'); app.setPath('home',${JSON.stringify(appHome ?? home)});app.setPath('documents',${JSON.stringify(appHome ?? home)});app.setAppPath(${JSON.stringify(resolve('.'))});require(${JSON.stringify(resolve(process.env.DIARY_BUILD ? process.env.DIARY_BUILD + '/main/index.js' : '.cache/diary-build/main/index.js'))});`,
   )
   const session = { home, profile, app: null, page: null }
   session.launch = async (extraEnv = {}) => {

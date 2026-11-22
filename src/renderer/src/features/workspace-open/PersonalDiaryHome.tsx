@@ -3,12 +3,14 @@ import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
 import { DiarySyncStatus, DiarySyncPage, useDiarySyncRevision } from './DiarySyncStatus'
-import { TaskDefinitionTransfer } from './TaskDefinitionTransfer'
+import { DiaryDayView } from './DiaryDayView'
+import { useDiaryCalendar } from './diary-calendar-store'
+import { DiaryTasksView } from './DiaryTasksView'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useDiaryNavigation } from './personal-diary-navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   defaultDiaryDirectory,
   defaultDiaryTimezone,
@@ -24,29 +26,14 @@ import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-tas
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { askAi, editRule } from './diary-ai'
-import {
-  createScheduledTaskTab,
-  describeSchedule,
-} from '../scheduled-tasks/scheduled-task-view-model'
+import { createScheduledTaskTab } from '../scheduled-tasks/scheduled-task-view-model'
 import {
   defaultBuiltInChoice,
   ensureBuiltInDiaryTasks,
   findDailyDraft,
-  isWeeklyReviewTask,
 } from './diary-builtin-tasks'
 
 type DiaryEntry = FsDirEntry & { year: string; month: string; day: string; rel: string }
-
-const runLabel: Record<string, string> = {
-  queued: '排队中',
-  running: '运行中',
-  completed: '完成',
-  failed: '失败',
-  cancelled: '已取消',
-  interrupted: '中断',
-  missed: '错过',
-  skipped: '跳过',
-}
 
 /** Section headings with their first paragraph: a compact view of a day's entry. */
 export function summarizeDiary(content: string): Array<{ title: string; text: string }> {
@@ -116,7 +103,6 @@ export function PersonalDiaryHome(): React.ReactElement {
     if (syncedAt) setRevision((r) => r + 1)
   }, [syncedAt])
   const [clock, setClock] = useState(() => Date.now())
-  const [month, setMonth] = useState('')
   const [aiProblem, setAiProblem] = useState('')
   useEffect(() => {
     void window.cclinkStudio.agent
@@ -281,19 +267,38 @@ export function PersonalDiaryHome(): React.ReactElement {
     return `${parts.year}${parts.month}${parts.day}`
   }
   const todayKey = `${day.year}${day.month}${day.day}`
+  // Feed the sidebar calendar: dated diary files by day, plus today in the project timezone.
+  useEffect(() => {
+    const byDay: Record<string, Array<{ path: string; name: string }>> = {}
+    for (const file of files.diaries)
+      (byDay[`${file.year}-${file.month}-${file.day}`] ??= []).push({
+        path: file.path,
+        name: file.name,
+      })
+    // The standard MMDD_周X name first; alternates (e.g. MMDD-周X) follow.
+    for (const entries of Object.values(byDay))
+      entries.sort(
+        (a, b) =>
+          Number(/^\d{4}-/.test(a.name)) - Number(/^\d{4}-/.test(b.name)) ||
+          a.name.localeCompare(b.name),
+      )
+    useDiaryCalendar.getState().publish(byDay, `${day.year}-${day.month}-${day.day}`)
+  }, [files.diaries, day.year, day.month, day.day])
+  const readDiary = useCallback(
+    (path: string) =>
+      window.cclinkStudio.workspaceState.diaryDocument({
+        action: 'read',
+        workspacePath: ownerPath ?? undefined,
+        path: path.slice((source?.workspacePath.length ?? 0) + 1),
+      }),
+    [ownerPath, source?.workspacePath],
+  )
   const daily = findDailyDraft(tasks)
   const dailyRun =
     daily?.latestRun &&
     dayKey(daily.latestRun.scheduledFor ?? daily.latestRun.createdAt) === todayKey
       ? daily.latestRun
       : undefined
-  const months = useMemo(() => {
-    const keys = [...new Set(files.diaries.map((file) => `${file.year}-${file.month}`))]
-    return keys.sort().reverse()
-  }, [files.diaries])
-  const currentMonth = `${day.year}-${day.month}`
-  const shownMonth =
-    month || (months.includes(currentMonth) ? currentMonth : (months[0] ?? currentMonth))
   const selectedPreview =
     previewPath || (page === '今天' && today.length === 1 ? today[0].path : '')
   useEffect(() => {
@@ -552,162 +557,14 @@ export function PersonalDiaryHome(): React.ReactElement {
       )}
     </div>
   )
-  const [shownYear, shownMonthNumber] = shownMonth.split('-')
-  const monthEntries = files.diaries.filter(
-    (file) => file.year === shownYear && file.month === shownMonthNumber,
-  )
-  const step = (delta: number): void => {
-    const index = months.indexOf(shownMonth)
-    const next = months[index - delta]
-    if (next) setMonth(next)
-  }
-  const historyView = (
-    <div className="diary-history">
-      <div className="diary-month-nav">
-        <button
-          aria-label="上个月"
-          disabled={months.indexOf(shownMonth) >= months.length - 1}
-          onClick={() => step(-1)}
-        >
-          ‹
-        </button>
-        <b>
-          {shownYear} 年 {Number(shownMonthNumber)} 月
-        </b>
-        <button
-          aria-label="下个月"
-          disabled={months.indexOf(shownMonth) <= 0}
-          onClick={() => step(1)}
-        >
-          ›
-        </button>
-        <span className="spacer" />
-        <button
-          onClick={() =>
-            askAi(
-              `请阅读 ${source?.directory}/${shownYear} 年 ${Number(shownMonthNumber)} 月的日记，总结这个月：`,
-            )
-          }
-        >
-          AI 总结这个月
-        </button>
-      </div>
-      {!monthEntries.length && <p className="muted">这个月没有日记。</p>}
-      {monthEntries.map((file) => (
-        <button
-          className={`workspace-home-record diary-day-row ${previewPath === file.path ? 'selected' : ''}`}
-          key={file.path}
-          onClick={() => setPreviewPath(file.path)}
-        >
-          <span>{Number(file.day)} 日</span>
-          <span>{file.name.replace(/^\d{4}[_-]/, '').replace(/\.md$/i, '')}</span>
-          <span>{file.name}</span>
-          <span className="diary-row-path">{file.rel}</span>
-        </button>
-      ))}
-      {files.others.length > 0 && (
-        <details>
-          <summary>未识别日期 · {files.others.length} 个</summary>
-          {files.others.map((file) => (
-            <button
-              className="workspace-home-record"
-              key={file.path}
-              onClick={() => setPreviewPath(file.path)}
-            >
-              {file.name}
-            </button>
-          ))}
-        </details>
-      )}
-    </div>
-  )
-  const tasksView = (
-    <div className="diary-tasks">
-      {!tasks.length && (
-        <div className="diary-card">
-          <b>还没有定时整理任务</b>
-          <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
-            创建每日起草与周期计划
-          </button>
-        </div>
-      )}
-      {tasks.map((task) => (
-        <button
-          className="workspace-home-record diary-task-row"
-          key={task.definition.id}
-          onClick={() => openTask(task)}
-        >
-          <span>
-            <b>{task.definition.title}</b>
-            <span className="diary-tag">
-              {task.definition.source === 'shared' ? '共享' : '本机'}
-            </span>
-          </span>
-          <span>
-            {describeSchedule(task.definition.schedule)} ·{' '}
-            {task.activation.enabled &&
-            (task.definition.source === 'local' ||
-              task.activation.confirmedExecutionDigest === task.definition.executionDigest)
-              ? `本机已启用 · 下次 ${formatNextInZone(task.activation.nextRunAt, task.definition.schedule.timezone)}`
-              : task.activation.enabled
-                ? '定义已变化，待重新确认'
-                : '本机未启用'}
-          </span>
-        </button>
-      ))}
-      {tasks.length > 0 &&
-        (!daily || !tasks.some((task) => isWeeklyReviewTask(task.definition))) && (
-          <button disabled={busy} onClick={() => act(createBuiltIns)}>
-            补齐内置任务
-          </button>
-        )}
-      <h3>最近运行</h3>
-      {tasks
-        .filter((task) => task.latestRun)
-        .sort((a, b) => (b.latestRun!.createdAt ?? 0) - (a.latestRun!.createdAt ?? 0))
-        .map((task) => {
-          const run = task.latestRun!
-          return (
-            <div className="workspace-home-record" key={run.id}>
-              <span>
-                {task.definition.title} · {runLabel[run.status] ?? run.status}
-                {run.status === 'skipped' || run.status === 'missed' ? ` · ${run.currentStep}` : ''}
-                {run.status === 'failed' && run.error ? ` · ${run.error.message}` : ''}
-              </span>
-              {run.artifact && source && (
-                <button
-                  onClick={() =>
-                    openFile({
-                      name: run.artifact!.relativePath.split('/').pop()!,
-                      path: `${source.workspacePath}/${run.artifact!.relativePath}`,
-                    })
-                  }
-                >
-                  打开 {run.artifact.relativePath.split('/').pop()}
-                </button>
-              )}
-            </div>
-          )
-        })}
-      {source && (
-        <TaskDefinitionTransfer
-          workspacePath={source.workspacePath}
-          taskIds={tasks.map((task) => task.definition.id)}
-          onImported={() => setRevision((value) => value + 1)}
-        />
-      )}
-    </div>
-  )
   return (
     <section className="personal-diary-home">
       <h2>
         {page === '今天'
           ? `${Number(day.month)}月${Number(day.day)}日 ${day.weekday}`
-          : page === '日记'
-            ? '历史日记'
-            : page === 'Git'
-              ? '同步'
-              : page}
+          : page === 'Git'
+            ? '同步'
+            : page}
       </h2>
       {legacyLink && source && ownerPath === fixedPath && (
         <div className="diary-card" role="status">
@@ -744,7 +601,9 @@ export function PersonalDiaryHome(): React.ReactElement {
         <>
           {/* Until a legacy link is migrated, only the migration prompt acts on it. */}
           {page === '今天' && !(legacyLink && ownerPath === fixedPath) && todayView}
-          {page === '日记' && historyView}
+          {page === '日记' && source && (
+            <DiaryDayView read={readDiary} openFile={openFile} directory={source.directory} />
+          )}
           {page === '计划' && source && source.workspacePath === ownerPath && (
             <DiaryPlans
               key={ownerPath}
@@ -760,8 +619,18 @@ export function PersonalDiaryHome(): React.ReactElement {
               refresh={() => setRevision((v) => v + 1)}
             />
           )}
-          {page === '定时整理' && tasksView}
-          {page !== '今天' && preview && (
+          {page === '定时整理' && source && (
+            <DiaryTasksView
+              workspacePath={source.workspacePath}
+              directory={source.directory}
+              timezone={source.timezone}
+              tasks={tasks}
+              onChanged={() => setRevision((value) => value + 1)}
+              openTask={openTask}
+              openFile={openFile}
+            />
+          )}
+          {page !== '今天' && page !== '日记' && preview && (
             <article className="diary-preview" aria-label="日记正文预览">
               <header>
                 <strong>{preview.path.split('/').pop()}</strong>

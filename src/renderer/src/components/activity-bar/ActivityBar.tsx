@@ -39,6 +39,7 @@ import {
   ActivityWebAccountsIcon,
 } from './activity-bar-icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
+import { DiaryCalendar } from '../../features/workspace-open/DiaryCalendar'
 import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
@@ -244,7 +245,7 @@ export function ActivityBar(): React.ReactElement {
       <div className="activity-bar-main">
         <div className="activity-bar-group" role="group" aria-label="项目功能">
           <button
-            className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && (workspaceType !== 'diary' || !!activeTab.settingsSection || diaryPage === '今天') ? 'active' : ''}`}
+            className={`activity-bar-icon ${activePanel !== 'files' && activeTab?.type === 'workspace-home' && (workspaceType !== 'diary' || !!activeTab.settingsSection || diaryPage === '今天') ? 'active' : ''}`}
             onClick={() => handleClick('workspace-home')}
           >
             <ActivityProjectsIcon size={18} />
@@ -358,6 +359,7 @@ export function ActivityBar(): React.ReactElement {
           })}
         </details>
       </div>
+      {workspaceType === 'diary' && sidebarVisible && <DiaryCalendar />}
     </div>
   )
 }

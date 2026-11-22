@@ -14,7 +14,7 @@
 
 截图：[等待用户决定](../design/personal-diary-space-2026-11-17/acceptance/sync-feedback.png) · [继续后两端同步](../design/personal-diary-space-2026-11-17/acceptance/sync-finished.png)。
 
-复现：运行 `pnpm exec electron-vite build --outDir .cache/diary-build`，再运行 `DIARY_LIVE_AI=1 node scripts/diary-sync-smoke.mjs`。使用隔离的 Electron 配置、真实 Git 裸仓库、正常 Studio IPC 和实际 AI；跨整点只加速 renderer 时钟。本轮未使用公网私有仓库验证账号认证。
+复现：运行 `pnpm exec electron-vite build`，再运行 `DIARY_LIVE_AI=1 DIARY_BUILD="$PWD/out" node scripts/diary-sync-smoke.mjs`。使用隔离的 Electron 配置、真实 Git 裸仓库、正常 Studio IPC 和实际 AI；跨整点只加速 renderer 时钟。本轮未使用公网私有仓库验证账号认证。
 
 ## 2026-11-17　旧版来源接入验收记录
 

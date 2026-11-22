@@ -668,6 +668,112 @@
   flex-basis: 100%;
 }
 
+/* 日记日历（左下角）与按天查看 */
+.diary-calendar {
+  margin-top: auto;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  padding: 10px 8px 6px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+}
+.diary-calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.diary-calendar-head button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.diary-calendar-title {
+  font-weight: 600;
+}
+.diary-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.diary-calendar-weekday {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.diary-calendar-day {
+  position: relative;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  padding: 2px 0 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.diary-calendar-day.has {
+  color: var(--text-primary);
+}
+.diary-calendar-day.has::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 1px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--accent-color, #3b8eea);
+}
+.diary-calendar-day.today {
+  border-color: var(--accent-color, #3b8eea);
+}
+.diary-calendar-day.selected {
+  background: var(--accent-color, #2b74c4);
+  color: #fff;
+}
+.diary-calendar-foot {
+  color: var(--text-secondary);
+  margin-top: 4px;
+  text-align: right;
+}
+.diary-day-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.diary-day-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+}
+.diary-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+}
+.diary-day-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.diary-day-tabs button.on {
+  border-color: var(--accent-color, #2b74c4);
+}
+.diary-day-doc header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.diary-day-doc header strong {
+  flex: 1;
+}
+
 .diary-sync-panel {
   max-width: 38rem;
 }

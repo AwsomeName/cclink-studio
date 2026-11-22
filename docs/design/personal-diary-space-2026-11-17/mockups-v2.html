@@ -89,6 +89,33 @@
   .dialog { width: 560px; background: var(--side); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
   .cal { display: grid; grid-template-columns: 70px 50px 1fr auto; gap: 0 10px; }
   .legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; font-size: 12px; margin-bottom: 10px; }
+  .seg span { flex: 1; text-align: center; padding: 5px 0; color: var(--muted); }
+  .seg span.on { background: var(--accentbg); color: var(--text); font-weight: 600; }
+  .pcol { width: 290px; flex: none; border-left: 1px solid var(--line); padding: 16px 14px; background: var(--side); font-size: 13px; }
+  .prow { display: flex; justify-content: space-between; padding: 5px 8px; border-radius: 6px; }
+  .prow.cur { box-shadow: inset 2px 0 var(--accent); }
+  .prow.sel { background: #1b2b3d; }
+  .prow .dot { color: #7fd6a8; font-size: 11px; }
+  .prow .none { color: #6f757d; font-size: 11px; }
+  .mgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .mgrid div { border: 1px solid var(--line); border-radius: 6px; padding: 6px; text-align: center; font-size: 12px; }
+  .mgrid div.sel { background: #1b2b3d; border-color: var(--accent); }
+  .mgrid div.cur { box-shadow: inset 0 -2px var(--accent); }
+  .mgrid small { display: block; color: #7fd6a8; font-size: 10px; }
+  .kv { display: grid; grid-template-columns: 70px 1fr; gap: 4px 8px; font-size: 12px; margin: 6px 0; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .mcal { margin-top: auto; border-top: 1px solid var(--line); padding-top: 8px; font-size: 11px; }
+  .mcal-h { display: flex; justify-content: space-between; padding: 0 4px 4px; }
+  .mcal-g { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+  .mcal-g i { color: var(--muted); font-style: normal; }
+  .mcal-g span { position: relative; padding: 2px 0 4px; border-radius: 4px; color: var(--muted); border: 1px solid transparent; }
+  .mcal-g span.has { color: var(--text); }
+  .mcal-g span.has::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+  .mcal-g span.sel { background: #2b74c4; color: #fff; }
+  .mcal-g span.today { border-color: var(--accent); }
+  .mcal-f { text-align: right; color: var(--muted); margin-top: 4px; }
+  @media (max-width: 760px) { .pcol { display: none; } }
   @media (max-width: 760px) { .side, .chat { display: none; } .main { padding: 14px; } .field { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -102,23 +129,28 @@
 
 <script>
 const NAV = ['今天', '日记', '计划', '定时整理', '↻ 同步', '|', '文件', '会话', '工具']
-function side(on) {
-  return '<div class="side"><div class="grp">我的空间</div>' + NAV.map(n => n === '|' ? '<div class="sep"></div>' :
-    `<div class="it ${n === on ? 'on' : ''}">${n}</div>`).join('') + '</div>'
+function side(on, calendar = false) {
+  const days = { 2: 0, 9: 0, 16: 1, 17: 1, 18: 1, 19: 1, 20: 1, 21: 1 }
+  const cal = calendar ? `<div class="mcal"><div class="mcal-h"><span>‹</span><b>2026 年 11 月</b><span>›</span></div><div class="mcal-g">` +
+    ['一','二','三','四','五','六','日'].map(d => `<i>${d}</i>`).join('') + '<span></span>'.repeat(6) +
+    Array.from({ length: 30 }, (_, i) => { const d = i + 1; return `<span class="${days[d] ? 'has' : ''} ${d === 20 ? 'sel' : ''} ${d === 22 ? 'today' : ''}">${d}</span>` }).join('') +
+    '</div><div class="mcal-f">本月 6 篇</div></div>' : ''
+  return '<div class="side" style="display:flex;flex-direction:column"><div><div class="grp">我的空间</div>' + NAV.map(n => n === '|' ? '<div class="sep"></div>' :
+    `<div class="it ${n === on ? 'on' : ''}">${n}</div>`).join('') + '</div>' + cal + '</div>'
 }
-function shell({ nav = '今天', body, chat = '', status = 'ok', firstUse = false }) {
+function shell({ nav = '今天', body, chat = '', status = 'ok', firstUse = false, calendar = false }) {
   const st = {
-    ok: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
+    ok: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#7fd6a8"></i>已同步</span>',
     ahead: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#f0c674"></i>远端有 2 项更新</span>',
-    aiDown: '<span><i class="dot" style="background:#f29b9b"></i>AI 未登录</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
+    aiDown: '<span><i class="dot" style="background:#f29b9b"></i>AI 未登录</span><span><i class="dot" style="background:#7fd6a8"></i>已同步</span>',
+    setup: '<span><i class="dot" style="background:#9aa0a8"></i>正在设置</span>',
     syncing: '<span>↻ 同步中…</span>',
     paused: '<span>同步暂停 · 需要你的决定</span>',
-    setup: '<span><i class="dot" style="background:#9aa0a8"></i>正在设置</span>',
     lost: '<span><i class="dot" style="background:#f29b9b"></i>项目目录失联</span>',
   }[status]
   return `<div class="win">
     <div class="topbar"><span class="brand">CCLink Studio</span><span class="tab pin on">我的空间</span><span class="tab">研发日记</span><span class="sp"></span><span class="tab">＋ 新建 / 打开</span><span class="tab">历史项目</span><span class="tab">Studio 设置</span></div>
-    <div class="body">${firstUse ? '<div class="side"><div class="grp">我的空间</div><div class="it on">首次使用</div></div>' : side(nav)}<div class="main">${body}</div>${chat}</div>
+    <div class="body">${firstUse ? '<div class="side"><div class="grp">我的空间</div><div class="it on">首次使用</div></div>' : side(nav, calendar)}<div class="main">${body}</div>${chat}</div>
     <div class="status"><span>本地 · 我的空间</span>${st}</div>
   </div>`
 }
@@ -170,7 +202,7 @@ const SHOTS = [
        <div style="margin:8px 0" class="muted">起草依据：1120_周五.md · 第47周计划.md · 日记模板.md</div>
        <span class="btn">现在起草</span><span class="btn">空白模板</span> <span class="muted" style="font-size:12px">修改时间 ›</span></div>
        <h4>本周计划</h4><div class="row"><span>第47周计划.md</span><span class="r">打开 ›</span></div>
-       <h4>同步</h4><div class="row"><span>已与 origin/main 同步</span><span class="r">06:58 检查</span></div>` })],
+       <h4>同步</h4><div class="row"><span>已同步</span><span class="r">06:58 检查</span></div>` })],
 
   ['today-drafting', '06 今天 · 起草中', '实时显示 AI 读取的文件与进度，可取消；完成后自动打开预览。',
     shell({ body: crumb('我的空间 / 今天') + '<h3 class="title">11月21日 周六</h3>' +
@@ -194,15 +226,18 @@ const SHOTS = [
        <div class="muted">07:30 自动起草未成功。重新登录后会自动补起草今天。</div>
        <div style="margin-top:8px"><span class="btn pri">重新登录</span><span class="btn">空白模板（未经 AI 起草）</span></div></div>` })],
 
-  ['history', '09 日记 · 历史', '按年月翻页；同日多篇逐行列出原名；合并月份按日期归月；未识别日期单列。',
-    shell({ nav: '日记', body: crumb('我的空间 / 日记') + '<h3 class="title">历史日记</h3>' +
-      `<div class="row"><span>‹ <b>2026 年 11 月</b> ›</span><span><span class="btn sm">AI 总结这段时间</span><span class="btn sm">让 AI 修改…</span></span></div>
-       <div class="split"><div>
-       ${[['21', '周六', '1121_周六.md', 'ai'], ['20', '周五', '1120_周五.md', ''], ['18', '周三', '1118_周三.md', ''], ['18', '周三', '1118-周三.md', ''], ['17', '周二', '1117_周二.md', '']].map(([d, w, f, t], i) =>
-        `<div class="row" style="${i === 1 ? 'background:#1b2b3d' : ''}"><span class="cal"><span>${d} 日</span><span>${w}</span><span>${f}${t ? ' <span class="tag ai">AI 起草</span>' : ''}</span></span><span class="r">${i === 1 ? '已选' : ''}</span></div>`).join('')}
-       <div class="legend">未识别日期 · 1 个：11月杂记.md</div></div>
-       <div class="editor"><b>1120_周五.md</b><h4>昨日总结</h4><div class="muted">完成样品检查……</div><h4>今日打卡</h4><div class="muted">09:30 评审……</div>
-       <div style="margin-top:10px"><span class="btn pri">打开原文</span></div></div></div>` })],
+  ['history', '09 日记 · 日历与按天查看', '左下角月历标出有日记的日期，点哪天看哪天；同日多篇用标签切换；右侧保持 Agent 对话，可问这天做了什么、最近花了多少钱。',
+    shell({ nav: '日记', body: crumb('我的空间 / 日记') +
+      `<div class="row"><span><span class="btn sm">‹ 上一篇</span> <b style="font-size:17px">2026 年 11 月 20 日 周五</b></span><span class="btn sm">下一篇 ›</span></div>
+       <div style="margin:8px 0"><span class="muted">问 AI：</span><span class="btn sm">这天做了什么</span><span class="btn sm">最近一周花了多少钱</span><span class="btn sm">这个月总结</span></div>
+       <div class="editor"><div class="row" style="border:0"><b>1120_周五.md</b><span><span class="btn sm pri">继续写</span><span class="btn sm">让 AI 修改…</span></span></div>
+       <h4>昨日总结</h4><div>完成样品检查，记录两项需复查问题。</div>
+       <h4>今日打卡</h4><table class="md"><tr><th>时间</th><th>事项</th><th>花销</th></tr><tr><td>12:00</td><td>午饭</td><td>35 元</td></tr><tr><td>15:00</td><td>买散热片</td><td>120 元</td></tr></table></div>`,
+      calendar: true,
+      chat: `<div class="chat"><b>会话 · 我的空间</b>
+        <div class="bub me">最近一周花了多少钱？</div>
+        <div class="bub">最近 7 天共记录 4 笔，合计 <b>412 元</b>：11/16 打车 58 元；11/18 午饭 35 元；11/20 午饭 35 元、散热片 120 元……11/19 未写金额，待核实。
+          <span class="cite">↗ 1116_周一.md</span><span class="cite">↗ 1118_周三.md</span><span class="cite">↗ 1120_周五.md</span></div></div>` })],
 
   ['edit', '10 编辑 · 富媒体', '沿用 Studio Markdown：图片粘贴自动存到相邻 .assets/；表格、清单、代码、附件链接。',
     shell({ nav: '文件', body: crumb('我的空间 / 1121_周六.md', '已保存') +
