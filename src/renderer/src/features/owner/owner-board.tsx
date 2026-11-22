@@ -1,5 +1,5 @@
 import type { Affair } from './affair'
-import { statusChips } from './owner-status'
+import { sessionStatus, statusChips } from './owner-status'
 import { decisionWorker, workerLabel, workersOf } from './research-model'
 
 const short = (s: string, n = 90) => (s.length > n ? s.slice(0, n) + '…' : s)
@@ -116,27 +116,13 @@ export function SessionsCard({ a, running }: { a: Affair; running?: string }) {
         </thead>
         <tbody>
           {workers.map((w) => {
-            const mine = decisions.filter(
-              (d) => d.kind !== 'deliver' && decisionWorker(d) === w.key,
-            )
-            const runs = mine.filter((d) => d.workerRunId).length
-            const continued = mine.filter((d) => d.workerChoice === 'continue').length
-            const last = mine.filter((d) => d.workerRunId).at(-1)
-            const newest = mine.at(-1)
-            const state =
-              running === w.key
-                ? { text: '第 ' + Math.max(runs, 1) + ' 次运行 · 运行中', tone: 'run' }
-                : newest && !newest.workerRunId && newest.collectionClosed
-                  ? { text: '最近一轮未派出（检索失败）', tone: 'warn' }
-                  : !runs
-                    ? { text: '尚未运行', tone: 'q' }
-                    : last?.verdict
-                      ? last.verdict.met
-                        ? { text: '已验收 · ' + runs + ' 次运行', tone: 'ok' }
-                        : { text: '验收未通过 · 待补查', tone: 'warn' }
-                      : last?.workerReturned
-                        ? { text: '已交回 · 待验收', tone: 'run' }
-                        : { text: runs + ' 次运行 · 未交回', tone: 'q' }
+            const continued = decisions.filter(
+              (d) =>
+                d.kind !== 'deliver' &&
+                decisionWorker(d) === w.key &&
+                d.workerChoice === 'continue',
+            ).length
+            const state = sessionStatus(r, w.key, running === w.key)
             return (
               <tr key={w.key} data-owner-session={w.key}>
                 <td className="own-sess-key">{workerLabel(w.key)}</td>
@@ -306,7 +292,9 @@ export function Timeline({ a, active }: { a: Affair; active: boolean }) {
           : [
               d.choiceReason && short(d.choiceReason, 80),
               d.verdict &&
-                (d.verdict.met ? '验收通过' : '验收未通过：' + short(d.verdict.note, 60)),
+                (d.verdict.met
+                  ? 'Owner 核对通过'
+                  : 'Owner 核对未通过：' + short(d.verdict.note, 60)),
             ]
               .filter(Boolean)
               .join(' · ') || short(d.reason),

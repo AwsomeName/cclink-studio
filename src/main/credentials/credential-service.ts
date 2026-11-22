@@ -255,6 +255,7 @@ function cloneRecords(
 
 function consumersFor(id: string): string[] {
   if (id.startsWith('agent:')) return ['Agent']
+  if (id === 'git:github') return ['Git 备份', 'Owner 调研']
   if (id.startsWith('git:')) return ['Git 备份']
   if (id.startsWith('data-source:')) return ['数据源']
   if (id.startsWith('extension:webdav:')) return ['云同步']

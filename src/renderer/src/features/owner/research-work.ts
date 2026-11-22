@@ -323,7 +323,7 @@ function remember(id: string, message: string) {
 
 // The Owner chooses the research question and search terms. A chooses documents from the real tree.
 type Decision = NonNullable<Research['decisions']>[number]
-/** The latest dispatch that came back and still needs Owner's acceptance. */
+/** The latest dispatch that came back and Owner has not checked yet. */
 export function lastDispatch(r: Research) {
   const d = r.decisions?.filter((x) => x.kind !== 'deliver' && x.workerReturned).at(-1)
   return d && !d.verdict ? d : undefined
@@ -625,7 +625,7 @@ export async function research(id: string, reassign = false) {
           r.decisions!.find((x) => x.id === d.id)!.verdict = verdict.data
           event(
             r,
-            '验收执行会话 ' +
+            'Owner 核对执行会话 ' +
               workerLabel(decisionWorker(d)) +
               '：' +
               (verdict.data.met ? '满足完成标准' : '未满足 · ' + verdict.data.note),

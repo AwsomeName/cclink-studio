@@ -54,7 +54,7 @@ const SERVICES = [
     name: 'GitHub',
     group: '开发服务',
     credential: 'git:github',
-    description: '配置 GitHub 账号和 Token，供 Git 备份使用。',
+    description: '配置 GitHub 账号和 Token，供 Git 备份和 Owner 调研读取公开仓库使用。',
     usage: '账号认证通过不代表具有目标仓库写入权限；仓库选择仍在 Git 备份中完成。',
   },
   {

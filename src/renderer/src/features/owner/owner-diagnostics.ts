@@ -102,7 +102,9 @@ export function formatOwnerDiagnostics(input: OwnerDiagnosticInput): string {
       if (d.ask) out.push('- 本步问题：' + clip(d.ask))
       if (d.doneWhen) out.push('- 完成标准：' + clip(d.doneWhen))
       if (d.verdict)
-        out.push('- 验收：' + (d.verdict.met ? '满足' : '未满足') + ' · ' + clip(d.verdict.note))
+        out.push(
+          '- Owner 核对：' + (d.verdict.met ? '满足' : '未满足') + ' · ' + clip(d.verdict.note),
+        )
       out.push('- 原因：' + clip(d.reason))
       if (d.requests?.length)
         out.push(

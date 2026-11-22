@@ -32,10 +32,54 @@ export function renamedRepositoryTarget(location: string | null, base: string) {
     return
   }
 }
+/**
+ * Explains a GitHub refusal the Owner must not read as "the source lacks this information".
+ * Returns nothing for responses that are not a quota, rate or credential refusal.
+ */
+export function githubRefusal(
+  status: number,
+  headers: Pick<Headers, 'get'>,
+  authenticated: boolean,
+  now = Date.now(),
+): string | undefined {
+  if (status === 401 && authenticated)
+    return 'GitHub Token 无效或已过期，请在“设置 → API 连接 → GitHub”中更新后从本事务继续。'
+  if (status !== 403 && status !== 429) return
+  const later = (minutes?: number) => (minutes ? '，约 ' + minutes + ' 分钟后恢复' : '')
+  const hint = authenticated
+    ? ''
+    : '可在“设置 → API 连接 → GitHub”配置 Token，把额度从每小时 60 次提高到 5000 次。'
+  if (headers.get('x-ratelimit-remaining') === '0') {
+    const reset = Number(headers.get('x-ratelimit-reset'))
+    const minutes = reset > 0 ? Math.max(1, Math.ceil((reset * 1000 - now) / 60000)) : undefined
+    return (
+      'GitHub ' +
+      (authenticated ? '账号' : '公开') +
+      '接口本小时额度已用完' +
+      later(minutes) +
+      '。这不是资料缺失，请稍后从本事务继续。' +
+      hint
+    )
+  }
+  const retry = Number(headers.get('retry-after'))
+  if (retry > 0)
+    return (
+      'GitHub 暂时限制了请求频率' +
+      later(Math.max(1, Math.ceil(retry / 60))) +
+      '。这不是资料缺失，请稍后从本事务继续。'
+    )
+}
+/** Main-process lookup of the GitHub token kept under Settings → API connections (`git:github`). */
+let githubToken: () => string | null = () => null
 async function github(repo: string, suffix: string, limit: number) {
+  const token = githubToken()
+  // Only api.github.com ever sees the token: the first request and the single renamed-repo hop.
+  const headers: Record<string, string> = token
+    ? { ...GITHUB_HEADERS, Authorization: 'Bearer ' + token }
+    : GITHUB_HEADERS
   const first = 'https://api.github.com/repos/' + repo + suffix
   let response = await fetch(first, {
-    headers: GITHUB_HEADERS,
+    headers,
     redirect: 'manual',
     signal: AbortSignal.timeout(20000),
   })
@@ -43,25 +87,21 @@ async function github(repo: string, suffix: string, limit: number) {
     const target = renamedRepositoryTarget(response.headers.get('location'), first)
     if (!target) throw Error('GitHub 返回了不受信任的跳转（HTTP ' + response.status + '）')
     response = await fetch(target, {
-      headers: GITHUB_HEADERS,
+      headers,
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
     })
   }
-  if (
-    (response.status === 403 || response.status === 429) &&
-    response.headers.get('x-ratelimit-remaining') === '0'
-  ) {
-    const reset = Number(response.headers.get('x-ratelimit-reset'))
-    const minutes = Number.isFinite(reset)
-      ? Math.max(1, Math.ceil((reset * 1000 - Date.now()) / 60000))
-      : undefined
-    throw Error(
-      'GitHub 公开接口本小时额度已用完' +
-        (minutes ? '，约 ' + minutes + ' 分钟后恢复' : '') +
-        '。这不是资料缺失，请稍后从本事务继续。',
-    )
-  }
+  console.info('[Owner] GitHub API', {
+    repo,
+    resource: suffix.split('?')[0] || '/',
+    status: response.status,
+    authenticated: Boolean(token),
+    remaining: response.headers.get('x-ratelimit-remaining'),
+    limit: response.headers.get('x-ratelimit-limit'),
+  })
+  const refusal = githubRefusal(response.status, response.headers, Boolean(token))
+  if (refusal) throw Error(refusal)
   if (!response.ok || !response.body) throw Error('GitHub HTTP ' + response.status)
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
@@ -137,7 +177,15 @@ export function registerOwnerReadme(
     ok: false,
     error: 'Agent 服务未就绪',
   }),
+  resolveGithubToken: () => string | null = () => null,
 ) {
+  githubToken = () => {
+    try {
+      return resolveGithubToken()?.trim() || null
+    } catch {
+      return null
+    }
+  }
   registerTrustedIpcContract(ownerResearchIpc.selectAgent, guard, () => selectAgent())
   registerTrustedIpcContract(ownerResearchIpc.readReadme, guard, (_e, repo) => read(repo))
   registerTrustedIpcContract(ownerResearchIpc.readFile, guard, (_e, repo, path, anchor, ref) =>

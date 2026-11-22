@@ -43,6 +43,39 @@ export function rowMeta(a: Affair, active: boolean): string {
   return runs ? '执行会话 A · 第 ' + runs + ' 次运行' : '尚未派工'
 }
 
+type Research = NonNullable<Affair['research']>
+export type SessionTone = 'run' | 'warn' | 'q' | 'ok'
+/**
+ * One execution session's row in the sessions card. "核对" is Owner checking the session's
+ * hand-back; it never means the user still has to accept something. A returned run without a
+ * recorded check is resolved by Owner's later decision: delivering on it, or moving on.
+ */
+export function sessionStatus(
+  r: Research,
+  key: string,
+  running: boolean,
+): { text: string; tone: SessionTone } {
+  const decisions = r.decisions ?? []
+  const mine = decisions.filter((d) => d.kind !== 'deliver' && decisionWorker(d) === key)
+  const runs = mine.filter((d) => d.workerRunId).length
+  const last = mine.filter((d) => d.workerRunId).at(-1)
+  const newest = mine.at(-1)
+  if (running) return { text: '第 ' + Math.max(runs, 1) + ' 次运行 · 运行中', tone: 'run' }
+  if (newest && !newest.workerRunId && newest.collectionClosed)
+    return { text: '最近一轮未派出（检索失败）', tone: 'warn' }
+  if (!last) return { text: '尚未运行', tone: 'q' }
+  if (last.verdict)
+    return last.verdict.met
+      ? { text: 'Owner 已核对 · ' + runs + ' 次运行', tone: 'ok' }
+      : { text: 'Owner 核对未通过 · 待补查', tone: 'warn' }
+  if (!last.workerReturned) return { text: runs + ' 次运行 · 未交回', tone: 'q' }
+  const later = decisions.slice(decisions.indexOf(last) + 1)
+  if (later.some((d) => d.kind === 'deliver'))
+    return { text: '已交回 · Owner 已据此交付', tone: 'ok' }
+  if (later.length) return { text: '已交回 · 未记录核对结论', tone: 'q' }
+  return { text: '已交回 · 待 Owner 核对', tone: 'run' }
+}
+
 export function relativeTime(at: number) {
   const s = Math.max(0, (Date.now() - at) / 1000)
   if (s < 60) return '刚刚'

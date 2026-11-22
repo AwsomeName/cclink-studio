@@ -92,7 +92,7 @@ describe('CredentialService', () => {
         expect.objectContaining({
           id: 'git:github',
           fieldNames: ['token'],
-          consumers: ['Git 备份'],
+          consumers: ['Git 备份', 'Owner 调研'],
         }),
         expect.objectContaining({
           id: 'extension:jimeng:default',
