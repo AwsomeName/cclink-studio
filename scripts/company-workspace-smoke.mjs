@@ -18,6 +18,17 @@ await Promise.all([userData, a, b].map((path) => mkdir(path)))
 const material = join(a, '产品规格.md')
 const csv = join(a, '付款流水.csv')
 await writeFile(material, '# AR 眼镜规格\n\n公司工作空间验收资料。\n')
+// Both test folders are Company-type projects, as users create them from 新建 / 打开.
+for (const [path, name] of [
+  [a, 'company-a'],
+  [b, 'company-b'],
+]) {
+  await mkdir(join(path, '.cclink-studio'), { recursive: true })
+  await writeFile(
+    join(path, '.cclink-studio', 'workspace-settings.json'),
+    JSON.stringify({ version: 1, name, type: 'company' }),
+  )
+}
 await writeFile(
   csv,
   '日期,收支,金额,账户,交易对方,用途,交易号\n2026-09-02,支出,180,银行卡,示例服务商,试戴服务,smoke-1\n',
@@ -77,6 +88,12 @@ async function until(operation, predicate, description) {
   }
   throw new Error(description + ': ' + JSON.stringify(result))
 }
+/** Company pages live in the activity bar's 公司经营 group; 项目首页 is the project sidebar entry. */
+async function companyNav(label) {
+  const bar = page.locator(`.activity-bar-icon[aria-label="${label}"]`)
+  if (await bar.count()) return bar.first().click()
+  return page.getByRole('button', { name: label, exact: true }).first().click()
+}
 async function launch() {
   app = await _electron.launch({
     executablePath: electronPath,
@@ -106,20 +123,19 @@ async function switchWorkspace(path) {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [target] })
   }, path)
   await page.getByRole('button', { name: '新建或打开项目', exact: true }).click()
-  await page.getByRole('button', { name: /本地文件夹/ }).click()
+  await page.getByRole('button', { name: /打开已有项目/ }).click()
   await page
     .getByRole('button', { name: '关闭打开工作空间', exact: true })
     .waitFor({ state: 'hidden' })
 }
 try {
   await launch()
-  await page.getByRole('button', { name: '公司经营', exact: true }).click()
   await page.getByRole('heading', { name: '启用公司视图', exact: true }).waitFor({ timeout: 20000 })
   await page.getByLabel('公司显示名称').fill('眼镜研发公司')
   await page.getByRole('button', { name: '开始使用', exact: true }).click()
-  await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '项目首页', exact: true }).waitFor()
   await page.getByLabel('账目月份').fill('2026-09')
-  pass('普通本地工作空间免登录启用公司视图')
+  pass('公司类型项目免登录启用公司视图')
   await page.getByRole('button', { name: '创建业务项目', exact: true }).click()
   await page.getByLabel('业务项目名称').fill('AR 眼镜一代')
   await page.getByLabel('目标', { exact: true }).fill('完成首轮试戴资料')
@@ -139,8 +155,7 @@ try {
     .getByText('AR 眼镜规格', { exact: false })
     .waitFor({ timeout: 10000 })
     .catch(() => page.getByText('AR 眼镜规格', { exact: false }).first().waitFor())
-  await page.locator('.activity-bar-icon[title="公司经营"]').click()
-  await page.getByRole('button', { name: '业务项目', exact: true }).click()
+  await companyNav('业务项目')
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   pass('关联真实文件并通过原编辑器查看')
   // Create a real conversation using the production command, without sending a model request.
@@ -222,7 +237,7 @@ try {
   await page.getByText('2026-09 流水 · 眼镜研发支出', { exact: true }).waitFor()
   await page.getByText('示例服务商', { exact: true }).first().waitFor()
   pass('绑定原账目归属并下钻到实际确认流水')
-  await page.getByRole('button', { name: '公司总览', exact: true }).click()
+  await companyNav('项目首页')
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   // Create an original, unstarted publishing task in the isolated profile; no login or execution.
   const manuscript = join(a, '运营介绍.md')
@@ -267,7 +282,7 @@ try {
       ),
     'Company changed the original publication fact',
   )
-  await page.getByRole('button', { name: '业务项目', exact: true }).click()
+  await companyNav('业务项目')
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   pass('关联原发布事务并下钻，未开始事实保持不变')
   await page.getByRole('button', { name: '归档业务', exact: true }).click()
@@ -283,18 +298,57 @@ try {
   await page.getByRole('button', { name: '重新打开业务', exact: true }).click()
   await page.getByRole('button', { name: '归档业务', exact: true }).waitFor()
   pass('业务归档和重新打开保留三类来源关联')
-  await page.getByRole('button', { name: '公司总览', exact: true }).click()
+  await companyNav('项目首页')
   await writeFile(material, '# 产品规格\n\n已更新。')
   await page.getByRole('button', { name: '刷新', exact: true }).click()
-  await page.getByRole('button', { name: '查看下一步', exact: true }).click()
+  await page.getByRole('button', { name: '检查关联', exact: true }).click()
   await page.getByText(/文件已变化，使用前请核对/).waitFor()
   await rm(material)
   await page.getByRole('button', { name: '刷新', exact: true }).click()
   await page.getByText(/文件缺失或不再属于当前工作空间/).waitFor()
   pass('变化与缺失资料显示真实卡点')
   await page.screenshot({ path: join(runDir, 'company-project.png'), fullPage: true })
+  // Customers & after-sales v1: a locally recorded case drives today's list until the user replies.
+  await companyNav('客户与售后')
+  await page.getByRole('heading', { name: '客户与售后', exact: true }).waitFor()
+  await page.getByRole('button', { name: '记一条', exact: true }).click()
+  await page.getByLabel('客户', { exact: true }).fill('周先生')
+  await page.getByLabel('来源', { exact: true }).fill('网店')
+  await page.getByLabel('订单号（可选）', { exact: true }).fill('XH-1108')
+  await page.getByLabel('问题或需求', { exact: true }).fill('镜腿松动')
+  await page.getByRole('button', { name: '记下，等你处理', exact: true }).click()
+  await page.getByText('镜腿松动', { exact: true }).waitFor()
+  await companyNav('项目首页')
+  await page.getByText('回复 1 个售后问题', { exact: true }).waitFor()
+  await page.screenshot({ path: join(runDir, 'company-home.png'), fullPage: true })
+  await page.getByRole('button', { name: '去处理售后', exact: true }).click()
+  await page.getByRole('heading', { name: '客户与售后', exact: true }).waitFor()
+  await page.getByRole('button', { name: '已回复，等对方', exact: true }).click()
+  await until(
+    () =>
+      page.evaluate((input) => window.cclinkStudio.companyWorkspace.getSnapshot(input), scope(a)),
+    (value) => value.success && value.data.cases[0]?.status === 'waiting-customer',
+    'Customer case reply state',
+  )
+  await page.screenshot({ path: join(runDir, 'company-customers.png'), fullPage: true })
+  await companyNav('项目首页')
+  await page.getByRole('heading', { name: '今天要处理', exact: true }).waitFor()
+  assert(
+    (await page.getByText('回复 1 个售后问题', { exact: true }).count()) === 0,
+    'Replied case still listed as waiting',
+  )
+  pass('客户与售后记录进入首页待办，回复后离开待办')
+  await page.getByRole('button', { name: '去推广', exact: true }).click()
+  await page.getByRole('heading', { name: '推广', exact: true }).waitFor()
+  await page.getByText(publication.title, { exact: true }).first().waitFor()
+  await page.screenshot({ path: join(runDir, 'company-promote.png'), fullPage: true })
+  await page
+    .locator('.company-publications li', { hasText: publication.title })
+    .getByRole('button', { name: '打开发布任务', exact: true })
+    .click()
+  await page.getByRole('heading', { name: publication.title, exact: true }).waitFor()
+  pass('推广页列出原发布任务并打开同一事务')
   await switchWorkspace(b)
-  await page.getByRole('button', { name: '公司经营', exact: true }).click()
   await page.getByRole('heading', { name: '启用公司视图', exact: true }).waitFor()
   const other = await page.evaluate(
     (input) => window.cclinkStudio.companyWorkspace.getSnapshot(input),
@@ -302,8 +356,8 @@ try {
   )
   assert(other.success && other.data.projects.length === 0, 'A business leaked into B')
   await switchWorkspace(a)
-  await page.getByRole('button', { name: '公司经营', exact: true }).click()
-  await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
+  await companyNav('项目首页')
+  await page.getByRole('heading', { name: '项目首页', exact: true }).waitFor()
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   assert(
     (await page.getByLabel('账目月份').inputValue()) === '2026-09',
@@ -313,8 +367,8 @@ try {
   await app.close()
   app = null
   await launch()
-  await page.getByRole('button', { name: '公司经营', exact: true }).click()
-  await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
+  await companyNav('项目首页')
+  await page.getByRole('heading', { name: '项目首页', exact: true }).waitFor()
   await page.getByRole('button', { name: 'AR 眼镜一代', exact: true }).click()
   assert(
     (await page.getByLabel('账目月份').inputValue()) === '2026-09',
@@ -331,8 +385,18 @@ try {
       restored.data.projects[0].ledgerProjectId === ledger.id,
     'Restart did not restore company state',
   )
+  const restoredCases = await page.evaluate(
+    (input) => window.cclinkStudio.companyWorkspace.getSnapshot(input),
+    scope(a),
+  )
+  assert(
+    restoredCases.success &&
+      restoredCases.data.cases.length === 1 &&
+      restoredCases.data.cases[0].customer === '周先生',
+    'Customer case lost after restart',
+  )
   pass('完整 Electron 重启保留业务、文件和会话引用及财务绑定')
-  await page.getByRole('button', { name: '公司总览', exact: true }).click()
+  await companyNav('项目首页')
   await page.getByRole('button', { name: '关闭公司视图', exact: true }).click()
   await page.getByRole('heading', { name: '启用公司视图', exact: true }).waitFor()
   await page.getByRole('button', { name: '文件', exact: true }).click()

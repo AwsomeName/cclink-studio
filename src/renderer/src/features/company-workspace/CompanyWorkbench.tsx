@@ -31,13 +31,6 @@ const currentMonth = () => {
 }
 const money = (n: number, currency: string) =>
   new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(n / 100)
-const publicationLabel: Record<string, string> = {
-  'not-started': '尚未提交发布',
-  dispatched: '已提交，结果待核验',
-  verifying: '正在核验',
-  published: '已发布 · 结果已核验',
-  'result-unknown': '提交结果未知',
-}
 export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
   const ref = tab.workspaceRef
   const generation = useWorkspaceStore((state) => state.generation)
@@ -680,7 +673,7 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
                     {renderLinks()}
                   </section>
                   <section>
-                    <h2>运营内容</h2>
+                    <h2>推广（发布任务）</h2>
                     {snapshot.sourceIssues.publications && (
                       <p>{snapshot.sourceIssues.publications}</p>
                     )}
@@ -739,42 +732,11 @@ export function CompanyWorkbench({ tab }: { tab: Tab }): React.ReactElement {
               </label>
               {business ? (
                 <>
-                  {(page as string) === 'operations' ? (
-                    <>
-                      {links
-                        .filter((item) => item.kind === 'publishing')
-                        .map((link) => {
-                          const source = snapshot.publications.find(
-                            (item) => item.id === link.target,
-                          )
-                          return (
-                            <article key={link.id} className="company-row">
-                              <div>
-                                <strong>{link.label}</strong>
-                                <p>
-                                  {source
-                                    ? (publicationLabel[source.status] ?? source.status)
-                                    : link.issue}
-                                  {source?.observedAt ? ' · 核验于 ' + source.observedAt : ''}
-                                </p>
-                              </div>
-                              <button disabled={!source} onClick={() => openLink(link)}>
-                                查看发布任务
-                              </button>
-                            </article>
-                          )
-                        })}
-                      {!links.some((item) => item.kind === 'publishing') && (
-                        <p>此业务尚未关联发布任务。</p>
-                      )}
-                    </>
-                  ) : (
-                    renderLinks()
-                  )}
+                  {renderLinks()}
                   <button onClick={() => selectBusiness(business.id)}>管理业务关联</button>
                 </>
               ) : (
-                <p>选择业务项目，查看它关联的 文件与原有会话。</p>
+                <p>选择业务项目，查看它关联的文件与原有会话。</p>
               )}
             </>
           )}

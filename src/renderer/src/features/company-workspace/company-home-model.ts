@@ -125,6 +125,8 @@ export interface CompanyTodoInput {
   accounts: CompanyAccountAttention[]
   publications: CompanyPublishingSource[]
   businesses: CompanyBusiness[]
+  /** Businesses whose linked files, projects or ledger owner are missing or changed. */
+  businessesNeedingCheck?: string[]
 }
 
 /**
@@ -187,14 +189,20 @@ export function buildCompanyTodos(input: CompanyTodoInput): CompanyTodo[] {
       action: '打开发布任务',
       target: { kind: 'publication', affairId: item.id, title: item.title },
     })
-  for (const item of input.businesses.filter((b) => !b.archived && (!b.goal || !b.deliverable)))
+  const needsCheck = new Set(input.businessesNeedingCheck ?? [])
+  for (const item of input.businesses.filter((b) => !b.archived)) {
+    const missingInfo = !item.goal || !item.deliverable
+    if (!missingInfo && !needsCheck.has(item.id)) continue
     todos.push({
       id: 'business-' + item.id,
       tone: 'normal',
-      title: `补全业务“${item.name}”的目标或交付条件`,
-      detail: '首页进展按这两项判断',
-      action: '去补全',
+      title: missingInfo
+        ? `补全业务“${item.name}”的目标或交付条件`
+        : `检查业务“${item.name}”的关联资料`,
+      detail: missingInfo ? '首页进展按这两项判断' : '关联的文件、工程或账目归属缺失或已变化',
+      action: missingInfo ? '去补全' : '检查关联',
       target: { kind: 'business', businessId: item.id },
     })
+  }
   return todos
 }

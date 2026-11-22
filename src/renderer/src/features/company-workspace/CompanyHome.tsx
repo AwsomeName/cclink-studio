@@ -10,6 +10,7 @@ import {
   type CompanyTodo,
 } from './company-home-model'
 import type { CompanyWebAccountRow } from './use-company-sources'
+import { CompanyDecisionCard } from './CompanyDecisionCard'
 
 export interface CompanyHomeActions {
   openLedger(projectId?: string): void
@@ -72,6 +73,17 @@ export function CompanyHome({
     })),
     publications: snapshot.publications,
     businesses: visible,
+    businessesNeedingCheck: visible
+      .filter(
+        (item) =>
+          snapshot.links.some(
+            (link) => link.businessId === item.id && link.availability !== 'available',
+          ) ||
+          (item.ledgerProjectId &&
+            finance.state === 'ready' &&
+            !finance.projects.some((project) => project.id === item.ledgerProjectId)),
+      )
+      .map((item) => item.id),
   })
   const waitingAfterSales = snapshot.cases.filter(
     (item) => item.kind === 'after-sales' && item.status === 'waiting-me',
@@ -104,6 +116,7 @@ export function CompanyHome({
   }
   return (
     <div className="company-home">
+      <CompanyDecisionCard snapshot={snapshot} month={month} />
       <section className="company-card company-today" aria-labelledby="company-today-title">
         <div className="company-section-heading">
           <h2 id="company-today-title">今天要处理</h2>

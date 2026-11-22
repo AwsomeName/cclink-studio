@@ -73,8 +73,8 @@ describe('company workspace first loop', () => {
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         .all()
         .map((row) => row.name),
-    ).toEqual(['business_projects', 'customer_cases', 'resource_links', 'settings'])
-    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+    ).toEqual(['business_projects', 'customer_cases', 'decisions', 'resource_links', 'settings'])
+    expect(db.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
     db.close()
     await service.dispose()
     service = new CompanyWorkspaceService(sources())
@@ -280,7 +280,7 @@ describe('company workspace first loop', () => {
     await service.createBusiness(a, create())
     const path = join(a.workspacePath, '.cclink-studio/company-workspace/company.sqlite')
     const db = new DatabaseSync(path)
-    db.exec('DROP TABLE customer_cases; PRAGMA user_version=1;')
+    db.exec('DROP TABLE customer_cases; DROP TABLE decisions; PRAGMA user_version=1;')
     db.close()
     await expect(CompanyWorkspaceService.describeExisting(a)).resolves.toMatchObject({
       enabled: true,
@@ -301,7 +301,96 @@ describe('company workspace first loop', () => {
     expect(after.projects).toHaveLength(1)
     expect(after.cases).toHaveLength(1)
     const check = new DatabaseSync(path, { readOnly: true })
-    expect(check.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+    expect(check.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
     check.close()
   })
+  it('reads v2 data without decisions and adds the table on the next write', async () => {
+    await enable()
+    const path = join(a.workspacePath, '.cclink-studio/company-workspace/company.sqlite')
+    const db = new DatabaseSync(path)
+    db.exec('DROP TABLE decisions; PRAGMA user_version=2;')
+    db.close()
+    expect((await service.getSnapshot(a, month)).decisions).toEqual([])
+    const after = await service.createDecision(a, { ...scope(), ...decisionInput })
+    expect(after.decisions).toHaveLength(1)
+    const check = new DatabaseSync(path, { readOnly: true })
+    expect(check.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
+    check.close()
+  })
+  it('records a decision through Owner runs and adopts it without touching other data', async () => {
+    await enable()
+    await service.createBusiness(a, create())
+    const created = await service.createDecision(a, { ...scope(), ...decisionInput })
+    const decision = created.decisions[0]!
+    expect(decision).toMatchObject({
+      status: 'thinking',
+      conversationId: 'company-decision-' + decisionInput.decisionId,
+      scopes: ['accounts', 'sales'],
+    })
+    await expect(service.createDecision(a, { ...scope(), ...decisionInput })).rejects.toMatchObject(
+      { code: 'CONFLICT' },
+    )
+    const update = (change: Record<string, unknown>) =>
+      service.updateDecision(a, {
+        ...scope(),
+        decisionId: decisionInput.decisionId,
+        change: change as never,
+      })
+    let snapshot = await update({ action: 'dispatch', expectedVersion: 1, attempt: 't1' })
+    snapshot = await update({ action: 'run', attempt: 't1', runId: 'run-1' })
+    await expect(update({ action: 'run', attempt: 'stale', runId: 'x' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    })
+    snapshot = await update({
+      action: 'result',
+      attempt: 't1',
+      reply: {
+        ticket: 't1',
+        draft: {
+          summary: '先卖个人用户',
+          recommendedOptionId: 'a',
+          options: [
+            { id: 'a', title: '个人', audience: '通勤', price: '¥1,299', pros: '快', cons: '累' },
+            { id: 'b', title: '团队', audience: '工作室', price: '¥1,499', pros: '大', cons: '慢' },
+          ],
+          evidence: [{ text: '12 位意向客户', source: 'sales', kind: 'fact' }],
+          numbers: [],
+          rethinkWhen: ['成本超过 ¥800'],
+        },
+      },
+    })
+    const decided = snapshot.decisions[0]!
+    expect(decided.status).toBe('decide')
+    const before = { projects: snapshot.projects, cases: snapshot.cases, links: snapshot.links }
+    snapshot = await update({
+      action: 'adopt',
+      expectedVersion: decided.version,
+      optionId: 'a',
+      text: '先卖个人，1299',
+    })
+    expect(snapshot.decisions[0]).toMatchObject({
+      status: 'adopted',
+      decisionText: '先卖个人，1299',
+    })
+    expect({ projects: snapshot.projects, cases: snapshot.cases, links: snapshot.links }).toEqual(
+      before,
+    )
+    await expect(
+      update({ action: 'adopt', expectedVersion: decided.version, optionId: 'a', text: 'x' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+    await expect(
+      service.updateDecision(b, {
+        ...scope(),
+        workspaceRef: { kind: 'local', path: b.workspacePath },
+        decisionId: decisionInput.decisionId,
+        change: { action: 'defer', expectedVersion: 1 },
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_ENABLED' })
+  })
 })
+const decisionInput = {
+  decisionId: '5d7c3b1e-8a4f-4c2e-9b6d-1f2e3a4b5c6d',
+  question: '首批先卖给谁，怎么定价？',
+  context: '首批 300 台',
+  scopes: ['accounts' as const, 'sales' as const],
+}

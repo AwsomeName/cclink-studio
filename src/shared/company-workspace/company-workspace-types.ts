@@ -12,7 +12,10 @@ import type {
   companyUnlinkSchema,
   companyCreateCaseSchema,
   companyUpdateCaseSchema,
+  companyCreateDecisionSchema,
+  companyUpdateDecisionSchema,
 } from './company-workspace-schema'
+import type { CompanyDecision } from './company-decision'
 
 export type CompanyWorkspaceScope = z.infer<typeof companyWorkspaceScopeSchema>
 export type CompanyConfigureInput = z.infer<typeof companyConfigureSchema>
@@ -22,9 +25,11 @@ export type CompanyLinkInput = z.infer<typeof companyLinkSchema>
 export type CompanyUnlinkInput = z.infer<typeof companyUnlinkSchema>
 export type CompanyCreateCaseInput = z.infer<typeof companyCreateCaseSchema>
 export type CompanyUpdateCaseInput = z.infer<typeof companyUpdateCaseSchema>
+export type CompanyCreateDecisionInput = z.infer<typeof companyCreateDecisionSchema>
+export type CompanyUpdateDecisionInput = z.infer<typeof companyUpdateDecisionSchema>
 export type CompanyCustomerCaseKind = CompanyCreateCaseInput['kind']
 export type CompanyCustomerCaseStatus = CompanyUpdateCaseInput['status']
-/** A customer inquiry or after-sales case the user records locally; never synced or committed. */
+/** A customer inquiry or after-sales case the user records; stored locally under .cclink-studio, not uploaded or included in diagnostics. */
 export interface CompanyCustomerCase {
   id: string
   version: number
@@ -99,6 +104,8 @@ export interface CompanyWorkspaceSnapshot {
   projects: CompanyBusiness[]
   links: CompanyResourceLink[]
   cases: CompanyCustomerCase[]
+  /** Business decision records, newest first (ADR 0025). */
+  decisions: CompanyDecision[]
   conversations: CompanyConversationSource[]
   publications: CompanyPublishingSource[]
   sourceIssues: { conversations?: string; publications?: string }

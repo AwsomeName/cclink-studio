@@ -91,8 +91,9 @@ export function CompanyCustomers({
         </div>
       </div>
       <p className="company-muted">
-        本版需要你把网店、平台私信或电话里的问题记在这里；记录只保存在本机公司项目数据中，不进入
-        Git、诊断或同步。价格、企业报价和退款仍由你在原平台处理。
+        本版需要你把网店、平台私信或电话里的问题记在这里。记录只保存在本机项目的 .cclink-studio
+        目录，不上传、不进诊断；若项目目录是 Git
+        仓库，请勿提交该目录。价格、企业报价和退款仍由你在原平台处理。
       </p>
       {(draft || editing) && (
         <CaseForm

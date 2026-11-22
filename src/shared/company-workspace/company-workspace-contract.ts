@@ -10,6 +10,8 @@ import {
   companyUnlinkSchema,
   companyCreateCaseSchema,
   companyUpdateCaseSchema,
+  companyCreateDecisionSchema,
+  companyUpdateDecisionSchema,
 } from './company-workspace-schema'
 import type { CompanyWorkspaceResult, CompanyWorkspaceSnapshot } from './company-workspace-types'
 function bind<T>(
@@ -37,5 +39,7 @@ export const companyWorkspaceIpcContracts = {
   unlinkResource: bind(companyWorkspaceIpc.unlinkResource, companyUnlinkSchema),
   createCase: bind(companyWorkspaceIpc.createCase, companyCreateCaseSchema),
   updateCase: bind(companyWorkspaceIpc.updateCase, companyUpdateCaseSchema),
+  createDecision: bind(companyWorkspaceIpc.createDecision, companyCreateDecisionSchema),
+  updateDecision: bind(companyWorkspaceIpc.updateDecision, companyUpdateDecisionSchema),
 } as const
 export type { CompanyWorkspaceApiContract } from './company-workspace'

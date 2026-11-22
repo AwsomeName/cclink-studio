@@ -15,6 +15,8 @@ export const companyWorkspaceApi: CompanyWorkspaceApiContract = {
   unlinkResource: (input) => invokeIpcContract(companyWorkspaceIpc.unlinkResource, input),
   createCase: (input) => invokeIpcContract(companyWorkspaceIpc.createCase, input),
   updateCase: (input) => invokeIpcContract(companyWorkspaceIpc.updateCase, input),
+  createDecision: (input) => invokeIpcContract(companyWorkspaceIpc.createDecision, input),
+  updateDecision: (input) => invokeIpcContract(companyWorkspaceIpc.updateDecision, input),
   onChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, value: unknown): void => {
       const parsed = companyWorkspaceChangedSchema.safeParse(value)

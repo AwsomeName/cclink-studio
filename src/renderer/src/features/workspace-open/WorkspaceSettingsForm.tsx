@@ -25,7 +25,7 @@ import './workspace-settings.css'
 const descriptions: Record<WorkspaceType, string> = {
   general: '项目首页、文件、会话与通用工具',
   diary: '今天、日记、计划和定时整理；接回原资料',
-  company: '公司概览、业务项目、账目与运营内容',
+  company: '公司首页、业务项目、推广、客户与售后、公司账目',
   electronics: '设计文件、生产资料与检查；保留现有查看和受限修改能力',
 }
 

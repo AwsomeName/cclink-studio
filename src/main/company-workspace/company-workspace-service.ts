@@ -11,7 +11,9 @@ import type {
   CompanyConversationSource,
   CompanyCreateBusinessInput,
   CompanyCreateCaseInput,
+  CompanyCreateDecisionInput,
   CompanyCustomerCase,
+  CompanyUpdateDecisionInput,
   CompanyUpdateCaseInput,
   CompanyLinkInput,
   CompanyPublishingSource,
@@ -21,6 +23,18 @@ import type {
   CompanyWorkspaceErrorCode,
   CompanyWorkspaceSnapshot,
 } from '../../shared/company-workspace/company-workspace-types'
+import type { CompanyDecision } from '../../shared/company-workspace/company-decision'
+import {
+  applyDecisionChange,
+  DECISION_COLUMNS,
+  DECISION_UPDATE,
+  decisionFromRow,
+  decisionToRow,
+  decisionUpdateArgs,
+  DECISIONS_DDL,
+  MAX_DECISIONS,
+  newDecision,
+} from './company-decisions'
 
 export interface CompanyWorkspaceTarget {
   workspacePath: string
@@ -34,8 +48,8 @@ interface Sources {
   changed?(workspaceId: string, revision: number): void
 }
 type Row = Record<string, unknown>
-const SCHEMA_VERSION = 2
-const SUPPORTED_VERSIONS = new Set([1, SCHEMA_VERSION])
+const SCHEMA_VERSION = 3
+const SUPPORTED_VERSIONS = new Set([1, 2, SCHEMA_VERSION])
 const MAX_CASES = 5000
 /** v2 adds locally recorded customer inquiries and after-sales cases. */
 const CUSTOMER_CASES_DDL =
@@ -329,6 +343,52 @@ export class CompanyWorkspaceService {
       return this.snapshot(target, input.month)
     })
   }
+  createDecision(
+    target: CompanyWorkspaceTarget,
+    input: CompanyCreateDecisionInput,
+  ): Promise<CompanyWorkspaceSnapshot> {
+    return this.enqueue(async () => {
+      await this.mutate(target, (db) => {
+        if (
+          Number((db.prepare('SELECT COUNT(*) AS n FROM decisions').get() as Row).n) >=
+          MAX_DECISIONS
+        )
+          throw new CompanyWorkspaceError('CONFLICT', '经营决策数量已达本版上限')
+        if (db.prepare('SELECT 1 FROM decisions WHERE id=?').get(input.decisionId))
+          throw new CompanyWorkspaceError('CONFLICT', '这条决策已存在，请刷新后重试')
+        const decision = newDecision(input, new Date().toISOString())
+        db.prepare(
+          `INSERT INTO decisions(${DECISION_COLUMNS}) VALUES (${DECISION_COLUMNS.split(',')
+            .map(() => '?')
+            .join(',')})`,
+        ).run(...(decisionToRow(decision) as never[]))
+      })
+      return this.snapshot(target, input.month)
+    })
+  }
+  /** Only changes the decision record; never touches ledger, cases, or publishing. */
+  updateDecision(
+    target: CompanyWorkspaceTarget,
+    input: CompanyUpdateDecisionInput,
+  ): Promise<CompanyWorkspaceSnapshot> {
+    return this.enqueue(async () => {
+      await this.mutate(target, (db) => {
+        const row = db.prepare('SELECT * FROM decisions WHERE id=?').get(input.decisionId) as
+          | Row
+          | undefined
+        if (!row) throw new CompanyWorkspaceError('NOT_FOUND', '决策不存在或不属于当前公司')
+        const current = decisionFromRow(row)
+        const result = applyDecisionChange(current, input.change, new Date().toISOString())
+        if (!result.ok) throw new CompanyWorkspaceError(result.code, result.message)
+        const changed = db
+          .prepare(DECISION_UPDATE)
+          .run(...(decisionUpdateArgs(result.next, current.version) as never[]))
+        if (!Number(changed.changes))
+          throw new CompanyWorkspaceError('CONFLICT', '决策已变化，请刷新后重试')
+      })
+      return this.snapshot(target, input.month)
+    })
+  }
   private async verifyLedger(
     target: CompanyWorkspaceTarget,
     month: string,
@@ -367,6 +427,7 @@ export class CompanyWorkspaceService {
         db.exec(
           'BEGIN; CREATE TABLE settings(id INTEGER PRIMARY KEY CHECK(id=1), workspace_id TEXT NOT NULL, enabled INTEGER NOT NULL, name TEXT NOT NULL, revision INTEGER NOT NULL); CREATE TABLE business_projects(id TEXT PRIMARY KEY,version INTEGER NOT NULL,name TEXT NOT NULL,goal TEXT NOT NULL,deliverable TEXT NOT NULL,due_date TEXT,ledger_project_id TEXT UNIQUE,archived INTEGER NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL); CREATE TABLE resource_links(id TEXT PRIMARY KEY,business_id TEXT NOT NULL REFERENCES business_projects(id),kind TEXT NOT NULL,target TEXT NOT NULL,size INTEGER,modified REAL,created_at TEXT NOT NULL,UNIQUE(business_id,kind,target)); ' +
             CUSTOMER_CASES_DDL +
+            DECISIONS_DDL +
             ` PRAGMA user_version=${SCHEMA_VERSION};`,
         )
         db.prepare('INSERT INTO settings VALUES (1,?,0,?,0)').run(
@@ -398,6 +459,7 @@ export class CompanyWorkspaceService {
         db.exec(
           'BEGIN IMMEDIATE; ' +
             CUSTOMER_CASES_DDL +
+            DECISIONS_DDL +
             ` PRAGMA user_version=${SCHEMA_VERSION}; COMMIT;`,
         )
       return db
@@ -461,6 +523,7 @@ export class CompanyWorkspaceService {
     let projects: CompanyBusiness[] = []
     let rows: Row[] = []
     let cases: CompanyCustomerCase[] = []
+    let decisions: CompanyDecision[] = []
     if (existsSync(path)) {
       const db = this.open(path, target.workspaceId, true)
       try {
@@ -487,6 +550,13 @@ export class CompanyWorkspaceService {
               )
               .all(MAX_CASES) as Row[]
           ).map(caseFromRow)
+        // Older databases opened read-only gain the table on their first write.
+        if (Number((db.prepare('PRAGMA user_version').get() as Row).user_version) >= 3)
+          decisions = (
+            db
+              .prepare('SELECT * FROM decisions ORDER BY updated_at DESC, id LIMIT ?')
+              .all(MAX_DECISIONS) as Row[]
+          ).map(decisionFromRow)
       } finally {
         db.close()
       }
@@ -587,6 +657,7 @@ export class CompanyWorkspaceService {
       projects,
       links,
       cases,
+      decisions,
       conversations,
       publications,
       sourceIssues: {

@@ -86,4 +86,10 @@ export function registerCompanyWorkspaceIpc(
   handle(companyWorkspaceIpcContracts.updateCase, (service, target, input) =>
     service.updateCase(target, input),
   )
+  handle(companyWorkspaceIpcContracts.createDecision, (service, target, input) =>
+    service.createDecision(target, input),
+  )
+  handle(companyWorkspaceIpcContracts.updateDecision, (service, target, input) =>
+    service.updateDecision(target, input),
+  )
 }

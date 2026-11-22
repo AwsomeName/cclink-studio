@@ -1,0 +1,265 @@
+.company-home .company-decision {
+  grid-column: 1 / -1;
+  border-color: var(--accent-color);
+}
+.company-decision .company-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.company-decision .company-section-heading h2 {
+  margin: 0;
+}
+.company-workbench .company-decision .company-decision-ask {
+  margin-left: auto;
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+.company-workbench .company-decision button.primary,
+.company-workbench .company-decision-dialog button.primary {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: var(--bg-primary);
+}
+.company-workbench .company-decision button.primary:hover:not(:disabled),
+.company-workbench .company-decision-dialog button.primary:hover:not(:disabled) {
+  background: var(--accent-color);
+  filter: brightness(1.08);
+}
+.company-decision-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.company-decision-question {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+.company-workbench .company-decision p {
+  margin: 0;
+}
+.company-decision-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.company-decision-tag.decide,
+.company-decision-tag.clarify {
+  border-color: var(--warning-color);
+  color: var(--warning-color);
+}
+.company-decision-tag.adopted {
+  border-color: var(--success-color);
+  color: var(--success-color);
+}
+.company-decision-wait {
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent-color);
+  background: var(--bg-primary);
+}
+.company-decision-stopped {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.company-decision-answers {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.company-workbench .company-decision fieldset,
+.company-decision-dialog fieldset {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  min-width: 0;
+}
+.company-decision fieldset legend,
+.company-decision-dialog fieldset legend {
+  padding: 0 4px;
+  font-size: 13px;
+}
+.company-decision-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.company-workbench .company-decision-choices button[aria-pressed='true'] {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+.company-decision-choices input {
+  flex: 1 1 160px;
+}
+.company-decision-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary) !important;
+}
+.company-decision-summary span {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 11px;
+  color: var(--accent-color);
+}
+.company-decision-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.company-workbench .company-decision-options label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px 10px 32px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.company-decision-options label.chosen {
+  border-color: var(--accent-color);
+}
+.company-decision-options input {
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  margin: 0;
+}
+.company-decision-option-title {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.company-decision-option-title em,
+.company-decision-numbers em {
+  margin-left: 6px;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent-color);
+}
+.company-decision-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.company-decision-numbers span {
+  color: var(--text-secondary);
+  margin-right: 6px;
+}
+.company-decision-evidence summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.company-decision-evidence ul,
+.company-decision-rethink ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.company-decision-source {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.company-decision-source a {
+  color: var(--accent-color);
+}
+.company-decision-done {
+  padding: 10px 12px;
+  border-left: 3px solid var(--success-color);
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.company-decision-choose,
+.company-decision-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.company-decision-history {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+  font-size: 12px;
+}
+.company-decision-history ul {
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.company-decision-history li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.company-decision-history li .company-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.company-decision-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.company-decision-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.company-decision-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+.company-workbench .company-decision-dialog label.company-decision-scope {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.company-decision-dialog p {
+  margin: 0;
+}
+
+.company-decision-option-title em.company-decision-chosen {
+  color: var(--success-color);
+}

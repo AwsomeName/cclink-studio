@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  companyDecisionCreateFieldsSchema,
+  companyDecisionUpdateFieldsSchema,
+} from './company-decision'
 
 const id = z.string().trim().min(1).max(200)
 const text = z.string().trim().max(2000)
@@ -86,6 +90,12 @@ export const companyUpdateCaseSchema = companyCreateCaseSchema
     expectedVersion: z.number().int().positive(),
     status: companyCustomerCaseStatusSchema,
   })
+  .strict()
+export const companyCreateDecisionSchema = companyWorkspaceScopeSchema
+  .extend(companyDecisionCreateFieldsSchema.shape)
+  .strict()
+export const companyUpdateDecisionSchema = companyWorkspaceScopeSchema
+  .extend(companyDecisionUpdateFieldsSchema.shape)
   .strict()
 export const companyWorkspaceChangedSchema = z
   .object({ workspaceId: id, revision: z.number().int().nonnegative() })

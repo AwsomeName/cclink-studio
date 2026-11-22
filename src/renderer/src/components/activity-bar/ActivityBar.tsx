@@ -16,6 +16,8 @@ import {
   IconDollar,
   IconTool,
   IconList,
+  IconUser,
+  IconSend,
 } from '../common/Icons'
 import type { ActivityPanel } from '../../types'
 import {
@@ -273,15 +275,19 @@ export function ActivityBar(): React.ReactElement {
               {(
                 [
                   ['projects', '业务项目', IconList],
+                  ['promote', '推广', IconSend],
+                  ['customers', '客户与售后', IconUser],
                   ['finance', '公司账目', IconDollar],
-                  ['operations', '运营内容', IconClipboard],
                 ] as const
               ).map(([section, label, Icon]) => {
+                const current = activeTab?.companyWorkspace?.section
                 const selected =
                   activeTab?.type === 'company-accounts'
                     ? section === 'finance'
-                    : activeTab?.type === 'company-workspace' &&
-                      activeTab.companyWorkspace?.section === section
+                    : activeTab?.type === 'article-publishing'
+                      ? section === 'promote'
+                      : activeTab?.type === 'company-workspace' &&
+                        (current === 'operations' ? 'promote' : current) === section
                 return (
                   <button
                     key={section}

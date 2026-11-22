@@ -10,6 +10,8 @@ import type {
   CompanyUnlinkInput,
   CompanyCreateCaseInput,
   CompanyUpdateCaseInput,
+  CompanyCreateDecisionInput,
+  CompanyUpdateDecisionInput,
 } from './company-workspace-types'
 type Result = CompanyWorkspaceResult<CompanyWorkspaceSnapshot>
 export const companyWorkspaceIpc = {
@@ -25,6 +27,12 @@ export const companyWorkspaceIpc = {
   unlinkResource: defineIpcCall<[CompanyUnlinkInput], Result>('company-workspace:unlink-resource'),
   createCase: defineIpcCall<[CompanyCreateCaseInput], Result>('company-workspace:create-case'),
   updateCase: defineIpcCall<[CompanyUpdateCaseInput], Result>('company-workspace:update-case'),
+  createDecision: defineIpcCall<[CompanyCreateDecisionInput], Result>(
+    'company-workspace:create-decision',
+  ),
+  updateDecision: defineIpcCall<[CompanyUpdateDecisionInput], Result>(
+    'company-workspace:update-decision',
+  ),
 } as const
 export const companyWorkspaceIpcEvents = { changed: 'company-workspace:changed' } as const
 export interface CompanyWorkspaceApiContract {
@@ -36,5 +44,7 @@ export interface CompanyWorkspaceApiContract {
   unlinkResource(input: CompanyUnlinkInput): Promise<Result>
   createCase(input: CompanyCreateCaseInput): Promise<Result>
   updateCase(input: CompanyUpdateCaseInput): Promise<Result>
+  createDecision(input: CompanyCreateDecisionInput): Promise<Result>
+  updateDecision(input: CompanyUpdateDecisionInput): Promise<Result>
   onChanged(callback: (input: { workspaceId: string; revision: number }) => void): () => void
 }

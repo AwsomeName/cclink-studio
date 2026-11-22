@@ -97,7 +97,7 @@ function HomeContent(): React.ReactElement {
           tab={{
             id: 'company-home',
             type: 'company-workspace',
-            title: '公司概览',
+            title: '项目首页',
             icon: '司',
             workspaceRef: ref,
           }}
