@@ -1,13 +1,13 @@
 # 首页截图来源
 
-首页使用五张真实应用截图，原图复制到本目录，未重绘产品界面。
+首页使用五张真实应用截图。文档编辑和文章发布截图直接引用仓库中的原图。
 
 | 文件 | 内容 | 拍摄时版本 |
 | --- | --- | --- |
-| `workspace-writing.jpg` | 本地文件、Markdown 编辑器及待发送的 Agent 指令 | v0.1.118 |
+| [studio-writing.jpg](../../../promotion/assets/screenshots/studio-writing.jpg) | 本地文件、Markdown 编辑器及待发送的 Agent 指令 | v0.1.118 |
 | `browser-workspace.jpg` | 多项目工作空间、文件树、内嵌浏览器与会话列表 | v0.1.134 |
 | `pcb-agent.jpg` | Altium PCB 只读预览与 Agent 项目解读 | v0.1.134 |
-| `article-publishing.jpeg` | 头条发布分步计划与公开页面核验 | v0.1.94 |
+| [toutiao-plan-result.jpeg](../../../artifacts/article-day192-20260922/toutiao-plan-result.jpeg) | 头条发布分步计划与公开页面核验 | v0.1.94 |
 | `conversation-terminal.png` | 会话代码块关联终端与交互输入 | v0.1.131 |
 
 文档截图来自本地宣传素材的 `assets/screenshots/studio-writing.jpg`，使用专门准备的演示文档，输入框中的指令尚未发送。

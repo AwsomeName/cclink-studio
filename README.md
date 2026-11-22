@@ -20,7 +20,7 @@
 
 从本地文件树打开 Markdown，直接编辑并保存。把当前文档、文件或任务资源提供给 Agent，让讨论围绕实际材料展开。新建本地会话默认使用 Codex，也可选择 Claude Code；文件访问与工具操作沿用 Studio 的授权边界。
 
-![CCLink Studio Markdown 编辑器：本地文件、文档与 Agent 协作](docs/images/readme/workspace-writing.jpg)
+![CCLink Studio Markdown 编辑器：本地文件、文档与 Agent 协作](promotion/assets/screenshots/studio-writing.jpg)
 
 *文档演示截图（v0.1.118）：本地 Markdown 与待发送的 Agent 指令。*
 
@@ -46,7 +46,7 @@
 
 围绕原稿、账号和目标平台组织发布任务，把执行步骤、等待原因及核验结果显示在工作台里。发布后继续检查平台页面，保留可查看的执行与结果记录。
 
-![CCLink Studio 文章发布：分步执行计划、公开页面图片核验及 Agent 执行记录](docs/images/readme/article-publishing.jpeg)
+![CCLink Studio 文章发布：分步执行计划、公开页面图片核验及 Agent 执行记录](artifacts/article-day192-20260922/toutiao-plan-result.jpeg)
 
 *历史实测截图（v0.1.94）：一条头条发布任务的步骤与公开页面核验记录。实际发布需要对应账号和文章授权。*
 

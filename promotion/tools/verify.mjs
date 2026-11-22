@@ -48,11 +48,6 @@ for (const item of manifest.assets) {
   if (item.file.endsWith('.jpg') && meta.format !== 'jpeg') errors.push(`Invalid JPEG type: ${item.file}`)
   if (createHash('sha256').update(data).digest('hex') !== item.sha256) errors.push(`Checksum differs: ${item.file}`)
 }
-for (const name of ['cover-square', 'card-01-introduction', 'card-02-workspace', 'card-03-get-started']) {
-  const a = await readFile(join(kit, 'assets/graphics', name + '.png'))
-  const b = await readFile(join(kit, '04-social/images', name + '.png'))
-  if (!a.equals(b)) errors.push(`Social copy differs: ${name}`)
-}
 const drafts = []
 for (const file of ['01-wechat/article.md', '02-open-source/article.md', '03-website/copy.md', '04-social/copy.md']) {
   const source = await readFile(join(kit, file), 'utf8')

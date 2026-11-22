@@ -21,7 +21,7 @@ const rule = (x1, y1, x2, y2, color = palette.line, width = 2) => `<path d="M${x
 const img = (x, y, w, h, source) => `<image x="${x}" y="${y}" width="${w}" height="${h}" href="${source}"/>`
 const png = async path => `data:image/png;base64,${(await readFile(path)).toString('base64')}`
 const jpeg = async path => `data:image/jpeg;base64,${(await readFile(path)).toString('base64')}`
-const icon = await png(join(kit, 'assets/brand/app-icon.png'))
+const icon = await png(join(kit, '../resources/icon.png'))
 const writing = await jpeg(join(kit, 'assets/screenshots/studio-writing.jpg'))
 const browser = await jpeg(join(kit, 'assets/screenshots/studio-browser.jpg'))
 const originalWriting = 'assets/screenshots/studio-writing.jpg'
@@ -104,7 +104,7 @@ for (const [id, heading] of [['workspace', '先把资料和草稿放在手边'],
   body = body.replace(`<h2>${heading}</h2>`, `<h2 id="${id}">${heading}</h2>`)
 }
 const title = 'CCLink Studio 公众号精修稿'
-await writeFile(join(target, 'preview.html'), `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self';"><title>${title}</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="style.css"></head><body><header class="top"><a class="wordmark" href="../index.html"><img src="../assets/brand/app-icon.png" alt="">CCLink Studio</a><nav><a href="article.md">正文</a><a class="secondary" href="paragraph-review.md">逐段修订</a><a href="../index.html">返回总览</a></nav></header><div class="preview-meta wechat-meta"><span>公众号与项目首发</span><span class="revision-tag">图文精修稿 v2</span></div><main class="article wechat-article">${body}</main><footer class="bottom wechat-bottom"><a href="article.md">打开可编辑正文</a><a href="paragraph-review.md">查看逐段修订说明</a><a href="preview-v1.html">对照初稿</a></footer></body></html>`)
+await writeFile(join(target, 'preview.html'), `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'self'; font-src 'self';"><title>${title}</title><link rel="stylesheet" href="../assets/style.css"><link rel="stylesheet" href="style.css"></head><body><header class="top"><a class="wordmark" href="../index.html"><img src="../../resources/icon.png" alt="">CCLink Studio</a><nav><a href="article.md">正文</a><a class="secondary" href="paragraph-review.md">逐段修订</a><a href="../index.html">返回总览</a></nav></header><div class="preview-meta wechat-meta"><span>公众号与项目首发</span><span class="revision-tag">图文精修稿 v2</span></div><main class="article wechat-article">${body}</main><footer class="bottom wechat-bottom"><a href="article.md">打开可编辑正文</a><a href="paragraph-review.md">查看逐段修订说明</a><a href="preview-v1.html">对照初稿</a></footer></body></html>`)
 
 const manifestPath = join(kit, 'assets/asset-manifest.json')
 let manifest

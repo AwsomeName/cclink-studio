@@ -9,6 +9,7 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost')
     let path = resolve(root, '.' + decodeURIComponent(url.pathname))
     if (path !== root && !path.startsWith(root + sep)) throw Error('Outside root')
+    if (url.pathname === '/resources/icon.png') path = resolve(root, '../resources/icon.png')
     if ((await stat(path)).isDirectory()) path = resolve(path, 'index.html')
     const buffer = await readFile(path)
     res.writeHead(200, { 'content-type': types[extname(path)] || 'application/octet-stream', 'cache-control': 'no-store' })

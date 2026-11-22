@@ -9,7 +9,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -39,7 +39,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -65,7 +65,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -91,23 +91,23 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
-          "src": "images/cover-square.png"
+          "src": "../assets/graphics/cover-square.png"
         },
         {
           "loaded": true,
-          "src": "images/card-01-introduction.png"
+          "src": "../assets/graphics/card-01-introduction.png"
         },
         {
           "loaded": true,
-          "src": "images/card-02-workspace.png"
+          "src": "../assets/graphics/card-02-workspace.png"
         },
         {
           "loaded": true,
-          "src": "images/card-03-get-started.png"
+          "src": "../assets/graphics/card-03-get-started.png"
         }
       ],
       "scrollWidth": 1280,
@@ -121,7 +121,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -150,7 +150,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -175,7 +175,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -200,23 +200,23 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
-          "src": "images/cover-square.png"
+          "src": "../assets/graphics/cover-square.png"
         },
         {
           "loaded": true,
-          "src": "images/card-01-introduction.png"
+          "src": "../assets/graphics/card-01-introduction.png"
         },
         {
           "loaded": true,
-          "src": "images/card-02-workspace.png"
+          "src": "../assets/graphics/card-02-workspace.png"
         },
         {
           "loaded": true,
-          "src": "images/card-03-get-started.png"
+          "src": "../assets/graphics/card-03-get-started.png"
         }
       ],
       "scrollWidth": 390,

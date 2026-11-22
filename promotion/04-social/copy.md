@@ -14,7 +14,7 @@
 
 [GitHub CCLink Studio](https://github.com/AwsomeName/cclink-studio)
 
-![社交媒体方形封面](images/cover-square.png)
+![社交媒体方形封面](../assets/graphics/cover-square.png)
 
 ## 简短转发版
 
@@ -38,10 +38,10 @@ CCLink Studio 想把这些放进同一个工作空间：打开自己的资料，
 
 按以下顺序配图：
 
-![第一张图 CCLink Studio 是什么](images/card-01-introduction.png)
+![第一张图 CCLink Studio 是什么](../assets/graphics/card-01-introduction.png)
 
-![第二张图 工作空间中的真实 Markdown 界面](images/card-02-workspace.png)
+![第二张图 工作空间中的真实 Markdown 界面](../assets/graphics/card-02-workspace.png)
 
-![第三张图 开源参与和使用条件](images/card-03-get-started.png)
+![第三张图 开源参与和使用条件](../assets/graphics/card-03-get-started.png)
 
 第二张为真实开发版界面配图，使用演示文档，Agent 指令尚未发送。其余为编辑制作的介绍图卡。

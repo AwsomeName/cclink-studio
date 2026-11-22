@@ -43,9 +43,9 @@
 | [界面图卡](assets/graphics/card-02-workspace.png) | 1080 × 1440，在版式中完整放入真实文档截图，未改写截图内容 |
 | [上手图卡](assets/graphics/card-03-get-started.png) | 1080 × 1440，说明源码入口、使用条件与开源参与 |
 
-品牌图标直接复用仓库 `resources/icon.png`，副本为 [app-icon.png](assets/brand/app-icon.png)。配图为本地可编辑 SVG，经本地渲染生成 PNG；没有使用生成式模型重建产品界面。
+品牌图标使用[应用图标](../resources/icon.png)。配图为本地可编辑 SVG，经本地渲染生成 PNG；没有使用生成式模型重建产品界面。
 
-图片尺寸和校验值记录在 [素材清单](assets/asset-manifest.json)。社交媒体可直接取用 `04-social/images/` 中的四张 PNG 副本。
+图片尺寸和校验值记录在 [素材清单](assets/asset-manifest.json)。社交媒体使用上表中的方形封面和三张图卡。
 
 ## 公众号精修配图
 

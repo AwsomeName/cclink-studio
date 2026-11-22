@@ -8,7 +8,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -41,7 +41,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
@@ -74,7 +74,7 @@
       "images": [
         {
           "loaded": true,
-          "src": "../assets/brand/app-icon.png"
+          "src": "../../resources/icon.png"
         },
         {
           "loaded": true,
