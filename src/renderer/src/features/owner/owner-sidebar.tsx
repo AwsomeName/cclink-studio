@@ -241,7 +241,9 @@ export function OwnerSidebar({
           <button className="own-side-item" disabled={busy} onClick={() => void addSource()}>
             ▱ {busy && !grant ? '等待选择目录…' : '配置参考目录…'}
           </button>
-          <small className="own-side-note">只读，仅本事务可见；Owner 取证暂不读取本地目录。</small>
+          <small className="own-side-note">
+            只读，仅本事务可见；列入约定的目录由 Owner 读取取证，撤销后立即停止。
+          </small>
           {sourceError && (
             <small className="own-side-note" role="alert">
               {sourceError}

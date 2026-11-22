@@ -1,0 +1,89 @@
+[
+ {
+  "name": "home-light",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1060,
+  "errors": []
+ },
+ {
+  "name": "home-dark",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1060,
+  "errors": []
+ },
+ {
+  "name": "home-trial",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1059,
+  "errors": []
+ },
+ {
+  "name": "home-notes",
+  "w": 1440,
+  "h": 1300,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1202,
+  "errors": []
+ },
+ {
+  "name": "home-confirmed",
+  "w": 1440,
+  "h": 1300,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1202,
+  "errors": []
+ },
+ {
+  "name": "home-1180",
+  "w": 1180,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1469,
+  "errors": []
+ },
+ {
+  "name": "home-agent",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 1489,
+  "errors": []
+ },
+ {
+  "name": "home-narrow",
+  "w": 375,
+  "h": 812,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollH": 3187,
+  "errors": []
+ },
+ {
+  "name": "interaction",
+  "incomeBefore": "¥3,897.00",
+  "incomeAfter": "¥5,196.00",
+  "pendAfter": "11",
+  "trialToggled": true
+ }
+]

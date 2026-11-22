@@ -6,6 +6,7 @@ import {
   workersOf,
   type Research,
 } from '../../shared/owner/research'
+import type { Plan } from '../../shared/owner/research'
 
 export const configurationFile = '事务配置.md'
 export const scheduleFile = '调度.md'
@@ -23,15 +24,23 @@ export function configurationDocument(a: AffairRecord, path: string, revision: n
       r.plan?.output ?? '等待双方明确交付要求。',
       '## 取证范围',
       '公开 GitHub 仓库：' +
-        (r.plan?.repos.join('、') || '待拟定') +
+        (r.plan?.repos.join('、') || (r.plan ? '无' : '待拟定')) +
         (a.confirmed ? '（已确认）' : '（尚未授权执行）'),
-      '本地参考目录：无。',
+      '本地参考目录：' + folderLine(r.plan),
       '## 时间安排',
       r.plan?.timing ?? '未单独约定截止时间或投入上限。',
       '## 实际保存位置',
       path,
     ].join('\n\n') + '\n'
   )
+}
+
+/** Folders listed by name only; the grant service holds the actual paths and permissions. */
+export function folderLine(plan: Plan | null | undefined) {
+  const folders = plan?.folders ?? []
+  return folders.length
+    ? folders.map((f) => f.label).join('、') + '（只读；所选片段会交给本次使用的模型分析）'
+    : '无。'
 }
 
 export function documentHeader(kind: string, id: string, revision: number, title: string) {

@@ -12,6 +12,16 @@ import {
   workerLabel,
   workersOf,
   assignWorker,
+  folderKey,
+  grantOfFolder,
+  isFolderKey,
+  isLocalKey,
+  grantOfFile,
+  isFileKey,
+  pendingSkips,
+  planSources,
+  sourceLabel,
+  type Plan,
   type Research,
 } from './research-model'
 import type { Affair } from './affair'
@@ -260,14 +270,22 @@ export async function discuss(id: string, text: string) {
       if (!a.confirmed) r.phase = 'planning'
     })
     const r = a.research!
+    const grants = await grantedFolders(a.id)
     const out = await run(
       a,
       'main',
-      '你是负责开源项目调研的 Owner。根据用户原话和讨论提出或修订一份可执行约定，不开始调研。选择 1 至 4 个真实公开 GitHub 仓库的规范 owner/repo 名，若用户没指定，主动建议。用户只需定目标和交付物。由你决定选哪些项目、查阅概览、官方仓库文档或源码以及证据标准，不向用户索要材料或检索步骤。能力是只读公开 GitHub 仓库，不承诺实跑。若用户给了具体目标就保留其粒度，不擅自扩张交付。若关键信息不足可先提问并令 plan=null。返回 {reply:"简短说明建议和要用户确认的地方",plan:{scope:"具体范围和比较维度",output:"交付物和判断标准",timing:"仅在用户提出时记录时间要求，否则省略；说明只支持按回执推进",repos:["组织/项目"]}}。用户询问不等于批准。\n' +
-        JSON.stringify({ previous: r.plan, goal: a.goal, dialog: r.chat.slice(-10) }),
+      '你是负责开源项目调研的 Owner。根据用户原话和讨论提出或修订一份可执行约定，不开始调研。' +
+        localPlanning(grants) +
+        '选择 0 至 4 个真实公开 GitHub 仓库的规范 owner/repo 名，若用户没指定，主动建议。用户只需定目标和交付物。由你决定选哪些项目、查阅概览、官方仓库文档或源码以及证据标准，不向用户索要材料或检索步骤。能力是只读公开 GitHub 仓库，不承诺实跑。若用户给了具体目标就保留其粒度，不擅自扩张交付。若关键信息不足可先提问并令 plan=null。返回 {reply:"简短说明建议和要用户确认的地方",plan:{scope:"具体范围和比较维度",output:"交付物和判断标准",timing:"仅在用户提出时记录时间要求，否则省略；说明只支持按回执推进",repos:["组织/项目"],folders:["需要读取的本地目录 key，可省略"],outcomes:[{text:"交付必须达成或可选的一项结果",required:true}]}}。outcomes 列 1 至 6 项：用户明确要求的结果 required=true，锦上添花的 required=false。用户询问不等于批准。\n' +
+        JSON.stringify({
+          previous: r.plan,
+          goal: a.goal,
+          dialog: r.chat.slice(-10),
+          localFolders: grants.map((g) => ({ key: g.key, name: g.label })),
+        }),
     )
     const reply = z.string().min(1).max(3200).parse(out.reply),
-      plan = planSchema.nullable().parse(out.plan)
+      plan = planSchema.nullable().parse(withFolderLabels(out.plan, grants))
     await change(id, (r) => {
       r.plan = plan
       r.phase = plan ? 'ready' : 'draft'
@@ -276,10 +294,48 @@ export async function discuss(id: string, text: string) {
     })
   })
 }
-const instruction = z.object({
-  reason: z.string().trim().min(1).max(1200),
-  requests: z.array(researchRequest).min(1).max(4),
-})
+type FolderGrant = { key: string; label: string }
+/** Folders granted to this affair and still readable; Owner may only plan with these. */
+async function grantedFolders(id: string): Promise<FolderGrant[]> {
+  try {
+    const grants = await window.cclinkStudio.ownerSources.list(id)
+    return grants.filter((g) => !g.error).map((g) => ({ key: folderKey(g.id), label: g.label }))
+  } catch {
+    return []
+  }
+}
+function localPlanning(grants: FolderGrant[]) {
+  return grants.length
+    ? '用户已为本事务授权只读本地目录（见 localFolders）。目标涉及用户本地笔记、设计或资料时，把对应目录 key 写入 plan.folders，与公开仓库一起作为来源；不需要时不列。本地片段会交给本次使用的模型分析。'
+    : '本事务没有授权本地目录；目标需要用户本地资料时，在 reply 中请用户先在左侧为本事务授权目录，并令 plan=null。'
+}
+/** Owner names folders by key; labels come from the grant, and ungranted keys are refused. */
+function withFolderLabels(raw: unknown, grants: FolderGrant[]) {
+  if (!raw || typeof raw !== 'object') return raw
+  const plan = raw as { folders?: unknown }
+  if (plan.folders === undefined) return raw
+  if (!Array.isArray(plan.folders)) throw Error('约定中的本地目录格式无效')
+  const folders = plan.folders.map((f) => {
+    const key = String(typeof f === 'object' && f ? (f as { key?: unknown }).key : f).toLowerCase()
+    const grant = grants.find((g) => g.key === key)
+    if (!grant) throw Error('约定引用了未授权给本事务的本地目录')
+    return { key: grant.key, label: grant.label }
+  })
+  return { ...plan, folders: folders.length ? folders : undefined }
+}
+function sourcesPrompt(plan: Plan) {
+  return (plan.folders ?? []).length
+    ? '来源包括公开仓库和本地只读目录；本地目录用 folder:… 形式的 key 指代，名称见 plan.folders。'
+    : ''
+}
+const instruction = z
+  .object({
+    reason: z.string().trim().min(1).max(1200),
+    requests: z.array(researchRequest).max(4).default([]),
+    /** Local files outside the folders, named in evidence already read; each needs approval. */
+    files: z.array(z.string().trim().min(1).max(600)).max(2).default([]),
+  })
+  .refine((o) => o.requests.length + o.files.length > 0)
 const clip = (n: number) =>
   z
     .string()
@@ -350,12 +406,14 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
   async function selectFiles() {
     const candidates: { repo: string; paths: string[] }[] = []
     for (const { repo, terms } of order.requests) {
-      if (!plan!.repos.includes(repo)) throw Error('取证对象超出本次计划：' + repo)
-      if (!terms.length) {
+      if (!planSources(plan).includes(repo)) throw Error('取证对象超出本次计划：' + repo)
+      if (!terms.length && !isFolderKey(repo)) {
         candidates.push({ repo, paths: ['@README'] })
         continue
       }
-      const index = await window.cclinkStudio.ownerResearch.findPaths(repo, terms, revision(repo))
+      const index = isFolderKey(repo)
+        ? await window.cclinkStudio.ownerSources.find(a.id, grantOfFolder(repo), terms)
+        : await window.cclinkStudio.ownerResearch.findPaths(repo, terms, revision(repo))
       if (!index.ok) {
         await remember(a.id, index.error)
         continue
@@ -363,9 +421,9 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
       candidates.push({ repo, paths: index.paths })
       await remember(
         a.id,
-        repo +
+        sourceLabel(plan, repo) +
           ' · 检索 ' +
-          terms.join(' / ') +
+          (terms.join(' / ') || '全部文件') +
           '，找到 ' +
           index.paths.length +
           ' 个候选文件' +
@@ -395,7 +453,8 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
                 sheet.doneWhen +
                 '。'
               : '') +
-            '为回答 Owner 本轮的问题，从各仓库实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
+            sourcesPrompt(plan!) +
+            '为回答 Owner 本轮的问题，从各来源实际候选路径选择最直接的资料。@README 表示项目首页说明。最多共选 4 份，只选相关文件；已读取的相同文件仅在需要其它段落时再选，并给出定位用的 anchor。可用 @L行号 定向读取；优先使用上轮真实命中位置中的赋值或实现行，避免反复读取声明。返回 {files:[{repo,path,anchor:"可选的短原文定位词或空字符串",purpose:"要核对的具体问题"}]}。\n' +
             JSON.stringify({
               goal: a.goal,
               plan,
@@ -422,24 +481,29 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
       dispatch.workerReturned = true
       dispatch.workerFiles = selected
       for (const file of files)
-        if (!selected.includes(file)) event(r, 'A 选择的路径未在该仓库的目录中找到：' + file.path)
+        if (!selected.includes(file)) event(r, 'A 选择的路径未在该来源的候选中找到：' + file.path)
     })
     return selected
   }
   const files = prior?.workerFiles ?? (await selectFiles())
   for (let index = prior?.filesProcessed ?? 0; index < files.length; index++) {
     const file = files[index]
-    if (!plan!.repos.includes(file.repo)) throw Error('取证对象超出本次计划：' + file.repo)
-    await remember(
-      a.id,
-      'A 查 ' + file.repo + '/' + file.path.replace('@README', 'README') + ' · ' + file.purpose,
-    )
-    const got = await window.cclinkStudio.ownerResearch.readFile(
-      file.repo,
-      file.path,
-      file.anchor ?? '',
-      revision(file.repo),
-    )
+    if (!planSources(plan).includes(file.repo)) throw Error('取证对象超出本次计划：' + file.repo)
+    const where = sourceLabel(plan, file.repo) + '/' + file.path.replace('@README', 'README')
+    await remember(a.id, 'A 查 ' + where + ' · ' + file.purpose)
+    const got = isFolderKey(file.repo)
+      ? await window.cclinkStudio.ownerSources.excerpt(
+          a.id,
+          grantOfFolder(file.repo),
+          file.path,
+          file.anchor ?? '',
+        )
+      : await window.cclinkStudio.ownerResearch.readFile(
+          file.repo,
+          file.path,
+          file.anchor ?? '',
+          revision(file.repo),
+        )
     if (!got.ok) {
       await change(a.id, (r) => {
         event(r, got.error)
@@ -449,8 +513,7 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
     }
     await change(a.id, (r) => {
       r.decisions!.at(-1)!.filesProcessed = index + 1
-      if (got.locations?.length)
-        event(r, '文件内定位 ' + file.repo + '/' + file.path + ' · ' + got.locations.join(' | '))
+      if (got.locations?.length) event(r, '文件内定位 ' + where + ' · ' + got.locations.join(' | '))
       if (got.matchedAnchor === false)
         event(r, file.path + ' 未找到定位词「' + file.anchor + '」，本次返回文件开头')
       if (
@@ -473,23 +536,15 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
           at: got.at,
         })
       }
-      event(
-        r,
-        '已取得 ' +
-          file.repo +
-          '/' +
-          file.path.replace('@README', 'README') +
-          ' · ' +
-          got.text.length +
-          ' 字符',
-      )
+      event(r, '已取得 ' + where + ' · ' + got.text.length + ' 字符')
     })
   }
 }
 const lookupFormat =
-  '取证返回 {action:"read",reason:"用中文说明已有证据、还差哪项证据、为什么查它",requests:[{repo:"计划中的原样仓库名",terms:["用于匹配文件路径的英文关键词"]}],worker:{use:"已有执行会话的字母"} 或 {new:"新会话负责什么，一句话"},workerReason:"为什么续用或新开",ask:"本步问题",deliverable:"要交回什么",doneWhen:"怎样算完成，可逐项核对"}。terms 为空数组表示读项目根 README。多个 terms 按命中数量排序，使用具体的文件或模块名。' +
+  '取证返回 {action:"read",reason:"用中文说明已有证据、还差哪项证据、为什么查它",requests:[{repo:"计划中的原样仓库名或本地目录 key",terms:["用于匹配文件路径的关键词"]}],worker:{use:"已有执行会话的字母"} 或 {new:"新会话负责什么，一句话"},workerReason:"为什么续用或新开",ask:"本步问题",deliverable:"要交回什么",doneWhen:"怎样算完成，可逐项核对"}。terms 为空数组表示读项目根 README；对本地目录表示列出全部文件。多个 terms 按命中数量排序，使用具体的文件或模块名；本地文件名可用中文。' +
   '分配执行会话：本步依赖某个会话已读到的内容或结论（例如沿它读过的文档继续追源码）时续用该会话；本步与已有会话的工作互不依赖（例如另一个项目、另一类问题）时新开会话，不把无关上下文堆进同一个会话。workers 列出已有会话及各自负责什么。' +
-  '若 lastDispatch 存在且尚无 verdict，必须给出 verdict:{met:true或false,note:"按该派工单 doneWhen 逐项说明满足或缺什么"}。'
+  '若 lastDispatch 存在且尚无 verdict，必须给出 verdict:{met:true或false,note:"按该派工单 doneWhen 逐项说明满足或缺什么"}。' +
+  '若已读资料明确写出某个本地文件路径、而它不在约定的目录里，可在 read 中给 files:["该文件的完整路径，原样照抄"]（最多 2 个，可不带 requests）；Studio 会请用户允许，60 秒无回应即跳过并继续，skipped 中的文件不要再请求。'
 
 // Older snapshots store their bytes and blob hash but lack the line offset.
 async function restoreSourceLines(a: Affair) {
@@ -577,15 +632,23 @@ export async function research(id: string, reassign = false) {
           r.phase = 'reading'
           event(r, '恢复原委托，沿用执行会话 ' + workerLabel(decisionWorker(prior)) + ' 的回执')
         })
-        await collect(initial, { reason: prior.reason, requests: prior.requests }, prior)
+        await collect(initial, { reason: prior.reason, requests: prior.requests, files: [] }, prior)
         await finishCollection(id)
       }
     }
+    const last = current(id)!.research!.decisions?.at(-1)
+    if (last?.localFiles?.length && !last.localFilesDone) await askLocalFiles(id, last.id!)
+    const rerun = await readGrantedSkips(id)
     const a = await change(id, (r, a) => {
       if (!r.plan || r.report) throw Error('没有可执行的调研约定')
       a.issue = ''
       r.phase = 'checking'
-      event(r, 'Owner 按已确认的交付物核对当前证据')
+      event(
+        r,
+        rerun
+          ? '补查：只读入先前跳过的文件，已核对的证据保持有效'
+          : 'Owner 按已确认的交付物核对当前证据',
+      )
     })
     await restoreSourceLines(a)
     let correction = ''
@@ -597,11 +660,19 @@ export async function research(id: string, reassign = false) {
         a,
         'main',
         '你是本事务 Owner。依据目标和约定的交付物，自行判断下一步，逐项核对原始资料，只把给定文本当证据。按信息依赖分批：若后续要查哪个细节取决于对现有材料的判断，先查清前一个问题，看过证据再派下一项委托。可以一次并查独立的问题。概览或目录不能证明具体实现、实跑结果或输出等；需要时派执行会话定向查官方仓库的文档、示例或源码。不要因只是重述同一证据而反复检索。' +
+          sourcesPrompt(state.plan!) +
           lookupFormat +
-          ' 若本次目标已充分得到支持，返回 {action:"deliver",reason:"逐项解释哪些出处解决了什么问题，注明判断边界",conclusion:"按约定样式写成可直接阅读的中文 Markdown 成品",items:[{repo:"原样仓库名",url:"实际证据的完整原样URL，行号由系统按引文定位",finding:"该来源支持的具体结论",quote:"该来源逐字原文的连续短句，6至160字符，无省略号"}]}。用 1 至 16 条证据覆盖关键结论。每份原文提供 startLine 时即为该片段首行在源文件的真实行号，交付时由 Studio 将逐字引文自动定位到具体源文件行，不要为了数行再次取证。所有必须项均有直接证据才交付，不得降级必交项。不要把代码标识符的字面出现当作行为证明。确实没有途径继续时返回 {action:"blocked",reason:"尚缺什么及原因"}。\n' +
+          ' 若本次目标已充分得到支持，返回 {action:"deliver",reason:"逐项解释哪些出处解决了什么问题，注明判断边界",conclusion:"按约定样式写成可直接阅读的中文 Markdown 成品",items:[{repo:"原样仓库名或本地目录 key",url:"实际证据的完整原样URL，行号由系统按引文定位",finding:"该来源支持的具体结论",quote:"该来源逐字原文的连续短句，6至160字符，无省略号"}]}。用 1 至 16 条证据覆盖关键结论。每份原文提供 startLine 时即为该片段首行在源文件的真实行号，交付时由 Studio 将逐字引文自动定位到具体源文件行，不要为了数行再次取证。所有必须项均有直接证据才交付，不得降级必交项。不要把代码标识符的字面出现当作行为证明。确实没有途径继续时返回 {action:"blocked",reason:"尚缺什么及原因"}。' +
+          '若 skipped 非空且你要交付，必须附 skips:[{id:"原样 id",required:"约定中 required=true 的结果是否依赖它，布尔值",affects:"影响哪项结果，一句话"}]；Studio 只在没有必需步骤被跳过时才算交付，否则保留为草稿等用户允许。' +
+          (draftHint(state) ?? '') +
+          '\n' +
           JSON.stringify({
             goal: a.goal,
             plan: state.plan,
+            skipped: pendingSkips(state)
+              .filter((k) => k.required === undefined)
+              .map(({ id, path, why }) => ({ id, path, why })),
+            approvedFiles: state.files,
             prior: state.decisions,
             workers: workersOf(state).map(({ key, purpose }) => ({ key, purpose })),
             lastDispatch: lastDispatch(state),
@@ -636,12 +707,40 @@ export async function research(id: string, reassign = false) {
           if (
             !state.docs.length ||
             !Array.isArray(out.items) ||
-            !out.items.every((i) => typeof i?.url === 'string')
+            // Local citations may omit the URL when their source has one file; checkReport decides.
+            !out.items.every((i) => typeof i?.url === 'string' || isLocalKey(String(i?.repo)))
           )
             throw Error('每个结论都需要实际来源链接')
           const report = checkReport(state, out)
+          const judged = judgeSkips(state, out.skips)
+          const held = judged.filter((k) => k.required)
+          if (held.length) {
+            await change(id, (r) => {
+              applySkipJudgement(r, judged)
+              r.draft = report
+              r.phase = 'decide'
+              event(
+                r,
+                '草稿已核对 ' +
+                  report.items.length +
+                  ' 条引文；' +
+                  held.length +
+                  ' 项必需步骤被跳过，未交付',
+              )
+              say(
+                r,
+                'Owner',
+                '还差 ' +
+                  held.map((k) => k.path + '（' + (k.affects || '必需结果') + '）').join('、') +
+                  '，这些步骤等待时被跳过，所以暂不交付。在看板上允许读取后，只重跑被跳过的步骤，已核对的引文不重做。',
+              )
+            })
+            return
+          }
           await change(id, (r) => {
+            applySkipJudgement(r, judged)
             r.report = report
+            r.draft = null
             r.phase = 'done'
             decision(r, 'deliver', reason)
             event(r, '核对通过 · ' + report.items.length + ' 条引文已与各自来源逐项匹配')
@@ -662,11 +761,11 @@ export async function research(id: string, reassign = false) {
       const parsedOrder = instruction.safeParse(out)
       const outOfScope =
         parsedOrder.success &&
-        parsedOrder.data.requests.some((request) => !state.plan!.repos.includes(request.repo))
+        parsedOrder.data.requests.some((request) => !planSources(state.plan).includes(request.repo))
       if (!parsedOrder.success || outOfScope) {
         correction = outOfScope
-          ? '取证对象超出已确认的仓库范围，只能查：' + state.plan!.repos.join('、')
-          : '派工单无效：每次最多 4 个检索请求，必须给出 requests；多个独立问题请分多次派给不同会话。'
+          ? '取证对象超出已确认的来源范围，只能查：' + planSources(state.plan).join('、')
+          : '派工单无效：每次最多 4 个检索请求和 2 个本地文件，至少给出一项；多个独立问题请分多次派给不同会话。'
         await remember(id, '派工未通过校验：' + correction)
         if (++invalid >= 3) throw Error(correction)
         continue
@@ -675,6 +774,25 @@ export async function research(id: string, reassign = false) {
       const budget = Math.min(15, 5 * Math.max(1, workersOf(current(id)!.research!).length))
       if (rounds++ >= budget) throw Error('本轮核对仍缺证据：' + reason)
       const order = parsedOrder.data
+      const skippedPaths = new Set((current(id)!.research!.skips ?? []).map((k) => k.path))
+      const files = order.files.filter((f) => !skippedPaths.has(f))
+      if (!order.requests.length) {
+        if (!files.length) {
+          correction = '这些文件已被跳过，不要再请求；请用已有证据判断或改查其他资料。'
+          await remember(id, '派工未通过校验：' + correction)
+          if (++invalid >= 3) throw Error(correction)
+          continue
+        }
+        // A file-only step needs no execution session: Studio asks and reads it directly.
+        await change(id, (r) => {
+          decision(r, r.docs.length ? 'more' : 'read', reason, undefined, { localFiles: files })
+          r.phase = 'reading'
+        })
+        await askLocalFiles(id, current(id)!.research!.decisions!.at(-1)!.id!)
+        await finishCollection(id)
+        correction = ''
+        continue
+      }
       const parsedSheet = dispatchSheet.safeParse(out)
       // Older replies without a sheet continue the most recent session, as before.
       const sheet = parsedSheet.success
@@ -696,6 +814,7 @@ export async function research(id: string, reassign = false) {
           reason,
           order.requests,
           {
+            ...(files.length && { localFiles: files }),
             worker: key,
             workerChoice: choice,
             choiceReason: sheet.workerReason,
@@ -713,9 +832,155 @@ export async function research(id: string, reassign = false) {
         )
         r.phase = 'reading'
       })
+      if (files.length) await askLocalFiles(id, current(id)!.research!.decisions!.at(-1)!.id!)
       await collect(a, order)
       await finishCollection(id)
       correction = ''
     }
+  })
+}
+
+const skipJudgement = z.array(
+  z.object({
+    id: z.string(),
+    required: z.boolean(),
+    affects: z.string().trim().max(300).optional(),
+  }),
+)
+/** Owner must say, for each newly skipped step, whether a required outcome depends on it. */
+function judgeSkips(r: Research, raw: unknown) {
+  const open = pendingSkips(r)
+  const fresh = open.filter((k) => k.required === undefined)
+  const given = fresh.length ? skipJudgement.parse(raw ?? []) : []
+  for (const k of fresh)
+    if (!given.some((g) => g.id === k.id))
+      throw Error('交付前须对每个被跳过的步骤给出 skips 判断（是否影响必需结果）：' + k.path)
+  return open.map((k) => {
+    const g = given.find((x) => x.id === k.id)
+    return { ...k, required: g ? g.required : k.required!, affects: g?.affects ?? k.affects }
+  })
+}
+function applySkipJudgement(r: Research, judged: ReturnType<typeof judgeSkips>) {
+  for (const j of judged) {
+    const k = r.skips?.find((x) => x.id === j.id)
+    if (!k) continue
+    k.required = j.required
+    if (j.affects) k.affects = j.affects.slice(0, 300)
+  }
+}
+function draftHint(r: Research) {
+  if (!r.draft) return null
+  return '这是补查：上次已核对的草稿和证据仍然有效，本轮只读入了先前被跳过、现已允许的文件（见 approvedFiles）。优先用现有证据判断能否交付；交付时重新给出完整 items。'
+}
+
+/**
+ * Asks to read the local files a step named. Each request shows the shared permission prompt;
+ * approval reads the file, a refusal or 60 s of silence records a skip, and the run goes on.
+ */
+async function askLocalFiles(id: string, decisionId: string) {
+  const a = current(id)!
+  const d = a.research!.decisions?.find((x) => x.id === decisionId)
+  if (!d?.localFiles?.length || d.localFilesDone) return
+  const conversation = session(a, decisionWorker(d))
+  for (const path of d.localFiles) {
+    await remember(id, '请求读取本地文件 ' + path + '（需要你允许，60 秒无回应将跳过）')
+    const got = await window.cclinkStudio.ownerSources.requestFile(id, conversation, path)
+    if (!got.ok) {
+      if (got.outcome === 'invalid') {
+        await remember(id, '无法读取 ' + path + '：' + got.error)
+        continue
+      }
+      await change(id, (r) => {
+        r.skips = [
+          ...(r.skips ?? []).filter((k) => k.path !== got.label || k.status !== 'skipped'),
+          {
+            id: crypto.randomUUID(),
+            kind: 'file' as const,
+            path: got.label,
+            why: got.outcome as 'timeout' | 'denied',
+            at: Date.now(),
+            status: 'skipped' as const,
+          },
+        ].slice(-20)
+        event(r, '已跳过读取 ' + got.label + '：' + got.error + '；其余步骤继续')
+      })
+      continue
+    }
+    await readApproved(id, got.key, got.label, got.path)
+  }
+  await change(id, (r) => {
+    const x = r.decisions?.find((y) => y.id === decisionId)
+    if (x) x.localFilesDone = true
+  })
+}
+/** Reads one approved local file (or a file inside a granted folder) into the evidence. */
+async function readApproved(id: string, key: string, label: string, rel?: string) {
+  const got = isFileKey(key)
+    ? await window.cclinkStudio.ownerSources.fileExcerpt(id, grantOfFile(key), '')
+    : await window.cclinkStudio.ownerSources.excerpt(id, grantOfFolder(key), rel ?? '', '')
+  await change(id, (r) => {
+    if (!got.ok) {
+      event(r, label + ' 读取失败：' + got.error)
+      return
+    }
+    if (isFileKey(key) && !(r.files ?? []).some((f) => f.key === key))
+      r.files = [...(r.files ?? []), { key, label }].slice(-16)
+    if (!r.docs.some((d) => d.url === got.url && d.sha === got.sha && d.text === got.text)) {
+      if (r.docs.length >= 24) throw Error('已达单项事务的来源容量，保留已有取证结果')
+      r.docs.push({
+        repo: got.repo,
+        path: (rel ?? label.split('/').at(-1) ?? label).slice(0, 360),
+        text: got.text,
+        url: got.url,
+        sha: got.sha,
+        startLine: got.startLine,
+        at: got.at,
+      })
+    }
+    event(r, '已取得 ' + label + ' · ' + got.text.length + ' 字符')
+  })
+  return got.ok
+}
+/** After the user grants skipped files, read exactly those; nothing already checked is redone. */
+async function readGrantedSkips(id: string) {
+  const granted = (current(id)!.research!.skips ?? []).filter(
+    (k) => k.status === 'granted' && k.key,
+  )
+  for (const k of granted) {
+    await remember(id, '补查：读取先前跳过的 ' + k.path)
+    const ok = await readApproved(id, k.key!, k.path)
+    await change(id, (r) => {
+      const x = r.skips?.find((y) => y.id === k.id)
+      if (x && ok) x.status = 'read'
+    })
+  }
+  return granted.length > 0
+}
+
+/** The user allows a skipped file from the Owner page; a run starts once nothing required waits. */
+export async function grantSkip(id: string, skipId: string) {
+  const skip = current(id)?.research?.skips?.find((k) => k.id === skipId)
+  if (!skip || skip.status !== 'skipped') return
+  const got = await window.cclinkStudio.ownerSources.grantFile(id, skip.path)
+  if (!got.ok) throw Error(got.error)
+  await change(id, (r) => {
+    const k = r.skips?.find((x) => x.id === skipId)
+    if (!k) return
+    k.status = 'granted'
+    k.key = isFileKey(got.key) ? got.key : undefined
+    if (isFileKey(got.key) && !(r.files ?? []).some((f) => f.key === got.key))
+      r.files = [...(r.files ?? []), { key: got.key, label: got.label }].slice(-16)
+    event(r, '你允许读取 ' + got.label + '（仅本事务、只读）')
+  })
+  const r = current(id)!.research!
+  if (r.phase === 'decide' && !pendingSkips(r).some((k) => k.required)) await research(id)
+}
+/** An optional skipped step the user does not need; it stays listed as unfinished. */
+export async function declineSkip(id: string, skipId: string) {
+  await change(id, (r) => {
+    const k = r.skips?.find((x) => x.id === skipId)
+    if (!k || k.status !== 'skipped' || k.required) return
+    k.status = 'declined'
+    event(r, '你决定不需要：' + k.path)
   })
 }

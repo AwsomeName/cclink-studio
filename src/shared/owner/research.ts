@@ -1,23 +1,127 @@
 import { z } from 'zod'
 import { publicRepoPattern } from '../ipc/owner-research'
 const phrase = z.string().trim().min(1).max(1200)
-export const planSchema = z.object({
-  scope: phrase,
-  output: phrase,
-  timing: phrase.optional(),
-  repos: z
-    .array(z.string().regex(publicRepoPattern))
-    .min(1)
-    .max(4)
-    .refine((rs) => new Set(rs.map((r) => r.toLowerCase())).size === rs.length),
+/**
+ * A research source is either a public GitHub repository (`owner/repo`) or a read-only local
+ * folder granted to this affair, addressed as `folder:<grant UUID>`. The key never carries a
+ * local path: reads resolve the grant in the main process and fail once it is revoked.
+ */
+export const folderKeyPattern =
+  /^folder:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const folderKey = (grantId: string) => 'folder:' + grantId.toLowerCase()
+export const isFolderKey = (key: string) => folderKeyPattern.test(key)
+export const grantOfFolder = (key: string) => key.slice('folder:'.length)
+/** One local file outside the folders, approved read-only for this affair only. */
+export const fileKeyPattern = /^file:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export const fileKey = (grantId: string) => 'file:' + grantId.toLowerCase()
+export const isFileKey = (key: string) => fileKeyPattern.test(key)
+export const grantOfFile = (key: string) => key.slice('file:'.length)
+/** Any local evidence: a granted folder or a single approved file. */
+export const isLocalKey = (key: string) => isFolderKey(key) || isFileKey(key)
+const sourceKey = z
+  .string()
+  .refine(
+    (k) => publicRepoPattern.test(k) || folderKeyPattern.test(k) || fileKeyPattern.test(k),
+    '无效的来源',
+  )
+/** Local evidence links point at the grant and relative path, never at an absolute path. */
+export const localSourceUrl = (grantId: string, path: string) =>
+  'cclink-owner-source://' +
+  grantId.toLowerCase() +
+  '/' +
+  path.split('/').map(encodeURIComponent).join('/')
+export const planSchema = z
+  .object({
+    scope: phrase,
+    output: phrase,
+    timing: phrase.optional(),
+    repos: z
+      .array(z.string().regex(publicRepoPattern))
+      .max(4)
+      .refine((rs) => new Set(rs.map((r) => r.toLowerCase())).size === rs.length),
+    /** Local folders this agreement lets Owner read; each must be granted to the affair. */
+    folders: z
+      .array(
+        z.object({
+          key: z.string().regex(folderKeyPattern),
+          label: z.string().trim().min(1).max(200),
+        }),
+      )
+      .max(8)
+      .refine((fs) => new Set(fs.map((f) => f.key.toLowerCase())).size === fs.length)
+      .optional(),
+    /**
+     * What the delivery must achieve. A skipped step that a required outcome depends on keeps
+     * the affair from being delivered; optional ones are listed as unfinished.
+     */
+    outcomes: z
+      .array(z.object({ text: z.string().trim().min(1).max(300), required: z.boolean() }))
+      .max(8)
+      .optional(),
+  })
+  .refine((p) => p.repos.length + (p.folders?.length ?? 0) > 0, '至少需要一个来源')
+export type Plan = z.infer<typeof planSchema>
+/** Every source the confirmed agreement covers, GitHub repositories first. */
+export const planSources = (plan: Plan | null | undefined) =>
+  plan ? [...plan.repos, ...(plan.folders ?? []).map((f) => f.key)] : []
+type ApprovedFile = { key: string; label: string }
+/** Human label for a source key: the folder's name, the approved file, or the repository. */
+export function sourceLabel(plan: Plan | null | undefined, key: string, files?: ApprovedFile[]) {
+  if (isFileKey(key)) return '本地文件 ' + (files?.find((f) => f.key === key)?.label ?? '')
+  if (!isFolderKey(key)) return key
+  return '本地 ' + (plan?.folders?.find((f) => f.key === key)?.label ?? '目录')
+}
+/** Sources a citation may point at: the agreement's plus files approved during the run. */
+export const evidenceSources = (r: { plan: Plan | null; files?: ApprovedFile[] }) => [
+  ...planSources(r.plan),
+  ...(r.files ?? []).map((f) => f.key),
+]
+type CitedItem = { repo: string; url?: string; line?: number }
+/** Where a citation points: a local file and line, or the pinned GitHub URL. */
+export function citationPlace(
+  r: {
+    plan: Plan | null
+    files?: ApprovedFile[]
+    docs: { repo: string; url: string; path?: string }[]
+  },
+  item: CitedItem,
+) {
+  const doc = r.docs.find((d) => d.repo === item.repo && (!item.url || d.url === item.url))
+  const line = item.line ? ' 第 ' + item.line + ' 行' : ''
+  if (isFileKey(item.repo)) return sourceLabel(r.plan, item.repo, r.files) + line
+  if (isFolderKey(item.repo)) return sourceLabel(r.plan, item.repo) + '/' + (doc?.path ?? '') + line
+  return (item.url ?? doc?.url ?? '') + (item.line ? '#L' + item.line : '')
+}
+/** Verified citations by tool, for the deliverable summary. */
+export function citationCounts(items: { repo: string }[]) {
+  const local = items.filter((i) => isLocalKey(i.repo)).length
+  return { local, github: items.length - local }
+}
+/** A step that waited for approval and was skipped, and what the user did about it later. */
+export const skipSchema = z.object({
+  id: z.string().uuid(),
+  kind: z.literal('file'),
+  /** Display path (~/…); the main process resolves and re-checks it before any read. */
+  path: z.string().min(1).max(600),
+  why: z.enum(['timeout', 'denied']),
+  at: z.number(),
+  status: z.enum(['skipped', 'granted', 'declined', 'read']),
+  /** Set by Owner when it judged delivery: does a required outcome depend on this step? */
+  required: z.boolean().optional(),
+  affects: z.string().max(300).optional(),
+  key: z.string().regex(fileKeyPattern).optional(),
 })
+export type Skip = z.infer<typeof skipSchema>
+export const pendingSkips = (r: { skips?: Skip[] }) =>
+  (r.skips ?? []).filter((s) => s.status === 'skipped')
 export const sourceSchema = z.object({
-  repo: z.string().regex(publicRepoPattern),
+  repo: sourceKey,
   path: z.string().max(360).optional(),
   startLine: z.number().int().positive().optional(),
   text: z.string().min(1).max(9000),
   url: z.string().url(),
-  sha: z.string().regex(/^[a-f0-9]{40}$/i),
+  /** Git blob SHA-1 for GitHub; SHA-256 of the whole file when a local file was read. */
+  sha: z.string().regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i),
   at: z.number(),
 })
 export const reportSchema = z.object({
@@ -36,13 +140,14 @@ export const reportSchema = z.object({
     .max(16),
 })
 export const researchRequest = z.object({
-  repo: z.string().regex(publicRepoPattern),
-  terms: z.array(z.string().regex(/^[a-z0-9_.+/-]{1,60}$/i)).max(8),
+  repo: sourceKey,
+  // Local notes may be named in any language; GitHub tree search still validates its own terms.
+  terms: z.array(z.string().regex(/^[\p{L}\p{N}_.+/-]{1,60}$/u)).max(8),
 })
 export const workerFilesSchema = z
   .array(
     z.object({
-      repo: z.string().regex(publicRepoPattern),
+      repo: sourceKey,
       path: z.string().min(1).max(360),
       anchor: z.string().max(120).optional(),
       purpose: z.string().min(1).max(500),
@@ -62,7 +167,17 @@ export type Worker = z.infer<typeof workerSchema>
 export const workerLabel = (key: string) => key.toUpperCase()
 export const researchSchema = z.object({
   plan: planSchema.nullable(),
-  phase: z.enum(['draft', 'planning', 'ready', 'reading', 'writing', 'checking', 'done', 'error']),
+  phase: z.enum([
+    'draft',
+    'planning',
+    'ready',
+    'reading',
+    'writing',
+    'checking',
+    'decide',
+    'done',
+    'error',
+  ]),
   log: z.array(z.string()).max(60),
   chat: z
     .array(
@@ -99,33 +214,49 @@ export const researchSchema = z.object({
         doneWhen: z.string().max(600).optional(),
         /** Owner's acceptance of this dispatch against doneWhen, recorded at the next judgment. */
         verdict: z.object({ met: z.boolean(), note: z.string().max(600) }).optional(),
+        /** Local files outside the folders this step asked to read; each needs approval. */
+        localFiles: z.array(z.string().min(1).max(600)).max(2).optional(),
+        localFilesDone: z.boolean().optional(),
       }),
     )
     .max(60)
     .optional(),
   report: reportSchema.nullable(),
   workers: z.array(workerSchema).max(8).optional(),
+  /** Single files approved during the run (or afterwards), read-only, this affair only. */
+  files: z
+    .array(z.object({ key: z.string().regex(fileKeyPattern), label: z.string().max(600) }))
+    .max(16)
+    .optional(),
+  skips: z.array(skipSchema).max(20).optional(),
+  /** A checked report held back because a required step was skipped; never a deliverable. */
+  draft: reportSchema.nullable().optional(),
 })
 export type Research = z.infer<typeof researchSchema>
 export function checkReport(r: Research, raw: unknown) {
   const report = reportSchema.parse(raw)
-  if (!r.plan || !r.plan.repos.every((repo) => report.items.some((item) => item.repo === repo)))
-    throw Error('没有覆盖本次研究的所有项目')
+  const sources = evidenceSources(r)
+  if (
+    !r.plan ||
+    !planSources(r.plan).every((repo) => report.items.some((item) => item.repo === repo))
+  )
+    throw Error('没有覆盖本次研究的所有来源')
   for (const item of report.items) {
     // Line numbers come from the immutable snapshot and matching quote, never from the reply.
     delete item.line
     const url = item.url?.replace(/#L\d+(?:-L\d+)?$/, '')
-    const sources = r.docs.filter((d) => d.repo === item.repo && (!url || d.url === url))
+    const docs = r.docs.filter((d) => d.repo === item.repo && (!url || d.url === url))
     const words = item.quote.split(/\s+/).map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     const pattern = new RegExp(words.join('\\s+'))
-    const matches = sources.filter((d) => pattern.test(d.text))
+    const matches = docs.filter((d) => pattern.test(d.text))
     const urls = new Set(matches.map((d) => d.url))
+    const label = sourceLabel(r.plan, item.repo, r.files)
     if (
-      !r.plan.repos.includes(item.repo) ||
+      !sources.includes(item.repo) ||
       urls.size !== 1 ||
-      (!url && new Set(sources.map((d) => d.url)).size !== 1)
+      (!url && new Set(docs.map((d) => d.url)).size !== 1)
     )
-      throw Error(item.repo + '：引文与标明的来源不匹配')
+      throw Error(label + '：引文与标明的来源不匹配')
     item.url = matches[0].url
     const lines = new Set<number>()
     for (const doc of matches) {
@@ -133,9 +264,7 @@ export function checkReport(r: Research, raw: unknown) {
       for (const match of doc.text.matchAll(new RegExp(pattern, 'g'))) {
         lines.add(doc.startLine + doc.text.slice(0, match.index).split('\n').length - 1)
         if (lines.size > 1)
-          throw Error(
-            item.repo + '：引文在该文件多处出现，请补足前后原文以定位到具体行：' + item.quote,
-          )
+          throw Error(label + '：引文在该文件多处出现，请补足前后原文以定位到具体行：' + item.quote)
       }
     }
     item.line = lines.values().next().value
@@ -158,6 +287,11 @@ export function researchStatus(r: Research, active: boolean): [string, string] {
       return ['进行中', '执行会话 A 正在比较项目、撰写调研结果']
     case 'checking':
       return ['进行中', 'Owner 正在逐项判断证据是否足以交付']
+    case 'decide':
+      return [
+        '待你决定',
+        pendingSkips(r).filter((s) => s.required).length + ' 项必需步骤被跳过，尚未交付',
+      ]
     case 'done':
       return ['已交付', '调研简报和逐项出处已就绪']
     case 'error':

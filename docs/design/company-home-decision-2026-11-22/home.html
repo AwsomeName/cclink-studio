@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>公司首页 · 经营决策</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --info: #5b4bc4; --info-soft: #ece9fb; --info-line: #c9c1f3;
+  --note: #7a4dd8; --note-soft: #f1ebfd;
+  --sell: #c2410c; --sell-soft: #fff1e8; --sell-line: #f3b48f;
+  --scrim: rgba(20, 24, 30, .42);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843; --info-line: #4a4278;
+    --note: #c3a6ff; --note-soft: #31284a;
+    --sell: #fb9a5b; --sell-soft: #3a2619; --sell-line: #7a4425;
+    --scrim: rgba(0, 0, 0, .55);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843; --info-line: #4a4278;
+  --note: #c3a6ff; --note-soft: #31284a;
+  --sell: #fb9a5b; --sell-soft: #3a2619; --sell-line: #7a4425;
+  --scrim: rgba(0, 0, 0, .55);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; min-height: 560px; }
+
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.strip .proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.strip .proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.strip .spacer { flex: 1; }
+.badge-wait { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 11px; line-height: 17px; }
+
+.body { display: grid; grid-template-columns: 200px minmax(0, 1fr) 290px; min-height: 0; }
+
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .item .count { margin-left: auto; font-size: 11px; color: var(--faint); white-space: nowrap; }
+.side .item.think-item { color: var(--info); }
+.side .item.think-item .count { color: var(--info); }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+.side .group.sell-g { color: var(--sell); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.side .sell-box { border: 1px solid var(--sell-line); background: var(--sell-soft); border-radius: 8px; padding: 4px; margin: 0 2px; }
+.side .sell-box .item { color: var(--sell); font-weight: 600; }
+.side .sell-box .item .count { color: var(--sell); font-weight: 500; }
+.side hr { border: 0; border-top: 1px solid var(--border); margin: 10px 4px; }
+
+.center { display: grid; grid-template-rows: 34px 1fr; min-width: 0; min-height: 0; }
+.tabs { display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--border); }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; border-right: 1px solid var(--border); color: var(--muted); }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.tabs .tools { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--muted); }
+
+.page { overflow: auto; padding: 18px 24px 64px; }
+.head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.head .type { font-size: 12px; color: var(--muted); padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; margin-left: 8px; vertical-align: 3px; font-weight: 400; }
+.head .sub { color: var(--muted); margin-top: 4px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.sell { background: var(--sell); border-color: var(--sell); color: #fff; }
+.btn.think { background: var(--info); border-color: var(--info); color: #fff; }
+.btn.think-o { border-color: var(--info-line); color: var(--info); background: var(--surface); }
+.btn.ghost { background: none; border-color: transparent; color: var(--accent); padding: 0 4px; }
+.btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+.btn[aria-pressed="true"] { background: var(--info-soft); border-color: var(--info); color: var(--info); font-weight: 600; }
+.month { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.col { display: grid; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; position: relative; }
+.card > header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.card > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.card > header .n { color: var(--faint); font-weight: 400; }
+.card > header .right { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.card .foot { padding: 9px 14px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--border); }
+.sub-h { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 12px; color: var(--faint); font-weight: 500; }
+.sub-h .right { margin-left: auto; }
+
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-danger { background: var(--danger-soft); color: var(--danger); }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-info { background: var(--info-soft); color: var(--info); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+.t-sell { background: var(--sell-soft); color: var(--sell); }
+.t-guess { background: none; color: var(--warn); border: 1px dashed var(--warn); }
+.b-warn { background: var(--warn); } .b-danger { background: var(--danger); } .b-info { background: var(--info); } .b-plain { background: var(--border); } .b-sell { background: var(--sell); }
+
+/* ---------- think / decision card ---------- */
+.card.think-card { border: 2px solid var(--info); box-shadow: 0 0 0 4px var(--info-soft); }
+.think-card > header { background: var(--info-soft); border-bottom-color: var(--info-line); border-radius: 6px 6px 0 0; }
+.think-card > header h2 { color: var(--info); display: flex; align-items: center; gap: 6px; }
+.th-body { padding: 12px 14px; display: grid; gap: 12px; }
+.th-q { font-size: 16px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.th-q small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.th-scope { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
+.th-ask { display: grid; gap: 10px; }
+.ask-box { display: flex; gap: 8px; align-items: center; padding: 8px 8px 8px 12px; border: 1px solid var(--info-line); border-radius: 8px; background: var(--bg); color: var(--faint); cursor: text; }
+.ask-box span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-2); font-size: 12px; color: var(--text); }
+.past { display: grid; gap: 4px; }
+.past .p { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; flex-wrap: wrap; }
+.past .p .d { color: var(--faint); font-size: 12px; white-space: nowrap; }
+
+.clar { display: grid; gap: 10px; }
+.clar .cq { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
+.clar .cq .t { font-weight: 600; }
+.clar .cq .w { font-size: 12px; color: var(--muted); }
+.clar .opts { display: flex; gap: 6px; flex-wrap: wrap; }
+.thinking { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--muted); }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--info); opacity: .35; animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dots i { animation: none; opacity: .8; } }
+
+.rec { border-left: 3px solid var(--info); background: var(--info-soft); border-radius: 0 8px 8px 0; padding: 10px 12px; }
+.rec .lbl { font-size: 11.5px; color: var(--info); font-weight: 600; letter-spacing: .02em; }
+.rec .txt { font-size: 14px; font-weight: 600; margin-top: 2px; overflow-wrap: anywhere; }
+.rec .why { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.rec textarea { width: 100%; min-height: 64px; margin-top: 6px; padding: 8px; border: 1px solid var(--info-line); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; resize: vertical; }
+
+.opt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.opt-table th { text-align: left; font-weight: 500; color: var(--faint); font-size: 12px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.opt-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.opt-table tr:last-child td { border-bottom: 0; }
+.opt-table tr.pick td { background: var(--info-soft); }
+.opt-table tr.pick td:first-child { box-shadow: inset 3px 0 0 var(--info); }
+.opt-table .who { font-weight: 600; }
+.opt-table .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; }
+.panel { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.panel h3 { margin: 0 0 6px; font-size: 12.5px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.ev { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; font-size: 12.5px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--border); }
+.ev:first-of-type { border-top: 0; }
+.ev .s { grid-column: 2; font-size: 11.5px; color: var(--faint); }
+.ev .s a { color: var(--accent); text-decoration: none; }
+.cost { display: grid; gap: 3px; font-size: 12.5px; }
+.cost .l { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cost .l .v { margin-left: auto; font-variant-numeric: tabular-nums; }
+.cost .l.sum { border-top: 1px solid var(--border); padding-top: 4px; font-weight: 600; }
+.chg { margin: 0; padding-left: 18px; font-size: 12.5px; display: grid; gap: 3px; }
+.th-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.th-acts .r { margin-left: auto; font-size: 12px; color: var(--faint); }
+.bound { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: flex-start; }
+
+.decided { display: grid; gap: 8px; }
+.decided .rec { background: var(--ok-soft); border-left-color: var(--ok); }
+.decided .rec .lbl { color: var(--ok); }
+.decided .meta { display: flex; gap: 6px 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); align-items: center; }
+
+/* state switching */
+body:not([data-think="ask"]) .st-ask,
+body:not([data-think="clarify"]) .st-clarify,
+body:not([data-think="decide"]) .st-decide,
+body:not([data-think="done"]) .st-done,
+body:not([data-think="later"]) .st-later,
+body[data-think="ask"] .st-notask { display: none !important; }
+
+/* ---------- to-do rows ---------- */
+.row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--border); }
+.row:last-of-type { border-bottom: 0; }
+.row .bar { align-self: stretch; border-radius: 0 3px 3px 0; }
+.row .title { font-weight: 600; overflow-wrap: anywhere; }
+.row .why { color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; font-size: 12.5px; }
+.row .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12px; color: var(--faint); align-items: center; }
+
+/* project progress */
+.proj-row { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.proj-row:last-child { border-bottom: 0; }
+.proj-row .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proj-row .name { font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; }
+.proj-row .goal { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.proj-row .money { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; align-items: center; }
+.st { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; border: 1px solid var(--border); color: var(--faint); background: var(--surface); white-space: nowrap; }
+.st.done { color: var(--ok); border-color: transparent; background: var(--ok-soft); }
+.st.now { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.arrow { color: var(--faint); font-size: 11px; }
+.proj-row .now-line { margin-top: 7px; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* sales card */
+.card.sell-card { border: 2px solid var(--sell); box-shadow: 0 0 0 4px var(--sell-soft); }
+.sell-card > header { background: var(--sell-soft); border-bottom-color: var(--sell-line); border-radius: 6px 6px 0 0; }
+.sell-card > header h2 { color: var(--sell); }
+.entries { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; }
+.entry { display: grid; gap: 2px; text-align: left; padding: 10px 10px 9px; border: 1px solid var(--sell-line); border-radius: 8px; background: var(--surface); min-width: 0; }
+.entry .k { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--sell); white-space: nowrap; }
+.entry .c { font-size: 12px; color: var(--muted); }
+.entry .go { font-size: 12px; color: var(--sell); }
+.funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0 14px 12px; }
+.fs { padding: 6px 8px 6px 10px; border: 1px solid var(--border); border-left-width: 0; background: var(--surface); min-width: 0; }
+.fs:first-child { border-left-width: 1px; border-radius: 6px 0 0 6px; }
+.fs:last-child { border-radius: 0 6px 6px 0; }
+.fs .l { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fs .s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs.win { background: var(--ok-soft); } .fs.win .v { color: var(--ok); }
+.sec-h { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 12px; font-weight: 600; color: var(--sell); border-top: 1px solid var(--border); }
+.sec-h .n { color: var(--faint); font-weight: 400; }
+.sec-h .right { margin-left: auto; }
+.lead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 14px; }
+.lead + .lead { border-top: 1px dashed var(--border); }
+.lead .who { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lead .src { font-weight: 400; color: var(--faint); font-size: 12px; }
+.lead .q { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.lead .wait { font-size: 11.5px; color: var(--warn); }
+.promo { display: flex; gap: 8px; align-items: center; padding: 6px 14px; font-size: 12.5px; flex-wrap: wrap; }
+.promo .t { overflow-wrap: anywhere; }
+.promo .r { margin-left: auto; color: var(--faint); font-size: 12px; }
+
+/* money */
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metric { padding: 11px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.metric:last-child { border-right: 0; }
+.metric .label { font-size: 12px; color: var(--muted); }
+.metric .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; }
+.metric .hint { font-size: 11.5px; color: var(--faint); }
+.lines { padding: 8px 14px 10px; display: grid; gap: 5px; border-top: 1px solid var(--border); }
+.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.line .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+.pend { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); }
+.pend .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.pend .amt { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pend .amt.in { color: var(--ok); }
+.pend .d { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.pend .ai { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.pend .acts { display: flex; gap: 4px; }
+
+/* agent */
+.agent { background: var(--surface); border-left: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+.agent .top { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.agent .msgs { padding: 14px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+.ctx { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; color: var(--muted); font-size: 12px; }
+.ctx b { color: var(--text); font-weight: 600; }
+.sugg { display: grid; gap: 6px; }
+.sugg button { text-align: left; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.sugg button.th { border-color: var(--info-line); color: var(--info); background: var(--info-soft); }
+.composer { margin: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg); }
+.composer .ph { color: var(--faint); min-height: 36px; }
+.composer .bar { display: flex; gap: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--statusbar); color: var(--on-accent); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.status .right { margin-left: auto; display: flex; gap: 16px; }
+
+/* dialog */
+.scrim { position: fixed; inset: 0; background: var(--scrim); display: none; align-items: flex-start; justify-content: center; padding: 70px 16px 16px; z-index: 20; overflow: auto; }
+body.dlg .scrim { display: flex; }
+.dialog { width: 560px; max-width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 16px 48px rgba(0,0,0,.25); }
+.dialog header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.dialog header h2 { margin: 0; font-size: 15px; color: var(--info); display: flex; gap: 6px; align-items: center; }
+.dialog header .x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; }
+.dialog .db { padding: 14px 16px; display: grid; gap: 12px; }
+.dialog label.f { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+.dialog textarea { width: 100%; min-height: 70px; padding: 9px 10px; border: 1px solid var(--info-line); border-radius: 6px; background: var(--bg); color: var(--text); font: 14px/1.5 inherit; font-family: inherit; resize: vertical; }
+.reads { display: grid; gap: 6px; }
+.reads label { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; }
+.reads label small { display: block; color: var(--faint); font-size: 11.5px; }
+.reads input { margin-top: 3px; accent-color: var(--info); }
+.dialog footer { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.dialog footer .r { margin-left: auto; display: flex; gap: 8px; }
+
+/* annotations */
+.note { display: none; position: absolute; top: -10px; right: 10px; z-index: 2; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--note-soft); color: var(--note); border: 1px solid var(--note); white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+body.notes .note { display: inline-block; }
+body.notes .card { outline: 1px dashed var(--note); outline-offset: 3px; }
+body.clean .review { display: none; }
+
+.review { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+.review button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.review button[aria-pressed="true"] { background: var(--info-soft); color: var(--text); }
+.review .sep { width: 1px; background: var(--border); margin: 3px 2px; }
+.review .lab { font-size: 11px; color: var(--faint); align-self: center; padding: 0 4px; }
+
+@media (max-width: 1320px) { .body { grid-template-columns: 190px minmax(0, 1fr); } .agent { display: none; } }
+@media (max-width: 1080px) { .grid { grid-template-columns: minmax(0, 1fr); } .two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .body { grid-template-columns: minmax(0, 1fr); } .side { display: none; }
+  .strip .proj:not(.active):not(.keep) { display: none; }
+  .page { padding: 14px 16px 120px; }
+  .tabs .tools { display: none; }
+  .hide-narrow { display: none; }
+  .row { grid-template-columns: 4px minmax(0, 1fr); } .row > .btn { grid-column: 2; justify-self: start; }
+  .entries { grid-template-columns: minmax(0, 1fr); }
+  .funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .fs, .fs:first-child, .fs:last-child { border-width: 1px; border-radius: 6px; }
+  .metrics { grid-template-columns: minmax(0, 1fr); } .metric { border-right: 0; border-bottom: 1px solid var(--border); }
+  .lead, .pend { grid-template-columns: minmax(0, 1fr); }
+  .proj-row .money { margin-left: 0; width: 100%; }
+  .opt-table thead { display: none; }
+  .opt-table tr { display: grid; grid-template-columns: minmax(0, 1fr); border-bottom: 1px solid var(--border); }
+  .opt-table td { border-bottom: 0; padding: 4px 8px; }
+  .opt-table td:first-child { padding-top: 8px; }
+  .opt-table td:last-child { padding-bottom: 8px; }
+  .status .right, .status .hide-narrow { display: none; }
+  .head .right { margin-left: 0; }
+}
+</style>
+</head>
+<body data-think="decide">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3.5h-3v3.5H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="yuan" viewBox="0 0 16 16"><path d="M4 2.5 8 8l4-5.5M8 8v5.5M5 9h6M5 11.5h6"/></symbol>
+  <symbol id="mega" viewBox="0 0 16 16"><path d="M2.5 6.5v3h2l5 3v-9l-5 3zM12 6a2.5 2.5 0 0 1 0 4M5 9.5l1 3.5"/></symbol>
+  <symbol id="users" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.2c.4-2.3 2.1-3.7 4.2-3.7s3.8 1.4 4.2 3.7M10.5 3.4a2.2 2.2 0 0 1 0 4.2M11.8 9.7c1.3.4 2.2 1.6 2.4 3.5"/></symbol>
+  <symbol id="wrench" viewBox="0 0 16 16"><path d="M10 2.5a3 3 0 0 0-2.8 4.1L2.5 11.3l2.2 2.2 4.7-4.7A3 3 0 0 0 13.5 6l-1.8 1.8-1.9-.5-.5-1.9z"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="chat" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol>
+  <symbol id="tool" viewBox="0 0 16 16"><path d="M3 13l4-4M9.5 2.5l4 4-5 5-4-4z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="owner" viewBox="0 0 16 16"><path d="M8 1.8 14 8l-6 6.2L2 8z"/></symbol>
+  <symbol id="bulb" viewBox="0 0 16 16"><path d="M6 12.5h4M6.5 14.5h3M8 1.8a4.2 4.2 0 0 0-2.6 7.5c.5.4.8 1 .8 1.6v.6h3.6v-.6c0-.6.3-1.2.8-1.6A4.2 4.2 0 0 0 8 1.8z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></symbol>
+  <symbol id="cal" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></symbol>
+  <symbol id="globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.8 2 1.8 9.6 0 11.6M8 2.2c-1.8 2-1.8 9.6 0 11.6"/></symbol>
+  <symbol id="term" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="m4.5 6.5 2 1.5-2 1.5M8 10h3"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
+  <symbol id="check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="cube" viewBox="0 0 16 16"><path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5zM2.5 5 8 8.2 13.5 5M8 8.2v6"/></symbol>
+  <symbol id="shield" viewBox="0 0 16 16"><path d="M8 1.8 13 3.6v4c0 3.2-2.2 5.4-5 6.6-2.8-1.2-5-3.4-5-6.6v-4z"/></symbol>
+  <symbol id="arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="strip" aria-label="项目栏">
+    <button class="proj" aria-label="收起侧栏"><svg class="i"><use href="#panel"/></svg></button>
+    <button class="proj"><svg class="i"><use href="#grid"/></svg>我的空间</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#grid"/></svg>眼镜研发</button>
+    <button class="proj active"><svg class="i"><use href="#grid"/></svg>星河科技</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#plus"/></svg>新建 / 打开</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#clock"/></svg>历史项目</button>
+    <span class="spacer"></span>
+    <button class="proj hide-narrow"><svg class="i"><use href="#gear"/></svg>Studio 设置</button>
+    <button class="proj keep"><svg class="i"><use href="#owner"/></svg>Owner<span class="badge-wait" data-owner-badge>1 等你</span></button>
+  </nav>
+
+  <div class="body">
+    <aside class="side" aria-label="项目导航">
+      <button class="item active"><svg class="i"><use href="#home"/></svg>项目首页</button>
+      <div class="group">公司经营</div>
+      <button class="item"><svg class="i"><use href="#list"/></svg>业务项目<span class="count">3</span></button>
+      <button class="item"><svg class="i"><use href="#yuan"/></svg>公司账目<span class="count">12 待核对</span></button>
+      <button class="item think-item" data-open-think><svg class="i"><use href="#bulb"/></svg>经营决策<span class="count" data-side-think>1 等你决定</span></button>
+      <div class="group sell-g"><svg class="i" style="width:13px;height:13px"><use href="#mega"/></svg>推广与销售</div>
+      <div class="sell-box">
+        <button class="item"><svg class="i"><use href="#mega"/></svg>推广产品<span class="count">1 卡住</span></button>
+        <button class="item"><svg class="i"><use href="#users"/></svg>跟进客户<span class="count">3 等回复</span></button>
+        <button class="item"><svg class="i"><use href="#wrench"/></svg>售后服务<span class="count">2 待处理</span></button>
+      </div>
+      <hr />
+      <div class="group">工作</div>
+      <button class="item"><svg class="i"><use href="#folder"/></svg>文件</button>
+      <button class="item"><svg class="i"><use href="#chat"/></svg>会话</button>
+      <button class="item"><svg class="i"><use href="#tool"/></svg>工具</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <div class="tab active" role="tab" aria-selected="true"><svg class="i"><use href="#home"/></svg>项目首页</div>
+        <div class="tools"><svg class="i"><use href="#globe"/></svg><svg class="i"><use href="#term"/></svg></div>
+      </div>
+
+      <div class="page">
+        <div class="head">
+          <div>
+            <h1>星河科技<span class="type">公司</span></h1>
+            <div class="sub">AR 眼镜一代直接上市 · 今天 <span data-todo-count>5</span> 件事 · 数据更新于 11-22 09:41</div>
+          </div>
+          <div class="right">
+            <button class="btn think" data-open-think><svg class="i"><use href="#bulb"/></svg>帮我想清楚一个问题</button>
+            <span class="month"><svg class="i"><use href="#cal"/></svg>2026-11</span>
+            <button class="btn"><svg class="i"><use href="#gear"/></svg>项目设置</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="col">
+            <!-- ================= Think / decision card ================= -->
+            <section class="card think-card" aria-labelledby="h-think" id="think">
+              <span class="note">新增：公司决策记录（问题、选项、决定、来源）· 思考过程是 Owner 事务</span>
+              <header>
+                <h2 id="h-think"><svg class="i"><use href="#bulb"/></svg>经营决策</h2>
+                <span class="tag t-info st-clarify">Owner 先问你 2 个问题</span>
+                <span class="tag t-warn st-decide">等你决定</span>
+                <span class="tag t-ok st-done">已决定</span>
+                <span class="tag t-plain st-later">先不决定</span>
+                <div class="right">
+                  <span class="st-notask" style="font-size:12px;color:var(--faint)">OW-026</span>
+                  <button class="btn ghost sm st-notask">在 Owner 中打开 ›</button>
+                </div>
+              </header>
+
+              <!-- ask: empty state -->
+              <div class="th-body st-ask grid-ok">
+                <div class="th-ask">
+                  <div style="color:var(--muted)">拿不准的经营问题，交给 Owner 想清楚。它先读你允许的资料，有歧义就问你，最后在这里给出带依据的选项和建议，由你决定。</div>
+                  <div class="ask-box" data-open-think role="button" tabindex="0"><span>例如：首批先卖给谁，怎么定价？</span><button class="btn think sm">开始</button></div>
+                  <div class="chips">
+                    <button class="chip" data-open-think>首批先卖给谁，怎么定价？</button>
+                    <button class="chip" data-open-think>要不要接渠道代理？</button>
+                    <button class="chip" data-open-think>这个月推广钱该花在哪？</button>
+                  </div>
+                </div>
+                <div class="past">
+                  <div style="font-size:12px;color:var(--faint)">已做的决定</div>
+                  <div class="p"><span class="d">11-08</span><span>首批只做黑色单色款，彩色款等小批量之后</span><span class="tag t-plain">来源 3 项</span></div>
+                </div>
+              </div>
+
+              <!-- clarify -->
+              <div class="th-body st-clarify grid-ok">
+                <div class="th-q">首批 AR 眼镜一代先卖给谁，怎么定价？<small>11-22 09:52 交办 · 只读 4 类资料 · 不发消息、不改价格、不动账目</small></div>
+                <div class="thinking"><span class="dots"><i></i><i></i><i></i></span>已读：11 月账目汇总、18 位感兴趣的客户、AR 眼镜一代两个业务项目、BOM 调研 OW-025。下面两点会改变建议，先问你：</div>
+                <div class="clar">
+                  <div class="cq">
+                    <div class="t">1. 首批能交付多少台？</div>
+                    <div class="w">业务项目写“首批卖出 20 台”，但 DVT 还没完成，没写产能。</div>
+                    <div class="opts" data-q="1">
+                      <button class="btn sm" aria-pressed="true">20 台，12 月底前</button>
+                      <button class="btn sm" aria-pressed="false">50 台</button>
+                      <button class="btn sm" aria-pressed="false">还不确定</button>
+                    </div>
+                  </div>
+                  <div class="cq">
+                    <div class="t">2. 近视镜片怎么处理？</div>
+                    <div class="w">18 人里 7 人问到近视；这会决定价格里含不含镜片。</div>
+                    <div class="opts" data-q="2">
+                      <button class="btn sm" aria-pressed="false">含 600 度以内镜片</button>
+                      <button class="btn sm" aria-pressed="true">磁吸镜片另配，用户自付</button>
+                      <button class="btn sm" aria-pressed="false">暂不支持近视</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="th-acts"><button class="btn think" data-go="decide">回答并继续</button><span class="r">也可以在 Owner 主对话里补充</span></div>
+              </div>
+
+              <!-- decide -->
+              <div class="th-body st-decide grid-ok">
+                <div class="th-q">首批 AR 眼镜一代先卖给谁，怎么定价？<small>Owner 11-22 10:06 给出 · 依据 6 项，其中 2 项是估算、1 项未核实</small></div>
+
+                <div class="rec" data-rec>
+                  <div class="lbl">OWNER 建议 · 待你决定</div>
+                  <div class="txt" data-rec-text>首批 20 台主攻个人近视通勤用户，早鸟价 ¥1,299（磁吸镜片另配）；团队采购同价开票；渠道代理暂缓到小批量之后。</div>
+                  <div class="why">已成交 3 单都来自个人、都按 ¥1,299 付款；感兴趣的 18 人里 11 人是个人。按目前估算每台约剩 ¥530，但 BOM 还差 1 家报价。</div>
+                  <textarea data-edit hidden aria-label="修改建议">首批 20 台主攻个人近视通勤用户，早鸟价 ¥1,299（磁吸镜片另配）；团队采购同价开票；渠道代理暂缓到小批量之后。</textarea>
+                </div>
+
+                <table class="opt-table" aria-label="可选方案">
+                  <thead><tr><th>卖给谁</th><th>价格</th><th>好处</th><th>代价</th></tr></thead>
+                  <tbody>
+                    <tr class="pick">
+                      <td><span class="who">A 个人近视通勤用户</span><br /><span class="tag t-info">建议主攻</span></td>
+                      <td class="num">早鸟 ¥1,299<br /><span style="color:var(--faint)">第 21 台起 ¥1,599</span></td>
+                      <td>已有 3 单验证；知乎内容带来 9 人；售后简单</td>
+                      <td>单价低，靠内容持续带人</td>
+                    </tr>
+                    <tr>
+                      <td><span class="who">B 小团队采购</span><br /><span class="tag t-plain">可以同时接</span></td>
+                      <td class="num">¥1,299 + 开票</td>
+                      <td>一次 2–5 台；李女士已在问</td>
+                      <td>要开票、可能要对公账期</td>
+                    </tr>
+                    <tr>
+                      <td><span class="who">C 渠道代理</span><br /><span class="tag t-plain">建议暂缓</span></td>
+                      <td class="num">需让出 30%+</td>
+                      <td>铺得快；陈工想做华东</td>
+                      <td>20 台不够分；早鸟价下没有利润空间</td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <details>
+                  <summary style="cursor:pointer;font-size:12.5px;color:var(--accent)">依据、成本估算和会改变建议的情况</summary>
+                  <div class="two" style="margin-top:10px">
+                    <div class="panel">
+                      <h3>依据 <span class="tag t-plain">6 项</span></h3>
+                      <div class="ev"><span class="tag t-ok">账目</span><span>11 月已确认 3 单，每单 ¥1,299，均为个人转账</span><span class="s"><a href="#">公司账目 · 11 月收入明细</a></span></div>
+                      <div class="ev"><span class="tag t-sell">客户</span><span>18 位感兴趣的人：个人 11、团队 4、合作 3；7 人问近视</span><span class="s"><a href="#">跟进感兴趣的客户 · 全部 18 人</a></span></div>
+                      <div class="ev"><span class="tag t-sell">推广</span><span>知乎《设计手记》带来 9 人，推广支出 ¥300</span><span class="s"><a href="#">推广产品 · 平台读回</a></span></div>
+                      <div class="ev"><span class="tag t-info">Owner</span><span>BOM 估算 ¥612/台（3 家连接器报价只拿到 2 家）</span><span class="s"><a href="#">OW-025 · BOM 成本调研 · 第 2 轮</a></span></div>
+                      <div class="ev"><span class="tag t-guess">估算</span><span>组装包装 ¥90/台、售后预留 5%，是 Owner 的假设</span><span class="s">没有你的资料支持；改动它会改变利润</span></div>
+                      <div class="ev"><span class="tag t-guess">未核实</span><span>同类 AR 眼镜公开售价</span><span class="s">没找到可引用的出处，不参与本次建议</span></div>
+                    </div>
+                    <div class="panel" style="display:grid;gap:10px;align-content:start">
+                      <div>
+                        <h3>每台大约剩多少（¥1,299 时）</h3>
+                        <div class="cost">
+                          <div class="l"><span>BOM</span><span class="tag t-guess">2/3 报价</span><span class="v">¥612</span></div>
+                          <div class="l"><span>组装包装</span><span class="tag t-guess">估算</span><span class="v">¥90</span></div>
+                          <div class="l"><span>售后预留 5%</span><span class="tag t-guess">估算</span><span class="v">¥65</span></div>
+                          <div class="l sum"><span>剩余</span><span class="v">约 ¥532（41%）</span></div>
+                        </div>
+                      </div>
+                      <div>
+                        <h3>出现这些情况，建议要重想</h3>
+                        <ul class="chg">
+                          <li>BOM 最终报价超过 ¥800/台</li>
+                          <li>前 20 台里团队采购超过一半</li>
+                          <li>售后退换超过 3 台</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="th-acts">
+                  <button class="btn think" data-go="done"><svg class="i"><use href="#check"/></svg><span data-adopt-label>采纳并记为决策</span></button>
+                  <button class="btn think-o" data-edit-btn>改一下再采纳</button>
+                  <button class="btn" data-go="later">先不决定</button>
+                  <span class="r">在 Owner 里继续讨论 ›</span>
+                </div>
+                <div class="bound"><svg class="i" style="width:13px;height:13px;margin-top:2px"><use href="#shield"/></svg>采纳只记录决定，不会自动改产品页价格、给客户发消息或调整账目；这些从各自的入口去做。</div>
+              </div>
+
+              <!-- done -->
+              <div class="th-body st-done grid-ok decided">
+                <div class="th-q">首批 AR 眼镜一代先卖给谁，怎么定价？</div>
+                <div class="rec">
+                  <div class="lbl">你的决定 · 11-22 10:14</div>
+                  <div class="txt" data-done-text>首批 20 台主攻个人近视通勤用户，早鸟价 ¥1,299（磁吸镜片另配）；团队采购同价开票；渠道代理暂缓到小批量之后。</div>
+                </div>
+                <div class="meta">
+                  <span class="tag t-plain">来源 6 项</span>
+                  <span>适用：AR 眼镜一代 · 上市销售</span>
+                  <span>重想条件：BOM 最终报价出来后</span>
+                </div>
+                <div style="font-size:12.5px;color:var(--muted)">接下来可以做（都需要你从对应入口确认）：</div>
+                <div class="th-acts">
+                  <button class="btn sm">更新产品页价格 → 推广产品</button>
+                  <button class="btn sm">回复王先生报价 → 跟进客户</button>
+                  <button class="btn sm">回复陈工：暂不做代理</button>
+                </div>
+              </div>
+
+              <!-- later -->
+              <div class="th-body st-later">
+                <div class="th-q" style="font-size:14px">首批 AR 眼镜一代先卖给谁，怎么定价？</div>
+                <div style="color:var(--muted);font-size:12.5px;margin-top:6px">建议和依据保留在 OW-026，没有记为决定。<button class="btn ghost sm" data-go="decide">重新查看</button></div>
+              </div>
+            </section>
+
+            <!-- ================= Today ================= -->
+            <section class="card" aria-labelledby="h-today">
+              <span class="note">聚合视图 · 处理回到原功能</span>
+              <header><h2 id="h-today">今天要做 <span class="n" data-todo-count>5</span></h2><div class="right"><span style="font-size:12px;color:var(--faint)">按等待时间排序</span></div></header>
+              <div class="row todo st-decide">
+                <span class="bar b-info"></span>
+                <div>
+                  <div class="title">Owner 想好了：首批卖给谁、怎么定价</div>
+                  <div class="why">建议主攻个人近视通勤用户、早鸟 ¥1,299；2 项是估算，等你决定。</div>
+                  <div class="meta"><span class="tag t-info">经营决策</span><span>OW-026</span></div>
+                </div>
+                <a class="btn" href="#think">看决策卡</a>
+              </div>
+              <div class="row todo st-clarify">
+                <span class="bar b-info"></span>
+                <div>
+                  <div class="title">Owner 问你 2 个问题：首批产能、近视镜片</div>
+                  <div class="why">回答后给出“首批卖给谁、怎么定价”的建议。</div>
+                  <div class="meta"><span class="tag t-info">经营决策</span><span>OW-026</span></div>
+                </div>
+                <a class="btn" href="#think">去回答</a>
+              </div>
+              <div class="row todo">
+                <span class="bar b-sell"></span>
+                <div>
+                  <div class="title">回复王先生：近视 600 度能不能用、多少钱</div>
+                  <div class="why">知乎《设计手记》评论区，已等 6 小时。回复草稿已按产品事实表写好，价格由你定。</div>
+                  <div class="meta"><span class="tag t-sell">跟进客户</span><span>想买 · AR 眼镜一代</span></div>
+                </div>
+                <button class="btn sell">看回复草稿</button>
+              </div>
+              <div class="row todo">
+                <span class="bar b-sell"></span>
+                <div>
+                  <div class="title">赵先生申请退订金 ¥1,299</div>
+                  <div class="why">已付订金，不想等到 12 月。退款要你在支付宝操作；Studio 只起草回复并记下这笔待核对。</div>
+                  <div class="meta"><span class="tag t-sell">售后服务</span><span>已成交 · 微信</span></div>
+                </div>
+                <button class="btn">打开售后记录</button>
+              </div>
+              <div class="row todo">
+                <span class="bar b-warn"></span>
+                <div>
+                  <div class="title">核对 12 条账目</div>
+                  <div class="why">其中 1 笔 ¥1,299.00 转入疑似孙先生的订金；核对前不计入本月收入。</div>
+                  <div class="meta"><span class="tag t-warn">公司账目</span><span>招商银行、支付宝 11-15 至 11-21</span></div>
+                </div>
+                <button class="btn">去核对</button>
+              </div>
+              <div class="row todo">
+                <span class="bar b-danger"></span>
+                <div>
+                  <div class="title">知乎账号登录失效，DVT 进展文章停在“提交前核验”</div>
+                  <div class="why">正文与 3 张图已填好，草稿已保存；在原账号页面重新扫码后从原步骤继续。</div>
+                  <div class="meta"><span class="tag t-danger">推广产品</span><span>知乎 @星河科技</span></div>
+                </div>
+                <button class="btn">打开发布事务</button>
+              </div>
+            </section>
+
+            <!-- ================= Progress ================= -->
+            <section class="card" aria-labelledby="h-prog">
+              <span class="note">公司领域：业务项目与关联 · 进行中只引用 Owner/发布事务</span>
+              <header><h2 id="h-prog">项目进度 <span class="n">3</span></h2><div class="right"><button class="btn"><svg class="i"><use href="#plus"/></svg>创建业务项目</button></div></header>
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">AR 眼镜一代 · 研发</button>
+                  <span class="tag t-plain"><svg class="i" style="width:12px;height:12px;margin-right:3px"><use href="#cube"/></svg>关联工程：眼镜研发</span>
+                  <span class="money">本月已确认支出 ¥1,520.40</span>
+                </div>
+                <div class="goal">做出可以小批量生产的 DVT 样机</div>
+                <div class="steps">
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>原型</span><span class="arrow">›</span>
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>EVT 样机</span><span class="arrow">›</span>
+                  <span class="st now">DVT 样机</span><span class="arrow">›</span>
+                  <span class="st">小批量</span>
+                </div>
+                <div class="now-line"><span class="tag t-info">Owner 执行中</span>OW-025 BOM 成本调研 · 第 2 轮补查 <button class="btn ghost sm">打开工程</button></div>
+              </div>
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">AR 眼镜一代 · 上市销售</button>
+                  <span class="money">本月收入 ¥3,897.00 · 推广支出 ¥300.00</span>
+                </div>
+                <div class="goal">直接销售，首批卖出 20 台 <span class="st-done tag t-ok" style="margin-left:4px">已按 11-22 决定：个人近视通勤用户 · ¥1,299</span></div>
+                <div class="steps">
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>产品页</span><span class="arrow">›</span>
+                  <span class="st now">首批成交 3/20</span><span class="arrow">›</span>
+                  <span class="st">发货</span><span class="arrow">›</span>
+                  <span class="st">售后</span>
+                </div>
+                <div class="now-line"><span class="tag t-plain">等待外部</span>B 站《佩戴一周》平台审核中 · 只读检查，不自动重发</div>
+              </div>
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">官网改版</button>
+                  <span class="money">未关联账目归属</span>
+                </div>
+                <div class="goal" style="color:var(--warn)">目标和交付物待补，暂不显示进度</div>
+                <div class="steps"><button class="btn ghost sm">补目标</button></div>
+              </div>
+            </section>
+          </div>
+
+          <div class="col">
+            <!-- ================= Sales ================= -->
+            <section class="card sell-card" aria-labelledby="h-sell">
+              <span class="note">复用：文章发布、网页事务、账号库 · 新增：客户与售后记录</span>
+              <header><h2 id="h-sell">推广与销售</h2><div class="right"><span style="font-size:12px;color:var(--sell)">直接销售</span></div></header>
+              <div class="entries" role="group" aria-label="三个入口">
+                <button class="entry"><span class="k"><svg class="i"><use href="#mega"/></svg>推广产品</span><span class="c">3 篇在推 · 1 篇卡住</span><span class="go">进入 ›</span></button>
+                <button class="entry"><span class="k"><svg class="i"><use href="#users"/></svg>跟进客户</span><span class="c">3 人等回复 · 共 18 人</span><span class="go">进入 ›</span></button>
+                <button class="entry"><span class="k"><svg class="i"><use href="#wrench"/></svg>售后服务</span><span class="c">2 件待处理</span><span class="go">进入 ›</span></button>
+              </div>
+              <div class="funnel" aria-label="本月推广与成交">
+                <div class="fs"><div class="l">看到内容</div><div class="v">12,480</div><div class="s">平台读回 · 3 篇</div></div>
+                <div class="fs"><div class="l">感兴趣</div><div class="v">18</div><div class="s">评论、私信</div></div>
+                <div class="fs win"><div class="l">已成交</div><div class="v">3</div><div class="s">收入已确认</div></div>
+                <div class="fs"><div class="l">已发货</div><div class="v">0/3</div><div class="s">DVT 后发货</div></div>
+              </div>
+
+              <div class="sec-h"><svg class="i" style="width:13px;height:13px"><use href="#users"/></svg>跟进感兴趣的客户 <span class="n">3 等回复</span><span class="right"><button class="btn ghost sm">全部 18 人</button></span></div>
+              <div class="lead">
+                <div>
+                  <div class="who">王先生 <span class="tag t-sell">想买</span><span class="src">知乎评论</span></div>
+                  <div class="q">“近视 600 度能用吗？大概多少钱？” <span class="wait">· 等 6 小时</span></div>
+                </div>
+                <button class="btn sm">看回复草稿</button>
+              </div>
+              <div class="lead">
+                <div>
+                  <div class="who">李女士 <span class="tag t-sell">想买 2 台</span><span class="src">小红书私信</span></div>
+                  <div class="q">“团队用，能开发票吗？” <span class="wait">· 等 1 天</span></div>
+                </div>
+                <button class="btn sm">起草报价</button>
+              </div>
+              <div class="lead">
+                <div>
+                  <div class="who">陈工 <span class="tag t-plain">想做代理</span><span class="src">B 站评论</span></div>
+                  <div class="q">想做华东渠道代理 <span class="wait">· 等 2 天</span></div>
+                </div>
+                <button class="btn sm">查看</button>
+              </div>
+
+              <div class="sec-h"><svg class="i" style="width:13px;height:13px"><use href="#wrench"/></svg>售后服务 <span class="n">2 待处理</span><span class="right"><button class="btn ghost sm">全部</button></span></div>
+              <div class="lead">
+                <div>
+                  <div class="who">赵先生 <span class="tag t-warn">申请退订金</span><span class="src">微信 · 已付 ¥1,299</span></div>
+                  <div class="q">不想等到 12 月 <span class="wait">· 等 1 天</span></div>
+                </div>
+                <button class="btn sm">起草回复</button>
+              </div>
+              <div class="lead">
+                <div>
+                  <div class="who">张同学 <span class="tag t-plain">问发货时间</span><span class="src">微信 · 已付 ¥1,299</span></div>
+                  <div class="q">你答应 11 月底前给准确日期</div>
+                </div>
+                <button class="btn sm">打开对话记录</button>
+              </div>
+
+              <div class="sec-h"><svg class="i" style="width:13px;height:13px"><use href="#mega"/></svg>推广产品 <span class="n">最近 3 篇</span><span class="right"><button class="btn sell sm">推广产品</button></span></div>
+              <div class="promo"><span class="tag t-ok">已公开 · 已核验</span><span class="t">知乎《AR 眼镜一代设计手记》</span><span class="r">带来 9 人</span></div>
+              <div class="promo"><span class="tag t-plain">审核中</span><span class="t">B 站《佩戴一周》</span><span class="r">11-21 提交</span></div>
+              <div class="promo" style="padding-bottom:10px"><span class="tag t-danger">卡住</span><span class="t">知乎《DVT 进展》登录失效</span><span class="r">见今天要做</span></div>
+              <div class="foot">只显示平台读回的数字；读不到写“未获取”。价格、发货时间、退款只起草，由你发送或操作。</div>
+            </section>
+
+            <!-- ================= Money ================= -->
+            <section class="card" aria-labelledby="h-money">
+              <span class="note">来源：公司账目 · 汇总只计已确认</span>
+              <header><h2 id="h-money">11 月收支</h2><div class="right"><button class="btn">打开账目</button></div></header>
+              <div class="metrics">
+                <div class="metric"><div class="label">已确认收入</div><div class="value">¥3,897.00</div><div class="hint">3 台一代</div></div>
+                <div class="metric"><div class="label">已确认支出</div><div class="value">¥1,820.40</div><div class="hint">研发 + 推广</div></div>
+                <div class="metric"><div class="label">净流入</div><div class="value">¥2,076.60</div><div class="hint">不等于利润</div></div>
+              </div>
+              <div class="lines">
+                <div class="line"><span>AR 眼镜一代 · 研发</span><span class="v">−¥1,520.40</span></div>
+                <div class="line"><span>AR 眼镜一代 · 上市销售</span><span class="v">+¥3,897.00 / −¥300.00</span></div>
+                <div class="line"><span class="tag t-plain">资料可能未齐</span><span style="color:var(--muted)">招商银行至 11-20，支付宝至 11-21；微信未导入</span></div>
+              </div>
+              <div class="sub-h">待核对 12 条 · 不计入上方汇总<span class="right"><button class="btn ghost sm">全部核对</button></span></div>
+              <div class="pend">
+                <div>
+                  <div class="top"><span class="amt in">+¥1,299.00</span><span>招商银行 转入 · 孙先生</span><span class="d">11-20</span></div>
+                  <div class="ai">建议：销售收入 · 上市销售 · 关联孙先生的对话</div>
+                </div>
+                <div class="acts"><button class="btn sm">确认</button><button class="btn sm">改</button></div>
+              </div>
+              <div class="pend">
+                <div>
+                  <div class="top"><span class="amt">−¥268.00</span><span>支付宝 · FPC 打样</span><span class="d">11-19</span></div>
+                  <div class="ai">建议：研发打样 · AR 眼镜一代 · 研发 · 有凭证</div>
+                </div>
+                <div class="acts"><button class="btn sm">确认</button><button class="btn sm">改</button></div>
+              </div>
+              <div class="foot">AI 建议不入账；你点“确认”后才进入汇总。剩余待核对在账目页处理。</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="agent" aria-label="Agent">
+      <div class="top"><button class="btn primary">新建对话</button><span style="color:var(--muted)">会话列表</span></div>
+      <div class="msgs">
+        <div class="ctx">本次上下文：<b>星河科技 · 项目首页</b><br />快速提问在这里；需要读资料、反复核对的经营问题，用“帮我想清楚”交给 Owner，结果回到首页决策卡。</div>
+        <div class="sugg">
+          <button class="th" data-open-think>帮我想清楚：要不要接渠道代理？</button>
+          <button>帮我回复王先生（只用产品事实表里的数字）</button>
+          <button>这个月推广花了多少，带来几单？</button>
+          <button>给赵先生起草退订金回复</button>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="ph">继续提问，或用 @ 引用资源…</div>
+        <div class="bar"><span>本机 Codex ⌄</span><span>权限：自动 ⌄</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span>进行中的工作 2</span><span class="hide-narrow">本地 · 星河科技</span><span class="hide-narrow">朗读</span>
+    <span class="right"><span>效果稿 · 数据为示意</span><span>CCLink Studio v0.2.14</span></span>
+  </footer>
+</div>
+
+<!-- ================= Dialog ================= -->
+<div class="scrim" data-scrim>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-h">
+    <header><h2 id="dlg-h"><svg class="i"><use href="#bulb"/></svg>帮我想清楚一个问题</h2><button class="x" data-close aria-label="关闭">×</button></header>
+    <div class="db">
+      <label class="f">你想决定什么
+        <textarea data-q>首批 AR 眼镜一代先卖给谁，怎么定价？</textarea>
+      </label>
+      <div class="chips">
+        <button class="chip" data-fill>要不要接渠道代理？</button>
+        <button class="chip" data-fill>这个月推广钱该花在哪？</button>
+        <button class="chip" data-fill>赵先生的退订金要不要收手续费？</button>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Owner 可以读（只读）</div>
+        <div class="reads">
+          <label><input type="checkbox" checked />公司账目 · 11 月已确认汇总<small>不读待核对流水的原件</small></label>
+          <label><input type="checkbox" checked />推广与销售 · 感兴趣的客户、成交和售后<small>只读记录，不发消息</small></label>
+          <label><input type="checkbox" checked />业务项目 · AR 眼镜一代（研发、上市销售）</label>
+          <label><input type="checkbox" checked />Owner 事务 OW-025 · BOM 成本调研</label>
+          <label><input type="checkbox" />网上公开资料<small>引用必须带出处；找不到出处标“未核实”，不参与建议</small></label>
+        </div>
+      </div>
+      <div class="bound"><svg class="i" style="width:13px;height:13px;margin-top:2px"><use href="#shield"/></svg>Owner 只给建议，不改价格、不发消息、不动账目。结果放在首页“经营决策”，由你决定。</div>
+    </div>
+    <footer><span style="font-size:12px;color:var(--faint)">新建事务 OW-026</span><div class="r"><button class="btn" data-close>取消</button><button class="btn think" data-go="clarify">交给 Owner 想</button></div></footer>
+  </div>
+</div>
+
+<div class="review" role="toolbar" aria-label="评审控制">
+  <span class="lab">决策卡</span>
+  <button data-state="ask">① 提问前</button>
+  <button data-state="dialog">② 交办</button>
+  <button data-state="clarify">③ Owner 追问</button>
+  <button data-state="decide">④ 等你决定</button>
+  <button data-state="done">⑤ 已采纳</button>
+  <span class="sep"></span>
+  <button data-notes aria-pressed="false">数据来源标注</button>
+  <button data-theme-btn="light" aria-pressed="false">浅色</button>
+  <button data-theme-btn="dark" aria-pressed="false">深色</button>
+</div>
+
+<script>
+(function () {
+  var body = document.body, root = document.documentElement;
+  function press(sel, on) { document.querySelectorAll(sel).forEach(function (b) { b.setAttribute('aria-pressed', String(on(b))); }); }
+  var editArea = document.querySelector('[data-edit]');
+  var recText = document.querySelector('[data-rec-text]');
+  var doneText = document.querySelector('[data-done-text]');
+  var adoptLabel = document.querySelector('[data-adopt-label]');
+
+  function counts() {
+    var n = 0;
+    document.querySelectorAll('.row.todo').forEach(function (r) { if (getComputedStyle(r).display !== 'none') n++; });
+    document.querySelectorAll('[data-todo-count]').forEach(function (e) { e.textContent = n; });
+    var s = body.dataset.think;
+    var side = document.querySelector('[data-side-think]');
+    side.textContent = s === 'decide' ? '1 等你决定' : s === 'clarify' ? '1 等你回答' : '';
+    var badge = document.querySelector('[data-owner-badge]');
+    var wait = (s === 'decide' || s === 'clarify') ? 2 : 1;
+    badge.textContent = wait + ' 等你';
+  }
+  function openDlg() { body.classList.add('dlg'); setTimeout(function () { document.querySelector('[data-q]').focus(); }, 0); press('[data-state]', function (x) { return x.dataset.state === 'dialog'; }); }
+  function closeDlg() { body.classList.remove('dlg'); press('[data-state]', function (x) { return x.dataset.state === body.dataset.think; }); }
+  function setThink(s) {
+    if (s === 'dialog') { setThink('ask'); openDlg(); return; }
+    body.classList.remove('dlg');
+    body.dataset.think = s;
+    if (s !== 'decide') { editArea.hidden = true; recText.hidden = false; adoptLabel.textContent = '采纳并记为决策'; }
+    press('[data-state]', function (x) { return x.dataset.state === s; });
+    counts();
+  }
+
+  document.querySelectorAll('[data-open-think]').forEach(function (b) {
+    b.addEventListener('click', function (e) { e.preventDefault(); if (b.classList.contains('chip') && b.closest('.th-ask')) document.querySelector('[data-q]').value = b.textContent; openDlg(); });
+    b.addEventListener('keydown', function (e) { if (e.key === 'Enter') openDlg(); });
+  });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', closeDlg); });
+  document.querySelector('[data-scrim]').addEventListener('click', function (e) { if (e.target === e.currentTarget) closeDlg(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && body.classList.contains('dlg')) closeDlg(); });
+  document.querySelectorAll('[data-fill]').forEach(function (b) { b.addEventListener('click', function () { document.querySelector('[data-q]').value = b.textContent; }); });
+  document.querySelectorAll('[data-go]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.go === 'done' && !editArea.hidden) doneText.textContent = editArea.value.trim() || recText.textContent;
+      else if (b.dataset.go === 'done') doneText.textContent = recText.textContent;
+      setThink(b.dataset.go);
+    });
+  });
+  document.querySelector('[data-edit-btn]').addEventListener('click', function () {
+    editArea.hidden = false; recText.hidden = true; editArea.focus();
+    adoptLabel.textContent = '按修改后采纳';
+  });
+  document.querySelectorAll('.opts').forEach(function (g) {
+    g.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { g.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); });
+    });
+  });
+  document.querySelectorAll('[data-state]').forEach(function (b) { b.addEventListener('click', function () { setThink(b.dataset.state); }); });
+
+  var notes = document.querySelector('[data-notes]');
+  notes.addEventListener('click', function () { var on = body.classList.toggle('notes'); notes.setAttribute('aria-pressed', String(on)); });
+  function setTheme(t) {
+    root.setAttribute('data-theme', t);
+    press('[data-theme-btn]', function (x) { return x.dataset.themeBtn === t; });
+    try { localStorage.setItem('company-decision-theme', t); } catch (e) {}
+  }
+  document.querySelectorAll('[data-theme-btn]').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); }); });
+  var saved = null;
+  try { saved = localStorage.getItem('company-decision-theme'); } catch (e) {}
+  var params = new URLSearchParams(location.search);
+  setTheme(params.get('theme') || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  setThink(params.get('think') || 'decide');
+  if (params.get('notes') === '1') notes.click();
+  if (params.get('clean') === '1') body.classList.add('clean');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>公司首页销售版</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --info: #5b4bc4; --info-soft: #ece9fb;
+  --note: #7a4dd8; --note-soft: #f1ebfd; --page: #f4f4f4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+    --note: #c3a6ff; --note-soft: #31284a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+  --note: #c3a6ff; --note-soft: #31284a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+[hidden] { display: none !important; }
+
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; min-height: 600px; }
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.strip .proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.strip .proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.strip .spacer { flex: 1; }
+
+.body { display: grid; grid-template-columns: 200px minmax(0, 1fr) 44px; min-height: 0; }
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; white-space: nowrap; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .item .count { margin-left: auto; font-size: 11px; color: var(--faint); }
+.side .item .count.hot { color: var(--warn); }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+.side hr { border: 0; border-top: 1px solid var(--border); margin: 10px 4px; }
+.rail { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 10px; color: var(--muted); }
+.rail button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; }
+.rail .lbl { writing-mode: vertical-rl; font-size: 11px; color: var(--faint); letter-spacing: 2px; }
+
+.center { display: grid; grid-template-rows: 34px 1fr; min-width: 0; min-height: 0; }
+.tabs { display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 12px 0 14px; border: 0; border-right: 1px solid var(--border); background: none; color: var(--muted); white-space: nowrap; }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.tab .x { margin-left: 4px; color: var(--faint); font-size: 14px; line-height: 1; }
+.view { min-height: 0; overflow: auto; }
+.page { padding: 16px 24px 40px; }
+
+.head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.head h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.head .type { font-size: 12px; color: var(--muted); padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; margin-left: 8px; vertical-align: 3px; font-weight: 400; }
+.head .sub { color: var(--muted); margin-top: 2px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: none; border-color: transparent; color: var(--accent); padding: 0 4px; }
+.month { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; position: relative; }
+.card > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.card > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.card > header .n { color: var(--faint); font-size: 12px; }
+.card > header .right { margin-left: auto; display: flex; gap: 6px; }
+.card .foot { padding: 8px 14px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--border); }
+.full { grid-column: 1 / -1; }
+
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-danger { background: var(--danger-soft); color: var(--danger); }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-info { background: var(--info-soft); color: var(--info); }
+.t-acc { background: var(--accent-soft); color: var(--accent); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+
+/* To-dos */
+.todo { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+.todo:last-child { border-bottom: 0; }
+.todo .dot { width: 8px; height: 8px; border-radius: 50%; justify-self: center; }
+.todo .t { font-weight: 600; overflow-wrap: anywhere; }
+.todo .m { font-size: 12px; color: var(--faint); margin-top: 1px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.todo .go { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.todo .dest { font-size: 11px; color: var(--faint); white-space: nowrap; }
+.todo.done .t { text-decoration: line-through; color: var(--faint); font-weight: 400; }
+.todo input { margin: 0; accent-color: var(--accent); justify-self: center; }
+
+/* Money */
+.sales { display: flex; gap: 6px 14px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: baseline; font-size: 12.5px; color: var(--muted); }
+.sales b { font-size: 16px; color: var(--text); font-variant-numeric: tabular-nums; }
+.sales .src { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metric { padding: 11px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.metric:last-child { border-right: 0; }
+.metric .label { font-size: 12px; color: var(--muted); }
+.metric .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.split { padding: 10px 14px; border-top: 1px solid var(--border); display: grid; gap: 6px; }
+.split h3 { margin: 0; font-size: 12px; font-weight: 500; color: var(--faint); }
+.sr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 120px) 92px; gap: 8px; align-items: center; font-size: 12.5px; }
+.sr span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.sr .bar i { display: block; height: 100%; background: var(--accent); }
+.sr b { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; }
+.pending { padding: 9px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+
+/* Projects */
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-weight: 500; font-size: 12px; color: var(--faint); }
+tr:last-child td { border-bottom: 0; }
+td .name { font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; }
+td .goal { color: var(--muted); font-size: 12px; margin-top: 1px; }
+td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ms { display: flex; gap: 3px; margin-bottom: 4px; flex-wrap: wrap; }
+.ms i { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: 3px; line-height: 18px; background: var(--surface-2); color: var(--faint); white-space: nowrap; }
+.ms i.ok { background: var(--ok-soft); color: var(--ok); }
+.ms i.now { background: var(--accent-soft); color: var(--accent); }
+.ms i.warn { background: var(--warn-soft); color: var(--warn); }
+.next { font-size: 12px; color: var(--muted); }
+
+/* Ledger review */
+.lr { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); align-items: start; }
+.lr .d { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; padding-top: 1px; }
+.lr .who { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.lr .who b { font-weight: 600; }
+.lr .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
+.lr .amt.in { color: var(--ok); }
+.lr .sug { font-size: 12px; color: var(--muted); margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lr .acts { display: flex; gap: 5px; }
+.lr.ok { opacity: .55; }
+
+/* Promote & customers block */
+.pc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pc > div { padding: 12px 14px; border-right: 1px solid var(--border); min-width: 0; display: grid; gap: 4px; align-content: start; }
+.pc > div:last-child { border-right: 0; }
+.pc .h { font-weight: 600; display: flex; align-items: center; gap: 7px; }
+.pc .k { font-size: 12px; color: var(--muted); }
+.pc .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pc .v small { font-size: 12px; font-weight: 400; color: var(--faint); }
+.pc .btn { justify-self: start; margin-top: 4px; }
+.accts { display: flex; gap: 8px 14px; padding: 9px 14px; border-top: 1px solid var(--border); align-items: center; flex-wrap: wrap; font-size: 12.5px; }
+.accts .lab { color: var(--faint); font-size: 12px; }
+.acc { display: inline-flex; align-items: center; gap: 6px; }
+.st { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.st.authenticated { background: var(--ok); } .st.not-authenticated { background: var(--danger); } .st.session-data { background: var(--warn); }
+
+/* Destination pages */
+.cols { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 14px; align-items: start; }
+.src { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.src:last-child { border-bottom: 0; }
+.src.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.src .title { font-weight: 600; }
+.src .from { font-size: 12px; color: var(--faint); margin-top: 3px; display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.src .angle { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+.src .acts { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
+.draft-title { padding: 12px 14px 0; font-weight: 600; font-size: 14px; }
+.draft-meta { padding: 3px 14px 0; font-size: 12px; color: var(--faint); }
+.preview { margin: 10px 14px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.preview mark { background: var(--warn-soft); color: var(--warn); padding: 0 2px; border-radius: 2px; }
+.blk { padding: 10px 14px 0; }
+.blk h3 { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--faint); }
+.check { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; font-size: 12.5px; }
+.check .mk { width: 16px; flex: none; text-align: center; font-weight: 700; }
+.check.ok .mk { color: var(--ok); } .check.bad .mk { color: var(--warn); }
+.check .fix { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.acctc { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; font-size: 12.5px; }
+.acctc input { margin: 0; accent-color: var(--accent); }
+.acctc .s { margin-left: auto; font-size: 11.5px; color: var(--faint); text-align: right; }
+.acctc .s.warn { color: var(--warn); }
+.approve { display: flex; gap: 8px; padding: 12px 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.approve .hint { font-size: 12px; color: var(--faint); }
+.pub { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.pub:last-child { border-bottom: 0; }
+.pub .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pub .top b { font-weight: 600; }
+.pub .sub { color: var(--muted); margin-top: 2px; }
+.subhead { padding: 8px 14px; font-size: 12px; color: var(--faint); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+
+.chips { display: flex; gap: 5px; padding: 9px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.chips button { height: 24px; padding: 0 9px; border: 1px solid var(--border); border-radius: 12px; background: none; font-size: 12px; color: var(--muted); }
+.chips button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.person { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.person .who { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.person .who b { font-weight: 600; }
+.person .who .wait { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+.person .who .wait.long { color: var(--warn); }
+.person .ctx { font-size: 12px; color: var(--faint); margin-top: 2px; }
+.person .said { margin-top: 6px; padding-left: 9px; border-left: 2px solid var(--border); }
+.person .reply { margin-top: 7px; padding: 8px 10px; border-radius: 6px; background: var(--surface-2); font-size: 12.5px; color: var(--muted); }
+.person .reply b { color: var(--text); font-weight: 500; }
+.person .acts { display: flex; gap: 6px; margin-top: 7px; align-items: center; flex-wrap: wrap; }
+.person .acts .n2 { font-size: 11.5px; color: var(--faint); }
+.sent { font-size: 12px; color: var(--ok); }
+.cust-side .row { display: flex; gap: 8px; padding: 6px 14px; font-size: 12.5px; align-items: center; }
+.cust-side .row .c { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* Browser view (existing account environment) */
+.bview { display: grid; grid-template-rows: auto auto 1fr; height: 100%; }
+.btool { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.btool .nav { display: flex; gap: 2px; color: var(--muted); }
+.btool .nav span { width: 26px; height: 26px; display: grid; place-items: center; }
+.addr { flex: 1; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); color: var(--muted); overflow: hidden; white-space: nowrap; }
+.env { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--accent); border-radius: 13px; color: var(--accent); background: var(--accent-soft); white-space: nowrap; font-size: 12px; }
+.handoff { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: var(--warn-soft); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.handoff .tag { background: var(--surface); }
+.handoff .grow { flex: 1; min-width: 220px; }
+.webpage { background: var(--page); color: #333; display: grid; place-items: center; padding: 24px; }
+.login { width: min(380px, 100%); background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 26px; text-align: center; }
+.login h3 { margin: 0 0 4px; font-size: 17px; color: #222; }
+.login p { margin: 0; color: #888; font-size: 12.5px; }
+.login .kv { text-align: left; margin: 16px 0; font-size: 13px; color: #444; display: grid; gap: 6px; }
+.login .fakebtn { display: inline-block; margin-top: 6px; padding: 7px 16px; border-radius: 6px; background: #e8e8e8; color: #666; font-size: 13px; }
+.qr { width: 150px; height: 150px; margin: 16px auto; border-radius: 8px; background: repeating-linear-gradient(0deg, #222 0 6px, transparent 6px 12px), repeating-linear-gradient(90deg, #222 0 6px, transparent 6px 12px); opacity: .85; position: relative; }
+.qr::after { content: "示意"; position: absolute; inset: 56px 46px; background: #fff; color: #888; border-radius: 6px; display: grid; place-items: center; font-size: 12px; }
+
+/* Settings view (existing 网站与账号) */
+.sview { display: grid; grid-template-columns: 200px minmax(0, 1fr); height: 100%; }
+.snav { border-right: 1px solid var(--border); padding: 10px 8px; background: var(--surface); overflow: auto; }
+.snav .g { font-size: 11px; color: var(--faint); margin: 10px 10px 4px; }
+.snav .it { display: block; width: 100%; text-align: left; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); }
+.snav .it.active { background: var(--accent-soft); color: var(--text); }
+.scontent { padding: 18px 24px; overflow: auto; max-width: 720px; }
+.scontent h2 { margin: 0 0 2px; font-size: 18px; }
+.loc { color: var(--faint); font-size: 12px; margin: 0 0 12px; }
+.wtool { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.wtool .sp { margin-left: auto; display: flex; gap: 6px; }
+.wrow { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; background: var(--surface); }
+.wrow .open { display: flex; gap: 10px; align-items: flex-start; flex: 1; min-width: 0; text-align: left; background: none; border: 0; padding: 0; }
+.wrow .main { display: grid; min-width: 0; }
+.wrow .main .title { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.wrow .main span { font-size: 12px; color: var(--muted); }
+.wgroups { margin-top: 14px; }
+.wgroups .ttl { font-size: 12px; color: var(--faint); margin-bottom: 6px; }
+.boundary { margin-top: 14px; font-size: 12px; color: var(--faint); border-top: 1px solid var(--border); padding-top: 10px; }
+
+.toast { position: fixed; left: 50%; bottom: 80px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: 12.5px; z-index: 20; box-shadow: 0 6px 24px rgba(0,0,0,.2); max-width: calc(100vw - 32px); }
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--statusbar); color: var(--on-accent); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.status .right { margin-left: auto; display: flex; gap: 16px; }
+
+.note { display: none; position: absolute; top: -9px; right: 10px; z-index: 2; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--note-soft); color: var(--note); border: 1px solid var(--note); white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+body.notes .note { display: inline-block; }
+body.notes .card { outline: 1px dashed var(--note); outline-offset: 3px; }
+.review { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+.review button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.review button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+.review .sep { width: 1px; background: var(--border); margin: 3px 2px; }
+body.clean .review { display: none; }
+.flash { outline: 2px solid var(--accent) !important; outline-offset: 3px; }
+
+@media (max-width: 1180px) { .grid, .cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { .body { grid-template-columns: minmax(0, 1fr); } .side, .rail { display: none; } .sview { grid-template-columns: minmax(0, 1fr); } .snav { display: none; } .pc { grid-template-columns: minmax(0, 1fr); } .pc > div { border-right: 0; border-bottom: 1px solid var(--border); } }
+@media (max-width: 760px) {
+  .strip .proj:not(.active):not(.keep) { display: none; }
+  .page { padding: 12px 16px 90px; }
+  .hide-narrow { display: none !important; }
+  .todo { grid-template-columns: 18px minmax(0, 1fr); } .todo .go { grid-column: 2; align-items: flex-start; flex-direction: row; gap: 8px; }
+  .metrics { grid-template-columns: minmax(0, 1fr); } .metric { border-right: 0; border-bottom: 1px solid var(--border); }
+  .lr { grid-template-columns: 40px minmax(0, 1fr); } .lr .acts { grid-column: 2; }
+  .status .right, .status .hide-narrow { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3.5h-3v3.5H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="yuan" viewBox="0 0 16 16"><path d="M4 2.5 8 8l4-5.5M8 8v5.5M5 9h6M5 11.5h6"/></symbol>
+  <symbol id="people" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.5-2.4 2.2-3.6 4.2-3.6s3.7 1.2 4.2 3.6M10.5 3.4a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.4 2 1.6 2.3 3.6"/></symbol>
+  <symbol id="mega" viewBox="0 0 16 16"><path d="M2.5 6.5v3h2l5 3v-9l-5 3zM11.5 6a2.5 2.5 0 0 1 0 4M4.5 9.5l1 3.5"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="chat" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol>
+  <symbol id="tool" viewBox="0 0 16 16"><path d="M10 2.5a3 3 0 0 0-2.8 4.1L2.5 11.3l2.2 2.2 4.7-4.7A3 3 0 0 0 13.5 6l-1.8 1.8-1.9-.5-.5-1.9z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="owner" viewBox="0 0 16 16"><path d="M8 1.8 14 8l-6 6.2L2 8z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></symbol>
+  <symbol id="cal" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
+  <symbol id="facts" viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></symbol>
+  <symbol id="globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.8 2 1.8 9.6 0 11.6M8 2.2c-1.8 2-1.8 9.6 0 11.6"/></symbol>
+  <symbol id="lock" viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7"/></symbol>
+  <symbol id="arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></symbol>
+  <symbol id="wrench" viewBox="0 0 16 16"><path d="M9.5 2.5a3 3 0 0 0-2.7 4.3l-4.3 4.3 2.4 2.4 4.3-4.3a3 3 0 0 0 4.3-2.7l-1.9 1.9-2-.5-.5-2z"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="strip" aria-label="项目栏">
+    <button class="proj" aria-label="收起侧栏"><svg class="i"><use href="#panel"/></svg></button>
+    <button class="proj"><svg class="i"><use href="#grid"/></svg>我的空间</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#grid"/></svg>眼镜研发</button>
+    <button class="proj active"><svg class="i"><use href="#grid"/></svg>星河科技</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#plus"/></svg>新建 / 打开</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#clock"/></svg>历史项目</button>
+    <span class="spacer"></span>
+    <button class="proj hide-narrow" data-open="settings"><svg class="i"><use href="#gear"/></svg>Studio 设置</button>
+    <button class="proj keep"><svg class="i"><use href="#owner"/></svg>Owner</button>
+  </nav>
+
+  <div class="body">
+    <aside class="side" aria-label="项目导航">
+      <button class="item active" data-open="home"><svg class="i"><use href="#home"/></svg>项目首页</button>
+      <div class="group">公司经营</div>
+      <button class="item"><svg class="i"><use href="#list"/></svg>业务项目<span class="count">3</span></button>
+      <button class="item" data-open="promote"><svg class="i"><use href="#mega"/></svg>推广<span class="count hot">1 待批准</span></button>
+      <button class="item" data-open="customers"><svg class="i"><use href="#people"/></svg>客户与售后<span class="count hot" data-side-cust>5 等你</span></button>
+      <button class="item" data-scroll="ledger"><svg class="i"><use href="#yuan"/></svg>公司账目<span class="count" data-side-pending>23 待核对</span></button>
+      <button class="item"><svg class="i"><use href="#facts"/></svg>产品事实表</button>
+      <hr />
+      <div class="group">工作</div>
+      <button class="item"><svg class="i"><use href="#folder"/></svg>文件</button>
+      <button class="item"><svg class="i"><use href="#chat"/></svg>会话</button>
+      <button class="item"><svg class="i"><use href="#tool"/></svg>工具</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" data-tab="home"><svg class="i"><use href="#home"/></svg>项目首页</button>
+        <button class="tab" role="tab" data-tab="promote" hidden><svg class="i"><use href="#mega"/></svg>推广<span class="x" data-close="promote">×</span></button>
+        <button class="tab" role="tab" data-tab="customers" hidden><svg class="i"><use href="#people"/></svg>客户与售后<span class="x" data-close="customers">×</span></button>
+        <button class="tab" role="tab" data-tab="browser" hidden><svg class="i"><use href="#globe"/></svg><span data-btab-title>账号</span><span class="x" data-close="browser">×</span></button>
+        <button class="tab" role="tab" data-tab="settings" hidden><svg class="i"><use href="#gear"/></svg>设置<span class="x" data-close="settings">×</span></button>
+      </div>
+
+      <!-- ============ HOME ============ -->
+      <section class="view" data-view="home">
+        <div class="page">
+          <div class="head">
+            <div>
+              <h1>星河科技<span class="type">公司</span></h1>
+              <div class="sub">11 月 22 日 周日 · AR 眼镜一代在售 · 今天 <span data-todo-left>7</span> 件事待处理 · 数据更新于 09:41</div>
+            </div>
+            <div class="right">
+              <span class="month"><svg class="i"><use href="#cal"/></svg>2026-11</span>
+              <button class="btn"><svg class="i"><use href="#gear"/></svg>项目设置</button>
+            </div>
+          </div>
+
+          <div class="grid">
+            <section class="card" aria-labelledby="h-todo">
+              <span class="note">聚合视图：每项回到原功能处理，首页不另存状态</span>
+              <header><h2 id="h-todo">今天要处理</h2><span class="n" data-todo-count>7 项</span><div class="right"><button class="btn sm"><svg class="i"><use href="#plus"/></svg>添加待办</button></div></header>
+
+              <div class="todo">
+                <span class="dot" style="background:var(--danger)"></span>
+                <div><div class="t">回复 3 个售后问题</div><div class="m"><span class="tag t-warn">售后</span>最久等了 20 小时：周先生的镜腿松动</div></div>
+                <div class="go"><button class="btn sm primary" data-open="customers" data-filter="after">去售后</button><span class="dest">→ 客户与售后 · 售后</span></div>
+              </div>
+              <div class="todo" data-todo="refund">
+                <span class="dot" style="background:var(--danger)"></span>
+                <div><div class="t">1 笔退货退款待你同意 · ¥2,999.00</div><div class="m"><span class="tag t-warn">售后</span>陈女士 · 7 天无理由 · 商品已寄回</div></div>
+                <div class="go"><button class="btn sm primary" data-browser="store">打开网店后台</button><span class="dest">→ 网店后台（你本人确认）</span></div>
+              </div>
+              <div class="todo">
+                <span class="dot" style="background:var(--warn)"></span>
+                <div><div class="t">回复 2 位意向客户</div><div class="m"><span class="tag t-acc">客户</span>其中 1 家企业想采购 50 副，询问企业价</div></div>
+                <div class="go"><button class="btn sm" data-open="customers" data-filter="lead">去跟进</button><span class="dest">→ 客户与售后 · 意向</span></div>
+              </div>
+              <div class="todo">
+                <span class="dot" style="background:var(--warn)"></span>
+                <div><div class="t">批准 1 篇推广《戴着它通勤一个月》</div><div class="m"><span class="tag t-info">推广</span>1 处事实冲突：续航 4 小时 / 事实表 3.5 小时</div></div>
+                <div class="go"><button class="btn sm" data-open="promote">去审阅</button><span class="dest">→ 推广 · 审阅</span></div>
+              </div>
+              <div class="todo" data-todo="login">
+                <span class="dot" style="background:var(--warn)"></span>
+                <div><div class="t">小红书 @星河眼镜 需要重新登录</div><div class="m"><span class="tag t-plain">账号</span>《鼻托细节》草稿已保存，停在发布前</div></div>
+                <div class="go"><button class="btn sm" data-browser="xhs">打开账号页面</button><span class="dest">→ 账号浏览器环境</span></div>
+              </div>
+              <div class="todo">
+                <span class="dot" style="background:var(--warn)"></span>
+                <div><div class="t">核对 11 月流水 <span data-todo-ledger>23 条</span></div><div class="m"><span class="tag t-plain">账目</span>未核对的不计入收支</div></div>
+                <div class="go"><button class="btn sm" data-scroll="ledger">去核对</button><span class="dest">→ 本页 · 待核对</span></div>
+              </div>
+              <div class="todo">
+                <input type="checkbox" aria-label="标记完成" data-manual />
+                <div><div class="t">给镜片供应商下补货单 50 套</div><div class="m"><span class="tag t-plain">你添加的</span>AR 眼镜一代 · 库存剩 41 套 · 今天到期</div></div>
+                <div class="go"><span class="dest">按当前销量约 3 周售完</span></div>
+              </div>
+            </section>
+
+            <section class="card" aria-labelledby="h-money">
+              <span class="note">订单：网店后台读取；收支：公司账目，只计已确认</span>
+              <header><h2 id="h-money">11 月销售与收支</h2><div class="right"><button class="btn sm">打开账目</button></div></header>
+              <div class="sales">
+                <span>订单 <b>64</b></span><span>已发货 58</span><span>待发货 6</span><span>退款 2</span>
+                <span class="src">网店后台 · 09:30 读取</span>
+              </div>
+              <div class="metrics">
+                <div class="metric"><div class="label">已确认收入</div><div class="value" data-inc>¥149,950.00</div></div>
+                <div class="metric"><div class="label">已确认支出</div><div class="value" data-exp>¥98,620.40</div></div>
+                <div class="metric"><div class="label">净流入</div><div class="value" data-net>¥51,329.60</div></div>
+              </div>
+              <div class="split">
+                <h3>支出归属（已确认）</h3>
+                <div class="sr"><span>AR 眼镜一代</span><span class="bar"><i style="width:82%"></i></span><b data-p1>¥80,720.40</b></div>
+                <div class="sr"><span>公司日常</span><span class="bar"><i style="width:13%"></i></span><b>¥12,800.00</b></div>
+                <div class="sr"><span>二代研发</span><span class="bar"><i style="width:5.2%"></i></span><b>¥5,100.00</b></div>
+              </div>
+              <div class="pending"><span class="tag t-warn" data-pend-tag>23 条待核对</span><span data-pend-amt>收入 ¥26,990.00 · 支出 ¥14,243.10 未计入</span><span class="tag t-plain">资料可能未齐</span><span style="color:var(--muted)">网店 11-16 后的结算单未导入</span></div>
+              <div class="foot">订单数按下单统计，收入按到账确认，两者不相等是正常的。净流入不等于利润；11-30 前导出给代账。</div>
+            </section>
+
+            <section class="card" aria-labelledby="h-proj">
+              <span class="note">公司领域拥有：业务项目与关联</span>
+              <header><h2 id="h-proj">业务项目进展</h2><span class="n">3</span><div class="right"><button class="btn sm"><svg class="i"><use href="#plus"/></svg>创建</button></div></header>
+              <table>
+                <thead><tr><th>业务</th><th>进展</th><th class="hide-narrow">本月支出</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><button class="name">AR 眼镜一代</button><div class="goal">在售 · ¥2,999</div></td>
+                    <td><div class="ms"><i class="ok">售出 64</i><i>退货 2（3.1%）</i><i class="warn">库存 41</i><i class="now">售后进行中 5</i></div><div class="next">下一步：今天下补货单；镜腿松动本月 4 次</div></td>
+                    <td class="num hide-narrow" data-p1b>¥80,720.40</td>
+                  </tr>
+                  <tr>
+                    <td><button class="name">二代研发</button><div class="goal">关联工程：眼镜研发 <button class="btn ghost" style="height:18px">打开工程</button></div></td>
+                    <td><div class="ms"><i class="ok">需求整理</i><i class="now">镜腿结构改版</i><i>EVT</i></div><div class="next">售后反馈的镜腿松动已转为改版输入</div></td>
+                    <td class="num hide-narrow">¥5,100.00</td>
+                  </tr>
+                  <tr>
+                    <td><button class="name">企业采购渠道</button><div class="goal">年底前签下 3 家企业客户</div></td>
+                    <td><div class="ms"><i class="now">询价 1</i><i>报价 0</i><i>成交 0</i></div><div class="next">下一步：给华东某科技公司报企业价 <button class="btn ghost" style="height:18px" data-open="customers" data-filter="lead">去跟进</button></div></td>
+                    <td class="num hide-narrow" style="color:var(--faint)">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="card" id="ledger" aria-labelledby="h-ledger">
+              <span class="note">来源：公司账目 · 确认后才计入收支</span>
+              <header><h2 id="h-ledger">待核对流水</h2><span class="n" data-pend-n>23 条</span><div class="right"><button class="btn sm">打开核对</button></div></header>
+              <div class="lr" data-sign="1">
+                <span class="d">11-21</span>
+                <div><div class="who"><b>网店结算 · 5 单货款</b><span class="amt in">+¥14,995.00</span></div><div class="sug">建议：销售收入 · AR 眼镜一代 <span class="tag t-ok">结算单.csv</span></div></div>
+                <div class="acts"><button class="btn sm primary" data-confirm>确认</button><button class="btn sm">修改</button></div>
+              </div>
+              <div class="lr" data-sign="-1">
+                <span class="d">11-20</span>
+                <div><div class="who"><b>镜片供应商</b><span class="amt">-¥9,800.00</span></div><div class="sug">建议：生产物料 · AR 眼镜一代 <span class="tag t-ok">发票.pdf</span></div></div>
+                <div class="acts"><button class="btn sm primary" data-confirm>确认</button><button class="btn sm">修改</button></div>
+              </div>
+              <div class="lr" data-sign="-1">
+                <span class="d">11-20</span>
+                <div><div class="who"><b>顺丰速运</b><span class="amt">-¥412.00</span></div><div class="sug">建议：售后物流 · AR 眼镜一代 <span class="tag t-plain">原件未关联</span></div></div>
+                <div class="acts"><button class="btn sm primary" data-confirm>确认</button><button class="btn sm">修改</button></div>
+              </div>
+              <div class="lr">
+                <span class="d">11-19</span>
+                <div><div class="who"><b>网店退款</b><span class="amt">-¥2,999.00</span></div><div class="sug">建议：销售退款 · 订单 1118-0233 <span class="tag t-warn">冲减收入还是记支出，需要你选</span></div></div>
+                <div class="acts"><button class="btn sm">选择处理方式</button></div>
+              </div>
+              <div class="foot" data-pend-foot>还有 19 条在账目页</div>
+            </section>
+
+            <section class="card full" aria-labelledby="h-pc">
+              <span class="note">入口：推广、客户与售后；账号来自 设置 · 网站与账号</span>
+              <header><h2 id="h-pc">推广与客户</h2><span class="n">从这里进入推广产品、跟进意向客户和处理售后</span></header>
+              <div class="pc">
+                <div>
+                  <div class="h"><svg class="i"><use href="#mega"/></svg>推广</div>
+                  <div class="v">1 <small>篇待批准</small></div>
+                  <div class="k">本周已发布 2 篇（平台核验）· 带来咨询 11 · 可追溯下单 4</div>
+                  <button class="btn sm" data-open="promote">去推广 <svg class="i"><use href="#arrow"/></svg></button>
+                </div>
+                <div>
+                  <div class="h"><svg class="i"><use href="#people"/></svg>意向客户</div>
+                  <div class="v">2 <small>人等回复</small></div>
+                  <div class="k">本周新咨询 11 · 已下单 4 · 企业询价 1</div>
+                  <button class="btn sm primary" data-open="customers" data-filter="lead">去跟进 <svg class="i"><use href="#arrow"/></svg></button>
+                </div>
+                <div>
+                  <div class="h"><svg class="i"><use href="#wrench"/></svg>售后</div>
+                  <div class="v">3 <small>个等你回复</small></div>
+                  <div class="k">进行中 5 · 本月已解决 12 · 首次回复平均 6 小时 · 退款待你同意 1</div>
+                  <button class="btn sm primary" data-open="customers" data-filter="after">去售后 <svg class="i"><use href="#arrow"/></svg></button>
+                </div>
+              </div>
+              <div class="accts">
+                <span class="lab">使用的账号</span>
+                <span class="acc"><span class="st authenticated"></span>知乎 · 星河科技 · 已登录</span>
+                <span class="acc" data-acc-xhs><span class="st not-authenticated"></span>小红书 · 星河眼镜 · 需重新登录 <button class="btn sm" data-browser="xhs">登录</button></span>
+                <span class="acc"><span class="st authenticated"></span>网店后台 · 星河科技 · 已登录</span>
+                <button class="btn ghost" data-open="settings">管理账号 →</button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PROMOTE ============ -->
+      <section class="view" data-view="promote" hidden>
+        <div class="page">
+          <div class="head"><div><h1>推广</h1><div class="sub">AR 眼镜一代在售 · 文末统一放网店链接</div></div><div class="right"><button class="btn"><svg class="i"><use href="#facts"/></svg>产品事实表</button></div></div>
+          <div class="cols">
+            <section class="card">
+              <header><h2>可以讲的</h2><span class="n">本周 3 条</span></header>
+              <div class="src sel"><div class="title">买家反馈：戴着它通勤一个月</div><div class="from"><span class="tag t-plain">客户与售后</span>林先生的使用反馈 · 已同意引用</div><div class="angle">给通勤族 → 知乎长文 + 小红书图文</div><div class="acts"><span class="tag t-acc">已起草，在右侧</span></div></div>
+              <div class="src"><div class="title">鼻托细节：为什么改成硅胶双段</div><div class="from"><span class="tag t-plain">眼镜研发</span>设计记录 · 11-18</div><div class="angle">给长时间佩戴的人 → 小红书图文</div><div class="acts"><span class="tag t-danger">小红书需重新登录</span></div></div>
+              <div class="src"><div class="title">镜腿松动问题的改进</div><div class="from"><span class="tag t-plain">客户与售后</span>本月 4 次 · 二代研发处理中</div><div class="angle"><span class="tag t-warn">暂不公开</span> 改进未验证前不对外宣传</div></div>
+            </section>
+            <section class="card">
+              <header><h2>审阅与批准</h2><span class="n">1 篇</span></header>
+              <div class="draft-title">戴着它通勤一个月：一位买家的真实记录</div>
+              <div class="draft-meta">知乎长文 2,100 字 · 3 图 ｜ 小红书图文 360 字 · 6 图 · 草稿版本 2</div>
+              <div class="preview">林先生每天地铁通勤 1 小时……一个月下来，最常用的是导航和消息提醒，单次充电续航 <mark>约 4 小时</mark>……想试试？链接在文末。</div>
+              <div class="blk">
+                <h3>事实核对（对照产品事实表）</h3>
+                <div class="check ok"><span class="mk">✓</span><span>引用的买家反馈已获对方同意 · 11-20</span></div>
+                <div class="check bad" data-fact><span class="mk">!</span><span>草稿写“续航约 4 小时”，事实表为 <b>3.5 小时</b>；4 小时属于尚未发布的固件 1.3<span class="fix"><button class="btn sm primary" data-fixfact>改为 3.5 小时</button><button class="btn sm">打开事实表</button></span></span></div>
+                <div class="check ok"><span class="mk">✓</span><span>价格 ¥2,999、7 天无理由、1 年保修 · 事实表</span></div>
+              </div>
+              <div class="blk">
+                <h3>发布到（每个账号单独批准）</h3>
+                <label class="acctc"><input type="checkbox" checked data-acct /> 知乎 @星河科技<span class="s">已登录</span></label>
+                <label class="acctc"><input type="checkbox" checked data-acct /> 小红书 @星河眼镜<span class="s warn" data-pr-xhs>需重新登录，发布时会停下交给你</span></label>
+              </div>
+              <div class="approve"><button class="btn primary" data-approve disabled>批准并发布到 2 个账号</button><button class="btn">退回修改</button><span class="hint" data-approve-hint>先处理 1 处事实冲突</span></div>
+              <div class="subhead">本周发布</div>
+              <div data-publishing hidden><div class="pub"><div class="top"><span class="tag t-info">执行中</span><b>知乎 · 戴着它通勤一个月</b></div><div class="sub">第 3/9 步：粘贴正文</div></div></div>
+              <div class="pub"><div class="top"><span class="tag t-ok">已公开 · 已核验</span><b>知乎 · 一代上手两周</b></div><div class="sub">11-15 核验 · 带来咨询 7 · 可追溯下单 3</div></div>
+              <div class="pub"><div class="top"><span class="tag t-ok">已公开 · 已核验</span><b>小红书 · 开箱与佩戴</b></div><div class="sub">11-17 核验 · 带来咨询 4 · 可追溯下单 1</div></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CUSTOMERS ============ -->
+      <section class="view" data-view="customers" hidden>
+        <div class="page">
+          <div class="head"><div><h1>客户与售后</h1><div class="sub">意向咨询和售后都在这里；退款、价格和企业报价由你本人决定</div></div><div class="right"><button class="btn"><svg class="i"><use href="#facts"/></svg>售后政策与事实表</button></div></div>
+          <div class="cols" style="grid-template-columns:minmax(0,1.5fr) minmax(0,.7fr)">
+            <section class="card">
+              <div class="chips" role="toolbar" aria-label="筛选">
+                <button aria-pressed="true" data-f="all">等你 5</button>
+                <button aria-pressed="false" data-f="after">售后 3</button>
+                <button aria-pressed="false" data-f="lead">意向 2</button>
+              </div>
+              <div class="person" data-k="after">
+                <div class="who"><b>周先生</b><span class="tag t-warn">售后 · 质量</span><span class="wait long">等了 20 小时</span></div>
+                <div class="ctx">网店客服消息 · 订单 1109-0312 · 购买 13 天</div>
+                <div class="said">右边镜腿有点松，戴久了会往下滑。</div>
+                <div class="reply"><b>拟回复：</b>抱歉给您添麻烦。在 1 年保修内，我们免费换新镜腿，下单寄回后 3 个工作日内寄出。也可以先用附带的小螺丝刀拧紧右侧铰链螺丝试试。<br /><span style="color:var(--faint)">依据：保修政策 · 事实表；同类问题本月第 4 次，已转二代研发</span></div>
+                <div class="acts"><button class="btn sm primary" data-send>批准发送</button><button class="btn sm">修改</button><span class="n2">发送后在网店后台读回核验</span></div>
+              </div>
+              <div class="person" data-k="after">
+                <div class="who"><b>陈女士</b><span class="tag t-warn">售后 · 退货</span><span class="wait">等了 9 小时</span></div>
+                <div class="ctx">网店退货申请 · 订单 1121-0457 · 7 天无理由 · 商品已签收寄回</div>
+                <div class="said">不太适合我的脸型，申请退货。</div>
+                <div class="reply"><b>退款要你本人确认：</b>¥2,999.00 原路退回。Agent 不代为点击退款，只帮你打开该订单页面。</div>
+                <div class="acts"><button class="btn sm primary" data-browser="store">打开网店后台</button><button class="btn sm">先回复对方</button></div>
+              </div>
+              <div class="person" data-k="after">
+                <div class="who"><b>刘同学</b><span class="tag t-plain">售后 · 使用</span><span class="wait">等了 3 小时</span></div>
+                <div class="ctx">网店客服消息 · 订单 1115-0098</div>
+                <div class="said">手机 App 连不上眼镜。</div>
+                <div class="reply"><b>拟回复：</b>请先在手机系统设置里删除旧的配对记录，再长按眼镜右侧按键 5 秒进入配对……如果还不行，回复手机型号，我们帮您排查。<br /><span style="color:var(--faint)">依据：使用说明 · 连接问题</span></div>
+                <div class="acts"><button class="btn sm primary" data-send>批准发送</button><button class="btn sm">修改</button></div>
+              </div>
+              <div class="person" data-k="lead">
+                <div class="who"><b>王经理 · 华东某科技公司</b><span class="tag t-acc">意向 · 企业采购</span><span class="wait">等了 1 天</span></div>
+                <div class="ctx">知乎私信 · 来自《一代上手两周》</div>
+                <div class="said">想给 50 名员工采购，有企业价吗？能开专票吗？</div>
+                <div class="reply"><b>只起草，等你定价：</b>企业价格属于“只由我回复”。专票可以开（事实表）。</div>
+                <div class="acts"><button class="btn sm">由我回复</button><button class="btn sm">关联到“企业采购渠道”</button></div>
+              </div>
+              <div class="person" data-k="lead">
+                <div class="who"><b>林小舟</b><span class="tag t-acc">意向 · 个人</span><span class="wait">等了 2 小时</span></div>
+                <div class="ctx">小红书评论 · 《开箱与佩戴》</div>
+                <div class="said">600 度近视能戴吗？</div>
+                <div class="reply"><b>拟回复：</b>可以，-6.00D 以内可以配插片，下单时备注度数即可。链接在主页。<br /><span style="color:var(--faint)">依据：近视适配 -6.00D 以内 · 事实表</span></div>
+                <div class="acts"><button class="btn sm primary" data-send>批准发送</button><button class="btn sm">修改</button></div>
+              </div>
+            </section>
+            <section class="card cust-side">
+              <header><h2>本月售后</h2></header>
+              <div class="row">工单<span class="c">20</span></div>
+              <div class="row">已解决<span class="c">12</span></div>
+              <div class="row">进行中<span class="c">5</span></div>
+              <div class="row">首次回复平均<span class="c">6 小时</span></div>
+              <div class="subhead">反复出现的问题</div>
+              <div class="row">镜腿松动<span class="c">4 次</span></div>
+              <div class="row" style="padding-top:0"><button class="btn sm">已转给二代研发</button></div>
+              <div class="row">App 连接<span class="c">3 次</span></div>
+              <div class="row" style="padding-top:0"><button class="btn sm">写进使用说明</button></div>
+              <div class="foot">客户信息只存本机，不进 Git、诊断或项目共享配置。</div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ BROWSER (existing account environment) ============ -->
+      <section class="view" data-view="browser" hidden style="overflow:hidden">
+        <div class="bview">
+          <div class="btool">
+            <div class="nav hide-narrow"><span>‹</span><span>›</span><span>⟳</span></div>
+            <div class="addr"><svg class="i"><use href="#lock"/></svg><span data-addr>creator.xiaohongshu.com/login</span></div>
+            <span class="env" data-env><svg class="i"><use href="#globe"/></svg><span data-env-txt>账号 · 星河眼镜</span></span>
+          </div>
+          <div class="handoff" data-hand-xhs>
+            <span class="tag t-danger">需要你处理</span>
+            <div class="grow"><b>文章发布 · 《鼻托细节》</b>：平台要求扫码登录。完成登录后交还，Agent 重新观察页面并从“提交前核验”继续，不会重复上传图片。</div>
+            <button class="btn primary" data-handback>交还 Agent 并继续</button>
+          </div>
+          <div class="handoff" data-hand-store hidden>
+            <span class="tag t-danger">由你本人确认</span>
+            <div class="grow"><b>退款 · 订单 1121-0457 · ¥2,999.00</b>：付款和退款不由 Agent 操作。请在下方页面核对后自己点击同意；完成后点“已处理”，Studio 读回订单状态。</div>
+            <button class="btn primary" data-refund-done>已处理，读回状态</button>
+          </div>
+          <div class="webpage">
+            <div class="login" data-page-xhs>
+              <h3>平台登录页</h3>
+              <p>效果稿示意，实际显示平台自己的页面</p>
+              <div class="qr" aria-hidden="true"></div>
+              <p>用手机 App 扫码登录。验证码和扫码只由你完成。</p>
+            </div>
+            <div class="login" data-page-store hidden>
+              <h3>网店后台 · 退款详情</h3>
+              <p>效果稿示意，实际显示网店平台自己的页面</p>
+              <div class="kv"><span>订单 1121-0457 · AR 眼镜一代 × 1</span><span>退款原因：7 天无理由</span><span>物流：退货已签收 11-21</span><span>退款金额：¥2,999.00</span></div>
+              <span class="fakebtn">同意退款</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ SETTINGS (existing 网站与账号) ============ -->
+      <section class="view" data-view="settings" hidden style="overflow:hidden">
+        <div class="sview">
+          <nav class="snav" aria-label="设置分组">
+            <div class="g">资源管理</div>
+            <button class="it active">网站与账号</button><button class="it">角色</button><button class="it">数据源连接</button><button class="it">远程设备</button>
+            <div class="g">通用</div>
+            <button class="it">外观</button><button class="it">编辑器</button><button class="it">快捷键</button>
+            <div class="g">AI 与服务</div>
+            <button class="it">API Key 与连接</button><button class="it">Agent 行为与工具</button><button class="it">模型用量</button>
+            <div class="g">工作台</div>
+            <button class="it">浏览器</button><button class="it">硬件与 CAD</button>
+          </nav>
+          <div class="scontent">
+            <h2>网站与账号</h2>
+            <p class="loc">网站与账号 · 本机全局</p>
+            <div class="wtool"><button class="btn sm"><svg class="i"><use href="#plus"/></svg>添加网站与账号</button><span class="sp"><button class="btn sm">刷新状态</button><button class="btn sm">新建矩阵</button><button class="btn sm">导入</button></span></div>
+            <div class="wrow"><button class="open"><svg class="i"><use href="#globe"/></svg><span class="main"><span class="title">知乎<span class="st authenticated"></span></span><span>星河科技 · 已登录</span></span></button><button class="btn sm">归档</button></div>
+            <div class="wrow"><button class="open" data-browser="xhs"><svg class="i"><use href="#globe"/></svg><span class="main"><span class="title">小红书<span class="st not-authenticated" data-set-xhs-dot></span></span><span data-set-xhs-txt>星河科技 · 需重新登录</span><span>星河眼镜 · 运营</span></span></button><button class="btn sm" data-set-xhs-confirm>确认登录</button><button class="btn sm">归档</button></div>
+            <div class="wrow"><button class="open" data-browser="store"><svg class="i"><use href="#globe"/></svg><span class="main"><span class="title">网店后台<span class="st authenticated"></span></span><span>星河科技 · 已登录</span><span>星河官方店 · 店主</span></span></button><button class="btn sm">归档</button></div>
+            <div class="wrow"><button class="open"><svg class="i"><use href="#globe"/></svg><span class="main"><span class="title">企业邮箱<span class="st session-data"></span></span><span>星河科技 · 待确认</span><span>sales 收件箱</span></span></button><button class="btn sm">确认登录</button><button class="btn sm">归档</button></div>
+            <div class="wgroups"><div class="ttl">运营矩阵</div><div class="wrow"><span style="flex:1">推广账号 · 2 个账号 · v2</span><button class="btn sm">编辑</button><button class="btn sm">归档</button></div></div>
+            <div class="boundary">账号目录全局共用；密码与 Cookie 不进入项目，登录由唯一的本机隔离浏览器环境持有。</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="rail" aria-label="Agent（已收起）">
+      <button aria-label="展开 Agent"><svg class="i"><use href="#chat"/></svg></button>
+      <span class="lbl">Agent</span>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span>进行中的工作 3</span><span class="hide-narrow">本地 · 星河科技</span>
+    <span class="right"><span>效果稿 · 数据与人名为示意</span><span>CCLink Studio v0.2.14</span></span>
+  </footer>
+</div>
+
+<div class="review" role="toolbar" aria-label="评审控制">
+  <button data-notes aria-pressed="false">数据来源标注</button>
+  <button data-reset>重置演示</button>
+  <span class="sep"></span>
+  <button data-theme-btn="light" aria-pressed="false">浅色</button>
+  <button data-theme-btn="dark" aria-pressed="false">深色</button>
+</div>
+
+<script>
+(function () {
+  var body = document.body, root = document.documentElement;
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+  var params = new URLSearchParams(location.search);
+  function fmt(n) { return (n < 0 ? '-' : '') + '¥' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function toast(msg) { var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2400); }
+
+  function filterPeople(f) {
+    $$('[data-f]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.f === (f || 'all'))); });
+    $$('.person').forEach(function (p) { p.hidden = !!f && f !== 'all' && p.dataset.k !== f; });
+  }
+  function setBrowser(kind) {
+    var store = kind === 'store';
+    $('[data-btab-title]').textContent = store ? '网店后台 · 星河科技' : '小红书 · 星河眼镜';
+    $('[data-addr]').textContent = store ? 'shop-admin.example.com/refund/1121-0457' : 'creator.xiaohongshu.com/login';
+    $('[data-env-txt]').textContent = store ? '账号 · 星河科技' : '账号 · 星河眼镜';
+    $('[data-hand-xhs]').hidden = store; $('[data-page-xhs]').hidden = store;
+    $('[data-hand-store]').hidden = !store; $('[data-page-store]').hidden = !store;
+  }
+  function show(view, opts) {
+    opts = opts || {};
+    $$('[data-view]').forEach(function (v) { v.hidden = v.dataset.view !== view; });
+    $$('[data-tab]').forEach(function (t) { if (t.dataset.tab === view) t.hidden = false; t.classList.toggle('active', t.dataset.tab === view); });
+    $$('.side .item').forEach(function (i) { i.classList.toggle('active', i.dataset.open === view); });
+    if (view === 'customers') filterPeople(opts.filter);
+    if (view === 'browser') setBrowser(opts.browser);
+    var v = $('[data-view="' + view + '"]'); if (v) v.scrollTop = 0;
+  }
+  document.addEventListener('click', function (e) {
+    var close = e.target.closest('[data-close]');
+    if (close) { e.stopPropagation(); $('[data-tab="' + close.dataset.close + '"]').hidden = true; show('home'); return; }
+    var br = e.target.closest('[data-browser]');
+    if (br) { show('browser', { browser: br.dataset.browser }); return; }
+    var open = e.target.closest('[data-open]');
+    if (open) { show(open.dataset.open, { filter: open.dataset.filter }); return; }
+    var tab = e.target.closest('[data-tab]');
+    if (tab) { show(tab.dataset.tab); return; }
+    var sc = e.target.closest('[data-scroll]');
+    if (sc) { show('home'); var el = document.getElementById(sc.dataset.scroll); el.scrollIntoView({ block: 'start', behavior: 'smooth' }); el.classList.add('flash'); setTimeout(function () { el.classList.remove('flash'); }, 1400); return; }
+    var f = e.target.closest('[data-f]');
+    if (f) { filterPeople(f.dataset.f); }
+  });
+
+  function todoLeft(d) { var el = $('[data-todo-left]'); var n = +el.textContent + d; el.textContent = n; $('[data-todo-count]').textContent = n + ' 项'; }
+
+  // Ledger
+  var inc = 149950, exp = 98620.40, p1 = 80720.40, pendN = 23, pendIn = 26990, pendOut = 14243.10;
+  function renderMoney() {
+    $('[data-inc]').textContent = fmt(inc); $('[data-exp]').textContent = fmt(exp); $('[data-net]').textContent = fmt(inc - exp);
+    $('[data-p1]').textContent = fmt(p1); $('[data-p1b]').textContent = fmt(p1);
+    $('[data-pend-tag]').textContent = pendN + ' 条待核对';
+    $('[data-pend-amt]').textContent = '收入 ' + fmt(pendIn) + ' · 支出 ' + fmt(pendOut) + ' 未计入';
+    $('[data-pend-n]').textContent = pendN + ' 条'; $('[data-todo-ledger]').textContent = pendN + ' 条';
+    $('[data-side-pending]').textContent = pendN + ' 待核对';
+  }
+  $$('[data-confirm]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var row = b.closest('.lr'); var amt = parseFloat(row.querySelector('.amt').textContent.replace(/[^\d.]/g, ''));
+      if (row.dataset.sign === '1') { inc += amt; pendIn -= amt; } else { exp += amt; pendOut -= amt; if (row.textContent.indexOf('AR 眼镜一代') >= 0) p1 += amt; }
+      pendN -= 1; renderMoney();
+      row.classList.add('ok'); row.querySelector('.acts').innerHTML = '<span class="tag t-ok">已确认 · 已计入</span>';
+    });
+  });
+  $('[data-manual]').addEventListener('change', function (e) { e.target.closest('.todo').classList.toggle('done', e.target.checked); todoLeft(e.target.checked ? -1 : 1); });
+
+  // Sign-in handback
+  $('[data-handback]').addEventListener('click', function () {
+    var row = $('[data-todo="login"]'); row.classList.add('done'); row.querySelector('.go').innerHTML = '<span class="tag t-info">已交还 · 发布继续</span>'; todoLeft(-1);
+    $('[data-acc-xhs]').innerHTML = '<span class="st authenticated"></span>小红书 · 星河眼镜 · 已登录';
+    $('[data-set-xhs-dot]').className = 'st authenticated'; $('[data-set-xhs-txt]').textContent = '星河科技 · 已登录';
+    var c = $('[data-set-xhs-confirm]'); if (c) c.remove();
+    var pr = $('[data-pr-xhs]'); pr.className = 's'; pr.textContent = '已登录';
+    $('[data-tab="browser"]').hidden = true; show('home'); toast('已交还 Agent：重新观察页面后从“提交前核验”继续');
+  });
+  // Refund handled by user
+  $('[data-refund-done]').addEventListener('click', function () {
+    var row = $('[data-todo="refund"]'); row.classList.add('done'); row.querySelector('.go').innerHTML = '<span class="tag t-ok">已读回：退款已同意</span>'; todoLeft(-1);
+    $('[data-tab="browser"]').hidden = true; show('home'); toast('已读回订单 1121-0457：退款已同意');
+  });
+
+  // Promote approval
+  var factFixed = false;
+  function refreshApprove() {
+    var n = $$('[data-acct]').filter(function (c) { return c.checked; }).length, btn = $('[data-approve]');
+    btn.textContent = n ? '批准并发布到 ' + n + ' 个账号' : '请选择账号'; btn.disabled = !factFixed || !n;
+    $('[data-approve-hint]').textContent = !factFixed ? '先处理 1 处事实冲突' : '批准即授权这篇内容在所选账号上公开发布';
+  }
+  $('[data-fixfact]').addEventListener('click', function () {
+    factFixed = true; var r = $('[data-fact]'); r.className = 'check ok';
+    r.innerHTML = '<span class="mk">✓</span><span>续航已改为 3.5 小时（两个平台版本同步）</span>';
+    $$('.preview mark').forEach(function (m) { m.outerHTML = '3.5 小时'; }); refreshApprove();
+  });
+  $$('[data-acct]').forEach(function (c) { c.addEventListener('change', refreshApprove); });
+  $('[data-approve]').addEventListener('click', function () { $('[data-publishing]').hidden = false; var b = $('[data-approve]'); b.disabled = true; b.textContent = '已批准 · 草稿版本 2'; $('[data-approve-hint]').textContent = '“已发布”只在平台读回核验后出现'; });
+
+  // Replies
+  var custLeft = 5;
+  $$('[data-send]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var acts = b.parentNode; acts.innerHTML = '<span class="sent" style="color:var(--muted)">发送中…</span>';
+      setTimeout(function () { acts.innerHTML = '<span class="sent">已发送 · 已在平台读回核验</span>'; custLeft -= 1; $('[data-side-cust]').textContent = custLeft + ' 等你'; }, 900);
+    });
+  });
+
+  // Review controls
+  var notes = $('[data-notes]');
+  notes.addEventListener('click', function () { notes.setAttribute('aria-pressed', String(body.classList.toggle('notes'))); });
+  $('[data-reset]').addEventListener('click', function () { location.href = location.pathname + '?theme=' + (root.getAttribute('data-theme') || 'light'); });
+  function setTheme(t) { root.setAttribute('data-theme', t); $$('[data-theme-btn]').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.themeBtn === t)); }); try { localStorage.setItem('company-home-sales-theme', t); } catch (e) {} }
+  $$('[data-theme-btn]').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); }); });
+  var saved = null; try { saved = localStorage.getItem('company-home-sales-theme'); } catch (e) {}
+  setTheme(params.get('theme') || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  if (params.get('notes') === '1') notes.click();
+  if (params.get('clean') === '1') body.classList.add('clean');
+  if (params.get('view')) show(params.get('view'), { filter: params.get('filter'), browser: params.get('browser') });
+})();
+</script>
+</body>
+</html>

@@ -246,3 +246,48 @@ it('finishes partially written v1 Markdown in its original format before upgradi
   expect(upgraded.directory!.files).toContain('调度.md')
   expect(upgraded.research).toEqual(recovered.research)
 })
+
+it('writes local evidence with its hash and cites the local file line, not an absolute path', async () => {
+  const { service, affair } = await setup(),
+    store = service()
+  const first = await store.save(affair, 0)
+  const grant = '33333333-3333-4333-8333-333333333333'
+  const key = 'folder:' + grant
+  affair.research!.plan = {
+    scope: '对比',
+    output: '对比简报',
+    repos: [],
+    folders: [{ key, label: 'chip-notes' }],
+  }
+  affair.research!.phase = 'ready'
+  const proposal = await store.save(affair, first.directory!.revision)
+  expect(await store.preview(affair.id, '事务配置.md')).toContain('本地参考目录：chip-notes（只读')
+  const confirmed = await store.confirm(affair.id, proposal.directory!.revision)
+  Object.assign(affair, confirmed)
+  const r = affair.research!
+  const url = 'cclink-owner-source://' + grant + '/' + encodeURIComponent('笔记.md')
+  r.docs = [
+    {
+      repo: key,
+      path: '笔记.md',
+      sha: 'c'.repeat(64),
+      url,
+      at: 1,
+      text: '甲\n取指使用两级预取缓冲',
+      startLine: 4,
+    },
+  ]
+  r.phase = 'done'
+  r.report = {
+    conclusion: '# 对比简报',
+    items: [{ repo: key, finding: '两级预取', quote: '取指使用两级预取缓冲' }],
+  }
+  const done = await store.save(affair, confirmed.directory!.revision)
+  expect(done.directory!.error).toBeUndefined()
+  const snapshot = await store.preview(affair.id, '资料/01-笔记.md.md')
+  expect(snapshot).toContain('# 本地 chip-notes · 笔记.md')
+  expect(snapshot).toContain('SHA-256 ' + 'c'.repeat(64))
+  const report = await readFile(join(done.directory!.path, done.directory!.reportFile!), 'utf8')
+  expect(report).toContain('本地 chip-notes/笔记.md 第 5 行')
+  expect(report).not.toContain('cclink-owner-source://')
+})

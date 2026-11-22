@@ -3,7 +3,7 @@ import type { OwnerSourceGrant } from '@shared/ipc/owner-source'
 import { getRendererDiagnosticLogSnapshot } from '../diagnostics/renderer-diagnostic-log'
 import type { Affair } from './affair'
 import { session } from './owner-agent'
-import { decisionWorker, workerLabel, workersOf } from './research-model'
+import { decisionWorker, planSources, workerLabel, workersOf } from './research-model'
 import { statusChips } from './owner-status'
 
 export const OWNER_DIAGNOSTIC_INCLUDES = [
@@ -76,7 +76,10 @@ export function formatOwnerDiagnostics(input: OwnerDiagnosticInput): string {
     out.push('', '## 约定')
     if (r.plan) {
       out.push('- 范围：' + clip(r.plan.scope, 600), '- 交付与验收：' + clip(r.plan.output, 600))
-      out.push('- 时间：' + (r.plan.timing ?? '无硬截止'), '- 仓库：' + r.plan.repos.join('、'))
+      out.push(
+        '- 时间：' + (r.plan.timing ?? '无硬截止'),
+        '- 来源：' + planSources(r.plan).join('、'),
+      )
     } else out.push('- 尚未形成约定')
 
     out.push('', '## 判断与派工')

@@ -921,3 +921,67 @@
   display: block;
   margin-bottom: 2px;
 }
+
+/* Tool tags: which tool a source, step or citation used. */
+.own-tool {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  background: var(--bg-tertiary, #2b2e33);
+  color: var(--text-secondary, #9aa3ad);
+}
+.own-tool.local {
+  background: rgba(139, 92, 246, 0.16);
+  color: #a78bfa;
+}
+.own-tool.github {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+}
+.own-tool.terminal {
+  background: rgba(234, 179, 8, 0.16);
+  color: #facc15;
+}
+[data-owner-tools] small,
+[data-owner-citations] small {
+  display: block;
+  color: var(--text-secondary, #9aa3ad);
+}
+.own-tool.required {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+}
+.own-card.red {
+  border-color: #7a3a3a;
+}
+.own-skip {
+  padding: 8px 0;
+  border-top: 1px solid var(--border-color, #33373d);
+}
+.own-skip:first-of-type {
+  border-top: none;
+}
+.own-skip small {
+  display: block;
+  color: var(--text-secondary, #9aa3ad);
+}
+.own-tl li.skip::before {
+  background: #e0b45c;
+}
+.own-perm {
+  border: 1px solid #7a6330;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.own-perm small {
+  display: block;
+  color: var(--text-secondary, #9aa3ad);
+}
+[data-owner-outcomes] small {
+  display: block;
+  color: var(--text-secondary, #9aa3ad);
+}

@@ -1,7 +1,12 @@
 import { shell } from 'electron'
 import { ownerDirectoryIpc } from '../../shared/ipc/owner-directory'
 import { ownerSourceIpc } from '../../shared/ipc/owner-source'
-import type { OwnerSourceDirectories } from './source-directories'
+import type { AskFileRead, OwnerSourceFiles } from './source-files'
+import {
+  findSourceFiles,
+  readSourceExcerpt,
+  type OwnerSourceDirectories,
+} from './source-directories'
 import { ownerPreferencesIpc } from '../../shared/ipc/owner-preferences'
 import type { OwnerPreferences } from './owner-preferences'
 import {
@@ -32,7 +37,12 @@ export function registerOwnerDirectories(
     if (error) throw Error(error)
   })
 }
-export function registerOwnerSources(guard: TrustedRendererGuard, sources: OwnerSourceDirectories) {
+export function registerOwnerSources(
+  guard: TrustedRendererGuard,
+  sources: OwnerSourceDirectories,
+  files: OwnerSourceFiles,
+  ask: AskFileRead,
+) {
   registerTrustedIpcContract(ownerSourceIpc.list, guard, (_e, id) => sources.list(id))
   registerTrustedIpcContract(ownerSourceIpc.prepare, guard, (_e, id, rootId) =>
     sources.prepare(id, rootId ?? undefined),
@@ -48,6 +58,21 @@ export function registerOwnerSources(guard: TrustedRendererGuard, sources: Owner
   )
   registerTrustedIpcContract(ownerSourceIpc.read, guard, (_e, id, grant, rel) =>
     sources.read(id, grant, rel),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.find, guard, (_e, id, grant, terms) =>
+    findSourceFiles(sources, id, grant, terms),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.excerpt, guard, (_e, id, grant, rel, anchor) =>
+    readSourceExcerpt(sources, id, grant, rel, anchor),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.requestFile, guard, (_e, id, conversation, path) =>
+    files.request(id, conversation, path, ask),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.grantFile, guard, (_e, id, path) =>
+    files.grantSkipped(id, path),
+  )
+  registerTrustedIpcContract(ownerSourceIpc.fileExcerpt, guard, (_e, id, grant, anchor) =>
+    files.excerpt(id, grant, anchor),
   )
 }
 export function registerOwnerPreferences(guard: TrustedRendererGuard, prefs: OwnerPreferences) {

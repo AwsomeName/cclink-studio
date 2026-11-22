@@ -7,7 +7,12 @@ import { decisionWorker, workerLabel, workersOf } from './research-model'
 export const GROUPS = [
   { key: 'confirm', label: '等我确认', waits: true, states: ['等我确认'] },
   { key: 'material', label: '等我提供资料', waits: true, states: ['等我提供资料'] },
-  { key: 'attention', label: '需要我处理', waits: true, states: ['待保存', '需要处理', '待恢复'] },
+  {
+    key: 'attention',
+    label: '需要我处理',
+    waits: true,
+    states: ['待保存', '需要处理', '待恢复', '待你决定'],
+  },
   {
     key: 'active',
     label: '进行中',
@@ -111,6 +116,7 @@ export function statusChips(a: Affair, active: boolean, workerLoading: boolean) 
                 : '派工',
             checking: last ? '核对证据' : '准备派工',
             writing: '写入交付物',
+            decide: '等你决定跳过的步骤',
             done: '无后续派工',
             error: '已停下',
           } as const

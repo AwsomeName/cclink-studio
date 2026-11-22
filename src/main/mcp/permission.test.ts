@@ -270,3 +270,36 @@ describe('PermissionManager confirmation IPC boundary', () => {
     await expect(pending).resolves.toBe(true)
   })
 })
+
+describe('PermissionManager.requestDecision', () => {
+  it('reports a timeout separately and removes the card', async () => {
+    vi.useFakeTimers()
+    const send = vi.fn()
+    const manager = new PermissionManager({
+      isDestroyed: () => false,
+      webContents: { send },
+    } as unknown as ConstructorParameters<typeof PermissionManager>[0])
+    const decision = manager.requestDecision({
+      conversationId: 'owner-x-a',
+      toolName: 'owner_read_local_file',
+      params: { path: '/tmp/a.md' },
+      riskLevel: 'read',
+      allowAlways: false,
+    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    await expect(decision).resolves.toBe('timeout')
+    expect(send).toHaveBeenLastCalledWith(
+      'agent:confirmationsInvalidated',
+      expect.objectContaining({ reason: '60 秒无回应，已按拒绝处理' }),
+    )
+    const refused = manager.requestDecision({
+      toolName: 'owner_read_local_file',
+      params: {},
+      riskLevel: 'read',
+    })
+    const id = send.mock.calls.at(-1)![1].id
+    manager.resolveConfirmation(id, false)
+    await expect(refused).resolves.toBe('denied')
+    vi.useRealTimers()
+  })
+})

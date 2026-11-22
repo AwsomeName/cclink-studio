@@ -1,0 +1,123 @@
+[
+ {
+  "name": "home-dark",
+  "w": 1440,
+  "h": 900,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "home-light-full",
+  "w": 1440,
+  "h": 1620,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "home-notes",
+  "w": 1440,
+  "h": 1620,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "promote",
+  "w": 1440,
+  "h": 900,
+  "view": "promote",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "customers-aftersales",
+  "w": 1440,
+  "h": 900,
+  "view": "customers",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "refund-store",
+  "w": 1440,
+  "h": 900,
+  "view": "browser",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "signin",
+  "w": 1440,
+  "h": 900,
+  "view": "browser",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "accounts",
+  "w": 1440,
+  "h": 900,
+  "view": "settings",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "home-1180",
+  "w": 1180,
+  "h": 900,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "name": "home-narrow",
+  "w": 375,
+  "h": 812,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "trialMentions": 0,
+  "errors": []
+ },
+ {
+  "interaction": {
+   "incomeAfterConfirm": "¥164,945.00",
+   "todosLeftAfterRefund": "6",
+   "afterSalesFilter": [
+    "after",
+    "after",
+    "after"
+   ]
+  }
+ }
+]

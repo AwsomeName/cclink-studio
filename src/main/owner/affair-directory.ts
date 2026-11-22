@@ -15,6 +15,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID, createHash } from 'node:crypto'
 import { z } from 'zod'
 import { affair, type Affair, type AffairRecord } from '../../shared/owner/affair'
+import { evidenceSources } from '../../shared/owner/research'
 import { additions, directoryFiles, shortName } from './directory-files'
 
 import { configurationFile, scheduleFile } from './affair-documents'
@@ -67,11 +68,12 @@ function validateUpdate(a: AffairRecord, before?: AffairRecord, confirm = false)
       ['checking', 'reading', 'writing', 'done'].includes(r.phase))
   )
     throw Error('确认前不能派工、取证或交付')
+  const sources = evidenceSources(r)
   if (
-    r.docs.some((d) => !r.plan?.repos.includes(d.repo)) ||
-    r.decisions?.some((d) => d.requests?.some((request) => !r.plan?.repos.includes(request.repo)))
+    r.docs.some((d) => !sources.includes(d.repo)) ||
+    r.decisions?.some((d) => d.requests?.some((request) => !sources.includes(request.repo)))
   )
-    throw Error('取证对象超出已确认的仓库范围')
+    throw Error('取证对象超出已确认的来源范围')
 }
 async function atomic(path: string, content: string, create = false) {
   const tmp = join(dirname(path), '.owner-' + randomUUID() + '.tmp')

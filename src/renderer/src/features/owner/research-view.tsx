@@ -16,8 +16,10 @@ import {
   subscribeWork,
   askOwner,
   activeQuestion,
+  grantSkip,
+  declineSkip,
 } from './research-work'
-import { freshResearch } from './research-model'
+import { citationPlace, freshResearch, isLocalKey, sourceLabel } from './research-model'
 import { OwnerSidebar } from './owner-sidebar'
 import { OwnerDocument } from './owner-document'
 import { CopyOwnerDiagnostics } from './owner-diagnostics-button'
@@ -25,6 +27,7 @@ import {
   AgreementCard,
   DeliveryCard,
   SessionsCard,
+  SkippedCard,
   StatusChips,
   StepCard,
   Timeline,
@@ -273,6 +276,12 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               confirm={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
             />
           )}
+          <SkippedCard
+            a={a}
+            busy={active}
+            grant={(skipId) => void grantSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
+            decline={(skipId) => void declineSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
+          />
           <SessionsCard a={a} running={workerLoading ? workerKey : undefined} />
           <StepCard
             a={a}
@@ -294,13 +303,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               <ConversationMarkdown source={r.report.conclusion} />
               {r.report.items.map((it, i) => (
                 <div key={i}>
-                  <h3>{it.repo}</h3>
+                  <h3>{sourceLabel(r.plan, it.repo, r.files)}</h3>
                   <p>{it.finding}</p>
                   <blockquote>{it.quote}</blockquote>
-                  <small>
-                    {it.url ?? r.docs.find((d) => d.repo === it.repo)?.url}
-                    {it.line ? '#L' + it.line : ''}
-                  </small>
+                  <small>{citationPlace(r, it)}</small>
                 </div>
               ))}
               <button
@@ -320,14 +326,13 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                         ...r.report!.items.map(
                           (v) =>
                             '## ' +
-                            v.repo +
+                            sourceLabel(r.plan, v.repo, r.files) +
                             '\n\n' +
                             v.finding +
                             '\n\n> ' +
                             v.quote +
                             '\n\n' +
-                            (v.url ?? r.docs.find((d) => d.repo === v.repo)?.url) +
-                            (v.line ? '#L' + v.line : ''),
+                            citationPlace(r, v),
                         ),
                       ].join('\n\n'),
                     })
@@ -380,11 +385,13 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               {r.docs.map((d, i) => (
                 <details key={i}>
                   <summary>
-                    {d.repo} · {d.path ?? 'README'}
+                    {sourceLabel(r.plan, d.repo, r.files)} · {d.path ?? 'README'}
                   </summary>
-                  <p>{d.url}</p>
+                  {!isLocalKey(d.repo) && <p>{d.url}</p>}
                   <small>
-                    读取于 {new Date(d.at).toLocaleString()} · 内容版本 {d.sha.slice(0, 10)}
+                    读取于 {new Date(d.at).toLocaleString()} ·{' '}
+                    {isLocalKey(d.repo) ? 'SHA-256 ' : '内容版本 '}
+                    {d.sha.slice(0, 10)}
                   </small>
                   <pre>{d.text}</pre>
                 </details>
@@ -450,10 +457,15 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
         {perms
           .filter((p) => !!p.conversationId?.startsWith('owner-' + a.id + '-'))
           .map((p) => (
-            <div key={p.id}>
+            <div key={p.id} className="own-perm" data-owner-permission={p.toolName}>
               <b>
-                {p.toolName} · {p.riskLevel}
+                {p.toolName === 'owner_read_local_file'
+                  ? 'Owner 想读取一个不在参考目录中的文件'
+                  : p.toolName + ' · ' + p.riskLevel}
               </b>
+              {p.toolName === 'owner_read_local_file' && (
+                <small>只读、仅此文件、仅本事务；60 秒无回应将跳过，其余步骤继续。</small>
+              )}
               {p.summary.map((s, i) => (
                 <p key={i}>
                   {s.label}：{s.value}
@@ -471,7 +483,13 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                     }
                   }}
                 >
-                  {v ? '仅允许这次' : '拒绝'}
+                  {p.toolName === 'owner_read_local_file'
+                    ? v
+                      ? '允许读取'
+                      : '跳过'
+                    : v
+                      ? '仅允许这次'
+                      : '拒绝'}
                 </button>
               ))}
             </div>

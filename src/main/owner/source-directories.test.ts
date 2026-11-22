@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, realpath, rename, rm, symlink, writeFile } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { OwnerSourceDirectories } from './source-directories'
+import { createHash } from 'node:crypto'
+import { OwnerSourceDirectories, findSourceFiles, readSourceExcerpt } from './source-directories'
 
 const A = '11111111-1111-4111-8111-111111111111'
 const B = '22222222-2222-4222-8222-222222222222'
@@ -79,5 +80,45 @@ describe('OwnerSourceDirectories', () => {
   it('refuses a directory that contains the affair directory', async () => {
     picked = dir
     await expect(service.add(A)).rejects.toThrow(/包含本事务目录/)
+  })
+
+  it('finds evidence files by any-language terms and reads hashed excerpts with real lines', async () => {
+    const [grant] = (await service.add(A))!
+    await mkdir(join(source, '设计'), { recursive: true })
+    const note = '# 取指\n\n假设：取指使用两级预取缓冲。\n'
+    await writeFile(join(source, '设计', '流水线笔记.md'), note)
+    const all = await findSourceFiles(service, A, grant.id, [])
+    expect(all).toEqual({
+      ok: true,
+      paths: ['README.md', 'rtl/ibex_if_stage.sv', '设计/流水线笔记.md'],
+      truncated: false,
+    })
+    const hit = await findSourceFiles(service, A, grant.id, ['流水线', 'missing'])
+    expect(hit).toMatchObject({ ok: true, paths: ['设计/流水线笔记.md'] })
+    const got = await readSourceExcerpt(service, A, grant.id, '设计/流水线笔记.md', '两级预取', 7)
+    expect(got).toMatchObject({
+      ok: true,
+      repo: 'folder:' + grant.id,
+      startLine: 1,
+      at: 7,
+      sha: createHash('sha256').update(note).digest('hex'),
+      url:
+        'cclink-owner-source://' +
+        grant.id +
+        '/' +
+        encodeURIComponent('设计') +
+        '/' +
+        encodeURIComponent('流水线笔记.md'),
+    })
+    expect(got.ok && got.text).toContain('两级预取缓冲')
+    // Another affair cannot search or read the same folder, and failures come back as results.
+    expect(await findSourceFiles(service, B, grant.id, [])).toMatchObject({ ok: false })
+    expect(await readSourceExcerpt(service, A, grant.id, '../secret/token.txt', '')).toMatchObject({
+      ok: false,
+    })
+    await service.revoke(A, grant.id)
+    expect(await readSourceExcerpt(service, A, grant.id, 'README.md', '')).toMatchObject({
+      ok: false,
+    })
   })
 })

@@ -1,5 +1,13 @@
 import { basename } from 'node:path'
-import { checkReport, decisionTitle, researchStatus } from '../../shared/owner/research'
+import {
+  checkReport,
+  decisionTitle,
+  isFolderKey,
+  isLocalKey,
+  planSources,
+  researchStatus,
+  sourceLabel,
+} from '../../shared/owner/research'
 import type { AffairRecord } from '../../shared/owner/affair'
 
 import {
@@ -80,11 +88,18 @@ export function directoryFiles(
     const fence = '`'.repeat(
       Math.max(3, ...Array.from(d.text.matchAll(/`+/g), (m) => m[0].length + 1)),
     )
+    const local = isLocalKey(d.repo)
     files[name] =
       [
-        '# ' + d.repo + ' · ' + (d.path || 'README'),
-        '[固定版本的原文](' + d.url + line + ')',
-        '读取时间 ' + new Date(d.at).toISOString() + '　·　文件版本 ' + d.sha,
+        '# ' + sourceLabel(r.plan, d.repo, r.files) + ' · ' + (d.path || 'README'),
+        local
+          ? '本地只读目录中的文件，按读取时的快照核对'
+          : '[固定版本的原文](' + d.url + line + ')',
+        '读取时间 ' +
+          new Date(d.at).toISOString() +
+          '　·　' +
+          (local ? '读取时整个文件的 SHA-256 ' : '文件版本 ') +
+          d.sha,
         '片段起始行 ' + (d.startLine ?? '未知'),
         fence + 'text\n' + d.text + '\n' + fence,
       ].join('\n\n') + '\n'
@@ -95,7 +110,9 @@ export function directoryFiles(
     const report = checkReport(r, r.report)
     const title =
       report.conclusion.match(/^#\s+(.+)$/m)?.[1] ||
-      (r.plan?.repos.length === 1 ? r.plan.repos[0].split('/')[1] + ' 调研报告' : '调研报告')
+      (r.plan?.repos.length === 1 && !r.plan.folders?.length
+        ? r.plan.repos[0].split('/')[1] + ' 调研报告'
+        : '调研报告')
     reportFile = '交付物/' + shortName(title) + '.md'
     const citations = report.items.map((item, i) => {
       const hit = r.docs.findIndex(
@@ -118,14 +135,35 @@ export function directoryFiles(
         '\n\n[本地证据](../' +
         encodeURI(names[hit]) +
         (item.line ? '#L' + item.line : '') +
-        ') · [仓库原文](' +
-        item.url +
-        (item.line ? '#L' + item.line : '') +
-        ')'
+        ') · ' +
+        (isLocalKey(item.repo)
+          ? sourceLabel(r.plan, item.repo, r.files) +
+            (isFolderKey(item.repo) ? '/' + (r.docs[hit].path ?? '') : '') +
+            (item.line ? ' 第 ' + item.line + ' 行' : '')
+          : '[仓库原文](' + item.url + (item.line ? '#L' + item.line : '') + ')')
       )
     })
+    const unfinished = (r.skips ?? []).filter(
+      (k) => k.status === 'skipped' || k.status === 'declined',
+    )
     files[reportFile] =
-      report.conclusion + '\n\n## 核对过的出处\n\n' + citations.join('\n\n') + '\n'
+      report.conclusion +
+      '\n\n## 核对过的出处\n\n' +
+      citations.join('\n\n') +
+      (unfinished.length
+        ? '\n\n## 未完成项\n\n' +
+          unfinished
+            .map(
+              (k) =>
+                '- 读取 ' +
+                k.path +
+                '：' +
+                (k.status === 'declined' ? '你选择不需要' : '等待允许时被跳过') +
+                (k.affects ? '；影响 ' + k.affects : ''),
+            )
+            .join('\n')
+        : '') +
+      '\n'
   }
   const [status, detail] = researchStatus(r, true)
   files['工作记录.md'] =
@@ -139,7 +177,13 @@ export function directoryFiles(
       a.goal,
       '## ' + (a.confirmed ? '已确认的约定' : '待确认的约定'),
       r.plan
-        ? [r.plan.scope, r.plan.output, r.plan.repos.join('、')].join('\n\n')
+        ? [
+            r.plan.scope,
+            r.plan.output,
+            planSources(r.plan)
+              .map((key) => sourceLabel(r.plan, key))
+              .join('、'),
+          ].join('\n\n')
         : '等待 Owner 提出范围与交付物。',
       '## 最近一次记录的状态',
       status + ' · ' + (a.issue || detail),

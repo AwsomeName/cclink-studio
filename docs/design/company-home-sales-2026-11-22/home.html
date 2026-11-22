@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>公司首页 v3</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --info: #5b4bc4; --info-soft: #ece9fb;
+  --note: #7a4dd8; --note-soft: #f1ebfd;
+  --sell: #c2410c; --sell-soft: #fff1e8; --sell-line: #f3b48f; --on-sell: #fff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+    --note: #c3a6ff; --note-soft: #31284a;
+    --sell: #fb9a5b; --sell-soft: #3a2619; --sell-line: #7a4425; --on-sell: #2a1306;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+  --note: #c3a6ff; --note-soft: #31284a;
+  --sell: #fb9a5b; --sell-soft: #3a2619; --sell-line: #7a4425; --on-sell: #2a1306;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; min-height: 560px; }
+
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.strip .proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.strip .proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.strip .spacer { flex: 1; }
+.badge-wait { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 11px; line-height: 17px; }
+
+.body { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 0; }
+body.agent-open .body { grid-template-columns: 200px minmax(0, 1fr) 290px; }
+
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .item .count { margin-left: auto; font-size: 11px; color: var(--faint); white-space: nowrap; }
+.side .item.sell { color: var(--sell); font-weight: 600; background: var(--sell-soft); box-shadow: inset 2px 0 0 var(--sell); margin-top: 2px; }
+.side .item.sell .count { color: var(--sell); font-weight: 500; }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+.side hr { border: 0; border-top: 1px solid var(--border); margin: 10px 4px; }
+.side .hint { margin: 4px 10px 0 28px; font-size: 11.5px; color: var(--sell); line-height: 1.4; }
+
+.center { display: grid; grid-template-rows: 34px 1fr; min-width: 0; min-height: 0; }
+.tabs { display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--border); }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; border-right: 1px solid var(--border); color: var(--muted); }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.tabs .tools { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 0 12px; color: var(--muted); }
+.tabs .tools .agent-btn { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); font-size: 12px; }
+body.agent-open .agent-btn { border-color: var(--accent); color: var(--text); }
+
+.page { overflow: auto; padding: 18px 24px 48px; }
+.head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.head h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.head .type { font-size: 12px; color: var(--muted); padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; margin-left: 8px; vertical-align: 3px; font-weight: 400; }
+.head .sub { color: var(--muted); margin-top: 4px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.sell { background: var(--sell); border-color: var(--sell); color: var(--on-sell); }
+.btn.ghost { background: none; border-color: transparent; color: var(--accent); padding: 0 4px; }
+.btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+.month { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr) minmax(0, 1.02fr); grid-template-areas: "today money sell" "prog prog sell"; gap: 16px; align-items: start; }
+.a-today { grid-area: today; } .a-money { grid-area: money; } .a-sell { grid-area: sell; } .a-prog { grid-area: prog; }
+.prog-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.prog-grid .proj-row { border-bottom: 0; border-right: 1px solid var(--border); }
+.prog-grid .proj-row:last-child { border-right: 0; }
+.prog-grid .proj-row .money { margin-left: 0; width: 100%; white-space: normal; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; position: relative; }
+.card > header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.card > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.card > header .n { color: var(--faint); font-weight: 400; }
+.card > header .right { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+.card .foot { padding: 9px 14px; color: var(--faint); font-size: 12px; border-top: 1px solid var(--border); }
+.sub-h { display: flex; align-items: center; gap: 8px; padding: 10px 14px 4px; font-size: 12px; color: var(--faint); font-weight: 500; }
+.sub-h .right { margin-left: auto; }
+
+/* to-do rows */
+.row { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px 10px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row .bar { align-self: stretch; border-radius: 0 3px 3px 0; }
+.row .title { font-weight: 600; overflow-wrap: anywhere; }
+.row .why { color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; font-size: 12.5px; }
+.row .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; font-size: 12px; color: var(--faint); align-items: center; }
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-danger { background: var(--danger-soft); color: var(--danger); }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-info { background: var(--info-soft); color: var(--info); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+.t-sell { background: var(--sell-soft); color: var(--sell); }
+.b-warn { background: var(--warn); } .b-danger { background: var(--danger); } .b-info { background: var(--info); } .b-plain { background: var(--border); } .b-sell { background: var(--sell); }
+
+/* project progress */
+.proj-row { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.proj-row:last-child { border-bottom: 0; }
+.proj-row .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proj-row .name { font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; }
+.proj-row .goal { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.proj-row .money { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; align-items: center; }
+.st { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; border: 1px solid var(--border); color: var(--faint); background: var(--surface); white-space: nowrap; }
+.st.done { color: var(--ok); border-color: transparent; background: var(--ok-soft); }
+.st.now { color: var(--text); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.st.opt { border-style: dashed; }
+.arrow { color: var(--faint); font-size: 11px; }
+.proj-row .now-line { margin-top: 7px; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* sell card */
+.card.sell-card { border: 2px solid var(--sell); box-shadow: 0 0 0 4px var(--sell-soft); }
+.sell-card > header { background: var(--sell-soft); border-bottom-color: var(--sell-line); border-radius: 6px 6px 0 0; }
+.sell-card > header h2 { color: var(--sell); }
+.here { display: flex; align-items: center; gap: 6px; width: 100%; font-size: 12px; color: var(--sell); }
+.mode { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.mode .lbl { font-size: 12px; color: var(--muted); }
+.mode .always { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ok); }
+.toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; user-select: none; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.sw { width: 28px; height: 16px; border-radius: 8px; background: var(--border); position: relative; transition: background .15s; flex: none; }
+.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: left .15s; }
+.toggle input:checked + .sw { background: var(--sell); }
+.toggle input:checked + .sw::after { left: 14px; }
+.funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 10px 14px 12px; }
+.fs { position: relative; padding: 6px 8px 6px 10px; border: 1px solid var(--border); border-left-width: 0; background: var(--surface); min-width: 0; }
+.fs:first-child { border-left-width: 1px; border-radius: 6px 0 0 6px; }
+.fs:last-child { border-radius: 0 6px 6px 0; }
+.fs .l { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fs .s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fs.off { border-style: dashed; background: var(--surface-2); }
+.fs.off .v { color: var(--faint); font-size: 13px; font-weight: 500; padding: 3px 0; }
+.fs.win { background: var(--ok-soft); }
+.fs.win .v { color: var(--ok); }
+.lead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); }
+.lead .who { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lead .src { font-weight: 400; color: var(--faint); font-size: 12px; }
+.lead .q { color: var(--muted); font-size: 12.5px; margin-top: 2px; overflow-wrap: anywhere; }
+.lead .wait { font-size: 11.5px; color: var(--warn); }
+.promo { display: flex; gap: 8px; align-items: center; padding: 7px 14px; font-size: 12.5px; flex-wrap: wrap; }
+.promo .t { overflow-wrap: anywhere; }
+.promo .r { margin-left: auto; color: var(--faint); font-size: 12px; }
+.trial-only { display: none; }
+body.trial span.trial-only { display: inline; }
+body.trial .st.trial-only { display: inline-flex; }
+body.trial .row.trial-only, body.trial .lead.trial-only { display: grid; }
+body.trial .fs.trial-only { display: block; }
+body.trial .direct-only { display: none; }
+
+/* money */
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metric { padding: 11px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.metric:last-child { border-right: 0; }
+.metric .label { font-size: 12px; color: var(--muted); }
+.metric .value { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; }
+.metric .hint { font-size: 11.5px; color: var(--faint); }
+.lines { padding: 8px 14px 10px; display: grid; gap: 5px; border-top: 1px solid var(--border); }
+.line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.line .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+.pend { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--border); }
+.pend .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.pend .amt { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pend .amt.in { color: var(--ok); }
+.pend .what { overflow-wrap: anywhere; }
+.pend .d { color: var(--faint); font-size: 12px; white-space: nowrap; }
+.pend .ai { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pend .acts { display: flex; gap: 4px; }
+.pend.done { opacity: .6; }
+.pend.done .acts { display: none; }
+.pend .ok-mark { display: none; color: var(--ok); font-size: 12px; white-space: nowrap; }
+.pend.done .ok-mark { display: inline; }
+
+/* agent */
+.agent { display: none; }
+body.agent-open .agent { background: var(--surface); border-left: 1px solid var(--border); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+body.agent-open .agent .top { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.agent .msgs { padding: 14px; overflow: auto; display: grid; gap: 12px; align-content: start; }
+.ctx { border: 1px dashed var(--border); border-radius: 8px; padding: 10px; color: var(--muted); font-size: 12px; }
+.ctx b { color: var(--text); font-weight: 600; }
+.sugg { display: grid; gap: 6px; }
+.sugg button { text-align: left; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.composer { margin: 10px; border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--bg); }
+.composer .ph { color: var(--faint); min-height: 36px; }
+.composer .bar { display: flex; gap: 12px; font-size: 12px; color: var(--muted); align-items: center; }
+
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--statusbar); color: var(--on-accent); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.status .right { margin-left: auto; display: flex; gap: 16px; }
+
+/* annotations */
+.note { display: none; position: absolute; top: -10px; right: 10px; z-index: 2; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--note-soft); color: var(--note); border: 1px solid var(--note); white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+body.notes .note { display: inline-block; }
+body.notes .card { outline: 1px dashed var(--note); outline-offset: 3px; }
+body.clean .review { display: none; }
+
+.review { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+.review button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.review button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+.review .sep { width: 1px; background: var(--border); margin: 3px 2px; }
+
+body.agent-open .grid, .grid.narrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "today sell" "money sell" "prog prog"; }
+@media (max-width: 1320px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "today sell" "money sell" "prog prog"; } body.agent-open .body { grid-template-columns: 190px minmax(0, 1fr); } body.agent-open .agent { display: none; } }
+@media (max-width: 1100px) { .prog-grid { grid-template-columns: minmax(0, 1fr); } .prog-grid .proj-row { border-right: 0; border-bottom: 1px solid var(--border); } .prog-grid .proj-row:last-child { border-bottom: 0; } }
+@media (max-width: 900px) { .grid, body.agent-open .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "today" "sell" "money" "prog"; } }
+@media (max-width: 760px) {
+  .body { grid-template-columns: minmax(0, 1fr); } .side { display: none; }
+  .strip .proj:not(.active):not(.keep) { display: none; }
+  .page { padding: 14px 16px 100px; }
+  .tabs .tools { display: none; }
+  .hide-narrow { display: none; }
+  .row { grid-template-columns: 4px minmax(0, 1fr); } .row > .btn { grid-column: 2; justify-self: start; }
+  .funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .fs, .fs:first-child, .fs:last-child { border-width: 1px; border-radius: 6px; }
+  .metrics { grid-template-columns: minmax(0, 1fr); } .metric { border-right: 0; border-bottom: 1px solid var(--border); }
+  .lead, .pend { grid-template-columns: minmax(0, 1fr); }
+  .proj-row .money { margin-left: 0; width: 100%; }
+  .status .right, .status .hide-narrow { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3.5h-3v3.5H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="yuan" viewBox="0 0 16 16"><path d="M4 2.5 8 8l4-5.5M8 8v5.5M5 9h6M5 11.5h6"/></symbol>
+  <symbol id="mega" viewBox="0 0 16 16"><path d="M2.5 6.5v3h2l5 3v-9l-5 3zM12 6a2.5 2.5 0 0 1 0 4M5 9.5l1 3.5"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="chat" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol>
+  <symbol id="tool" viewBox="0 0 16 16"><path d="M10 2.5a3 3 0 0 0-2.8 4.1L2.5 11.3l2.2 2.2 4.7-4.7A3 3 0 0 0 13.5 6l-1.8 1.8-1.9-.5-.5-1.9z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="owner" viewBox="0 0 16 16"><path d="M8 1.8 14 8l-6 6.2L2 8z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></symbol>
+  <symbol id="cal" viewBox="0 0 16 16"><rect x="2.5" y="3.5" width="11" height="10" rx="1"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></symbol>
+  <symbol id="globe" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.8 2 1.8 9.6 0 11.6M8 2.2c-1.8 2-1.8 9.6 0 11.6"/></symbol>
+  <symbol id="term" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="m4.5 6.5 2 1.5-2 1.5M8 10h3"/></symbol>
+  <symbol id="ext" viewBox="0 0 16 16"><path d="M9.5 2.5h4v4M13.5 2.5 8 8M11.5 9.5v3a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1h3"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
+  <symbol id="pin" viewBox="0 0 16 16"><path d="M8 14s4.5-4.2 4.5-7.5a4.5 4.5 0 0 0-9 0C3.5 9.8 8 14 8 14z"/><circle cx="8" cy="6.5" r="1.6"/></symbol>
+  <symbol id="check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="cube" viewBox="0 0 16 16"><path d="M8 1.8 13.5 5v6L8 14.2 2.5 11V5zM2.5 5 8 8.2 13.5 5M8 8.2v6"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="strip" aria-label="项目栏">
+    <button class="proj" aria-label="收起侧栏"><svg class="i"><use href="#panel"/></svg></button>
+    <button class="proj"><svg class="i"><use href="#grid"/></svg>我的空间</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#grid"/></svg>眼镜研发</button>
+    <button class="proj active"><svg class="i"><use href="#grid"/></svg>星河科技</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#plus"/></svg>新建 / 打开</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#clock"/></svg>历史项目</button>
+    <span class="spacer"></span>
+    <button class="proj hide-narrow"><svg class="i"><use href="#gear"/></svg>Studio 设置</button>
+    <button class="proj keep"><svg class="i"><use href="#owner"/></svg>Owner<span class="badge-wait">1 等你</span></button>
+  </nav>
+
+  <div class="body">
+    <aside class="side" aria-label="项目导航">
+      <button class="item active"><svg class="i"><use href="#home"/></svg>项目首页</button>
+      <div class="group">公司经营</div>
+      <button class="item"><svg class="i"><use href="#list"/></svg>业务项目<span class="count">3</span></button>
+      <button class="item"><svg class="i"><use href="#yuan"/></svg>公司账目<span class="count" data-pend-count-side>12 待核对</span></button>
+      <button class="item sell"><svg class="i"><use href="#mega"/></svg>推广与销售<span class="count"><span class="direct-only">3 等回复</span><span class="trial-only">8 等处理</span></span></button>
+      <div class="hint">推广产品、跟进感兴趣的人</div>
+      <hr />
+      <div class="group">工作</div>
+      <button class="item"><svg class="i"><use href="#folder"/></svg>文件</button>
+      <button class="item"><svg class="i"><use href="#chat"/></svg>会话</button>
+      <button class="item"><svg class="i"><use href="#tool"/></svg>工具</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <div class="tab active" role="tab" aria-selected="true"><svg class="i"><use href="#home"/></svg>项目首页</div>
+        <div class="tools"><svg class="i"><use href="#globe"/></svg><svg class="i"><use href="#term"/></svg><button class="agent-btn" data-agent aria-pressed="false"><svg class="i"><use href="#chat"/></svg>Agent</button></div>
+      </div>
+
+      <div class="page">
+        <div class="head">
+          <div>
+            <h1>星河科技<span class="type">公司</span></h1>
+            <div class="sub">今天 5 件事 · <span class="direct-only">3 位感兴趣的人等你回复</span><span class="trial-only">3 人等回复、5 份试用报名待筛选</span> · 数据更新于 11-22 09:41</div>
+          </div>
+          <div class="right">
+            <span class="month"><svg class="i"><use href="#cal"/></svg>2026-11</span>
+            <button class="btn"><svg class="i"><use href="#gear"/></svg>项目设置</button>
+          </div>
+        </div>
+
+        <div class="grid">
+            <section class="card a-today" aria-labelledby="h-today">
+              <span class="note">聚合视图 · 不另建待办，处理回到原功能</span>
+              <header><h2 id="h-today">今天要做 <span class="n">5</span></h2><div class="right"><span style="font-size:12px;color:var(--faint)">按等待时间排序</span></div></header>
+              <div class="row">
+                <span class="bar b-sell"></span>
+                <div>
+                  <div class="title">回复王先生：近视 600 度能不能用、多少钱</div>
+                  <div class="why">知乎《设计手记》评论区，已等 6 小时。助理已按产品事实表起草，价格由你定。</div>
+                  <div class="meta"><span class="tag t-sell">推广与销售</span><span>想买</span><span>AR 眼镜一代 · 上市销售</span></div>
+                </div>
+                <button class="btn sell">起草的回复</button>
+              </div>
+              <div class="row">
+                <span class="bar b-warn"></span>
+                <div>
+                  <div class="title">核对 <span data-pend-count>12</span> 条账目</div>
+                  <div class="why">其中 1 笔 ¥1,299.00 转入疑似张同学的预订款；核对前不计入本月收入。</div>
+                  <div class="meta"><span class="tag t-warn">公司账目</span><span>招商银行、支付宝 11-15 至 11-21</span></div>
+                </div>
+                <button class="btn">去核对</button>
+              </div>
+              <div class="row">
+                <span class="bar b-danger"></span>
+                <div>
+                  <div class="title">知乎账号登录失效，DVT 进展文章停在“提交前核验”</div>
+                  <div class="why">正文与 3 张图已填好，草稿已保存；在原账号页面重新扫码后从原步骤继续。</div>
+                  <div class="meta"><span class="tag t-danger">发布事务</span><span>知乎 @星河科技</span></div>
+                </div>
+                <button class="btn">打开发布事务</button>
+              </div>
+              <div class="row">
+                <span class="bar b-info"></span>
+                <div>
+                  <div class="title">Owner 等你决定：BOM 成本调研要不要用付费报价</div>
+                  <div class="why">公开渠道只查到 2 家连接器单价，第 3 家需要询价；已查到的部分不受影响。</div>
+                  <div class="meta"><span class="tag t-info">Owner</span><span>OW-025 · AR 眼镜一代 · 研发</span></div>
+                </div>
+                <button class="btn">打开事务</button>
+              </div>
+              <div class="row direct-only">
+                <span class="bar b-sell"></span>
+                <div>
+                  <div class="title">告诉张同学发货时间</div>
+                  <div class="why">已成交 3 单中最早的一单；你答应 11 月底前回复。</div>
+                  <div class="meta"><span class="tag t-sell">推广与销售</span><span>已成交 · 微信</span></div>
+                </div>
+                <button class="btn">打开对话记录</button>
+              </div>
+              <div class="row trial-only">
+                <span class="bar b-sell"></span>
+                <div>
+                  <div class="title">筛选 5 份试用报名</div>
+                  <div class="why">按你的条件（近视、通勤佩戴）建议邀请 3 人；邀请发出前由你确认。</div>
+                  <div class="meta"><span class="tag t-sell">推广与销售</span><span>试用招募 · 报名表</span></div>
+                </div>
+                <button class="btn">查看建议名单</button>
+              </div>
+            </section>
+
+            <section class="card a-prog" aria-labelledby="h-prog">
+              <span class="note">公司领域：业务项目与关联 · 进行中只引用 Owner/发布事务</span>
+              <header><h2 id="h-prog">项目进度 <span class="n">3</span></h2><div class="right"><button class="btn"><svg class="i"><use href="#plus"/></svg>创建业务项目</button></div></header>
+              <div class="prog-grid">
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">AR 眼镜一代 · 研发</button>
+                  <span class="tag t-plain"><svg class="i" style="width:12px;height:12px;margin-right:3px"><use href="#cube"/></svg>关联工程：眼镜研发</span>
+                  <span class="money" data-prog-rd>本月已确认支出 ¥1,520.40</span>
+                </div>
+                <div class="goal">做出可以小批量生产的 DVT 样机</div>
+                <div class="steps">
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>原型</span><span class="arrow">›</span>
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>首轮试戴</span><span class="arrow">›</span>
+                  <span class="st now">DVT 样机</span><span class="arrow">›</span>
+                  <span class="st">小批量</span>
+                </div>
+                <div class="now-line"><span class="tag t-info">Owner 执行中</span>OW-025 BOM 成本整理 · 第 2 轮补查 <button class="btn ghost sm">打开工程</button></div>
+              </div>
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">AR 眼镜一代 · 上市销售</button>
+                  <span class="money" data-prog-sale>本月收入 ¥3,897.00 · 推广支出 ¥300.00</span>
+                </div>
+                <div class="goal"><span class="direct-only">首批卖出 20 台；直接销售，不设试用环节</span><span class="trial-only">先招募 30 位试用者拿到反馈，同时接受直接下单；首批卖出 20 台</span></div>
+                <div class="steps">
+                  <span class="st done"><svg class="i" style="width:12px;height:12px"><use href="#check"/></svg>产品页</span><span class="arrow">›</span>
+                  <span class="st opt trial-only">试用招募 7/30</span><span class="arrow trial-only">›</span>
+                  <span class="st now">首批成交 <span data-deals>3</span>/20</span><span class="arrow">›</span>
+                  <span class="st">发货</span>
+                </div>
+                <div class="now-line"><span class="tag t-plain">等待外部</span>B 站《试戴一周》平台审核中 · 只读检查，不自动重发</div>
+              </div>
+              <div class="proj-row">
+                <div class="top">
+                  <button class="name">官网改版</button>
+                  <span class="money">未关联账目归属</span>
+                </div>
+                <div class="goal" style="color:var(--warn)">目标和交付物待补，暂不显示进度</div>
+                <div class="steps"><button class="btn ghost sm">补目标</button></div>
+              </div>
+              </div>
+            </section>
+
+            <section class="card sell-card a-sell" aria-labelledby="h-sell">
+              <span class="note">新增：人的记录、评论/私信读取 · 复用：文章发布、网页事务、账号库</span>
+              <header>
+                <div class="here"><svg class="i" style="width:13px;height:13px"><use href="#pin"/></svg>推广产品、跟进感兴趣的人，都从这里进</div>
+                <h2 id="h-sell">推广与销售</h2>
+                <div class="right">
+                  <button class="btn sell"><svg class="i"><use href="#mega"/></svg>推广产品</button>
+                  <button class="btn">跟进感兴趣的人</button>
+                </div>
+              </header>
+              <div class="mode">
+                <span class="lbl">销售方式</span>
+                <span class="always"><svg class="i" style="width:13px;height:13px"><use href="#check"/></svg>直接销售</span>
+                <label class="toggle"><input type="checkbox" id="trial-switch" /><span class="sw"></span>同时招募试用者（可选）</label>
+              </div>
+              <div class="funnel" aria-label="本月推广与成交">
+                <div class="fs"><div class="l">看到内容</div><div class="v">12,480</div><div class="s">平台读回 · 3 篇</div></div>
+                <div class="fs"><div class="l">感兴趣</div><div class="v">18</div><div class="s">评论、私信</div></div>
+                <div class="fs off direct-only"><div class="l">试用</div><div class="v">未启用</div><div class="s">可随时开启</div></div>
+                <div class="fs trial-only"><div class="l">试用</div><div class="v">7/30</div><div class="s">5 份报名待筛选</div></div>
+                <div class="fs win"><div class="l">已成交</div><div class="v" data-deals>3</div><div class="s">收入已入账确认</div></div>
+              </div>
+              <div class="sub-h">等你回复 <span class="n">3</span><span class="right"><button class="btn ghost sm">全部 18 人</button></span></div>
+              <div class="lead">
+                <div>
+                  <div class="who">王先生 <span class="tag t-sell">想买</span><span class="src">知乎评论 ·《设计手记》</span></div>
+                  <div class="q">“近视 600 度能用吗？大概多少钱？” <span class="wait">· 等 6 小时</span></div>
+                </div>
+                <button class="btn sm">看回复草稿</button>
+              </div>
+              <div class="lead">
+                <div>
+                  <div class="who">李女士 <span class="tag t-sell">想买 2 台</span><span class="src">小红书私信</span></div>
+                  <div class="q">“团队用，能开发票吗？” <span class="wait">· 等 1 天</span></div>
+                </div>
+                <button class="btn sm">起草报价</button>
+              </div>
+              <div class="lead">
+                <div>
+                  <div class="who">陈工 <span class="tag t-plain">合作</span><span class="src">B 站评论</span></div>
+                  <div class="q">想做华东渠道代理 <span class="wait">· 等 2 天</span></div>
+                </div>
+                <button class="btn sm">查看</button>
+              </div>
+              <div class="lead trial-only">
+                <div>
+                  <div class="who">5 份试用报名 <span class="tag t-warn">待筛选</span><span class="src">报名表</span></div>
+                  <div class="q">建议邀请 3 人；发邀请前由你确认</div>
+                </div>
+                <button class="btn sm">筛选</button>
+              </div>
+              <div class="sub-h">最近推广</div>
+              <div class="promo"><span class="tag t-ok">已公开 · 已核验</span><span class="t">知乎《AR 眼镜一代设计手记》</span><span class="r">带来 9 人</span></div>
+              <div class="promo"><span class="tag t-plain">审核中</span><span class="t">B 站《试戴一周》</span><span class="r">11-21 提交</span></div>
+              <div class="promo" style="padding-bottom:10px"><span class="tag t-danger">卡住</span><span class="t">知乎《DVT 进展》登录失效</span><span class="r">见今天要做</span></div>
+              <div class="foot">只显示平台读回的数字；读不到写“未获取”。价格、发货时间只起草，由你发送。</div>
+            </section>
+
+            <section class="card a-money" aria-labelledby="h-money">
+              <span class="note">来源：公司账目 · 汇总只计已确认</span>
+              <header><h2 id="h-money">11 月收支</h2><div class="right"><button class="btn">打开账目</button></div></header>
+              <div class="metrics">
+                <div class="metric"><div class="label">已确认收入</div><div class="value" data-income>¥3,897.00</div><div class="hint"><span data-deals>3</span> 台一代</div></div>
+                <div class="metric"><div class="label">已确认支出</div><div class="value" data-expense>¥1,820.40</div><div class="hint">研发 + 推广</div></div>
+                <div class="metric"><div class="label">净流入</div><div class="value" data-net>¥2,076.60</div><div class="hint">不等于利润</div></div>
+              </div>
+              <div class="lines">
+                <div class="line"><span>AR 眼镜一代 · 研发</span><span class="v" data-biz-rd>−¥1,520.40</span></div>
+                <div class="line"><span>AR 眼镜一代 · 上市销售</span><span class="v" data-biz-sale>+¥3,897.00 / −¥300.00</span></div>
+                <div class="line"><span class="tag t-plain">资料可能未齐</span><span style="color:var(--muted)">招商银行至 11-20，支付宝至 11-21；微信未导入</span></div>
+              </div>
+              <div class="sub-h">待核对 <span class="n" data-pend-count>12</span> 条 · 不计入上方汇总<span class="right"><button class="btn ghost sm">全部核对</button></span></div>
+              <div class="pend" data-amount="1299" data-kind="in" data-biz="sale">
+                <div>
+                  <div class="top"><span class="amt in">+¥1,299.00</span><span class="what">招商银行 转入 · 张同学</span><span class="d">11-20</span></div>
+                  <div class="ai">建议：销售收入 · 上市销售 · 关联张同学的对话</div>
+                </div>
+                <div class="acts"><button class="btn sm" data-confirm>确认</button><button class="btn sm">改</button></div>
+                <span class="ok-mark">已确认</span>
+              </div>
+              <div class="pend" data-amount="268" data-kind="out" data-biz="rd">
+                <div>
+                  <div class="top"><span class="amt">−¥268.00</span><span class="what">支付宝 · FPC 打样</span><span class="d">11-19</span></div>
+                  <div class="ai">建议：研发打样 · AR 眼镜一代 · 研发 · 有凭证</div>
+                </div>
+                <div class="acts"><button class="btn sm" data-confirm>确认</button><button class="btn sm">改</button></div>
+                <span class="ok-mark">已确认</span>
+              </div>
+              <div class="pend" data-amount="150" data-kind="out" data-biz="sale">
+                <div>
+                  <div class="top"><span class="amt">−¥150.00</span><span class="what">支付宝 · 知乎内容推广</span><span class="d">11-18</span></div>
+                  <div class="ai">建议：市场推广 · 上市销售 · <span style="color:var(--warn)">缺发票</span></div>
+                </div>
+                <div class="acts"><button class="btn sm" data-confirm>确认</button><button class="btn sm">改</button></div>
+                <span class="ok-mark">已确认</span>
+              </div>
+              <div class="foot">AI 建议不入账；你点“确认”后才进入汇总。剩余待核对在账目页处理。</div>
+            </section>
+        </div>
+      </div>
+    </main>
+
+    <aside class="agent" aria-label="Agent">
+      <div class="top"><button class="btn primary">新建对话</button><span style="color:var(--muted)">会话列表</span></div>
+      <div class="msgs">
+        <div class="ctx">本次上下文：<b>星河科技 · 项目首页</b><br />选中某个人、某笔账或某个业务后，会话改为以它为上下文。已开始的运行不随选中项变化。</div>
+        <div class="sugg">
+          <button>帮我回复王先生（只用产品事实表里的数字）</button>
+          <button>这个月推广花了多少，带来几单？</button>
+          <button>把 DVT 进展写成知乎和小红书两版</button>
+          <button>交给 Owner：整理 11 月还没核对的账</button>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="ph">继续提问，或用 @ 引用资源…</div>
+        <div class="bar"><span>本机 Codex ⌄</span><span>权限：自动 ⌄</span></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span>进行中的工作 2</span><span class="hide-narrow">本地 · 星河科技</span><span class="hide-narrow">朗读</span>
+    <span class="right"><span>效果稿 · 数据为示意</span><span>CCLink Studio v0.2.14</span></span>
+  </footer>
+</div>
+
+<div class="review" role="toolbar" aria-label="评审控制">
+  <button data-mode="direct" aria-pressed="true">直接销售</button>
+  <button data-mode="trial" aria-pressed="false">+ 招募试用者</button>
+  <span class="sep"></span>
+  <button data-notes aria-pressed="false">数据来源标注</button>
+  <button data-reset>重置</button>
+  <span class="sep"></span>
+  <button data-theme-btn="light" aria-pressed="false">浅色</button>
+  <button data-theme-btn="dark" aria-pressed="false">深色</button>
+</div>
+
+<script>
+(function () {
+  var body = document.body, root = document.documentElement;
+  function press(sel, on) { document.querySelectorAll(sel).forEach(function (b) { b.setAttribute('aria-pressed', String(on(b))); }); }
+  var sw = document.getElementById('trial-switch');
+  function setTrial(on) {
+    body.classList.toggle('trial', on);
+    sw.checked = on;
+    press('[data-mode]', function (x) { return (x.dataset.mode === 'trial') === on; });
+  }
+  sw.addEventListener('change', function () { setTrial(sw.checked); });
+  document.querySelectorAll('[data-mode]').forEach(function (b) {
+    b.addEventListener('click', function () { setTrial(b.dataset.mode === 'trial'); });
+  });
+
+  var base = { income: 3897, expense: 1820.4, rd: 1520.4, saleIn: 3897, saleOut: 300, pend: 12, deals: 3 };
+  var cur = Object.assign({}, base);
+  function fmt(n) { return '¥' + n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function render() {
+    document.querySelector('[data-income]').textContent = fmt(cur.income);
+    document.querySelector('[data-expense]').textContent = fmt(cur.expense);
+    document.querySelector('[data-net]').textContent = fmt(cur.income - cur.expense);
+    document.querySelector('[data-biz-rd]').textContent = '−' + fmt(cur.rd);
+    document.querySelector('[data-biz-sale]').textContent = '+' + fmt(cur.saleIn) + ' / −' + fmt(cur.saleOut);
+    document.querySelectorAll('[data-pend-count]').forEach(function (e) { e.textContent = cur.pend; });
+    document.querySelector('[data-pend-count-side]').textContent = cur.pend + ' 待核对';
+    document.querySelectorAll('[data-deals]').forEach(function (e) { e.textContent = cur.deals; });
+    document.querySelector('[data-prog-sale]').textContent = '本月收入 ' + fmt(cur.saleIn) + ' · 推广支出 ' + fmt(cur.saleOut);
+    document.querySelector('[data-prog-rd]').textContent = '本月已确认支出 ' + fmt(cur.rd);
+  }
+  document.querySelectorAll('[data-confirm]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var row = b.closest('.pend'), amt = Number(row.dataset.amount);
+      if (row.classList.contains('done')) return;
+      row.classList.add('done');
+      if (row.dataset.kind === 'in') { cur.income += amt; cur.saleIn += amt; cur.deals += 1; }
+      else { cur.expense += amt; if (row.dataset.biz === 'rd') cur.rd += amt; else cur.saleOut += amt; }
+      cur.pend -= 1;
+      render();
+    });
+  });
+  document.querySelector('[data-reset]').addEventListener('click', function () {
+    cur = Object.assign({}, base);
+    document.querySelectorAll('.pend.done').forEach(function (r) { r.classList.remove('done'); });
+    setTrial(false); render();
+  });
+
+  var ab = document.querySelector('[data-agent]');
+  ab.addEventListener('click', function () { var on = body.classList.toggle('agent-open'); ab.setAttribute('aria-pressed', String(on)); });
+  var notes = document.querySelector('[data-notes]');
+  notes.addEventListener('click', function () {
+    var on = body.classList.toggle('notes');
+    notes.setAttribute('aria-pressed', String(on));
+  });
+  function setTheme(t) {
+    root.setAttribute('data-theme', t);
+    press('[data-theme-btn]', function (x) { return x.dataset.themeBtn === t; });
+    try { localStorage.setItem('company-home-theme', t); } catch (e) {}
+  }
+  document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+    b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem('company-home-theme'); } catch (e) {}
+  var params = new URLSearchParams(location.search);
+  setTheme(params.get('theme') || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  if (params.get('mode') === 'trial') setTrial(true);
+  if (params.get('notes') === '1') notes.click();
+  if (params.get('clean') === '1') body.classList.add('clean');
+  if (params.get('agent') === '1') ab.click();
+  if (params.get('confirmed') === '1') document.querySelectorAll('[data-confirm]').forEach(function (b) { b.click(); });
+})();
+</script>
+</body>
+</html>

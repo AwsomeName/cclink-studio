@@ -1,15 +1,19 @@
 import { constants } from 'node:fs'
 import { lstat, mkdir, open, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, sep } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type {
   OwnerSourceCandidate,
   OwnerSourceEntry,
   OwnerSourceFile,
   OwnerSourceGrant,
+  OwnerSourcePaths,
 } from '../../shared/ipc/owner-source'
 import { ownerSourceRelative } from '../../shared/ipc/owner-source'
+import type { ReadmeResult } from '../../shared/ipc/owner-research'
+import { folderKey, localSourceUrl } from '../../shared/owner/research'
+import { sourceWindow } from './source-window'
 
 const grantSchema = z.object({
   id: z.string().uuid(),
@@ -25,6 +29,8 @@ type Grant = z.infer<typeof grantSchema>
 export const MAX_SOURCE_GRANTS = 8
 export const MAX_SOURCE_ENTRIES = 500
 export const MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
+export const MAX_SEARCH_DIRECTORIES = 300
+export const MAX_SEARCH_RESULTS = 40
 
 const missing = (e: unknown) => (e as NodeJS.ErrnoException)?.code === 'ENOENT'
 
@@ -266,6 +272,84 @@ export class OwnerSourceDirectories {
       return { content, size: stat.size }
     } finally {
       await handle.close()
+    }
+  }
+}
+
+/**
+ * Owner evidence reads. Both go through the same grant check as previews, so revoking the
+ * folder stops them, and both return relative paths only.
+ */
+export async function findSourceFiles(
+  sources: Pick<OwnerSourceDirectories, 'entries'>,
+  id: string,
+  grantId: string,
+  terms: string[],
+): Promise<OwnerSourcePaths> {
+  try {
+    const files: string[] = []
+    const queue = ['']
+    let visited = 0
+    let truncated = false
+    while (queue.length) {
+      if (++visited > MAX_SEARCH_DIRECTORIES) {
+        truncated = true
+        break
+      }
+      const dir = queue.shift()!
+      for (const entry of await sources.entries(id, grantId, dir)) {
+        const rel = dir ? dir + '/' + entry.name : entry.name
+        if (entry.dir) queue.push(rel)
+        else if ((entry.size ?? 0) <= MAX_SOURCE_FILE_BYTES) files.push(rel)
+      }
+    }
+    const words = terms.map((t) => t.toLowerCase())
+    const ranked = files
+      .map((path) => ({
+        path,
+        hits: words.filter((w) => path.toLowerCase().includes(w)).length,
+      }))
+      .filter((f) => !words.length || f.hits > 0)
+      .sort(
+        (a, b) =>
+          b.hits - a.hits ||
+          a.path.split('/').length - b.path.split('/').length ||
+          a.path.localeCompare(b.path),
+      )
+    return {
+      ok: true,
+      paths: ranked.slice(0, MAX_SEARCH_RESULTS).map((f) => f.path),
+      truncated: truncated || ranked.length > MAX_SEARCH_RESULTS,
+    }
+  } catch (e) {
+    return { ok: false, error: '本地目录检索失败：' + (e instanceof Error ? e.message : String(e)) }
+  }
+}
+
+export async function readSourceExcerpt(
+  sources: Pick<OwnerSourceDirectories, 'read'>,
+  id: string,
+  grantId: string,
+  relative: string,
+  anchor: string,
+  now = Date.now(),
+): Promise<ReadmeResult> {
+  try {
+    const { content } = await sources.read(id, grantId, relative)
+    const window = sourceWindow(content, anchor)
+    if (!window.text.trim()) return { ok: false, error: relative + ' 是空文件' }
+    return {
+      ok: true,
+      repo: folderKey(grantId),
+      url: localSourceUrl(grantId, relative),
+      sha: createHash('sha256').update(content, 'utf8').digest('hex'),
+      at: now,
+      ...window,
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: relative + ' 读取失败：' + (e instanceof Error ? e.message : String(e)),
     }
   }
 }

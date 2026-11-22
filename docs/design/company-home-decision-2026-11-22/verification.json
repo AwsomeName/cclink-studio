@@ -1,0 +1,140 @@
+[
+ {
+  "name": "home-decide",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-decide-full",
+  "w": 1440,
+  "h": 2200,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-dark",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-ask",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "4",
+  "think": "ask",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-dialog",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "4",
+  "think": "ask",
+  "dlg": true,
+  "errors": []
+ },
+ {
+  "name": "home-clarify",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "clarify",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-done",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "4",
+  "think": "done",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-notes",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-1180",
+  "w": 1180,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "name": "home-narrow",
+  "w": 375,
+  "h": 812,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "todo": "5",
+  "think": "decide",
+  "dlg": false,
+  "errors": []
+ },
+ {
+  "interaction": {
+   "dlgOpen": true,
+   "afterSubmit": [
+    "clarify",
+    "5"
+   ],
+   "afterAnswer": [
+    "decide",
+    "5"
+   ],
+   "afterAdoptEdited": [
+    "done",
+    "4",
+    "首批 20 台主攻个人近视通勤用户，早鸟价 ¥1,399；团队同价开票；渠道代理暂缓。"
+   ]
+  }
+ }
+]

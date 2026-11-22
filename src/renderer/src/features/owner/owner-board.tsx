@@ -1,6 +1,13 @@
 import type { Affair } from './affair'
 import { sessionStatus, statusChips } from './owner-status'
-import { decisionWorker, workerLabel, workersOf } from './research-model'
+import {
+  citationCounts,
+  decisionWorker,
+  pendingSkips,
+  planSources,
+  workerLabel,
+  workersOf,
+} from './research-model'
 
 const short = (s: string, n = 90) => (s.length > n ? s.slice(0, n) + '…' : s)
 
@@ -67,12 +74,45 @@ export function AgreementCard({
         <dd>{plan.output}</dd>
         <dt>时间限制</dt>
         <dd>{plan.timing ?? '无硬截止 · 无投入上限 · 按回执推进'}</dd>
-        <dt>可用来源</dt>
-        <dd>
-          公开 GitHub 仓库：{plan.repos.join('、')}
-          <br />
-          本地参考目录：
-          {sourceGrants ? '已授权 ' + sourceGrants + ' 个（仅供你浏览，暂不用于取证）' : '无'}
+        {(plan.outcomes ?? []).length > 0 && (
+          <>
+            <dt>交付结果</dt>
+            <dd data-owner-outcomes>
+              {plan.outcomes!.map((o, i) => (
+                <div key={i}>
+                  <span className={'own-tool' + (o.required ? ' required' : '')}>
+                    {o.required ? '必需' : '可选'}
+                  </span>
+                  {o.text}
+                </div>
+              ))}
+              <small>必需结果依赖的步骤被跳过时，不会标为已交付。</small>
+            </dd>
+          </>
+        )}
+        <dt>这次会用到</dt>
+        <dd data-owner-tools>
+          {plan.repos.map((repo) => (
+            <div key={repo}>
+              <span className="own-tool github">GitHub</span>
+              {repo} · 只读
+            </div>
+          ))}
+          {(plan.folders ?? []).map((f) => (
+            <div key={f.key}>
+              <span className="own-tool local">本地</span>
+              {f.label} · 只读
+            </div>
+          ))}
+          {(plan.folders ?? []).length > 0 && (
+            <small>所选本地片段会交给本次使用的模型分析；撤销授权后立即停止读取。</small>
+          )}
+          <small>
+            其他本地文件：每次询问，60 秒无回应则跳过并继续；允许只对该文件、本事务、只读有效。
+          </small>
+          {!a.confirmed && sourceGrants > (plan.folders ?? []).length && (
+            <small>另有已授权的本地目录未列入约定；需要使用时，在右侧告诉 Owner 加入。</small>
+          )}
         </dd>
         {a.directory && (
           <>
@@ -248,8 +288,9 @@ export function DeliveryCard({
       )}
       <dl className="own-kv">
         <dt>引用核对</dt>
-        <dd>
+        <dd data-owner-citations>
           {r.report.items.length} / {r.report.items.length} 条引文与证据原文一致
+          {citationLine(r.report.items, planSources(r.plan).length)}
         </dd>
         <dt>证据快照</dt>
         <dd>{r.docs.length} 份，保存在 资料/</dd>
@@ -260,7 +301,99 @@ export function DeliveryCard({
   )
 }
 
-type Step = { state: 'ok' | 'now' | 'todo'; title: string; hint?: string }
+function citationLine(items: { repo: string }[], sources: number) {
+  const { local, github } = citationCounts(items)
+  if (!local) return null
+  return (
+    <small>
+      本地 {local} · GitHub {github} · 覆盖全部 {sources} 个来源
+    </small>
+  )
+}
+
+/**
+ * Steps that waited for approval and were skipped. Required ones keep the affair from being
+ * delivered; allowing one reruns only the skipped steps.
+ */
+export function SkippedCard({
+  a,
+  grant,
+  decline,
+  busy,
+}: {
+  a: Affair
+  grant: (skipId: string) => void
+  decline: (skipId: string) => void
+  busy: boolean
+}) {
+  const r = a.research!
+  const skips = r.skips ?? []
+  const open = skips.filter((k) => k.status !== 'read' && k.status !== 'declined')
+  if (!open.length && r.phase !== 'decide') return null
+  const held = pendingSkips(r).filter((k) => k.required)
+  const why = (k: (typeof skips)[number]) =>
+    (k.why === 'timeout' ? '60 秒无回应，已跳过' : '你拒绝了，已跳过') +
+    ' · ' +
+    new Date(k.at).toLocaleTimeString()
+  return (
+    <div className={'own-card' + (held.length ? ' red' : ' amber')} data-owner-skipped>
+      <h3>
+        {r.phase === 'decide' ? '待你决定 · 未交付' : '跳过的步骤'}
+        <small>
+          {held.length
+            ? held.length + ' 项必需步骤被跳过，因此不能标为已交付'
+            : '允许后只重跑被跳过的步骤，已核对的引文不重做'}
+        </small>
+      </h3>
+      {skips.map((k) => (
+        <div key={k.id} className="own-skip" data-owner-skip={k.status}>
+          <div>
+            <span className={'own-tool' + (k.required ? ' required' : '')}>
+              {k.required === undefined ? '待判断' : k.required ? '必需' : '可选'}
+            </span>
+            <span className="own-tool local">本地文件</span>
+            <code>{k.path}</code>
+          </div>
+          <small>
+            {why(k)}
+            {k.affects ? ' · 影响：' + k.affects : ''}
+          </small>
+          {k.status === 'skipped' ? (
+            <div className="own-card-actions">
+              <button
+                className={k.required ? 'own-primary' : ''}
+                disabled={busy}
+                onClick={() => grant(k.id)}
+              >
+                允许读取此文件并补查
+              </button>
+              {!k.required && (
+                <button disabled={busy} onClick={() => decline(k.id)}>
+                  不需要
+                </button>
+              )}
+            </div>
+          ) : (
+            <small>
+              {k.status === 'granted'
+                ? '已允许（仅此文件、本事务、只读），等待补查'
+                : k.status === 'read'
+                  ? '已补查'
+                  : '你选择不需要，列为未完成项'}
+            </small>
+          )}
+        </div>
+      ))}
+      {r.draft && (
+        <small>
+          草稿已核对 {r.draft.items.length} 条引文，不是交付物；必需步骤补查完成后才交付。
+        </small>
+      )}
+    </div>
+  )
+}
+
+type Step = { state: 'ok' | 'now' | 'todo' | 'skip'; title: string; hint?: string }
 export function Timeline({ a, active }: { a: Affair; active: boolean }) {
   const r = a.research!
   const steps: Step[] = [{ state: 'ok', title: '交办并建档', hint: a.directory?.path }]
@@ -280,12 +413,14 @@ export function Timeline({ a, active }: { a: Affair; active: boolean }) {
       title:
         d.kind === 'deliver'
           ? '写入交付物并逐条核对引用'
-          : (d.workerChoice === 'new' || (d.kind === 'read' && !d.workerChoice)
-              ? '新开 '
-              : '续用 ') +
-            workerLabel(decisionWorker(d)) +
-            '：' +
-            short(d.ask ?? d.reason, 60),
+          : !d.requests?.length && d.localFiles?.length
+            ? '读取本地文件：' + d.localFiles.join('、')
+            : (d.workerChoice === 'new' || (d.kind === 'read' && !d.workerChoice)
+                ? '新开 '
+                : '续用 ') +
+              workerLabel(decisionWorker(d)) +
+              '：' +
+              short(d.ask ?? d.reason, 60),
       hint:
         d.kind === 'deliver'
           ? short(d.reason)
@@ -300,6 +435,19 @@ export function Timeline({ a, active }: { a: Affair; active: boolean }) {
               .join(' · ') || short(d.reason),
     })
   })
+  for (const k of r.skips ?? [])
+    steps.push({
+      state: k.status === 'read' ? 'ok' : 'skip',
+      title: (k.status === 'read' ? '补查：读取 ' : '已跳过：读取 ') + k.path,
+      hint:
+        k.status === 'read'
+          ? '你允许后只重跑了这一步'
+          : (k.why === 'timeout' ? '60 秒无回应' : '你拒绝了') +
+            '，其余步骤继续' +
+            (k.affects ? ' · 影响：' + k.affects : ''),
+    })
+  if (r.phase === 'decide')
+    steps.push({ state: 'now', title: '待你决定', hint: '必需步骤补查后才交付' })
   if (a.confirmed && !decisions.some((d) => d.kind === 'deliver'))
     steps.push({ state: 'todo', title: '写入交付物并逐条核对引用' })
   if (r.phase === 'done')

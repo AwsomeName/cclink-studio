@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>市场与用户效果稿</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --info: #5b4bc4; --info-soft: #ece9fb;
+  --note: #7a4dd8; --note-soft: #f1ebfd;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+    --note: #c3a6ff; --note-soft: #31284a;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --info: #a99cf5; --info-soft: #2c2843;
+  --note: #c3a6ff; --note-soft: #31284a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 13px/1.5 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .5; }
+button:focus-visible, label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 15px; height: 15px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.app { display: grid; grid-template-rows: 40px 1fr 24px; height: 100vh; min-height: 600px; }
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.strip .proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.strip .proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.strip .spacer { flex: 1; }
+.badge-wait { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 11px; line-height: 17px; }
+
+.body { display: grid; grid-template-columns: 200px minmax(0, 1fr) 44px; min-height: 0; }
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; white-space: nowrap; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .item .count { margin-left: auto; font-size: 11px; color: var(--faint); }
+.side .item .count.hot { color: var(--warn); }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+.side hr { border: 0; border-top: 1px solid var(--border); margin: 10px 4px; }
+.rail { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 10px; color: var(--muted); }
+.rail button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: none; display: grid; place-items: center; }
+.rail .lbl { writing-mode: vertical-rl; font-size: 11px; color: var(--faint); letter-spacing: 2px; }
+
+.center { display: grid; grid-template-rows: 34px 1fr; min-width: 0; min-height: 0; }
+.tabs { display: flex; align-items: stretch; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; border-right: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.page { overflow: auto; padding: 16px 24px 40px; }
+
+.head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.head h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.head .sub { color: var(--muted); margin-top: 2px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.sm { height: 24px; padding: 0 8px; font-size: 12px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.ghost { background: none; border-color: transparent; color: var(--accent); padding: 0 4px; }
+
+/* Goal strip */
+.goal { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; position: relative; }
+.goal > div { padding: 10px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.goal > div:last-child { border-right: 0; }
+.goal .k { font-size: 12px; color: var(--muted); }
+.goal .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.goal .v small { font-size: 12px; font-weight: 400; color: var(--faint); }
+.goal .t { font-weight: 600; margin-top: 2px; }
+.funnel { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface-2); margin-top: 7px; }
+.funnel i { display: block; height: 100%; }
+.legend { display: flex; gap: 12px; margin-top: 5px; font-size: 11.5px; color: var(--muted); flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; background: var(--c); }
+
+/* Flow columns */
+.flow { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) minmax(0, 1.1fr); gap: 14px; align-items: start; }
+.col { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; position: relative; }
+.col > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.col > header .step { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; background: var(--accent-soft); color: var(--accent); flex: none; }
+.col > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.col > header .n { color: var(--faint); font-size: 12px; }
+.col > header .right { margin-left: auto; }
+
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-danger { background: var(--danger-soft); color: var(--danger); }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-info { background: var(--info-soft); color: var(--info); }
+.t-acc { background: var(--accent-soft); color: var(--accent); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+
+/* Progress cards */
+.src { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.src:last-child { border-bottom: 0; }
+.src.sel { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.src .title { font-weight: 600; overflow-wrap: anywhere; }
+.src .from { font-size: 12px; color: var(--faint); margin-top: 3px; display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.src .angle { font-size: 12.5px; color: var(--muted); margin-top: 5px; }
+.src .acts { display: flex; gap: 6px; margin-top: 7px; align-items: center; flex-wrap: wrap; }
+
+/* Review */
+.draft-title { padding: 12px 14px 0; font-weight: 600; font-size: 14px; overflow-wrap: anywhere; }
+.draft-meta { padding: 3px 14px 0; font-size: 12px; color: var(--faint); }
+.ptabs { display: flex; gap: 4px; padding: 10px 14px 0; flex-wrap: wrap; }
+.ptabs button { height: 26px; padding: 0 10px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.ptabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.preview { margin: 10px 14px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 12.5px; color: var(--muted); line-height: 1.65; }
+.preview mark { background: var(--warn-soft); color: var(--warn); padding: 0 2px; border-radius: 2px; }
+.preview .thumbs { display: flex; gap: 5px; margin-top: 8px; }
+.preview .thumbs i { width: 42px; height: 42px; border-radius: 4px; background: linear-gradient(135deg, var(--surface-2), var(--border)); }
+.blk { padding: 10px 14px 0; }
+.blk h3 { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--faint); }
+.check { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; font-size: 12.5px; }
+.check .mk { width: 16px; flex: none; text-align: center; font-weight: 700; }
+.check.ok .mk { color: var(--ok); } .check.bad .mk { color: var(--warn); }
+.check .fix { display: flex; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.acct { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; font-size: 12.5px; }
+.acct input { margin: 0; accent-color: var(--accent); }
+.acct .st { margin-left: auto; font-size: 11.5px; color: var(--faint); text-align: right; }
+.acct .st.warn { color: var(--warn); }
+.expect { font-size: 12.5px; color: var(--muted); }
+.approve { display: flex; gap: 8px; padding: 12px 14px; align-items: center; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.approve .hint { font-size: 12px; color: var(--faint); }
+.pub { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+.pub:last-child { border-bottom: 0; }
+.pub .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pub .top b { font-weight: 600; }
+.pub .sub { color: var(--muted); margin-top: 2px; }
+.subhead { padding: 8px 14px; font-size: 12px; color: var(--faint); background: var(--surface-2); border-bottom: 1px solid var(--border); }
+
+/* People */
+.chips { display: flex; gap: 5px; padding: 9px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.chips button { height: 24px; padding: 0 9px; border: 1px solid var(--border); border-radius: 12px; background: none; font-size: 12px; color: var(--muted); }
+.chips button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.person { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+.person:last-child { border-bottom: 0; }
+.person .who { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; }
+.person .who b { font-weight: 600; }
+.person .who .wait { margin-left: auto; font-size: 11.5px; color: var(--faint); }
+.person .who .wait.long { color: var(--warn); }
+.person .ctx { font-size: 12px; color: var(--faint); margin-top: 2px; }
+.person .said { margin-top: 6px; padding-left: 9px; border-left: 2px solid var(--border); color: var(--text); overflow-wrap: anywhere; }
+.person .reply { margin-top: 7px; padding: 8px 10px; border-radius: 6px; background: var(--surface-2); font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.person .reply b { color: var(--text); font-weight: 500; }
+.person .acts { display: flex; gap: 6px; margin-top: 7px; align-items: center; flex-wrap: wrap; }
+.person .acts .note2 { font-size: 11.5px; color: var(--faint); }
+.person .sent { font-size: 12px; color: var(--ok); }
+
+/* Insights */
+.insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; position: relative; }
+.insights > div { padding: 11px 14px; border-right: 1px solid var(--border); min-width: 0; }
+.insights > div:last-child { border-right: 0; }
+.insights h3 { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--faint); }
+.bars .r { display: grid; grid-template-columns: minmax(0, 1fr) 90px 22px; gap: 8px; align-items: center; font-size: 12.5px; padding: 2px 0; }
+.bars .r span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bars .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.bars .bar i { display: block; height: 100%; background: var(--accent); }
+.bars .r b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.q { display: flex; gap: 8px; align-items: center; font-size: 12.5px; padding: 2px 0; flex-wrap: wrap; }
+.q .c { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.status { display: flex; align-items: center; gap: 16px; padding: 0 12px; background: var(--statusbar); color: var(--on-accent); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.status .right { margin-left: auto; display: flex; gap: 16px; }
+
+.note { display: none; position: absolute; top: -9px; right: 10px; z-index: 2; padding: 1px 8px; border-radius: 10px; font-size: 11px; background: var(--note-soft); color: var(--note); border: 1px solid var(--note); white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+body.notes .note { display: inline-block; }
+body.notes .col, body.notes .goal, body.notes .insights { outline: 1px dashed var(--note); outline-offset: 3px; }
+
+.review { position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%); z-index: 10; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; box-shadow: 0 6px 24px rgba(0,0,0,.18); max-width: calc(100vw - 32px); flex-wrap: wrap; justify-content: center; }
+.review button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
+.review button[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+.review .sep { width: 1px; background: var(--border); margin: 3px 2px; }
+body.clean .review { display: none; }
+
+body.embed .strip, body.embed .side, body.embed .rail, body.embed .status, body.embed .tabs, body.embed .review { display: none !important; }
+body.embed .app { grid-template-rows: minmax(0, 1fr); }
+body.embed .body { grid-template-columns: minmax(0, 1fr); }
+body.embed .center { grid-template-rows: minmax(0, 1fr); }
+.focus-flash { outline: 2px solid var(--accent); outline-offset: 3px; }
+[hidden] { display: none !important; }
+
+@media (max-width: 1320px) { .flow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .flow .c3 { grid-column: 1 / -1; } }
+@media (max-width: 1080px) { .goal { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .goal > div:nth-child(2) { border-right: 0; } .goal > div:nth-child(-n+2) { border-bottom: 1px solid var(--border); } .insights { grid-template-columns: minmax(0, 1fr); } .insights > div { border-right: 0; border-bottom: 1px solid var(--border); } .insights > div:last-child { border-bottom: 0; } }
+@media (max-width: 860px) { .body { grid-template-columns: minmax(0, 1fr); } .side, .rail { display: none; } .flow { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .strip .proj:not(.active):not(.keep) { display: none; }
+  .page { padding: 12px 16px 90px; }
+  .goal { grid-template-columns: minmax(0, 1fr); } .goal > div { border-right: 0; border-bottom: 1px solid var(--border); }
+  .hide-narrow { display: none; }
+  .status .right, .status .hide-narrow { display: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="grid" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></symbol>
+  <symbol id="home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3.5h-3v3.5H3a.5.5 0 0 1-.5-.5z"/></symbol>
+  <symbol id="list" viewBox="0 0 16 16"><path d="M6 4h8M6 8h8M6 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01"/></symbol>
+  <symbol id="yuan" viewBox="0 0 16 16"><path d="M4 2.5 8 8l4-5.5M8 8v5.5M5 9h6M5 11.5h6"/></symbol>
+  <symbol id="people" viewBox="0 0 16 16"><circle cx="6" cy="5.5" r="2.3"/><path d="M1.8 13.5c.5-2.4 2.2-3.6 4.2-3.6s3.7 1.2 4.2 3.6M10.5 3.4a2.2 2.2 0 0 1 0 4.2M12 9.9c1.2.4 2 1.6 2.3 3.6"/></symbol>
+  <symbol id="folder" viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="chat" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></symbol>
+  <symbol id="tool" viewBox="0 0 16 16"><path d="M10 2.5a3 3 0 0 0-2.8 4.1L2.5 11.3l2.2 2.2 4.7-4.7A3 3 0 0 0 13.5 6l-1.8 1.8-1.9-.5-.5-1.9z"/></symbol>
+  <symbol id="gear" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/></symbol>
+  <symbol id="owner" viewBox="0 0 16 16"><path d="M8 1.8 14 8l-6 6.2L2 8z"/></symbol>
+  <symbol id="plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 4.8V8l2.2 1.4"/></symbol>
+  <symbol id="panel" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="1.5"/><path d="M6 2.5v11"/></symbol>
+  <symbol id="spark" viewBox="0 0 16 16"><path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/></symbol>
+  <symbol id="facts" viewBox="0 0 16 16"><rect x="3" y="2" width="10" height="12" rx="1"/><path d="M5.5 5.5h5M5.5 8h5M5.5 10.5h3"/></symbol>
+  <symbol id="user" viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4"/></symbol>
+</svg>
+
+<div class="app">
+  <nav class="strip" aria-label="项目栏">
+    <button class="proj" aria-label="收起侧栏"><svg class="i"><use href="#panel"/></svg></button>
+    <button class="proj"><svg class="i"><use href="#grid"/></svg>我的空间</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#grid"/></svg>眼镜研发</button>
+    <button class="proj active"><svg class="i"><use href="#grid"/></svg>星河科技</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#plus"/></svg>新建 / 打开</button>
+    <button class="proj hide-narrow"><svg class="i"><use href="#clock"/></svg>历史项目</button>
+    <span class="spacer"></span>
+    <button class="proj hide-narrow"><svg class="i"><use href="#gear"/></svg>Studio 设置</button>
+    <button class="proj keep"><svg class="i"><use href="#owner"/></svg>Owner<span class="badge-wait">1 等你</span></button>
+  </nav>
+
+  <div class="body">
+    <aside class="side" aria-label="项目导航">
+      <button class="item"><svg class="i"><use href="#home"/></svg>项目首页</button>
+      <div class="group">公司经营</div>
+      <button class="item"><svg class="i"><use href="#list"/></svg>业务项目<span class="count">3</span></button>
+      <button class="item active"><svg class="i"><use href="#people"/></svg>市场与用户<span class="count hot">5 等你</span></button>
+      <button class="item"><svg class="i"><use href="#yuan"/></svg>公司账目<span class="count">12 待核对</span></button>
+      <button class="item"><svg class="i"><use href="#facts"/></svg>产品事实表</button>
+      <hr />
+      <div class="group">工作</div>
+      <button class="item"><svg class="i"><use href="#folder"/></svg>文件</button>
+      <button class="item"><svg class="i"><use href="#chat"/></svg>会话</button>
+      <button class="item"><svg class="i"><use href="#tool"/></svg>工具</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <div class="tab" role="tab" aria-selected="false"><svg class="i"><use href="#home"/></svg>项目首页</div>
+        <div class="tab active" role="tab" aria-selected="true"><svg class="i"><use href="#people"/></svg>市场与用户</div>
+      </div>
+
+      <div class="page">
+        <div class="head">
+          <div>
+            <h1>市场与用户</h1>
+            <div class="sub">AR 眼镜一代 · 上市前：建立受众，招募 30 名早期试戴者</div>
+          </div>
+          <div class="right">
+            <button class="btn hide-narrow"><svg class="i"><use href="#facts"/></svg>产品事实表</button>
+            <button class="btn"><svg class="i"><use href="#gear"/></svg>账号与规则</button>
+          </div>
+        </div>
+
+        <section class="goal" aria-label="上市前目标">
+          <span class="note">报名名单为本机记录；关注者为平台实际读取</span>
+          <div>
+            <div class="k">早期试戴者招募</div>
+            <div class="v">7 <small>/ 30 确认参加</small></div>
+            <div class="funnel" aria-hidden="true"><i style="width:23.3%;background:var(--ok)"></i><i style="width:13.3%;background:var(--accent)"></i><i style="width:23.3%;background:var(--warn)"></i></div>
+            <div class="legend"><span style="--c:var(--ok)">确认 7</span><span style="--c:var(--accent)">已邀请 4</span><span style="--c:var(--warn)">报名待筛选 7</span><span style="--c:var(--surface-2)">目标缺口 12</span></div>
+          </div>
+          <div><div class="k">本周新报名</div><div class="v">14</div><div class="k">来自 2 篇内容</div></div>
+          <div><div class="k">等你回复</div><div class="v" style="color:var(--warn)">4</div><div class="k">最久 1 天（合作邀约）</div></div>
+          <div><div class="k">关注者（本周变化）</div><div class="t">知乎 +62 · 小红书 +24</div><div class="k">B 站 未获取 · 11-22 09:00 读取</div></div>
+        </section>
+
+        <div class="flow">
+          <!-- 1. Progress -->
+          <section class="col c1" aria-labelledby="h1">
+            <span class="note">只读来源：日记 · 眼镜研发 · Owner 交付物</span>
+            <header><span class="step">1</span><h2 id="h1">可以讲的进展</h2><span class="n">本周 4 条</span></header>
+            <div class="src sel">
+              <div class="title">铰链改为双轴，两万次开合无松动</div>
+              <div class="from"><span class="tag t-plain">眼镜研发</span>测试报告 hinge-endurance.md · 11-20</div>
+              <div class="angle">给关心可靠性的技术读者 → 知乎长文 + 小红书图文</div>
+              <div class="acts"><span class="tag t-acc">已起草，在第 2 步</span></div>
+            </div>
+            <div class="src">
+              <div class="title">首轮 8 人试戴：3 人鼻托压痕，已改为硅胶双段</div>
+              <div class="from"><span class="tag t-plain">我的空间</span>日记 11-18 · 试戴记录.md</div>
+              <div class="angle">给想报名试戴的人：说明我们怎么用反馈改设计</div>
+              <div class="acts"><button class="btn sm primary" data-draft>写成内容</button><button class="btn sm">稍后</button></div>
+            </div>
+            <div class="src">
+              <div class="title">镜腿减重到 38 g</div>
+              <div class="from"><span class="tag t-plain">眼镜研发</span>BOM v0.7 · 11-21</div>
+              <div class="angle">数字未写入产品事实表，确认后才能公开</div>
+              <div class="acts"><button class="btn sm">确认为产品事实</button></div>
+            </div>
+            <div class="src">
+              <div class="title">竞品显示方案对比</div>
+              <div class="from"><span class="tag t-plain">Owner</span>OW-024 交付物</div>
+              <div class="angle"><span class="tag t-warn">不建议公开</span> 含供应商与成本信息，属于你设定的不公开范围</div>
+            </div>
+          </section>
+
+          <!-- 2. Review & approve -->
+          <section class="col c2" aria-labelledby="h2">
+            <span class="note">执行：网页事务 · 账号：全局账号库</span>
+            <header><span class="step">2</span><h2 id="h2">审阅与批准</h2><span class="n">1 篇待批准</span></header>
+            <div class="draft-title">两万次开合之后：AR 眼镜一代为什么把铰链改成双轴</div>
+            <div class="draft-meta">来源：眼镜研发 / hinge-endurance.md · 草稿版本 3 · 11-22 09:20</div>
+            <div class="ptabs" role="tablist">
+              <button role="tab" aria-selected="true" data-p="zh">知乎长文 · 2,400 字 · 4 图</button>
+              <button role="tab" aria-selected="false" data-p="xhs">小红书图文 · 380 字 · 6 图</button>
+              <button role="tab" aria-selected="false" data-p="bili">B 站口播 · 未起草</button>
+            </div>
+            <div class="preview" data-pv="zh">我们原来的单轴铰链在第 3,000 次开合左右开始松动……改为双轴后，实验室连续开合两万次，扭矩变化小于 5%。整机续航 <mark>约 4 小时</mark>，镜腿……<div class="thumbs"><i></i><i></i><i></i><i></i></div></div>
+            <div class="preview" data-pv="xhs" hidden>戴了一周才发现，眼镜最先坏的往往是铰链 🔧 我们把它改成了双轴，开合两万次还是紧的。续航 <mark>约 4 小时</mark>……想第一批试戴？看最后一张图 👇<div class="thumbs"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+            <div class="preview" data-pv="bili" hidden>B 站口播稿尚未起草。批准前两版不受影响；需要时点“起草”。<div style="margin-top:8px"><button class="btn sm">起草口播稿</button></div></div>
+
+            <div class="blk">
+              <h3>事实核对（对照产品事实表）</h3>
+              <div class="check ok"><span class="mk">✓</span><span>两万次开合、扭矩变化 &lt; 5% · 测试报告 11-20</span></div>
+              <div class="check ok"><span class="mk">✓</span><span>双轴铰链结构 · 设计文件 hinge-v2.step</span></div>
+              <div class="check bad" data-fact><span class="mk">!</span><span>草稿写“续航约 4 小时”，事实表为 <b>3.5 小时</b>（11-15 确认）
+                <span class="fix"><button class="btn sm primary" data-fixfact>改为 3.5 小时</button><button class="btn sm">打开事实表</button></span></span></div>
+              <div class="check ok"><span class="mk">✓</span><span>文末试戴报名入口 · 同一张报名表</span></div>
+            </div>
+
+            <div class="blk">
+              <h3>发布到（每个账号单独批准）</h3>
+              <label class="acct"><input type="checkbox" checked data-acct /> 知乎 @星河科技<span class="st">已登录 · 11-21 确认</span></label>
+              <label class="acct"><input type="checkbox" checked data-acct /> 小红书 @星河眼镜<span class="st warn">登录可能已失效<br />发布时可能需要你扫码</span></label>
+              <div class="expect">预期结果：每个账号公开发布 1 篇；不含付费推广。验证码、扫码和平台声明会停下交给你。</div>
+            </div>
+            <div class="approve">
+              <button class="btn primary" data-approve disabled>批准并发布到 2 个账号</button>
+              <button class="btn">退回修改</button>
+              <span class="hint" data-approve-hint>先处理 1 处事实冲突</span>
+            </div>
+
+            <div class="subhead">本周发布</div>
+            <div data-publishing hidden>
+              <div class="pub"><div class="top"><span class="tag t-info">执行中</span><b>知乎 · 两万次开合之后</b></div><div class="sub">第 3/9 步：粘贴正文；4 张图待上传</div></div>
+              <div class="pub"><div class="top"><span class="tag t-plain">排队</span><b>小红书 · 两万次开合之后</b></div><div class="sub">知乎完成后开始，逐个账号执行</div></div>
+            </div>
+            <div class="pub"><div class="top"><span class="tag t-ok">已公开 · 已核验</span><b>知乎 · 首轮试戴记录</b></div><div class="sub">公开页全文与 3 张图核验通过 · 11-18 10:24 · 带来 9 个报名</div></div>
+            <div class="pub"><div class="top"><span class="tag t-danger">需要你处理</span><b>小红书 · 鼻托改版</b></div><div class="sub">6 张图已上传、草稿已保存；平台要求扫码登录 <button class="btn ghost">打开账号页面</button></div></div>
+          </section>
+
+          <!-- 3. People -->
+          <section class="col c3" aria-labelledby="h3">
+            <span class="note">新增：人的记录，仅存本机，不进 Git</span>
+            <header><span class="step">3</span><h2 id="h3">跟进感兴趣的人</h2><span class="n">5 等你</span></header>
+            <div class="chips" role="toolbar" aria-label="按意向筛选">
+              <button aria-pressed="true" data-f="all">全部 5</button>
+              <button aria-pressed="false" data-f="trial">试戴意向 2</button>
+              <button aria-pressed="false" data-f="buy">购买询问 1</button>
+              <button aria-pressed="false" data-f="collab">合作 1</button>
+              <button aria-pressed="false" data-f="signup">报名待筛选 7</button>
+            </div>
+
+            <div class="person" data-k="trial">
+              <div class="who"><b>林小舟</b><span class="tag t-acc">试戴意向</span><span class="wait long">等了 5 小时</span></div>
+              <div class="ctx">知乎评论 · 《首轮试戴记录》</div>
+              <div class="said">600 度近视能试吗？我每天通勤两小时，很想报名。</div>
+              <div class="reply" data-reply><b>拟回复：</b>可以，这一轮正好在找近视用户，-6.00D 以内都能配插片。报名入口在文末，填写时注明通勤场景就好。<br /><span style="color:var(--faint)">事实：近视适配 -6.00D 以内 · 事实表 11-15</span></div>
+              <div class="acts"><button class="btn sm primary" data-send>批准发送</button><button class="btn sm">修改</button><span class="note2">发送后在平台读回核验</span></div>
+            </div>
+
+            <div class="person" data-k="trial">
+              <div class="who"><b>阿哲在骑行</b><span class="tag t-acc">试戴意向</span><span class="wait">等了 2 小时</span></div>
+              <div class="ctx">小红书评论 · 《鼻托改版》</div>
+              <div class="said">骑车时会不会滑？想帮你们测户外。</div>
+              <div class="reply"><b>拟回复：</b>户外正是我们缺的场景，欢迎报名，表里选“户外骑行”。防滑还在测，结果会写在下一篇。</div>
+              <div class="acts"><button class="btn sm primary" data-send>批准发送</button><button class="btn sm">修改</button></div>
+            </div>
+
+            <div class="person" data-k="buy">
+              <div class="who"><b>Luna_看世界</b><span class="tag t-warn">购买询问</span><span class="wait">等了 3 小时</span></div>
+              <div class="ctx">小红书私信</div>
+              <div class="said">多少钱？什么时候能买？</div>
+              <div class="reply"><b>只起草，等你定口径：</b>价格和上市时间属于你设定的“只由我回复”。事实表里没有定价。</div>
+              <div class="acts"><button class="btn sm">由我回复</button><button class="btn sm">在事实表写统一口径</button></div>
+            </div>
+
+            <div class="person" data-k="collab">
+              <div class="who"><b>硬件老张</b><span class="tag t-info">合作</span><span class="wait">等了 1 天</span></div>
+              <div class="ctx">B 站私信 · 粉丝 3.2 万（平台显示）</div>
+              <div class="said">想做一期上手测评，能寄一台吗？</div>
+              <div class="acts"><button class="btn sm">打开对话</button><button class="btn sm">交给 Owner 了解对方</button></div>
+            </div>
+
+            <div class="person" data-k="signup">
+              <div class="who"><b>试戴报名 7 人待筛选</b><span class="tag t-plain">报名表</span><span class="wait">11-22 08:00 读取</span></div>
+              <div class="ctx">你的条件：近视与非近视各半 · 覆盖通勤 / 办公 / 户外 · 上海、杭州优先</div>
+              <div class="reply">符合条件 5 人：近视 3 · 户外 2。建议邀请 4 人，1 人城市不在优先范围。</div>
+              <div class="acts"><button class="btn sm primary">查看并确认邀请名单</button></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="insights" aria-label="本周什么有效">
+          <span class="note">只用核验过的发布和实际收到的报名</span>
+          <div>
+            <h3>报名来自哪篇内容</h3>
+            <div class="bars">
+              <div class="r"><span>知乎 · 首轮试戴记录</span><span class="bar"><i style="width:100%"></i></span><b>9</b></div>
+              <div class="r"><span>小红书 · 鼻托改版</span><span class="bar"><i style="width:44%"></i></span><b>4</b></div>
+              <div class="r"><span>其他 / 无法判断</span><span class="bar"><i style="width:11%;background:var(--faint)"></i></span><b>1</b></div>
+            </div>
+          </div>
+          <div>
+            <h3>反复被问到的问题</h3>
+            <div class="q"><span>近视能不能用</span><span class="c">11 次</span><button class="btn ghost">交给眼镜研发</button></div>
+            <div class="q"><span>续航多久</span><span class="c">6 次</span><span class="tag t-ok">事实表已有</span></div>
+            <div class="q"><span>什么时候能买</span><span class="c">5 次</span><span class="tag t-warn">缺统一口径</span></div>
+          </div>
+          <div>
+            <h3>下一篇可以讲</h3>
+            <div class="q"><span>“近视用户怎么戴”——11 次提问 + 林小舟的场景</span></div>
+            <div class="q"><button class="btn sm"><svg class="i"><use href="#spark"/></svg>加入第 1 步</button></div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <aside class="rail" aria-label="Agent（已收起）">
+      <button aria-label="展开 Agent"><svg class="i"><use href="#chat"/></svg></button>
+      <span class="lbl">Agent</span>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span>进行中的工作 3</span><span class="hide-narrow">本地 · 星河科技</span>
+    <span class="right"><span>效果稿 · 人名与数据为示意</span><span>CCLink Studio v0.2.14</span></span>
+  </footer>
+</div>
+
+<div class="review" role="toolbar" aria-label="评审控制">
+  <button data-notes aria-pressed="false">数据来源标注</button>
+  <button data-reset>重置演示</button>
+  <span class="sep"></span>
+  <button data-theme-btn="light" aria-pressed="false">浅色</button>
+  <button data-theme-btn="dark" aria-pressed="false">深色</button>
+</div>
+
+<script>
+(function () {
+  var body = document.body, root = document.documentElement;
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+
+  // Platform version tabs
+  $$('[data-p]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $$('[data-p]').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+      $$('[data-pv]').forEach(function (p) { p.hidden = p.dataset.pv !== b.dataset.p; });
+    });
+  });
+
+  // Approval requires fact conflict resolved and at least one account
+  var factFixed = false;
+  function refreshApprove() {
+    var n = $$('[data-acct]').filter(function (c) { return c.checked; }).length;
+    var btn = $('[data-approve]'), hint = $('[data-approve-hint]');
+    btn.textContent = n ? '批准并发布到 ' + n + ' 个账号' : '请选择账号';
+    btn.disabled = !factFixed || !n;
+    hint.textContent = !factFixed ? '先处理 1 处事实冲突' : (n ? '批准即授权这篇内容在所选账号上公开发布' : '');
+  }
+  $('[data-fixfact]').addEventListener('click', function () {
+    factFixed = true;
+    var row = $('[data-fact]');
+    row.className = 'check ok';
+    row.innerHTML = '<span class="mk">✓</span><span>续航已改为 3.5 小时 · 事实表 11-15（两个平台版本同步修改）</span>';
+    $$('.preview mark').forEach(function (m) { m.outerHTML = '3.5 小时'; });
+    refreshApprove();
+  });
+  $$('[data-acct]').forEach(function (c) { c.addEventListener('change', refreshApprove); });
+  $('[data-approve]').addEventListener('click', function () {
+    $('[data-publishing]').hidden = false;
+    var btn = $('[data-approve]');
+    btn.disabled = true; btn.textContent = '已批准 · 草稿版本 3';
+    $('[data-approve-hint]').textContent = '执行进度在下方；“已发布”只在平台读回核验后出现';
+  });
+
+  // Reply sending
+  $$('[data-send]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var acts = b.parentNode;
+      acts.innerHTML = '<span class="sent" style="color:var(--muted)">发送中…</span>';
+      setTimeout(function () { acts.innerHTML = '<span class="sent">已发送 · 已在平台读回核验</span>'; }, 900);
+    });
+  });
+
+  // Draft another progress item
+  $$('[data-draft]').forEach(function (b) {
+    b.addEventListener('click', function () { b.parentNode.innerHTML = '<span class="tag t-info">助理起草中 · 完成后出现在第 2 步</span>'; });
+  });
+
+  // Intent filter
+  $$('[data-f]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      $$('[data-f]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      $$('.person').forEach(function (p) { p.hidden = b.dataset.f !== 'all' && p.dataset.k !== b.dataset.f; });
+    });
+  });
+
+  // Review controls
+  var notes = $('[data-notes]');
+  notes.addEventListener('click', function () { notes.setAttribute('aria-pressed', String(body.classList.toggle('notes'))); });
+  $('[data-reset]').addEventListener('click', function () { location.reload(); });
+  function setTheme(t) {
+    root.setAttribute('data-theme', t);
+    $$('[data-theme-btn]').forEach(function (x) { x.setAttribute('aria-pressed', String(x.dataset.themeBtn === t)); });
+    try { localStorage.setItem('company-marketing-theme', t); } catch (e) {}
+  }
+  $$('[data-theme-btn]').forEach(function (b) { b.addEventListener('click', function () { setTheme(b.dataset.themeBtn); }); });
+  var saved = null;
+  try { saved = localStorage.getItem('company-marketing-theme'); } catch (e) {}
+  var params = new URLSearchParams(location.search);
+  setTheme(params.get('theme') || saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  if (params.get('notes') === '1') notes.click();
+  if (params.get('clean') === '1') body.classList.add('clean');
+  if (params.get('embed') === '1') body.classList.add('embed', 'clean');
+  var focusSel = { c1: '.c1', c2: '.c2', c3: '.c3', signup: '.person[data-k="signup"]' }[params.get('focus')];
+  if (focusSel) {
+    var el = document.querySelector(focusSel);
+    if (el) { setTimeout(function () { el.scrollIntoView({ block: 'start' }); el.classList.add('focus-flash'); setTimeout(function () { el.classList.remove('focus-flash'); }, 1600); }, 50); }
+  }
+  if (params.get('approved') === '1') { $('[data-fixfact]').click(); $('[data-approve]').click(); }
+  refreshApprove();
+  if (params.get('approved') === '1') { $('[data-approve]').disabled = true; $('[data-approve]').textContent = '已批准 · 草稿版本 3'; }
+})();
+</script>
+</body>
+</html>

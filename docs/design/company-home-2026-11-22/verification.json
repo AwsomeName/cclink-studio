@@ -1,0 +1,99 @@
+[
+ {
+  "name": "home-dark",
+  "w": 1440,
+  "h": 900,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-light-full",
+  "w": 1440,
+  "h": 1560,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-notes",
+  "w": 1440,
+  "h": 1560,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-signin",
+  "w": 1440,
+  "h": 900,
+  "view": "browser",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-accounts",
+  "w": 1440,
+  "h": 900,
+  "view": "settings",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-to-followup",
+  "w": 1440,
+  "h": 900,
+  "view": "market",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": false,
+  "errors": []
+ },
+ {
+  "name": "home-1180",
+  "w": 1180,
+  "h": 900,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "name": "home-narrow",
+  "w": 375,
+  "h": 812,
+  "view": "home",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "iframeOk": null,
+  "errors": []
+ },
+ {
+  "interaction": {
+   "expenseAfterConfirm": "¥18,506.40",
+   "pendingAfterConfirm": "11 条待核对 · ¥5,786.40",
+   "todosLeftAfterHandback": "6",
+   "xhsAccount": "小红书 · 星河眼镜 · 已登录",
+   "marketTabShown": true
+  }
+ }
+]

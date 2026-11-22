@@ -155,6 +155,31 @@ export interface CCLinkStudioAPI {
       grantId: string,
       rel: string,
     ) => Promise<import('../shared/ipc/owner-source').OwnerSourceFile>
+    find: (
+      id: string,
+      grantId: string,
+      terms: string[],
+    ) => Promise<import('../shared/ipc/owner-source').OwnerSourcePaths>
+    excerpt: (
+      id: string,
+      grantId: string,
+      rel: string,
+      anchor: string,
+    ) => Promise<import('../shared/ipc/owner-research').ReadmeResult>
+    requestFile: (
+      id: string,
+      conversationId: string,
+      path: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerFileRequestResult>
+    grantFile: (
+      id: string,
+      path: string,
+    ) => Promise<import('../shared/ipc/owner-source').OwnerFileGrantResult>
+    fileExcerpt: (
+      id: string,
+      grantId: string,
+      anchor: string,
+    ) => Promise<import('../shared/ipc/owner-research').ReadmeResult>
   }
   ownerResearch: {
     selectAgent: () => Promise<import('../shared/ipc/owner-research').OwnerAgentChoice>

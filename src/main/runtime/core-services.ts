@@ -54,6 +54,7 @@ import {
 } from '../owner/directory-ipc'
 import { OwnerPreferences } from '../owner/owner-preferences'
 import { OwnerSourceDirectories } from '../owner/source-directories'
+import { OwnerSourceFiles } from '../owner/source-files'
 import { registerOwnerReadme } from '../owner/read-public-readme'
 import { registerModelUsageIpc } from '../usage/model-usage-ipc'
 import { MacDmgVerifier } from '../update/mac-dmg-verifier'
@@ -359,7 +360,21 @@ export async function bootstrapMainProcessServices(
     (rootId) => ownerPreferences.reference(rootId),
   )
   registerOwnerDirectories(runtime.trustedRendererGuard, ownerAffairs)
-  registerOwnerSources(runtime.trustedRendererGuard, ownerSources)
+  const ownerFiles = new OwnerSourceFiles(ownerRegistry, ownerAffairs, ownerSources)
+  registerOwnerSources(runtime.trustedRendererGuard, ownerSources, ownerFiles, async (req) => {
+    const permissions = runtime.permissionManager
+    if (!permissions) return 'denied'
+    // Owner's prompt goes through the shared mechanism; the path comes from a note, so it is
+    // always asked, shown in full and never remembered as "always allow".
+    return permissions.requestDecision({
+      conversationId: req.conversationId,
+      toolName: 'owner_read_local_file',
+      params: { path: req.path },
+      riskLevel: 'read',
+      allowAlways: false,
+      reason: 'Owner 想读取一个不在本事务参考目录中的文件',
+    })
+  })
   registerOwnerPreferences(runtime.trustedRendererGuard, ownerPreferences)
   registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
 

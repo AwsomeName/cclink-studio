@@ -482,6 +482,15 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       invokeIpcContract(ownerSourceIpc.entries, id, grantId, rel),
     read: (id: string, grantId: string, rel: string) =>
       invokeIpcContract(ownerSourceIpc.read, id, grantId, rel),
+    find: (id: string, grantId: string, terms: string[]) =>
+      invokeIpcContract(ownerSourceIpc.find, id, grantId, terms),
+    excerpt: (id: string, grantId: string, rel: string, anchor: string) =>
+      invokeIpcContract(ownerSourceIpc.excerpt, id, grantId, rel, anchor),
+    requestFile: (id: string, conversationId: string, path: string) =>
+      invokeIpcContract(ownerSourceIpc.requestFile, id, conversationId, path),
+    grantFile: (id: string, path: string) => invokeIpcContract(ownerSourceIpc.grantFile, id, path),
+    fileExcerpt: (id: string, grantId: string, anchor: string) =>
+      invokeIpcContract(ownerSourceIpc.fileExcerpt, id, grantId, anchor),
   },
   ownerResearch: {
     selectAgent: () => invokeIpcContract(ownerResearchIpc.selectAgent),

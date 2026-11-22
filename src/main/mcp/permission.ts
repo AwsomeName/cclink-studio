@@ -145,7 +145,16 @@ export class PermissionManager {
    * 超时 60 秒自动拒绝。
    */
   requestConfirmation(req: PermissionConfirmationInput): Promise<boolean> {
-    return new Promise((resolve) => {
+    return this.requestDecision(req).then((outcome) => outcome === 'approved')
+  }
+
+  /**
+   * Same confirmation, but tells a timeout apart from an explicit refusal, so a caller such as
+   * Owner can skip the step and keep going instead of treating it as a user denial.
+   */
+  requestDecision(req: PermissionConfirmationInput): Promise<'approved' | 'denied' | 'timeout'> {
+    return new Promise((settle) => {
+      const resolve = (approved: boolean) => settle(approved ? 'approved' : 'denied')
       const id = randomUUID()
       const request: ToolConfirmationRequest = {
         id,
@@ -163,7 +172,15 @@ export class PermissionManager {
       const timeout = setTimeout(() => {
         this.pending.delete(id)
         console.log(`[PermissionManager] 确认超时，自动拒绝: ${req.toolName}`)
-        resolve(false)
+        // Remove the card too, so a late click cannot look like it still counts.
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          const event: AgentConfirmationsInvalidatedEvent = {
+            ids: [id],
+            reason: '60 秒无回应，已按拒绝处理',
+          }
+          this.mainWindow.webContents.send(agentIpcEvents.confirmationsInvalidated, event)
+        }
+        settle('timeout')
       }, CONFIRMATION_TIMEOUT)
 
       this.pending.set(id, { resolve, timeout, request })

@@ -1,0 +1,77 @@
+[
+ {
+  "name": "marketing-dark",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 1339,
+  "pageClientHeight": 802,
+  "errors": []
+ },
+ {
+  "name": "marketing-light-full",
+  "w": 1440,
+  "h": 1480,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 1382,
+  "pageClientHeight": 1382,
+  "errors": []
+ },
+ {
+  "name": "marketing-notes",
+  "w": 1440,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 1339,
+  "pageClientHeight": 802,
+  "errors": []
+ },
+ {
+  "name": "marketing-approved",
+  "w": 1440,
+  "h": 1480,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 1382,
+  "pageClientHeight": 1382,
+  "errors": []
+ },
+ {
+  "name": "marketing-1180",
+  "w": 1180,
+  "h": 900,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 2109,
+  "pageClientHeight": 802,
+  "errors": []
+ },
+ {
+  "name": "marketing-narrow",
+  "w": 375,
+  "h": 812,
+  "docOverflow": 0,
+  "pageOverflow": 0,
+  "overflowing": [],
+  "pageScrollHeight": 3409,
+  "pageClientHeight": 714,
+  "errors": []
+ },
+ {
+  "interaction": {
+   "approveDisabledBefore": true,
+   "approveDisabledAfterFactFix": false,
+   "publishingShown": true,
+   "replyState": "已发送 · 已在平台读回核验",
+   "buyFilterVisible": 1
+  }
+ }
+]
