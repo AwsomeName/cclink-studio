@@ -48,6 +48,20 @@ async function github(repo: string, suffix: string, limit: number) {
       signal: AbortSignal.timeout(20000),
     })
   }
+  if (
+    (response.status === 403 || response.status === 429) &&
+    response.headers.get('x-ratelimit-remaining') === '0'
+  ) {
+    const reset = Number(response.headers.get('x-ratelimit-reset'))
+    const minutes = Number.isFinite(reset)
+      ? Math.max(1, Math.ceil((reset * 1000 - Date.now()) / 60000))
+      : undefined
+    throw Error(
+      'GitHub 公开接口本小时额度已用完' +
+        (minutes ? '，约 ' + minutes + ' 分钟后恢复' : '') +
+        '。这不是资料缺失，请稍后从本事务继续。',
+    )
+  }
   if (!response.ok || !response.body) throw Error('GitHub HTTP ' + response.status)
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []

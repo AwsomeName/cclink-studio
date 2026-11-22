@@ -671,7 +671,9 @@ export async function research(id: string, reassign = false) {
         if (++invalid >= 3) throw Error(correction)
         continue
       }
-      if (rounds++ >= 5) throw Error('本轮核对仍缺证据：' + reason)
+      // Each execution session gets its own budget of five rounds, capped at fifteen per run.
+      const budget = Math.min(15, 5 * Math.max(1, workersOf(current(id)!.research!).length))
+      if (rounds++ >= budget) throw Error('本轮核对仍缺证据：' + reason)
       const order = parsedOrder.data
       const parsedSheet = dispatchSheet.safeParse(out)
       // Older replies without a sheet continue the most recent session, as before.
