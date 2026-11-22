@@ -632,6 +632,8 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               >
                 <option value="once">单次</option>
                 <option value="daily">每天</option>
+                <option value="monthly">每月最后一天</option>
+                <option value="yearly">每年 12 月 31 日</option>
                 <option value="weekdays">工作日</option>
                 <option value="weekly">每周</option>
               </select>

@@ -3,7 +3,7 @@ import type {
   ScheduledTaskSnapshot,
 } from '@shared/scheduled-task/scheduled-task-types'
 
-/** The two built-in tasks are ordinary shared task definitions recognized by their output shape. */
+/** Built-in tasks use ordinary shared definitions. */
 export function isDailyDraftTask(definition: ScheduledTaskDefinition): boolean {
   return (
     definition.schedule.kind === 'daily' &&
@@ -15,7 +15,11 @@ export function isDailyDraftTask(definition: ScheduledTaskDefinition): boolean {
 }
 
 export function isWeeklyReviewTask(definition: ScheduledTaskDefinition): boolean {
-  return definition.schedule.kind === 'weekly' && /周计划$/.test(definition.outputPolicy.directory)
+  return (
+    definition.schedule.kind === 'weekly' &&
+    (/周计划$/.test(definition.outputPolicy.directory) ||
+      definition.outputPolicy.directory === planOutputs.weekly[1])
+  )
 }
 
 /** Prefer a device-enabled definition so the home page reflects what will actually run. */
@@ -29,11 +33,6 @@ export const dailyDraftInstruction = (directory: string): string =>
   '顶部一级标题为“YYYY-MM-DD 周X”，然后依次写四个二级章节：「昨日总结」「今日待做」「强调事项」「今日打卡」。' +
   '昨日总结只依据昨天日记；今日待做用 - [ ] 任务清单，结合本周计划和昨天未完成事项；' +
   '今日打卡用表格，列为 时间 | 事项 | 详细记录，暂无内容时只保留表头。未知事实写“待核实”，不要编造。'
-
-export const weeklyReviewInstruction = (directory: string): string =>
-  `读取 ${directory} 中最近 7 天的日记与上一份周计划，写本周复盘与下周计划。` +
-  '依次写三个二级章节：「本周进展」「遗留问题」「下周计划（下周一日期，格式 YYYY-MM-DD）」。' +
-  '遗留问题用表格，列为 问题 | 原因 | 下一步；原因未知写“待核实”。不要写其他二级章节，400 字以内。'
 
 export interface BuiltInTaskChoice {
   daily: { enable: boolean; time: string }
@@ -63,7 +62,6 @@ export async function ensureBuiltInDiaryTasks(
     { kind: 'directory' as const, path: directory },
   ]
   const daily = findDailyDraft(listed.tasks)
-  const weekly = listed.tasks.find((task) => isWeeklyReviewTask(task.definition))
   const apply = async (
     existing: ScheduledTaskSnapshot | undefined,
     create: () => Promise<{ success: boolean; error?: { message: string } }>,
@@ -102,28 +100,57 @@ export async function ensureBuiltInDiaryTasks(
       }),
     choice.daily.enable,
   )
-  await apply(
-    weekly,
-    () =>
-      api.save({
-        workspacePath,
-        title: '每周复盘',
-        instruction: weeklyReviewInstruction(directory),
-        schedule: {
-          kind: 'weekly',
-          time: choice.weekly.time,
-          weekdays: [choice.weekly.weekday],
-          timezone,
-        },
-        resources,
-        outputPolicy: {
-          directory: `${directory}/{year}/周计划`,
-          fileNameTemplate: '{date}-周复盘.md',
-          mode: 'create-only',
-        },
-        definitionSource: 'shared',
-        enable: choice.weekly.enable,
-      }),
-    choice.weekly.enable,
+  for (const kind of ['weekly', 'monthly', 'yearly'] as const) {
+    await ensurePlanTask(workspacePath, directory, timezone, kind, choice.weekly)
+  }
+}
+
+export type PlanTaskKind = 'weekly' | 'monthly' | 'yearly'
+export const planOutputs = {
+  weekly: ['周度计划', '{planRoot}/周/{nextWeekYear}', '{nextWeekYear}-W{nextWeek}.md'],
+  monthly: ['月度计划', '{planRoot}/月/{nextMonthYear}', '{nextMonth}.md'],
+  yearly: ['年度计划', '{planRoot}/年', '{nextYear}.md'],
+} as const
+
+export async function ensurePlanTask(
+  workspacePath: string,
+  directory: string,
+  timezone: string,
+  kind: PlanTaskKind,
+  weekly = defaultBuiltInChoice.weekly,
+): Promise<void> {
+  const api = window.cclinkStudio.scheduledTasks
+  const listed = await api.list(workspacePath)
+  if (!listed.success) throw Error(listed.error?.message || '读取计划任务失败')
+  const [title, output, fileNameTemplate] = planOutputs[kind]
+  const existing = listed.tasks.find(
+    (task) =>
+      task.definition.outputPolicy.directory === output &&
+      task.definition.outputPolicy.fileNameTemplate === fileNameTemplate,
   )
+  if (existing) {
+    if (kind === 'weekly' && weekly.enable && !existing.activation.enabled) {
+      const enabled = await api.setEnabled({
+        workspacePath,
+        taskId: existing.definition.id,
+        enabled: true,
+      })
+      if (!enabled.success) throw Error(enabled.error?.message || '周度计划启用失败')
+    }
+    return
+  }
+  const result = await api.save({
+    workspacePath,
+    title,
+    instruction: `根据上一期计划、待办完成情况和 ${directory} 内该期日记，生成下一期${title}。依次写上期回顾、本期目标、待办与备注，待办使用 Markdown 任务清单。未知事实写待核实。`,
+    schedule:
+      kind === 'weekly'
+        ? { kind, time: weekly.time, timezone, weekdays: [weekly.weekday] }
+        : { kind, time: '21:00', timezone },
+    resources: [{ kind: 'workspace' }],
+    outputPolicy: { directory: output, fileNameTemplate, mode: 'create-only' },
+    definitionSource: 'shared',
+    enable: kind === 'weekly' && weekly.enable,
+  })
+  if (!result.success) throw Error(result.error?.message || '创建计划任务失败')
 }

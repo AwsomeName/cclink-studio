@@ -1,3 +1,4 @@
+import { readWorkspaceSettings } from '../workspace/workspace-settings-files'
 import { createHash } from 'node:crypto'
 import { lstat, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
@@ -120,11 +121,14 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         )
     }
     await checkDiaryCollision()
-    await assertOutputDoesNotExist(output.absolutePath)
+    await assertOutputDoesNotExist(
+      output.absolutePath,
+      definition.outputPolicy.directory.startsWith('{planRoot}/'),
+    )
     assertNotCancelled(active)
 
     let generationError: string | undefined
-    const markdown = await new Promise<string>((resolvePromise, rejectPromise) => {
+    const generated = await new Promise<string>((resolvePromise, rejectPromise) => {
       let settled = false
       const settle = (callback: () => void): void => {
         if (settled) return
@@ -194,6 +198,10 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         )
       })
 
+    const markdown =
+      definition.outputPolicy.directory.startsWith('{planRoot}/') && !generationError
+        ? generated.trimEnd() + '\n\n*起草来源：AI 生成*\n'
+        : generated
     const bytes = Buffer.byteLength(markdown, 'utf-8')
     if (bytes === 0 || bytes > MAX_OUTPUT_BYTES) {
       throw new Error('Agent 生成的 Markdown 为空或超过 2 MiB')
@@ -204,11 +212,16 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     }
     await checkDiaryCollision()
     assertNotCancelled(active)
-    await writeFile(output.absolutePath, markdown, {
-      encoding: 'utf-8',
-      flag: 'wx',
-      mode: 0o600,
-    })
+    try {
+      await writeFile(output.absolutePath, markdown, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+    } catch (error) {
+      if (
+        (error as NodeJS.ErrnoException).code === 'EEXIST' &&
+        definition.outputPolicy.directory.startsWith('{planRoot}/')
+      )
+        throw new ScheduledTaskSkippedError('本期计划已存在，保留原文')
+      throw error
+    }
     const persisted = await readFile(output.absolutePath, 'utf-8')
     if (persisted !== markdown) throw new Error('Markdown 写后校验失败')
     return {
@@ -258,12 +271,19 @@ async function resolveOutput(
   occurrenceAt: number,
   runId: string,
 ): Promise<{ absolutePath: string; relativePath: string; canonicalDirectory: string }> {
+  const template = definition.outputPolicy.directory
+  let planDirectory = ''
+  if (template.startsWith('{planRoot}/')) {
+    const config = await readWorkspaceSettings(workspaceRoot)
+    if (config.status === 'invalid' || config.status === 'unavailable')
+      throw Error(config.error ?? '无法读取计划目录')
+    planDirectory = config.settings.diary?.planDirectory ?? '计划'
+  }
   const outputDirectory = resolve(
     workspaceRoot,
-    renderScheduledTaskDirectory(
-      definition.outputPolicy.directory,
-      occurrenceAt,
-      definition.schedule.timezone,
+    renderScheduledTaskDirectory(template, occurrenceAt, definition.schedule.timezone).replace(
+      /^\{planRoot\}\//,
+      () => planDirectory + '/',
     ),
   )
   if (!isPathWithin(workspaceRoot, outputDirectory)) throw new Error('输出目录逃逸出工作空间')
@@ -299,9 +319,10 @@ async function resolveOutput(
   }
 }
 
-async function assertOutputDoesNotExist(filePath: string): Promise<void> {
+async function assertOutputDoesNotExist(filePath: string, plan: boolean): Promise<void> {
   try {
     await stat(filePath)
+    if (plan) throw new ScheduledTaskSkippedError('本期计划已存在，保留原文')
     throw new Error('输出文件已存在；create-only 任务不会覆盖它')
   } catch (error) {
     if (isMissingFileError(error)) return

@@ -41,6 +41,8 @@ export function describeSchedule(schedule: ScheduledTaskSchedule): string {
     }).format(schedule.runAt)
   }
   if (schedule.kind === 'daily') return `每天 ${schedule.time}`
+  if (schedule.kind === 'monthly') return `每月最后一天 ${schedule.time}`
+  if (schedule.kind === 'yearly') return `每年 12 月 31 日 ${schedule.time}`
   if (schedule.kind === 'weekdays') return `工作日 ${schedule.time}`
   const labels = ['日', '一', '二', '三', '四', '五', '六']
   return `每周${schedule.weekdays.map((day) => labels[day]).join('、')} ${schedule.time}`

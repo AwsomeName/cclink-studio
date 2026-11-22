@@ -38,8 +38,12 @@ try {
     title: t.definition.title,
     enabled: t.activation.enabled,
   }))
-  assert.deepEqual(result.tasks.map((t) => t.title).sort(), ['每周复盘', '每日起草'].sort())
-  assert(result.tasks.every((t) => t.enabled))
+  assert.deepEqual(Object.fromEntries(result.tasks.map((t) => [t.title, t.enabled])), {
+    每日起草: true,
+    周度计划: true,
+    月度计划: false,
+    年度计划: false,
+  })
   const home = page.locator('.personal-diary-home')
   await home
     .getByText(/AI 正在起草|自动生成今天的草稿|今天的日记/)

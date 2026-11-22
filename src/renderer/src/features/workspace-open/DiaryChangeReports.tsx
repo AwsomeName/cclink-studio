@@ -4,8 +4,10 @@ import type { DiaryChangeReport } from '@shared/diary-change-report'
 /** AI change reports for this project: what changed, per-file diff, and one-click undo. */
 export function DiaryChangeReports({
   workspacePath,
+  filePath,
   onOpen,
 }: {
+  filePath?: string
   workspacePath: string
   onOpen: (path: string) => void
 }): React.ReactElement | null {
@@ -18,7 +20,12 @@ export function DiaryChangeReports({
       void window.cclinkStudio.workspaceState
         .listDiaryChanges(workspacePath)
         .then((items) => {
-          if (alive) setReports(items.slice(0, 3))
+          if (alive)
+            setReports(
+              items
+                .filter((report) => !filePath || report.files.some((f) => f.path === filePath))
+                .slice(0, 3),
+            )
         })
         .catch(() => {})
     load()
@@ -28,7 +35,7 @@ export function DiaryChangeReports({
       alive = false
       window.clearInterval(timer)
     }
-  }, [workspacePath, refresh])
+  }, [workspacePath, filePath, refresh])
   if (!reports.length) return null
   const undo = async (report: DiaryChangeReport): Promise<void> => {
     const result = await window.cclinkStudio.workspaceState.undoDiaryChange(report.id)

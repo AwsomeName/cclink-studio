@@ -120,7 +120,9 @@ try {
   result.machineBTasks = tasks.tasks.map((t) => [t.definition.title, t.activation.enabled])
   assert.deepEqual(Object.fromEntries(result.machineBTasks), {
     每日起草: true,
-    每周复盘: true,
+    周度计划: true,
+    月度计划: false,
+    年度计划: false,
     整理参考资料: false,
   })
   await nav(page, '定时整理')

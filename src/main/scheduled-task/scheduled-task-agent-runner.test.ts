@@ -220,6 +220,35 @@ describe('ScheduledTaskAgentRunner', () => {
     expect(await readFile(join(folder, '0729_周三.md'), 'utf8')).toBe('# 另一台设备')
   })
 
+  it('records a skip when the user creates the plan while the agent is generating', async () => {
+    const task = definition()
+    task.outputPolicy.directory = '{planRoot}/年'
+    task.outputPolicy.fileNameTemplate = '2027.md'
+    const target = join(root, '计划/年/2027.md')
+    const listeners = new Set<(event: AgentRuntimeEvent) => void>()
+    const runner = new ScheduledTaskAgentRunner({
+      onRuntimeEvent: (listener: (event: AgentRuntimeEvent) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      sendScheduledTaskMessage: async ({
+        conversationId,
+        runId,
+      }: {
+        conversationId: string
+        runId: string
+      }) => {
+        await writeFile(target, '# 手写')
+        for (const listener of listeners)
+          listener({ conversationId, runId, type: 'complete', data: { result: '# AI' } })
+      },
+      abort: vi.fn(),
+    } as never)
+    await expect(
+      runner.run({ definition: task, runId: 'race', conversationId: 'race', scheduledFor: null }),
+    ).rejects.toBeInstanceOf(ScheduledTaskSkippedError)
+    expect(await readFile(target, 'utf8')).toBe('# 手写')
+  })
   it('refuses create-only collisions before starting Agent', async () => {
     await mkdir(join(root, 'docs/generated'), { recursive: true })
     await writeFile(

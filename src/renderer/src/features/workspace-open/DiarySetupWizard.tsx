@@ -358,7 +358,7 @@ export function DiarySetupWizard({
                   setChoice({ ...choice, weekly: { ...choice.weekly, enable: e.target.checked } })
                 }
               />
-              每周复盘 · 自动生成复盘与下周计划
+              周度计划 · 自动生成下周计划
               <select
                 aria-label="每周复盘日"
                 value={choice.weekly.weekday}
@@ -385,7 +385,7 @@ export function DiarySetupWizard({
               />
             </label>
             <p className="muted">
-              将新建：缺失的项目设置与日记目录、「每日起草」「每周复盘」两个共享任务（已有则沿用）。
+              创建缺失的项目设置、日记目录和任务。月度与年度计划任务默认停用。
               不会改动已有日记、附件、计划和仓库历史，也不会上传。已过起草时间时，确认后立即生成今天的草稿。
             </p>
           </div>

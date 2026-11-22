@@ -20,8 +20,18 @@ export function calculateNextRunAt(
   const current = getZonedParts(after, schedule.timezone)
   const calendarStart = Date.UTC(current.year, current.month - 1, current.day)
 
-  for (let offset = 0; offset <= 8; offset += 1) {
+  for (
+    let offset = 0;
+    offset <= (schedule.kind === 'yearly' ? 366 : schedule.kind === 'monthly' ? 31 : 8);
+    offset += 1
+  ) {
     const date = new Date(calendarStart + offset * 86_400_000)
+    if (schedule.kind === 'yearly' && date.getUTCMonth() !== 11) continue
+    if (
+      (schedule.kind === 'monthly' || schedule.kind === 'yearly') &&
+      new Date(date.getTime() + 86400000).getUTCDate() !== 1
+    )
+      continue
     const weekday = date.getUTCDay()
     if (schedule.kind === 'weekdays' && (weekday === 0 || weekday === 6)) continue
     if (schedule.kind === 'weekly' && !schedule.weekdays.includes(weekday)) continue

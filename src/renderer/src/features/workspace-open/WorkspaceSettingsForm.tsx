@@ -193,11 +193,13 @@ export function WorkspaceSettingsForm(): React.ReactElement {
   const [busy, setBusy] = useState(false)
   const [useDiary, setUseDiary] = useState(false)
   const [directory, setDirectory] = useState(defaultDiaryDirectory)
+  const [planDirectory, setPlanDirectory] = useState('计划')
   const [timezone, setTimezone] = useState(defaultDiaryTimezone)
   useEffect(() => {
     setDraft(snapshot?.settings ?? null)
     setUseDiary(!!snapshot?.settings.diary)
     setDirectory(snapshot?.settings.diary?.directory ?? defaultDiaryDirectory)
+    setPlanDirectory(snapshot?.settings.diary?.planDirectory ?? '计划')
     setTimezone(snapshot?.settings.diary?.timezone ?? defaultDiaryTimezone)
     setError('')
     setNotice('')
@@ -214,6 +216,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       if (useDiary)
         settings.diary = {
           directory,
+          planDirectory,
           timezone,
           taskIds: draft.diary?.taskIds ?? [],
         }
@@ -275,6 +278,12 @@ export function WorkspaceSettingsForm(): React.ReactElement {
               <small>
                 只记录位置，不创建或移动目录；本机外部关联优先，需在资料接入页解除后才使用此目录。
               </small>
+            </label>
+          )}
+          {useDiary && (
+            <label>
+              计划目录
+              <input value={planDirectory} onChange={(e) => setPlanDirectory(e.target.value)} />
             </label>
           )}
           {useDiary && (

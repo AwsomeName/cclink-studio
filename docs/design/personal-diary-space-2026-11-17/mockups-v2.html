@@ -230,30 +230,10 @@ const SHOTS = [
         <span class="cite">↗ 2026/03/0312_周四.md · 纹波 120mV</span><span class="cite">↗ 2026/07-08/0715_周三.md · 换电容</span><span class="cite">↗ 2026/11/1118_周三.md · 布线调整</span><span class="cite">↗ 2026/11/1121_周六.md · 纹波 42mV</span></div>
        <div class="muted">读取范围：000-个人计划（日记、计划、模板、资料、会话记录）</div>` })],
 
-  ['plans', '13 计划 · 本周已有计划', '本周置顶：周次、日期范围、完成进度与章节摘要；长期计划固定；历次周计划按月分组、按周倒序；右侧预览同页查看。',
-    shell({ nav: '计划', body: crumb('我的空间 / 计划') +
-      `<div class="split"><div style="flex:1.1">
-       <div class="card"><div class="row" style="border:0;padding-top:0"><span><b>本周 · 第47周</b> <span class="muted">11/16–11/22</span></span><span class="r">4/7 已完成</span></div>
-         <div class="muted">周一-2026-11-16.md</div>
-         <div class="quote"><b>重点</b>电源板量产前复测</div><div class="quote"><b>待办</b>☑ 复测纹波　☐ 散热片交期　☐ 固件签名流程</div>
-         <span class="btn pri sm">继续写</span><span class="btn sm">让 AI 修改…</span>
-         <div class="legend">每周复盘 · 周日 21:00 自动生成下周计划 · 本机已启用 · 修改 ›</div></div>
-       <h4>长期计划</h4><div class="row"><span>一日生活计划.md</span><span class="r">11/02 修改</span></div>
-       <h4>历次周计划</h4><div class="legend">2026 年 11 月</div><div class="row" style=""><span><b>第46周</b> <span class="muted">11/09–11/15</span> · 周一-2026-11-09.md</span><span class="r">5/6</span></div><div class="row" style=""><span><b>第45周</b> <span class="muted">11/02–11/08</span> · 周四-2026-11-05.md</span><span class="r">3/5</span></div><div class="legend">2026 年 10 月</div><div class="row" style="background:#1b2b3d;"><span><b>第43周</b> <span class="muted">10/19–10/25</span> · 周一-2026-10-19.md</span><span class="r">6/6</span></div><div class="row" style=""><span><b>第42周</b> <span class="muted">10/12–10/18</span> · 周五-2026-10-16.md</span><span class="r">2/4</span></div><div class="row" style=""><span><b>第41周</b> <span class="muted">10/05–10/11</span> · 周三-2026-10-07.md</span><span class="r">4/4</span></div><div class="legend">未识别日期 · 1 个</div><div class="row"><span>旧计划草稿.md</span><span class="r">09/02 修改</span></div>
-       </div><div class="editor"><div class="row" style="border:0;padding-top:0"><b>第43周 · 10/19–10/25</b><span class="r">6/6 已完成</span></div>
-         <div class="muted" style="font-size:12px">周一-2026-10-19.md · 当周日记 5 篇 › · 复盘：2026-10-25-周复盘.md ›</div>
-         <h4>重点</h4><div class="muted">客户评审材料定稿</div><h4>待办</h4><div class="muted">☑ 评审 PPT　☑ 样品寄送　☑ 报价单…</div>
-         <div style="margin-top:10px"><span class="btn pri sm">打开原文</span><span class="btn sm">让 AI 修改…</span></div></div></div>` })],
-
-  ['plans-empty', '13b 计划 · 本周还没有计划', '本周没有计划时：AI 依据上周复盘、上一份计划和本周日记生成，按项目已有命名新建；也可新建空白周计划。',
-    shell({ nav: '计划', body: crumb('我的空间 / 计划') +
-      `<div class="card" style="max-width:640px"><div class="row" style="border:0;padding-top:0"><span><b>本周 · 第48周</b> <span class="muted">11/23–11/29</span></span><span class="r">还没有计划</span></div>
-       <div class="muted">将新建 个人计划/2026/周计划/周一-2026-11-23.md（沿用本项目命名）</div>
-       <div class="muted" style="margin:6px 0">依据：2026-11-22-周复盘.md · 周一-2026-11-16.md · 本周日记 1 篇</div>
-       <span class="btn pri sm">AI 生成本周计划</span><span class="btn sm">空白周计划</span>
-       <div class="legend">每周复盘 · 周日 21:00 · 本机未启用 · 启用 ›</div></div>
-       <h4>长期计划</h4><div class="row" style="max-width:640px"><span>一日生活计划.md</span><span class="r">11/02 修改</span></div>
-       <h4>历次周计划</h4><div style="max-width:640px"><div class="legend">2026 年 11 月</div><div class="row" style=""><span><b>第47周</b> <span class="muted">11/16–11/22</span> · 周一-2026-11-16.md</span><span class="r">7/7</span></div><div class="row" style=""><span><b>第46周</b> <span class="muted">11/09–11/15</span> · 周一-2026-11-09.md</span><span class="r">5/6</span></div></div>` })],
+  ['plans-week', '计划 · 周度', '直接编辑本周计划，底部 AI 对话跟随当前文件。', '<img style="width:100%" src="mockups-v2/13-plans-week.png" alt="周度计划效果图">'],
+  ['plans-month', '计划 · 月度', '查看所选月份，核对 AI 改动并可撤销。', '<img style="width:100%" src="mockups-v2/14-plans-month.png" alt="月度计划效果图">'],
+  ['plans-year', '计划 · 年度', '选择年份，按周期创建或补写计划。', '<img style="width:100%" src="mockups-v2/15-plans-year.png" alt="年度计划效果图">'],
+  ['plans-long', '计划 · 长期', '右侧新建、重命名及删除计划。', '<img style="width:100%" src="mockups-v2/16-plans-long.png" alt="长期计划效果图">'],
 
   ['tasks', '14 定时整理', '直接列出本项目全部任务；两个内置任务默认启用；每日起草错过时打开 Studio 自动补当天；其他任务错过只提示。',
     shell({ nav: '定时整理', body: crumb('我的空间 / 定时整理', '＋ 新建任务') + '<h3 class="title">定时整理</h3>' +
