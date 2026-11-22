@@ -868,15 +868,16 @@ async function main() {
       )
       return 'deep search, truncation, sibling/symlink/new-target denial, and generation-bound switch verified'
     } finally {
-      await page.evaluate(async (path) => {
+      const restored = await page.evaluate(async (path) => {
         const { useFsStore } = await import('/src/stores/fs-store.ts')
-        await useFsStore.getState().openRecentWorkspace(path)
+        return useFsStore.getState().openRecentWorkspace(path)
       }, rootDir)
       await Promise.all([
         rm(workspaceA, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
         rm(workspaceB, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
         rm(outsideFile, { force: true }),
       ])
+      assert(restored, 'workspace boundary fixture could not restore the repository workspace')
     }
   })
 
@@ -1251,10 +1252,14 @@ async function main() {
         )
       }
 
-      await page.evaluate(async () => {
-        const { useUIStore } = await import('/src/stores/ui-store.ts')
-        useUIStore.getState().setAgentPanelMode('right', 'user')
-      })
+      const showSideChat = () =>
+        page.evaluate(async () => {
+          const { useUIStore } = await import('/src/stores/ui-store.ts')
+          const ui = useUIStore.getState()
+          ui.showAgentChat()
+          ui.setAgentPanelWidth(350)
+        })
+      await showSideChat()
       const localPanel = page.locator('[data-agent-panel-runtime="local"]')
       await localPanel.waitFor({ state: 'visible', timeout: 10_000 })
       assert((await page.locator('.agent-panel').count()) === 1, 'expected one Agent Panel root')
@@ -1385,6 +1390,7 @@ async function main() {
         })
       })
       const remotePanel = page.locator('[data-agent-panel-runtime="remote"]')
+      await showSideChat()
       await remotePanel.waitFor({ state: 'visible', timeout: 10_000 })
       assert(
         (await page.locator('.agent-panel').count()) === 1,
@@ -1397,6 +1403,15 @@ async function main() {
       assert(
         (await page.locator('.remote-agent-panel, .remote-agent-composer').count()) === 0,
         'legacy remote Panel or Composer is still rendered',
+      )
+      await page.waitForFunction(
+        (expectedWidth) =>
+          Math.abs(
+            document.querySelector('[data-agent-panel-runtime="remote"]')?.getBoundingClientRect()
+              .width - expectedWidth,
+          ) < 1,
+        localSideProjection.rootWidth,
+        { timeout: 10_000 },
       )
       const remoteSideProjection = await panelProjection('remote')
       await writeFile(

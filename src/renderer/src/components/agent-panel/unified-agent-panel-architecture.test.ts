@@ -21,12 +21,15 @@ describe('unified Agent Panel production boundary', () => {
 
   it('routes both layout positions through the single AgentPanel entry', () => {
     const appSource = read('../../App.tsx')
+    const workspaceSource = read('./agent-workspace.tsx')
 
     expect(appSource).not.toContain('RemoteAgentPanel')
+    expect(appSource.match(/<AgentPanel\b/gu)).toHaveLength(1)
     expect(appSource).toContain('<AgentPanel variant="center"')
-    expect(appSource).toContain('<AgentWorkspace />')
-    const workspaceSource = read('./agent-workspace.tsx')
-    expect(workspaceSource.match(/<AgentPanel variant="side"/gu)).toHaveLength(1)
+    expect(appSource.match(/<AgentWorkspace\b/gu)).toHaveLength(1)
+    expect(workspaceSource.match(/<AgentPanel\b/gu)).toHaveLength(1)
+    expect(workspaceSource).toContain('<AgentPanel variant="side"')
+    expect(workspaceSource).not.toContain('RemoteAgentPanel')
     expect(workspaceSource).not.toContain('<textarea')
     expect(workspaceSource).not.toMatch(
       /agent\.(abort|resetSession|closeConversation|onStreamEvent)/u,
