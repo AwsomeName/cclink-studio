@@ -7,7 +7,7 @@ import { useFixedSpacesStore } from './fixed-spaces-store'
 import { PersonalDiaryGit } from './PersonalDiaryGit'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useDiaryNavigation } from './personal-diary-navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   defaultDiaryDirectory,
   defaultDiaryTimezone,
@@ -351,6 +351,49 @@ export function PersonalDiaryHome(): React.ReactElement {
     if (!result.success) throw Error(result.error?.message || '起草未能开始')
     setRevision((value) => value + 1)
   }
+  // My Space always has the daily draft task: create the built-ins once if they are missing.
+  const builtInsChecked = useRef(false)
+  useEffect(() => {
+    if (busy || !source || page !== '今天' || ownerPath !== fixedPath || legacyLink) return
+    if (builtInsChecked.current || daily) return
+    builtInsChecked.current = true
+    const key = `cclink.diary.builtins.${source.projectId}`
+    try {
+      if (window.localStorage.getItem(key)) return
+      window.localStorage.setItem(key, '1')
+    } catch {
+      /* storage unavailable: still create once per mount */
+    }
+    act(createBuiltIns)
+  }, [busy, source, page, ownerPath, fixedPath, legacyLink, daily])
+  // Today's draft did not happen (missed or failed): the first visit today starts it once.
+  const autoDraftKey = useRef('')
+  useEffect(() => {
+    if (busy || !source || page !== '今天' || legacyLink || today.length || !daily) return
+    if (!daily.activation.enabled || aiProblem || daily.definition.schedule.kind !== 'daily') return
+    // A draft the user cancelled is not restarted automatically.
+    if (dailyRun && !['failed', 'interrupted', 'missed'].includes(dailyRun.status)) return
+    const nowText = new Intl.DateTimeFormat('en-GB', {
+      timeZone: daily.definition.schedule.timezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(new Date(clock))
+    if (nowText < daily.definition.schedule.time) return
+    const key = `cclink.diary.autoDraft.${source.projectId}.${todayKey}`
+    if (autoDraftKey.current === key) return
+    autoDraftKey.current = key
+    try {
+      if (window.localStorage.getItem(key)) return
+      window.localStorage.setItem(key, '1')
+    } catch {
+      /* storage unavailable: once per mount */
+    }
+    act(async () => {
+      await draftNow()
+      setNotice('今天的草稿未按时生成，已自动开始起草。')
+    })
+  }, [busy, source, page, legacyLink, today.length, daily, dailyRun, aiProblem, todayKey, clock])
   const cancelDraft = async (): Promise<void> => {
     if (!source || !dailyRun) return
     await window.cclinkStudio.scheduledTasks.cancelRun({

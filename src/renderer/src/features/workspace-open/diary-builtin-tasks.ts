@@ -41,7 +41,7 @@ export interface BuiltInTaskChoice {
 }
 
 export const defaultBuiltInChoice: BuiltInTaskChoice = {
-  daily: { enable: true, time: '07:30' },
+  daily: { enable: true, time: '01:00' },
   weekly: { enable: true, time: '21:00', weekday: 0 },
 }
 

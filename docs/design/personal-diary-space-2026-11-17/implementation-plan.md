@@ -99,6 +99,10 @@
 - AI 查阅全部日记依赖会话以项目为工作区，未验收引用可点击打开。
 - 会话「保存到项目」、上传时标注 AI 修改来源、冲突时 AI 合并均未实现。
 
+## 2026-11-22 每日起草时间与当天自动重起草
+
+用户反馈正式版 v0.2.14 首页没有当天日记：该版本由 `main` 发布，不含本分支任何改动。本分支随后改为：默认 01:00 起草；当天起草失败或中断时，当天第一次进入今天页自动重新起草一次（同日不重复，用户取消的不重来）；我的空间缺少每日起草任务时进入今天页自动创建。真实应用验收 `scripts/diary-v2-autodraft-smoke.mjs` 通过：起草被中断 → 重启进入今天页自动起草 → 显示当天日记 → 再次进入不重复运行。[自动重起草](acceptance/v2-auto-redraft.png) · [完成](acceptance/v2-auto-redraft-done.png)
+
 ## 2026-11-22 剩余缺口补齐
 
 `pnpm verify` 通过（4106 项单测）；真实应用复跑 `diary-relocation-smoke`（含新增两个场景）、`diary-v2-first-use-smoke`、`diary-v2-daily-smoke`、`diary-git-machines-smoke`、`diary-tasks-smoke` 全部通过。
