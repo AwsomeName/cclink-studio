@@ -484,9 +484,13 @@ export function RemoteDesktopTab({
       event.stopPropagation()
       controllerImpl.current?.setFullscreen(!fullscreenRef.current)
     }
+    const unsubscribe = window.cclinkStudio.window.onFullscreenExit(() => {
+      if (activeRef.current && fullscreenRef.current) controllerImpl.current?.setFullscreen(false)
+    })
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('keyup', onKey, true)
     return () => {
+      unsubscribe()
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('keyup', onKey, true)
     }

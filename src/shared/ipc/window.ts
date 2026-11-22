@@ -63,6 +63,7 @@ export interface WindowApiContract {
   reload: () => Promise<WindowOperationResult>
   requestClose: () => Promise<WindowOperationResult>
   isForeground: () => Promise<boolean>
+  onFullscreenExit: (callback: () => void) => () => void
   onForegroundChanged: (callback: (active: boolean) => void) => () => void
   focusRenderer: () => Promise<WindowOperationResult>
   setShortcutCaptureGuard: (input: ShortcutCaptureGuardInput) => Promise<WindowOperationResult>
@@ -108,6 +109,7 @@ export const windowIpc = {
 } as const
 
 export const windowIpcEvents = {
+  fullscreenExit: 'window:fullscreenExit',
   foregroundChanged: 'window:foregroundChanged',
   shortcutCaptureInput: 'window:shortcutCaptureInput',
 } as const

@@ -59,7 +59,7 @@
 .remote-desktop-screen[data-large-pointer] canvas {
   /* noVNC writes an inline cursor whenever the server changes the pointer shape. */
   cursor:
-    url('./large-pointer.svg') 3 3,
+    url('./large-pointer.svg') 2 2,
     default !important;
 }
 .remote-desktop select {

@@ -29,6 +29,19 @@ export function registerWindowIpc(
   }
 
   const interceptNativeCaptureShortcut = (event: Electron.Event, input: Electron.Input): void => {
+    if (
+      input.type === 'keyDown' &&
+      !input.isAutoRepeat &&
+      (input.key === 'Escape' || input.code === 'Escape') &&
+      input.meta &&
+      !input.alt &&
+      !input.control &&
+      !input.shift &&
+      mainWindow.isFullScreen()
+    ) {
+      // Notify the workbench even when the native key equivalent bypasses DOM keydown.
+      mainWindow.webContents.send(windowIpcEvents.fullscreenExit)
+    }
     const session = shortcutCaptureSession
     if (!session || Date.now() >= session.expiresAt || input.type !== 'keyDown') {
       if (session && Date.now() >= session.expiresAt) clearShortcutCapture()
@@ -93,7 +106,10 @@ export function registerWindowIpc(
     else mainWindow.setFullScreen(requestedFullscreen)
   }
   mainWindow.on('enter-full-screen', () => finishFullscreenTransition(true))
-  mainWindow.on('leave-full-screen', () => finishFullscreenTransition(false))
+  mainWindow.on('leave-full-screen', () => {
+    finishFullscreenTransition(false)
+    if (requestedFullscreen !== true) mainWindow.webContents.send(windowIpcEvents.fullscreenExit)
+  })
 
   registerTrustedIpcContract(windowIpc.toggleFullscreen, trustedRendererGuard, () => {
     if (mainWindow.isDestroyed()) return { success: false }

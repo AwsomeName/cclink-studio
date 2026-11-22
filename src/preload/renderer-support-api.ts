@@ -31,6 +31,11 @@ export const windowApi: WindowApiContract = {
   reload: () => invokeIpcContract(windowIpc.reload),
   requestClose: () => invokeIpcContract(windowIpc.requestClose),
   isForeground: () => invokeIpcContract(windowIpc.isForeground),
+  onFullscreenExit: (callback) => {
+    const handler = (): void => callback()
+    ipcRenderer.on(windowIpcEvents.fullscreenExit, handler)
+    return () => ipcRenderer.removeListener(windowIpcEvents.fullscreenExit, handler)
+  },
   onForegroundChanged: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, active: unknown): void => {
       if (typeof active === 'boolean') callback(active)
