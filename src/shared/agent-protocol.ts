@@ -416,6 +416,8 @@ export interface AgentApiContract {
   onRunStatus(callback: (run: AgentRuntimeRunRecord) => void): () => void
 
   getCapabilities(): Promise<AgentCapabilityStatus[]>
+  /** Short real generation with the local runtime: proves login and quota, not just install. */
+  probeRuntime(): Promise<{ ok: boolean; error?: string; elapsedMs: number }>
   listToolModules(): Promise<AgentToolModuleStatus[]>
   setToolModuleEnabled(moduleId: string, enabled: boolean): Promise<AgentCommandResult>
 

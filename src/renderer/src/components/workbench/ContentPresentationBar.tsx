@@ -20,7 +20,7 @@ export function ContentPresentationBar({ tab }: { tab?: Tab }): React.ReactEleme
   )
 }
 
-function openAs(tab: Tab, mode: string): void {
+export function openAs(tab: Tab, mode: string): void {
   void useCommandStore
     .getState()
     .executeCommand(`workbench.openAs.${mode}`, {

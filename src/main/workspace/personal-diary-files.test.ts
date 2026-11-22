@@ -32,6 +32,8 @@ describe('connected diary file access', () => {
     expect(results.filter((r) => r.created)).toHaveLength(1)
     expect(new Set(results.map((r) => r.path)).size).toBe(1)
     expect(results[0].path).toContain('/2027/01/0101_周五.md')
+    // The rich editor refuses raw HTML, so the template must stay plain Markdown.
+    expect(results.find((r) => r.created)!.content).not.toMatch(/<[!a-z]/i)
     await writeFile(results[0].path, '# 用户已开始写\n事实')
     const again = await accessDiaryDocument(
       source,

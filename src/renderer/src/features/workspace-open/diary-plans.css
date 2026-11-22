@@ -1,0 +1,74 @@
+.diary-plan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 30%);
+  gap: 16px;
+}
+.diary-plan-layout aside {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+  overflow-wrap: anywhere;
+}
+.diary-plan-center {
+  min-width: 0;
+}
+.diary-plan-editor {
+  height: clamp(300px, 52vh, 720px);
+  overflow: auto;
+}
+.diary-plan-chat {
+  border-top: 1px solid var(--border-color);
+  padding: 10px 0;
+}
+.diary-plan-chat textarea {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  box-sizing: border-box;
+  background: var(--bg-secondary);
+  color: inherit;
+}
+.diary-plan-chat [aria-live] {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.diary-plan-periods,
+.diary-plan-months {
+  display: grid;
+  gap: 3px;
+  margin: 8px 0;
+}
+.diary-plan-months {
+  grid-template-columns: repeat(3, 1fr);
+}
+.diary-plan-row {
+  display: block;
+  width: 100%;
+}
+@container (max-width: 520px) {
+  .diary-plan-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.personal-diary-home:has(.diary-plan-layout) {
+  container-type: inline-size;
+}
+.diary-plan-layout aside nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+}
+.diary-plan-layout aside nav button {
+  padding: 6px 2px;
+}
+.diary-plan-chat small {
+  color: var(--text-secondary);
+}
+.diary-plan-chat textarea {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin: 8px 0;
+  resize: vertical;
+}

@@ -64,9 +64,13 @@ function HomeContent(): React.ReactElement {
   const tabs = useTabStore((state) => state.tabs)
   const conversations = useAgentStore((state) => state.conversations)
   const key = workspaceRefKey(ref)
+  const isFixedPersonal = ref.kind === 'local' && ref.path === spaces?.personal?.workspacePath
+  // An unconfirmed My Space (e.g. bound via "use current workspace") always gets the diary home,
+  // which runs first-use setup or the legacy migration prompt before writing anything.
   const personal = settingsSnapshot
-    ? settingsSnapshot.settings.type === 'diary'
-    : ref.kind === 'local' && ref.path === spaces?.personal?.workspacePath
+    ? settingsSnapshot.settings.type === 'diary' ||
+      (isFixedPersonal && !spaces?.personal?.diaryRootConfirmed)
+    : isFixedPersonal
   const recent = tabs
     .filter((tab) => tab.type === 'editor' && workspaceRefKey(tab.workspaceRef ?? ref) === key)
     .slice(-6)

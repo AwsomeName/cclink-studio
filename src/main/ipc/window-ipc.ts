@@ -57,6 +57,23 @@ export function registerWindowIpc(
   mainWindow.on('blur', clearShortcutCapture)
   mainWindow.on('closed', clearShortcutCapture)
 
+  const foreground = (): boolean =>
+    !mainWindow.isDestroyed() &&
+    mainWindow.isFocused() &&
+    mainWindow.isVisible() &&
+    !mainWindow.isMinimized()
+  const notify = (): void => {
+    if (!mainWindow.isDestroyed())
+      mainWindow.webContents.send(windowIpcEvents.foregroundChanged, foreground())
+  }
+  mainWindow.on('focus', notify)
+  mainWindow.on('blur', notify)
+  mainWindow.on('minimize', notify)
+  mainWindow.on('restore', notify)
+  mainWindow.on('show', notify)
+  mainWindow.on('hide', notify)
+  registerTrustedIpcContract(windowIpc.isForeground, trustedRendererGuard, foreground)
+
   /** 切换全屏 */
   registerTrustedIpcContract(windowIpc.toggleFullscreen, trustedRendererGuard, () => {
     if (mainWindow.isDestroyed()) return { success: false }

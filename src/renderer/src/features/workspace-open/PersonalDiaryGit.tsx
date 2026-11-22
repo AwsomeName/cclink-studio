@@ -10,21 +10,32 @@ import {
 } from '@shared/personal-diary-source'
 import { openWorkspaceRef } from './workspace-open-controller'
 import { useGitStore } from '../../stores/git-store'
+import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
+import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useOpenProjectsStore } from '../../stores/open-projects-store'
+import { askAi } from './diary-ai'
 
 export function PersonalDiaryGit({
   source,
   ownerPath,
   onConnected,
+  onUpdated,
 }: {
   ownerPath: string | null
   source: PersonalDiarySource | null
   onConnected: (value: PersonalDiarySource) => void
+  /** Files changed in place (a pull); the home page re-reads diaries. */
+  onUpdated?: () => void
 }): React.ReactElement {
   const [url, setUrl] = useState('')
   const [branch, setBranch] = useState('')
   const [username, setUsername] = useState('')
   const [token, setToken] = useState('')
   const [keyPath, setKeyPath] = useState('')
+  const [destination, setDestination] = useState('')
+  const fixedOwner = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
+  /** The fixed project switches its single directory; other projects keep the legacy link. */
+  const switchesProject = Boolean(ownerPath && ownerPath === fixedOwner)
   const [directory, setDirectory] = useState(source?.directory ?? defaultDiaryDirectory)
   const [result, setResult] = useState<GitTransferSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
@@ -32,6 +43,21 @@ export function PersonalDiaryGit({
   const [confirmed, setConfirmed] = useState(false)
   const [copyReview, setCopyReview] = useState<string[]>([])
   const [reviewError, setReviewError] = useState('')
+  /** Files changed by AI conversation runs (not undone): labelled before upload (§11). */
+  const [aiPaths, setAiPaths] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    if (!source) return
+    void window.cclinkStudio.workspaceState
+      .listDiaryChanges(source.workspacePath)
+      .then((reports) =>
+        setAiPaths(
+          new Set(
+            reports.filter((r) => !r.undone).flatMap((r) => r.files.map((file) => file.path)),
+          ),
+        ),
+      )
+      .catch(() => {})
+  }, [source, result])
   useEffect(() => {
     let alive = true
     setCopyReview([])
@@ -104,7 +130,8 @@ export function PersonalDiaryGit({
         username,
         token: token || undefined,
         sshKeyPath: keyPath || undefined,
-        ...(action === 'update-copy'
+        ...(action === 'clone' && destination ? { destination } : {}),
+        ...(action === 'update-copy' || action === 'pull'
           ? { expectedHead: result?.head, expectedTarget: result?.target }
           : {}),
       })
@@ -115,6 +142,7 @@ export function PersonalDiaryGit({
           value.snapshot.diaryMapping?.directory ?? source?.directory ?? defaultDiaryDirectory,
         )
       setResult(value.snapshot)
+      if (action === 'pull') onUpdated?.()
     } catch (e) {
       setError(String(e))
       setToken('')
@@ -129,6 +157,20 @@ export function PersonalDiaryGit({
     try {
       if (useTabStore.getState().tabs.some((tab) => tab.dirty))
         throw Error('有未保存内容，请先保存或取消修改；副本已准备，关联未切换。')
+      if (switchesProject && ownerPath) {
+        // Main re-checks identity, settings revision and that old tasks are paused before binding.
+        const preview = await window.cclinkStudio.workspaceState.inspectDiaryRoot(
+          result.workspacePath,
+        )
+        await window.cclinkStudio.workspaceState.confirmDiaryRoot(ownerPath, preview)
+        await openPersonalSpace()
+        // The previous folder stays on disk and in 历史项目; only its tab is closed.
+        const active = useWorkspaceStore.getState().activeWorkspaceRef
+        if (active.kind === 'local' && active.path !== ownerPath)
+          useOpenProjectsStore.getState().removeProject(ownerPath)
+        await useWorkspaceStore.getState().refreshSettings()
+        return
+      }
       if (source) {
         const previous = await window.cclinkStudio.scheduledTasks.inspect(source.workspacePath)
         if (!previous.success) throw Error('原任务状态读取失败，保持旧关联')
@@ -224,8 +266,24 @@ export function PersonalDiaryGit({
             />
           </label>
         </details>
+        <div className="diary-git-destination">
+          <span>本地目的地：{destination || '未选择（将另建独立副本）'}</span>
+          <button
+            disabled={busy}
+            onClick={() =>
+              void window.cclinkStudio.dialog
+                .showOpenDialog({ selectDirectory: true, title: '选择用于拉取的空目录' })
+                .then((picked) => {
+                  if (!picked.canceled && picked.filePaths[0]) setDestination(picked.filePaths[0])
+                })
+                .catch((e) => setError(String(e)))
+            }
+          >
+            选择空目录…
+          </button>
+        </div>
         <button disabled={busy || !url} onClick={() => void execute('clone')}>
-          从 Git 拉取到新目录
+          {destination ? '拉取到所选空目录' : '从 Git 拉取到新目录'}
         </button>
       </div>
       {source && (
@@ -259,38 +317,87 @@ export function PersonalDiaryGit({
             {result.diffTruncated && <p>差异过长，显示前 128 KB；请在原仓库核对全文后再切换。</p>}
           </details>
           <h4>当前本地改动</h4>
-          <pre>{result.localChanges || '工作目录干净'}</pre>
+          <pre>
+            {result.localChanges
+              ? result.localChanges
+                  .split('\n')
+                  .map((line) => {
+                    const path = line.slice(3).replace(/^"|"$/g, '')
+                    return aiPaths.has(path) ? `${line}  · AI 修改` : line
+                  })
+                  .join('\n')
+              : '工作目录干净'}
+          </pre>
           {result.diverged && (
-            <p role="alert">本地有未上传提交或历史分叉，已阻止快捷更新；请在原仓库处理分支。</p>
+            <div role="alert">
+              <p>本地有未上传提交或历史分叉，已阻止快捷更新；本地内容不会丢失。</p>
+              <button
+                onClick={() =>
+                  askAi(
+                    `我的空间 ${result.workspacePath} 的 Git 本地与远端（${result.branch}）分叉。请先说明双方各自的改动和冲突文件，提出合并方案，等我确认后再执行；不要强制推送、重置或丢弃任何一方的内容，完成后说明改了什么。`,
+                  )
+                }
+              >
+                让 AI 帮我合并…
+              </button>
+            </div>
+          )}
+          {!result.newCopy && result.head === result.target && (
+            <p role="status">本地已是远端最新版本。</p>
           )}
           {!result.newCopy && (
-            <button
-              disabled={
-                busy ||
-                result.head === result.target ||
-                !!result.localChanges ||
-                result.diverged ||
-                result.diffTruncated
-              }
-              onClick={() => void execute('update-copy')}
-            >
-              将已审阅更新拉取为新副本
-            </button>
+            <div className="diary-actions">
+              <button
+                className="primary"
+                disabled={
+                  busy ||
+                  result.head === result.target ||
+                  !!result.localChanges ||
+                  result.diverged ||
+                  result.diffTruncated
+                }
+                onClick={() => void execute('pull')}
+              >
+                拉取并更新
+              </button>
+              <button
+                disabled={
+                  busy ||
+                  result.head === result.target ||
+                  !!result.localChanges ||
+                  result.diverged ||
+                  result.diffTruncated
+                }
+                onClick={() => void execute('update-copy')}
+              >
+                另存远端版本为独立副本
+              </button>
+            </div>
           )}
           {result.newCopy && (
             <div className="diary-source-form">
-              <label>
-                新副本的个人资料目录
-                <input
-                  aria-label="副本个人资料目录"
-                  value={directory}
-                  onChange={(e) => setDirectory(e.target.value)}
-                />
-              </label>
-              <p>
-                切换只改变首页来源。当前关联的 {source?.taskIds.length ?? 0}{' '}
-                项原任务需重新核对。旧目录的私有任务、运行历史、未上传文件不会跟来；旧任务仍按旧设置运行。新副本的共享任务需要在本设备重新确认，任务关联需重新选择。
-              </p>
+              {switchesProject ? (
+                <p>
+                  确认后「我的空间」改用 {result.workspacePath}
+                  ：首页、文件树、会话、终端与任务都从这里打开。原目录 {source?.workspacePath}{' '}
+                  的文件、未上传内容和私有任务原样保留；仓库带来的共享任务在本机默认停用，需逐项确认启用。
+                </p>
+              ) : (
+                <label>
+                  新副本的个人资料目录
+                  <input
+                    aria-label="副本个人资料目录"
+                    value={directory}
+                    onChange={(e) => setDirectory(e.target.value)}
+                  />
+                </label>
+              )}
+              {!switchesProject && (
+                <p>
+                  切换只改变首页来源。当前关联的 {source?.taskIds.length ?? 0}{' '}
+                  项原任务需重新核对。旧目录的私有任务、运行历史、未上传文件不会跟来；旧任务仍按旧设置运行。新副本的共享任务需要在本设备重新确认，任务关联需重新选择。
+                </p>
+              )}
               <p>
                 旧日记与计划：{source ? source.workspacePath + '/' + source.directory : '尚未关联'}
               </p>

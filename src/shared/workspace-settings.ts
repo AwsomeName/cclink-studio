@@ -23,6 +23,7 @@ export const workspaceSettingsSchema = z
     diary: z
       .object({
         directory: diaryRelativePathSchema,
+        planDirectory: diaryRelativePathSchema.optional(),
         timezone: z
           .string()
           .max(80)

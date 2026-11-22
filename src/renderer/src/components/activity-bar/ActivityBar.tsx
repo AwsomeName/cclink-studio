@@ -10,6 +10,7 @@ import {
   useWorkspaceStore,
 } from '../../stores'
 import {
+  IconRefresh,
   IconPencil,
   IconClipboard,
   IconClock,
@@ -179,7 +180,8 @@ export function ActivityBar(): React.ReactElement {
         : activePanel
   const isTypeEntry = (id: ActivityPanel): boolean =>
     ['company-workspace', 'company-accounts', 'cclink', 'operations', 'agent-roles'].includes(id) ||
-    (workspaceType === 'electronics' && id === 'production')
+    (workspaceType === 'electronics' && id === 'production') ||
+    (workspaceType === 'diary' && id === 'scheduled-tasks')
   const visiblePinnedTools = pinnedTools.filter((id) => !isTypeEntry(id))
   const renderGroup = (group: (typeof MAIN_ICON_GROUPS)[number]): React.ReactElement => (
     <div key={group.id} className="activity-bar-group" role="group" aria-label={group.label}>
@@ -251,11 +253,11 @@ export function ActivityBar(): React.ReactElement {
           {workspaceType === 'diary' && (
             <>
               <div className="activity-bar-group-label">日记与计划</div>
-              {(['日记', '计划', '定时整理'] as const).map((page, index) => {
-                const Icon = [IconPencil, IconClipboard, IconClock][index]
+              {(['日记', '计划', '定时整理', 'Git'] as const).map((page, index) => {
+                const Icon = [IconPencil, IconClipboard, IconClock, IconRefresh][index]
                 return (
                   <button
-                    key={page}
+                    key={page === 'Git' ? '同步' : page}
                     className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && !activeTab.settingsSection && diaryPage === page ? 'active' : ''}`}
                     onClick={() => {
                       useDiaryNavigation.getState().setPage(page)
@@ -263,7 +265,7 @@ export function ActivityBar(): React.ReactElement {
                     }}
                   >
                     <Icon size={18} />
-                    {page}
+                    {page === 'Git' ? '同步' : page}
                   </button>
                 )
               })}
@@ -342,17 +344,6 @@ export function ActivityBar(): React.ReactElement {
             <IconTool size={18} />
             <span className="activity-bar-label">工具</span>
           </summary>
-          {workspaceType === 'diary' && (
-            <button
-              className="activity-bar-icon"
-              onClick={() => {
-                useDiaryNavigation.getState().setPage('Git')
-                showWorkspaceHome(activeRef)
-              }}
-            >
-              Git 更新
-            </button>
-          )}
           {renderGroup({
             id: 'tools',
             label: '全部工具',

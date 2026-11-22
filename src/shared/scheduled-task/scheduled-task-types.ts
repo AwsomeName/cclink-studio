@@ -39,6 +39,16 @@ export type ScheduledTaskSchedule =
       timezone: string
     }
   | {
+      kind: 'monthly'
+      time: string
+      timezone: string
+    }
+  | {
+      kind: 'yearly'
+      time: string
+      timezone: string
+    }
+  | {
       kind: 'weekdays'
       time: string
       timezone: string

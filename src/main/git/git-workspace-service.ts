@@ -43,6 +43,7 @@ interface GitCommandRunner {
 }
 
 interface GitWorkspaceServiceOptions {
+  decide?: (prompt: string) => Promise<string>
   runner?: GitCommandRunner
   now?: () => Date
   resolveAuthentication?: (remoteUrl: string) => Promise<{ username: string; token: string } | null>
@@ -59,7 +60,7 @@ export class GitWorkspaceService {
 
   constructor(
     private readonly workspaceStateService: WorkspaceStateService,
-    options: GitWorkspaceServiceOptions = {},
+    private readonly options: GitWorkspaceServiceOptions = {},
   ) {
     this.runner = options.runner ?? new GitExecutor()
     this.now = options.now ?? (() => new Date())
@@ -105,13 +106,48 @@ export class GitWorkspaceService {
     if (this.activeOperations.has(key)) throw Error('此仓库已有 Git 操作正在执行')
     this.activeOperations.add(key)
     try {
+      const diarySection = 'personal-diary-sync'
+      let diary
+      if (input.action === 'diary-sync') {
+        const space = this.workspaceStateService.getFixedSpaces().personal
+        if (space?.workspacePath !== key || !space.diaryRootConfirmed)
+          throw Error('请先确认我的空间目录')
+        const { settings } = await readWorkspaceSettings(key)
+        if (settings.type !== 'diary' || !settings.diary) throw Error('我的空间日记目录未配置')
+        const saved = (await this.workspaceStateService.getSnapshot(key)).sections[diarySection] as
+          | GitTransferSnapshot
+          | undefined
+        if (!input.url && saved?.conflict && !input.feedback) return saved
+        input.url ??= saved?.remoteUrl
+        if (!input.url)
+          return {
+            workspacePath: key,
+            remoteUrl: '',
+            branch: '',
+            head: '',
+            target: '',
+            checkedAt: '',
+            changes: '',
+            localChanges: '',
+            diverged: false,
+          }
+        diary = settings.diary
+      }
       const result = await transferRepository(input, {
+        diary,
+        decide: this.options.decide,
+        onDiaryAddress: raw.url
+          ? async (url) => {
+              await this.workspaceStateService.setSection(key, diarySection, { remoteUrl: url })
+            }
+          : undefined,
         runner: this.transferRunner,
         copyRoot: input.destinationParent,
         authentication: input.token
           ? { username: input.username || 'git', token: input.token }
           : undefined,
       })
+      if (diary) await this.workspaceStateService.setSection(key, diarySection, result)
       // Register only a newly-created copy. Never initialize or migrate the connected old root.
       if (result.newCopy) {
         await this.workspaceStateService.getSnapshot(result.workspacePath)

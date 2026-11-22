@@ -30,6 +30,14 @@ export const windowApi: WindowApiContract = {
   toggleDevtools: () => invokeIpcContract(windowIpc.toggleDevtools),
   reload: () => invokeIpcContract(windowIpc.reload),
   requestClose: () => invokeIpcContract(windowIpc.requestClose),
+  isForeground: () => invokeIpcContract(windowIpc.isForeground),
+  onForegroundChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, active: unknown): void => {
+      if (typeof active === 'boolean') callback(active)
+    }
+    ipcRenderer.on(windowIpcEvents.foregroundChanged, handler)
+    return () => ipcRenderer.removeListener(windowIpcEvents.foregroundChanged, handler)
+  },
   focusRenderer: () => invokeIpcContract(windowIpc.focusRenderer),
   setShortcutCaptureGuard: (input) => invokeIpcContract(windowIpc.setShortcutCaptureGuard, input),
   onShortcutCaptureInput: (callback) => {

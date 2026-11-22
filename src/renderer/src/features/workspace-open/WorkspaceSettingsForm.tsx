@@ -6,7 +6,7 @@ import {
   personalDiarySourceSchema,
   personalDiarySourceSection,
 } from '@shared/personal-diary-source'
-import { refreshFixedSpaces } from './fixed-spaces-store'
+import { refreshFixedSpaces, useFixedSpacesStore } from './fixed-spaces-store'
 import type { GitRepositorySnapshot } from '@shared/git'
 import { useEffect, useState } from 'react'
 import {
@@ -20,6 +20,7 @@ import { useToastStore } from '../../components/common/Toast'
 import { useDiaryNavigation } from './personal-diary-navigation'
 import { showWorkspaceHome } from './workspace-home-navigation'
 import { openWorkspaceRef } from './workspace-open-controller'
+import { useTabStore } from '../../stores/tab-store'
 import './workspace-settings.css'
 
 const descriptions: Record<WorkspaceType, string> = {
@@ -192,11 +193,13 @@ export function WorkspaceSettingsForm(): React.ReactElement {
   const [busy, setBusy] = useState(false)
   const [useDiary, setUseDiary] = useState(false)
   const [directory, setDirectory] = useState(defaultDiaryDirectory)
+  const [planDirectory, setPlanDirectory] = useState('计划')
   const [timezone, setTimezone] = useState(defaultDiaryTimezone)
   useEffect(() => {
     setDraft(snapshot?.settings ?? null)
     setUseDiary(!!snapshot?.settings.diary)
     setDirectory(snapshot?.settings.diary?.directory ?? defaultDiaryDirectory)
+    setPlanDirectory(snapshot?.settings.diary?.planDirectory ?? '计划')
     setTimezone(snapshot?.settings.diary?.timezone ?? defaultDiaryTimezone)
     setError('')
     setNotice('')
@@ -213,6 +216,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       if (useDiary)
         settings.diary = {
           directory,
+          planDirectory,
           timezone,
           taskIds: draft.diary?.taskIds ?? [],
         }
@@ -278,6 +282,12 @@ export function WorkspaceSettingsForm(): React.ReactElement {
           )}
           {useDiary && (
             <label>
+              计划目录
+              <input value={planDirectory} onChange={(e) => setPlanDirectory(e.target.value)} />
+            </label>
+          )}
+          {useDiary && (
+            <label>
               日记时区
               <input
                 aria-label="项目日记时区"
@@ -305,6 +315,49 @@ export function WorkspaceSettingsForm(): React.ReactElement {
         >
           Git 配置与更新
         </button>
+      )}
+      {draft.type === 'diary' && (
+        <div className="workspace-diary-extras">
+          <button
+            onClick={() => {
+              const dir = draft.diary?.directory ?? defaultDiaryDirectory
+              const target = `${ref.path}/${dir}/模板/日记模板.md`
+              void window.cclinkStudio.fs
+                .readDir(`${ref.path}/${dir}/模板`)
+                .catch(async () => {
+                  await window.cclinkStudio.fs.mkdir(`${ref.path}/${dir}/模板`)
+                  return []
+                })
+                .then(async (entries) => {
+                  if (!entries.some((entry) => entry.name === '日记模板.md'))
+                    await window.cclinkStudio.fs.writeFile(
+                      target,
+                      '# YYYY-MM-DD 周X\n\n## 昨日总结\n\n## 今日待做\n\n## 强调事项\n\n## 今日打卡\n\n| 时间 | 事项 | 详细记录 |\n| --- | --- | --- |\n',
+                    )
+                  useTabStore.getState().openTab({
+                    type: 'editor',
+                    title: '日记模板.md',
+                    filePath: target,
+                    workspaceRef: ref,
+                    icon: '📄',
+                  })
+                })
+                .catch((e) => setError(String(e)))
+            }}
+          >
+            编辑日记模板
+          </button>
+          {ref.path === useFixedSpacesStore.getState().spaces?.personal?.workspacePath && (
+            <button
+              onClick={() => {
+                useDiaryNavigation.getState().setPage('更换目录')
+                showWorkspaceHome(ref)
+              }}
+            >
+              更换项目目录…
+            </button>
+          )}
+        </div>
       )}
       <div className="workspace-form-actions">
         <button

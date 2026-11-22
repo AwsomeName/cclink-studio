@@ -2,9 +2,9 @@ import type RFB from '@novnc/novnc'
 
 // noVNC 1.7.0 sends at most one wheel click per event and only after 50px,
 // discarding the remainder. A Mac trackpad swipe therefore loses most of its
-// distance and scrolls very slowly on macOS Screen Sharing. This handler keeps
-// the remainder and converts every STEP_PX into a click (capped per event).
+// distance and scrolls very slowly on macOS Screen Sharing.
 const STEP_PX = 6
+const VERTICAL_TRACKPAD_STEP_PX = 4
 const LINE_PX = 19
 const MAX_STEPS_PER_EVENT = 24
 
@@ -23,6 +23,7 @@ interface NoVncInternals {
 export function installMacWheel(
   rfb: RFB,
   screen: HTMLElement,
+  batchPointerInput: (emit: () => void) => void,
   onSteps?: (steps: number) => void,
 ): (() => void) | undefined {
   const internals = rfb as unknown as NoVncInternals
@@ -39,15 +40,17 @@ export function installMacWheel(
     if (rfb.viewOnly) return
     const scale = event.deltaMode === 0 ? 1 : LINE_PX
     accX += event.deltaX * scale
+    // A previous gesture's partial step should not oppose the user's change of direction.
+    if (accY * event.deltaY < 0) accY = 0
     accY += event.deltaY * scale
     const rect = canvas.getBoundingClientRect()
     const x = Math.min(Math.max(event.clientX - rect.left, 0), rect.width)
     const y = Math.min(Math.max(event.clientY - rect.top, 0), rect.height)
     const base = internals._mouseButtonMask ?? 0
     let sent = 0
-    const emit = (axis: 'x' | 'y', negative: number, positive: number): void => {
+    const emit = (axis: 'x' | 'y', negative: number, positive: number, stepPx: number): void => {
       const acc = axis === 'x' ? accX : accY
-      const steps = Math.min(Math.floor(Math.abs(acc) / STEP_PX), MAX_STEPS_PER_EVENT)
+      const steps = Math.min(Math.floor(Math.abs(acc) / stepPx), MAX_STEPS_PER_EVENT)
       if (steps === 0) return
       const mask = acc < 0 ? negative : positive
       for (let i = 0; i < steps; i++) {
@@ -55,14 +58,15 @@ export function installMacWheel(
         press(x, y, base)
       }
       // Keep the remainder; drop any excess beyond the cap so momentum cannot queue up.
-      const rest = Math.sign(acc) * (Math.abs(acc) - steps * STEP_PX)
-      const kept = Math.abs(rest) >= STEP_PX ? 0 : rest
+      const kept = acc % stepPx
       if (axis === 'x') accX = kept
       else accY = kept
       sent += steps
     }
-    emit('y', UP, DOWN)
-    emit('x', LEFT, RIGHT)
+    batchPointerInput(() => {
+      emit('y', UP, DOWN, event.deltaMode === 0 ? VERTICAL_TRACKPAD_STEP_PX : STEP_PX)
+      emit('x', LEFT, RIGHT, STEP_PX)
+    })
     if (sent) onSteps?.(sent)
   }
   screen.addEventListener('wheel', onWheel, { capture: true, passive: false })
