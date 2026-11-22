@@ -76,6 +76,7 @@ import {
 import { registerMarkdownViewStateFlusher } from '../../features/markdown/markdown-view-state-lifecycle'
 import { getWorkspaceStateKey } from '../../utils/workspace-state'
 import { useEditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
+import { openAs } from './ContentPresentationBar'
 import { isMarkdownDocumentPath } from '@shared/markdown-document'
 
 const lowlight = createLowlight(common)
@@ -618,6 +619,18 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     if (!editor) return
     setMarkdownEditorEditable(editor, !parseBlockedReason)
   }, [editor, parseBlockedReason])
+  // Content the rich editor cannot round-trip (e.g. raw HTML) opens in source mode instead of
+  // being refused, so the user can still edit the original Markdown (my-space design §8).
+  const switchedToSourceRef = useRef(false)
+  useEffect(() => {
+    if (!parseBlockedReason || switchedToSourceRef.current) return
+    // Scoped to diary projects; other Studio documents keep their protected preview.
+    if (useWorkspaceStore.getState().settingsSnapshot?.settings.type !== 'diary') return
+    const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+    if (!tab) return
+    switchedToSourceRef.current = true
+    openAs(tab, 'source')
+  }, [parseBlockedReason, tabId])
 
   useEffect(() => {
     if (!filePath) return

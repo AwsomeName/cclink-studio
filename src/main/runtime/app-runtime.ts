@@ -66,6 +66,7 @@ import type { WorkbenchTabModel } from '../workbench/workbench-tab-model'
 import type { WorkbenchWindowService } from '../workbench/workbench-window-service'
 import type { BrowserBookmarkModel } from '../workbench/browser-bookmark-model'
 import type { BrowserRecoveryHostRegistry } from '../workbench/browser-recovery-host-registry'
+import type { DiaryChangeTracker } from '../workspace/diary-change-tracker'
 import type { DetachableBrowserWindowController } from '../workbench/detachable-browser-window-controller'
 
 export interface CclinkStudioRuntimeState {
@@ -133,6 +134,7 @@ export interface CclinkStudioRuntimeState {
   updateService: UpdateService | null
   updateSnapshotUnsubscribe: (() => void) | null
   scheduledTaskService: ScheduledTaskService | null
+  diaryChangeTracker: DiaryChangeTracker | null
   mediaProjectService: MediaProjectService | null
   mediaAssetService: MediaAssetService | null
   videoGenerationService: VideoGenerationService | null
@@ -212,6 +214,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     updateService: null,
     updateSnapshotUnsubscribe: null,
     scheduledTaskService: null,
+    diaryChangeTracker: null,
     mediaProjectService: null,
     mediaAssetService: null,
     videoGenerationService: null,

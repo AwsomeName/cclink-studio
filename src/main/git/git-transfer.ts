@@ -3,10 +3,11 @@ import {
   inspectCclinkStudioIndex,
 } from './cclink-studio-path-policy'
 import { app } from 'electron'
-import { lstat, mkdir, mkdtemp, realpath, readFile, writeFile } from 'node:fs/promises'
-import { join, relative, isAbsolute } from 'node:path'
+import { lstat, mkdir, mkdtemp, readdir, realpath, readFile, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, isAbsolute } from 'node:path'
 import type { GitTransferInput, GitTransferSnapshot } from '../../shared/git'
 import type { GitExecutor, GitAuthentication } from '../git-backup/git-executor'
+import { fastForwardIfClean } from './git-fast-forward'
 
 export interface TransferContext {
   runner: Pick<GitExecutor, 'run'>
@@ -146,9 +147,47 @@ export async function transferRepository(
       input.branch.includes('//'))
   )
     throw Error('分支名无效')
+  const cloneInto = async (url: string, target: string, branch?: string): Promise<string> => {
+    const home = await realpath(app.getPath('home'))
+    if (!isAbsolute(target)) throw Error('本地目的地必须是绝对路径')
+    const actual = await realpath(target)
+    const rel = relative(home, actual)
+    if (!rel || rel.startsWith('..') || isAbsolute(rel)) throw Error('本地目的地必须在用户目录中')
+    if (actual !== target || (await lstat(target)).isSymbolicLink())
+      throw Error('本地目的地不能是符号链接')
+    if (!(await lstat(target)).isDirectory()) throw Error('本地目的地不是目录')
+    if ((await readdir(target)).length)
+      throw Error('所选目录不是空目录；为保留现有内容，不会拉取到这里。请选择空目录或使用已有项目')
+    try {
+      await run(dirname(target), [
+        'clone',
+        '--no-hardlinks',
+        '--no-local',
+        ...(branch ? ['--branch', branch, '--single-branch'] : []),
+        '--',
+        url,
+        target,
+      ])
+      const forbidden = await inspectCclinkStudioIndex(context.runner, target)
+      if (forbidden.length)
+        throw Error(
+          `仓库跟踪了不应跨设备接入的本机数据：${forbidden.join('、')}；请清理远程仓库后重新拉取`,
+        )
+      const excludes = join(target, '.git/info/exclude')
+      const existing = await readFile(excludes, 'utf8').catch(() => '')
+      await writeFile(excludes, updateCclinkStudioExcludeBlock(existing), 'utf8')
+      return target
+    } catch (error) {
+      throw Error(
+        `拉取未完成，当前项目保持不变。所选目录 ${target} 可能留有部分内容，请检查后重试。${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
+  }
   if (input.action === 'clone') {
     const url = await validateUrl(input.url ?? '')
-    const path = await createCopy(url, input.branch || undefined)
+    const path = input.destination
+      ? await cloneInto(url, input.destination, input.branch || undefined)
+      : await createCopy(url, input.branch || undefined)
     const branch = await run(path, ['symbolic-ref', '--short', 'HEAD'])
     const head = await run(path, ['rev-parse', 'HEAD'])
     return {
@@ -238,6 +277,30 @@ export async function transferRepository(
     await run(path, ['merge-base', '--is-ancestor', head, target])
   } catch {
     diverged = true
+  }
+  if (input.action === 'pull') {
+    // In place, fast-forward only, exactly the reviewed head → target (D4).
+    if (!input.expectedHead || !input.expectedTarget) throw Error('请先检查远程更新并审阅差异')
+    if (fullDiff.length > diff.length)
+      throw Error('正文差异超过预览范围，请完整审阅后通过 Git 变更面板处理')
+    const moved = await fastForwardIfClean(context.runner, path, {
+      expectedHead: input.expectedHead,
+      expectedTarget: input.expectedTarget,
+    })
+    if (moved.outcome === 'blocked') throw Error(`未更新，原资料已保留：${moved.reason}`)
+    return {
+      workspacePath: path,
+      remoteUrl: url,
+      branch,
+      head: moved.head ?? target,
+      target,
+      changes,
+      diff,
+      diffTruncated: false,
+      localChanges: '',
+      diverged: false,
+      checkedAt: new Date().toISOString(),
+    }
   }
   if (input.action === 'update-copy') {
     if (head !== input.expectedHead || target !== input.expectedTarget)

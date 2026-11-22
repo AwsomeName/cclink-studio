@@ -662,6 +662,82 @@ describe('ScheduledTaskService', () => {
     await restarted.stopRuntime()
   })
 
+  it('catches up a missed daily diary draft later the same day, but not the next day', async () => {
+    const initialNow = Date.parse('2026-07-29T00:00:00.000Z')
+    const first = createService(undefined, () => initialNow)
+    await first.load()
+    const saved = await first.save({
+      ...createInput(true),
+      schedule: { kind: 'daily', time: '00:01', timezone: 'UTC' },
+      outputPolicy: {
+        directory: '个人计划/{year}/{month}',
+        fileNameTemplate: '{monthDay}_{weekday}.md',
+        mode: 'create-only',
+      },
+    })
+    await first.flush()
+    const run = vi.fn(async () => ({
+      artifact: { relativePath: '个人计划/2026/07/0729_周三.md', bytes: 8, sha256: 'd'.repeat(64) },
+    }))
+    const sameDay = createService(
+      { run, cancel: vi.fn(async () => {}) },
+      () => initialNow + 9 * 3600_000,
+    )
+    await sameDay.load()
+    await sameDay.startRuntime({} as never)
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    expect(
+      (await sameDay.listRuns(workspacePath, saved.task!.definition.id)).runs[0],
+    ).toMatchObject({
+      trigger: 'catch-up',
+      status: 'completed',
+    })
+    await sameDay.stopRuntime()
+    // Just after midnight the latest due draft belongs to yesterday: recorded as missed.
+    const nextDayRun = vi.fn()
+    const nextDay = createService(
+      { run: nextDayRun, cancel: vi.fn(async () => {}) },
+      () => initialNow + 2 * 86_400_000 + 30_000,
+    )
+    await nextDay.load()
+    await nextDay.startRuntime({} as never)
+    await vi.waitFor(async () =>
+      expect(
+        (await nextDay.listRuns(workspacePath, saved.task!.definition.id)).runs[0],
+      ).toMatchObject({
+        status: 'missed',
+      }),
+    )
+    expect(nextDayRun).not.toHaveBeenCalled()
+    await nextDay.stopRuntime()
+  })
+
+  it('drafts today once when the daily diary task is enabled after its time', async () => {
+    const now = Date.parse('2026-07-29T10:00:00.000Z')
+    const run = vi.fn(async () => ({
+      artifact: { relativePath: '个人计划/2026/07/0729_周三.md', bytes: 8, sha256: 'e'.repeat(64) },
+    }))
+    const service = createService({ run, cancel: vi.fn(async () => {}) }, () => now)
+    await service.load()
+    await service.startRuntime({} as never)
+    const saved = await service.save({
+      ...createInput(true),
+      schedule: { kind: 'daily', time: '07:30', timezone: 'UTC' },
+      outputPolicy: {
+        directory: '个人计划/{year}/{month}',
+        fileNameTemplate: '{monthDay}_{weekday}.md',
+        mode: 'create-only',
+      },
+    })
+    await vi.waitFor(() => expect(run).toHaveBeenCalledTimes(1))
+    // Re-enabling the same day does not queue a second draft.
+    await service.setEnabled({ workspacePath, taskId: saved.task!.definition.id, enabled: true })
+    const history = await service.listRuns(workspacePath, saved.task!.definition.id)
+    expect(history.runs).toHaveLength(1)
+    expect(history.runs[0]).toMatchObject({ trigger: 'catch-up' })
+    await service.stopRuntime()
+  })
+
   it('shares only a portable definition and requires device B to confirm each revision', async () => {
     const workspaceB = join(tempDir, 'workspace-b')
     const userDataB = join(tempDir, 'user-data-b')

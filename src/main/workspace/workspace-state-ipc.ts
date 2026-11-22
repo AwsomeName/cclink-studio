@@ -5,6 +5,7 @@ import {
 } from '../../shared/personal-diary-source'
 import { workspaceStateIpcContracts } from '../../shared/ipc/workbench-contract'
 import { WorkspaceStateService } from './workspace-state-service'
+import type { DiaryChangeTracker } from './diary-change-tracker'
 import {
   registerTrustedIpcContract,
   type TrustedRendererGuard,
@@ -23,6 +24,7 @@ export function registerWorkspaceStateIpc(
   fileService?: FileService,
   getCompanyService?: () => CompanyWorkspaceService | null,
   assertDiarySourceChange?: (previous: PersonalDiarySource) => Promise<void>,
+  getDiaryChangeTracker?: () => DiaryChangeTracker | null,
 ): void {
   const cleanupBoundSenders = new WeakSet<WebContents>()
   const bindCapabilityCleanup = (sender: WebContents): void => {
@@ -46,6 +48,7 @@ export function registerWorkspaceStateIpc(
     ]
     if (
       value === undefined &&
+      !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
       workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
     )
       value = (await workspaceStateService.getSnapshot(null)).sections[personalDiarySourceSection]
@@ -103,6 +106,7 @@ export function registerWorkspaceStateIpc(
       let override = state.sections[personalDiarySourceSection]
       if (
         override === undefined &&
+        !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
         input.workspacePath === workspaceStateService.getFixedSpaces().personal?.workspacePath
       )
         override = (await workspaceStateService.getSnapshot(null)).sections[
@@ -155,6 +159,92 @@ export function registerWorkspaceStateIpc(
     fileService?.registerKnownWorkspaces(sender.id, paths)
     fileService?.registerPickerSelection(sender.id, paths, 'workspace')
   }
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.inspectDiaryRoot,
+    trustedRendererGuard,
+    (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.inspectDiaryRoot(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.confirmDiaryRoot,
+    trustedRendererGuard,
+    async (event, owner, preview) => {
+      assertWorkspaceAccess(event.sender.id, owner)
+      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      if (owner !== preview.workspacePath)
+        await guardDiaryChange(await previousDiarySource(owner), null)
+      const fixed = await workspaceStateService.confirmDiaryRoot(owner, preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.listDiaryChanges,
+    trustedRendererGuard,
+    async (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return (await getDiaryChangeTracker?.()?.list(path)) ?? []
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.undoDiaryChange,
+    trustedRendererGuard,
+    async (event, id) => {
+      const tracker = getDiaryChangeTracker?.()
+      if (!tracker) throw Error('改动记录当前不可用')
+      const report = (await tracker.listAll()).find((item) => item.id === id)
+      if (!report) throw Error('改动报告不存在')
+      assertWorkspaceAccess(event.sender.id, report.workspacePath)
+      return tracker.undo(id)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.describeDefaultPersonalSpace,
+    trustedRendererGuard,
+    () => workspaceStateService.describeDefaultPersonalSpace(),
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.initializePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      if (preview) assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      const fixed = await workspaceStateService.initializePersonalSpace(preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.replaceUnavailablePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
+      const fixed = await workspaceStateService.initializePersonalSpace(preview, {
+        replaceUnavailable: true,
+      })
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.inspectPersonalRelocation,
+    trustedRendererGuard,
+    (event, path) => {
+      assertWorkspaceAccess(event.sender.id, path)
+      return workspaceStateService.inspectPersonalRelocation(path)
+    },
+  )
+  registerTrustedIpcContract(
+    workspaceStateIpcContracts.relocatePersonalSpace,
+    trustedRendererGuard,
+    async (event, preview) => {
+      assertWorkspaceAccess(event.sender.id, preview.candidate.workspacePath)
+      const fixed = await workspaceStateService.relocatePersonalSpace(preview)
+      grant(event.sender, [fixed.personal!.workspacePath])
+      return fixed
+    },
+  )
   registerTrustedIpcContract(workspaceStateIpcContracts.getFixedSpaces, trustedRendererGuard, () =>
     workspaceStateService.getFixedSpaces(),
   )
@@ -164,6 +254,7 @@ export function registerWorkspaceStateIpc(
     async (event) => {
       const fixed = await workspaceStateService.ensurePersonalSpace(
         settingsService?.getAll().defaultWorkspacePath,
+        { createDefault: false },
       )
       if (fixed.personal) grant(event.sender, [fixed.personal.workspacePath])
       return fixed
@@ -247,8 +338,11 @@ export function registerWorkspaceStateIpc(
         if (!settingsService) throw new Error('设置服务当前不可用')
         const fixed = await workspaceStateService.ensurePersonalSpace(
           settingsService.getAll().defaultWorkspacePath,
+          { createDefault: false },
         )
-        const workspacePath = fixed.personal!.workspacePath
+        // Not set up yet: start without a workspace; the renderer shows first use (D2).
+        if (!fixed.personal) return { success: true, workspacePath: null }
+        const workspacePath = fixed.personal.workspacePath
         fileService?.registerKnownWorkspaces(event.sender.id, [workspacePath])
         fileService?.registerPickerSelection(event.sender.id, [workspacePath], 'workspace')
         return { success: true, workspacePath }

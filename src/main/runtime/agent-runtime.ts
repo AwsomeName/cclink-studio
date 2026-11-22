@@ -214,6 +214,7 @@ export async function bootstrapAgentRuntime(runtime: CclinkStudioRuntimeState): 
           runtimeStateStore: runtime.agentRuntimeStateStore,
         },
       )
+      if (runtime.diaryChangeTracker) runtime.agentBridge.setRunObserver(runtime.diaryChangeTracker)
       startingCclinkAgentService = null
 
       if (runtime.browserManager) {

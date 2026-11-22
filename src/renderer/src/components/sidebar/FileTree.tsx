@@ -168,6 +168,36 @@ export function FileTree(): React.ReactElement {
   useEffect(() => {
     treeRef.current?.querySelector('.file-tree-item.selected')?.scrollIntoView({ block: 'nearest' })
   }, [highlightedPath, tree])
+  // Returning to the tree from an editor locates the open file: expand its collapsed ancestors once
+  // per file and tree load (switching projects reloads the tree). Linked directories still require the user's explicit authorization click.
+  const revealedFileRef = useRef<string | null>(null)
+  const hasTree = tree.length > 0
+  useEffect(() => {
+    if (!hasTree) revealedFileRef.current = null
+    const key = `${workspacePath}\n${activeFile}`
+    if (!activeFile || !workspacePath || !hasTree || revealedFileRef.current === key) return
+    if (!activeFile.startsWith(workspacePath + '/')) return
+    revealedFileRef.current = key
+    let cancelled = false
+    void (async () => {
+      const parts = activeFile
+        .slice(workspacePath.length + 1)
+        .split('/')
+        .slice(0, -1)
+      let dir = workspacePath
+      for (const part of parts) {
+        dir = `${dir}/${part}`
+        const state = useFsStore.getState()
+        if (cancelled || state.workspacePath !== workspacePath) return
+        const node = findFileTreeNode(state.tree, dir)
+        if (!node || node.symbolicLink) return
+        if (!node.expanded) await state.toggleDir(dir)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeFile, workspacePath, hasTree])
 
   useEffect(() => {
     if (!workspacePath) return

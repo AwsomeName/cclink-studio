@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>我的空间效果图</title>
+<style>
+  :root {
+    --page: #15171b; --bg: #1e1f22; --side: #23252a; --top: #2b2d31; --panel: #26282d;
+    --line: #34373d; --text: #e6e6e6; --muted: #9aa0a8; --accent: #3b8eea; --accentbg: #1d3a5c;
+    --ok: #3fb37f; --warn: #d9a441; --bad: #e06c6c; --add: #1f3d2c; --del: #4a2326; --status: #1f4f7a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.6 -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; }
+  header.doc { max-width: 1120px; margin: 0 auto; padding: 32px 16px 8px; }
+  header.doc h1 { margin: 0 0 6px; font-size: 24px; }
+  header.doc p { margin: 0; color: var(--muted); }
+  nav.toc { max-width: 1120px; margin: 12px auto 0; padding: 0 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+  nav.toc a { color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+  nav.toc a:hover { color: var(--text); border-color: var(--accent); }
+  section.shot { max-width: 1120px; margin: 36px auto; padding: 0 16px; }
+  section.shot h2 { font-size: 17px; margin: 0 0 4px; }
+  section.shot .note { color: var(--muted); margin: 0 0 12px; font-size: 13px; }
+  .win { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); box-shadow: 0 8px 30px #0006; }
+  .topbar { display: flex; align-items: center; height: 42px; background: var(--top); padding: 0 12px; gap: 4px; font-size: 13px; }
+  .topbar .brand { font-weight: 600; margin-right: 12px; }
+  .tab { padding: 0 12px; height: 42px; display: flex; align-items: center; color: var(--muted); }
+  .tab.on { color: var(--text); box-shadow: inset 0 -2px var(--accent); font-weight: 600; }
+  .tab.pin::before { content: "📌"; font-size: 10px; margin-right: 4px; opacity: .7; }
+  .topbar .sp { flex: 1; }
+  .body { display: flex; min-height: 520px; }
+  .side { width: 168px; background: var(--side); border-right: 1px solid var(--line); padding: 10px 8px; font-size: 13px; flex: none; }
+  .side .it { padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+  .side .it.on { background: var(--accentbg); color: var(--text); box-shadow: inset 2px 0 var(--accent); }
+  .side .sep { border-top: 1px solid var(--line); margin: 8px 4px; }
+  .side .grp { font-size: 11px; color: #6f757d; padding: 6px 10px 2px; }
+  .main { flex: 1; padding: 20px 28px; min-width: 0; }
+  .crumb { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; }
+  h3.title { font-size: 22px; margin: 6px 0 14px; }
+  .status { height: 24px; background: var(--status); font-size: 12px; display: flex; align-items: center; gap: 14px; padding: 0 12px; }
+  .status .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; }
+  .btn { display: inline-block; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); font-size: 13px; margin-right: 6px; }
+  .btn.pri { background: #2b74c4; border-color: #2b74c4; }
+  .btn.dis { opacity: .45; }
+  .btn.sm { padding: 3px 10px; font-size: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin: 10px 0; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--line); gap: 10px; }
+  .row .r { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .muted { color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: #2f3238; color: var(--muted); margin-left: 6px; }
+  .tag.ai { background: #2a2f4a; color: #9db4ff; }
+  .tag.ok { background: #1e3a2c; color: #7fd6a8; }
+  .tag.warn { background: #3d3220; color: #f0c674; }
+  .tag.bad { background: #43242a; color: #f29b9b; }
+  .opt { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 8px 0; display: flex; gap: 10px; align-items: flex-start; }
+  .opt.on { border-color: var(--accent); background: #1b2b3d; }
+  .radio { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--muted); margin-top: 4px; flex: none; }
+  .opt.on .radio { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--bg); background: var(--accent); }
+  .check { width: 14px; height: 14px; border-radius: 3px; border: 2px solid var(--muted); display: inline-block; vertical-align: -2px; margin-right: 6px; }
+  .check.on { background: var(--accent); border-color: var(--accent); }
+  .field { display: grid; grid-template-columns: 120px 1fr; gap: 6px 14px; align-items: center; margin: 8px 0; }
+  .field .k { color: var(--muted); font-size: 13px; }
+  .input { background: #1a1b1e; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+  .steps { display: flex; gap: 6px; margin: 0 0 16px; font-size: 12px; }
+  .steps span { flex: 1; text-align: center; padding: 5px; border-radius: 6px; background: var(--panel); color: var(--muted); }
+  .steps span.on { background: var(--accentbg); color: var(--text); }
+  .steps span.done { color: var(--ok); }
+  .quote { border-left: 3px solid #4a5160; padding: 2px 12px; margin: 8px 0; }
+  .quote b { display: block; font-size: 13px; }
+  .diff { font: 12px/1.6 ui-monospace, Menlo, monospace; background: #1a1b1e; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+  .diff .a { background: var(--add); display: block; }
+  .diff .d { background: var(--del); display: block; text-decoration: line-through; opacity: .85; }
+  .split { display: flex; gap: 16px; }
+  .split > * { flex: 1; min-width: 0; }
+  .editor { background: #1a1b1e; border: 1px solid var(--line); border-radius: 8px; padding: 14px 18px; }
+  .editor h4 { margin: 10px 0 4px; font-size: 15px; border-bottom: 1px solid var(--line); padding-bottom: 3px; }
+  .toolbar { display: flex; gap: 10px; font-size: 12px; color: var(--muted); padding: 6px 2px 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .img { height: 90px; border-radius: 6px; background: linear-gradient(135deg, #3a4a5c, #2b3440); display: flex; align-items: center; justify-content: center; color: #9fb3c8; font-size: 12px; margin: 6px 0; }
+  table.md { border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+  table.md td, table.md th { border: 1px solid var(--line); padding: 3px 10px; }
+  .chat { width: 300px; border-left: 1px solid var(--line); background: var(--side); padding: 14px; font-size: 13px; flex: none; }
+  .bub { background: var(--panel); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+  .bub.me { background: #24384f; margin-left: 30px; }
+  .cite { font-size: 12px; color: #9db4ff; display: block; }
+  .bar { height: 6px; background: #2f3238; border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .bar i { display: block; height: 100%; width: 55%; background: var(--accent); }
+  .modal { position: relative; }
+  .overlay { position: absolute; inset: 0; background: #0009; display: flex; align-items: center; justify-content: center; }
+  .dialog { width: 560px; background: var(--side); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .cal { display: grid; grid-template-columns: 70px 50px 1fr auto; gap: 0 10px; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  @media (max-width: 760px) { .side, .chat { display: none; } .main { padding: 14px; } .field { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header class="doc">
+  <h1>我的空间 · 第二版效果图</h1>
+  <p>依据 product-logic.md（第二版，已确认）。所有正文、路径、时间均为示意数据。</p>
+</header>
+<nav class="toc" id="toc"></nav>
+<main id="shots"></main>
+
+<script>
+const NAV = ['今天', '日记', '计划', '定时整理', '|', '文件', '会话', '工具']
+function side(on) {
+  return '<div class="side"><div class="grp">我的空间</div>' + NAV.map(n => n === '|' ? '<div class="sep"></div>' :
+    `<div class="it ${n === on ? 'on' : ''}">${n}</div>`).join('') + '</div>'
+}
+function shell({ nav = '今天', body, chat = '', status = 'ok', firstUse = false }) {
+  const st = {
+    ok: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
+    ahead: '<span><i class="dot" style="background:#7fd6a8"></i>AI 就绪 · Codex</span><span><i class="dot" style="background:#f0c674"></i>远端有 2 项更新</span>',
+    aiDown: '<span><i class="dot" style="background:#f29b9b"></i>AI 未登录</span><span><i class="dot" style="background:#7fd6a8"></i>已同步 · main</span>',
+    setup: '<span><i class="dot" style="background:#9aa0a8"></i>正在设置</span>',
+    lost: '<span><i class="dot" style="background:#f29b9b"></i>项目目录失联</span>',
+  }[status]
+  return `<div class="win">
+    <div class="topbar"><span class="brand">CCLink Studio</span><span class="tab pin on">我的空间</span><span class="tab">研发日记</span><span class="sp"></span><span class="tab">＋ 新建 / 打开</span><span class="tab">历史项目</span><span class="tab">Studio 设置</span></div>
+    <div class="body">${firstUse ? '<div class="side"><div class="grp">我的空间</div><div class="it on">首次使用</div></div>' : side(nav)}<div class="main">${body}</div>${chat}</div>
+    <div class="status"><span>本地 · 我的空间</span>${st}</div>
+  </div>`
+}
+const crumb = (a, right = '') => `<div class="crumb"><span>${a}</span><span>${right}</span></div>`
+const steps = (n) => `<div class="steps">${['1 选择目录', '2 同步', '3 AI', '4 核对并确认'].map((s, i) =>
+  `<span class="${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}">${i + 1 < n ? '✓ ' : ''}${s}</span>`).join('')}</div>`
+
+const SHOTS = [
+  ['first-dir', '01 首次使用 · 选择目录', '查看此页不写入任何文件。选已有目录时只读核对并显示识别结果。',
+    shell({ firstUse: true, status: 'setup', body: crumb('我的空间 / 首次使用') + '<h3 class="title">设置「我的空间」</h3>' + steps(1) +
+      `<div class="opt"><div class="radio"></div><div><b>使用默认目录</b><div class="muted">~/CCLink Studio/我的空间 · 确认后才创建</div></div></div>
+       <div class="opt on"><div class="radio"></div><div style="flex:1"><b>选择已有目录</b> <span class="btn sm">选择文件夹…</span>
+         <div class="card" style="margin-bottom:0"><div class="field"><span class="k">项目目录</span><span>~/Desktop/woniu-forward</span>
+         <span class="k">日记目录</span><span>000-个人计划 <span class="tag">自动识别</span></span>
+         <span class="k">日记</span><span>412 篇 · 最近 2026/11/1120_周五.md</span>
+         <span class="k">Git</span><span>已是仓库 · origin github.com/…/woniu-forward · main</span></div></div></div></div>
+       <div style="margin-top:16px"><span class="btn pri">下一步</span></div>` })],
+
+  ['first-sync', '02 首次使用 · 同步（推荐）', '已有仓库自动带出；新设备可克隆到所选空目录；也可稍后连接。',
+    shell({ firstUse: true, status: 'setup', body: crumb('我的空间 / 首次使用') + '<h3 class="title">在设备之间同步</h3>' + steps(2) +
+      `<div class="opt on"><div class="radio"></div><div style="flex:1"><b>使用该目录已有的 Git 仓库</b>
+        <div class="field"><span class="k">远端</span><span class="input">https://github.com/…/woniu-forward.git</span><span class="k">分支</span><span class="input">main</span>
+        <span class="k">认证</span><span><span class="input">HTTPS Token（仅本次使用，不保存）</span></span></div>
+        <div class="muted">检查结果：本地与远端一致 · 无未提交改动</div></div></div>
+       <div class="opt"><div class="radio"></div><div><b>从已有仓库克隆到空目录</b><div class="muted">新电脑使用；克隆完成后核对日记、附件和任务</div></div></div>
+       <div class="opt"><div class="radio"></div><div><b>稍后连接</b><div class="muted">本地照常使用，首页与状态栏显示「未同步」</div></div></div>
+       <div style="margin-top:16px"><span class="btn">上一步</span><span class="btn pri">下一步</span></div>` })],
+
+  ['first-ai', '03 首次使用 · AI', 'AI 必选。检测本机运行时与登录，并跑一次短测试；未通过不能完成首次使用，前两步选择保留。',
+    shell({ firstUse: true, status: 'setup', body: crumb('我的空间 / 首次使用') + '<h3 class="title">连接 AI</h3>' + steps(3) +
+      `<div class="card"><div class="row"><span><b>Codex</b> <span class="tag ok">已安装</span> <span class="tag ok">已登录</span></span><span class="r">当前使用</span></div>
+       <div class="row"><span><b>Claude Code</b> <span class="tag">已安装</span> <span class="tag warn">未登录</span></span><span class="btn sm">登录</span></div>
+       <div class="row" style="border:0"><span>测试：读取 1 篇示例日记并生成三行摘要</span><span class="r" style="color:#7fd6a8">✓ 通过 · 6 秒</span></div></div>
+       <p class="muted">AI 可读取项目内全部日记与计划；只有你要求时才修改已有文件，修改后会给出改动报告并可撤销。</p>
+       <div style="margin-top:16px"><span class="btn">上一步</span><span class="btn pri">下一步</span></div>` })],
+
+  ['first-confirm', '04 首次使用 · 核对并确认', '只有点「确认并开始」才写入。列出将新建与不会改动的内容。',
+    shell({ firstUse: true, status: 'setup', body: crumb('我的空间 / 首次使用') + '<h3 class="title">核对并确认</h3>' + steps(4) +
+      `<div class="field"><span class="k">项目目录</span><span>~/Desktop/woniu-forward</span><span class="k">日记目录</span><span>000-个人计划 · 时区 Asia/Shanghai</span>
+       <span class="k">同步</span><span>origin / main</span><span class="k">AI</span><span>Codex</span></div>
+       <div class="card"><b>将新建</b><div class="muted">.cclink-studio/workspace-settings.json · 000-个人计划/模板/日记模板.md · 任务「每日起草」「每周复盘」（共享定义）</div>
+       <b style="display:block;margin-top:8px">不会改动</b><div class="muted">已有 412 篇日记、附件、计划和仓库历史；不会上传</div></div>
+       <div class="card"><b>自动整理（本设备）</b><div class="row"><span><span class="check on"></span>每日起草 · 每天自动生成当天草稿</span><span class="input">07:30</span></div><div class="row" style="border:0"><span><span class="check on"></span>每周复盘 · 自动生成复盘与下周计划</span><span class="input">周日 21:00</span></div><div class="muted">之后可在定时整理中修改。已过 07:30 时，确认后立即生成今天的草稿。</div></div>
+       <div style="margin-top:16px"><span class="btn">上一步</span><span class="btn pri">确认并开始</span></div>` })],
+
+  ['today-empty', '05 今天 · 等待自动起草', '每天定时自动生成，用户无需操作；到点前可选择现在起草或先用空白模板。',
+    shell({ body: crumb('我的空间 / 今天', '项目设置') + '<h3 class="title">11月21日 周六</h3>' +
+      `<div class="card"><b>07:30 自动生成今天的草稿</b> <span class="tag ai">每日起草 · 本机已启用</span><div class="muted">将写入 000-个人计划/2026/11/1121_周六.md · 生成前先与远端同步</div>
+       <div style="margin:8px 0" class="muted">起草依据：1120_周五.md · 第47周计划.md · 日记模板.md</div>
+       <span class="btn">现在起草</span><span class="btn">空白模板</span> <span class="muted" style="font-size:12px">修改时间 ›</span></div>
+       <h4>本周计划</h4><div class="row"><span>第47周计划.md</span><span class="r">打开 ›</span></div>
+       <h4>同步</h4><div class="row"><span>已与 origin/main 同步</span><span class="r">06:58 检查</span></div>` })],
+
+  ['today-drafting', '06 今天 · 起草中', '实时显示 AI 读取的文件与进度，可取消；完成后自动打开预览。',
+    shell({ body: crumb('我的空间 / 今天') + '<h3 class="title">11月21日 周六</h3>' +
+      `<div class="card"><b>AI 正在自动起草</b> <span class="muted">· 07:30 定时</span> <span class="tag ai">Codex</span><div class="bar"><i></i></div>
+       <div class="muted">✓ 读取 1120_周五.md<br>✓ 读取 第47周计划.md<br>✓ 读取 日记模板.md<br>… 正在写「今日待做」</div>
+       <div style="margin-top:8px"><span class="btn">取消</span></div></div>` })],
+
+  ['today-has', '07 今天 · 已自动生成（日常状态）', '打开 Studio 即看到当天草稿；显示各章节首段摘要与来源；继续写，或让 AI 修改。',
+    shell({ status: 'ahead', body: crumb('我的空间 / 今天', '项目设置') + '<h3 class="title">11月21日 周六</h3>' +
+      `<div><b>1121_周六.md</b> <span class="tag ai">07:30 自动起草</span> <span class="tag ok">已保存</span></div>
+       <div class="quote"><b>昨日总结</b>完成样品检查，记录两项需复查问题。</div>
+       <div class="quote"><b>今日待做</b>☐ 复查电源方案 ☐ 整理测试记录 ☐ 联系散热片供应商</div>
+       <div class="quote"><b>强调事项</b>固件签名流程今天定下来。</div>
+       <span class="btn pri">继续写</span><span class="btn">让 AI 修改…</span>
+       <h4>本周计划</h4><div class="row"><span>第47周计划.md</span><span class="r">打开 ›</span></div>
+       <h4>同步</h4><div class="row"><span>远端有 2 项更新 · 本地 1 项未上传</span><span class="r">查看 ›</span></div>` })],
+
+  ['today-ai-down', '08 今天 · AI 不可用', 'AI 临时不可用时说明原因与修复入口，仍可用空白模板继续写，并标注未经 AI 起草。',
+    shell({ status: 'aiDown', body: crumb('我的空间 / 今天') + '<h3 class="title">11月21日 周六</h3>' +
+      `<div class="card" style="border-color:#6a3a3f"><b>AI 起草不可用</b> <span class="tag bad">Codex 登录已过期</span>
+       <div class="muted">07:30 自动起草未成功。重新登录后会自动补起草今天。</div>
+       <div style="margin-top:8px"><span class="btn pri">重新登录</span><span class="btn">空白模板（未经 AI 起草）</span></div></div>` })],
+
+  ['history', '09 日记 · 历史', '按年月翻页；同日多篇逐行列出原名；合并月份按日期归月；未识别日期单列。',
+    shell({ nav: '日记', body: crumb('我的空间 / 日记') + '<h3 class="title">历史日记</h3>' +
+      `<div class="row"><span>‹ <b>2026 年 11 月</b> ›</span><span><span class="btn sm">AI 总结这段时间</span><span class="btn sm">让 AI 修改…</span></span></div>
+       <div class="split"><div>
+       ${[['21', '周六', '1121_周六.md', 'ai'], ['20', '周五', '1120_周五.md', ''], ['18', '周三', '1118_周三.md', ''], ['18', '周三', '1118-周三.md', ''], ['17', '周二', '1117_周二.md', '']].map(([d, w, f, t], i) =>
+        `<div class="row" style="${i === 1 ? 'background:#1b2b3d' : ''}"><span class="cal"><span>${d} 日</span><span>${w}</span><span>${f}${t ? ' <span class="tag ai">AI 起草</span>' : ''}</span></span><span class="r">${i === 1 ? '已选' : ''}</span></div>`).join('')}
+       <div class="legend">未识别日期 · 1 个：11月杂记.md</div></div>
+       <div class="editor"><b>1120_周五.md</b><h4>昨日总结</h4><div class="muted">完成样品检查……</div><h4>今日打卡</h4><div class="muted">09:30 评审……</div>
+       <div style="margin-top:10px"><span class="btn pri">打开原文</span></div></div></div>` })],
+
+  ['edit', '10 编辑 · 富媒体', '沿用 Studio Markdown：图片粘贴自动存到相邻 .assets/；表格、清单、代码、附件链接。',
+    shell({ nav: '文件', body: crumb('我的空间 / 1121_周六.md', '已保存') +
+      `<div class="editor"><div class="toolbar"><span>正文 ▾</span><span>B</span><span>I</span><span>☐</span><span>表格</span><span>代码</span><span>图片</span><span>附件</span><span style="flex:1"></span><span>切到源码</span></div>
+       <b style="font-size:18px">2026-11-21 周六</b>
+       <h4>今日待做</h4><div>☑ 复查电源方案　☐ 整理测试记录</div>
+       <h4>今日打卡</h4><table class="md"><tr><th>时间</th><th>事项</th><th>详细记录</th></tr><tr><td>09:30</td><td>样品复测</td><td>纹波 42mV</td></tr></table>
+       <div class="img">板子.png · 1121_周六.assets/板子.png</div>
+       <div class="muted">📎 <u>测试报告.pdf</u>（1121_周六.assets/）　🎙 <u>语音记录.m4a</u></div></div>` })],
+
+  ['ai-edit', '11 AI 修改与改动报告', '用户明确要求才修改；多文件或删除类修改先确认清单；改完给出每个文件的说明与差异，可一键撤销。',
+    shell({ body: crumb('我的空间 / 今天') + '<h3 class="title">11月21日 周六</h3>' +
+      `<div class="card"><b>改动报告</b> <span class="tag ai">Codex</span> <span class="muted">· 1 个文件 · 10:41</span>
+       <div class="muted" style="margin:6px 0">1121_周六.md：「今日待做」按优先级重排，新增截止时间；其他章节未改动。</div>
+       <div class="diff"><span class="d">- ☐ 复查电源方案</span><span class="d">- ☐ 整理测试记录</span><span class="d">- ☐ 联系散热片供应商</span><span class="a">+ ☐ 【高】联系散热片供应商（今天 12:00 前）</span><span class="a">+ ☐ 【高】复查电源方案</span><span class="a">+ ☐ 【中】整理测试记录</span></div>
+       <div style="margin-top:10px"><span class="btn">打开文件</span><span class="btn">撤销本次修改</span></div></div>`,
+      chat: `<div class="chat"><b>会话 · 我的空间</b>
+        <div class="bub me">把今天的待做按优先级重排，散热片那件事今天中午前要办</div>
+        <div class="bub">已修改 1121_周六.md 的「今日待做」：按优先级重排为高/中两级，并给散热片事项加了 12:00 截止。改动报告见左侧，可撤销。</div>
+        <div class="bub me">把 11 月日记里的「样品A」都改成「样机A」</div>
+        <div class="bub">将修改 6 个文件（共 9 处）：1103、1107、1112、1115、1118_周三、1120。<br><span class="btn sm pri">确认修改</span><span class="btn sm">取消</span></div></div>` })],
+
+  ['ai-ask', '12 AI 查阅全部日记', 'AI 默认可读整个日记目录；回答列出引用的文件与日期，可点击打开。',
+    shell({ nav: '会话', body: crumb('我的空间 / 会话') + '<h3 class="title">提问</h3>' +
+      `<div class="bub me" style="margin-left:0;max-width:520px">今年哪几天提到电源板纹波？结论是什么？</div>
+       <div class="bub" style="max-width:640px">共 5 天提到，纹波从 3 月的 120mV 降到 11 月的 42mV，主要改动是更换输出电容和调整布线。
+        <span class="cite">↗ 2026/03/0312_周四.md · 纹波 120mV</span><span class="cite">↗ 2026/07-08/0715_周三.md · 换电容</span><span class="cite">↗ 2026/11/1118_周三.md · 布线调整</span><span class="cite">↗ 2026/11/1121_周六.md · 纹波 42mV</span></div>
+       <div class="muted">读取范围：000-个人计划（日记、计划、模板、资料、会话记录）</div>` })],
+
+  ['plans', '13 计划 · 本周已有计划', '本周置顶：周次、日期范围、完成进度与章节摘要；长期计划固定；历次周计划按月分组、按周倒序；右侧预览同页查看。',
+    shell({ nav: '计划', body: crumb('我的空间 / 计划') +
+      `<div class="split"><div style="flex:1.1">
+       <div class="card"><div class="row" style="border:0;padding-top:0"><span><b>本周 · 第47周</b> <span class="muted">11/16–11/22</span></span><span class="r">4/7 已完成</span></div>
+         <div class="muted">周一-2026-11-16.md</div>
+         <div class="quote"><b>重点</b>电源板量产前复测</div><div class="quote"><b>待办</b>☑ 复测纹波　☐ 散热片交期　☐ 固件签名流程</div>
+         <span class="btn pri sm">继续写</span><span class="btn sm">让 AI 修改…</span>
+         <div class="legend">每周复盘 · 周日 21:00 自动生成下周计划 · 本机已启用 · 修改 ›</div></div>
+       <h4>长期计划</h4><div class="row"><span>一日生活计划.md</span><span class="r">11/02 修改</span></div>
+       <h4>历次周计划</h4><div class="legend">2026 年 11 月</div><div class="row" style=""><span><b>第46周</b> <span class="muted">11/09–11/15</span> · 周一-2026-11-09.md</span><span class="r">5/6</span></div><div class="row" style=""><span><b>第45周</b> <span class="muted">11/02–11/08</span> · 周四-2026-11-05.md</span><span class="r">3/5</span></div><div class="legend">2026 年 10 月</div><div class="row" style="background:#1b2b3d;"><span><b>第43周</b> <span class="muted">10/19–10/25</span> · 周一-2026-10-19.md</span><span class="r">6/6</span></div><div class="row" style=""><span><b>第42周</b> <span class="muted">10/12–10/18</span> · 周五-2026-10-16.md</span><span class="r">2/4</span></div><div class="row" style=""><span><b>第41周</b> <span class="muted">10/05–10/11</span> · 周三-2026-10-07.md</span><span class="r">4/4</span></div><div class="legend">未识别日期 · 1 个</div><div class="row"><span>旧计划草稿.md</span><span class="r">09/02 修改</span></div>
+       </div><div class="editor"><div class="row" style="border:0;padding-top:0"><b>第43周 · 10/19–10/25</b><span class="r">6/6 已完成</span></div>
+         <div class="muted" style="font-size:12px">周一-2026-10-19.md · 当周日记 5 篇 › · 复盘：2026-10-25-周复盘.md ›</div>
+         <h4>重点</h4><div class="muted">客户评审材料定稿</div><h4>待办</h4><div class="muted">☑ 评审 PPT　☑ 样品寄送　☑ 报价单…</div>
+         <div style="margin-top:10px"><span class="btn pri sm">打开原文</span><span class="btn sm">让 AI 修改…</span></div></div></div>` })],
+
+  ['plans-empty', '13b 计划 · 本周还没有计划', '本周没有计划时：AI 依据上周复盘、上一份计划和本周日记生成，按项目已有命名新建；也可新建空白周计划。',
+    shell({ nav: '计划', body: crumb('我的空间 / 计划') +
+      `<div class="card" style="max-width:640px"><div class="row" style="border:0;padding-top:0"><span><b>本周 · 第48周</b> <span class="muted">11/23–11/29</span></span><span class="r">还没有计划</span></div>
+       <div class="muted">将新建 个人计划/2026/周计划/周一-2026-11-23.md（沿用本项目命名）</div>
+       <div class="muted" style="margin:6px 0">依据：2026-11-22-周复盘.md · 周一-2026-11-16.md · 本周日记 1 篇</div>
+       <span class="btn pri sm">AI 生成本周计划</span><span class="btn sm">空白周计划</span>
+       <div class="legend">每周复盘 · 周日 21:00 · 本机未启用 · 启用 ›</div></div>
+       <h4>长期计划</h4><div class="row" style="max-width:640px"><span>一日生活计划.md</span><span class="r">11/02 修改</span></div>
+       <h4>历次周计划</h4><div style="max-width:640px"><div class="legend">2026 年 11 月</div><div class="row" style=""><span><b>第47周</b> <span class="muted">11/16–11/22</span> · 周一-2026-11-16.md</span><span class="r">7/7</span></div><div class="row" style=""><span><b>第46周</b> <span class="muted">11/09–11/15</span> · 周一-2026-11-09.md</span><span class="r">5/6</span></div></div>` })],
+
+  ['tasks', '14 定时整理', '直接列出本项目全部任务；两个内置任务默认启用；每日起草错过时打开 Studio 自动补当天；其他任务错过只提示。',
+    shell({ nav: '定时整理', body: crumb('我的空间 / 定时整理', '＋ 新建任务') + '<h3 class="title">定时整理</h3>' +
+      `<div class="row"><span><b>每日起草</b> <span class="tag">共享</span></span><span class="r">每天 07:30 · <span style="color:#7fd6a8">本机已启用</span> · 下次 明天 07:30 ›</span></div>
+       <div class="row"><span><b>每周复盘</b> <span class="tag">共享</span></span><span class="r">周日 21:00 · <span style="color:#7fd6a8">本机已启用</span> · 下次 11/23 21:00 ›</span></div>
+       <div class="row"><span><b>月度体重整理</b> <span class="tag">本机</span></span><span class="r">每月 1 日 · 本机已启用 ›</span></div>
+       <div class="row"><span><b>旧电脑整理提纲</b> <span class="tag">共享 · 来自 Git</span></span><span class="r">本机未启用 · <u>检查后启用</u> ›</span></div>
+       <div class="card" style="border-color:#5a4a2a"><b>11/20 07:30 Studio 未运行</b><span class="muted"> · 09:12 打开时已自动补起草 1120_周五.md</span></div>
+       <h4>最近运行</h4>
+       <div class="row"><span>每日起草 · <span style="color:#7fd6a8">完成</span></span><span class="r">11/21 07:30 · 1121_周六.md 打开 ›</span></div>
+       <div class="row"><span>每周复盘 · <span style="color:#7fd6a8">完成</span></span><span class="r">11/16 21:00 · 第47周计划.md 打开 ›</span></div>
+       <div class="row"><span>每日起草 · <span class="muted">跳过</span></span><span class="r">11/19 · 远端已有当天日记（MacBook Air 生成），已拉取</span></div>` })],
+
+  ['task-detail', '15 任务详情 · 编辑要求', '用自然语言约定章节、次序、标题、格式、篇幅与缺失事实；可选参考提纲；保存影响以后的运行。',
+    shell({ nav: '定时整理', body: crumb('我的空间 / 定时整理 / 每周复盘', '<span class="btn sm">立即运行</span><span class="btn sm">在此设备启用</span><span class="btn sm pri">保存</span>') + '<h3 class="title">每周复盘</h3>' +
+      `<div class="field"><span class="k">任务内容</span><div class="input" style="min-height:96px">读取上周的日记与上一份周计划，写本周复盘。依次写三个二级章节：「上周进展」「遗留问题」「本周计划（本周一日期）」。遗留问题用表格，列为 问题 | 原因 | 下一步；原因未知写“待核实”。不要写其他二级章节，300 字以内。</div>
+       <span class="k">读取范围</span><span>000-个人计划（全部） <span class="btn sm">调整</span></span>
+       <span class="k">输出</span><span>000-个人计划/{year}/周计划/{date}-周复盘.md · 只新建</span>
+       <span class="k">周期</span><span>每周日 21:00 · Asia/Shanghai</span>
+       <span class="k">共享</span><span>随项目共享（定义随 Git）· 本机启用单独确认</span></div>
+       <h4>运行历史</h4><div class="row"><span>11/16 21:00 到点运行 · 完成</span><span class="r">第47周计划.md ›</span></div><div class="row"><span>11/15 10:12 手动运行 · 完成</span><span class="r">2026-11-15-周复盘.md ›</span></div>` })],
+
+  ['sync', '16 同步 · 检查与拉取', '自动检查只下载；拉取前展示文件变化与正文差异；干净且未分叉时原位快进。',
+    shell({ status: 'ahead', body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">同步</h3>' +
+      `<div class="field"><span class="k">远端</span><span>origin · github.com/…/woniu-forward · main</span><span class="k">本地</span><span>工作目录干净 · 未分叉</span></div>
+       <div class="card"><b>远端有 2 项更新</b> <span class="muted">· 来自 MacBook Air · 10:31</span>
+       <div class="diff"><span class="a">A 000-个人计划/2026/11/1121_周六.assets/现场.jpg</span><span>M 000-个人计划/2026/周计划/第47周计划.md</span></div>
+       <details open style="margin-top:6px"><summary class="muted">正文差异</summary><div class="diff"><span class="d">- 周三前确认固件签名</span><span class="a">+ 周三前确认固件签名（负责人：小王）</span></div></details>
+       <div style="margin-top:10px"><span class="btn pri">拉取并更新</span><span class="btn">稍后</span></div></div>` })],
+
+  ['upload', '17 同步 · 上传', '列出将提交的文件与 AI 修改来源；用户写提交说明后提交并推送；默认不自动上传。',
+    shell({ body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">上传本地改动</h3>' +
+      `<div class="card">${[['M', '2026/11/1121_周六.md', 'AI 修改 · 今日待做重排'], ['A', '2026/11/1121_周六.assets/板子.png', ''], ['M', '2026/11/1103_周二.md 等 6 个', 'AI 修改 · 样品A→样机A']].map(([k, f, n]) => `<div class="row"><span><span class="check on"></span>${k} ${f}</span><span class="r">${n}</span></div>`).join('')}
+       <div class="field"><span class="k">提交说明</span><span class="input">11/21 日记与样机改名</span></div>
+       <span class="btn pri">提交并上传</span><span class="btn">只提交</span></div>
+       <div class="muted">本机状态、运行记录、认证材料不会进入仓库。</div>` })],
+
+  ['conflict', '18 同步 · 冲突或分叉', '阻止拉取并列出冲突文件；引导到 Git 变更面板；可另存远端版本为独立副本对比。',
+    shell({ status: 'ahead', body: crumb('我的空间 / 项目设置 / 同步') + '<h3 class="title">同步</h3>' +
+      `<div class="card" style="border-color:#6a3a3f"><b>本地与远端都修改了同一天的日记，暂不能拉取</b>
+       <div class="diff"><span>UU 000-个人计划/2026/11/1121_周六.md</span></div>
+       <div class="muted">本地内容不会丢失。处理方式：</div>
+       <div style="margin-top:8px"><span class="btn pri">打开变更面板处理</span><span class="btn">让 AI 合并两份并给出改动报告</span><span class="btn">另存远端版本为副本</span></div></div>` })],
+
+  ['relocate', '19 重新定位', '失联时直接进入；所选目录必须是原项目；原位置出现其他日记时两侧并列、由用户选择。',
+    `<div class="modal">${shell({ status: 'lost', body: crumb('我的空间') + '<h3 class="title">今天</h3>' })}<div class="overlay"><div class="dialog">
+      <div class="muted" style="font-size:12px">项目首页 / 资料位置</div><h3 style="margin:4px 0 10px">重新定位日记项目</h3>
+      <p class="muted">上次使用的目录目前不可访问。选择移动后的项目文件夹，核对后恢复连接。</p>
+      <div class="row"><span><b>上次位置</b><br><span class="muted">~/Desktop/woniu-forward</span></span><span class="r">目录不存在</span></div>
+      <div class="row"><span><b>移动后的位置</b><br><span class="muted">~/资料盘/woniu-forward · 000-个人计划 · 412 篇 · 最近 1120_周五.md</span></span><span class="r" style="color:#7fd6a8">身份一致</span></div>
+      <div style="margin-top:14px;text-align:right"><span class="btn">改用其他目录</span><span class="btn">取消</span><span class="btn pri">确认并恢复</span></div></div></div></div>`],
+
+  ['settings', '20 项目设置', '显示名、目录、日记目录、时区、模板、AI 与同步状态、更换项目目录。保存只改设置文件。',
+    shell({ body: crumb('我的空间 / 项目设置') + '<h3 class="title">项目设置</h3>' +
+      `<div class="field"><span class="k">显示名</span><span class="input">我的空间</span><span class="k">类型</span><span>日记</span>
+       <span class="k">项目目录</span><span>~/Desktop/woniu-forward ↗ <span class="btn sm">更换…</span></span>
+       <span class="k">日记目录</span><span class="input">000-个人计划</span><span class="k">时区</span><span class="input">Asia/Shanghai</span>
+       <span class="k">日记模板</span><span>000-个人计划/模板/日记模板.md ›</span>
+       <span class="k">AI</span><span>Codex · 已登录 ›</span><span class="k">同步</span><span>origin / main · 已同步 ›</span></div>
+       <div style="margin-top:12px"><span class="btn pri">保存</span></div>` })],
+]
+
+document.getElementById('toc').innerHTML = SHOTS.map(([id, t]) => `<a href="#${id}">${t.split(' ')[0]} ${t.split(' ').slice(1).join(' ')}</a>`).join('')
+document.getElementById('shots').innerHTML = SHOTS.map(([id, t, note, html]) =>
+  `<section class="shot" id="${id}"><h2>${t}</h2><p class="note">${note}</p>${html}</section>`).join('')
+</script>
+</body>
+</html>

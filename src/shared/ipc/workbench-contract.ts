@@ -188,6 +188,18 @@ class WorkspaceStateWriteContractError extends Error {
   }
 }
 
+const diaryRootPreviewSchema = z
+  .object({
+    workspacePath: absolutePathSchema,
+    directory: z.string().max(1024),
+    latestFile: z.string().max(4096).nullable(),
+    diaryCount: z.number().int().min(0).optional(),
+    isGitRepository: z.boolean().optional(),
+    revision: z.string().max(128).nullable(),
+    projectId: z.string().max(128).nullable(),
+  })
+  .strict()
+
 export const workspaceStateIpcContracts = {
   getSettings: bindIpcParser(workspaceStateIpc.getSettings, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
@@ -207,6 +219,49 @@ export const workspaceStateIpcContracts = {
     ipcArgs(absolutePathSchema.parse(args[0]), z.string().min(1).max(128).parse(args[1])),
   ),
   getFixedSpaces: bindLegacyNoArgs(workspaceStateIpc.getFixedSpaces),
+  inspectDiaryRoot: bindIpcParser(workspaceStateIpc.inspectDiaryRoot, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  confirmDiaryRoot: bindIpcParser(workspaceStateIpc.confirmDiaryRoot, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0]), diaryRootPreviewSchema.parse(args[1])),
+  ),
+  describeDefaultPersonalSpace: bindLegacyNoArgs(workspaceStateIpc.describeDefaultPersonalSpace),
+  listDiaryChanges: bindIpcParser(workspaceStateIpc.listDiaryChanges, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  undoDiaryChange: bindIpcParser(workspaceStateIpc.undoDiaryChange, (args) =>
+    ipcArgs(z.string().uuid().parse(args[0])),
+  ),
+  initializePersonalSpace: bindIpcParser(workspaceStateIpc.initializePersonalSpace, (args) =>
+    ipcArgs(args[0] === null ? null : diaryRootPreviewSchema.parse(args[0])),
+  ),
+  replaceUnavailablePersonalSpace: bindIpcParser(
+    workspaceStateIpc.replaceUnavailablePersonalSpace,
+    (args) => ipcArgs(diaryRootPreviewSchema.parse(args[0])),
+  ),
+  inspectPersonalRelocation: bindIpcParser(workspaceStateIpc.inspectPersonalRelocation, (args) =>
+    ipcArgs(absolutePathSchema.parse(args[0])),
+  ),
+  relocatePersonalSpace: bindIpcParser(workspaceStateIpc.relocatePersonalSpace, (args) =>
+    ipcArgs(
+      z
+        .object({
+          previousPath: absolutePathSchema,
+          previousState: z.enum(['missing', 'other']),
+          previous: z
+            .object({
+              directory: z.string().max(1024),
+              latestFile: z.string().max(4096).nullable(),
+              diaryCount: z.number().int().min(0),
+            })
+            .strict()
+            .nullable(),
+          candidate: diaryRootPreviewSchema,
+        })
+        .strict()
+        .parse(args[0]),
+    ),
+  ),
   ensurePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: bindLegacyNoArgs(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: bindIpcParser(workspaceStateIpc.inspectCompanySpace, (args) =>

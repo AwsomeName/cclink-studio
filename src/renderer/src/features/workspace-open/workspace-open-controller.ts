@@ -33,6 +33,12 @@ export async function openDefaultWorkspace(): Promise<LocalWorkspaceRef | null> 
   const generation = beginWorkspaceRuntimeTransition()
   const result = await window.cclinkStudio.workspaceState.ensureDefaultWorkspace()
   if (!isWorkspaceRuntimeTransitionCurrent(generation)) return null
+  if (result.success && !result.workspacePath) {
+    // My Space is not set up yet: show first use instead of creating a folder (D2).
+    const { useFixedSpacesStore } = await import('./fixed-spaces-store')
+    useFixedSpacesStore.setState({ firstUse: true })
+    return null
+  }
   if (!result.success || !result.workspacePath)
     throw new Error(result.error || '默认工作空间不可用')
   const ref: LocalWorkspaceRef = { kind: 'local', path: result.workspacePath }

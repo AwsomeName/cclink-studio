@@ -127,6 +127,7 @@ export const agentApi: AgentApiContract = {
     return () => ipcRenderer.removeListener(agentIpcEvents.runStatus, listener)
   },
   getCapabilities: () => invokeIpcContract(agentIpc.getCapabilities),
+  probeRuntime: () => invokeIpcContract(agentIpc.probeRuntime),
   listToolModules: () => invokeIpcContract(agentIpc.listToolModules),
   setToolModuleEnabled: (moduleId, enabled) =>
     invokeIpcContract(agentIpc.setToolModuleEnabled, moduleId, enabled),

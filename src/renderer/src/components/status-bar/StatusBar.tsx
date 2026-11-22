@@ -26,6 +26,7 @@ import {
 } from '../../features/context-actions/context-menu-trigger'
 import { useCommandStore } from '../../stores/command-store'
 import { GitStatusBarItem } from './GitStatusBarItem'
+import { AiStatusBarItem } from './AiStatusBarItem'
 import { StatusBarClock } from './StatusBarClock'
 import { GitOperationDialog } from './GitOperationDialog'
 import { useEscapeDismiss } from '../common/dismissable-layer'
@@ -128,6 +129,7 @@ export function StatusBar(): React.ReactElement {
             </span>
           </span>
 
+          {projectSettings?.settings.type === 'diary' && <AiStatusBarItem />}
           <GitStatusBarItem
             workspacePath={workspacePath}
             contextProps={statusContextProps('git')}
