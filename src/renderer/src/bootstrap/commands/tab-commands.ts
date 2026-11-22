@@ -116,7 +116,7 @@ export function createTabCommands(): Command[] {
         scope: 'global',
         inputPolicy: 'allow',
         defaultBindings: mac
-          ? [{ code: 'BracketRight', modifiers: ['primary', 'shift'] }]
+          ? [{ code: 'BracketRight', modifiers: ['primary', 'alt'] }]
           : [{ code: 'Tab', modifiers: ['primary'] }],
       },
       action: () => {
@@ -135,7 +135,7 @@ export function createTabCommands(): Command[] {
         scope: 'global',
         inputPolicy: 'allow',
         defaultBindings: mac
-          ? [{ code: 'BracketLeft', modifiers: ['primary', 'shift'] }]
+          ? [{ code: 'BracketLeft', modifiers: ['primary', 'alt'] }]
           : [{ code: 'Tab', modifiers: ['primary', 'shift'] }],
       },
       action: () => {
