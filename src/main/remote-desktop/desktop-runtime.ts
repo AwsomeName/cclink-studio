@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { app, clipboard, type Input } from 'electron'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { desktopIpc, type RemoteDesktopDevice } from '../../shared/ipc/remote-desktop'
@@ -8,11 +8,17 @@ import {
 } from '../ipc/trusted-renderer-guard'
 import type { CclinkStudioRuntimeState } from '../runtime/app-runtime'
 import type { RuntimeService } from '../runtime/service-registry'
+import { packClipboardImage } from './apple-image-clipboard'
 import { RemoteDesktopDeviceStore, type StoredDesktopDevice } from './device-store'
 
 interface Session {
   socket: Socket
   chunks: AsyncIterator<Buffer>
+  workspaceKey: string | null
+  ownerKey: string | null
+  appleViewer: boolean
+  sendingImage: boolean
+  pendingImageBytes: number
   tabId: string
   deviceId: string
   verified: boolean
@@ -72,7 +78,24 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
         ipcRegistrations: registrations,
       }
       let generation = 0
+      // Renderer code alone cannot trigger a read of the system pasteboard.
+      let pasteGestureUntil = 0
+      let focusRevision = 0
+      const invalidateGesture = (): void => {
+        pasteGestureUntil = 0
+        focusRevision++
+      }
+      const beforeInput = (_event: Electron.Event, input: Input): void => {
+        if (input.type !== 'keyDown' || input.isAutoRepeat) return
+        pasteGestureUntil =
+          input.code === 'KeyV' && input.meta && !input.shift && !input.alt && !input.control
+            ? Date.now() + 1000
+            : 0
+      }
+      wc.on('before-input-event', beforeInput)
+      wc.on('blur', invalidateGesture)
       const reset = (): void => {
+        invalidateGesture()
         generation++
         clear()
       }
@@ -81,6 +104,8 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
       wc.on('destroyed', reset)
       dispose = () => {
         reset()
+        wc.removeListener('before-input-event', beforeInput)
+        wc.removeListener('blur', invalidateGesture)
         wc.removeListener('did-start-loading', reset)
         wc.removeListener('render-process-gone', reset)
         wc.removeListener('destroyed', reset)
@@ -133,6 +158,11 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
         const session: Session = {
           socket,
           chunks: socket[Symbol.asyncIterator](),
+          workspaceKey: input.workspaceKey,
+          ownerKey: input.ownerKey,
+          appleViewer: false,
+          sendingImage: false,
+          pendingImageBytes: 0,
           tabId: input.tabId,
           deviceId: device.id,
           verified: false,
@@ -195,6 +225,7 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
               close(id)
               return null
             }
+            session.appleViewer = banner.subarray(0, 12).toString('ascii') === 'RFB 003.889\n'
             session.verified = true
             session.socket.setTimeout(0)
             return new Uint8Array(banner)
@@ -208,10 +239,61 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
         close(id)
         return null
       })
+      registerTrustedIpcContract(desktopIpc.pasteImage, guard, async (event, id, supported) => {
+        const s = sessions.get(id)
+        if (
+          !s?.appleViewer ||
+          s.senderId !== event.sender.id ||
+          s.sendingImage ||
+          Date.now() > pasteGestureUntil
+        )
+          return 'cancelled'
+        pasteGestureUntil = 0
+        const revision = focusRevision
+        const isCurrent = async (): Promise<boolean> => {
+          const view = await runtime.workbenchTabModel?.getProjection(s.workspaceKey, s.ownerKey)
+          return (
+            sessions.get(id) === s &&
+            !s.socket.destroyed &&
+            wc.isFocused() &&
+            focusRevision === revision &&
+            view?.activeTabId === s.tabId
+          )
+        }
+        s.sendingImage = true
+        try {
+          if (!(await isCurrent())) return 'cancelled'
+          const formats = clipboard.availableFormats()
+          if (
+            !formats.some(
+              (format) =>
+                format.startsWith('image/') || format === 'public.png' || format === 'public.tiff',
+            )
+          )
+            return 'no-image'
+          if (!supported) return 'unsupported'
+          const image = clipboard.readImage()
+          if (image.isEmpty()) return 'failed'
+          const content = await packClipboardImage(image)
+          if (!content) return 'failed'
+          if (!(await isCurrent())) return 'cancelled'
+          // One socket write keeps input packets out of the compressed body.
+          s.pendingImageBytes = content.packet.length
+          await new Promise<void>((resolve, reject) =>
+            s.socket.write(content.packet, (error) => (error ? reject(error) : resolve())),
+          )
+          return content.scaled ? 'sent-scaled' : 'sent'
+        } catch {
+          return 'failed'
+        } finally {
+          s.pendingImageBytes = 0
+          s.sendingImage = false
+        }
+      })
       registerTrustedIpcContract(desktopIpc.write, guard, (event, id, bytes) => {
         const s = sessions.get(id)
         if (!s?.verified || s.senderId !== event.sender.id || s.socket.destroyed) return false
-        if (s.socket.writableLength > 1024 * 1024) {
+        if (s.socket.writableLength > s.pendingImageBytes + 1024 * 1024) {
           close(id)
           return false
         }

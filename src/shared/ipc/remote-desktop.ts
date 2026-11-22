@@ -55,6 +55,14 @@ export type DesktopOpenResult =
   | { ok: true; host: string; port: number }
   | { ok: false; reason: 'device-missing' | 'tab-mismatch' | 'busy' }
 
+export type DesktopImagePasteResult =
+  | 'sent'
+  | 'sent-scaled'
+  | 'no-image'
+  | 'unsupported'
+  | 'cancelled'
+  | 'failed'
+
 export const desktopIpc = {
   listDevices: defineNoArgsIpc<RemoteDesktopDevice[]>('remoteDesktop:listDevices'),
   saveDevice: defineIpcInvoke<[SaveRemoteDesktopDeviceInput], RemoteDesktopDevice>(
@@ -77,6 +85,10 @@ export const desktopIpc = {
   rememberCredential: defineIpcInvoke<[string, DesktopCredential], boolean>(
     'remoteDesktop:rememberCredential',
     (args) => ipcArgs(id.parse(args[0]), credential.parse(args[1])),
+  ),
+  pasteImage: defineIpcInvoke<[string, boolean], DesktopImagePasteResult>(
+    'remoteDesktop:pasteImage',
+    (args) => ipcArgs(id.parse(args[0]), z.boolean().parse(args[1])),
   ),
   read: defineIpcInvoke<[string], DesktopRead>('remoteDesktop:read', (args) =>
     ipcArgs(id.parse(args[0])),
@@ -101,6 +113,7 @@ export interface DesktopApi {
   open(input: DesktopConnection): Promise<DesktopOpenResult>
   savedCredential(sessionId: string): Promise<DesktopCredential | null>
   rememberCredential(sessionId: string, credential: DesktopCredential): Promise<boolean>
+  pasteImage(sessionId: string, serverSupportsImage: boolean): Promise<DesktopImagePasteResult>
   read(sessionId: string): Promise<DesktopRead>
   write(sessionId: string, bytes: Uint8Array): Promise<boolean>
   close(sessionId: string): Promise<void>

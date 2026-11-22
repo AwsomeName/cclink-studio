@@ -1,0 +1,106 @@
+diff --git a/core/rfb.js b/core/rfb.js
+index 80011e4a10203806f14df1ffc3b8425861a965a7..604fdd4810845fd9cb35f7ece45db2567a846f83 100644
+--- a/core/rfb.js
++++ b/core/rfb.js
+@@ -116,6 +116,8 @@ export default class RFB extends EventTargetMixin {
+         // Connection details
+         options = options || {};
+         this._rfbCredentials = options.credentials || {};
++        this._requestAppleClipboard = !!options.appleClipboard;
++        this._appleViewer = false;
+         this._shared = 'shared' in options ? !!options.shared : true;
+         this._repeaterID = options.repeaterID || '';
+         this._wsProtocols = options.wsProtocols || [];
+@@ -1500,6 +1502,10 @@ export default class RFB extends EventTargetMixin {
+ 
+         const sversion = this._sock.rQshiftStr(12).substr(4, 7);
+         Log.Info("Server ProtocolVersion: " + sversion);
++        // Apple retains the 3.8 security handshake. Echo 3.889 only for an
++        // opted-in viewer so ServerInit can advertise its command bitmap.
++        this._appleViewer = this._requestAppleClipboard && sversion === "003.889";
++        if (this._appleViewer) { this._setCapability("appleImageClipboard", false); }
+         let isRepeater = 0;
+         switch (sversion) {
+             case "000.000":  // UltraVNC repeater
+@@ -1539,7 +1545,7 @@ export default class RFB extends EventTargetMixin {
+ 
+         const cversion = "00" + parseInt(this._rfbVersion, 10) +
+                        ".00" + ((this._rfbVersion * 10) % 10);
+-        this._sock.sQpushString("RFB " + cversion + "\n");
++        this._sock.sQpushString("RFB " + (this._appleViewer ? "003.889" : cversion) + "\n");
+         this._sock.flush();
+         Log.Debug('Sent ProtocolVersion: ' + cversion);
+ 
+@@ -2165,6 +2171,15 @@ export default class RFB extends EventTargetMixin {
+         const nameLength = this._sock.rQshift32();
+         if (this._sock.rQwait('server init name', nameLength, 24)) { return false; }
+         let name = this._sock.rQshiftStr(nameLength);
++        let selectAppleSession = false;
++        if (this._appleViewer && name.length >= 22 && name.startsWith("\x00\x00")) {
++            // Two reserved bytes, big-endian flags, then 128 commands (MSB-first).
++            const flags = name.charCodeAt(5);
++            this._setCapability("appleImageClipboard",
++                                !(flags & 1) && !!(name.charCodeAt(9) & 1)); // command 31
++            selectAppleSession = !!(flags & 4);
++            name = name.slice(22);
++        }
+         name = decodeUTF8(name, true);
+ 
+         if (this._rfbTightVNC) {
+@@ -2208,6 +2223,39 @@ export default class RFB extends EventTargetMixin {
+         this._setDesktopName(name);
+         this._resize(width, height);
+ 
++        if (selectAppleSession) {
++            this._rfbInitState = 'AppleSessionOffer';
++            return true;
++        }
++        return this._finishServerInit();
++    }
++
++    // Some Apple servers require selection of an advertised console before
++    // they accept ordinary framebuffer requests, including in shared mode.
++    _appleSessionSelection(result) {
++        if (this._sock.rQwait("Apple session length", 2)) { return false; }
++        const length = this._sock.rQshift16();
++        if (length < (result ? 3 : 10)) { return this._fail("Invalid Apple session length"); }
++        if (this._sock.rQwait("Apple session", length, 2)) { return false; }
++        const payload = this._sock.rQshiftBytes(length, false);
++        if (payload[0] !== 0 || payload[1] !== 1) { return this._fail("Unknown Apple session version"); }
++        if (result) {
++            if (payload[2] !== 0) { return this._fail("Apple console session refused"); }
++            return this._finishServerInit();
++        }
++        if (!(payload[5] & 3)) { return this._fail("No shared Apple console available"); }
++        const selection = new Uint8Array(74);
++        selection[1] = 72;
++        selection[3] = 1;
++        selection[8] = (payload[5] & 2) ? 1 : 0;
++        selection.set(new TextEncoder().encode("CCLink Studio"), 10);
++        this._sock.sQpushBytes(selection);
++        this._sock.flush();
++        this._rfbInitState = 'AppleSessionResult';
++        return true;
++    }
++
++    _finishServerInit() {
+         if (!this._viewOnly) { this._keyboard.grab(); }
+ 
+         this._fbDepth = 24;
+@@ -2295,11 +2343,15 @@ export default class RFB extends EventTargetMixin {
+                 return this._handleSecurityReason();
+ 
+             case 'ClientInitialisation':
+-                this._sock.sQpush8(this._shared ? 1 : 0); // ClientInitialisation
++                this._sock.sQpush8((this._appleViewer ? 0x80 : 0) | (this._shared ? 1 : 0));
+                 this._sock.flush();
+                 this._rfbInitState = 'ServerInitialisation';
+                 return true;
+ 
++            case 'AppleSessionOffer':
++                return this._appleSessionSelection(false);
++            case 'AppleSessionResult':
++                return this._appleSessionSelection(true);
+             case 'ServerInitialisation':
+                 return this._negotiateServerInit();
+ 

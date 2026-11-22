@@ -240,3 +240,8 @@
 .status-bar-item.remote-desktop-status.interrupted {
   background: rgba(210, 153, 34, 0.35);
 }
+.remote-desktop-paste-notice {
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+}

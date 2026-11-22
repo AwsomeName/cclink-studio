@@ -8,6 +8,7 @@ export const desktopApi: DesktopApi = {
   savedCredential: (id) => invokeIpcContract(desktopIpc.savedCredential, id),
   rememberCredential: (id, credential) =>
     invokeIpcContract(desktopIpc.rememberCredential, id, credential),
+  pasteImage: (id, supported) => invokeIpcContract(desktopIpc.pasteImage, id, supported),
   close: (id) => invokeIpcContract(desktopIpc.close, id),
   read: (id) => invokeIpcContract(desktopIpc.read, id),
   write: (id, bytes) => invokeIpcContract(desktopIpc.write, id, bytes),

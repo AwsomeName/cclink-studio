@@ -3,9 +3,11 @@ declare module '@novnc/novnc' {
     constructor(
       target: HTMLElement,
       channel: import('./desktop-channel').DesktopChannel,
-      options?: { shared: boolean },
+      options?: { shared: boolean; appleClipboard?: boolean },
     )
     scaleViewport: boolean
+    readonly capabilities: { appleImageClipboard?: boolean }
+    sendKey(keysym: number, code: string, down?: boolean): void
     viewOnly: boolean
     showDotCursor: boolean
     disconnect(): void

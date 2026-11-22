@@ -6,6 +6,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
+import { installMacImagePaste } from './mac-image-paste'
 import { applyMacServerModifiers } from './mac-keys'
 import { installMacWheel } from './mac-scroll'
 import { installNoVncProbe } from './novnc-probe'
@@ -36,6 +37,7 @@ export function RemoteDesktopTab({
   const [port, setPort] = useState(tab.desktopTarget?.port ?? 5900)
   const [phase, setPhase] = useState<Phase>('idle')
   const [message, setMessage] = useState('')
+  const [pasteNotice, setPasteNotice] = useState('')
   const [usernameRequired, setUsernameRequired] = useState(false)
   const fit = (tab.desktopView ?? 'fit') === 'fit'
   const [fullscreen, setFullscreen] = useState(false)
@@ -163,6 +165,7 @@ export function RemoteDesktopTab({
     const attempt = generation.current
     setInterrupted(false)
     setPhase('connecting')
+    setPasteNotice('')
     setMessage('')
     const fail = (explanation: string): void => {
       if (generation.current !== attempt) return
@@ -203,10 +206,21 @@ export function RemoteDesktopTab({
       if (generation.current !== attempt || !target.current) return
       sessionRef.current = sessionId
       const channel = new DesktopChannel(input)
-      const rfb = new Viewer(target.current, channel, { shared: true })
+      const rfb = new Viewer(target.current, channel, { shared: true, appleClipboard: true })
       client.current = rfb
       const diag = createDesktopDiagnostics(`${device.host}:${device.port}`)
       diag.stage('connecting')
+      const unpaste = installMacImagePaste(
+        rfb,
+        target.current,
+        () => activeRef.current && generation.current === attempt && !rfb.viewOnly,
+        async (supported) => {
+          const outcome = await api().pasteImage(sessionId, supported)
+          diag.stage(`clipboard gesture: ${outcome}`)
+          return outcome
+        },
+        setPasteNotice,
+      )
       const unwatch = diag.watchInput(target.current, () => activeRef.current)
       const unwheel = installMacWheel(
         rfb,
@@ -220,6 +234,7 @@ export function RemoteDesktopTab({
       // macOS hides the pointer while typing and then sends a transparent cursor shape.
       rfb.showDotCursor = true
       releaseDiagnostics.current = () => {
+        unpaste()
         unwatch()
         unwheel?.()
         unprobe?.()
@@ -318,7 +333,7 @@ export function RemoteDesktopTab({
         disconnectMessage = '与远端桌面的连接已中断。'
         const canvas = target.current?.querySelector('canvas')
         diag.stage(
-          `connected framebuffer=${canvas?.width}x${canvas?.height} viewOnly=${rfb.viewOnly}`,
+          `connected appleImageClipboard=${rfb.capabilities.appleImageClipboard ?? 'unavailable'} framebuffer=${canvas?.width}x${canvas?.height} viewOnly=${rfb.viewOnly}`,
         )
         const remember = pendingRemember.current
         pendingRemember.current = null
@@ -523,6 +538,11 @@ export function RemoteDesktopTab({
           <button type="button" className="danger" onClick={disconnect}>
             断开
           </button>
+        </div>
+      )}
+      {phase === 'connected' && pasteNotice && (
+        <div role="status" className="remote-desktop-paste-notice">
+          {pasteNotice}
         </div>
       )}
       <div
