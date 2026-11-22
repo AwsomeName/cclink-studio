@@ -83,6 +83,31 @@ function ViewItems({
   )
 }
 
+function DisconnectItem({
+  tabId,
+  connected,
+  close,
+}: {
+  tabId: string
+  connected: boolean
+  close(): void
+}): React.ReactElement {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className="danger"
+      onClick={() => {
+        close()
+        getDesktopController(tabId)?.disconnect()
+      }}
+    >
+      <span className="remote-desktop-menu-check" />
+      {connected ? '断开远程桌面' : '取消连接'}
+    </button>
+  )
+}
+
 /** Status dot and view-mode button rendered inside a remote desktop workbench tab. */
 export function RemoteDesktopTabControls({ tab }: { tab: Tab }): React.ReactElement | null {
   const view = useDesktopSessionStore((state) => state.sessions[tab.id])
@@ -134,6 +159,8 @@ export function RemoteDesktopTabControls({ tab }: { tab: Tab }): React.ReactElem
               onContextMenu={(event) => event.stopPropagation()}
             >
               <ViewItems tab={tab} view={view} close={() => setOpen(false)} />
+              <div className="remote-desktop-menu-sep" role="separator" />
+              <DisconnectItem tabId={tab.id} connected close={() => setOpen(false)} />
             </div>
           </FloatingSurface>
         </span>
@@ -194,18 +221,11 @@ export function RemoteDesktopStatusItem({ tab }: { tab: Tab }): React.ReactEleme
           <span>重新连接</span>
         </button>
         {live && (
-          <button
-            type="button"
-            role="menuitem"
-            className="danger"
-            onClick={() => {
-              setOpen(false)
-              controller?.disconnect()
-            }}
-          >
-            <span className="remote-desktop-menu-check" />
-            <span>{view.phase === 'connected' ? '断开' : '取消连接'}</span>
-          </button>
+          <DisconnectItem
+            tabId={tab.id}
+            connected={view.phase === 'connected'}
+            close={() => setOpen(false)}
+          />
         )}
       </FloatingSurface>
     </>
