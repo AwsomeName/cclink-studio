@@ -1,3 +1,4 @@
+import { isMacPlatform } from '@shared/keybindings'
 import type { Command } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -9,6 +10,7 @@ import { buildTerminalTabDraft } from '../../utils/terminal-tab'
 import { recordTerminalLifecycleEvent } from '../../utils/terminal-lifecycle'
 
 export function createTabCommands(): Command[] {
+  const mac = isMacPlatform(typeof navigator === 'undefined' ? '' : navigator.platform)
   return [
     {
       id: 'workbench.newTab',
@@ -109,6 +111,14 @@ export function createTabCommands(): Command[] {
       id: 'tab.nextTab',
       label: '下一个 Tab',
       category: 'Tab',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: mac
+          ? [{ code: 'BracketRight', modifiers: ['primary', 'shift'] }]
+          : [{ code: 'Tab', modifiers: ['primary'] }],
+      },
       action: () => {
         const { tabs, activeTabId, activateTab } = useTabStore.getState()
         if (!activeTabId || tabs.length < 2) return
@@ -120,6 +130,14 @@ export function createTabCommands(): Command[] {
       id: 'tab.prevTab',
       label: '上一个 Tab',
       category: 'Tab',
+      configurable: true,
+      shortcutPolicy: {
+        scope: 'global',
+        inputPolicy: 'allow',
+        defaultBindings: mac
+          ? [{ code: 'BracketLeft', modifiers: ['primary', 'shift'] }]
+          : [{ code: 'Tab', modifiers: ['primary', 'shift'] }],
+      },
       action: () => {
         const { tabs, activeTabId, activateTab } = useTabStore.getState()
         if (!activeTabId || tabs.length < 2) return
