@@ -63,6 +63,9 @@ async function main() {
     await updateButton.waitFor({ state: 'visible', timeout: 10_000 })
     const label = await updateButton.innerText()
     assert(label.includes('更新已下载'), `expected restored update status, received: ${label}`)
+    await page.addLocatorHandler(page.getByRole('dialog', { name: '设置我的空间' }), async () => {
+      await page.getByRole('button', { name: '关闭首次使用' }).click()
+    })
     await updateButton.click()
     await page
       .getByText('更新已下载并通过校验', { exact: true })
