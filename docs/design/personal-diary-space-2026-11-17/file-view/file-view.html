@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>我的空间文件</title>
+<style>
+  :root { --page:#15171b; --bg:#1e1f22; --side:#23252a; --top:#2b2d31; --panel:#26282d; --line:#34373d; --text:#e6e6e6; --muted:#9aa0a8; --accent:#3b8eea; --accentbg:#1d3a5c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--page); color:var(--text); font:14px/1.6 -apple-system,"PingFang SC",sans-serif; }
+  section { max-width:1120px; margin:28px auto; padding:0 16px; }
+  h2 { font-size:17px; margin:0 0 4px; } .note { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .win { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--bg); position:relative; }
+  .topbar { display:flex; height:42px; background:var(--top); align-items:center; padding:0 12px; gap:6px; font-size:13px; }
+  .tab { padding:0 12px; line-height:42px; color:var(--muted); } .tab.on { color:var(--text); box-shadow:inset 0 -2px var(--accent); font-weight:600; }
+  .body { display:flex; min-height:540px; }
+  .side { width:260px; background:var(--side); border-right:1px solid var(--line); font-size:13px; display:flex; flex-direction:column; }
+  .nav { padding:10px 8px; border-bottom:1px solid var(--line); }
+  .it { padding:5px 10px; border-radius:6px; color:var(--muted); } .it.on { background:var(--accentbg); color:var(--text); box-shadow:inset 2px 0 var(--accent); }
+  .grp { font-size:11px; color:#6f757d; padding:6px 10px 2px; }
+  .files { padding:8px; flex:1; }
+  .quick { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:4px 0 10px; }
+  .quick span { border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; background:var(--panel); }
+  .row { padding:2px 6px; border-radius:4px; display:flex; gap:6px; align-items:center; white-space:nowrap; }
+  .row.sel { background:#24384f; }
+  .badge { font-size:10px; padding:0 5px; border-radius:4px; margin-left:auto; }
+  .b-ai { background:#2a2f4a; color:#9db4ff; } .b-git { background:#3d3220; color:#f0c674; }
+  .main { flex:1; padding:22px 28px; } .muted { color:var(--muted); }
+  .editor { background:#1a1b1e; border:1px solid var(--line); border-radius:8px; padding:14px 18px; }
+  .overlay { position:absolute; inset:0; background:#0009; display:flex; align-items:center; justify-content:center; }
+  .dialog { width:460px; background:var(--side); border:1px solid var(--line); border-radius:12px; padding:18px 20px; }
+  .btn { display:inline-block; padding:5px 12px; border-radius:6px; border:1px solid var(--line); background:var(--panel); font-size:13px; margin-left:6px; }
+  .btn.pri { background:#2b74c4; border-color:#2b74c4; }
+  @media (max-width:760px) { .main { display:none; } .side { width:100%; } }
+</style>
+</head>
+<body>
+<section>
+  <h2>A 文件 · 展开式，默认定位到今天</h2>
+  <p class="note">项目导航保留在上方；文件区在下方展开。顶部四个快捷入口；当月目录展开，今天的日记被选中；未上传与 AI 改动有标记。Owner 事务不在我的空间里。</p>
+  <div class="win">
+    <div class="topbar"><b style="margin-right:10px">CCLink Studio</b><span class="tab on">📌 我的空间</span><span class="tab">研发日记</span></div>
+    <div class="body">
+      <div class="side">
+        <div class="nav">
+          <div class="it">项目首页</div>
+          <div class="grp">日记与计划</div>
+          <div class="it">日记</div><div class="it">计划</div><div class="it">定时整理</div>
+          <div class="grp">工作</div>
+          <div class="it on">文件 ▾</div><div class="it">会话</div><div class="it">工具</div>
+        </div>
+        <div class="files">
+          <div class="quick"><span>📄 今天的日记</span><span>🗓 本周计划</span><span>📁 日记目录</span><span>📁 资料</span></div>
+          <div class="row">▾ 📁 个人计划</div>
+          <div class="row" style="padding-left:20px">▾ 📁 2026</div>
+          <div class="row" style="padding-left:36px">▸ 📁 10</div>
+          <div class="row" style="padding-left:36px">▾ 📁 11</div>
+          <div class="row" style="padding-left:52px">📄 1120_周五.md</div>
+          <div class="row" style="padding-left:52px">📄 1121_周六.md <span class="badge b-git">未上传</span></div>
+          <div class="row sel" style="padding-left:52px">📄 1122_周日.md <span class="badge b-ai">AI 改</span></div>
+          <div class="row" style="padding-left:36px">▸ 📁 周计划</div>
+          <div class="row" style="padding-left:20px">▸ 📁 项目记录</div>
+          <div class="row" style="padding-left:20px">▸ 📁 资料</div>
+          <div class="row" style="padding-left:20px">📄 一日生活计划.md</div>
+        </div>
+      </div>
+      <div class="main">
+        <div class="muted" style="font-size:12px">我的空间 / 1122_周日.md</div>
+        <div class="editor" style="margin-top:8px"><b style="font-size:18px">2026-11-22 周日</b><p class="muted">## 今日待做<br>☐ 复查电源方案　☐ 整理测试记录</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <h2>B 改名会让日记不再被识别时先确认</h2>
+  <p class="note">改名或移动后不符合「年/月/MMDD_周X.md」时提示后果；取消则不改。删除一律移到废纸篓。</p>
+  <div class="win">
+    <div class="topbar"><b style="margin-right:10px">CCLink Studio</b><span class="tab on">📌 我的空间</span></div>
+    <div class="body"><div class="side"><div class="files"><div class="row sel">📄 杂记.md（正在改名）</div></div></div><div class="main"></div></div>
+    <div class="overlay"><div class="dialog">
+      <b>改名后这篇日记将不再被识别</b>
+      <p class="muted">「1121_周六.md」改为「杂记.md」后，历史日记、今天页和每日起草都不会再把它当作 11 月 21 日的日记。文件内容不变。</p>
+      <div style="text-align:right"><span class="btn">取消</span><span class="btn pri">仍然改名</span></div>
+    </div></div>
+  </div>
+</section>
+</body>
+</html>
