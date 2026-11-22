@@ -63,6 +63,22 @@ function ViewItems({
         () => controller?.setFullscreen(true),
         DESKTOP_FULLSCREEN_SHORTCUT,
       )}
+      <div className="remote-desktop-menu-sep" role="separator" />
+      <button
+        type="button"
+        role="menuitemcheckbox"
+        aria-checked={view.largePointer}
+        disabled={!connected}
+        onClick={() => {
+          close()
+          controller?.setLargePointer(!view.largePointer)
+        }}
+      >
+        <span className="remote-desktop-menu-check">
+          {view.largePointer && <IconCheck size={11} />}
+        </span>
+        超大箭头
+      </button>
     </>
   )
 }
