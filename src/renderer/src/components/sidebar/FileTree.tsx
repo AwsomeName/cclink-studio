@@ -22,6 +22,10 @@ import { getFileTreeRefreshDirectory } from './file-tree-watch'
 import { shouldClearFileTreeSelectionOnBlur } from './file-tree-selection'
 import { resolveFileTreeClipboardShortcut } from './file-tree-shortcuts'
 import { findFileTreeNode, resolveFileTreeCreationParent } from '../../utils/workspace-tree'
+import {
+  confirmDiaryPathChange,
+  useDiaryFileBadges,
+} from '../../features/workspace-open/diary-files'
 import { useCommandStore } from '../../stores/command-store'
 
 const FILE_TREE_SCROLL_KEY = 'cclink-studio-file-tree-scroll'
@@ -336,6 +340,8 @@ export function FileTree(): React.ReactElement {
       event.preventDefault()
       const sourcePath = draggingPath
       resetDragState()
+      const name = sourcePath.split('/').pop()!
+      if (!confirmDiaryPathChange(sourcePath, `${node.path}/${name}`)) return
       void moveEntry(sourcePath, node.path)
     },
     [canDropTo, draggingPath, moveEntry, resetDragState],
@@ -469,6 +475,8 @@ export function FileTree(): React.ReactElement {
           event.preventDefault()
           const sourcePath = draggingPath
           resetDragState()
+          const name = sourcePath.split('/').pop()!
+          if (!confirmDiaryPathChange(sourcePath, `${workspacePath}/${name}`)) return
           void moveEntry(sourcePath, workspacePath)
         }}
       >
@@ -544,6 +552,7 @@ function FileTreeNodeView({
   const editingPath = useFsStore((s) => s.editingPath)
   const newFolderParent = useFsStore((s) => s.newFolderParent)
   const confirmRename = useFsStore((s) => s.confirmRename)
+  const badge = useDiaryFileBadges((state) => state.badges[node.path])
   const confirmNewFolder = useFsStore((s) => s.confirmNewFolder)
   const confirmNewFile = useFsStore((s) => s.confirmNewFile)
   const cancelEditing = useFsStore((s) => s.cancelEditing)
@@ -633,12 +642,24 @@ function FileTreeNodeView({
           <InlineInputBox
             initialValue={node.name}
             onConfirm={async (name) => {
+              const target = node.path.slice(0, node.path.lastIndexOf('/') + 1) + name
+              if (!confirmDiaryPathChange(node.path, target)) {
+                cancelEditing()
+                return
+              }
               await confirmRename(node.path, name)
             }}
             onCancel={cancelEditing}
           />
         ) : (
-          <span className="file-tree-name">{node.name}</span>
+          <>
+            <span className="file-tree-name">{node.name}</span>
+            {badge && (
+              <span className={`diary-file-badge ${badge === 'AI 改' ? 'ai' : 'git'}`}>
+                {badge}
+              </span>
+            )}
+          </>
         )}
       </div>
 

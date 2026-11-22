@@ -59,6 +59,7 @@ import { useWorkbenchWindowEvents } from './bootstrap/use-workbench-window-event
 import { AuxiliaryBrowserLayout } from './components/workbench/AuxiliaryBrowserLayout'
 import { startMarkdownAutosave } from './features/markdown/markdown-autosave'
 import { useFixedSpacesStore } from './features/workspace-open/fixed-spaces-store'
+import './features/workspace-open/diary-files.css'
 import { EditorDraftFailureBanner } from './features/markdown/EditorPersistenceStatus'
 
 /** 主布局。 */
@@ -87,7 +88,9 @@ function MainLayout(): React.ReactElement {
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
   const activeWorkspaceRef = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const sidebarContentVisible = sidebarVisible
+  const diaryWorkspaceType = useWorkspaceStore((s) => s.settingsSnapshot?.settings.type)
   const showNavigation = activePanel === 'workspace-home' || activePanel === 'company-workspace'
+  const inlineDiaryFiles = activePanel === 'files' && diaryWorkspaceType === 'diary'
   useEffect(() => {
     if (workspaceReady) return startMarkdownAutosave()
   }, [workspaceReady, activeWorkspaceRef])
@@ -424,6 +427,14 @@ function MainLayout(): React.ReactElement {
           >
             {showNavigation ? (
               <ActivityBar />
+            ) : inlineDiaryFiles ? (
+              // My Space: navigation stays; the file tree opens below it (file-view.md).
+              <div className="diary-inline-files">
+                <ActivityBar />
+                <div className="diary-inline-files-body">
+                  <Sidebar />
+                </div>
+              </div>
             ) : (
               <>
                 <button

@@ -11,6 +11,7 @@ import {
   isHtmlFileExtension,
 } from '../../../utils/html-files'
 import type { CommandContext, ContextTarget } from '../context-target'
+import { confirmDiaryPathChange } from '../../workspace-open/diary-files'
 import type { MenuContribution } from '../menu-contribution-registry'
 
 type FileTarget = Extract<ContextTarget, { kind: 'file' }>
@@ -217,6 +218,12 @@ export function createFileContextCommands(): Command[] {
         const inputValue = context?.inputValue
         if (inputValue === undefined) {
           useFsStore.getState().startEditing(target.path)
+          return
+        }
+        const destination = target.path.slice(0, target.path.lastIndexOf('/') + 1) + inputValue
+        if (!confirmDiaryPathChange(target.path, destination)) {
+          // My Space: the user kept the name so history and drafting still find this diary.
+          useFsStore.getState().cancelEditing()
           return
         }
         const renamed = await useFsStore.getState().confirmRename(target.path, inputValue)

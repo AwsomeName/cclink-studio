@@ -70,6 +70,7 @@ import { CclinkPanel } from '../../features/cclink-remote/CclinkPanel'
 import { RemoteFileTree } from '../../features/cclink-remote/RemoteFileTree'
 import { RemoteSessionsSidebar } from '../../features/cclink-remote/RemoteSessionsSidebar'
 import { PromotionalVideoSidebar } from '../../features/media-production/PromotionalVideoSidebar'
+import { DiaryFileShortcuts } from '../../features/workspace-open/DiaryFileShortcuts'
 import { openWorkspaceRef } from '../../features/workspace-open/workspace-open-controller'
 
 function getProjectName(path: string): string {
@@ -829,6 +830,7 @@ function FilesSidebarView({
 
   return (
     <div className="sidebar-section project-files-section">
+      {workspacePath && <DiaryFileShortcuts />}
       {workspacePath ? <FileTree /> : <div className="project-panel-empty">尚未打开工作空间</div>}
     </div>
   )
