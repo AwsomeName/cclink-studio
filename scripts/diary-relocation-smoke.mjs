@@ -100,6 +100,33 @@ const root = await makeRoot('.cclink-relocate-')
   const external = join(s.home, '外部日记')
   const ownerNote = await writeDiary(owner, '个人计划', '2026/11/1118_周三.md', '# 默认目录里的\n')
   await writeDiary(external, '000-个人计划', '2026/11/1120_周五.md', '# 外部\n')
+  const t = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    })
+      .formatToParts(new Date())
+      .map((x) => [x.type, x.value]),
+  )
+  const wd = {
+    Mon: '周一',
+    Tue: '周二',
+    Wed: '周三',
+    Thu: '周四',
+    Fri: '周五',
+    Sat: '周六',
+    Sun: '周日',
+  }
+  const todayName = `${t.month}${t.day}_${wd[t.weekday]}.md`
+  await writeDiary(
+    external,
+    '000-个人计划',
+    `${t.year}/${t.month}/${todayName}`,
+    '# 今天\n## 今日安排\n外部目录里的今天\n',
+  )
   try {
     const page = await s.launch()
     const wizard = page.getByRole('dialog', { name: '设置我的空间' })
@@ -141,6 +168,10 @@ const root = await makeRoot('.cclink-relocate-')
     await s.launch()
     await s.page.locator(`.project-strip-item[data-project-path="${owner}"]`).click()
     await s.page.getByText('日记仍在另一个目录').waitFor()
+    // Before migrating, the home already shows today's diary from the linked directory.
+    const todayEntry = s.page.getByRole('article', { name: '今天的日记' })
+    await todayEntry.getByText(todayName).waitFor()
+    await todayEntry.getByText('外部目录里的今天').waitFor()
     await s.page.screenshot({ path: join(shots, 'v2-legacy-prompt.png') })
     await s.page.getByRole('button', { name: '将原资料目录用作项目目录' }).click()
     await s.page.getByText('两个位置都有日记').waitFor()

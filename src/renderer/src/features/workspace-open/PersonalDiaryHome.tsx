@@ -363,7 +363,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   // Today's draft did not happen (missed or failed): the first visit today starts it once.
   const autoDraftKey = useRef('')
   useEffect(() => {
-    if (busy || !source || page !== '今天' || legacyLink || today.length || !daily) return
+    if (busy || !source || page !== '今天' || today.length || !daily) return
     if (!daily.activation.enabled || aiProblem || daily.definition.schedule.kind !== 'daily') return
     // A draft the user cancelled is not restarted automatically.
     if (dailyRun && !['failed', 'interrupted', 'missed'].includes(dailyRun.status)) return
@@ -387,7 +387,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       await draftNow()
       setNotice('今天的草稿未按时生成，已自动开始起草。')
     })
-  }, [busy, source, page, legacyLink, today.length, daily, dailyRun, aiProblem, todayKey, clock])
+  }, [busy, source, page, today.length, daily, dailyRun, aiProblem, todayKey, clock])
   const cancelDraft = async (): Promise<void> => {
     if (!source || !dailyRun) return
     await window.cclinkStudio.scheduledTasks.cancelRun({
@@ -532,10 +532,17 @@ export function PersonalDiaryHome(): React.ReactElement {
           ) : (
             <>
               <b>还没有每日起草任务</b>
-              <p className="muted">创建后每天自动生成当天草稿，并每周自动复盘。</p>
-              <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
-                创建每日起草与周期计划
-              </button>
+              {legacyLink ? (
+                // Tasks are never created in the old linked directory: migrate first.
+                <p className="muted">将原资料目录用作项目目录后，会自动创建每日起草。</p>
+              ) : (
+                <>
+                  <p className="muted">创建后每天自动生成当天草稿，并每周自动复盘。</p>
+                  <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
+                    创建每日起草与周期计划
+                  </button>
+                </>
+              )}
               <button disabled={busy} onClick={() => act(prepareBlank)}>
                 空白模板
               </button>
@@ -570,11 +577,9 @@ export function PersonalDiaryHome(): React.ReactElement {
         <div className="diary-card" role="status">
           <b>日记仍在另一个目录：{source.workspacePath}</b>
           <p className="muted">
-            现在「我的空间」直接使用一个项目目录。核对后改用该目录，文件原样保留。
+            下面直接显示该目录里今天的日记。核对后可将它用作「我的空间」的项目目录，文件原样保留。
           </p>
-          <button className="primary" onClick={() => setReviewRoot(true)}>
-            将原资料目录用作项目目录
-          </button>
+          <button onClick={() => setReviewRoot(true)}>将原资料目录用作项目目录</button>
         </div>
       )}
       {notice && <p role="status">{notice}</p>}
@@ -599,8 +604,8 @@ export function PersonalDiaryHome(): React.ReactElement {
         />
       ) : (
         <>
-          {/* Until a legacy link is migrated, only the migration prompt acts on it. */}
-          {page === '今天' && !(legacyLink && ownerPath === fixedPath) && todayView}
+          {/* Today's diary shows even before a legacy link is migrated. */}
+          {page === '今天' && todayView}
           {page === '日记' && source && (
             <DiaryDayView read={readDiary} openFile={openFile} directory={source.directory} />
           )}
