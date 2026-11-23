@@ -140,9 +140,12 @@ export function StatusBar(): React.ReactElement {
             <span className="status-bar-text">
               {workspaceRefSourceLabel(activeWorkspaceRef)} ·{' '}
               {activeWorkspaceRef.kind === 'local' &&
-              projectSettings?.workspacePath === activeWorkspaceRef.path
-                ? projectSettings.settings.name
-                : workspaceRefLabel(activeWorkspaceRef)}
+              activeWorkspaceRef.path === personal?.workspacePath
+                ? '我的空间'
+                : activeWorkspaceRef.kind === 'local' &&
+                    projectSettings?.workspacePath === activeWorkspaceRef.path
+                  ? projectSettings.settings.name
+                  : workspaceRefLabel(activeWorkspaceRef)}
             </span>
           </span>
 

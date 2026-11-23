@@ -129,8 +129,10 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
           openProjectPaths.filter((other) => projectNames[other] === name).length > 1
         fallback.set(path, duplicates ? `${name} · ${getParentName(path)}` : name)
       }
+    // My Space keeps its own name whatever directory backs it.
+    if (personalPath) fallback.set(personalPath, '我的空间')
     return fallback
-  }, [openProjectPaths, projectNames])
+  }, [openProjectPaths, projectNames, personalPath])
   const runningProjectCounts = useMemo(
     () => getRunningProjectCounts(conversations),
     [conversations],
@@ -362,7 +364,9 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                 >
                   <IconProjects size={13} />
                   <span className="project-strip-label">
-                    {active && settingsSnapshot ? settingsSnapshot.settings.name : labels.get(path)}
+                    {active && settingsSnapshot && path !== personalPath
+                      ? settingsSnapshot.settings.name
+                      : labels.get(path)}
                   </span>
                   {runningCount > 0 && (
                     <span

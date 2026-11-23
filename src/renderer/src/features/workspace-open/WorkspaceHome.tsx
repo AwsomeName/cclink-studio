@@ -34,10 +34,12 @@ export async function createPersonalNote(): Promise<void> {
 export function WorkspaceHome({ settings = false }: { settings?: boolean }): React.ReactElement {
   const ref = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const config = useWorkspaceStore((s) => s.settingsSnapshot?.settings)
+  const personalPath = useFixedSpacesStore((s) => s.spaces?.personal?.workspacePath)
+  const isPersonal = ref.kind === 'local' && ref.path === personalPath
   return (
     <div className="project-home-shell">
       <header className="project-home-header">
-        <h1>{config?.name ?? workspaceRefLabel(ref)}</h1>
+        <h1>{isPersonal ? '我的空间' : (config?.name ?? workspaceRefLabel(ref))}</h1>
         <small>{config && workspaceTypeLabels[config.type]}</small>
         {ref.kind === 'local' && (
           <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>
