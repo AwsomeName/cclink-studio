@@ -15,6 +15,7 @@ import {
   registerDesktopController,
   useDesktopSessionStore,
   type DesktopPhase,
+  type PointerSize,
   type DesktopSessionController,
 } from './desktop-session-store'
 import './remote-desktop.css'
@@ -41,7 +42,7 @@ export function RemoteDesktopTab({
   const [usernameRequired, setUsernameRequired] = useState(false)
   const fit = (tab.desktopView ?? 'fit') === 'fit'
   const [fullscreen, setFullscreen] = useState(false)
-  const [largePointer, setLargePointer] = useState(true)
+  const [pointerSize, setPointerSize] = useState<PointerSize>('large')
   const [interrupted, setInterrupted] = useState(false)
   /** Resolves to the native window fullscreen state before we entered; null when not entered. */
   const windowWasFullscreen = useRef<Promise<boolean | null> | null>(null)
@@ -424,8 +425,8 @@ export function RemoteDesktopTab({
   controllerImpl.current = {
     setView: (view) => useTabStore.getState().setDesktopView(tab.id, view),
     setFullscreen: (on) => (on ? enterFullscreen() : exitFullscreen()),
-    setLargePointer: (on) => {
-      setLargePointer(on)
+    setPointerSize: (size) => {
+      setPointerSize(size)
       if (active && phase === 'connected') client.current?.focus({ preventScroll: true })
     },
     reconnect: () => void connect(),
@@ -436,7 +437,7 @@ export function RemoteDesktopTab({
       registerDesktopController(tab.id, {
         setView: (view) => controllerImpl.current?.setView(view),
         setFullscreen: (on) => controllerImpl.current?.setFullscreen(on),
-        setLargePointer: (on) => controllerImpl.current?.setLargePointer(on),
+        setPointerSize: (size) => controllerImpl.current?.setPointerSize(size),
         reconnect: () => controllerImpl.current?.reconnect(),
         disconnect: () => controllerImpl.current?.disconnect(),
       }),
@@ -451,9 +452,9 @@ export function RemoteDesktopTab({
       endpoint: `${host.trim()}:${port}`,
       interrupted,
       fullscreen,
-      largePointer,
+      pointerSize,
     })
-  }, [publish, tab.id, phase, name, host, port, interrupted, fullscreen, largePointer])
+  }, [publish, tab.id, phase, name, host, port, interrupted, fullscreen, pointerSize])
   useEffect(() => () => publish(tab.id, null), [publish, tab.id])
 
   // Leave fullscreen whenever the session is no longer usable or the Tab is hidden.
@@ -548,7 +549,7 @@ export function RemoteDesktopTab({
       <div
         className="remote-desktop-screen"
         data-remote-desktop-screen
-        data-large-pointer={largePointer || undefined}
+        data-pointer-size={pointerSize}
         ref={target}
         hidden={phase !== 'connected'}
       />

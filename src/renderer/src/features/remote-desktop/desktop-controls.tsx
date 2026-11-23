@@ -64,21 +64,13 @@ function ViewItems({
         DESKTOP_FULLSCREEN_SHORTCUT,
       )}
       <div className="remote-desktop-menu-sep" role="separator" />
-      <button
-        type="button"
-        role="menuitemcheckbox"
-        aria-checked={view.largePointer}
-        disabled={!connected}
-        onClick={() => {
-          close()
-          controller?.setLargePointer(!view.largePointer)
-        }}
-      >
-        <span className="remote-desktop-menu-check">
-          {view.largePointer && <IconCheck size={11} />}
-        </span>
-        超大箭头
-      </button>
+      <div role="group" aria-label="鼠标大小">
+        {item('原始指针', view.pointerSize === 'remote', () => controller?.setPointerSize('remote'))}
+        {item('大箭头', view.pointerSize === 'large', () => controller?.setPointerSize('large'))}
+        {item('超大箭头', view.pointerSize === 'extra-large', () =>
+          controller?.setPointerSize('extra-large'),
+        )}
+      </div>
     </>
   )
 }

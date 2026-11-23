@@ -87,19 +87,6 @@ function WorkspaceSourceChooser({
   const activeWorkspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [defaultPath, setDefaultPath] = useState('')
-  useEffect(() => {
-    let live = true
-    void window.cclinkStudio.workspaceState
-      .getDefaultWorkspace()
-      .then((result) => {
-        if (live && result.success) setDefaultPath(result.workspacePath ?? '')
-      })
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [])
   const runWorkspaceCommand = async (id: string): Promise<void> => {
     setBusyKey(id)
     setError(null)
@@ -207,20 +194,6 @@ function WorkspaceSourceChooser({
         >
           <strong>从 Git 获取…</strong>
           <small>下载到新目录后读取项目设置</small>
-        </button>
-        <button
-          type="button"
-          className="workspace-open-source-card"
-          disabled={busyKey !== null}
-          title={defaultPath}
-          onClick={() => void runWorkspaceCommand('workspace.open-default')}
-        >
-          <IconFolder size={22} />
-          <span>
-            <strong>打开默认项目</strong>
-            <small>{defaultPath || '打开日常资料目录'}</small>
-          </span>
-          <IconChevronRight size={14} />
         </button>
         <button
           type="button"
