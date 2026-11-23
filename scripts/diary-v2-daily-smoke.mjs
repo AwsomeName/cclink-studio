@@ -77,7 +77,11 @@ try {
       .click()
 
   // Today: waiting for the automatic draft at the configured time.
-  await home.getByText(/23:59.*自动生成今天的草稿/).waitFor()
+  await home
+    .getByRole('article', { name: '今天的日记' })
+    .or(home.getByText(/AI 正在/))
+    .first()
+    .waitFor({ timeout: 60000 })
   await page.screenshot({ path: join(shots, 'v2-today-waiting.png') })
 
   // Tasks: listed directly, both enabled on this device, no linking checkboxes.

@@ -10,6 +10,7 @@ import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useDiaryNavigation } from './personal-diary-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { isoWeek } from '@shared/scheduled-task/scheduled-task-file-name'
 import {
   defaultDiaryDirectory,
   defaultDiaryTimezone,
@@ -290,24 +291,36 @@ export function PersonalDiaryHome(): React.ReactElement {
     Boolean(todayFile && state.files[todayFile.path]?.dirty),
   )
   const syncText = useDiarySyncLabel(source?.workspacePath ?? null)
-  // This week's plan for the home row: the newest file in <year>/周计划 (as the file shortcuts).
+  // This week's plan for the home row: only a file that belongs to the current week
+  // (its Monday's date, 第N周 or YYYY-WNN), from <diary>/<year>/周计划 or <plans>/周/<year>.
   const [weekPlan, setWeekPlan] = useState<string | null>(null)
   useEffect(() => {
     if (!source) return
     let alive = true
-    void window.cclinkStudio.fs
-      .readDir(`${source.workspacePath}/${source.directory}/${day.year}/周计划`)
-      .catch(() => [])
-      .then((entries) => {
-        const newest = entries
-          .filter((entry) => entry.type === 'file' && entry.name.endsWith('.md'))
-          .sort((a, b) => b.modifiedAt - a.modifiedAt)[0]
-        if (alive) setWeekPlan(newest?.name ?? null)
-      })
+    const today = new Date(Date.UTC(Number(day.year), Number(day.month) - 1, Number(day.day)))
+    const monday = new Date(today)
+    monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7))
+    const mondayText = monday.toISOString().slice(0, 10)
+    const week = isoWeek(today)
+    const matches = (name: string): boolean =>
+      name.endsWith('.md') &&
+      (name.includes(mondayText) ||
+        name.includes(`${week.year}-W${week.week}`) ||
+        new RegExp(`第0?${Number(week.week)}周`).test(name))
+    const planRoot = config?.settings.diary?.planDirectory ?? '计划'
+    void Promise.all(
+      [
+        `${source.workspacePath}/${source.directory}/${day.year}/周计划`,
+        `${source.workspacePath}/${planRoot}/周/${week.year}`,
+      ].map((dir) => window.cclinkStudio.fs.readDir(dir).catch(() => [])),
+    ).then((lists) => {
+      const found = lists.flat().find((entry) => entry.type === 'file' && matches(entry.name))
+      if (alive) setWeekPlan(found?.name ?? null)
+    })
     return () => {
       alive = false
     }
-  }, [source, day.year, revision])
+  }, [source, day.year, day.month, day.day, revision, config?.settings.diary?.planDirectory])
   useEffect(() => {
     setPreviewPath('')
   }, [page, todayKey])
@@ -368,33 +381,38 @@ export function PersonalDiaryHome(): React.ReactElement {
     act(createBuiltIns)
   }, [busy, source, page, ownerPath, fixedPath, daily])
   // Today's draft did not happen (missed or failed): the first visit today starts it once.
+  // Entering 今天 always ends in today's file: with no file yet, draft it now (any time of
+  // day, not only after the scheduled time); without AI or a draft task, create it from the
+  // blank template. A draft that is running is awaited; one the user cancelled falls back
+  // to the blank template instead of starting again.
   const autoDraftKey = useRef('')
   useEffect(() => {
-    if (busy || !source || page !== '今天' || today.length || !daily) return
-    if (!daily.activation.enabled || aiProblem || daily.definition.schedule.kind !== 'daily') return
-    // A draft the user cancelled is not restarted automatically.
-    if (dailyRun && !['failed', 'interrupted', 'missed'].includes(dailyRun.status)) return
-    const nowText = new Intl.DateTimeFormat('en-GB', {
-      timeZone: daily.definition.schedule.timezone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date(clock))
-    if (nowText < daily.definition.schedule.time) return
+    if (busy || !source || page !== '今天' || today.length) return
+    if (dailyRun && ['queued', 'running'].includes(dailyRun.status)) return
+    // My Space creates its built-in tasks first; wait for them.
+    if (!daily && ownerPath === fixedPath) return
     const key = `cclink.diary.autoDraft.${source.projectId}.${todayKey}`
     if (autoDraftKey.current === key) return
     autoDraftKey.current = key
+    const canDraft =
+      daily &&
+      daily.activation.enabled &&
+      !aiProblem &&
+      (!dailyRun || ['failed', 'interrupted', 'missed'].includes(dailyRun.status))
+    let drafted = false
     try {
-      if (window.localStorage.getItem(key)) return
+      drafted = Boolean(window.localStorage.getItem(key))
       window.localStorage.setItem(key, '1')
     } catch {
       /* storage unavailable: once per mount */
     }
     act(async () => {
-      await draftNow()
-      setNotice('今天的草稿未按时生成，已自动开始起草。')
+      if (canDraft && !drafted) {
+        await draftNow()
+        setNotice('今天还没有日记，已开始起草，写好后直接打开。')
+      } else await prepareBlank()
     })
-  }, [busy, source, page, today.length, daily, dailyRun, aiProblem, todayKey, clock])
+  }, [busy, source, page, today.length, daily, dailyRun, aiProblem, todayKey, ownerPath, fixedPath])
   const cancelDraft = async (): Promise<void> => {
     if (!source || !dailyRun) return
     await window.cclinkStudio.scheduledTasks.cancelRun({

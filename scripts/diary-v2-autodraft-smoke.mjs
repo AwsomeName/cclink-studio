@@ -31,7 +31,7 @@ try {
   // Next day-visit: opening Today starts the draft by itself and the diary appears.
   await s.launch()
   const home = s.page.locator('.personal-diary-home')
-  await home.getByText('今天的草稿未按时生成，已自动开始起草。').waitFor({ timeout: 30000 })
+  await home.getByText('今天还没有日记，已开始起草，写好后直接打开。').waitFor({ timeout: 30000 })
   await s.page.screenshot({ path: join(shots, 'v2-auto-redraft.png') })
   await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 5 * 60_000 })
   await s.page.screenshot({ path: join(shots, 'v2-auto-redraft-done.png') })
