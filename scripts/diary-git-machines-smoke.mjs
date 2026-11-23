@@ -127,13 +127,13 @@ try {
   })
   await nav(page, '定时整理')
   await page
-    .getByText(/本机未启用/)
+    .getByText(/未启用/)
     .first()
     .waitFor()
   await page.screenshot({ path: join(shots, 'v2-machine-b-tasks.png') })
   await nav(page, '日记')
-  await page.locator('.diary-day-row').filter({ hasText: '1117_周二.md' }).click()
-  await page.getByRole('article', { name: '日记正文预览' }).waitFor()
+  await page.getByLabel('日记日历').getByRole('gridcell', { name: '2026-11-17 有日记' }).click()
+  await page.getByRole('article', { name: '当天日记' }).waitFor()
   await page.screenshot({ path: join(shots, 'v2-machine-b-diary.png') })
   await b.close()
   await b.launch()
@@ -146,12 +146,13 @@ try {
   await git(projectA, ['commit', '-m', '新增周六'])
   await git(projectA, ['push'])
   const p = b.page
-  await p.locator('.status-bar .diary-sync').click()
-  await p
-    .getByRole('region', { name: '我的空间同步' })
-    .getByRole('button', { name: '同步', exact: true })
-    .click()
-  await p.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
+  // Automatic sync runs only while Studio is in the foreground; a test window may not get
+  // focus, so call the same diary-sync operation the status bar and sync page trigger.
+  const synced = await p.evaluate(
+    (path) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: path }),
+    chosen,
+  )
+  assert(synced.success, JSON.stringify(synced))
   assert.equal(await b.fixedRoot(), chosen)
   assert.equal(
     await readFile(join(chosen, D, '2026/11/1121_周六.md'), 'utf8'),
