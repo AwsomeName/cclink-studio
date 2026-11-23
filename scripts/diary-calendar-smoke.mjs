@@ -8,7 +8,10 @@ const s = await makeHome(root, 'calendar')
 const project = join(s.home, '模拟日记项目')
 const D = '000-个人计划'
 for (const [rel, body] of [
-  ['2026/11/1118_周三.md', '# 周三\n## 今日打卡\n| 时间 | 事项 | 花销 |\n| --- | --- | --- |\n| 12:00 | 午饭 | 35 元 |\n'],
+  [
+    '2026/11/1118_周三.md',
+    '# 周三\n## 今日打卡\n| 时间 | 事项 | 花销 |\n| --- | --- | --- |\n| 12:00 | 午饭 | 35 元 |\n',
+  ],
   ['2026/11/1118-周三.md', '# 周三补记\n同日第二份\n'],
   ['2026/11/1120_周五.md', '# 周五\n买散热片 120 元\n'],
   ['2026/10/1031_周五.md', '# 十月最后一天\n'],
@@ -26,7 +29,12 @@ try {
   await home.getByRole('tab', { name: '1118-周三.md' }).waitFor()
   await home.getByRole('article', { name: '当天日记' }).getByText('35 元').waitFor()
   // The Agent conversation stays open on the right.
-  assert(await page.getByPlaceholder(/继续提问|输入消息/).first().isVisible())
+  assert(
+    await page
+      .getByPlaceholder(/继续提问|输入消息/)
+      .first()
+      .isVisible(),
+  )
   await page.screenshot({ path: join(shots, 'v2-calendar-day.png') })
   await home.getByRole('tab', { name: '1118-周三.md' }).click()
   await home.getByRole('article', { name: '当天日记' }).getByText('同日第二份').waitFor()
