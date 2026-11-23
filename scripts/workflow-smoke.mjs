@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import { chromium } from 'playwright-core'
@@ -84,6 +83,8 @@ async function clickByTitle(page, title) {
 }
 
 async function ensureSidebarVisible(page) {
+  const closeFirstUse = page.getByRole('button', { name: '关闭首次使用' })
+  if (await closeFirstUse.isVisible().catch(() => false)) await closeFirstUse.click()
   const expandButton = page.locator('[title="展开左侧栏"]').first()
   if ((await expandButton.count()) > 0) {
     await expandButton.click()
@@ -205,22 +206,9 @@ async function prepareWorkspaceCapability(path) {
   state.version = 2
   state.workspaces ??= {}
   state.localWorkspaces ??= {}
-  personalSpaceDir = await realpath(
-    await mkdtemp(join(homedir(), '.cclink-workflow-smoke-personal-')),
-  )
-  const projectId = randomUUID()
-  const metadata = join(personalSpaceDir, '.cclink-studio')
-  await mkdir(metadata)
-  await writeFile(
-    join(metadata, 'project.json'),
-    JSON.stringify({ version: 1, projectId, createdAt: Date.now() }),
-  )
-  state.fixedSpaces = {
-    version: 1,
-    personal: { workspacePath: personalSpaceDir, projectId },
-    company: null,
-    legacyDefaultPath: '',
-  }
+  // My Space only ever uses its fixed folder in the real home; leave it unset so this run
+  // never creates or binds it. The first-use dialog is dismissed by ensureSidebarVisible.
+  state.fixedSpaces = { version: 1, personal: null, company: null, legacyDefaultPath: '' }
   state.localWorkspaces['workflow-smoke-capability'] = {
     workspaceKey: path,
     workspacePath: path,
