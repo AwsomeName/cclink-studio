@@ -2,11 +2,7 @@ import { DiaryPlans } from './DiaryPlans'
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
-import {
-  DiarySyncPage,
-  useDiarySyncLabel,
-  useDiarySyncRevision,
-} from './DiarySyncStatus'
+import { DiarySyncPage, useDiarySyncLabel, useDiarySyncRevision } from './DiarySyncStatus'
 import { DiaryDayView } from './DiaryDayView'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
