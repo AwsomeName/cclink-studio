@@ -14,7 +14,6 @@ import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 
 import { CompanySpaceDialog } from '../../features/workspace-open/CompanySpaceDialog'
-import { PersonalRelocationDialog } from '../../features/workspace-open/PersonalRelocationDialog'
 import { PersonalFirstUseOverlay } from '../../features/workspace-open/PersonalFirstUseOverlay'
 import {
   useFixedSpacesStore,
@@ -263,7 +262,6 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
   return (
     <div className="project-strip">
       <CompanySpaceDialog />
-      <PersonalRelocationDialog />
       <PersonalFirstUseOverlay />
       <div className="project-strip-shell">
         <div

@@ -63,21 +63,13 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
   verifyLocalIdentity: (path, id) =>
     invokeIpcContract(workspaceStateIpc.verifyLocalIdentity, path, id),
   getFixedSpaces: () => invokeIpcContract(workspaceStateIpc.getFixedSpaces),
-  inspectDiaryRoot: (path) => invokeIpcContract(workspaceStateIpc.inspectDiaryRoot, path),
-  confirmDiaryRoot: (owner, preview) =>
-    invokeIpcContract(workspaceStateIpc.confirmDiaryRoot, owner, preview),
+  inspectDiaryImport: (path) => invokeIpcContract(workspaceStateIpc.inspectDiaryImport, path),
+  importDiaryHistory: (preview) => invokeIpcContract(workspaceStateIpc.importDiaryHistory, preview),
   listDiaryChanges: (path) => invokeIpcContract(workspaceStateIpc.listDiaryChanges, path),
   undoDiaryChange: (id) => invokeIpcContract(workspaceStateIpc.undoDiaryChange, id),
   describeDefaultPersonalSpace: () =>
     invokeIpcContract(workspaceStateIpc.describeDefaultPersonalSpace),
-  initializePersonalSpace: (preview) =>
-    invokeIpcContract(workspaceStateIpc.initializePersonalSpace, preview),
-  replaceUnavailablePersonalSpace: (preview) =>
-    invokeIpcContract(workspaceStateIpc.replaceUnavailablePersonalSpace, preview),
-  inspectPersonalRelocation: (path) =>
-    invokeIpcContract(workspaceStateIpc.inspectPersonalRelocation, path),
-  relocatePersonalSpace: (preview) =>
-    invokeIpcContract(workspaceStateIpc.relocatePersonalSpace, preview),
+  initializePersonalSpace: () => invokeIpcContract(workspaceStateIpc.initializePersonalSpace),
   ensurePersonalSpace: () => invokeIpcContract(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: () => invokeIpcContract(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: (path) => invokeIpcContract(workspaceStateIpc.inspectCompanySpace, path),
@@ -85,8 +77,6 @@ export const workspaceStateApi: WorkspaceStateApiContract = {
   resolveFixedSpace: (role) => invokeIpcContract(workspaceStateIpc.resolveFixedSpace, role),
   getDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.getDefaultWorkspace),
   ensureDefaultWorkspace: () => invokeIpcContract(workspaceStateIpc.ensureDefaultWorkspace),
-  setDefaultWorkspace: (workspacePath) =>
-    invokeIpcContract(workspaceStateIpc.setDefaultWorkspace, workspacePath),
   resolveLocalWorkspace: (workspacePath) =>
     invokeIpcContract(workspaceStateIpc.resolveLocalWorkspace, workspacePath),
   setActiveLocalWorkspace: (workspacePath, intent) =>

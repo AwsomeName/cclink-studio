@@ -19,7 +19,7 @@ for (const [rel, body] of [
   await writeDiary(project, D, rel, body)
 try {
   const page = await s.launch()
-  await firstUse(s, { directory: project })
+  await firstUse(s, { importFrom: project })
   const calendar = page.getByLabel('日记日历')
   await calendar.waitFor()
   await calendar.getByText('本月 2 篇').waitFor()

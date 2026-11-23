@@ -7,9 +7,10 @@ const TZ = 'Asia/Shanghai'
 const root = await makeRoot('.cclink-import-')
 const s = await makeHome(root, 'import')
 const oldProject = join(s.home, '旧日记项目')
-const space = join(s.home, '我的日记')
+const history = join(s.home, '我的日记')
 await writeDiary(oldProject, '个人计划', '2026/11/1120_周五.md', '# 旧\n')
-await writeDiary(space, '个人计划', '2026/11/1121_周六.md', '# 新\n')
+await writeDiary(history, '个人计划', '2026/11/1121_周六.md', '# 新\n')
+let space
 const save = (page, input) =>
   page.evaluate(async (i) => {
     const r = await window.cclinkStudio.scheduledTasks.save(i)
@@ -32,7 +33,7 @@ const task = (workspacePath, title, schedule, enable) => ({
 try {
   const page = await s.launch()
   page.on('dialog', (d) => void d.accept())
-  await firstUse(s, { directory: space })
+  space = await firstUse(s, { importFrom: history })
   // The earlier project, opened once so Studio knows it, with two diary tasks and one unrelated.
   await s.pickDirectory(oldProject)
   await page.locator('.app-topbar-open-project').first().click()

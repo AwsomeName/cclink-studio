@@ -5,11 +5,14 @@ import { makeRoot, makeHome, writeDiary, firstUse } from './diary-acceptance-lib
 
 const root = await makeRoot('.cclink-plans-')
 const session = await makeHome(root, 'plans')
-const project = join(session.home, '计划验收')
-const legacy = await writeDiary(project, '个人计划', '2026/周计划/旧计划.md', '# 原文\n')
+const history = join(session.home, '计划验收')
+await writeDiary(history, '个人计划', '2026/11/1120_周五.md', '# 周五\n')
+await writeDiary(history, '个人计划', '2026/周计划/旧计划.md', '# 原文\n')
+let project, legacy
 try {
   const page = await session.launch()
-  await firstUse(session, { directory: project })
+  project = await firstUse(session, { importFrom: history })
+  legacy = join(project, '个人计划', '2026/周计划/旧计划.md')
   // The home's 本周计划 row (first row) opens the plans page.
   await page.locator('.personal-diary-home .diary-row').first().click()
   const plans = page.locator('.diary-plan-layout')
@@ -56,7 +59,6 @@ try {
       .locator('.diary-plan-chat')
       .getByText(/你.*周四验收流转/s)
       .waitFor()
-
   }
   await plans.getByRole('button', { name: '月度', exact: true }).click()
   await plans.getByRole('button', { name: '空白计划' }).click()

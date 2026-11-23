@@ -2,7 +2,6 @@ import {
   defaultDiaryDirectory,
   defaultDiaryTimezone,
   personalDiarySourceSchema,
-  personalDiarySourceSection,
   type DiaryDocumentInput,
   type DiaryDocument,
 } from '../../shared/personal-diary-source'
@@ -18,7 +17,6 @@ import { accessDiaryDocument } from './personal-diary-files'
 import { app } from 'electron'
 import { createHash, randomUUID } from 'crypto'
 import {
-  access,
   copyFile,
   lstat,
   mkdir,
@@ -34,8 +32,8 @@ import { constants } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'path'
 import { isDeepStrictEqual } from 'node:util'
 import type {
-  DiaryRootPreview,
-  PersonalRelocationPreview,
+  DiaryImportPreview,
+  DiaryImportResult,
   FixedSpaceRef,
   FixedSpaces,
   CompanySpaceCandidate,
@@ -593,6 +591,7 @@ export class WorkspaceStateService {
   async ensureDefaultWorkspace(
     configuredPath = '',
     newDirectoryName = '默认工作空间',
+    options: { adoptExisting?: boolean } = {},
   ): Promise<string> {
     const operation = this.defaultWorkspaceQueue.then(async () => {
       this.assertCentralStateAvailable()
@@ -620,7 +619,9 @@ export class WorkspaceStateService {
           const known = Object.values(this.state.localWorkspaces).some(
             (entry) => entry.workspacePath === target && entry.projectId,
           )
-          if (!known) throw new Error('默认目录已被占用，请选择已有工作空间后设置为默认')
+          // My Space's own fixed folder is taken over in place (its type is checked by the caller).
+          if (!known && !options.adoptExisting)
+            throw new Error('默认目录已被占用，请选择已有工作空间后设置为默认')
         }
         if (!info) {
           if (
@@ -753,26 +754,16 @@ export class WorkspaceStateService {
   }
 
   async diaryDocument(input: DiaryDocumentInput): Promise<DiaryDocument> {
-    const snapshot = await this.getSnapshot(input.workspacePath ?? null)
-    let value = snapshot.sections[personalDiarySourceSection]
-    if (value === undefined && input.workspacePath) {
-      if (
-        !this.getFixedSpaces().personal?.diaryRootConfirmed &&
-        this.getFixedSpaces().personal?.workspacePath === input.workspacePath
-      )
-        value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
-      if (!value) {
-        const config = await this.getWorkspaceSettings(input.workspacePath)
-        if (config.settings.diary)
-          value = {
-            version: 1,
-            workspacePath: input.workspacePath,
-            projectId: await this.getLocalProjectId(input.workspacePath),
-            ...config.settings.diary,
-          }
-      }
-    }
-    const source = personalDiarySourceSchema.parse(value)
+    // A diary project's files always live in its own folder, under its configured directory.
+    if (!input.workspacePath) throw Error('请先打开日记项目')
+    const config = await this.getWorkspaceSettings(input.workspacePath)
+    if (!config.settings.diary) throw Error('此项目未配置日记目录')
+    const source = personalDiarySourceSchema.parse({
+      version: 1,
+      workspacePath: input.workspacePath,
+      projectId: await this.getLocalProjectId(input.workspacePath),
+      ...config.settings.diary,
+    })
     await this.verifyLocalIdentity(source.workspacePath, source.projectId)
     return accessDiaryDocument(source, input)
   }
@@ -897,38 +888,44 @@ export class WorkspaceStateService {
       throw new Error('原公司数据库不可用；请恢复原公司资料，不会创建空公司替代')
   }
 
+  /** My Space always lives in its own fixed folder; it is never another project's folder. */
+  async personalRootPath(): Promise<string> {
+    return join(await realpath(app.getPath('home')), 'CCLink Studio', '我的空间')
+  }
+
   /**
-   * Returns the bound personal space. With `createDefault: false` (every app entry point), an
-   * unbound space stays unbound so first use writes nothing until the user confirms (D2).
+   * Returns the bound personal space. A binding to any other folder (older versions let My
+   * Space adopt a project's directory) is dropped without touching that folder; the folder is
+   * only offered as an import source on the next first use.
    */
   async ensurePersonalSpace(
-    legacyDefaultPath = '',
+    _legacyDefaultPath = '',
     options: { createDefault?: boolean } = {},
   ): Promise<FixedSpaces> {
     const createDefault = options.createDefault ?? true
     return this.fixedOperation(async () => {
       const fixed = this.getFixedSpaces()
+      const root = await this.personalRootPath()
       if (fixed.personal) {
-        await this.inspectFixedIdentity(fixed.personal.workspacePath, fixed.personal.projectId)
-        return fixed
+        const valid =
+          fixed.personal.workspacePath === root &&
+          fixed.personal.diaryRootConfirmed === true &&
+          (await this.inspectFixedIdentity(root, fixed.personal.projectId).then(
+            () => true,
+            () => false,
+          ))
+        if (valid) return fixed
+        return this.commitFixedSpaces({
+          ...fixed,
+          personal: null,
+          importSuggestion:
+            fixed.personal.workspacePath !== root
+              ? fixed.personal.workspacePath
+              : fixed.importSuggestion,
+        })
       }
-      let personal: FixedSpaceRef | null = null
-      if (legacyDefaultPath) {
-        const candidate = await this.inspectCompanySpace(legacyDefaultPath)
-        if (candidate.state === 'empty' && candidate.projectId)
-          personal = { workspacePath: candidate.workspacePath, projectId: candidate.projectId }
-      }
-      if (!personal && !createDefault) return fixed
-      if (!personal)
-        personal = await this.inspectFixedIdentity(
-          await this.ensureDefaultWorkspace('', '我的空间'),
-        )
-      if (fixed.company) this.assertIndependent(personal, fixed.company)
-      return this.commitFixedSpaces({
-        ...fixed,
-        personal,
-        legacyDefaultPath: fixed.legacyDefaultPath || legacyDefaultPath,
-      })
+      if (!createDefault) return fixed
+      return this.commitPersonalRoot(fixed)
     })
   }
 
@@ -950,257 +947,113 @@ export class WorkspaceStateService {
     return verified.workspacePath
   }
 
-  private async previousFixedDiarySource() {
-    const personal = this.getFixedSpaces().personal
-    if (!personal) return null
-    const snapshot = await this.getSnapshot(personal.workspacePath)
-    let value = snapshot.sections[personalDiarySourceSection]
-    if (value === undefined && !personal.diaryRootConfirmed)
-      value = (await this.getSnapshot(null)).sections[personalDiarySourceSection]
-    const parsed = personalDiarySourceSchema.safeParse(value)
-    return parsed.success ? parsed.data : null
-  }
-
-  /** The default personal folder shown on first use; nothing is created here. */
+  /** The fixed personal folder shown on first use; nothing is created here. */
   async describeDefaultPersonalSpace(): Promise<{ path: string; exists: boolean }> {
-    const home = await realpath(app.getPath('home'))
-    const path = join(home, 'CCLink Studio', '我的空间')
+    const path = await this.personalRootPath()
     const exists = Boolean((await lstat(path).catch(() => null))?.isDirectory())
     return { path, exists }
   }
 
-  /**
-   * First-use confirmation for an unbound personal space. The default folder is created only
-   * here; an existing folder must match the reviewed preview. Settings are written by
-   * confirmDiaryRoot under the same checks as an existing binding.
-   */
-  async initializePersonalSpace(
-    preview: DiaryRootPreview | null,
-    options: { replaceUnavailable?: boolean } = {},
-  ): Promise<FixedSpaces> {
-    const root = await this.fixedOperation(async () => {
+  /** First-use confirmation: creates the fixed folder and its diary settings. */
+  async initializePersonalSpace(): Promise<FixedSpaces> {
+    return this.fixedOperation(async () => {
       const fixed = this.getFixedSpaces()
-      if (fixed.personal && !options.replaceUnavailable) throw Error('我的空间已设置，请刷新后重试')
-      if (fixed.personal && options.replaceUnavailable) {
-        // Only a binding that no longer proves its identity may be replaced (§13 改用其他目录).
-        const stillValid = await this.inspectFixedIdentity(
-          fixed.personal.workspacePath,
-          fixed.personal.projectId,
-        ).then(
-          () => true,
-          () => false,
-        )
-        if (stillValid) throw Error('上次的项目目录仍然可用，请在项目设置中更换目录')
-        if (!preview) throw Error('请选择要改用的目录')
-      }
-      const target = preview
-        ? await this.resolveLocalWorkspacePath(preview.workspacePath)
-        : await this.ensureDefaultWorkspace('', '我的空间')
-      await this.getSnapshot(target)
-      const personal = await this.inspectFixedIdentity(target)
-      if (fixed.company) this.assertIndependent(personal, fixed.company)
-      await this.commitFixedSpaces({ ...fixed, personal })
-      return target
+      if (fixed.personal?.diaryRootConfirmed) throw Error('我的空间已设置，请刷新后重试')
+      return this.commitPersonalRoot(fixed)
     })
-    const checked = preview
-      ? { ...preview, projectId: (await this.inspectDiaryRoot(root)).projectId }
-      : await this.inspectDiaryRoot(root)
-    return this.confirmDiaryRoot(root, checked)
   }
 
-  async inspectDiaryRoot(path: string): Promise<DiaryRootPreview> {
-    const root = await this.resolveLocalWorkspacePath(path)
+  private async commitPersonalRoot(fixed: FixedSpaces): Promise<FixedSpaces> {
+    const root = await this.ensureDefaultWorkspace('', '我的空间', { adoptExisting: true })
+    const personal = await this.inspectFixedIdentity(root)
+    if (fixed.company) this.assertIndependent(personal, fixed.company)
     const current = await readWorkspaceSettings(root)
-    if (current.error || ['company', 'electronics'].includes(current.settings.type))
-      throw Error(current.error || '此目录已有其他项目类型，请选择日记项目目录')
-    const entries = await readdir(root, { withFileTypes: true })
-    let projectId: string | null = null
-    if (entries.some((e) => e.name === PROJECT_METADATA_DIR)) {
-      const metadata = join(root, PROJECT_METADATA_DIR)
-      if (!(await lstat(metadata)).isDirectory()) throw Error('项目元数据目录不可用')
-      if ((await readdir(metadata)).includes(PROJECT_MANIFEST_FILE)) {
-        projectId = (await this.inspectFixedIdentity(root)).projectId
-        const candidate = await this.inspectCompanySpace(root)
-        if (candidate.state === 'unavailable')
-          throw Error(candidate.error || '公司资料状态不可读取')
-        if (candidate.state === 'company') throw Error('此目录已有公司资料')
+    if (current.error) throw Error(current.error)
+    if (!['general', 'diary'].includes(current.settings.type))
+      throw Error('我的空间目录里已有其他类型的项目资料，原文件已保留：' + root)
+    const diary = current.settings.diary ?? {
+      directory: defaultDiaryDirectory,
+      timezone: defaultDiaryTimezone,
+      taskIds: [],
+    }
+    await mkdir(join(root, diary.directory), { recursive: true })
+    if (current.settings.type !== 'diary' || !current.settings.diary)
+      await this.saveWorkspaceSettings({
+        workspacePath: root,
+        revision: current.revision,
+        settings: { ...current.settings, name: '我的空间', type: 'diary', diary },
+      })
+    const next: FixedSpaces = { ...fixed, personal: { ...personal, diaryRootConfirmed: true } }
+    delete next.importSuggestion
+    return this.commitFixedSpaces(next)
+  }
+
+  /** Read-only look at a history folder: which diary folder would be copied, and how much. */
+  async inspectDiaryImport(path: string): Promise<DiaryImportPreview> {
+    const picked = await realpath(path)
+    if (!(await lstat(picked)).isDirectory()) throw Error('请选择一个文件夹')
+    const root = await this.personalRootPath()
+    if (picked === root || picked.startsWith(root + sep) || root.startsWith(picked + sep))
+      throw Error('请选择我的空间以外的历史目录')
+    const settings = await readWorkspaceSettings(picked).catch(() => null)
+    let sourcePath = picked
+    for (const name of [
+      settings?.settings.diary?.directory,
+      '000-个人计划',
+      defaultDiaryDirectory,
+    ]) {
+      if (!name) continue
+      const info = await lstat(join(picked, name)).catch(() => null)
+      if (info?.isDirectory() && !info.isSymbolicLink()) {
+        sourcePath = join(picked, name)
+        break
       }
     }
-    const directory =
-      current.settings.diary?.directory ??
-      (entries.some((e) => e.name === defaultDiaryDirectory)
-        ? defaultDiaryDirectory
-        : entries.some((e) => e.name === '000-个人计划')
-          ? '000-个人计划'
-          : defaultDiaryDirectory)
-    const base = join(root, directory)
-    let folder = root
-    for (const part of directory.split('/')) {
-      folder = join(folder, part)
-      const info = await lstat(folder).catch((e: NodeJS.ErrnoException) => {
-        if (e.code !== 'ENOENT') throw e
-        return null
-      })
-      if (
-        !info &&
-        folder === base &&
-        directory === defaultDiaryDirectory &&
-        !current.settings.diary
-      )
-        return {
-          workspacePath: root,
-          directory,
-          isGitRepository: entries.some((e) => e.name === '.git' && e.isDirectory()),
-          latestFile: null,
-          diaryCount: 0,
-          revision: current.revision,
-          projectId,
-        }
-      if (!info?.isDirectory()) throw Error('日记目录不存在或包含符号链接：' + folder)
-    }
-    const scanned = await scanDiaryEntries(base)
+    const scanned = await scanDiaryEntries(sourcePath)
+    if (!scanned.diaryCount)
+      throw Error('这个目录里没有找到日记（应为 年/月/MMDD_周X.md）：' + sourcePath)
+    const files = await listImportFiles(sourcePath)
+    const target = await this.personalDiaryTarget()
+    const skipped: string[] = []
+    for (const rel of files) if (await lstat(join(target, rel)).catch(() => null)) skipped.push(rel)
     return {
-      workspacePath: root,
-      directory,
-      isGitRepository: entries.some((e) => e.name === '.git' && e.isDirectory()),
-      latestFile: scanned.latestFile,
+      sourcePath,
       diaryCount: scanned.diaryCount,
-      revision: current.revision,
-      projectId,
+      latestFile: scanned.latestFile,
+      fileCount: files.length,
+      skipCount: skipped.length,
+      skipped: skipped.slice(0, 20),
     }
   }
 
-  async confirmDiaryRoot(owner: string, preview: DiaryRootPreview): Promise<FixedSpaces> {
-    return this.fixedOperation(async () => {
-      const fixed = this.getFixedSpaces()
-      if (fixed.personal?.workspacePath !== owner) throw Error('默认项目已切换，请重新打开项目首页')
-      const checked = await this.inspectDiaryRoot(preview.workspacePath)
-      if (
-        checked.revision !== preview.revision ||
-        checked.projectId !== preview.projectId ||
-        checked.directory !== preview.directory
-      )
-        throw Error('项目资料已变化，请重新选择目录')
-      const root = checked.workspacePath
-      await access(root, constants.W_OK | constants.X_OK)
-      await access(join(root, checked.directory), constants.W_OK | constants.X_OK).catch(
-        (error: NodeJS.ErrnoException) => {
-          if (error.code !== 'ENOENT') throw Error('日记目录不可写，请检查目录权限')
-        },
-      )
-      const previous = await this.previousFixedDiarySource()
-      const legacy = previous?.workspacePath === root ? previous : null
-      if (
-        legacy &&
-        (legacy.projectId !== checked.projectId || legacy.directory !== checked.directory)
-      )
-        throw Error('原关联的身份或日记子目录与所选目录不一致，请在项目设置中核对')
-      if (fixed.company)
-        this.assertIndependent(
-          { workspacePath: root, projectId: checked.projectId ?? '' },
-          fixed.company,
-        )
-      const snapshot = await this.getSnapshot(root)
-      const override = snapshot.sections[personalDiarySourceSection]
-      if (override && personalDiarySourceSchema.parse(override).workspacePath !== root)
-        throw Error('所选项目仍关联了其他资料目录，请先在原项目中核对')
-      const personal = await this.inspectFixedIdentity(root, checked.projectId ?? undefined)
-      const current = await readWorkspaceSettings(root)
-      if (current.revision !== checked.revision) throw Error('项目设置已变化，请重新选择目录')
-      if (!current.settings.diary || current.settings.type !== 'diary') {
-        if (!current.settings.diary && checked.directory === defaultDiaryDirectory)
-          await mkdir(join(root, checked.directory)).catch((e) => {
-            if (e.code !== 'EEXIST') throw e
-          })
-        const diary = current.settings.diary ?? {
-          directory: checked.directory,
-          timezone: legacy?.timezone ?? defaultDiaryTimezone,
-          taskIds: legacy?.taskIds ?? [],
-        }
-        await this.saveWorkspaceSettings({
-          workspacePath: root,
-          revision: current.revision,
-          settings: { ...current.settings, type: 'diary', diary },
-        })
-      }
-      return this.commitFixedSpaces({
-        ...fixed,
-        personal: { ...personal, diaryRootConfirmed: true },
-      })
-    })
-  }
-
-  /**
-   * Relocation is only offered when the bound folder no longer proves the same identity.
-   * The candidate must carry the original project identity; nothing is written here.
-   */
-  async inspectPersonalRelocation(path: string): Promise<PersonalRelocationPreview> {
+  /** Copies a reviewed history folder into My Space. Never overwrites, never touches the source. */
+  async importDiaryHistory(preview: DiaryImportPreview): Promise<DiaryImportResult> {
     const personal = this.getFixedSpaces().personal
-    if (!personal) throw Error('我的空间尚未初始化')
-    const previousPath = personal.workspacePath
-    let previous: PersonalRelocationPreview['previous'] = null
-    let previousState: PersonalRelocationPreview['previousState'] = 'missing'
-    const previousInfo = await lstat(previousPath).catch(() => null)
-    if (previousInfo?.isDirectory()) {
-      const sameIdentity = await this.inspectFixedIdentity(previousPath, personal.projectId).then(
-        () => true,
-        () => false,
-      )
-      if (sameIdentity) throw Error('上次的项目目录仍然可用，无需重新定位')
-      previousState = 'other'
-      const settings = await readWorkspaceSettings(previousPath).catch(() => null)
-      const directory = settings?.settings.diary?.directory ?? defaultDiaryDirectory
-      const base = join(previousPath, directory)
-      const scanned = (await lstat(base).catch(() => null))?.isDirectory()
-        ? await scanDiaryEntries(base).catch(() => ({ latestFile: null, diaryCount: 0 }))
-        : { latestFile: null, diaryCount: 0 }
-      previous = { directory, ...scanned }
+    if (!personal?.diaryRootConfirmed) throw Error('请先完成我的空间设置')
+    const checked = await this.inspectDiaryImport(preview.sourcePath)
+    if (checked.sourcePath !== preview.sourcePath || checked.fileCount !== preview.fileCount)
+      throw Error('历史目录内容已变化，请重新核对')
+    const target = await this.personalDiaryTarget()
+    let copied = 0
+    let skipped = 0
+    for (const rel of await listImportFiles(checked.sourcePath)) {
+      const destination = join(target, rel)
+      await mkdir(dirname(destination), { recursive: true })
+      try {
+        await copyFile(join(checked.sourcePath, rel), destination, constants.COPYFILE_EXCL)
+        copied++
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        skipped++
+      }
     }
-    const root = await this.resolveLocalWorkspacePath(path)
-    if (root === previousPath) throw Error('请选择移动后的新位置')
-    const manifest = await this.readProjectManifestFile(
-      join(root, PROJECT_METADATA_DIR, PROJECT_MANIFEST_FILE),
-    )
-    if (manifest.status !== 'ok' || manifest.value.projectId !== personal.projectId)
-      throw Error('所选目录不是原来的日记项目（项目身份不一致），原绑定保持不变')
-    const candidate = await this.inspectDiaryRoot(root)
-    if (candidate.projectId !== personal.projectId)
-      throw Error('所选目录不是原来的日记项目（项目身份不一致），原绑定保持不变')
-    return { previousPath, previousState, previous, candidate }
+    return { copied, skipped }
   }
 
-  async relocatePersonalSpace(preview: PersonalRelocationPreview): Promise<FixedSpaces> {
-    return this.fixedOperation(async () => {
-      const fixed = this.getFixedSpaces()
-      if (!fixed.personal || fixed.personal.workspacePath !== preview.previousPath)
-        throw Error('默认项目已变化，请重新打开我的空间')
-      const checked = await this.inspectPersonalRelocation(preview.candidate.workspacePath)
-      if (
-        checked.previousState !== preview.previousState ||
-        checked.candidate.revision !== preview.candidate.revision ||
-        checked.candidate.directory !== preview.candidate.directory ||
-        checked.candidate.latestFile !== preview.candidate.latestFile
-      )
-        throw Error('两个位置的资料已变化，请重新核对')
-      const root = checked.candidate.workspacePath
-      await access(root, constants.W_OK | constants.X_OK)
-      if (fixed.company)
-        this.assertIndependent(
-          { workspacePath: root, projectId: fixed.personal.projectId },
-          fixed.company,
-        )
-      const personal = await this.inspectFixedIdentity(root, fixed.personal.projectId)
-      return this.commitFixedSpaces({ ...fixed, personal: { ...fixed.personal, ...personal } })
-    })
-  }
-
-  async setPersonalSpace(path: string): Promise<FixedSpaces> {
-    return this.fixedOperation(async () => {
-      const fixed = this.getFixedSpaces()
-      const personal = await this.inspectFixedIdentity(path)
-      if (fixed.company) this.assertIndependent(personal, fixed.company)
-      return this.commitFixedSpaces({ ...fixed, personal })
-    })
+  private async personalDiaryTarget(): Promise<string> {
+    const root = await this.personalRootPath()
+    const current = await readWorkspaceSettings(root).catch(() => null)
+    return join(root, current?.settings.diary?.directory ?? defaultDiaryDirectory)
   }
 
   async connectCompanySpace(
@@ -1224,7 +1077,7 @@ export class WorkspaceStateService {
       })
       this.assertBoundCompanyDatabase(company, description)
       if (input.shortcutOnly) {
-        if (!input.workspacePath || input.initializeName || input.replacePersonal)
+        if (!input.workspacePath || input.initializeName)
           throw Error('快捷入口关联必须明确选择已有项目')
         if (
           !description &&
@@ -1240,17 +1093,12 @@ export class WorkspaceStateService {
 
       if (!description && !input.initializeName)
         throw new Error('此目录尚未启用公司，请填写名称并明确启用')
-      let personal = fixed.personal
+      const personal = fixed.personal
       if (
         personal?.projectId === company.projectId ||
         personal?.workspacePath === company.workspacePath
-      ) {
-        if (!input.replacePersonal)
-          throw new Error('此目录当前是我的空间；请确认整目录用于公司，并建立独立个人空间')
-        personal = await this.inspectFixedIdentity(
-          await this.ensureDefaultWorkspace('', '我的空间（个人）'),
-        )
-      }
+      )
+        throw new Error('这是我的空间的目录，不能用作公司；请选择其他目录')
       if (personal) this.assertIndependent(personal, company)
       if (!description)
         await configure(
@@ -2344,4 +2192,20 @@ async function scanDiaryEntries(
     }
   }
   return { latestFile, diaryCount }
+}
+
+/** Regular files under a history folder, relative paths; hidden entries and links are skipped. */
+async function listImportFiles(base: string): Promise<string[]> {
+  const out: string[] = []
+  const walk = async (dir: string, prefix: string): Promise<void> => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
+      const rel = prefix ? prefix + '/' + entry.name : entry.name
+      if (entry.isDirectory()) await walk(join(dir, entry.name), rel)
+      else if (entry.isFile()) out.push(rel)
+      if (out.length > 20000) throw Error('历史目录文件超过 20000 个，请选择更具体的日记目录')
+    }
+  }
+  await walk(base, '')
+  return out.sort()
 }

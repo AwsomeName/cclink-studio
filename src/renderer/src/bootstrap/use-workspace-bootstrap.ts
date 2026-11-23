@@ -103,24 +103,17 @@ export function useWorkspaceBootstrap(): boolean {
         .then((spaces) => {
           useFixedSpacesStore.setState({ spaces })
         })
-        .catch(async (error) => {
+        .catch((error) => {
           console.warn('[FixedSpaces] 个人空间暂不可用，保留其他入口', error)
-          // A bound folder that no longer proves its identity goes straight to relocation.
-          const spaces = await window.cclinkStudio.workspaceState.getFixedSpaces().catch(() => null)
-          if (spaces?.personal)
-            useFixedSpacesStore.setState({
-              spaces,
-              relocate: { previousPath: spaces.personal.workspacePath, error: String(error) },
-            })
         })
       const result = await runWorkspaceBootstrapOnce()
       // A new user with nothing to restore starts at first use; nothing exists until confirmed.
+      // So does an install whose old My Space binding pointed at another project's folder.
       const fixedState = useFixedSpacesStore.getState()
       if (
         fixedState.spaces &&
         !fixedState.spaces.personal &&
-        !fixedState.relocate &&
-        !result.workspacePath
+        (!result.workspacePath || fixedState.spaces.importSuggestion)
       )
         useFixedSpacesStore.setState({ firstUse: true })
       if (

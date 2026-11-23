@@ -83,29 +83,34 @@ export async function writeDiary(projectRoot, diaryDir, rel, body) {
 }
 
 /**
- * Completes the four-step first use. `directory` picks an existing folder (else the default);
+ * Completes the four-step first use. My Space always uses its fixed folder; `importFrom`
+ * copies a history folder in, `url` sets its own Git address. Returns the My Space root.
  * `dailyTime` defaults late so confirming does not start an immediate AI draft.
  */
-export async function firstUse(s, { directory, dailyTime = '23:59', shot } = {}) {
+export async function firstUse(s, { importFrom, url, dailyTime = '23:59', shot } = {}) {
   const page = s.page
   const wizard = page.getByRole('dialog', { name: '设置我的空间' })
   if (!(await wizard.isVisible().catch(() => false)))
     await page.getByRole('button', { name: '我的空间', exact: true }).first().click()
-  await wizard.getByText('1 选择目录').waitFor()
-  if (directory) {
-    await s.pickDirectory(directory)
+  await wizard.getByText('1 导入历史').waitFor()
+  if (importFrom) {
+    await wizard.getByRole('radio', { name: /从历史目录导入/ }).check()
+    await s.pickDirectory(importFrom)
     await wizard.getByRole('button', { name: '选择文件夹…' }).click()
-    await wizard.getByText(directory, { exact: true }).waitFor()
+    await wizard.getByLabel('导入核对').waitFor()
   }
   if (shot) await page.screenshot({ path: shot })
-  for (let i = 0; i < 2; i++) await wizard.getByRole('button', { name: '下一步' }).click()
+  await wizard.getByRole('button', { name: '下一步' }).click()
+  if (url) await wizard.getByLabel('Git 项目地址').fill(url)
+  await wizard.getByRole('button', { name: '下一步' }).click()
   await wizard.getByText(/测试：生成一句话 · 通过/).waitFor({ timeout: 120000 })
   await wizard.getByRole('button', { name: '下一步' }).click()
   await wizard.getByLabel('每日起草时间').fill(dailyTime)
   await wizard.getByRole('button', { name: '确认并开始' }).click()
   await wizard.waitFor({ state: 'detached', timeout: 30000 })
   await page.locator('.personal-diary-home h2').first().waitFor()
+  return s.fixedRoot()
 }
 
-/** Back-compat name used by older scenarios. */
-export const confirmExisting = (s, directory, shot) => firstUse(s, { directory, shot })
+/** My Space's diary folder inside its fixed root. */
+export const SPACE_DIARY = '个人计划'

@@ -88,71 +88,7 @@ describe('fixed personal/company spaces preserve original data', () => {
     ).rejects.toThrow()
   })
 
-  it('rejects a changed settings revision, a linked diary folder and a duplicate project identity before binding', async () => {
-    const fixed = await service.ensurePersonalSpace()
-    const owner = fixed.personal!.workspacePath
-    const root = join(paths.root, '模拟旧资料')
-    await mkdir(root)
-    const inspected = await service.inspectDiaryRoot(root)
-    await service.saveWorkspaceSettings({
-      workspacePath: root,
-      revision: null,
-      settings: { version: 1, name: 'changed', type: 'general' },
-    })
-    await expect(service.confirmDiaryRoot(owner, inspected)).rejects.toThrow('变化')
-    await symlink(owner, join(root, '个人计划'))
-    await expect(service.inspectDiaryRoot(root)).rejects.toThrow('符号链接')
-    const duplicate = join(paths.root, '重复身份')
-    await cp(owner, duplicate, { recursive: true })
-    await expect(service.inspectDiaryRoot(duplicate)).rejects.toThrow('冲突')
-    expect(service.getFixedSpaces()).toEqual(fixed)
-  })
-
-  it('relocates a moved diary project by identity and shows material left at the old path', async () => {
-    const root = join(paths.root, '原日记')
-    await mkdir(join(root, '个人计划', '2026', '11'), { recursive: true })
-    const note = join(root, '个人计划', '2026', '11', '1120_周五.md')
-    await writeFile(note, '# 原文\n')
-    const fixed = await service.ensurePersonalSpace()
-    await service.confirmDiaryRoot(
-      fixed.personal!.workspacePath,
-      await service.inspectDiaryRoot(root),
-    )
-    const bound = service.getFixedSpaces().personal!
-    await expect(service.inspectPersonalRelocation(root)).rejects.toThrow('仍然可用')
-    const moved = join(paths.root, '移动后', '原日记')
-    await mkdir(join(paths.root, '移动后'))
-    await rename(root, moved)
-    await expect(service.ensurePersonalSpace()).rejects.toThrow()
-    const stranger = join(paths.root, '别的项目')
-    await mkdir(stranger)
-    await service.getSnapshot(stranger)
-    await expect(service.inspectPersonalRelocation(stranger)).rejects.toThrow('身份不一致')
-    const missing = await service.inspectPersonalRelocation(moved)
-    expect(missing).toMatchObject({ previousState: 'missing', previous: null })
-    expect(missing.candidate).toMatchObject({ diaryCount: 1, latestFile: '2026/11/1120_周五.md' })
-    // Something new appears at the old path: both sides are shown and nothing is merged.
-    await mkdir(join(root, '个人计划', '2026', '12'), { recursive: true })
-    await writeFile(join(root, '个人计划', '2026', '12', '1201_周二.md'), '# 新位置以外\n')
-    await expect(service.relocatePersonalSpace(missing)).rejects.toThrow('已变化')
-    const both = await service.inspectPersonalRelocation(moved)
-    expect(both).toMatchObject({
-      previousState: 'other',
-      previous: { diaryCount: 1, latestFile: '2026/12/1201_周二.md' },
-    })
-    expect(service.getFixedSpaces().personal).toEqual(bound)
-    const relocated = await service.relocatePersonalSpace(both)
-    expect(relocated.personal).toEqual({ ...bound, workspacePath: moved })
-    // Opening the moved copy must keep its identity even though the old folder exists again.
-    await service.getSnapshot(moved)
-    expect(await service.getLocalProjectId(moved)).toBe(bound.projectId)
-    expect(await readFile(join(moved, '个人计划', '2026', '11', '1120_周五.md'), 'utf8')).toBe(
-      '# 原文\n',
-    )
-    await expect(service.ensurePersonalSpace()).resolves.toEqual(relocated)
-  })
-
-  it('creates nothing before first-use confirmation, then binds the default or chosen folder', async () => {
+  it('creates nothing before first-use confirmation, then binds only the fixed folder', async () => {
     const unbound = await service.ensurePersonalSpace('', { createDefault: false })
     expect(unbound.personal).toBeNull()
     const described = await service.describeDefaultPersonalSpace()
@@ -161,47 +97,96 @@ describe('fixed personal/company spaces preserve original data', () => {
       exists: false,
     })
     await expect(readdir(described.path)).rejects.toMatchObject({ code: 'ENOENT' })
-    const fixed = await service.initializePersonalSpace(null)
+    const fixed = await service.initializePersonalSpace()
     expect(fixed.personal).toMatchObject({
       workspacePath: described.path,
       diaryRootConfirmed: true,
     })
     expect((await service.getWorkspaceSettings(described.path)).settings).toMatchObject({
+      name: '我的空间',
       type: 'diary',
       diary: { directory: '个人计划' },
     })
-    await expect(service.initializePersonalSpace(null)).rejects.toThrow('已设置')
+    await expect(service.initializePersonalSpace()).rejects.toThrow('已设置')
   })
 
-  it('replaces an unavailable binding with another reviewed folder, never a valid one', async () => {
-    const first = join(paths.root, '原日记')
-    await mkdir(first)
-    await service.initializePersonalSpace(await service.inspectDiaryRoot(first))
-    const other = join(paths.root, '新目录')
-    await mkdir(join(other, '个人计划'), { recursive: true })
-    await expect(
-      service.initializePersonalSpace(await service.inspectDiaryRoot(other), {
-        replaceUnavailable: true,
-      }),
-    ).rejects.toThrow('仍然可用')
-    await rm(first, { recursive: true })
-    const fixed = await service.initializePersonalSpace(await service.inspectDiaryRoot(other), {
-      replaceUnavailable: true,
-    })
-    expect(fixed.personal).toMatchObject({ workspacePath: other, diaryRootConfirmed: true })
-  })
-
-  it('initializes an existing folder in place after review', async () => {
-    const root = join(paths.root, '旧日记')
-    await mkdir(join(root, '000-个人计划', '2026', '11'), { recursive: true })
-    await writeFile(join(root, '000-个人计划', '2026', '11', '1120_周五.md'), '原文')
-    const preview = await service.inspectDiaryRoot(root)
-    expect(preview).toMatchObject({ directory: '000-个人计划', diaryCount: 1, projectId: null })
-    const fixed = await service.initializePersonalSpace(preview)
-    expect(fixed.personal).toMatchObject({ workspacePath: root, diaryRootConfirmed: true })
-    expect(await readFile(join(root, '000-个人计划', '2026', '11', '1120_周五.md'), 'utf8')).toBe(
-      '原文',
+  it('takes over an existing fixed folder left by an earlier install, refusing other project types', async () => {
+    const fixedDir = join(paths.root, 'CCLink Studio', '我的空间')
+    await mkdir(join(fixedDir, '个人计划', '2026', '11'), { recursive: true })
+    await writeFile(join(fixedDir, '个人计划', '2026', '11', '1119_周四.md'), '旧')
+    const fixed = await service.initializePersonalSpace()
+    expect(fixed.personal?.workspacePath).toBe(fixedDir)
+    expect(await readFile(join(fixedDir, '个人计划', '2026', '11', '1119_周四.md'), 'utf8')).toBe(
+      '旧',
     )
+  })
+
+  it('drops an old binding to another project folder without touching that folder', async () => {
+    const project = join(paths.root, '旧项目')
+    await mkdir(project)
+    await service.getSnapshot(project)
+    await service.saveWorkspaceSettings({
+      workspacePath: project,
+      revision: null,
+      settings: { version: 1, name: '旧项目', type: 'general' },
+    })
+    const projectId = (await service.getLocalProjectId(project))!
+    // An older version bound My Space straight to this project's folder.
+    await (
+      service as unknown as { commitFixedSpaces: (v: unknown) => Promise<unknown> }
+    ).commitFixedSpaces({
+      ...service.getFixedSpaces(),
+      personal: { workspacePath: project, projectId, diaryRootConfirmed: true },
+    })
+    const settingsBefore = await readFile(
+      join(project, '.cclink-studio/workspace-settings.json'),
+      'utf8',
+    )
+    const fixed = await service.ensurePersonalSpace('', { createDefault: false })
+    expect(fixed.personal).toBeNull()
+    expect(fixed.importSuggestion).toBe(project)
+    expect(await readFile(join(project, '.cclink-studio/workspace-settings.json'), 'utf8')).toBe(
+      settingsBefore,
+    )
+    const bound = await service.initializePersonalSpace()
+    expect(bound.personal?.workspacePath).toBe(join(paths.root, 'CCLink Studio', '我的空间'))
+    expect(bound.importSuggestion).toBeUndefined()
+    expect((await service.getWorkspaceSettings(project)).settings.type).toBe('general')
+  })
+
+  it('imports history by copying only, never overwriting or touching the source', async () => {
+    await service.initializePersonalSpace()
+    const history = join(paths.root, '旧电脑', '000-个人计划')
+    await mkdir(join(history, '2026', '11'), { recursive: true })
+    await writeFile(join(history, '2026', '11', '1120_周五.md'), '旧周五')
+    await writeFile(join(history, '2026', '11', '1121_周六.md'), '旧周六')
+    await mkdir(join(history, '2026', '周计划'), { recursive: true })
+    await writeFile(join(history, '2026', '周计划', '第47周.md'), '计划')
+    await writeFile(join(history, '.DS_Store'), 'x')
+    const target = join(paths.root, 'CCLink Studio', '我的空间', '个人计划')
+    await mkdir(join(target, '2026', '11'), { recursive: true })
+    await writeFile(join(target, '2026', '11', '1121_周六.md'), '我的空间里已有')
+    const preview = await service.inspectDiaryImport(join(paths.root, '旧电脑'))
+    expect(preview).toMatchObject({
+      sourcePath: history,
+      diaryCount: 2,
+      fileCount: 3,
+      skipCount: 1,
+      skipped: ['2026/11/1121_周六.md'],
+    })
+    expect(await service.importDiaryHistory(preview)).toEqual({ copied: 2, skipped: 1 })
+    expect(await readFile(join(target, '2026', '11', '1120_周五.md'), 'utf8')).toBe('旧周五')
+    expect(await readFile(join(target, '2026', '11', '1121_周六.md'), 'utf8')).toBe(
+      '我的空间里已有',
+    )
+    expect(await readFile(join(history, '2026', '11', '1121_周六.md'), 'utf8')).toBe('旧周六')
+    await expect(readFile(join(target, '.DS_Store'))).rejects.toThrow()
+    await expect(
+      service.inspectDiaryImport(join(paths.root, 'CCLink Studio', '我的空间')),
+    ).rejects.toThrow('我的空间以外')
+    const empty = join(paths.root, '空目录')
+    await mkdir(empty)
+    await expect(service.inspectDiaryImport(empty)).rejects.toThrow('没有找到日记')
   })
 
   it('initializes once, keeps company lazy and survives restart', async () => {
@@ -254,19 +239,13 @@ describe('fixed personal/company spaces preserve original data', () => {
       'broken',
     )
   })
-  it('requires confirmation for whole-root role change and commits both references together', async () => {
+  it('never turns the My Space folder into the company', async () => {
     const personal = await service.ensurePersonalSpace()
     const path = personal.personal!.workspacePath
     await expect(
       service.connectCompanySpace({ workspacePath: path, initializeName: '新公司' }, configure),
-    ).rejects.toThrow('确认')
+    ).rejects.toThrow('我的空间的目录')
     expect(service.getFixedSpaces()).toEqual(personal)
-    const after = await service.connectCompanySpace(
-      { workspacePath: path, initializeName: '新公司', replacePersonal: true },
-      configure,
-    )
-    expect(after.company).toEqual(personal.personal)
-    expect(after.personal?.projectId).not.toBe(after.company?.projectId)
   })
   it('rejects copied identities, aliases and nested roots without rewriting identity', async () => {
     const fixed = await service.ensurePersonalSpace()
@@ -282,7 +261,7 @@ describe('fixed personal/company spaces preserve original data', () => {
     await symlink(fixed.personal!.workspacePath, alias)
     await expect(
       service.connectCompanySpace({ workspacePath: alias, initializeName: 'alias' }, configure),
-    ).rejects.toThrow('确认')
+    ).rejects.toThrow('我的空间的目录')
     const nested = join(fixed.personal!.workspacePath, 'nested')
     await mkdir(nested)
     await service.getSnapshot(nested)

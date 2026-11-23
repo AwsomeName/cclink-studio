@@ -26,7 +26,7 @@ export function PersonalFirstUseOverlay(): React.ReactElement | null {
             ×
           </button>
         </header>
-        <DiarySetupWizard owner={null} onDone={close} />
+        <DiarySetupWizard onDone={close} />
       </div>
     </div>,
     document.body,

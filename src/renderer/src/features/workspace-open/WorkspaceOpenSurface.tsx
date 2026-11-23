@@ -250,15 +250,6 @@ function WorkspaceSourceChooser({
         </button>
       </div>
 
-      {activeWorkspaceRef.kind === 'local' && (
-        <button
-          type="button"
-          disabled={busyKey !== null}
-          onClick={() => void runWorkspaceCommand('workspace.set-default')}
-        >
-          将当前工作空间用作我的空间
-        </button>
-      )}
       <button
         type="button"
         disabled={busyKey !== null}

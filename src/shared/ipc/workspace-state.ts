@@ -202,23 +202,19 @@ export interface FixedSpaceRef {
   workspacePath: string
   projectId: string
 }
-export interface DiaryRootPreview {
-  workspacePath: string
-  directory: string
+/** Read-only review of a history folder before its files are copied into My Space. */
+export interface DiaryImportPreview {
+  sourcePath: string
+  diaryCount: number
   latestFile: string | null
-  /** Dated diary Markdown files found under YYYY/MM; read-only preview. */
-  diaryCount?: number
-  isGitRepository?: boolean
-  revision: string | null
-  projectId: string | null
+  fileCount: number
+  /** Files My Space already has under the same name; they are kept, not overwritten. */
+  skipCount: number
+  skipped: string[]
 }
-/** Moved personal project: previous binding versus the folder the user picked. */
-export interface PersonalRelocationPreview {
-  previousPath: string
-  /** missing: folder gone; other: folder exists but no longer carries this project identity. */
-  previousState: 'missing' | 'other'
-  previous: { directory: string; latestFile: string | null; diaryCount: number } | null
-  candidate: DiaryRootPreview
+export interface DiaryImportResult {
+  copied: number
+  skipped: number
 }
 
 export interface FixedSpaces {
@@ -226,6 +222,8 @@ export interface FixedSpaces {
   personal: FixedSpaceRef | null
   company: FixedSpaceRef | null
   legacyDefaultPath: string
+  /** Folder an older version had bound as My Space: offered as an import source only. */
+  importSuggestion?: string
 }
 export interface CompanySpaceCandidate {
   workspacePath: string
@@ -240,7 +238,6 @@ export interface ConnectCompanySpaceInput {
   /** Omitted only when explicitly creating a new company in the managed root. */
   workspacePath?: string
   initializeName?: string
-  replacePersonal?: boolean
   shortcutOnly?: boolean
 }
 
@@ -251,15 +248,12 @@ export interface WorkspaceStateApiContract {
   diaryDocument: (input: DiaryDocumentInput) => Promise<DiaryDocument>
   verifyLocalIdentity: (path: string, projectId: string) => Promise<void>
   getFixedSpaces: () => Promise<FixedSpaces>
-  inspectDiaryRoot: (path: string) => Promise<DiaryRootPreview>
-  confirmDiaryRoot: (owner: string, preview: DiaryRootPreview) => Promise<FixedSpaces>
+  inspectDiaryImport: (path: string) => Promise<DiaryImportPreview>
+  importDiaryHistory: (preview: DiaryImportPreview) => Promise<DiaryImportResult>
   describeDefaultPersonalSpace: () => Promise<{ path: string; exists: boolean }>
   listDiaryChanges: (workspacePath: string) => Promise<DiaryChangeReport[]>
   undoDiaryChange: (reportId: string) => Promise<DiaryUndoResult>
-  initializePersonalSpace: (preview: DiaryRootPreview | null) => Promise<FixedSpaces>
-  replaceUnavailablePersonalSpace: (preview: DiaryRootPreview) => Promise<FixedSpaces>
-  inspectPersonalRelocation: (path: string) => Promise<PersonalRelocationPreview>
-  relocatePersonalSpace: (preview: PersonalRelocationPreview) => Promise<FixedSpaces>
+  initializePersonalSpace: () => Promise<FixedSpaces>
   ensurePersonalSpace: () => Promise<FixedSpaces>
   listCompanySpaces: () => Promise<CompanySpaceCandidate[]>
   inspectCompanySpace: (workspacePath: string) => Promise<CompanySpaceCandidate>
@@ -267,7 +261,6 @@ export interface WorkspaceStateApiContract {
   resolveFixedSpace: (role: 'personal' | 'company') => Promise<DefaultWorkspaceResult>
   getDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
   ensureDefaultWorkspace: () => Promise<DefaultWorkspaceResult>
-  setDefaultWorkspace: (workspacePath: string) => Promise<DefaultWorkspaceResult>
   resolveLocalWorkspace: (workspacePath: string) => Promise<WorkspaceStateResolveResult>
   setActiveLocalWorkspace: (
     workspacePath: string | null,
@@ -302,27 +295,18 @@ export const workspaceStateIpc = {
   diaryDocument: defineIpcCall<[DiaryDocumentInput], DiaryDocument>('workspaceState:diaryDocument'),
   verifyLocalIdentity: defineIpcCall<[string, string], void>('workspaceState:verifyLocalIdentity'),
   getFixedSpaces: defineIpcCall<[], FixedSpaces>('workspaceState:getFixedSpaces'),
-  inspectDiaryRoot: defineIpcCall<[string], DiaryRootPreview>('workspaceState:inspectDiaryRoot'),
-  confirmDiaryRoot: defineIpcCall<[string, DiaryRootPreview], FixedSpaces>(
-    'workspaceState:confirmDiaryRoot',
+  inspectDiaryImport: defineIpcCall<[string], DiaryImportPreview>(
+    'workspaceState:inspectDiaryImport',
+  ),
+  importDiaryHistory: defineIpcCall<[DiaryImportPreview], DiaryImportResult>(
+    'workspaceState:importDiaryHistory',
   ),
   describeDefaultPersonalSpace: defineIpcCall<[], { path: string; exists: boolean }>(
     'workspaceState:describeDefaultPersonalSpace',
   ),
   listDiaryChanges: defineIpcCall<[string], DiaryChangeReport[]>('workspaceState:listDiaryChanges'),
   undoDiaryChange: defineIpcCall<[string], DiaryUndoResult>('workspaceState:undoDiaryChange'),
-  initializePersonalSpace: defineIpcCall<[DiaryRootPreview | null], FixedSpaces>(
-    'workspaceState:initializePersonalSpace',
-  ),
-  replaceUnavailablePersonalSpace: defineIpcCall<[DiaryRootPreview], FixedSpaces>(
-    'workspaceState:replaceUnavailablePersonalSpace',
-  ),
-  inspectPersonalRelocation: defineIpcCall<[string], PersonalRelocationPreview>(
-    'workspaceState:inspectPersonalRelocation',
-  ),
-  relocatePersonalSpace: defineIpcCall<[PersonalRelocationPreview], FixedSpaces>(
-    'workspaceState:relocatePersonalSpace',
-  ),
+  initializePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:initializePersonalSpace'),
   ensurePersonalSpace: defineIpcCall<[], FixedSpaces>('workspaceState:ensurePersonalSpace'),
   listCompanySpaces: defineIpcCall<[], CompanySpaceCandidate[]>('workspaceState:listCompanySpaces'),
   inspectCompanySpace: defineIpcCall<[workspacePath: string], CompanySpaceCandidate>(
@@ -339,9 +323,6 @@ export const workspaceStateIpc = {
   ),
   ensureDefaultWorkspace: defineIpcCall<[], DefaultWorkspaceResult>(
     'workspaceState:ensureDefaultWorkspace',
-  ),
-  setDefaultWorkspace: defineIpcCall<[workspacePath: string], DefaultWorkspaceResult>(
-    'workspaceState:setDefaultWorkspace',
   ),
   resolveLocalWorkspace: defineIpcCall<[workspacePath: string], WorkspaceStateResolveResult>(
     'workspaceState:resolveLocalWorkspace',

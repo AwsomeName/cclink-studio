@@ -58,7 +58,6 @@ import { useWorkspaceOpenStore } from './features/workspace-open/workspace-open-
 import { useWorkbenchWindowEvents } from './bootstrap/use-workbench-window-events'
 import { AuxiliaryBrowserLayout } from './components/workbench/AuxiliaryBrowserLayout'
 import { startMarkdownAutosave } from './features/markdown/markdown-autosave'
-import { useFixedSpacesStore } from './features/workspace-open/fixed-spaces-store'
 import './features/workspace-open/diary-files.css'
 import { EditorDraftFailureBanner } from './features/markdown/EditorPersistenceStatus'
 
@@ -82,7 +81,6 @@ function MainLayout(): React.ReactElement {
   const workspacePicking = useFsStore((s) => s.picking)
   const workspaceError = useFsStore((s) => s.error)
   // The relocation dialog explains a moved personal folder; skip the raw path error behind it.
-  const relocatingPersonal = useFixedSpacesStore((s) => Boolean(s.relocate))
   const executeCommand = useCommandStore((s) => s.executeCommand)
   const workspaceOpen = useWorkspaceOpenStore((s) => s.open)
   const closeWorkspaceOpen = useWorkspaceOpenStore((s) => s.close)
@@ -393,7 +391,7 @@ function MainLayout(): React.ReactElement {
       </div>
 
       <EditorDraftFailureBanner />
-      {workspaceError && activeWorkspaceRef.kind === 'global' && !relocatingPersonal && (
+      {workspaceError && activeWorkspaceRef.kind === 'global' && (
         <div className="workspace-recovery-notice" role="alert">
           <span>{workspaceError}</span>
           <button

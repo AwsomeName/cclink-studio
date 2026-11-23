@@ -65,7 +65,7 @@ export function CompanySpaceDialog(): React.ReactElement | null {
   const changingCompany = Boolean(
     spaces?.company && candidate?.projectId !== spaces.company.projectId,
   )
-  const needsConfirmation = replacingPersonal || changingCompany
+  const needsConfirmation = changingCompany
   const activate = async (): Promise<void> => {
     if (!(await openBoundCompany(request.section))) return
     openCompanyWorkspace(request.section)
@@ -87,7 +87,6 @@ export function CompanySpaceDialog(): React.ReactElement | null {
       const next = await window.cclinkStudio.workspaceState.connectCompanySpace({
         ...(selected && selected !== '__new__' ? { workspacePath: selected } : {}),
         ...(candidate?.state !== 'company' ? { initializeName: name.trim() } : {}),
-        ...(replacingPersonal && confirmed ? { replacePersonal: true } : {}),
       })
       useFixedSpacesStore.setState({ spaces: next })
       setActivationPending(true)
@@ -233,6 +232,11 @@ export function CompanySpaceDialog(): React.ReactElement | null {
           </label>
         )}
         <p>“我的空间”使用独立目录；旧目录中混有个人资料时，本次保留整个目录，不自动拆分。</p>
+        {replacingPersonal && (
+          <p className="fixed-space-error" role="alert">
+            这是我的空间的目录，不能用作公司。请选择其他目录或新建公司。
+          </p>
+        )}
         {needsConfirmation && (
           <label className="fixed-space-confirm">
             <input
@@ -241,9 +245,7 @@ export function CompanySpaceDialog(): React.ReactElement | null {
               disabled={busy || activationPending}
               onChange={(event) => setConfirmed(event.target.checked)}
             />
-            {replacingPersonal
-              ? '确认将原目录整体用于公司，并新建独立个人空间；资料全部留在原处。'
-              : '确认打开所选公司资料；原公司的资料及后台任务保持原归属。'}
+            确认打开所选公司资料；原公司的资料及后台任务保持原归属。
           </label>
         )}
         {error && (
@@ -273,6 +275,7 @@ export function CompanySpaceDialog(): React.ReactElement | null {
               loading ||
               (!activationPending &&
                 (!selected ||
+                  replacingPersonal ||
                   (needsConfirmation && !confirmed) ||
                   candidate?.state === 'unavailable' ||
                   (candidate?.state !== 'company' && !name.trim())))

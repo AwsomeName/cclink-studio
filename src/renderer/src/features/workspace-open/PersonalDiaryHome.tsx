@@ -1,5 +1,4 @@
 import { DiaryPlans } from './DiaryPlans'
-import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
 import { DiarySyncPage, useDiarySyncLabel, useDiarySyncRevision } from './DiarySyncStatus'
@@ -7,7 +6,7 @@ import { DiaryDayView } from './DiaryDayView'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
 import { useFixedSpacesStore } from './fixed-spaces-store'
-import { PersonalDiaryGit } from './PersonalDiaryGit'
+import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useDiaryNavigation } from './personal-diary-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -16,8 +15,6 @@ import {
   defaultDiaryTimezone,
   diaryDateParts,
   diaryDayLocation,
-  personalDiarySourceSchema,
-  personalDiarySourceSection,
   type DiaryDocument,
   type PersonalDiarySource,
 } from '@shared/personal-diary-source'
@@ -81,8 +78,6 @@ export function PersonalDiaryHome(): React.ReactElement {
   const config = useWorkspaceStore((state) => state.settingsSnapshot)
   const fixedPath = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
   const [source, setSource] = useState<PersonalDiarySource | null>(null)
-  /** A legacy external link (D5): shown only as a one-time migration prompt. */
-  const [legacyLink, setLegacyLink] = useState(false)
   const [files, setFiles] = useState<{
     diaries: DiaryEntry[]
     others: FsDirEntry[]
@@ -97,7 +92,6 @@ export function PersonalDiaryHome(): React.ReactElement {
   const [previewPath, setPreviewPath] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(true)
-  const [reviewRoot, setReviewRoot] = useState(false)
   const syncedAt = useDiarySyncRevision(ownerPath)
   const [revision, setRevision] = useState(0)
   useEffect(() => {
@@ -119,46 +113,33 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    if (page === '资料接入') setPage('今天')
-  }, [page, setPage])
+    // Import and sync are My Space pages; other diary projects return to 今天.
+    if ((page === '导入历史' || page === 'Git') && ownerPath !== fixedPath) setPage('今天')
+  }, [page, setPage, ownerPath, fixedPath])
   useEffect(() => {
     let alive = true
     setBusy(true)
     // Wait for this project's settings: a missing or stale snapshot must not look "unset".
     if (ownerPath && config?.workspacePath !== ownerPath) return
     void (async () => {
-      const [items, snapshot] = await Promise.all([
-        window.cclinkStudio.workspaceState.listLocalWorkspaces(),
-        window.cclinkStudio.workspaceState.get(ownerPath),
-      ])
-      let value = snapshot.sections[personalDiarySourceSection]
-      if (
-        value === undefined &&
-        !useFixedSpacesStore.getState().spaces?.personal?.diaryRootConfirmed &&
-        ownerPath === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
-      )
-        value = (await window.cclinkStudio.workspaceState.get(null)).sections[
-          personalDiarySourceSection
-        ]
+      // A diary project's files are always in its own folder, under its configured directory.
+      const items = await window.cclinkStudio.workspaceState.listLocalWorkspaces()
       const root = items.find((item) => item.workspacePath === ownerPath)
-      let link: PersonalDiarySource | null = value ? personalDiarySourceSchema.parse(value) : null
-      if (
-        !link &&
+      const link: PersonalDiarySource | null =
         ownerPath &&
         root?.projectId &&
         (config?.settings.diary ||
           ownerPath !== useFixedSpacesStore.getState().spaces?.personal?.workspacePath)
-      )
-        link = {
-          version: 1,
-          workspacePath: ownerPath,
-          projectId: root.projectId,
-          directory: config?.settings.diary?.directory ?? defaultDiaryDirectory,
-          timezone: config?.settings.diary?.timezone ?? defaultDiaryTimezone,
-          taskIds: [],
-        }
+          ? {
+              version: 1,
+              workspacePath: ownerPath,
+              projectId: root.projectId,
+              directory: config?.settings.diary?.directory ?? defaultDiaryDirectory,
+              timezone: config?.settings.diary?.timezone ?? defaultDiaryTimezone,
+              taskIds: [],
+            }
+          : null
       if (!alive) return
-      setLegacyLink(Boolean(link && link.workspacePath !== ownerPath))
       setSource(link)
     })()
       .catch((e) => {
@@ -371,7 +352,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   // My Space always has the daily draft task: create the built-ins once if they are missing.
   const builtInsChecked = useRef(false)
   useEffect(() => {
-    if (busy || !source || page !== '今天' || ownerPath !== fixedPath || legacyLink) return
+    if (busy || !source || page !== '今天' || ownerPath !== fixedPath) return
     if (builtInsChecked.current || daily) return
     builtInsChecked.current = true
     const key = `cclink.diary.builtins.${source.projectId}`
@@ -382,7 +363,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       /* storage unavailable: still create once per mount */
     }
     act(createBuiltIns)
-  }, [busy, source, page, ownerPath, fixedPath, legacyLink, daily])
+  }, [busy, source, page, ownerPath, fixedPath, daily])
   // Today's draft did not happen (missed or failed): the first visit today starts it once.
   const autoDraftKey = useRef('')
   useEffect(() => {
@@ -429,18 +410,8 @@ export function PersonalDiaryHome(): React.ReactElement {
     )
     setRevision((value) => value + 1)
   }
-  if (reviewRoot && source && ownerPath && ownerPath === fixedPath)
-    return (
-      <DiaryRootSetup
-        owner={ownerPath}
-        initialRoot={source.workspacePath}
-        cancel={() => setReviewRoot(false)}
-      />
-    )
   if (!source && !busy && !error && ownerPath && ownerPath === fixedPath)
-    return <DiarySetupWizard owner={ownerPath} />
-  if (page === '更换目录' && ownerPath && ownerPath === fixedPath)
-    return <DiaryRootSetup owner={ownerPath} cancel={() => setPage('今天')} />
+    return <DiarySetupWizard />
 
   const draftRunning = dailyRun && ['queued', 'running'].includes(dailyRun.status)
   const todayView = (
@@ -581,17 +552,10 @@ export function PersonalDiaryHome(): React.ReactElement {
           ) : (
             <>
               <b>还没有每日起草任务</b>
-              {legacyLink ? (
-                // Tasks are never created in the old linked directory: migrate first.
-                <p className="muted">将原资料目录用作项目目录后，会自动创建每日起草。</p>
-              ) : (
-                <>
-                  <p className="muted">创建后每天自动生成当天草稿，并每周自动复盘。</p>
-                  <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
-                    创建每日起草与周期计划
-                  </button>
-                </>
-              )}
+              <p className="muted">创建后每天自动生成当天草稿，并每周自动复盘。</p>
+              <button className="primary" disabled={busy} onClick={() => act(createBuiltIns)}>
+                创建每日起草与周期计划
+              </button>
               <button disabled={busy} onClick={() => act(prepareBlank)}>
                 空白模板
               </button>
@@ -626,17 +590,10 @@ export function PersonalDiaryHome(): React.ReactElement {
           ? `${Number(day.month)}月${Number(day.day)}日 ${day.weekday}`
           : page === 'Git'
             ? '同步'
-            : page}
+            : page === '导入历史'
+              ? '从历史导入'
+              : page}
       </h2>
-      {legacyLink && source && ownerPath === fixedPath && (
-        <div className="diary-card" role="status">
-          <b>日记仍在另一个目录：{source.workspacePath}</b>
-          <p className="muted">
-            下面直接显示该目录里今天的日记。核对后可将它用作「我的空间」的项目目录，文件原样保留。
-          </p>
-          <button onClick={() => setReviewRoot(true)}>将原资料目录用作项目目录</button>
-        </div>
-      )}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
       {busy && (
@@ -646,20 +603,15 @@ export function PersonalDiaryHome(): React.ReactElement {
       )}
       {page === 'Git' && ownerPath && ownerPath === fixedPath ? (
         <DiarySyncPage key={ownerPath} path={ownerPath} />
-      ) : page === 'Git' ? (
-        <PersonalDiaryGit
-          ownerPath={ownerPath}
-          source={source}
-          onConnected={(value) => {
-            setPreviewPath('')
-            setSource(value)
+      ) : page === '导入历史' && ownerPath === fixedPath ? (
+        <DiaryImportPage
+          onDone={() => {
+            setRevision((value) => value + 1)
             setPage('今天')
           }}
-          onUpdated={() => setRevision((value) => value + 1)}
         />
       ) : (
         <>
-          {/* Today's diary shows even before a legacy link is migrated. */}
           {page === '今天' && todayView}
           {page === '日记' && source && (
             <DiaryDayView read={readDiary} openFile={openFile} directory={source.directory} />

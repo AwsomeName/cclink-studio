@@ -43,26 +43,15 @@ export function registerWorkspaceStateIpc(
     }
   }
   const previousDiarySource = async (workspaceKey: string | null | undefined): Promise<unknown> => {
-    let value = (await workspaceStateService.getSnapshot(workspaceKey)).sections[
-      personalDiarySourceSection
-    ]
-    if (
-      value === undefined &&
-      !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
-      workspaceKey === workspaceStateService.getFixedSpaces().personal?.workspacePath
-    )
-      value = (await workspaceStateService.getSnapshot(null)).sections[personalDiarySourceSection]
-    if (value === undefined && workspaceKey && isAbsolute(workspaceKey)) {
-      const config = await workspaceStateService.getWorkspaceSettings(workspaceKey)
-      if (config.settings.diary)
-        value = {
-          version: 1,
-          workspacePath: workspaceKey,
-          projectId: await workspaceStateService.getLocalProjectId(workspaceKey),
-          ...config.settings.diary,
-        }
+    if (!workspaceKey || !isAbsolute(workspaceKey)) return undefined
+    const config = await workspaceStateService.getWorkspaceSettings(workspaceKey)
+    if (!config.settings.diary) return undefined
+    return {
+      version: 1,
+      workspacePath: workspaceKey,
+      projectId: await workspaceStateService.getLocalProjectId(workspaceKey),
+      ...config.settings.diary,
     }
-    return value
   }
   const guardDiaryChange = async (previous: unknown, value: unknown): Promise<void> => {
     if (!assertDiarySourceChange) return
@@ -100,32 +89,18 @@ export function registerWorkspaceStateIpc(
     trustedRendererGuard,
     async (event, input) => {
       assertWorkspaceAccess(event.sender.id, input.workspacePath)
-      // A portable relative mapping can be the active source too. Editing it must
-      // obey the same task handoff guard as changing an external association.
-      const state = await workspaceStateService.getSnapshot(input.workspacePath)
-      let override = state.sections[personalDiarySourceSection]
-      if (
-        override === undefined &&
-        !workspaceStateService.getFixedSpaces().personal?.diaryRootConfirmed &&
-        input.workspacePath === workspaceStateService.getFixedSpaces().personal?.workspacePath
+      // Moving or retiming a diary must obey the same task handoff guard.
+      await guardDiaryChange(
+        await previousDiarySource(input.workspacePath),
+        input.settings.diary
+          ? {
+              version: 1,
+              workspacePath: input.workspacePath,
+              projectId: await workspaceStateService.getLocalProjectId(input.workspacePath),
+              ...input.settings.diary,
+            }
+          : null,
       )
-        override = (await workspaceStateService.getSnapshot(null)).sections[
-          personalDiarySourceSection
-        ]
-      if (override === undefined) {
-        const previous = await previousDiarySource(input.workspacePath)
-        await guardDiaryChange(
-          previous,
-          input.settings.diary
-            ? {
-                version: 1,
-                workspacePath: input.workspacePath,
-                projectId: await workspaceStateService.getLocalProjectId(input.workspacePath),
-                ...input.settings.diary,
-              }
-            : null,
-        )
-      }
       return workspaceStateService.saveWorkspaceSettings(input)
     },
   )
@@ -160,24 +135,19 @@ export function registerWorkspaceStateIpc(
     fileService?.registerPickerSelection(sender.id, paths, 'workspace')
   }
   registerTrustedIpcContract(
-    workspaceStateIpcContracts.inspectDiaryRoot,
+    workspaceStateIpcContracts.inspectDiaryImport,
     trustedRendererGuard,
     (event, path) => {
       assertWorkspaceAccess(event.sender.id, path)
-      return workspaceStateService.inspectDiaryRoot(path)
+      return workspaceStateService.inspectDiaryImport(path)
     },
   )
   registerTrustedIpcContract(
-    workspaceStateIpcContracts.confirmDiaryRoot,
+    workspaceStateIpcContracts.importDiaryHistory,
     trustedRendererGuard,
-    async (event, owner, preview) => {
-      assertWorkspaceAccess(event.sender.id, owner)
-      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
-      if (owner !== preview.workspacePath)
-        await guardDiaryChange(await previousDiarySource(owner), null)
-      const fixed = await workspaceStateService.confirmDiaryRoot(owner, preview)
-      grant(event.sender, [fixed.personal!.workspacePath])
-      return fixed
+    (event, preview) => {
+      assertWorkspaceAccess(event.sender.id, preview.sourcePath)
+      return workspaceStateService.importDiaryHistory(preview)
     },
   )
   registerTrustedIpcContract(
@@ -208,39 +178,8 @@ export function registerWorkspaceStateIpc(
   registerTrustedIpcContract(
     workspaceStateIpcContracts.initializePersonalSpace,
     trustedRendererGuard,
-    async (event, preview) => {
-      if (preview) assertWorkspaceAccess(event.sender.id, preview.workspacePath)
-      const fixed = await workspaceStateService.initializePersonalSpace(preview)
-      grant(event.sender, [fixed.personal!.workspacePath])
-      return fixed
-    },
-  )
-  registerTrustedIpcContract(
-    workspaceStateIpcContracts.replaceUnavailablePersonalSpace,
-    trustedRendererGuard,
-    async (event, preview) => {
-      assertWorkspaceAccess(event.sender.id, preview.workspacePath)
-      const fixed = await workspaceStateService.initializePersonalSpace(preview, {
-        replaceUnavailable: true,
-      })
-      grant(event.sender, [fixed.personal!.workspacePath])
-      return fixed
-    },
-  )
-  registerTrustedIpcContract(
-    workspaceStateIpcContracts.inspectPersonalRelocation,
-    trustedRendererGuard,
-    (event, path) => {
-      assertWorkspaceAccess(event.sender.id, path)
-      return workspaceStateService.inspectPersonalRelocation(path)
-    },
-  )
-  registerTrustedIpcContract(
-    workspaceStateIpcContracts.relocatePersonalSpace,
-    trustedRendererGuard,
-    async (event, preview) => {
-      assertWorkspaceAccess(event.sender.id, preview.candidate.workspacePath)
-      const fixed = await workspaceStateService.relocatePersonalSpace(preview)
+    async (event) => {
+      const fixed = await workspaceStateService.initializePersonalSpace()
       grant(event.sender, [fixed.personal!.workspacePath])
       return fixed
     },
@@ -352,24 +291,6 @@ export function registerWorkspaceStateIpc(
     },
   )
   registerTrustedIpcContract(
-    workspaceStateIpcContracts.setDefaultWorkspace,
-    trustedRendererGuard,
-    async (event, path) => {
-      bindCapabilityCleanup(event.sender)
-      try {
-        if (!settingsService || !fileService?.canActivateWorkspace(event.sender.id, path)) {
-          throw new Error('请先通过工作空间选择器打开要设为默认的目录')
-        }
-        const resolved = await workspaceStateService.resolveLocalWorkspace(path)
-        if (!resolved.valid || !resolved.workspacePath) throw new Error(resolved.error)
-        await workspaceStateService.setPersonalSpace(resolved.workspacePath)
-        return { success: true, workspacePath: resolved.workspacePath }
-      } catch (error) {
-        return defaultFailure(error)
-      }
-    },
-  )
-  registerTrustedIpcContract(
     workspaceStateIpcContracts.resolveLocalWorkspace,
     trustedRendererGuard,
     async (event, workspacePath) => {
@@ -439,25 +360,8 @@ export function registerWorkspaceStateIpc(
     async (_event, workspaceKey, section, value: unknown, ownerKey, options) => {
       try {
         assertWorkspaceAccess(_event.sender.id, workspaceKey)
-        if (section === personalDiarySourceSection) {
-          if (ownerKey) throw new Error('个人资料连接只能保存在本机项目状态')
-          if (assertDiarySourceChange)
-            await guardDiaryChange(await previousDiarySource(workspaceKey), value)
-          if (value !== null) {
-            const source = personalDiarySourceSchema.parse(value)
-            const known = workspaceStateService
-              .listLocalWorkspaces()
-              .find(
-                (item) =>
-                  item.workspacePath === source.workspacePath &&
-                  item.projectId === source.projectId,
-              )
-            if (!known) throw new Error('请先打开来源工作空间，确认其原身份')
-            assertWorkspaceAccess(_event.sender.id, source.workspacePath)
-            await workspaceStateService.verifyLocalIdentity(source.workspacePath, source.projectId)
-            value = source
-          }
-        }
+        if (section === personalDiarySourceSection)
+          throw new Error('日记只能放在项目自己的目录里，不再支持关联外部目录')
         if (section === 'tabs' || section === 'browserTabs' || section === 'browserBookmarks') {
           throw new Error(`${section} 已由主进程 Workbench model 单独拥有，renderer 不得直接写入`)
         }

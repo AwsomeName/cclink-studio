@@ -1,6 +1,7 @@
-// Real Electron + real git with a local bare remote: machine A shares a diary project; machine B
-// sets up My Space by cloning into a chosen empty folder inside first use, then pulls a reviewed
-// update in place. Simulated data only; nothing is pushed anywhere but the local test remote.
+// Real Electron + real git with a local bare remote: machine A imports an old diary project into
+// My Space and syncs it to My Space's own Git address; machine B enters the same address in first
+// use and gets the diaries back, then a later update. Simulated data only; the only remote is a
+// bare repository inside the test folder.
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -47,23 +48,30 @@ await writeDiary(projectA, D, '2026/周计划/第47周.md', '# 第47周\n')
 // The simulated network remote lives in A's home; B's home is the parent, so both reach it.
 const remote = join(a.home, 'remote.git')
 await git(root, ['init', '--bare', '--initial-branch=main', remote])
+const spaceA = join(a.home, 'CCLink Studio', '我的空间')
+const S = '个人计划'
+const sync = (page, path) =>
+  page.evaluate(
+    (p) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: p }),
+    path,
+  )
 try {
   const page = await a.launch()
   page.on('dialog', (d) => void d.accept())
-  await firstUse(a, { directory: projectA })
+  assert.equal(await firstUse(a, { importFrom: projectA, url: remote }), spaceA)
   await page.evaluate(
     async (i) => {
       const r = await window.cclinkStudio.scheduledTasks.save(i)
       if (!r.success) throw Error(JSON.stringify(r.error))
     },
     {
-      workspacePath: projectA,
+      workspacePath: spaceA,
       title: '整理参考资料',
       instruction: '整理资料目录。',
       schedule: { kind: 'daily', time: '22:00', timezone: TZ },
-      resources: [{ kind: 'workspace' }, { kind: 'directory', path: D }],
+      resources: [{ kind: 'workspace' }, { kind: 'directory', path: S }],
       outputPolicy: {
-        directory: `${D}/资料`,
+        directory: `${S}/资料`,
         fileNameTemplate: '{date}-整理.md',
         mode: 'create-only',
       },
@@ -71,52 +79,37 @@ try {
       enable: true,
     },
   )
-  const listed = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), projectA)
+  const listed = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), spaceA)
   result.machineATasks = listed.tasks.map((t) => [t.definition.title, t.activation.enabled])
+  for (let i = 0; i < 20; i++) {
+    const r = await sync(page, spaceA)
+    if (r.success && !r.snapshot.localChanges) break
+    await page.waitForTimeout(1000)
+  }
+  // The old project is untouched and not a repository of My Space.
+  assert.equal(await lstat(join(projectA, '.git')).catch(() => null), null)
+  result.remoteLog = await git(remote, ['log', '--oneline', 'main'])
   await a.close()
-  await git(projectA, ['init', '--initial-branch=main'])
-  await git(projectA, ['add', D, '.cclink-studio/workspace-settings.json', '.cclink-studio/shared'])
-  await git(projectA, ['commit', '-m', '模拟日记初版'])
-  await git(projectA, ['remote', 'add', 'origin', remote])
-  await git(projectA, ['push', '-u', 'origin', 'main'])
 } catch (e) {
   await a.fail(e)
 }
 
-// Machine B: first use clones into a chosen empty folder; nothing else is created.
+// Machine B: first use with the same Git address; nothing is chosen but the address.
+// B's home is the parent of A's, so the simulated remote counts as a local source in B's home.
 const b = await makeHome(root, 'machine-b', { appHome: root })
-const chosen = join(b.home, '资料', '我的空间')
-await mkdir(chosen, { recursive: true })
+const spaceB = join(root, 'CCLink Studio', '我的空间')
 try {
   const page = await b.launch()
   page.on('dialog', (d) => void d.accept())
-  const wizard = page.getByRole('dialog', { name: '设置我的空间' })
-  await wizard.getByText('1 选择目录').waitFor()
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText('从已有仓库克隆到空目录').click()
-  await wizard.getByLabel('仓库地址').fill(remote)
-  await wizard.getByLabel('Git 分支').fill('main')
-  await b.pickDirectory(chosen)
-  await wizard.getByRole('button', { name: '选择空目录…' }).click()
-  await wizard.getByText('本地目的地：' + chosen).waitFor()
-  await page.screenshot({ path: join(shots, 'v2-machine-b-clone.png') })
-  await wizard.getByRole('button', { name: '克隆到所选空目录' }).click()
-  await wizard.getByText('使用该目录已有的 Git 仓库').waitFor({ timeout: 60000 })
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText(/测试：生成一句话 · 通过/).waitFor({ timeout: 120000 })
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText(chosen, { exact: true }).waitFor()
-  await wizard.getByLabel('每日起草时间').fill('23:59')
-  await page.screenshot({ path: join(shots, 'v2-machine-b-confirm.png') })
-  await wizard.getByRole('button', { name: '确认并开始' }).click()
-  await wizard.waitFor({ state: 'detached', timeout: 30000 })
-  assert.equal(await b.fixedRoot(), chosen)
-  assert.equal(await lstat(join(root, 'CCLink Studio', '我的空间')).catch(() => null), null)
   assert.equal(
-    await readFile(join(chosen, D, '2026/11/1117_周二.assets/板子.png'), 'utf8'),
+    await firstUse(b, { url: remote, shot: join(shots, 'v3-machine-b-first.png') }),
+    spaceB,
+  )
+  assert.equal(
+    await readFile(join(spaceB, S, '2026/11/1117_周二.assets/板子.png'), 'utf8'),
     'PNG-SIMULATED',
   )
-  const tasks = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), chosen)
+  const tasks = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), spaceB)
   result.machineBTasks = tasks.tasks.map((t) => [t.definition.title, t.activation.enabled])
   assert.deepEqual(Object.fromEntries(result.machineBTasks), {
     每日起草: true,
@@ -125,40 +118,28 @@ try {
     年度计划: false,
     整理参考资料: false,
   })
-  await nav(page, '定时整理')
-  await page
-    .getByText(/未启用/)
-    .first()
-    .waitFor()
-  await page.screenshot({ path: join(shots, 'v2-machine-b-tasks.png') })
   await nav(page, '日记')
   await page.getByLabel('日记日历').getByRole('gridcell', { name: '2026-11-17 有日记' }).click()
   await page.getByRole('article', { name: '当天日记' }).waitFor()
-  await page.screenshot({ path: join(shots, 'v2-machine-b-diary.png') })
-  await b.close()
-  await b.launch()
-  await b.page.locator('.personal-diary-home h2').first().waitFor()
-  assert.equal(await b.fixedRoot(), chosen)
+  await page.screenshot({ path: join(shots, 'v3-machine-b-diary.png') })
 
-  // Machine A publishes; B requests a sync in place.
-  await writeDiary(projectA, D, '2026/11/1121_周六.md', '# 周六\n来自 A 的更新\n')
-  await git(projectA, ['add', D])
-  await git(projectA, ['commit', '-m', '新增周六'])
-  await git(projectA, ['push'])
-  const p = b.page
+  // Another device publishes; B syncs in place.
+  const seed = join(root, 'seed')
+  await git(root, ['clone', remote, seed])
+  await writeDiary(seed, S, '2026/11/1121_周六.md', '# 周六\n来自 A 的更新\n')
+  await git(seed, ['add', S])
+  await git(seed, ['commit', '-m', '新增周六'])
+  await git(seed, ['push'])
+  const p = page
   // Automatic sync runs only while Studio is in the foreground; a test window may not get
   // focus, so call the same diary-sync operation the status bar and sync page trigger.
-  const synced = await p.evaluate(
-    (path) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: path }),
-    chosen,
-  )
+  const synced = await sync(p, spaceB)
   assert(synced.success, JSON.stringify(synced))
-  assert.equal(await b.fixedRoot(), chosen)
   assert.equal(
-    await readFile(join(chosen, D, '2026/11/1121_周六.md'), 'utf8'),
+    await readFile(join(spaceB, S, '2026/11/1121_周六.md'), 'utf8'),
     '# 周六\n来自 A 的更新\n',
   )
-  await p.screenshot({ path: join(shots, 'v2-machine-b-pulled.png') })
+  await p.screenshot({ path: join(shots, 'v3-machine-b-pulled.png') })
   console.log('PASS machines', JSON.stringify(result))
 } catch (e) {
   console.log('PARTIAL', JSON.stringify(result))

@@ -259,7 +259,8 @@ export function ActivityBar(): React.ReactElement {
                   ['日记', IconPencil],
                   ['计划', IconClipboard],
                   ['定时整理', IconClock],
-                  ['Git', IconRefresh],
+                  // Sync is My Space's own Git address; other diary projects use the Git panel.
+                  ...(isPersonal ? ([['Git', IconRefresh]] as const) : []),
                 ] as const
               ).map(([page, Icon]) => {
                 const selected =

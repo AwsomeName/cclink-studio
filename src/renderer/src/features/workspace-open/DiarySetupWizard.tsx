@@ -1,48 +1,32 @@
 import { syncDiarySpace } from './DiarySyncStatus'
 import { useEffect, useState } from 'react'
-import type { DiaryRootPreview } from '@shared/ipc/workspace-state'
+import type { DiaryImportPreview } from '@shared/ipc/workspace-state'
 import type { AgentCapabilityStatus } from '@shared/agent-protocol'
-import { defaultDiaryTimezone } from '@shared/personal-diary-source'
+import { defaultDiaryDirectory, defaultDiaryTimezone } from '@shared/personal-diary-source'
 import { openPersonalSpace, useFixedSpacesStore } from './fixed-spaces-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { useOpenProjectsStore } from '../../stores/open-projects-store'
 import { useDiaryNavigation } from './personal-diary-navigation'
+import { DiaryImportPicker, ipcMessage } from './DiaryImport'
 import {
   defaultBuiltInChoice,
   ensureBuiltInDiaryTasks,
   type BuiltInTaskChoice,
 } from './diary-builtin-tasks'
 
-const ipcMessage = (error: unknown): string =>
-  String(error)
-    .replace(/^Error: /, '')
-    .replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/i, '')
-
-const stepNames = ['选择目录', '同步', 'AI', '核对并确认']
+const stepNames = ['导入历史', '同步', 'AI', '核对并确认']
 const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
 /**
- * First use of 我的空间 in four steps. Nothing is written until「确认并开始」; a clone is the
- * only earlier side effect and only lands in an empty folder the user picked.
+ * First use of 我的空间 in four steps (mockups 01–04). My Space always uses its own fixed
+ * folder; history is only copied in. Nothing is written until「确认并开始」.
  */
-export function DiarySetupWizard({
-  owner,
-  onDone,
-}: {
-  /** Set when an older install already bound an (unconfirmed) default folder. */
-  owner: string | null
-  onDone?: () => void
-}): React.ReactElement {
+export function DiarySetupWizard({ onDone }: { onDone?: () => void }): React.ReactElement {
   const [step, setStep] = useState(0)
-  const [mode, setMode] = useState<'default' | 'existing'>('default')
-  const [defaultInfo, setDefaultInfo] = useState<{ path: string; exists: boolean } | null>(null)
-  const [preview, setPreview] = useState<DiaryRootPreview | null>(null)
-  const [sync, setSync] = useState<'repository' | 'clone' | 'later'>('later')
+  const [mode, setMode] = useState<'fresh' | 'import'>('fresh')
+  const [root, setRoot] = useState('')
+  const [preview, setPreview] = useState<DiaryImportPreview | null>(null)
+  const suggestion = useFixedSpacesStore((state) => state.spaces?.importSuggestion)
   const [url, setUrl] = useState('')
-  const [branch, setBranch] = useState('')
-  const [username, setUsername] = useState('')
-  const [token, setToken] = useState('')
-  const [destination, setDestination] = useState('')
   const [ai, setAi] = useState<AgentCapabilityStatus | null>(null)
   const [probe, setProbe] = useState<{ ok: boolean; error?: string; elapsedMs: number } | null>(
     null,
@@ -61,24 +45,12 @@ export function DiarySetupWizard({
   useEffect(() => {
     void ws
       .describeDefaultPersonalSpace()
-      .then(setDefaultInfo)
+      .then((info) => setRoot(info.path))
       .catch(() => {})
   }, [ws])
-  // An existing default folder (older installs) is reviewed like any existing folder.
   useEffect(() => {
-    if (mode !== 'default' || !defaultInfo?.exists) {
-      if (mode === 'default') setPreview(null)
-      return
-    }
-    void ws
-      .inspectDiaryRoot(defaultInfo.path)
-      .then(setPreview)
-      .catch((e) => setError(ipcMessage(e)))
-  }, [mode, defaultInfo, ws])
-  useEffect(() => {
-    if (preview?.isGitRepository) setSync('repository')
-    else if (sync === 'repository') setSync('later')
-  }, [preview?.isGitRepository])
+    if (suggestion) setMode('import')
+  }, [suggestion])
   const checkAi = async (): Promise<void> => {
     setProbe(null)
     const capabilities = await window.cclinkStudio.agent.getCapabilities()
@@ -90,75 +62,28 @@ export function DiarySetupWizard({
   useEffect(() => {
     if (step === 2) run(checkAi)
   }, [step])
-  const chooseExisting = (): void =>
-    run(async () => {
-      const picked = await window.cclinkStudio.dialog.showOpenDialog({
-        selectDirectory: true,
-        title: '选择已有的日记项目目录',
-      })
-      if (picked.canceled || !picked.filePaths[0]) return
-      setMode('existing')
-      setPreview(await ws.inspectDiaryRoot(picked.filePaths[0]))
-    })
-  const chooseDestination = (): void =>
-    run(async () => {
-      const picked = await window.cclinkStudio.dialog.showOpenDialog({
-        selectDirectory: true,
-        title: '选择用于克隆的空目录',
-      })
-      if (!picked.canceled && picked.filePaths[0]) setDestination(picked.filePaths[0])
-    })
-  const clone = (): void =>
-    run(async () => {
-      const result = await window.cclinkStudio.git.transfer({
-        action: 'clone',
-        url,
-        branch,
-        username,
-        token: token || undefined,
-        destination,
-      })
-      setToken('')
-      if (!result.success) throw Error(result.error.message)
-      setMode('existing')
-      setPreview(await ws.inspectDiaryRoot(result.snapshot.workspacePath))
-      setSync('repository')
-    })
-  const rootPath = mode === 'default' ? (defaultInfo?.path ?? '') : (preview?.workspacePath ?? '')
   const canNext = [
-    mode === 'default' ? Boolean(defaultInfo) : Boolean(preview),
-    sync !== 'clone',
+    Boolean(root) && (mode === 'fresh' || Boolean(preview)),
+    true,
     ai?.state === 'ready' && probe?.ok === true,
     true,
   ][step]
   const confirm = (): void =>
     run(async () => {
-      let fixed
-      if (owner) {
-        const target = preview ?? (await ws.inspectDiaryRoot(owner))
-        fixed = await ws.confirmDiaryRoot(owner, target)
-      } else
-        fixed = await ws.initializePersonalSpace(mode === 'default' && !preview ? null : preview)
-      // Stay open until tasks and today's draft are set up, so any failure is shown here.
+      const fixed = await ws.initializePersonalSpace()
+      // Stay open until history, tasks and sync are set up, so any failure is shown here.
       useFixedSpacesStore.setState({ spaces: fixed })
-      const root = fixed.personal!.workspacePath
-      const settings = (await ws.getSettings(root)).settings
-      const directory = settings.diary?.directory ?? preview?.directory ?? '个人计划'
+      const path = fixed.personal!.workspacePath
+      // Take back what another device already shared first, so its tasks are reused, not doubled.
+      if (url.trim()) await syncDiarySpace(path, true, { url: url.trim() })
+      if (mode === 'import' && preview) await ws.importDiaryHistory(preview)
+      const settings = (await ws.getSettings(path)).settings
+      const directory = settings.diary?.directory ?? defaultDiaryDirectory
       const timezone = settings.diary?.timezone ?? defaultDiaryTimezone
-      await ensureBuiltInDiaryTasks(root, directory, timezone, choice)
       // Enabling the daily draft after today's time makes the scheduler draft today once.
-      if (sync === 'repository') {
-        const inspected = await window.cclinkStudio.git.transfer({
-          action: 'inspect',
-          workspacePath: root,
-        })
-        if (inspected.success && inspected.snapshot.remoteUrl)
-          void syncDiarySpace(root, true, { url: inspected.snapshot.remoteUrl })
-      }
+      await ensureBuiltInDiaryTasks(path, directory, timezone, choice)
+      if (url.trim() && mode === 'import') void syncDiarySpace(path, true)
       await openPersonalSpace()
-      const active = useWorkspaceStore.getState().activeWorkspaceRef
-      if (owner && owner !== root && active.kind === 'local' && active.path !== owner)
-        useOpenProjectsStore.getState().removeProject(owner)
       await useWorkspaceStore.getState().refreshSettings()
       useDiaryNavigation.getState().setPage('今天')
       onDone?.()
@@ -181,117 +106,56 @@ export function DiarySetupWizard({
       </div>
       {step === 0 && (
         <div className="diary-setup-body">
-          <label className={`diary-option ${mode === 'default' ? 'on' : ''}`}>
-            <input type="radio" checked={mode === 'default'} onChange={() => setMode('default')} />
+          <dl className="diary-facts">
+            <dt>我的空间目录</dt>
+            <dd>
+              {root} <span className="diary-tag">固定</span>
+            </dd>
+          </dl>
+          <label className={`diary-option ${mode === 'fresh' ? 'on' : ''}`}>
+            <input type="radio" checked={mode === 'fresh'} onChange={() => setMode('fresh')} />
             <span>
-              <b>使用默认目录</b>
+              <b>从头开始</b>
+              <span className="muted">不导入，直接开始写今天的日记</span>
+            </span>
+          </label>
+          <label className={`diary-option ${mode === 'import' ? 'on' : ''}`}>
+            <input type="radio" checked={mode === 'import'} onChange={() => setMode('import')} />
+            <span>
+              <b>从历史目录导入</b>
               <span className="muted">
-                {defaultInfo?.path}
-                {defaultInfo && !defaultInfo.exists ? ' · 确认后才创建' : ''}
+                复制旧日记进来；原目录不移动、不修改，也不会变成我的空间
               </span>
             </span>
           </label>
-          <label className={`diary-option ${mode === 'existing' ? 'on' : ''}`}>
-            <input type="radio" checked={mode === 'existing'} onChange={chooseExisting} />
-            <span>
-              <b>选择已有目录</b>
-              <button disabled={busy} onClick={chooseExisting}>
-                选择文件夹…
-              </button>
-            </span>
-          </label>
-          {preview && (
-            <dl className="diary-facts">
-              <dt>项目目录</dt>
-              <dd>{preview.workspacePath}</dd>
-              <dt>日记目录</dt>
-              <dd>{preview.directory}</dd>
-              <dt>日记</dt>
-              <dd>
-                {preview.diaryCount ?? 0} 篇 · 最近 {preview.latestFile ?? '暂无'}
-              </dd>
-              <dt>Git</dt>
-              <dd>{preview.isGitRepository ? '已是 Git 仓库' : '不是 Git 仓库'}</dd>
-            </dl>
+          {mode === 'import' && (
+            <DiaryImportPicker
+              preview={preview}
+              onChange={setPreview}
+              suggestion={suggestion}
+              disabled={busy}
+            />
           )}
           <p className="muted">查看本页不会创建或修改任何文件。</p>
         </div>
       )}
       {step === 1 && (
         <div className="diary-setup-body">
-          {preview?.isGitRepository && (
-            <label className={`diary-option ${sync === 'repository' ? 'on' : ''}`}>
-              <input
-                type="radio"
-                checked={sync === 'repository'}
-                onChange={() => setSync('repository')}
-              />
-              <span>
-                <b>使用该目录已有的 Git 仓库</b>
-                <span className="muted">
-                  确认后自动接收和上传。进入空间时同步，留在前台时每小时整点同步。
-                </span>
-              </span>
-            </label>
-          )}
-          <label className={`diary-option ${sync === 'clone' ? 'on' : ''}`}>
-            <input type="radio" checked={sync === 'clone'} onChange={() => setSync('clone')} />
-            <span>
-              <b>从已有仓库克隆到空目录</b>
-              <span className="muted">新电脑使用；克隆完成后核对日记、附件和任务</span>
-            </span>
+          <label className="diary-facts-form">
+            Git 项目地址
+            <input
+              aria-label="Git 项目地址"
+              placeholder="https://github.com/你的账号/my-diary.git"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
           </label>
-          {sync === 'clone' && (
-            <div className="diary-facts-form">
-              <label>
-                仓库地址
-                <input aria-label="仓库地址" value={url} onChange={(e) => setUrl(e.target.value)} />
-              </label>
-              <label>
-                分支
-                <input
-                  aria-label="Git 分支"
-                  value={branch}
-                  onChange={(e) => setBranch(e.target.value)}
-                />
-              </label>
-              <label>
-                HTTPS 用户名
-                <input
-                  aria-label="Git 用户名"
-                  value={username}
-                  autoComplete="off"
-                  onChange={(e) => setUsername(e.target.value)}
-                />
-              </label>
-              <label>
-                HTTPS Token（仅本次使用，不保存）
-                <input
-                  aria-label="Git Token"
-                  type="password"
-                  value={token}
-                  autoComplete="off"
-                  onChange={(e) => setToken(e.target.value)}
-                />
-              </label>
-              <p>
-                本地目的地：{destination || '未选择'}{' '}
-                <button disabled={busy} onClick={chooseDestination}>
-                  选择空目录…
-                </button>
-              </p>
-              <button disabled={busy || !url || !destination} onClick={clone}>
-                {busy ? '正在克隆…' : '克隆到所选空目录'}
-              </button>
-            </div>
-          )}
-          <label className={`diary-option ${sync === 'later' ? 'on' : ''}`}>
-            <input type="radio" checked={sync === 'later'} onChange={() => setSync('later')} />
-            <span>
-              <b>稍后连接</b>
-              <span className="muted">本地照常使用，以后在「同步」中填写项目地址</span>
-            </span>
-          </label>
+          <p className="muted">
+            建议新建一个空的私有仓库专门放日记。地址只用于我的空间，不会影响其他项目的仓库。
+          </p>
+          <p className="muted">
+            这个地址已有日记时（另一台电脑设置过），确认后先取回，再合并本机导入的内容。不填也能本地使用，以后在「同步」中设置。
+          </p>
         </div>
       )}
       {step === 2 && (
@@ -330,14 +194,18 @@ export function DiarySetupWizard({
       {step === 3 && (
         <div className="diary-setup-body">
           <dl className="diary-facts">
-            <dt>项目目录</dt>
-            <dd>{rootPath}</dd>
-            <dt>日记目录</dt>
-            <dd>{preview?.directory ?? '个人计划'}</dd>
+            <dt>我的空间目录</dt>
+            <dd>{root}</dd>
+            <dt>导入</dt>
+            <dd>
+              {mode === 'import' && preview
+                ? `${preview.sourcePath} · ${preview.fileCount - preview.skipCount} 个文件`
+                : '不导入'}
+            </dd>
             <dt>同步</dt>
-            <dd>{sync === 'later' ? '稍后连接' : '使用 Git 仓库'}</dd>
+            <dd>{url.trim() || '稍后设置'}</dd>
             <dt>时区</dt>
-            <dd>{defaultDiaryTimezone}（已有项目沿用其设置；可在项目设置修改）</dd>
+            <dd>{defaultDiaryTimezone}（可在项目设置修改）</dd>
             <dt>AI</dt>
             <dd>{ai?.state === 'ready' ? '本机 AI 就绪' : '—'}</dd>
           </dl>
@@ -396,8 +264,8 @@ export function DiarySetupWizard({
               />
             </label>
             <p className="muted">
-              创建缺失的项目设置、日记目录和任务。月度与年度计划任务默认停用。
-              不会改动已有日记、附件、计划和仓库历史，也不会上传。已过起草时间时，确认后立即生成今天的草稿。
+              创建我的空间目录、日记目录和任务。月度与年度计划任务默认停用。
+              历史目录原样保留。已过起草时间时，确认后立即生成今天的草稿。
             </p>
           </div>
         </div>
@@ -414,7 +282,7 @@ export function DiarySetupWizard({
             下一步
           </button>
         ) : (
-          <button className="primary" disabled={busy || !rootPath} onClick={confirm}>
+          <button className="primary" disabled={busy || !root} onClick={confirm}>
             {busy ? '正在设置…' : '确认并开始'}
           </button>
         )}

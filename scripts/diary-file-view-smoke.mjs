@@ -43,14 +43,16 @@ await writeDiary(project, D, `${p.year}/${p.month}/${todayName}`, '# 今天\n')
 await writeDiary(project, D, `${p.year}/${p.month}/0101_周四.md`, '# 旧的一篇\n')
 await writeDiary(project, D, `${p.year}/周计划/第47周.md`, '# 第47周\n')
 await writeDiary(project, D, '资料/说明.md', '# 资料\n')
-await git(project, ['init', '--initial-branch=main'])
-await git(project, ['add', '.'])
-await git(project, ['commit', '-m', 'init'])
+let space
 try {
   const page = await s.launch()
   page.on('dialog', (d) => void d.dismiss())
-  await firstUse(s, { directory: project })
-  await writeFile(join(project, D, `${p.year}/${p.month}/0101_周四.md`), '# 旧的一篇\n本地改动\n')
+  space = await firstUse(s, { importFrom: project })
+  // My Space is its own repository: simulate one earlier upload, then a local edit.
+  await git(space, ['init', '--initial-branch=main'])
+  await git(space, ['add', '.'])
+  await git(space, ['commit', '-m', 'init'])
+  await writeFile(join(space, D, `${p.year}/${p.month}/0101_周四.md`), '# 旧的一篇\n本地改动\n')
   await page
     .locator('.workspace-sidebar-shell')
     .getByRole('button', { name: '文件' })
@@ -86,10 +88,10 @@ try {
   await page.keyboard.type('杂记.md')
   await page.keyboard.press('Enter')
   await page.waitForTimeout(800)
-  const names = await readdir(join(project, D, `${p.year}/${p.month}`))
+  const names = await readdir(join(space, D, `${p.year}/${p.month}`))
   assert(names.includes('0101_周四.md') && !names.includes('杂记.md'), names.join(','))
   // My Space root does not contain an Owner affairs folder.
-  assert(!(await readdir(project)).includes('Owner 事务'))
+  assert(!(await readdir(space)).includes('Owner 事务'))
   console.log('PASS files')
 } catch (e) {
   await s.fail(e)

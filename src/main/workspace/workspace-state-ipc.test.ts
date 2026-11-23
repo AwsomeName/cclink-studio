@@ -138,23 +138,11 @@ describe('registerWorkspaceStateIpc', () => {
     expect(() => ensure({ sender: 'other' })).toThrow('untrusted')
   })
 
-  it('rejects setting a renderer-invented default before touching its identity', async () => {
-    const service = createService()
-    const settings = { getAll: () => ({}), set: vi.fn() }
-    registerWorkspaceStateIpc(
-      service as never,
-      createGuard('trusted') as never,
-      settings as never,
-      { canActivateWorkspace: () => false } as never,
-    )
-    await expect(
-      mockIpcMain.handlers.get('workspaceState:setDefaultWorkspace')!(
-        { sender: 'trusted' },
-        '/invented',
-      ),
-    ).resolves.toMatchObject({ success: false })
-    expect(service.getSnapshot).not.toHaveBeenCalled()
-    expect(settings.set).not.toHaveBeenCalled()
+  it('no longer lets the renderer point My Space at another folder', () => {
+    registerWorkspaceStateIpc(createService() as never, createGuard('trusted') as never)
+    expect(mockIpcMain.handlers.has('workspaceState:setDefaultWorkspace')).toBe(false)
+    expect(mockIpcMain.handlers.has('workspaceState:confirmDiaryRoot')).toBe(false)
+    expect(mockIpcMain.handlers.has('workspaceState:relocatePersonalSpace')).toBe(false)
   })
 
   it('rejects an untrusted sender before reading persistent state', () => {

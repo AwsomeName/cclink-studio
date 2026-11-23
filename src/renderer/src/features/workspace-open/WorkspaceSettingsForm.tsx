@@ -1,12 +1,7 @@
 import { useUIStore } from '../../stores/ui-store'
 import type { ActivityPanel } from '../../types'
-import {
-  defaultDiaryDirectory,
-  defaultDiaryTimezone,
-  personalDiarySourceSchema,
-  personalDiarySourceSection,
-} from '@shared/personal-diary-source'
-import { refreshFixedSpaces, useFixedSpacesStore } from './fixed-spaces-store'
+import { defaultDiaryDirectory, defaultDiaryTimezone } from '@shared/personal-diary-source'
+import { useFixedSpacesStore } from './fixed-spaces-store'
 import type { GitRepositorySnapshot } from '@shared/git'
 import { useEffect, useState } from 'react'
 import {
@@ -25,7 +20,7 @@ import './workspace-settings.css'
 
 const descriptions: Record<WorkspaceType, string> = {
   general: '项目首页、文件、会话与通用工具',
-  diary: '今天、日记、计划和定时整理；接回原资料',
+  diary: '今天、日记、计划和定时整理',
   company: '公司首页、业务项目、推广、客户与售后、公司账目',
   electronics: '设计文件、生产资料与检查；保留现有查看和受限修改能力',
 }
@@ -129,8 +124,6 @@ function SidebarPreferences(): React.ReactElement {
 export function WorkspaceSettingsForm(): React.ReactElement {
   const ref = useWorkspaceStore((s) => s.activeWorkspaceRef)
   const snapshot = useWorkspaceStore((s) => s.settingsSnapshot)
-  const [sourceStatus, setSourceStatus] = useState('资料：正在读取…')
-  const [taskStatus, setTaskStatus] = useState('自动整理：正在读取…')
   const [git, setGit] = useState<GitRepositorySnapshot | null>(null)
   useEffect(() => {
     let alive = true
@@ -146,47 +139,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       alive = false
     }
   }, [ref, snapshot?.revision])
-  useEffect(() => {
-    let alive = true
-    if (ref.kind !== 'local') return
-    const load = async (): Promise<void> => {
-      const state = await window.cclinkStudio.workspaceState.get(ref.path)
-      const parsed = personalDiarySourceSchema.safeParse(state.sections[personalDiarySourceSection])
-      const directory = parsed.success ? parsed.data.directory : snapshot?.settings.diary?.directory
-      const sourcePath = parsed.success ? parsed.data.workspacePath : ref.path
-      const ids = parsed.success ? parsed.data.taskIds : (snapshot?.settings.diary?.taskIds ?? [])
-      if (alive)
-        setSourceStatus(
-          directory
-            ? `资料：${sourcePath === ref.path ? '项目内' : '关联本机目录'} · ${sourcePath}/${directory}`
-            : '资料：尚未关联日记目录',
-        )
-      if (!ids.length) {
-        if (alive) setTaskStatus('自动整理：尚未关联原任务')
-        return
-      }
-      await window.cclinkStudio.workspaceState.listLocalWorkspaces()
-      const result = await window.cclinkStudio.scheduledTasks.inspect(sourcePath)
-      const found = result.tasks.filter((task) => ids.includes(task.definition.id))
-      if (alive)
-        setTaskStatus(
-          !result.success
-            ? '自动整理：原任务状态不可用'
-            : found.length < ids.length
-              ? `自动整理：${ids.length - found.length} 个定义尚未接回`
-              : `自动整理：已关联 ${found.length} 个任务，${found.filter((task) => task.activation.enabled).length} 个在本机启用`,
-        )
-    }
-    void load().catch((error) => {
-      if (alive) {
-        setSourceStatus('资料：' + String(error))
-        setTaskStatus('自动整理：状态不可用')
-      }
-    })
-    return () => {
-      alive = false
-    }
-  }, [ref, snapshot?.revision])
+  const personalPath = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
   const [draft, setDraft] = useState<WorkspaceSettings | null>(null)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -205,6 +158,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
     setNotice('')
   }, [snapshot])
   if (ref.kind !== 'local') return <p>当前项目设置仅支持本地目录；远程文件、会话与终端仍可使用。</p>
+  const isPersonal = ref.path === personalPath
   if (!draft || !snapshot) return <p role="status">正在读取项目设置…</p>
   const save = async (): Promise<void> => {
     setBusy(true)
@@ -240,17 +194,44 @@ export function WorkspaceSettingsForm(): React.ReactElement {
   }
   return (
     <section className="workspace-settings-form" aria-label="当前项目设置">
-      <h2>项目设置 · {snapshot.settings.name}</h2>
-      <p className="workspace-home-path">{ref.path}</p>
-      <label>
-        显示名称
-        <input
-          aria-label="项目显示名称"
-          value={draft.name}
-          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-        />
-      </label>
-      <TypeSelector value={draft.type} onChange={(type) => setDraft({ ...draft, type })} />
+      <h2>项目设置 · {isPersonal ? '我的空间' : snapshot.settings.name}</h2>
+      {isPersonal ? (
+        // My Space: fixed name, type and folder (mockup 23); history is only copied in.
+        <dl className="diary-facts">
+          <dt>名称</dt>
+          <dd>
+            我的空间 <span className="diary-tag">固定</span>
+          </dd>
+          <dt>目录</dt>
+          <dd>
+            {ref.path}{' '}
+            <button
+              onClick={() =>
+                void window.cclinkStudio.fs
+                  .revealPath({ workspacePath: ref.path, targetPath: ref.path })
+                  .catch((e) => setError(String(e)))
+              }
+            >
+              在访达中显示
+            </button>
+          </dd>
+          <dt>日记目录</dt>
+          <dd>{directory}</dd>
+        </dl>
+      ) : (
+        <>
+          <p className="workspace-home-path">{ref.path}</p>
+          <label>
+            显示名称
+            <input
+              aria-label="项目显示名称"
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            />
+          </label>
+          <TypeSelector value={draft.type} onChange={(type) => setDraft({ ...draft, type })} />
+        </>
+      )}
       {draft.type !== snapshot.settings.type && (
         <p role="status">
           保存后首页与侧栏变为{workspaceTypeLabels[draft.type]}
@@ -259,15 +240,17 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       )}
       {draft.type === 'diary' && (
         <>
-          <label>
-            <input
-              type="checkbox"
-              checked={useDiary}
-              onChange={(e) => setUseDiary(e.target.checked)}
-            />
-            项目内日记目录（随项目配置保存）
-          </label>
-          {useDiary && (
+          {!isPersonal && (
+            <label>
+              <input
+                type="checkbox"
+                checked={useDiary}
+                onChange={(e) => setUseDiary(e.target.checked)}
+              />
+              项目内日记目录（随项目配置保存）
+            </label>
+          )}
+          {useDiary && !isPersonal && (
             <label>
               相对目录
               <input
@@ -275,12 +258,10 @@ export function WorkspaceSettingsForm(): React.ReactElement {
                 value={directory}
                 onChange={(e) => setDirectory(e.target.value)}
               />
-              <small>
-                只记录位置，不创建或移动目录；本机外部关联优先，需在资料接入页解除后才使用此目录。
-              </small>
+              <small>只记录位置，不创建或移动目录。</small>
             </label>
           )}
-          {useDiary && (
+          {useDiary && !isPersonal && (
             <label>
               计划目录
               <input value={planDirectory} onChange={(e) => setPlanDirectory(e.target.value)} />
@@ -296,25 +277,27 @@ export function WorkspaceSettingsForm(): React.ReactElement {
               />
             </label>
           )}
+        </>
+      )}
+      {isPersonal && (
+        <div className="workspace-diary-extras">
           <button
             onClick={() => {
-              useDiaryNavigation.getState().setPage('资料接入')
+              useDiaryNavigation.getState().setPage('导入历史')
               showWorkspaceHome(ref)
             }}
           >
-            接回本机原资料与任务
+            从历史导入…
           </button>
-        </>
-      )}
-      {draft.type === 'diary' && (
-        <button
-          onClick={() => {
-            useDiaryNavigation.getState().setPage('Git')
-            showWorkspaceHome(ref)
-          }}
-        >
-          Git 配置与更新
-        </button>
+          <button
+            onClick={() => {
+              useDiaryNavigation.getState().setPage('Git')
+              showWorkspaceHome(ref)
+            }}
+          >
+            同步设置 ›
+          </button>
+        </div>
       )}
       {draft.type === 'diary' && (
         <div className="workspace-diary-extras">
@@ -347,38 +330,9 @@ export function WorkspaceSettingsForm(): React.ReactElement {
           >
             编辑日记模板
           </button>
-          {ref.path === useFixedSpacesStore.getState().spaces?.personal?.workspacePath && (
-            <button
-              onClick={() => {
-                useDiaryNavigation.getState().setPage('更换目录')
-                showWorkspaceHome(ref)
-              }}
-            >
-              更换项目目录…
-            </button>
-          )}
         </div>
       )}
-      <div className="workspace-form-actions">
-        <button
-          disabled={busy}
-          onClick={() => {
-            setBusy(true)
-            setError('')
-            void window.cclinkStudio.workspaceState
-              .setDefaultWorkspace(ref.path)
-              .then(async (result) => {
-                if (!result.success) throw Error(result.error)
-                await refreshFixedSpaces()
-                setNotice('已设为默认项目。')
-              })
-              .catch((e) => setError(String(e)))
-              .finally(() => setBusy(false))
-          }}
-        >
-          设为默认项目
-        </button>
-      </div>
+      <div className="workspace-form-actions"></div>
       <p>配置位置：.cclink-studio/workspace-settings.json</p>
       <button
         onClick={() => {
@@ -392,12 +346,6 @@ export function WorkspaceSettingsForm(): React.ReactElement {
       >
         在文件夹中显示项目配置
       </button>
-      {draft.type === 'diary' && (
-        <>
-          <p>{sourceStatus}</p>
-          <p>{taskStatus}</p>
-        </>
-      )}
       <p>
         项目设置：{git?.workspaceSettingsTracked ? '已纳入 Git' : '仅在本机'}
         {git?.changes.some((item) => item.path === '.cclink-studio/workspace-settings.json')

@@ -15,10 +15,9 @@ import { showWorkspaceHome } from './workspace-home-navigation'
 export const useFixedSpacesStore = create<{
   spaces: FixedSpaces | null
   setup: { section: CompanySection; generation: number; error?: string } | null
-  relocate: { previousPath: string; error: string } | null
   /** My Space is not set up yet: the first-use wizard is shown; nothing exists on disk. */
   firstUse: boolean
-}>(() => ({ spaces: null, setup: null, relocate: null, firstUse: false }))
+}>(() => ({ spaces: null, setup: null, firstUse: false }))
 
 export async function refreshFixedSpaces(): Promise<FixedSpaces> {
   const spaces = await window.cclinkStudio.workspaceState.getFixedSpaces()
@@ -29,22 +28,10 @@ export async function refreshFixedSpaces(): Promise<FixedSpaces> {
 export async function openPersonalSpace(): Promise<void> {
   useDiaryNavigation.getState().setPage('今天')
   const generation = beginWorkspaceRuntimeTransition()
-  const spaces = await window.cclinkStudio.workspaceState
-    .ensurePersonalSpace()
-    .catch(async (error) => {
-      const bound = (await refreshFixedSpaces().catch(() => null))?.personal
-      if (bound) {
-        // The bound folder no longer proves its identity: offer relocation, keep the binding.
-        useFixedSpacesStore.setState({
-          relocate: { previousPath: bound.workspacePath, error: String(error) },
-        })
-        throw new Error('我的空间需要重新定位，原绑定和资料已保留')
-      }
-      useFsStore.setState({
-        error: '我的空间不可用，请定位原目录或打开其他空间；原资料已保留。' + String(error),
-      })
-      throw error
-    })
+  const spaces = await window.cclinkStudio.workspaceState.ensurePersonalSpace().catch((error) => {
+    useFsStore.setState({ error: '我的空间暂时打不开，资料已保留：' + String(error) })
+    throw error
+  })
   useFixedSpacesStore.setState({ spaces })
   if (!isWorkspaceRuntimeTransitionCurrent(generation)) return
   const path = spaces.personal?.workspacePath

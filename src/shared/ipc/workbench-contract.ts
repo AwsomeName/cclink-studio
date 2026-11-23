@@ -188,15 +188,14 @@ class WorkspaceStateWriteContractError extends Error {
   }
 }
 
-const diaryRootPreviewSchema = z
+const diaryImportPreviewSchema = z
   .object({
-    workspacePath: absolutePathSchema,
-    directory: z.string().max(1024),
+    sourcePath: absolutePathSchema,
+    diaryCount: z.number().int().min(0),
     latestFile: z.string().max(4096).nullable(),
-    diaryCount: z.number().int().min(0).optional(),
-    isGitRepository: z.boolean().optional(),
-    revision: z.string().max(128).nullable(),
-    projectId: z.string().max(128).nullable(),
+    fileCount: z.number().int().min(0),
+    skipCount: z.number().int().min(0),
+    skipped: z.array(z.string().max(4096)).max(20),
   })
   .strict()
 
@@ -219,11 +218,11 @@ export const workspaceStateIpcContracts = {
     ipcArgs(absolutePathSchema.parse(args[0]), z.string().min(1).max(128).parse(args[1])),
   ),
   getFixedSpaces: bindLegacyNoArgs(workspaceStateIpc.getFixedSpaces),
-  inspectDiaryRoot: bindIpcParser(workspaceStateIpc.inspectDiaryRoot, (args) =>
+  inspectDiaryImport: bindIpcParser(workspaceStateIpc.inspectDiaryImport, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
   ),
-  confirmDiaryRoot: bindIpcParser(workspaceStateIpc.confirmDiaryRoot, (args) =>
-    ipcArgs(absolutePathSchema.parse(args[0]), diaryRootPreviewSchema.parse(args[1])),
+  importDiaryHistory: bindIpcParser(workspaceStateIpc.importDiaryHistory, (args) =>
+    ipcArgs(diaryImportPreviewSchema.parse(args[0])),
   ),
   describeDefaultPersonalSpace: bindLegacyNoArgs(workspaceStateIpc.describeDefaultPersonalSpace),
   listDiaryChanges: bindIpcParser(workspaceStateIpc.listDiaryChanges, (args) =>
@@ -232,36 +231,7 @@ export const workspaceStateIpcContracts = {
   undoDiaryChange: bindIpcParser(workspaceStateIpc.undoDiaryChange, (args) =>
     ipcArgs(z.string().uuid().parse(args[0])),
   ),
-  initializePersonalSpace: bindIpcParser(workspaceStateIpc.initializePersonalSpace, (args) =>
-    ipcArgs(args[0] === null ? null : diaryRootPreviewSchema.parse(args[0])),
-  ),
-  replaceUnavailablePersonalSpace: bindIpcParser(
-    workspaceStateIpc.replaceUnavailablePersonalSpace,
-    (args) => ipcArgs(diaryRootPreviewSchema.parse(args[0])),
-  ),
-  inspectPersonalRelocation: bindIpcParser(workspaceStateIpc.inspectPersonalRelocation, (args) =>
-    ipcArgs(absolutePathSchema.parse(args[0])),
-  ),
-  relocatePersonalSpace: bindIpcParser(workspaceStateIpc.relocatePersonalSpace, (args) =>
-    ipcArgs(
-      z
-        .object({
-          previousPath: absolutePathSchema,
-          previousState: z.enum(['missing', 'other']),
-          previous: z
-            .object({
-              directory: z.string().max(1024),
-              latestFile: z.string().max(4096).nullable(),
-              diaryCount: z.number().int().min(0),
-            })
-            .strict()
-            .nullable(),
-          candidate: diaryRootPreviewSchema,
-        })
-        .strict()
-        .parse(args[0]),
-    ),
-  ),
+  initializePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.initializePersonalSpace),
   ensurePersonalSpace: bindLegacyNoArgs(workspaceStateIpc.ensurePersonalSpace),
   listCompanySpaces: bindLegacyNoArgs(workspaceStateIpc.listCompanySpaces),
   inspectCompanySpace: bindIpcParser(workspaceStateIpc.inspectCompanySpace, (args) =>
@@ -273,7 +243,6 @@ export const workspaceStateIpcContracts = {
         .object({
           workspacePath: absolutePathSchema.optional(),
           initializeName: z.string().trim().min(1).max(128).optional(),
-          replacePersonal: z.boolean().optional(),
           shortcutOnly: z.boolean().optional(),
         })
         .strict()
@@ -285,9 +254,6 @@ export const workspaceStateIpcContracts = {
   ),
   getDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.getDefaultWorkspace),
   ensureDefaultWorkspace: bindLegacyNoArgs(workspaceStateIpc.ensureDefaultWorkspace),
-  setDefaultWorkspace: bindIpcParser(workspaceStateIpc.setDefaultWorkspace, (args) =>
-    ipcArgs(absolutePathSchema.parse(args[0])),
-  ),
   resolveLocalWorkspace: bindIpcParser(workspaceStateIpc.resolveLocalWorkspace, (args) =>
     ipcArgs(absolutePathSchema.parse(args[0])),
   ),

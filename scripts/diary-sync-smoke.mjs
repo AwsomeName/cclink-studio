@@ -38,7 +38,7 @@ async function until(test) {
 }
 try {
   const space = await page.evaluate(() =>
-    window.cclinkStudio.workspaceState.initializePersonalSpace(null),
+    window.cclinkStudio.workspaceState.initializePersonalSpace(),
   )
   const path = space.personal.workspacePath
   await user.close()

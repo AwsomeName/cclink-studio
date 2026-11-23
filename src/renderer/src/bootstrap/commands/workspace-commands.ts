@@ -1,10 +1,7 @@
 import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
 import type { Command } from '../../stores/command-store'
 import { useWorkspaceOpenStore } from '../../features/workspace-open/workspace-open-store'
-import {
-  openDefaultWorkspace,
-  setCurrentWorkspaceAsDefault,
-} from '../../features/workspace-open/workspace-open-controller'
+import { openDefaultWorkspace } from '../../features/workspace-open/workspace-open-controller'
 import { useFsStore } from '../../stores/fs-store'
 import { createOperationsDraft } from '../../features/article-publishing/create-operations-draft'
 import { createPersonalNote } from '../../features/workspace-open/WorkspaceHome'
@@ -42,12 +39,6 @@ export function createWorkspaceCommands(): Command[] {
       label: '打开我的空间',
       category: '工作空间',
       action: openDefaultWorkspace,
-    },
-    {
-      id: 'workspace.set-default',
-      label: '将当前工作空间用作我的空间',
-      category: '工作空间',
-      action: setCurrentWorkspaceAsDefault,
     },
     {
       id: 'workspace.unfiled',
