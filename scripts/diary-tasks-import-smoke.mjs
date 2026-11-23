@@ -76,7 +76,7 @@ try {
   await home.getByText('原项目的定时任务已经都在这里了。').waitFor()
   // A second same-named task appears (e.g. one brought by Git): clean up keeps one.
   await save(page, task(space, '每日简报', { kind: 'daily', time: '00:40', timezone: TZ }, true))
-  await nav('项目首页')
+  await nav('今天')
   await nav('定时整理')
   await home.getByText(/有重复任务：每日简报/).waitFor()
   await page.screenshot({ path: join(shots, 'v2-tasks-duplicates.png') })

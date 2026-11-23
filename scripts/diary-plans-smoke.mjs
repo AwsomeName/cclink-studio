@@ -10,7 +10,8 @@ const legacy = await writeDiary(project, '个人计划', '2026/周计划/旧计�
 try {
   const page = await session.launch()
   await firstUse(session, { directory: project })
-  await page.getByRole('button', { name: '打开本周计划 ›' }).click()
+  // The home's 本周计划 row (first row) opens the plans page.
+  await page.locator('.personal-diary-home .diary-row').first().click()
   const plans = page.locator('.diary-plan-layout')
   await plans.getByRole('button', { name: '空白计划' }).click()
   const editor = plans.locator('.tiptap[contenteditable=true]')

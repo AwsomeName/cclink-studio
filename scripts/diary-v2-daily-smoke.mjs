@@ -123,7 +123,7 @@ try {
   await git(seed, ['add', '.'])
   await git(seed, ['commit', '-m', 'today'])
   await git(seed, ['push'])
-  await nav('项目首页')
+  await nav('今天')
   await home.getByRole('button', { name: '现在起草' }).click()
   await page.waitForFunction(async (root) => {
     const service = window.cclinkStudio.scheduledTasks
@@ -136,7 +136,7 @@ try {
     .getByRole('button', { name: '同步', exact: true })
     .click()
   await page.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
-  await nav('项目首页')
+  await nav('今天')
   await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 60000 })
   assert.equal(
     await readFile(join(project, D, todayRel), 'utf8'),

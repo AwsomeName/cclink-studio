@@ -40,6 +40,7 @@ import {
 } from './activity-bar-icons'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import { DiaryCalendar } from '../../features/workspace-open/DiaryCalendar'
+import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-store'
 import {
   buildKeyboardContextMenuInput,
   isContextMenuKeyboardEvent,
@@ -108,6 +109,8 @@ export function ActivityBar(): React.ReactElement {
   const toolsExpanded = useUIStore((state) => state.toolsExpanded)
   const diaryPage = useDiaryNavigation((state) => state.page)
   const activeRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
+  const personalPath = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
+  const isPersonal = activeRef.kind === 'local' && activeRef.path === personalPath
   const activeTab = useTabStore((state) => state.tabs.find((tab) => tab.id === state.activeTabId))
   const activePanel = useUIStore((s) => s.activePanel)
   const sidebarVisible = useUIStore((s) => s.sidebarVisible)
@@ -244,25 +247,35 @@ export function ActivityBar(): React.ReactElement {
     <div className={`activity-bar${sidebarVisible ? '' : ' activity-bar-compact'}`}>
       <div className="activity-bar-main">
         <div className="activity-bar-group" role="group" aria-label="项目功能">
-          <button
-            className={`activity-bar-icon ${activePanel !== 'files' && activeTab?.type === 'workspace-home' && (workspaceType !== 'diary' || !!activeTab.settingsSection || diaryPage === '今天') ? 'active' : ''}`}
-            onClick={() => handleClick('workspace-home')}
-          >
-            <ActivityProjectsIcon size={18} />
-            项目首页
-          </button>
-          {workspaceType === 'diary' && (
+          {workspaceType === 'diary' ? (
             <>
-              <div className="activity-bar-group-label">日记与计划</div>
-              {(['日记', '计划', '定时整理', 'Git'] as const).map((page, index) => {
-                const Icon = [IconPencil, IconClipboard, IconClock, IconRefresh][index]
+              {/* Product logic §4 / mockup 19: 今天 is the diary home, then 日记、计划、定时整理、同步. */}
+              <div className="activity-bar-group-label">
+                {isPersonal ? '我的空间' : '日记与计划'}
+              </div>
+              {(
+                [
+                  ['今天', ActivityProjectsIcon],
+                  ['日记', IconPencil],
+                  ['计划', IconClipboard],
+                  ['定时整理', IconClock],
+                  ['Git', IconRefresh],
+                ] as const
+              ).map(([page, Icon]) => {
+                const selected =
+                  activePanel !== 'files' &&
+                  activeTab?.type === 'workspace-home' &&
+                  !activeTab.settingsSection &&
+                  diaryPage === page
                 return (
                   <button
-                    key={page === 'Git' ? '同步' : page}
-                    className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && !activeTab.settingsSection && diaryPage === page ? 'active' : ''}`}
+                    key={page}
+                    aria-current={selected ? 'page' : undefined}
+                    className={`activity-bar-icon ${selected ? 'active' : ''}`}
                     onClick={() => {
                       useDiaryNavigation.getState().setPage(page)
-                      showWorkspaceHome(activeRef)
+                      if (page === '今天') handleClick('workspace-home')
+                      else showWorkspaceHome(activeRef)
                     }}
                   >
                     <Icon size={18} />
@@ -271,6 +284,14 @@ export function ActivityBar(): React.ReactElement {
                 )
               })}
             </>
+          ) : (
+            <button
+              className={`activity-bar-icon ${activePanel !== 'files' && activeTab?.type === 'workspace-home' ? 'active' : ''}`}
+              onClick={() => handleClick('workspace-home')}
+            >
+              <ActivityProjectsIcon size={18} />
+              项目首页
+            </button>
           )}
           {workspaceType === 'company' && (
             <>

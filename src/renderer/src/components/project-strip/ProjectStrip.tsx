@@ -3,7 +3,7 @@ import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } fr
 import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
 import { getRunningProjectCounts } from '../../features/agent-conversations/project-activity'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
-import { IconCloud, IconHistory, IconProjects } from '../common/Icons'
+import { IconBookmark, IconCloud, IconHistory, IconProjects } from '../common/Icons'
 import { useToastStore } from '../common/Toast'
 import {
   buildKeyboardContextMenuInput,
@@ -362,7 +362,12 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                     })
                   }}
                 >
-                  <IconProjects size={13} />
+                  {path === personalPath ? (
+                    // My Space is the pinned first tab (mockups 05–08).
+                    <IconBookmark size={13} />
+                  ) : (
+                    <IconProjects size={13} />
+                  )}
                   <span className="project-strip-label">
                     {active && settingsSnapshot && path !== personalPath
                       ? settingsSnapshot.settings.name

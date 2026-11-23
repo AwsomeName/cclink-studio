@@ -65,6 +65,11 @@ function label(s: State) {
             })
           : '未设置同步'
 }
+/** The status line shown on the diary home's 同步 row (mockups 05/07). */
+export function useDiarySyncLabel(path: string | null): string {
+  const state = useSync((s) => (path ? s[path] : undefined) ?? empty)
+  return state.snapshot?.remoteUrl || state.busy || state.error ? label(state) : '未设置同步'
+}
 export function useDiarySyncRevision(path: string | null): string | undefined {
   return useSync((s) => (path ? s[path]?.snapshot?.checkedAt : undefined))
 }

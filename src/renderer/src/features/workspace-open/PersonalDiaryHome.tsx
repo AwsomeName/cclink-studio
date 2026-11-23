@@ -2,7 +2,11 @@ import { DiaryPlans } from './DiaryPlans'
 import { DiaryRootSetup } from './DiaryRootSetup'
 import { DiarySetupWizard } from './DiarySetupWizard'
 import { DiaryChangeReports } from './DiaryChangeReports'
-import { DiarySyncStatus, DiarySyncPage, useDiarySyncRevision } from './DiarySyncStatus'
+import {
+  DiarySyncPage,
+  useDiarySyncLabel,
+  useDiarySyncRevision,
+} from './DiarySyncStatus'
 import { DiaryDayView } from './DiaryDayView'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
@@ -24,6 +28,7 @@ import {
 import type { FsDirEntry } from '@shared/ipc/fs'
 import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
 import { useTabStore } from '../../stores/tab-store'
+import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { askAi, editRule } from './diary-ai'
 import { createScheduledTaskTab } from '../scheduled-tasks/scheduled-task-view-model'
@@ -301,6 +306,28 @@ export function PersonalDiaryHome(): React.ReactElement {
       : undefined
   const selectedPreview =
     previewPath || (page === '今天' && today.length === 1 ? today[0].path : '')
+  const todayDirty = useTabStore((state) =>
+    state.tabs.some((tab) => tab.dirty && tab.filePath === today[0]?.path),
+  )
+  const syncText = useDiarySyncLabel(source?.workspacePath ?? null)
+  // This week's plan for the home row: the newest file in <year>/周计划 (as the file shortcuts).
+  const [weekPlan, setWeekPlan] = useState<string | null>(null)
+  useEffect(() => {
+    if (!source) return
+    let alive = true
+    void window.cclinkStudio.fs
+      .readDir(`${source.workspacePath}/${source.directory}/${day.year}/周计划`)
+      .catch(() => [])
+      .then((entries) => {
+        const newest = entries
+          .filter((entry) => entry.type === 'file' && entry.name.endsWith('.md'))
+          .sort((a, b) => b.modifiedAt - a.modifiedAt)[0]
+        if (alive) setWeekPlan(newest?.name ?? null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [source, day.year, revision])
   useEffect(() => {
     setPreviewPath('')
   }, [page, todayKey])
@@ -434,6 +461,9 @@ export function PersonalDiaryHome(): React.ReactElement {
                     : `${daily?.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''} 自动起草`}
                 </span>
               )}
+            <span className={`diary-tag ${todayDirty ? '' : 'ok'}`}>
+              {todayDirty ? '未保存' : '已保存'}
+            </span>
           </header>
           {summarizeDiary(preview.content).map((part) => (
             <div className="diary-quote" key={part.title}>
@@ -465,19 +495,40 @@ export function PersonalDiaryHome(): React.ReactElement {
           ))}
         </div>
       )}
-      {!today.length && source && aiProblem && (
-        <div className="diary-card" role="alert">
-          <b>本机 AI 不可用，今天的草稿无法自动生成</b>
+      {!today.length && source && aiProblem && !draftRunning && (
+        <div className="diary-card diary-card-alert" role="alert" aria-label="今天的草稿">
+          <b>
+            AI 起草不可用 <span className="diary-tag danger">{aiProblem}</span>
+          </b>
           <p className="muted">
-            {aiProblem}。请在 Studio 设置的 Agent 中修复；修复后会按时起草，也可现在起草。
+            {daily?.definition.schedule.kind === 'daily'
+              ? daily.definition.schedule.time + ' '
+              : ''}
+            自动起草无法进行。在 Studio 设置的 Agent 中修复后，会自动补起草今天。
           </p>
+          <button
+            className="primary"
+            onClick={() =>
+              void useCommandStore.getState().executeCommand('settings.open', { source: 'toolbar' })
+            }
+          >
+            去修复
+          </button>
+          <button disabled={busy} onClick={() => act(prepareBlank)}>
+            空白模板（未经 AI 起草）
+          </button>
         </div>
       )}
-      {!today.length && source && (
+      {!today.length && source && (!aiProblem || draftRunning) && (
         <div className="diary-card" aria-label="今天的草稿">
           {draftRunning ? (
             <>
-              <b>AI 正在起草今天的日记</b>
+              <b>
+                AI 正在{dailyRun?.trigger === 'manual' ? '' : '自动'}起草今天的日记
+                {dailyRun?.trigger !== 'manual' && daily?.definition.schedule.kind === 'daily'
+                  ? ` · ${daily.definition.schedule.time} 定时`
+                  : ''}
+              </b>
               <p className="muted">{dailyRun?.currentStep}</p>
               <button onClick={() => act(cancelDraft)}>取消</button>
             </>
@@ -500,7 +551,7 @@ export function PersonalDiaryHome(): React.ReactElement {
                 Intl.DateTimeFormat().resolvedOptions().timeZone
                   ? `（${daily.definition.schedule.timezone}）`
                   : ''}{' '}
-                自动生成今天的草稿
+                自动生成今天的草稿 <span className="diary-tag ai">每日起草 · 本机已启用</span>
               </b>
               <p className="muted">
                 将写入 {source.directory}/{location.folder}/{location.filename}
@@ -513,7 +564,9 @@ export function PersonalDiaryHome(): React.ReactElement {
               <button disabled={busy} onClick={() => act(prepareBlank)}>
                 空白模板
               </button>
-              <button onClick={() => openTask(daily)}>修改时间与要求</button>
+              <button className="diary-link" onClick={() => openTask(daily)}>
+                修改时间 ›
+              </button>
             </>
           ) : daily ? (
             <>
@@ -557,10 +610,16 @@ export function PersonalDiaryHome(): React.ReactElement {
         />
       )}
       <h3>本周计划</h3>
-      <button onClick={() => setPage('计划')}>打开本周计划 ›</button>
+      <button className="diary-row" onClick={() => setPage('计划')}>
+        <span>{weekPlan ?? '还没有本周计划'}</span>
+        <small>{weekPlan ? '打开 ›' : '去计划 ›'}</small>
+      </button>
       <h3>同步</h3>
       {source && (
-        <DiarySyncStatus workspacePath={source.workspacePath} onOpenGit={() => setPage('Git')} />
+        <button className="diary-row" onClick={() => setPage('Git')}>
+          <span>{syncText}</span>
+          <small>查看 ›</small>
+        </button>
       )}
     </div>
   )

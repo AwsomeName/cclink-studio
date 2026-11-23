@@ -60,7 +60,7 @@ try {
   await page.locator('.diary-inline-files').waitFor()
   await page
     .locator('.diary-inline-files')
-    .getByRole('button', { name: '项目首页' })
+    .getByRole('button', { name: '今天', exact: true })
     .first()
     .waitFor()
   assert.equal(await page.getByText('项目导航').count(), 0)
