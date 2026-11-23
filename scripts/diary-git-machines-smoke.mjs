@@ -50,11 +50,17 @@ const remote = join(a.home, 'remote.git')
 await git(root, ['init', '--bare', '--initial-branch=main', remote])
 const spaceA = join(a.home, 'CCLink Studio', '我的空间')
 const S = '个人计划'
-const sync = (page, path) =>
-  page.evaluate(
-    (p) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: p }),
-    path,
-  )
+// First use and entering the space start a sync of their own; wait for it instead of racing.
+const sync = async (page, path) => {
+  for (let i = 0; ; i++) {
+    const r = await page.evaluate(
+      (p) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: p }),
+      path,
+    )
+    if (r.success || !/正在执行/.test(r.error?.message ?? '') || i >= 30) return r
+    await page.waitForTimeout(1000)
+  }
+}
 try {
   const page = await a.launch()
   page.on('dialog', (d) => void d.accept())

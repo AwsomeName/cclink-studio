@@ -42,7 +42,7 @@ try {
 
   page = await s.launch()
   const wizard = page.getByRole('dialog', { name: '设置我的空间' })
-  await wizard.getByText('1 导入历史').waitFor()
+  await wizard.getByRole('button', { name: '开始使用' }).waitFor()
   await wizard.getByText(fixedDir).waitFor()
   await wizard.getByText('从上次使用的目录选择').waitFor()
   const space = await firstUse(s, {

@@ -14,23 +14,16 @@ try {
   page.on('dialog', (d) => void d.accept())
   // A new user lands on first use directly; nothing exists on disk yet.
   const wizard = page.getByRole('dialog', { name: '设置我的空间' })
-  await wizard.getByText('1 导入历史').waitFor()
+  await wizard.getByRole('button', { name: '开始使用' }).waitFor()
   await wizard.getByText(defaultDir).waitFor()
-  await page.screenshot({ path: join(shots, 'v2-first-01-directory.png') })
+  // One page: no step bar, no AI step.
+  assert.equal(await wizard.getByRole('button', { name: '下一步' }).count(), 0)
+  assert.equal(await wizard.getByText(/测试：生成一句话/).count(), 0)
   assert.equal(await lstat(defaultDir).catch(() => null), null, 'default folder must not exist yet')
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByLabel('Git 项目地址').waitFor()
-  await page.screenshot({ path: join(shots, 'v2-first-02-sync.png') })
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText(/测试：生成一句话 · (通过|未通过)/).waitFor({ timeout: 120000 })
-  await page.screenshot({ path: join(shots, 'v2-first-03-ai.png') })
-  await wizard.getByRole('button', { name: '下一步' }).click()
-  await wizard.getByText('自动整理（本设备）').waitFor()
-  await page.screenshot({ path: join(shots, 'v2-first-04-confirm.png') })
-  assert.equal(await lstat(defaultDir).catch(() => null), null, 'still nothing on disk')
-  // Set the daily time to 00:00 so the confirm step generates today's draft right away.
+  // Set the daily time to 00:00 so starting generates today's draft right away.
   await wizard.getByLabel('每日起草时间').fill('00:00')
-  await wizard.getByRole('button', { name: '确认并开始' }).click()
+  await page.screenshot({ path: join(shots, 'v3-first-use-one-page.png') })
+  await wizard.getByRole('button', { name: '开始使用' }).click()
   await wizard.waitFor({ state: 'detached', timeout: 30000 })
   assert.equal(await s.fixedRoot(), defaultDir)
   const tasks = await page.evaluate((p) => window.cclinkStudio.scheduledTasks.list(p), defaultDir)
@@ -52,6 +45,35 @@ try {
   await page.screenshot({ path: join(shots, 'v2-today-drafting.png') })
   await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 5 * 60_000 })
   await page.screenshot({ path: join(shots, 'v2-today-generated.png') })
+  // Today's file is open right on the home page and can be typed into and saved directly.
+  const todayEditor = home
+    .getByRole('article', { name: '今天的日记' })
+    .locator('.tiptap[contenteditable=true]')
+  await todayEditor.waitFor()
+  await todayEditor.click()
+  await page.keyboard.press('Meta+End')
+  await page.keyboard.press('Enter')
+  await page.keyboard.insertText('首页直接写的一行')
+  await page.keyboard.press('Meta+s')
+  await home.getByText('已保存').first().waitFor()
+  const written = await page.evaluate(
+    async (dir) => {
+      const walk = async (d) => {
+        for (const e of await window.cclinkStudio.fs.readDir(d)) {
+          if (e.type === 'directory') {
+            const found = await walk(e.path)
+            if (found) return found
+          } else if (/^\d{4}_.+\.md$/.test(e.name))
+            return (await window.cclinkStudio.fs.readTextDocument(e.path)).content
+        }
+        return ''
+      }
+      return walk(dir)
+    },
+    join(defaultDir, '个人计划'),
+  )
+  assert(written.includes('首页直接写的一行'), 'typing on the home page did not save to the file')
+  await page.screenshot({ path: join(shots, 'v3-today-editable.png') })
   const month = join(defaultDir, '个人计划')
   const years = await readdir(month)
   result.files = years

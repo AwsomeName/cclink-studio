@@ -848,3 +848,23 @@
   color: #8fd19e;
   background: rgba(80, 180, 110, 0.16);
 }
+
+.diary-today-entry header .diary-link.on {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.diary-today,
+.diary-today-entry {
+  min-width: 0;
+  max-width: 100%;
+}
+.diary-today-editor {
+  height: clamp(360px, 60vh, 900px);
+  min-width: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+.diary-today-editor .editor-toolbar {
+  flex-wrap: wrap;
+}

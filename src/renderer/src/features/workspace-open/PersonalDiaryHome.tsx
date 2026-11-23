@@ -21,6 +21,8 @@ import {
 import type { FsDirEntry } from '@shared/ipc/fs'
 import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
 import { useTabStore } from '../../stores/tab-store'
+import { useEditorStore } from '../../stores/editor-store'
+import { MarkdownEditor } from '../../components/workbench/MarkdownEditor'
 import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { askAi, editRule } from './diary-ai'
@@ -244,6 +246,8 @@ export function PersonalDiaryHome(): React.ReactElement {
       location.matchesName(file.name) &&
       file.path === [source.workspacePath, source.directory, location.folder, file.name].join('/'),
   )
+  const [todayPick, setTodayPick] = useState('')
+  const todayFile = today.find((file) => file.path === todayPick) ?? today[0]
   const dayKey = (value: number): string => {
     const parts = diaryDateParts(timezone, new Date(value))
     return `${parts.year}${parts.month}${parts.day}`
@@ -281,10 +285,9 @@ export function PersonalDiaryHome(): React.ReactElement {
     dayKey(daily.latestRun.scheduledFor ?? daily.latestRun.createdAt) === todayKey
       ? daily.latestRun
       : undefined
-  const selectedPreview =
-    previewPath || (page === '今天' && today.length === 1 ? today[0].path : '')
-  const todayDirty = useTabStore((state) =>
-    state.tabs.some((tab) => tab.dirty && tab.filePath === today[0]?.path),
+  const selectedPreview = page === '今天' ? '' : previewPath
+  const todayDirty = useEditorStore((state) =>
+    Boolean(todayFile && state.files[todayFile.path]?.dirty),
   )
   const syncText = useDiarySyncLabel(source?.workspacePath ?? null)
   // This week's plan for the home row: the newest file in <year>/周计划 (as the file shortcuts).
@@ -416,12 +419,25 @@ export function PersonalDiaryHome(): React.ReactElement {
   const draftRunning = dailyRun && ['queued', 'running'].includes(dailyRun.status)
   const todayView = (
     <div className="diary-today">
-      {today.length === 1 && preview && (
+      {todayFile && (
+        // Entering 今天 opens today's diary right here, ready to type (no summary card).
         <article className="diary-today-entry" aria-label="今天的日记">
           <header>
-            <strong>{today[0].name}</strong>
+            {today.length > 1 ? (
+              today.map((file) => (
+                <button
+                  key={file.path}
+                  className={file.path === todayFile.path ? 'diary-link on' : 'diary-link'}
+                  onClick={() => setTodayPick(file.path)}
+                >
+                  {file.name}
+                </button>
+              ))
+            ) : (
+              <strong>{todayFile.name}</strong>
+            )}
             {dailyRun?.status === 'completed' &&
-              dailyRun.artifact?.relativePath.endsWith(today[0].name) && (
+              dailyRun.artifact?.relativePath.endsWith(todayFile.name) && (
                 <span className="diary-tag ai">
                   {dailyRun.trigger === 'manual'
                     ? 'AI 起草'
@@ -431,36 +447,21 @@ export function PersonalDiaryHome(): React.ReactElement {
             <span className={`diary-tag ${todayDirty ? '' : 'ok'}`}>
               {todayDirty ? '未保存' : '已保存'}
             </span>
-          </header>
-          {summarizeDiary(preview.content).map((part) => (
-            <div className="diary-quote" key={part.title}>
-              <b>{part.title}</b>
-              <span>{part.text || '（空）'}</span>
-            </div>
-          ))}
-          <div className="diary-actions">
-            <button className="primary" onClick={() => openFile(today[0])}>
-              继续写
-            </button>
-            <button onClick={() => askAi(`${editRule}请修改今天的日记 ${today[0].path}：`)}>
+            <button
+              className="diary-link"
+              onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
+            >
               让 AI 修改…
             </button>
+          </header>
+          <div className="diary-today-editor">
+            <MarkdownEditor
+              key={todayFile.path}
+              filePath={todayFile.path}
+              tabId={'today:' + todayFile.path}
+            />
           </div>
         </article>
-      )}
-      {today.length > 1 && (
-        <div className="diary-card">
-          <b>今天有 {today.length} 篇日记，请选择要继续写的一篇</b>
-          {today.map((file) => (
-            <button
-              className="workspace-home-record"
-              key={file.path}
-              onClick={() => openFile(file)}
-            >
-              {file.name}
-            </button>
-          ))}
-        </div>
       )}
       {!today.length && source && aiProblem && !draftRunning && (
         <div className="diary-card diary-card-alert" role="alert" aria-label="今天的草稿">
