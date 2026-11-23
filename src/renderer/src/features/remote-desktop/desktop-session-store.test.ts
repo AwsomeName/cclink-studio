@@ -14,7 +14,7 @@ const view = (patch: Partial<DesktopSessionView> = {}): DesktopSessionView => ({
   endpoint: '10.0.0.8:5900',
   interrupted: false,
   fullscreen: false,
-  pointerSize: 'remote',
+  largePointer: false,
   ...patch,
 })
 
@@ -25,8 +25,8 @@ describe('desktop session store', () => {
     const first = store.getState().sessions
     store.getState().publish('tab-1', view())
     expect(store.getState().sessions).toBe(first)
-    store.getState().publish('tab-1', view({ pointerSize: 'extra-large' }))
-    expect(store.getState().sessions['tab-1']?.pointerSize).toBe('extra-large')
+    store.getState().publish('tab-1', view({ largePointer: true }))
+    expect(store.getState().sessions['tab-1']?.largePointer).toBe(true)
     store.getState().publish('tab-1', view({ fullscreen: true }))
     expect(store.getState().sessions['tab-1']?.fullscreen).toBe(true)
     store.getState().publish('tab-1', null)
@@ -44,7 +44,7 @@ describe('desktop session store', () => {
     const a = {
       setView: vi.fn(),
       setFullscreen: vi.fn(),
-      setPointerSize: vi.fn(),
+      setLargePointer: vi.fn(),
       reconnect: vi.fn(),
       disconnect: vi.fn(),
     }

@@ -7,8 +7,6 @@ export type DesktopPhase = 'idle' | 'connecting' | 'credentials' | 'connected' |
  * single writer; the status bar and tab bar only read it and send commands through the Tab's
  * registered controller. Nothing here is persisted.
  */
-export type PointerSize = 'remote' | 'large' | 'extra-large'
-
 export interface DesktopSessionView {
   phase: DesktopPhase
   deviceName: string
@@ -16,13 +14,13 @@ export interface DesktopSessionView {
   /** The last connection ended unexpectedly (not by the user). */
   interrupted: boolean
   fullscreen: boolean
-  pointerSize: PointerSize
+  largePointer: boolean
 }
 
 export interface DesktopSessionController {
   setView(view: 'fit' | 'original'): void
   setFullscreen(fullscreen: boolean): void
-  setPointerSize(size: PointerSize): void
+  setLargePointer(on: boolean): void
   reconnect(): void
   disconnect(): void
 }
@@ -50,7 +48,7 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set) => ({
         current.endpoint === view.endpoint &&
         current.interrupted === view.interrupted &&
         current.fullscreen === view.fullscreen &&
-        current.pointerSize === view.pointerSize
+        current.largePointer === view.largePointer
       )
         return state
       return { sessions: { ...state.sessions, [tabId]: view } }
