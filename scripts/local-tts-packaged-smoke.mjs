@@ -41,9 +41,11 @@ await writeFile(
   JSON.stringify({
     version: 2,
     workspaces: {},
+    // My Space only ever uses its fixed folder; leave it unset so the fixture stays an
+    // ordinary project and the real fixed folder is never touched.
     fixedSpaces: {
       version: 1,
-      personal: { workspacePath: workspace, projectId },
+      personal: null,
       company: null,
       legacyDefaultPath: '',
     },
@@ -104,6 +106,8 @@ try {
   }, 'workbench')
   assert(page.url().startsWith('file://'), 'Must exercise bundled renderer, never dev server')
   const snap = () => page.evaluate(() => window.cclinkStudio.localTts.getSnapshot())
+  const closeFirstUse = page.getByRole('button', { name: '关闭首次使用' })
+  if (await closeFirstUse.isVisible().catch(() => false)) await closeFirstUse.click()
   // Select only the registered temporary fixture; never the machine's real default space.
   await page.locator(`.project-strip-item[data-project-path=${JSON.stringify(workspace)}]`).click()
   await page.getByRole('button', { name: '文件', exact: true }).click()
