@@ -144,10 +144,12 @@ export function createProjectContextCommands(): Command[] {
 
         await openPersonalSpace()
         const active = useWorkspaceStore.getState().activeWorkspaceRef
-        if (
-          active.kind === 'local' &&
-          active.path === useFixedSpacesStore.getState().spaces?.personal?.workspacePath
-        ) {
+        const personalPath = useFixedSpacesStore.getState().spaces?.personal?.workspacePath
+        if (active.kind === 'local' && active.path === personalPath) {
+          useOpenProjectsStore.getState().removeProject(path)
+        } else if (!personalPath) {
+          // My Space is not set up yet (first use is offered): closing still closes.
+          await useFsStore.getState().closeWorkspace()
           useOpenProjectsStore.getState().removeProject(path)
         }
       },
