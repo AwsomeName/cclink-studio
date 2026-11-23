@@ -56,10 +56,15 @@
   overflow: hidden;
   background: #171717;
 }
-.remote-desktop-screen[data-large-pointer] canvas {
+.remote-desktop-screen[data-pointer-size='large'] canvas {
   /* noVNC writes an inline cursor whenever the server changes the pointer shape. */
   cursor:
     url('./large-pointer.svg') 2 2,
+    default !important;
+}
+.remote-desktop-screen[data-pointer-size='extra-large'] canvas {
+  cursor:
+    url('./extra-large-pointer.svg') 3 3,
     default !important;
 }
 .remote-desktop select {
