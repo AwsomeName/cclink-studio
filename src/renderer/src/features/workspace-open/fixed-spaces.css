@@ -1073,3 +1073,43 @@
 .diary-today-editor .editor-toolbar.compact {
   padding-left: 22px;
 }
+/* Close-project dialog (docs/design/project-close-2026-11-24). */
+.project-close-dialog {
+  width: min(460px, 100%);
+  padding: 20px 22px 18px;
+}
+.project-close-dialog h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+  color: var(--text-active);
+}
+.project-close-dialog > p {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.project-close-k {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 10px 0 4px;
+}
+.project-close-dialog ul {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.8;
+}
+.project-close-dialog .project-close-warn {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: #d7ba7d;
+}
+.project-close-dialog footer {
+  margin-top: 18px;
+}
+.project-close-buttons {
+  display: flex;
+  gap: 8px;
+}
+.project-close-dialog button {
+  font-size: 13px;
+  padding: 6px 14px;
+}

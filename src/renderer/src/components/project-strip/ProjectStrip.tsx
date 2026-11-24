@@ -1,3 +1,4 @@
+import { ProjectCloseDialog } from '../../features/running-work/ProjectCloseDialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAgentStore, useFsStore, useOpenProjectsStore, useWorkspaceStore } from '../../stores'
 import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
@@ -262,6 +263,7 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
   return (
     <div className="project-strip">
       <CompanySpaceDialog />
+      <ProjectCloseDialog />
       <PersonalFirstUseOverlay />
       <div className="project-strip-shell">
         <div

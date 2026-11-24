@@ -162,6 +162,11 @@ async function closeTemporaryWorkspaces() {
     pageRef.on('dialog', confirmClose)
     try {
       await closeAction.click()
+      const closeDialog = pageRef.getByRole('dialog', { name: '关闭项目' })
+      await closeDialog
+        .getByRole('button', { name: '仅关闭视图' })
+        .click({ timeout: 5_000 })
+        .catch(() => {})
       await pageRef.waitForFunction(
         (projectPath) =>
           !Array.from(document.querySelectorAll('.project-strip-item')).some(

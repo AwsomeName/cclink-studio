@@ -1,4 +1,5 @@
 import { inspectWorkspaceWork } from '../../running-work/workspace-work'
+import { askProjectClose } from '../../running-work/ProjectCloseDialog'
 import { useAgentStore } from '../../../stores/agent-store'
 import { getRunningProjectCounts } from '../../agent-conversations/project-activity'
 import { openWorkspaceSettings } from '../../workspace-open/WorkspaceSettingsForm'
@@ -113,18 +114,30 @@ export function createProjectContextCommands(): Command[] {
         const running =
           getRunningProjectCounts(useAgentStore.getState().conversations).get(path) ?? 0
         const work = await inspectWorkspaceWork(path)
-        const names = [
-          ...work.tasks.map((task) => task.definition.title),
-          ...work.affairs.map((affair) => affair.title),
-          ...work.terminals.map(() => 'Terminal'),
-        ]
         if (
-          (running || names.length || work.errors.length) &&
-          !window.confirm(
-            `此项目有 ${running} 个工作会话、${work.tasks.length} 个定时任务、${work.affairs.length} 个待处理事务、${work.terminals.length} 个终端。${names.join('、')}。${work.errors.length ? work.errors.join('；') + '，尚未确认全部工作状态。' : ''}关闭仅移除项目视图，不停止或删除任务。可从状态栏“进行中的工作”返回；完全退出应用会中断本机运行。是否仅关闭视图？`,
-          )
-        )
-          return
+          running ||
+          work.tasks.length ||
+          work.affairs.length ||
+          work.terminals.length ||
+          work.errors.length
+        ) {
+          const name = path.split('/').filter(Boolean).pop() ?? path
+          const choice = await askProjectClose(name, running, work)
+          if (!choice) return
+          if (choice === 'disable-tasks') {
+            for (const task of work.tasks.filter((item) => item.activation.enabled)) {
+              const result = await window.cclinkStudio.scheduledTasks.setEnabled({
+                workspacePath: path,
+                taskId: task.definition.id,
+                enabled: false,
+              })
+              if (!result.success)
+                throw new Error(
+                  `停用「${task.definition.title}」失败：${result.error?.message ?? '未知错误'}，项目未关闭`,
+                )
+            }
+          }
+        }
         const currentActive = useWorkspaceStore.getState().activeWorkspaceRef
         const projectsStore = useOpenProjectsStore.getState()
         const isActive = currentActive.kind === 'local' && currentActive.path === path

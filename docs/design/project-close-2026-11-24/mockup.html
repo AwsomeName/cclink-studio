@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>关闭项目弹窗</title>
+    <style>
+      body {
+        margin: 0;
+        background: #151515;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        color: #ccc;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 6px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 20px;
+        line-height: 1.7;
+        max-width: 1100px;
+      }
+      .row {
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .stage {
+        position: relative;
+        width: 640px;
+        height: 420px;
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .stage .bg {
+        padding: 18px 22px;
+        color: #555;
+        line-height: 2;
+      }
+      .shade {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+      }
+      .dlg {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 440px;
+        background: #252526;
+        border: 1px solid #3c3c3c;
+        border-radius: 10px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        padding: 20px 22px 18px;
+      }
+      .dlg h2 {
+        font-size: 16px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      .dlg .sub {
+        color: #999;
+        font-size: 13px;
+        margin: 0 0 14px;
+      }
+      .dlg .k {
+        font-size: 12px;
+        color: #888;
+        margin: 10px 0 4px;
+      }
+      .dlg ul {
+        margin: 0;
+        padding-left: 18px;
+        line-height: 1.8;
+        color: #ddd;
+      }
+      .dlg .warn {
+        margin-top: 12px;
+        font-size: 12.5px;
+        color: #d7ba7d;
+        line-height: 1.6;
+      }
+      .btns {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        border-radius: 6px;
+        padding: 6px 14px;
+        border: 1px solid #444;
+        background: #2d2d2d;
+        color: #ddd;
+      }
+      button.primary {
+        background: #0e639c;
+        border-color: #0e639c;
+        color: #fff;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 0;
+        width: 640px;
+        line-height: 1.6;
+      }
+      .cap b {
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>关闭项目 · 有后台工作时</h1>
+    <p class="note">
+      没有会话、定时任务、事务和终端时，直接关闭，不弹窗。有后台工作时弹出这个应用内对话框（不用系统弹窗），列出重复已合并的任务名，给三个选择。「关闭并停用定时任务」只停用、不删除，以后可以在定时任务里重新启用；运行中的会话和终端不会被强行结束，只提示一下。
+    </p>
+    <div class="row">
+      <div>
+        <div class="stage">
+          <div class="bg">woniu-forward · 今天<br />未找到日记，昨日进度待确认……</div>
+          <div class="shade"></div>
+          <div class="dlg">
+            <h2>关闭「woniu-forward」？</h2>
+            <p class="sub">这个项目还有后台工作。</p>
+            <div class="k">定时任务 4 个</div>
+            <ul>
+              <li>每周计划和总结</li>
+              <li>每日简报</li>
+              <li>周度计划</li>
+              <li>罗斯福的核心精神动力：他最深的信念是什么？</li>
+            </ul>
+            <div class="k">待处理事务 1 个</div>
+            <div class="btns">
+              <button>取消</button><button>关闭并停用定时任务</button
+              ><button class="primary">仅关闭视图</button>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          <b>A 常见情况</b
+          >：只有定时任务和事务。「仅关闭视图」任务照常按时跑，可从状态栏「进行中的工作」回来；「关闭并停用定时任务」4
+          个任务全部停用后再关闭。
+        </p>
+      </div>
+      <div>
+        <div class="stage">
+          <div class="bg">woniu-forward · 今天<br />未找到日记，昨日进度待确认……</div>
+          <div class="shade"></div>
+          <div class="dlg">
+            <h2>关闭「woniu-forward」？</h2>
+            <p class="sub">这个项目还有后台工作。</p>
+            <div class="k">运行中 1 个会话 · 1 个终端</div>
+            <div class="k">定时任务 2 个</div>
+            <ul>
+              <li>每日简报</li>
+              <li>周度计划</li>
+            </ul>
+            <p class="warn">
+              会话和终端不会被结束，关闭后仍在后台运行；完全退出 Studio 才会中断它们。
+            </p>
+            <div class="btns">
+              <button>取消</button><button>关闭并停用定时任务</button
+              ><button class="primary">仅关闭视图</button>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          <b>B 有正在运行的工作</b
+          >：多一行黄色提示。没有定时任务时不显示「关闭并停用定时任务」按钮。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
