@@ -86,9 +86,9 @@ try {
     .fill(
       '用 editor_read 读取工作空间 source.md，把文件中的标记作为 Markdown 正文原样返回。不要使用其他工具。',
     )
-  await page.getByLabel('结果保存方式').selectOption('workspace-file')
-  await page.getByLabel('工作空间内目录').fill('reports')
-  await page.getByLabel('文件名模板').fill('manual.md')
+  await page.getByLabel('结果保存到').selectOption('workspace-file')
+  await page.getByLabel('目录', { exact: true }).fill('reports')
+  await page.getByLabel('文件名', { exact: true }).fill('manual.md')
   await page.getByRole('button', { name: '保存', exact: true }).click()
   await page.getByText('已保存，当前设备保持暂停', { exact: true }).waitFor()
   const saved = await page.evaluate(

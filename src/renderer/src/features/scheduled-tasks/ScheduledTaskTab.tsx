@@ -150,19 +150,12 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     let active = true
     void window.cclinkStudio.git.getSnapshot(workspacePath).then((snapshot) => {
       if (!active) return
-      if (snapshot.availability !== 'available') {
-        setGitSharingHint('当前工作空间不是可用 Git 仓库；定义仍可通过显式文件复制共享。')
-        return
-      }
+      if (snapshot.availability !== 'available') return setGitSharingHint(null)
       const relativePath = `.cclink-studio/shared/scheduled-tasks/${task.definition.id}.json`
       const ignored = snapshot.ignoredSharedTaskDefinitions?.find(
         (candidate) => candidate.path === relativePath,
       )
-      setGitSharingHint(
-        ignored
-          ? `共享定义仍被 Git 规则忽略：${ignored.rule}。请手动修复对应规则，Studio 不会使用 git add -f。`
-          : '共享定义路径已开放给 Git；Commit 和 Push 仍由你明确执行。',
-      )
+      setGitSharingHint(ignored ? `该任务被 Git 忽略规则排除（${ignored.rule}），不会同步。` : null)
     })
     return () => {
       active = false
@@ -212,9 +205,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         if (
           form.definitionSource === 'shared' &&
           enable &&
-          !window.confirm(
-            '确认把当前 revision 和执行内容授权给此设备自动运行？共享定义可能由 Git 带到其他电脑；每台设备都需单独确认，多台设备启用后会各自执行，可能产生重复结果。',
-          )
+          !window.confirm('在此设备启用这个任务？其他设备需各自启用。')
         ) {
           return false
         }
@@ -245,9 +236,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         })
         updateTabTitle(tab.id, snapshot.definition.title)
         updateTabDirty(tab.id, false)
-        setSaveFeedback(
-          snapshot.activation.enabled ? '已保存并在此设备启用' : '已保存，当前设备保持暂停',
-        )
+        setSaveFeedback(snapshot.activation.enabled ? '已保存并启用' : '已保存 · 已暂停')
         await load(workspacePath)
         return true
       } catch (error) {
@@ -307,9 +296,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     if (
       task.definition.source === 'shared' &&
       !task.activation.enabled &&
-      !window.confirm(
-        `确认在此设备启用共享任务“${task.definition.title}”的 revision ${task.definition.revision}？后续项目定义变化会再次自动暂停。`,
-      )
+      !window.confirm(`在此设备启用“${task.definition.title}”？`)
     ) {
       return
     }
@@ -318,7 +305,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     setSaveFeedback(null)
     try {
       const snapshot = await setEnabled(workspacePath, task.definition.id, !task.activation.enabled)
-      setSaveFeedback(snapshot.activation.enabled ? '已在此设备启用' : '已在此设备暂停')
+      setSaveFeedback(snapshot.activation.enabled ? '已启用' : '已暂停')
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -342,13 +329,8 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
   const handleDelete = async (): Promise<void> => {
     if (!task) return
-    const sharedWarning =
-      task.definition.source === 'shared'
-        ? '这会删除共享定义并形成 Git 删除变更；其他电脑 Pull 后也会移除该任务。'
-        : '这会删除当前工作空间中的本机任务定义。'
-    if (
-      !window.confirm(`${sharedWarning}\n\n运行历史会保留，已经开始的运行会继续完成。确认删除吗？`)
-    ) {
+    const sharedWarning = task.definition.source === 'shared' ? '同步后其他设备也会删除。' : ''
+    if (!window.confirm(`删除“${task.definition.title}”？${sharedWarning}运行历史会保留。`)) {
       return
     }
     setSaving(true)
@@ -407,9 +389,6 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
 
   return (
     <div className="scheduled-task-tab">
-      <p className="workspace-data-location" title={workspacePath}>
-        工作空间：{workspacePath.split(/[\\/]/).filter(Boolean).at(-1)}
-      </p>
       <header className="scheduled-task-tab-header">
         <div className="scheduled-task-tab-heading">
           <IconClock size={24} />
@@ -441,12 +420,12 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                     : hasUnsavedChanges
                       ? task
                         ? '有未保存修改'
-                        : '尚未保存 · 绑定当前工作空间'
+                        : '尚未保存'
                       : activation?.enabled
-                        ? `${saveFeedback ?? '已保存并在此设备启用'} · 下次 ${formatNextRun(activation.nextRunAt)}`
+                        ? `${saveFeedback ?? '已启用'} · 下次 ${formatNextRun(activation.nextRunAt)}`
                         : task
-                          ? (saveFeedback ?? '已保存 · 此设备已暂停')
-                          : '尚未保存 · 绑定当前工作空间'}
+                          ? (saveFeedback ?? '已暂停')
+                          : '尚未保存'}
               </span>
             </p>
           </div>
@@ -460,7 +439,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 hasUnsavedChanges
                   ? '请先保存修改'
                   : sharedNeedsConfirmation
-                    ? '请先检查内容并在此设备启用'
+                    ? '请先启用'
                     : undefined
               }
               onClick={() => void handleRunNow()}
@@ -505,30 +484,24 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               disabled={saving}
               onClick={() => void handleSave(true)}
             >
-              {saving ? '保存中…' : '保存并在此设备启用'}
+              {saving ? '保存中…' : '保存并启用'}
             </button>
           )}
         </div>
       </header>
 
-      <div className="scheduled-task-stage-note">
-        任务仅在 CCLink Studio 主进程存活时调度；完全退出后不会由系统唤醒，也不会留下 计划任务或后台
-        Helper。
-      </div>
       {actionError && <div className="scheduled-task-form-error">{actionError}</div>}
       {task?.definition.source === 'shared' && !task.activation.enabled && (
         <div className="scheduled-task-confirmation-note">
-          <strong>来自项目，当前设备尚未授权执行</strong>
-          <span>
-            请检查任务内容、资源与输出位置，再点击“在此设备启用”。项目定义每次更新后都会自动暂停并要求重新确认。
-          </span>
+          <strong>本机未启用</strong>
+          <span>这是随项目同步来的任务，检查内容后点“在此设备启用”。</span>
         </div>
       )}
       {gitSharingHint && <div className="scheduled-task-git-note">{gitSharingHint}</div>}
       {externalUpdatePending && task && (
         <div className="scheduled-task-confirmation-note">
-          <strong>项目定义已更新，当前未保存草稿已保留</strong>
-          <span>直接保存会因旧 revision/digest 被拒绝。可先复制草稿，或重新加载项目版本。</span>
+          <strong>任务已在别处更新</strong>
+          <span>你的修改未保存，需要先载入新版本。</span>
           <button
             type="button"
             onClick={() => {
@@ -542,7 +515,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               updateTabDirty(tab.id, false)
             }}
           >
-            重新加载项目版本
+            载入新版本
           </button>
         </div>
       )}
@@ -579,17 +552,14 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 onChange={() => {
                   if (
                     task?.definition.source !== 'shared' ||
-                    window.confirm(
-                      '转换为本机任务会删除共享定义并形成 Git 删除变更；其他电脑 Pull 后将不再看到该任务。继续吗？',
-                    )
+                    window.confirm('改为仅本机后，其他设备同步后将不再有这个任务。继续吗？')
                   ) {
                     setForm({ ...form, definitionSource: 'local' })
                   }
                 }}
               />
               <span>
-                <strong>不随 Git 共享</strong>
-                <small>定义只保存在当前工作空间的本机数据目录。</small>
+                <strong>仅本机</strong>
               </span>
             </label>
             <label>
@@ -599,9 +569,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 checked={form.definitionSource === 'shared'}
                 onChange={() => {
                   if (
-                    window.confirm(
-                      '共享定义会成为普通 Git 变更，可能同步到其他电脑。定义不得包含密码、Token 或本机绝对路径。继续吗？',
-                    )
+                    window.confirm('任务内容会随项目同步到其他设备，请勿写入密码或 Token。继续吗？')
                   ) {
                     setForm({ ...form, definitionSource: 'shared' })
                   }
@@ -609,9 +577,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               />
               <span>
                 <strong>随项目共享</strong>
-                <small>
-                  只共享定义；本机状态不会同步。多台设备分别启用时会各自执行，可能产生重复结果。
-                </small>
+                <small>其他设备需各自启用</small>
               </span>
             </label>
           </div>
@@ -687,13 +653,13 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
             </div>
           )}
           <p className="scheduled-task-summary">
-            {describeSchedule(scheduleFromForm(form))} · {form.timezone}
+            {describeSchedule(scheduleFromForm(form))} · {form.timezone} · Studio 运行时执行
           </p>
         </TaskSection>
 
-        <TaskSection title="绑定资源">
+        <TaskSection title="额外读取">
           <label>
-            <span>工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）</span>
+            <span>文件或目录，每行一个（可留空）</span>
             <textarea
               value={form.resourcePaths}
               rows={4}
@@ -701,12 +667,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
               onChange={(event) => setForm({ ...form, resourcePaths: event.target.value })}
             />
           </label>
-          <p className="scheduled-task-help">当前工作空间始终绑定，不能切换为全局资源。</p>
         </TaskSection>
 
         <TaskSection title="运行结果">
           <label>
-            <span>结果保存方式</span>
+            <span>结果保存到</span>
             <select
               value={form.resultMode}
               onChange={(event) =>
@@ -716,19 +681,15 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 })
               }
             >
-              <option value="history">保留在运行历史（推荐）</option>
-              <option value="workspace-file">另存为工作空间 Markdown</option>
+              <option value="history">运行历史</option>
+              <option value="workspace-file">Markdown 文件</option>
             </select>
           </label>
-          {form.resultMode === 'history' ? (
-            <p className="scheduled-task-help">
-              当前版本会把每次执行的文本结果保留在此任务的运行历史中，无需配置日志目录或文件名。
-            </p>
-          ) : (
+          {form.resultMode === 'workspace-file' && (
             <>
               <div className="scheduled-task-form-grid scheduled-task-output-grid">
                 <label>
-                  <span>工作空间内目录（支持 {'{year}/{month}'}）</span>
+                  <span>目录</span>
                   <input
                     value={form.outputDirectory}
                     placeholder="docs/周报"
@@ -736,7 +697,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                   />
                 </label>
                 <label>
-                  <span>文件名模板</span>
+                  <span>文件名</span>
                   <input
                     value={form.fileNameTemplate}
                     placeholder="report-{date}.md"
@@ -745,22 +706,20 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 </label>
               </div>
               <p className="scheduled-task-help">
-                可用变量：<code>{'{date}'}</code>、<code>{'{monthDay}'}</code>、
-                <code>{'{weekday}'}</code>、<code>{'{time}'}</code>、<code>{'{taskId}'}</code>、
-                <code>{'{runId}'}</code>。只新建文件，不覆盖已有文件。
+                {fileNamePreview ? (
+                  <>
+                    下次生成 <code>{fileNamePreview}</code> ·{' '}
+                  </>
+                ) : null}
+                不覆盖已有文件
               </p>
-              {fileNamePreview && (
-                <p className="scheduled-task-help">
-                  下次计划生成：<code>{fileNamePreview}</code>
-                </p>
-              )}
             </>
           )}
         </TaskSection>
 
-        <TaskSection title="失败时保留内容">
+        <TaskSection title="AI 失败时">
           <label>
-            <span>AI 失败时保存的 Markdown 模板（可选）</span>
+            <span>改为写入此模板（可选）</span>
             <textarea
               value={form.failureTemplate}
               rows={10}
@@ -775,10 +734,6 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           >
             填入每日日志模板
           </button>
-          <p className="scheduled-task-help">
-            AI 失败时仍保存此模板，未知内容留空；运行仍标记为失败，可打开文件继续填写。
-            取消、路径无效或文件已存在时不写入。修改后请保存任务。
-          </p>
         </TaskSection>
 
         {task && (
@@ -792,8 +747,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                     <div>
                       <strong>{formatRunStatus(run.status)}</strong>
                       <span>
-                        {formatRunTrigger(run)} · revision {run.taskRevision} ·{' '}
-                        {new Date(run.createdAt).toLocaleString()}
+                        {formatRunTrigger(run)} · {new Date(run.createdAt).toLocaleString()}
                       </span>
                     </div>
                     <p>{run.currentStep}</p>

@@ -262,12 +262,13 @@ async function main() {
   )
   await page.getByLabel('任务名称').fill('Smoke 每周工作总结')
   await page.getByLabel('任务内容').fill('读取当前工作空间资料，并生成 create-only Markdown 周报。')
-  await page
-    .getByLabel('工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）')
-    .fill(join(workspacePath, 'README.md'))
-  await page.getByLabel('结果保存方式').selectOption('history')
+  await page.getByLabel('文件或目录，每行一个（可留空）').fill(join(workspacePath, 'README.md'))
+  await page.getByLabel('结果保存到').selectOption('history')
   await page.getByRole('button', { name: '保存并在此设备启用' }).click()
-  await page.getByText(/已保存并在此设备启用/).waitFor({ timeout: 10_000 })
+  await page
+    .locator('.scheduled-task-save-status')
+    .filter({ hasText: /已保存并启用|已启用/ })
+    .waitFor({ timeout: 10_000 })
   assert(
     (await page.locator('.tab.active .tab-dirty-dot').count()) === 0,
     'saved scheduled-task tab still shows a dirty dot',

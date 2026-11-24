@@ -232,11 +232,11 @@ try {
       '读取绑定的 Markdown，输出简短 Markdown 摘要，务必保留文件中的验收标记原文，不添加未经证实的内容。',
     )
   await page
-    .getByLabel('工作空间内路径（支持相对路径或绝对路径，每行一个，可留空）')
+    .getByLabel('文件或目录，每行一个（可留空）')
     .fill(manuscript)
-  await page.getByLabel('结果保存方式').selectOption('workspace-file')
-  await page.getByLabel('工作空间内目录').fill('产物')
-  await page.getByLabel('文件名模板').fill('验收-{runId}.md')
+  await page.getByLabel('结果保存到').selectOption('workspace-file')
+  await page.getByLabel('目录', { exact: true }).fill('产物')
+  await page.getByLabel('文件名', { exact: true }).fill('验收-{runId}.md')
   await page.getByLabel('周期').selectOption('once')
   const due = new Date(Date.now() + 100000)
   const pad = (n) => String(n).padStart(2, '0')
@@ -249,7 +249,7 @@ try {
     'Task save did not reach the production owner',
   )
   assert(
-    (await page.locator('.scheduled-task-tab-header').innerText()).includes('已保存并在此设备启用'),
+    (await page.locator('.scheduled-task-tab-header').innerText()).includes('已启用'),
   )
   assert(tasks.success && tasks.tasks.length === 1)
   const taskId = tasks.tasks[0].definition.id
