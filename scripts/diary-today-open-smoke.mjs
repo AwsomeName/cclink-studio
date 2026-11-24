@@ -33,11 +33,10 @@ try {
   await firstUse(s, { importFrom: history, dailyTime: '23:59' })
   const home = page.locator('.personal-diary-home')
   await home
-    .locator('.diary-row')
-    .first()
+    .locator('.diary-today-foot')
     .filter({ hasText: `周一-${mondayText}.md` })
     .waitFor()
-  assert.equal(await home.getByText('周一-2026-08-24.md').count(), 0)
+  assert.equal(await home.locator('.diary-today-foot').getByText('2026-08-24').count(), 0)
   assert.equal(await home.getByText(/23:59.*自动生成今天的草稿/).count(), 0)
   const article = home.getByRole('article', { name: '今天的日记' })
   await article.locator('.tiptap[contenteditable=true]').waitFor({ timeout: 5 * 60_000 })

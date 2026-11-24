@@ -13,8 +13,11 @@ try {
   const page = await session.launch()
   project = await firstUse(session, { importFrom: history })
   legacy = join(project, '个人计划', '2026/周计划/旧计划.md')
-  // The home's 本周计划 row (first row) opens the plans page.
-  await page.locator('.personal-diary-home .diary-row').first().click()
+  // The 本周计划 entry in the today page footer opens the plans page.
+  await page
+    .locator('.diary-today-foot')
+    .getByRole('button', { name: /本周计划/ })
+    .click()
   const plans = page.locator('.diary-plan-layout')
   await plans.getByRole('button', { name: '空白计划' }).click()
   const editor = plans.locator('.tiptap[contenteditable=true]')

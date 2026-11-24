@@ -84,6 +84,8 @@ const lowlight = createLowlight(common)
 interface MarkdownEditorProps {
   filePath?: string
   tabId: string
+  /** Slim toolbar for an editor embedded in a page (the My Space today page). */
+  compact?: boolean
 }
 
 interface ImageDraft {
@@ -92,7 +94,11 @@ interface ImageDraft {
   title: string
 }
 
-export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.ReactElement {
+export function MarkdownEditor({
+  filePath,
+  tabId,
+  compact,
+}: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -1060,6 +1066,7 @@ export function MarkdownEditor({ filePath, tabId }: MarkdownEditorProps): React.
     <div className="markdown-editor-wrapper" ref={wrapperRef}>
       <EditorToolbar
         tabId={tabId}
+        compact={compact}
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}

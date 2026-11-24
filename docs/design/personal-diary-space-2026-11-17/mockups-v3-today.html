@@ -1,0 +1,657 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>今天页重新设计</title><style>
+      :root {
+        --page: #15171b;
+        --bg: #1e1f22;
+        --side: #23252a;
+        --top: #2b2d31;
+        --panel: #26282d;
+        --line: #34373d;
+        --text: #e6e6e6;
+        --muted: #9aa0a8;
+        --accent: #3b8eea;
+        --accentbg: #1d3a5c;
+        --ok: #3fb37f;
+        --warn: #d9a441;
+        --bad: #e06c6c;
+        --add: #1f3d2c;
+        --del: #4a2326;
+        --status: #1f4f7a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font:
+          14px/1.6 -apple-system,
+          'PingFang SC',
+          'Helvetica Neue',
+          sans-serif;
+      }
+      header.doc {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 16px 8px;
+      }
+      header.doc h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+      }
+      header.doc p {
+        margin: 0;
+        color: var(--muted);
+      }
+      nav.toc {
+        max-width: 1120px;
+        margin: 12px auto 0;
+        padding: 0 16px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      nav.toc a {
+        color: var(--muted);
+        text-decoration: none;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 10px;
+        font-size: 12px;
+      }
+      nav.toc a:hover {
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      section.shot {
+        max-width: 1120px;
+        margin: 36px auto;
+        padding: 0 16px;
+      }
+      section.shot h2 {
+        font-size: 17px;
+        margin: 0 0 4px;
+      }
+      section.shot .note {
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-size: 13px;
+      }
+      .win {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--bg);
+        box-shadow: 0 8px 30px #0006;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        height: 42px;
+        background: var(--top);
+        padding: 0 12px;
+        gap: 4px;
+        font-size: 13px;
+      }
+      .topbar .brand {
+        font-weight: 600;
+        margin-right: 12px;
+      }
+      .tab {
+        padding: 0 12px;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        color: var(--muted);
+      }
+      .tab.on {
+        color: var(--text);
+        box-shadow: inset 0 -2px var(--accent);
+        font-weight: 600;
+      }
+      .tab.pin::before {
+        content: '📌';
+        font-size: 10px;
+        margin-right: 4px;
+        opacity: 0.7;
+      }
+      .topbar .sp {
+        flex: 1;
+      }
+      .body {
+        display: flex;
+        min-height: 520px;
+      }
+      .side {
+        width: 168px;
+        background: var(--side);
+        border-right: 1px solid var(--line);
+        padding: 10px 8px;
+        font-size: 13px;
+        flex: none;
+      }
+      .side .it {
+        padding: 6px 10px;
+        border-radius: 6px;
+        color: var(--muted);
+      }
+      .side .it.on {
+        background: var(--accentbg);
+        color: var(--text);
+        box-shadow: inset 2px 0 var(--accent);
+      }
+      .side .sep {
+        border-top: 1px solid var(--line);
+        margin: 8px 4px;
+      }
+      .side .grp {
+        font-size: 11px;
+        color: #6f757d;
+        padding: 6px 10px 2px;
+      }
+      .main {
+        flex: 1;
+        padding: 20px 28px;
+        min-width: 0;
+      }
+      .crumb {
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+      }
+      h3.title {
+        font-size: 22px;
+        margin: 6px 0 14px;
+      }
+      .status {
+        height: 24px;
+        background: var(--status);
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 12px;
+      }
+      .status .dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        margin-right: 4px;
+      }
+      .btn {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        font-size: 13px;
+        margin-right: 6px;
+      }
+      .btn.pri {
+        background: #2b74c4;
+        border-color: #2b74c4;
+      }
+      .btn.dis {
+        opacity: 0.45;
+      }
+      .btn.sm {
+        padding: 3px 10px;
+        font-size: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 12px 14px;
+        margin: 10px 0;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 2px;
+        border-bottom: 1px solid var(--line);
+        gap: 10px;
+      }
+      .row .r {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 4px;
+        background: #2f3238;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+      .tag.ai {
+        background: #2a2f4a;
+        color: #9db4ff;
+      }
+      .tag.ok {
+        background: #1e3a2c;
+        color: #7fd6a8;
+      }
+      .tag.warn {
+        background: #3d3220;
+        color: #f0c674;
+      }
+      .tag.bad {
+        background: #43242a;
+        color: #f29b9b;
+      }
+      .opt {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin: 8px 0;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .opt.on {
+        border-color: var(--accent);
+        background: #1b2b3d;
+      }
+      .radio {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid var(--muted);
+        margin-top: 4px;
+        flex: none;
+      }
+      .opt.on .radio {
+        border-color: var(--accent);
+        box-shadow: inset 0 0 0 3px var(--bg);
+        background: var(--accent);
+      }
+      .check {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 2px solid var(--muted);
+        display: inline-block;
+        vertical-align: -2px;
+        margin-right: 6px;
+      }
+      .check.on {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .field {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 6px 14px;
+        align-items: center;
+        margin: 8px 0;
+      }
+      .field .k {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .input {
+        background: #1a1b1e;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 13px;
+      }
+      .steps {
+        display: flex;
+        gap: 6px;
+        margin: 0 0 16px;
+        font-size: 12px;
+      }
+      .steps span {
+        flex: 1;
+        text-align: center;
+        padding: 5px;
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--muted);
+      }
+      .steps span.on {
+        background: var(--accentbg);
+        color: var(--text);
+      }
+      .steps span.done {
+        color: var(--ok);
+      }
+      .quote {
+        border-left: 3px solid #4a5160;
+        padding: 2px 12px;
+        margin: 8px 0;
+      }
+      .quote b {
+        display: block;
+        font-size: 13px;
+      }
+      .diff {
+        font:
+          12px/1.6 ui-monospace,
+          Menlo,
+          monospace;
+        background: #1a1b1e;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      .diff .a {
+        background: var(--add);
+        display: block;
+      }
+      .diff .d {
+        background: var(--del);
+        display: block;
+        text-decoration: line-through;
+        opacity: 0.85;
+      }
+      .split {
+        display: flex;
+        gap: 16px;
+      }
+      .split > * {
+        flex: 1;
+        min-width: 0;
+      }
+      .editor {
+        background: #1a1b1e;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 18px;
+      }
+      .editor h4 {
+        margin: 10px 0 4px;
+        font-size: 15px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 3px;
+      }
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 6px 2px 10px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 10px;
+      }
+      .img {
+        height: 90px;
+        border-radius: 6px;
+        background: linear-gradient(135deg, #3a4a5c, #2b3440);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9fb3c8;
+        font-size: 12px;
+        margin: 6px 0;
+      }
+      table.md {
+        border-collapse: collapse;
+        font-size: 12px;
+        margin: 6px 0;
+      }
+      table.md td,
+      table.md th {
+        border: 1px solid var(--line);
+        padding: 3px 10px;
+      }
+      .chat {
+        width: 300px;
+        border-left: 1px solid var(--line);
+        background: var(--side);
+        padding: 14px;
+        font-size: 13px;
+        flex: none;
+      }
+      .bub {
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 8px 10px;
+        margin: 8px 0;
+      }
+      .bub.me {
+        background: #24384f;
+        margin-left: 30px;
+      }
+      .cite {
+        font-size: 12px;
+        color: #9db4ff;
+        display: block;
+      }
+      .bar {
+        height: 6px;
+        background: #2f3238;
+        border-radius: 3px;
+        overflow: hidden;
+        margin: 8px 0;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        width: 55%;
+        background: var(--accent);
+      }
+      .modal {
+        position: relative;
+      }
+      .overlay {
+        position: absolute;
+        inset: 0;
+        background: #0009;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .dialog {
+        width: 560px;
+        background: var(--side);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 20px 22px;
+      }
+      .cal {
+        display: grid;
+        grid-template-columns: 70px 50px 1fr auto;
+        gap: 0 10px;
+      }
+      .legend {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .seg {
+        display: flex;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        overflow: hidden;
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+      .seg span {
+        flex: 1;
+        text-align: center;
+        padding: 5px 0;
+        color: var(--muted);
+      }
+      .seg span.on {
+        background: var(--accentbg);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .pcol {
+        width: 290px;
+        flex: none;
+        border-left: 1px solid var(--line);
+        padding: 16px 14px;
+        background: var(--side);
+        font-size: 13px;
+      }
+      .prow {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 8px;
+        border-radius: 6px;
+      }
+      .prow.cur {
+        box-shadow: inset 2px 0 var(--accent);
+      }
+      .prow.sel {
+        background: #1b2b3d;
+      }
+      .prow .dot {
+        color: #7fd6a8;
+        font-size: 11px;
+      }
+      .prow .none {
+        color: #6f757d;
+        font-size: 11px;
+      }
+      .mgrid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+      }
+      .mgrid div {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px;
+        text-align: center;
+        font-size: 12px;
+      }
+      .mgrid div.sel {
+        background: #1b2b3d;
+        border-color: var(--accent);
+      }
+      .mgrid div.cur {
+        box-shadow: inset 0 -2px var(--accent);
+      }
+      .mgrid small {
+        display: block;
+        color: #7fd6a8;
+        font-size: 10px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        gap: 4px 8px;
+        font-size: 12px;
+        margin: 6px 0;
+      }
+      .kv span:nth-child(odd) {
+        color: var(--muted);
+      }
+      .mcal {
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        padding-top: 8px;
+        font-size: 11px;
+      }
+      .mcal-h {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 4px 4px;
+      }
+      .mcal-g {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+        text-align: center;
+      }
+      .mcal-g i {
+        color: var(--muted);
+        font-style: normal;
+      }
+      .mcal-g span {
+        position: relative;
+        padding: 2px 0 4px;
+        border-radius: 4px;
+        color: var(--muted);
+        border: 1px solid transparent;
+      }
+      .mcal-g span.has {
+        color: var(--text);
+      }
+      .mcal-g span.has::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 4px;
+        height: 4px;
+        margin-left: -2px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .mcal-g span.sel {
+        background: #2b74c4;
+        color: #fff;
+      }
+      .mcal-g span.today {
+        border-color: var(--accent);
+      }
+      .mcal-f {
+        text-align: right;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+      @media (max-width: 760px) {
+        .pcol {
+          display: none;
+        }
+      }
+      @media (max-width: 760px) {
+        .side,
+        .chat {
+          display: none;
+        }
+        .main {
+          padding: 14px;
+        }
+        .field {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style><style>
+.dhead{display:flex;align-items:center;gap:10px;padding:14px 28px 10px;border-bottom:1px solid var(--line)}
+.dhead .crumb2{color:var(--muted);font-size:12px}
+.dhead .sp{flex:1}
+.chip{font-size:12px;color:var(--muted)}
+.chip b{color:var(--text);font-weight:500}
+.tb{display:flex;gap:14px;align-items:center;padding:6px 28px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
+.tb span.g{opacity:.5}
+.doc{flex:1;padding:18px 28px 10px;max-width:860px}
+.doc h1{font-size:24px;margin:0 0 14px}
+.doc h2{font-size:16px;margin:16px 0 6px}
+.doc p{margin:4px 0;color:#cfd3d8}
+.doc .t{margin:3px 0;color:#cfd3d8}
+.doc .t i{display:inline-block;width:12px;height:12px;border:1.5px solid var(--muted);border-radius:3px;margin-right:8px;vertical-align:-1px}
+.caret{display:inline-block;width:1.5px;height:16px;background:var(--accent);vertical-align:-3px;margin-left:1px}
+.foot{display:flex;gap:28px;padding:10px 28px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.foot b{color:var(--text);font-weight:500}
+.ghost{color:var(--muted);font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px 10px}
+</style></head><body>
+<header class="doc"><h1 style="font-size:22px">我的空间 · 今天页重新设计（待确认）</h1></header>
+<section class="shot" id="today-a"><h2>A 今天 · 日常</h2><p class="note">整页就是当天的文档：一个滚动条，没有卡片套卡片；日期只出现一次（文档标题）；状态和「让 AI 修改」放在顶部一行；工具栏一行精简，表格工具只在光标进表格时出现；本周计划、同步、前后一天固定在底部一行。</p><div class="win"><div class="topbar"><span class="brand">CCLink Studio</span><span class="tab pin on">我的空间</span><span class="tab">woniu-forward</span><span class="sp"></span><span class="tab">＋ 新建 / 打开</span><span class="tab">历史项目</span><span class="tab">Studio 设置</span></div>
+<div class="body" style="min-height:620px"><div class="side" style="display:flex;flex-direction:column"><div><div class="grp">我的空间</div>
+<div class="it on">今天</div><div class="it">日记</div><div class="it">计划</div><div class="it">定时整理</div><div class="it">↻ 同步</div><div class="sep"></div><div class="it">文件</div><div class="it">会话</div><div class="it">工具</div></div></div><div class="main" style="padding:0;display:flex;flex-direction:column"><div class="dhead"><span class="crumb2">我的空间 / 今天</span><span class="sp"></span><span class="chip"><b>01:00 自动起草</b> · 已保存</span><span class="ghost">让 AI 修改…</span><span class="ghost">项目设置</span></div><div class="tb"><span>正文 ▾</span><span><b>B</b></span><span><i>I</i></span><span>• 列表</span><span>☐ 待办</span><span>🔗</span><span class="g">｜</span><span>图片</span><span>表格</span><span style="flex:1"></span><span>1124_周二.md</span></div><div class="doc"><h1>11 月 24 日 周二</h1>
+<h2>昨日总结</h2><p>周一把晚间主线定为用一个真实任务走完 AIR 产品台和测试台的流程，并核对 APP 首项功能。打卡栏为空，项目进度沿用 11 月 20 日记录。</p>
+<h2>今日待做</h2><div class="t"><i></i>白天先确认孩子本周的饭和 6 个茶叶蛋是否已备好</div><div class="t"><i></i>核对 AIR 昨天是否已有验收记录，有结果就从上次停下的位置继续</div><div class="t"><i></i>核对 APP 首项功能的验收状态<span class="caret"></span></div>
+<h2>强调事项</h2><p>本周计划待核实，今天先按周一日记里的主线安排。</p>
+<h2>今日打卡</h2><p style="color:#6f757d">（按「HH:MM 实际记录」追加）</p></div><div class="foot"><span>本周计划 <b>第 48 周 · 2026-W48.md ›</b></span><span>同步 <b>未设置 ›</b></span><span style="flex:1"></span><span>11/23 ‹　› 11/25</span></div></div></div>
+<div class="status"><span>本地 · 我的空间</span><span><i class="dot" style="background:#7fd6a8"></i>AI 就绪</span><span>未设置同步</span></div></div></section>
+<section class="shot" id="today-drafting"><h2>B 今天 · 正在起草</h2><p class="note">同一个页面，正文位置显示进度，写好直接变成可编辑正文。</p><div class="win"><div class="topbar"><span class="brand">CCLink Studio</span><span class="tab pin on">我的空间</span><span class="tab">woniu-forward</span><span class="sp"></span><span class="tab">＋ 新建 / 打开</span><span class="tab">历史项目</span><span class="tab">Studio 设置</span></div>
+<div class="body" style="min-height:620px"><div class="side" style="display:flex;flex-direction:column"><div><div class="grp">我的空间</div>
+<div class="it on">今天</div><div class="it">日记</div><div class="it">计划</div><div class="it">定时整理</div><div class="it">↻ 同步</div><div class="sep"></div><div class="it">文件</div><div class="it">会话</div><div class="it">工具</div></div></div><div class="main" style="padding:0;display:flex;flex-direction:column"><div class="dhead"><span class="crumb2">我的空间 / 今天</span><span class="sp"></span><span class="chip"><b>AI 正在起草</b> · 01:00 定时 · <u>取消</u></span><span class="ghost">让 AI 修改…</span><span class="ghost">项目设置</span></div><div class="tb"><span>正文 ▾</span><span><b>B</b></span><span><i>I</i></span><span>• 列表</span><span>☐ 待办</span><span>🔗</span><span class="g">｜</span><span>图片</span><span>表格</span><span style="flex:1"></span><span>1124_周二.md</span></div><div class="doc"><h1>11 月 24 日 周二</h1><p style="color:var(--muted)">正在写「今日待做」… 读取了 1123_周一.md、第 48 周计划。写好的内容会直接出现在这里，随时可以接着写。</p><div class="bar" style="max-width:360px"><i></i></div></div><div class="foot"><span>本周计划 <b>第 48 周 · 2026-W48.md ›</b></span><span>同步 <b>未设置 ›</b></span><span style="flex:1"></span><span>11/23 ‹　› 11/25</span></div></div></div>
+<div class="status"><span>本地 · 我的空间</span><span><i class="dot" style="background:#7fd6a8"></i>AI 就绪</span><span>未设置同步</span></div></div></section>
+</body></html>

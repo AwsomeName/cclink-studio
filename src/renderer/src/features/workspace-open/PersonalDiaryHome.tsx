@@ -8,8 +8,9 @@ import { DiaryTasksView } from './DiaryTasksView'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
-import { useDiaryNavigation } from './personal-diary-navigation'
+import { useDiaryHeaderSlot, useDiaryNavigation } from './personal-diary-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { isoWeek } from '@shared/scheduled-task/scheduled-task-file-name'
 import {
   defaultDiaryDirectory,
@@ -287,6 +288,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       ? daily.latestRun
       : undefined
   const selectedPreview = page === '今天' ? '' : previewPath
+  const headerSlot = useDiaryHeaderSlot((state) => state.slot)
   const todayDirty = useEditorStore((state) =>
     Boolean(todayFile && state.files[todayFile.path]?.dirty),
   )
@@ -386,6 +388,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   // blank template. A draft that is running is awaited; one the user cancelled falls back
   // to the blank template instead of starting again.
   const autoDraftKey = useRef('')
+  const [autoTried, setAutoTried] = useState('')
   useEffect(() => {
     if (busy || !source || page !== '今天' || today.length) return
     if (dailyRun && ['queued', 'running'].includes(dailyRun.status)) return
@@ -394,6 +397,7 @@ export function PersonalDiaryHome(): React.ReactElement {
     const key = `cclink.diary.autoDraft.${source.projectId}.${todayKey}`
     if (autoDraftKey.current === key) return
     autoDraftKey.current = key
+    setAutoTried(key)
     const canDraft =
       daily &&
       daily.activation.enabled &&
@@ -435,14 +439,55 @@ export function PersonalDiaryHome(): React.ReactElement {
     return <DiarySetupWizard />
 
   const draftRunning = dailyRun && ['queued', 'running'].includes(dailyRun.status)
+  // Status and actions sit in the home header row (mockup 24), not in a card.
+  const draftLabel =
+    dailyRun?.status === 'completed' &&
+    todayFile &&
+    dailyRun.artifact?.relativePath.endsWith(todayFile.name)
+      ? dailyRun.trigger === 'manual'
+        ? 'AI 起草'
+        : `${daily?.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''} 自动起草`
+      : ''
+  const headerContent =
+    page === '今天' && todayFile && headerSlot
+      ? createPortal(
+          <>
+            <span className="diary-today-state" aria-label="今天的日记状态">
+              {draftLabel && <b>{draftLabel}</b>}
+              {draftLabel && ' · '}
+              {todayDirty ? '未保存' : '已保存'}
+            </span>
+            <button
+              className="diary-header-action"
+              onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
+            >
+              让 AI 修改…
+            </button>
+          </>,
+          headerSlot,
+        )
+      : null
+  const previousDay = Object.keys(useDiaryCalendar.getState().days)
+    .filter((date) => date < `${day.year}-${day.month}-${day.day}`)
+    .sort()
+    .pop()
+  // Until the automatic draft or blank file has started, show no waiting card at all.
+  const opening =
+    !today.length &&
+    Boolean(source) &&
+    !draftRunning &&
+    !error &&
+    (autoTried !== `cclink.diary.autoDraft.${source?.projectId}.${todayKey}` ||
+      // Started, but the run or the file has not shown up yet.
+      !dailyRun)
   const todayView = (
     <div className="diary-today">
       {todayFile && (
         // Entering 今天 opens today's diary right here, ready to type (no summary card).
         <article className="diary-today-entry" aria-label="今天的日记">
-          <header>
-            {today.length > 1 ? (
-              today.map((file) => (
+          {today.length > 1 && (
+            <nav className="diary-today-switch" aria-label="今天的日记">
+              {today.map((file) => (
                 <button
                   key={file.path}
                   className={file.path === todayFile.path ? 'diary-link on' : 'diary-link'}
@@ -450,38 +495,30 @@ export function PersonalDiaryHome(): React.ReactElement {
                 >
                   {file.name}
                 </button>
-              ))
-            ) : (
-              <strong>{todayFile.name}</strong>
-            )}
-            {dailyRun?.status === 'completed' &&
-              dailyRun.artifact?.relativePath.endsWith(todayFile.name) && (
-                <span className="diary-tag ai">
-                  {dailyRun.trigger === 'manual'
-                    ? 'AI 起草'
-                    : `${daily?.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''} 自动起草`}
-                </span>
-              )}
-            <span className={`diary-tag ${todayDirty ? '' : 'ok'}`}>
-              {todayDirty ? '未保存' : '已保存'}
-            </span>
-            <button
-              className="diary-link"
-              onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
-            >
-              让 AI 修改…
-            </button>
-          </header>
+              ))}
+            </nav>
+          )}
           <div className="diary-today-editor">
             <MarkdownEditor
               key={todayFile.path}
               filePath={todayFile.path}
               tabId={'today:' + todayFile.path}
+              compact
             />
           </div>
         </article>
       )}
-      {!today.length && source && aiProblem && !draftRunning && (
+      {!todayFile && (
+        <h1 className="diary-today-title">
+          {Number(day.month)} 月 {Number(day.day)} 日 {day.weekday}
+        </h1>
+      )}
+      {opening && (
+        <p className="muted" role="status">
+          正在打开今天的日记…
+        </p>
+      )}
+      {!today.length && source && !opening && aiProblem && !draftRunning && (
         <div className="diary-card diary-card-alert" role="alert" aria-label="今天的草稿">
           <b>
             AI 起草不可用 <span className="diary-tag danger">{aiProblem}</span>
@@ -505,7 +542,7 @@ export function PersonalDiaryHome(): React.ReactElement {
           </button>
         </div>
       )}
-      {!today.length && source && (!aiProblem || draftRunning) && (
+      {!today.length && source && !opening && (!aiProblem || draftRunning) && (
         <div className="diary-card" aria-label="今天的草稿">
           {draftRunning ? (
             <>
@@ -588,34 +625,41 @@ export function PersonalDiaryHome(): React.ReactElement {
           onOpen={(path) => openFile({ path, name: path.split('/').pop()! })}
         />
       )}
-      <h3>本周计划</h3>
-      <button className="diary-row" onClick={() => setPage('计划')}>
-        <span>{weekPlan ?? '还没有本周计划'}</span>
-        <small>{weekPlan ? '打开 ›' : '去计划 ›'}</small>
-      </button>
-      <h3>同步</h3>
-      {source && (
-        <button className="diary-row" onClick={() => setPage('Git')}>
-          <span>{syncText}</span>
-          <small>查看 ›</small>
+      <footer className="diary-today-foot">
+        <button className="diary-link" onClick={() => setPage('计划')}>
+          本周计划 <b>{weekPlan ?? '还没有'}</b> ›
         </button>
-      )}
+        {source && (
+          <button className="diary-link" onClick={() => setPage('Git')}>
+            同步 <b>{syncText}</b> ›
+          </button>
+        )}
+        <span className="diary-today-foot-gap" />
+        {previousDay && (
+          <button
+            className="diary-link"
+            onClick={() => {
+              useDiaryCalendar.getState().select(previousDay)
+              setPage('日记')
+            }}
+          >
+            ‹ 前一篇 {Number(previousDay.slice(5, 7))}/{Number(previousDay.slice(8))}
+          </button>
+        )}
+      </footer>
     </div>
   )
   return (
-    <section className="personal-diary-home">
-      <h2>
-        {page === '今天'
-          ? `${Number(day.month)}月${Number(day.day)}日 ${day.weekday}`
-          : page === 'Git'
-            ? '同步'
-            : page === '导入历史'
-              ? '从历史导入'
-              : page}
-      </h2>
+    <section
+      className={page === '今天' ? 'personal-diary-home diary-today-doc' : 'personal-diary-home'}
+    >
+      {headerContent}
+      {page !== '今天' && (
+        <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
+      )}
       {notice && <p role="status">{notice}</p>}
       {error && <p role="alert">{error}</p>}
-      {busy && (
+      {busy && !todayFile && (
         <p role="status" className="muted">
           正在读取…
         </p>

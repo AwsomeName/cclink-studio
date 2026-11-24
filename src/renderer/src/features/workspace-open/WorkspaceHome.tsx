@@ -6,7 +6,7 @@ import { HardwareProductionSection } from '../../components/sidebar/HardwareProd
 import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
 import { useUIStore } from '../../stores/ui-store'
 import { PersonalDiaryHome } from './PersonalDiaryHome'
-import { useDiaryNavigation } from './personal-diary-navigation'
+import { useDiaryHeaderSlot, useDiaryNavigation } from './personal-diary-navigation'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -53,6 +53,9 @@ export function WorkspaceHome({ settings = false }: { settings?: boolean }): Rea
             <h1>{name}</h1>
             <small>{config && workspaceTypeLabels[config.type]}</small>
           </>
+        )}
+        {diary && !settings && (
+          <span className="project-home-header-slot" ref={useDiaryHeaderSlot.getState().setSlot} />
         )}
         {ref.kind === 'local' && (
           <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>

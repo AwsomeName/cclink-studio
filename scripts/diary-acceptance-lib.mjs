@@ -104,7 +104,7 @@ export async function firstUse(s, { importFrom, url, dailyTime = '23:59', shot }
   if (shot) await page.screenshot({ path: shot })
   await wizard.getByRole('button', { name: '开始使用' }).click()
   await wizard.waitFor({ state: 'detached', timeout: 30000 })
-  await page.locator('.personal-diary-home h2').first().waitFor()
+  await page.locator('.personal-diary-home').first().waitFor()
   return s.fixedRoot()
 }
 

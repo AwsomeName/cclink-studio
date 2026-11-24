@@ -55,7 +55,7 @@ try {
   await page.keyboard.press('Enter')
   await page.keyboard.insertText('首页直接写的一行')
   await page.keyboard.press('Meta+s')
-  await home.getByText('已保存').first().waitFor()
+  await page.getByLabel('今天的日记状态').filter({ hasText: '已保存' }).waitFor()
   const written = await page.evaluate(
     async (dir) => {
       const walk = async (d) => {

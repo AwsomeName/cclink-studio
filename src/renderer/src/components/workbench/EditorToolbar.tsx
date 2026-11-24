@@ -9,6 +9,8 @@ import type { EditorPersistenceStatusView } from '../../features/markdown/Editor
 
 interface EditorToolbarProps {
   tabId?: string
+  /** A slim toolbar for an editor embedded in a page that shows save state itself. */
+  compact?: boolean
   editor: Editor | null
   filePath?: string
   dirty: boolean
@@ -69,8 +71,20 @@ export function resolveEditorSaveControl(
   }
 }
 
+/** The compact toolbar's buttons, with plain-text labels instead of glyphs. */
+const compactLabels: Record<string, string> = {
+  粗体: 'B',
+  斜体: 'I',
+  无序列表: '• 列表',
+  任务列表: '☐ 待办',
+  插入或编辑链接: '链接',
+  插入图片: '图片',
+  插入表格: '表格',
+}
+
 export function EditorToolbar({
   tabId,
+  compact,
   editor,
   filePath,
   dirty,
@@ -208,10 +222,15 @@ export function EditorToolbar({
   const inTable = editor?.isActive('table') ?? false
   const imageSelected = editor?.isActive('image') ?? false
   const saveControl = resolveEditorSaveControl(filePath, dirty, persistenceStatus)
+  const shown = compact
+    ? buttons
+        .filter((button) => button.title in compactLabels)
+        .map((button) => ({ ...button, label: compactLabels[button.title] }))
+    : buttons
 
   return (
-    <div className="editor-toolbar">
-      {tabId && <MarkdownOpenAs tabId={tabId} />}
+    <div className={compact ? 'editor-toolbar compact' : 'editor-toolbar'}>
+      {tabId && !compact && <MarkdownOpenAs tabId={tabId} />}
       <div className="toolbar-group">
         <select
           className="toolbar-select heading"
@@ -238,7 +257,7 @@ export function EditorToolbar({
           <option value="5">H5</option>
           <option value="6">H6</option>
         </select>
-        {buttons.map((button) => (
+        {shown.map((button) => (
           <button
             type="button"
             key={button.title}
@@ -350,29 +369,35 @@ export function EditorToolbar({
             {diagnosticsCount} 项提示
           </button>
         )}
-        <div
-          className={`toolbar-save-control${persistenceStatus?.kind === 'error' || persistenceStatus?.kind === 'conflict' ? ' error' : ''}`}
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {saveControl.kind === 'status' ? (
-            <span className="toolbar-save-state" title={saveControl.title}>
-              {saveControl.label === '已保存' && <IconCheck size={13} />}
-              {saveControl.label}
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="toolbar-save-action"
-              title={titleWithShortcut(saveControl.title, 'workbench.save')}
-              onClick={onSave}
-              disabled={saving}
-            >
-              {saving ? '保存中…' : saveControl.label}
-            </button>
-          )}
-        </div>
+        {compact && filePath && (
+          <span className="toolbar-file-name">{filePath.split('/').pop()}</span>
+        )}
+        {/* The embedding page shows 已保存 itself; only unsaved or failed states show here. */}
+        {!(compact && saveControl.label === '已保存') && (
+          <div
+            className={`toolbar-save-control${persistenceStatus?.kind === 'error' || persistenceStatus?.kind === 'conflict' ? ' error' : ''}`}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {saveControl.kind === 'status' ? (
+              <span className="toolbar-save-state" title={saveControl.title}>
+                {saveControl.label === '已保存' && <IconCheck size={13} />}
+                {saveControl.label}
+              </span>
+            ) : (
+              <button
+                type="button"
+                className="toolbar-save-action"
+                title={titleWithShortcut(saveControl.title, 'workbench.save')}
+                onClick={onSave}
+                disabled={saving}
+              >
+                {saving ? '保存中…' : saveControl.label}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
