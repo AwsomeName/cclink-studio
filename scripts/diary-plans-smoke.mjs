@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict'
 import { readFile, access } from 'node:fs/promises'
 import { join } from 'node:path'
+
+const headerFile = (page, pattern) =>
+  page.waitForFunction(
+    (source) =>
+      new RegExp(source).test(
+        document.querySelector('.diary-plan-header')?.getAttribute('data-file') ?? '',
+      ),
+    pattern.source,
+  )
 import { makeRoot, makeHome, writeDiary, firstUse } from './diary-acceptance-lib.mjs'
 
 const root = await makeRoot('.cclink-plans-')
@@ -13,10 +22,10 @@ try {
   const page = await session.launch()
   project = await firstUse(session, { importFrom: history })
   legacy = join(project, '个人计划', '2026/周计划/旧计划.md')
-  // The 本周计划 entry in the today page footer opens the plans page.
   await page
-    .locator('.diary-today-foot')
-    .getByRole('button', { name: /本周计划/ })
+    .locator('.workspace-sidebar-shell')
+    .getByRole('button', { name: '计划', exact: true })
+    .first()
     .click()
   const plans = page.locator('.diary-plan-layout')
   await plans.getByRole('button', { name: '空白计划' }).click()
@@ -26,46 +35,35 @@ try {
   await editor.press('Enter')
   await page.keyboard.insertText('本周验收记录')
   await editor.press('Meta+s')
-  await plans.getByText(/当前文稿 · .*W/).waitFor()
-  const name = await plans.locator('.diary-plan-center header strong').innerText()
+  const header = plans.locator('.diary-plan-header[data-file*="W"]')
+  await header.waitFor({ state: 'attached' })
+  const name = await header.getAttribute('data-file')
   await page.waitForFunction(
     async ({ path }) =>
       (await window.cclinkStudio.fs.readTextDocument(path)).content.includes('本周验收记录'),
     { path: join(project, '计划', '周', name.slice(0, 4), name) },
   )
   if (process.env.PLAN_AI_ACCEPTANCE === '1') {
-    await plans
-      .getByLabel('调整当前计划')
-      .fill('请在备注中加入这一行文字：周四验收流转。请实际修改文件。')
-    await plans.getByRole('button', { name: '发送', exact: true }).click()
+    // Adjusting a plan goes through the single conversation panel on the right.
+    await plans.getByRole('button', { name: '让 AI 调整' }).click()
+    const composer = page.getByPlaceholder(/继续提问|输入消息/).first()
+    await composer.click()
+    await page.keyboard.press('Meta+ArrowDown')
+    await page.keyboard.type('在备注中加入这一行文字：周四验收流转。请实际修改文件。')
+    await page.keyboard.press('Enter')
     await editor
       .getByText(/周四验收流转/)
       .first()
-      .waitFor({ timeout: 120000 })
+      .waitFor({ timeout: 180000 })
     assert.match(
       await readFile(join(project, '计划', '周', name.slice(0, 4), name), 'utf8'),
       /周四验收流转/,
     )
     await page.screenshot({ path: join(session.home, '周计划-AI修改.png') })
-    await plans.getByRole('button', { name: '撤销本次修改' }).click({ timeout: 90000 })
-    await editor.getByText(/周四验收流转/).waitFor({ state: 'detached' })
-    assert.doesNotMatch(
-      await readFile(join(project, '计划', '周', name.slice(0, 4), name), 'utf8'),
-      /周四验收流转/,
-    )
-    const sidebar = page.locator('.workspace-sidebar-shell')
-    await sidebar.getByRole('button', { name: '日记', exact: true }).first().click()
-    await plans.waitFor({ state: 'detached' })
-    await sidebar.getByRole('button', { name: '计划', exact: true }).first().click()
-    await plans.getByRole('button', { name: /完整对话|查看待确认操作/ }).waitFor()
-    await plans
-      .locator('.diary-plan-chat')
-      .getByText(/你.*周四验收流转/s)
-      .waitFor()
   }
   await plans.getByRole('button', { name: '月度', exact: true }).click()
   await plans.getByRole('button', { name: '空白计划' }).click()
-  await plans.getByText(/当前文稿 · \d{4}-\d{2}\.md/).waitFor()
+  await headerFile(page, /^\d{4}-\d{2}\.md$/)
   await plans.getByRole('button', { name: '年度', exact: true }).click()
   await plans.getByRole('button', { name: '空白计划' }).waitFor()
   await plans.locator('.diary-plan-periods button').first().click()
@@ -80,22 +78,20 @@ try {
       .waitFor({ timeout: 180000 })
   } else {
     await plans.getByRole('button', { name: '空白计划' }).click()
-    await plans.getByText(/当前文稿 · \d{4}\.md/).waitFor()
+    await headerFile(page, /^\d{4}\.md$/)
   }
   await plans.getByRole('button', { name: '长期', exact: true }).click()
   await plans.getByRole('button', { name: '＋ 新建计划' }).click()
   await plans.getByLabel('计划名称').fill('阅读')
   await plans.getByRole('button', { name: '确认', exact: true }).click()
-  await plans.getByText('当前文稿 · 阅读.md').waitFor()
-  await plans.getByLabel('调整当前计划').fill('保留这条待发指令')
+  await plans.locator('.diary-plan-header[data-file="阅读.md"]').waitFor({ state: 'attached' })
   await plans.getByRole('button', { name: '重命名', exact: true }).click()
   await plans.getByLabel('计划名称').fill('晨读')
   await plans.getByRole('button', { name: '确认', exact: true }).click()
-  await plans.getByText('当前文稿 · 晨读.md').waitFor()
-  assert.equal(await plans.getByLabel('调整当前计划').inputValue(), '保留这条待发指令')
+  await plans.locator('.diary-plan-header[data-file="晨读.md"]').waitFor({ state: 'attached' })
   await plans.getByRole('button', { name: '删除', exact: true }).click()
   await plans.getByRole('button', { name: '确认删除' }).click()
-  await plans.getByText('从右侧新建长期计划。').waitFor()
+  await plans.getByText('选择或新建一份长期计划').waitFor()
   await assert.rejects(access(join(project, '计划', '长期', '晨读.md')))
   assert.equal(await readFile(legacy, 'utf8'), '# 原文\n')
   if (process.env.PLAN_TASK_ACCEPTANCE === '1') {
@@ -104,8 +100,8 @@ try {
     const monthly = tasks.find((t) => t.definition.schedule.kind === 'monthly')
     assert.equal(monthly.activation.enabled, false)
     await plans.getByRole('button', { name: '月度', exact: true }).click()
-    await plans.getByRole('button', { name: '本机未启用 · 启用' }).click()
-    await plans.getByRole('button', { name: '本机已启用 · 停用' }).waitFor()
+    await plans.getByRole('button', { name: '启用', exact: true }).click()
+    await plans.getByText('· 已启用').waitFor()
     const run = async () => {
       const result = await page.evaluate(
         (input) => window.cclinkStudio.scheduledTasks.runNow(input),

@@ -11,7 +11,7 @@ import { createConversationRunController } from '../agent-conversations/conversa
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
 import { removeTrashedTargets } from '../context-actions/domains/file-context-actions'
 import { describeSchedule } from '../scheduled-tasks/scheduled-task-view-model'
-import { editRule } from './diary-ai'
+import { askAi, editRule } from './diary-ai'
 import { ensurePlanTask, planOutputs, type PlanTaskKind } from './diary-builtin-tasks'
 import './diary-plans.css'
 
@@ -171,7 +171,6 @@ export function DiaryPlans({
   const file = files.find((f) => f.path === path)
   const fileExists = Boolean(file)
   const text = useEditorStore((s) => s.files[path]?.currentContent ?? '')
-  const modifiedAt = useEditorStore((s) => s.files[path]?.modifiedAt)
   const task =
     mode === 'long'
       ? undefined
@@ -192,7 +191,6 @@ export function DiaryPlans({
     (s) => !!chatId && s.pendingConfirmations.some((r) => r.conversationId === chatId),
   )
   const [actionPath, setActionPath] = useState('')
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
   async function run(fn: () => Promise<void>) {
     setBusy(true)
     setError('')
@@ -233,7 +231,6 @@ export function DiaryPlans({
     )
     if (result.status === 'failed' || result.status === 'ignored')
       throw Error(result.status === 'failed' ? result.error : result.reason)
-    setDrafts((prev) => (prev[target] === prompt ? { ...prev, [target]: '' } : prev))
   }
   useEffect(() => {
     let alive = true
@@ -303,131 +300,131 @@ export function DiaryPlans({
     setAction('')
     setError('')
   }
+  const isCurrent = (p: { start: string; end: string }) => p.start <= today && p.end >= today
+  const split = (label: string) => {
+    const [name, range = ''] = label.split(' · ')
+    return { name, range: range.replace('–', ' – ') }
+  }
+  const title = current ? split(current.label) : null
   return (
     <div className="diary-plan-layout">
       <div className="diary-plan-center">
         {error && <p role="alert">{error}</p>}
         {listing?.key !== key ? (
-          <p>正在读取计划…</p>
+          <p className="muted">正在读取计划…</p>
         ) : file ? (
           <>
-            <header>
-              <strong>{file.name}</strong>　
-              <small>
-                {text.includes('起草来源：AI 生成')
-                  ? 'AI 生成'
-                  : text.includes('起草来源：手写')
-                    ? '手写'
-                    : '来源未记录'}
-              </small>
-              　{progress(text)}　
-            </header>
-            <div className="diary-plan-editor">
-              <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} />
-            </div>
-            <section className="diary-plan-chat">
-              <strong>与 AI 对话</strong> <small>当前文稿 · {file.name}</small>
-              {chatId && (
+            <header className="diary-plan-header" data-file={file.name}>
+              {progress(text) && <span className="chip">待办 {progress(text)}</span>}
+              {chat?.loading && <small role="status">AI 正在处理…</small>}
+              {chatId && (chat?.loading || needsConfirmation) && (
                 <button
+                  className="link small"
                   onClick={() => {
                     useAgentStore.getState().switchConversation(chatId)
                     useUIStore.getState().setAgentPanelMode('right', 'user')
                   }}
                 >
-                  {needsConfirmation ? '查看待确认操作' : '完整对话'}
+                  {needsConfirmation ? '查看待确认操作' : '查看'}
                 </button>
               )}
-              {chat?.loading && <small role="status"> AI 正在处理…</small>}
-              <div aria-live="polite">
-                {chat?.messages.slice(-4).map((m) => (
-                  <p key={m.id}>
-                    {m.role === 'user' ? '你' : 'AI'}　{m.rawText}
-                  </p>
-                ))}
-              </div>
-              <textarea
-                aria-label="调整当前计划"
-                value={drafts[path] ?? ''}
-                onChange={(e) => setDrafts({ ...drafts, [path]: e.target.value })}
-                placeholder="希望怎样调整这份计划？"
-              />
+              <span className="spacer" />
+              {/* Adjusting a plan uses the one conversation panel on the right. */}
               <button
-                disabled={busy || !drafts[path]?.trim()}
-                onClick={() => void run(() => send(path, drafts[path]))}
+                className="link"
+                onClick={() => askAi(`调整计划 ${path.slice(workspace.length + 1)}：`)}
               >
-                发送
+                让 AI 调整
               </button>
-            </section>
+            </header>
+            <div className="diary-plan-editor">
+              <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} />
+            </div>
           </>
         ) : current ? (
-          <section>
-            <h3>{current.label}</h3>
-            <p>这期还没有计划</p>
-            <p>生成依据：上一期计划、待办完成情况和期间日记。</p>
-            <p>{path.slice(workspace.length + 1)}</p>
-            {current.end >= today && (
-              <button disabled={busy} onClick={() => void run(() => create(true))}>
-                AI 生成计划
+          <section className="diary-plan-empty">
+            <h3>
+              {title?.name}
+              {title?.range && <span>{title.range}</span>}
+            </h3>
+            <p className="muted">还没有计划</p>
+            <div className="diary-plan-actions">
+              {current.end >= today && (
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => void run(() => create(true))}
+                >
+                  AI 生成计划
+                </button>
+              )}
+              <button disabled={busy} onClick={() => void run(() => create())}>
+                {current.end < today ? '补写计划' : '空白计划'}
               </button>
-            )}
-            <button disabled={busy} onClick={() => void run(() => create())}>
-              {current.end < today ? '补写计划' : '空白计划'}
-            </button>
-            <p className="muted">创建后，底部 AI 对话会自动关联这份计划。</p>
+            </div>
           </section>
         ) : (
-          <p>从右侧新建长期计划。</p>
+          <section className="diary-plan-empty">
+            <p className="muted">选择或新建一份长期计划</p>
+          </section>
         )}
       </div>
       <aside>
-        <nav>
+        <nav className="diary-plan-modes">
           {(Object.keys(labels) as Mode[]).map((m) => (
             <button key={m} disabled={busy} aria-pressed={mode === m} onClick={() => choose(m)}>
               {labels[m]}
             </button>
           ))}
         </nav>
-        {mode === 'monthly' && <strong>{Number(today.slice(0, 4)) + offset} 年</strong>}
         {(mode === 'weekly' || mode === 'monthly') && (
-          <div>
-            <button disabled={busy} onClick={() => setOffset(offset - 1)}>
-              ‹ 上一页
+          <div className="diary-plan-pager">
+            <button aria-label="上一页" disabled={busy} onClick={() => setOffset(offset - 1)}>
+              ‹
             </button>
-            <button disabled={busy} onClick={() => setOffset(offset + 1)}>
-              下一页 ›
+            <span>{mode === 'monthly' ? `${Number(today.slice(0, 4)) + offset} 年` : ''}</span>
+            <button aria-label="下一页" disabled={busy} onClick={() => setOffset(offset + 1)}>
+              ›
             </button>
+            {offset !== 0 && (
+              <button className="link" disabled={busy} onClick={() => setOffset(0)}>
+                回到本期
+              </button>
+            )}
           </div>
         )}
         <div className={mode === 'monthly' ? 'diary-plan-months' : 'diary-plan-periods'}>
-          {periods.map((p) => (
-            <button
-              disabled={busy}
-              key={p.path}
-              aria-pressed={p.path === current?.path}
-              onClick={() => setSelected(p.path)}
-            >
-              {p.label} {p.start <= today && p.end >= today ? '· 本期' : ''}{' '}
-              {(p.path === current?.path && file
+          {periods.map((p) => {
+            const label = split(p.label)
+            const status =
+              (p.path === current?.path && file
                 ? progress(text)
                 : listing?.counts[root + p.path]) ||
-                (files.some((f) => f.path === root + p.path) ? '有计划' : '')}
-            </button>
-          ))}
+              (files.some((f) => f.path === root + p.path) ? '有计划' : '')
+            return (
+              <button
+                disabled={busy}
+                key={p.path}
+                className={`diary-plan-period ${isCurrent(p) ? 'now' : ''}`}
+                aria-pressed={p.path === current?.path}
+                onClick={() => setSelected(p.path)}
+              >
+                <b>{label.name}</b>
+                {label.range && <span className="range">{label.range}</span>}
+                {status === '有计划' ? (
+                  <span className="state dot" title="有计划" />
+                ) : (
+                  status && <span className="state">{status}</span>
+                )}
+              </button>
+            )
+          })}
         </div>
         {mode === 'long' && (
-          <>
-            <button
-              disabled={busy}
-              onClick={() => {
-                setName('')
-                setAction('new')
-              }}
-            >
-              ＋ 新建计划
-            </button>
+          <div className="diary-plan-long">
             {files.map((f) => (
               <button
-                className="diary-plan-row"
+                className="diary-plan-period"
                 key={f.path}
                 disabled={busy}
                 aria-pressed={f.path === path}
@@ -436,134 +433,136 @@ export function DiaryPlans({
                   setAction('')
                 }}
               >
-                {f.name}
+                <b>{f.name.replace(/\.md$/, '')}</b>
               </button>
             ))}
-            {file && (
-              <>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setName(file.name.slice(0, -3))
-                    setActionPath(path)
-                    setAction('rename')
-                  }}
-                >
-                  重命名
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setActionPath(path)
-                    setAction('delete')
-                  }}
-                >
-                  删除
-                </button>
-              </>
-            )}
+            <div className="diary-plan-actions">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setName('')
+                  setAction('new')
+                }}
+              >
+                ＋ 新建计划
+              </button>
+              {file && (
+                <>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setName(file.name.slice(0, -3))
+                      setActionPath(path)
+                      setAction('rename')
+                    }}
+                  >
+                    重命名
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setActionPath(path)
+                      setAction('delete')
+                    }}
+                  >
+                    删除
+                  </button>
+                </>
+              )}
+            </div>
             {action && (
-              <div>
+              <div className="diary-plan-card">
                 {action === 'delete' ? (
                   <p>将「{file?.name}」移入废纸篓？</p>
                 ) : (
                   <input
                     aria-label="计划名称"
                     value={name}
+                    placeholder="计划名称"
                     onChange={(e) => setName(e.target.value)}
                   />
                 )}
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      if (action === 'new') return create()
-                      if (!file || path !== actionPath) throw Error('目标文件已变化，请重新选择')
-                      if (chat?.loading) throw Error('请等待当前计划的 AI 操作结束')
-                      if (
-                        useEditorStore.getState().files[path]?.dirty &&
-                        (await useEditorStore.getState().saveFile(path)) !== 'saved'
-                      )
-                        throw Error('请先处理保存冲突')
-                      if (action === 'rename') {
-                        const next = fileName()
-                        if (!(await useFsStore.getState().confirmRename(path, next)))
-                          throw Error('重命名失败')
-                        const target = root + '长期/' + next
-                        if (target !== path)
-                          setDrafts((prev) => ({ ...prev, [target]: prev[path] ?? '', [path]: '' }))
-                        setSelected(target)
-                      } else {
-                        const result = await window.cclinkStudio.fs.trashMarkdownDocument({
-                          workspacePath: workspace,
-                          documentPath: path,
-                          includeAssets: false,
-                        })
-                        removeTrashedTargets(result.trashedPaths)
-                        if (result.failedPaths.length) throw Error('删除失败')
-                        setDrafts((prev) => ({ ...prev, [path]: '' }))
-                        setSelected('')
-                      }
-                      setAction('')
-                    })
-                  }
-                >
-                  确认{action === 'delete' ? '删除' : ''}
-                </button>
-                <button disabled={busy} onClick={() => setAction('')}>
-                  取消
-                </button>
+                <div className="diary-plan-actions">
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        if (action === 'new') return create()
+                        if (!file || path !== actionPath) throw Error('目标文件已变化，请重新选择')
+                        if (chat?.loading) throw Error('请等待当前计划的 AI 操作结束')
+                        if (
+                          useEditorStore.getState().files[path]?.dirty &&
+                          (await useEditorStore.getState().saveFile(path)) !== 'saved'
+                        )
+                          throw Error('请先处理保存冲突')
+                        if (action === 'rename') {
+                          const next = fileName()
+                          if (!(await useFsStore.getState().confirmRename(path, next)))
+                            throw Error('重命名失败')
+                          const target = root + '长期/' + next
+                          setSelected(target)
+                        } else {
+                          const result = await window.cclinkStudio.fs.trashMarkdownDocument({
+                            workspacePath: workspace,
+                            documentPath: path,
+                            includeAssets: false,
+                          })
+                          removeTrashedTargets(result.trashedPaths)
+                          if (result.failedPaths.length) throw Error('删除失败')
+                          setSelected('')
+                        }
+                        setAction('')
+                      })
+                    }
+                  >
+                    确认{action === 'delete' ? '删除' : ''}
+                  </button>
+                  <button disabled={busy} onClick={() => setAction('')}>
+                    取消
+                  </button>
+                </div>
               </div>
             )}
-          </>
+          </div>
         )}
-        {file && (
-          <p>
-            {file.path.slice(workspace.length + 1)}
-            <br />
-            修改于 {modifiedAt ? new Date(modifiedAt).toLocaleString() : '读取中'}
-          </p>
-        )}
-        {current && (
-          <details>
-            <summary>本期日记 · {dated.length} 篇</summary>
+        {current && dated.length > 0 && (
+          <details className="diary-plan-card">
+            <summary>本期日记 {dated.length}</summary>
             {dated.map((d) => (
-              <button key={d.path} onClick={() => openFile(d)}>
-                {d.name}
+              <button className="link" key={d.path} onClick={() => openFile(d)}>
+                {d.name.replace(/\.md$/, '')}
               </button>
             ))}
           </details>
         )}
         {mode !== 'long' && (
-          <section>
-            <h4>{labels[mode]}计划生成</h4>
+          <section className="diary-plan-card">
             {task ? (
               <>
                 <p>
-                  {describeSchedule(task.definition.schedule)} · {task.definition.schedule.timezone}
+                  {describeSchedule(task.definition.schedule)} 自动生成
+                  <span className="muted"> · {task.activation.enabled ? '已启用' : '未启用'}</span>
                 </p>
-                <p>依据：上一期计划、期间日记、待办完成情况</p>
-                <p>
-                  {task.definition.outputPolicy.directory.replace('{planRoot}', planDirectory)}/
-                  {task.definition.outputPolicy.fileNameTemplate}
-                </p>
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      const r = await window.cclinkStudio.scheduledTasks.setEnabled({
-                        workspacePath: workspace,
-                        taskId: task.definition.id,
-                        enabled: !task.activation.enabled,
+                <div className="diary-plan-actions">
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const r = await window.cclinkStudio.scheduledTasks.setEnabled({
+                          workspacePath: workspace,
+                          taskId: task.definition.id,
+                          enabled: !task.activation.enabled,
+                        })
+                        if (!r.success) throw Error(r.error?.message)
+                        refresh()
                       })
-                      if (!r.success) throw Error(r.error?.message)
-                      refresh()
-                    })
-                  }
-                >
-                  {task.activation.enabled ? '本机已启用 · 停用' : '本机未启用 · 启用'}
-                </button>
-                <button onClick={() => openTask(task)}>编辑生成要求</button>
+                    }
+                  >
+                    {task.activation.enabled ? '停用' : '启用'}
+                  </button>
+                  <button onClick={() => openTask(task)}>编辑要求</button>
+                </div>
               </>
             ) : (
               <button
