@@ -1,3 +1,4 @@
+import { workspaceRefKey } from '@shared/workspace-ref'
 import { inspectWorkspaceWork } from '../../running-work/workspace-work'
 import { askProjectClose } from '../../running-work/ProjectCloseDialog'
 import { useAgentStore } from '../../../stores/agent-store'
@@ -6,7 +7,11 @@ import { openWorkspaceSettings } from '../../workspace-open/WorkspaceSettingsFor
 import { useFixedSpacesStore, openPersonalSpace } from '../../workspace-open/fixed-spaces-store'
 import type { Command } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
-import { getProjectCloseSuccessor, useOpenProjectsStore } from '../../../stores/open-projects-store'
+import {
+  getProjectCloseSuccessor,
+  useOpenProjectsStore,
+  workspaceStripGroup,
+} from '../../../stores/open-projects-store'
 import { useWorkspaceStore } from '../../../stores/workspace-store'
 import { useToastStore } from '../../../components/common/Toast'
 import type { CommandContext } from '../context-target'
@@ -14,6 +19,12 @@ import type { MenuContribution } from '../menu-contribution-registry'
 
 function projectPath(context?: CommandContext): string | null {
   return context?.target?.kind === 'project' ? context.target.path : null
+}
+
+function pinnableWorkspaceKey(context?: CommandContext): string | null {
+  const target = context?.target
+  if (target?.kind === 'remote-workspace' || target?.kind === 'project') return target.workspaceKey
+  return null
 }
 
 async function activateProject(path: string): Promise<boolean> {
@@ -55,6 +66,35 @@ export function createProjectContextCommands(): Command[] {
         const path = projectPath(context)
         if (!path) throw new Error('项目目标已失效')
         await activateProject(path)
+      },
+    },
+    {
+      id: 'workspace.togglePinned',
+      label: '固定项目',
+      contextOnly: true,
+      category: '项目',
+      visible: (context) =>
+        pinnableWorkspaceKey(context) !==
+        useFixedSpacesStore.getState().spaces?.personal?.workspacePath,
+      contextLabel: (context) =>
+        useOpenProjectsStore
+          .getState()
+          .pinnedWorkspaceKeys.includes(pinnableWorkspaceKey(context) ?? '')
+          ? '解除固定'
+          : '固定项目',
+      enabled: (context) => {
+        const key = pinnableWorkspaceKey(context)
+        const state = useOpenProjectsStore.getState()
+        return Boolean(
+          key &&
+          (state.openProjectPaths.includes(key) ||
+            state.openRemoteWorkspaceRefs.some((ref) => workspaceRefKey(ref) === key)),
+        )
+      },
+      action: (context) => {
+        const key = pinnableWorkspaceKey(context)
+        if (key && key !== useFixedSpacesStore.getState().spaces?.personal?.workspacePath)
+          useOpenProjectsStore.getState().toggleWorkspacePinned(key)
       },
     },
     {
@@ -146,10 +186,11 @@ export function createProjectContextCommands(): Command[] {
           return
         }
 
-        const nextPath = getProjectCloseSuccessor(
-          projectsStore.openProjectPaths.filter((item) => item !== fixed?.personal?.workspacePath),
-          path,
-        )
+        const group = (key: string) => workspaceStripGroup(key, projectsStore.pinnedWorkspaceKeys)
+        const visiblePaths = projectsStore.openProjectPaths
+          .filter((item) => item !== fixed?.personal?.workspacePath)
+          .sort((left, right) => group(left) - group(right))
+        const nextPath = getProjectCloseSuccessor(visiblePaths, path)
         if (nextPath) {
           if (await activateProject(nextPath)) useOpenProjectsStore.getState().removeProject(path)
           return
@@ -186,6 +227,14 @@ export const projectMenuContributions: MenuContribution[] = [
     order: 10,
     commandId: 'project.activate',
     icon: '✓',
+  },
+  {
+    id: 'workspace.pin',
+    targetKinds: ['project', 'remote-workspace'],
+    group: '20-edit',
+    order: 10,
+    commandId: 'workspace.togglePinned',
+    icon: '⚑',
   },
   {
     id: 'project.copy-path',

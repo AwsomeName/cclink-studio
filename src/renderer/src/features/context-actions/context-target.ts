@@ -22,6 +22,10 @@ export type ContextTarget =
       path: string
     }
   | {
+      kind: 'remote-workspace'
+      workspaceKey: string
+    }
+  | {
       kind: 'activity'
       activityId: string
     }
@@ -151,6 +155,7 @@ export const CONTEXT_TARGET_KINDS = [
   'file',
   'tab',
   'project',
+  'remote-workspace',
   'activity',
   'sidebar',
   'status-item',
@@ -189,7 +194,7 @@ export function targetMatchesWorkspace(
   target: ContextTarget,
   workspaceKey: string | null,
 ): boolean {
-  if (target.kind === 'project') return true
+  if (target.kind === 'project' || target.kind === 'remote-workspace') return true
   if (!('workspaceKey' in target)) return true
   return target.workspaceKey === workspaceKey
 }

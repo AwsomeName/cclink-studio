@@ -8,6 +8,7 @@ const MAX_RECENT_WORKSPACES = 12
 
 export interface ProjectStripSnapshot {
   version: 3
+  pinnedWorkspaceKeys?: string[]
   openProjectPaths: string[]
   openRemoteWorkspaceRefs?: RemoteWorkspaceRef[]
   recentWorkspaceRefs?: OpenableWorkspaceRef[]
@@ -18,6 +19,8 @@ export interface ProjectStripSnapshot {
 type DropPlacement = 'before' | 'after'
 
 interface OpenProjectsState {
+  pinnedWorkspaceKeys: string[]
+  toggleWorkspacePinned: (key: string) => void
   openProjectPaths: string[]
   openRemoteWorkspaceRefs: RemoteWorkspaceRef[]
   recentWorkspaceRefs: OpenableWorkspaceRef[]
@@ -69,6 +72,15 @@ export function reorderOpenProjectPaths(
   return next
 }
 
+export function workspaceStripGroup(
+  key: string,
+  pinnedKeys: string[],
+  personalPath?: string,
+): number {
+  if (key === personalPath) return 0
+  return pinnedKeys.includes(key) ? 1 : 2
+}
+
 export function getProjectCloseSuccessor(paths: string[], closingPath: string): string | null {
   const index = paths.indexOf(closingPath)
   if (index < 0) return null
@@ -80,7 +92,9 @@ function persistOpenProjects(
   remoteRefs = useOpenProjectsStore.getState().openRemoteWorkspaceRefs,
   recentRefs = useOpenProjectsStore.getState().recentWorkspaceRefs,
 ): void {
+  const { pinnedWorkspaceKeys } = useOpenProjectsStore.getState()
   const snapshot: ProjectStripSnapshot = {
+    ...(pinnedWorkspaceKeys.length ? { pinnedWorkspaceKeys } : {}),
     version: 3,
     openProjectPaths: paths,
     ...(remoteRefs.length > 0 ? { openRemoteWorkspaceRefs: remoteRefs } : {}),
@@ -166,6 +180,21 @@ function readRecentProjectStripSnapshot(value: unknown): OpenableWorkspaceRef[] 
 }
 
 export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
+  pinnedWorkspaceKeys: [],
+  toggleWorkspacePinned: (key) => {
+    const { openProjectPaths, openRemoteWorkspaceRefs, pinnedWorkspaceKeys } = get()
+    if (
+      !openProjectPaths.includes(key) &&
+      !openRemoteWorkspaceRefs.some((ref) => workspaceRefKey(ref) === key)
+    )
+      return
+    set({
+      pinnedWorkspaceKeys: pinnedWorkspaceKeys.includes(key)
+        ? pinnedWorkspaceKeys.filter((item) => item !== key)
+        : [...pinnedWorkspaceKeys, key],
+    })
+    persistOpenProjects(openProjectPaths)
+  },
   openProjectPaths: [],
   openRemoteWorkspaceRefs: [],
   recentWorkspaceRefs: [],
@@ -220,7 +249,12 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
         return key !== currentKey && key !== confirmedKey
       }),
     ].slice(0, MAX_RECENT_WORKSPACES)
-    set({ openRemoteWorkspaceRefs, recentWorkspaceRefs })
+    const pinnedWorkspaceKeys = [
+      ...new Set(
+        get().pinnedWorkspaceKeys.map((key) => (key === currentKey ? confirmedKey! : key)),
+      ),
+    ]
+    set({ openRemoteWorkspaceRefs, recentWorkspaceRefs, pinnedWorkspaceKeys })
     persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs, recentWorkspaceRefs)
   },
 
@@ -230,14 +264,20 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
       (item) => workspaceRefKey(item) !== key,
     )
     if (openRemoteWorkspaceRefs.length === get().openRemoteWorkspaceRefs.length) return
-    set({ openRemoteWorkspaceRefs })
+    set({
+      openRemoteWorkspaceRefs,
+      pinnedWorkspaceKeys: get().pinnedWorkspaceKeys.filter((item) => item !== key),
+    })
     persistOpenProjects(get().openProjectPaths, openRemoteWorkspaceRefs, get().recentWorkspaceRefs)
   },
 
   removeProject: (path) => {
     const openProjectPaths = get().openProjectPaths.filter((item) => item !== path)
     if (openProjectPaths.length === get().openProjectPaths.length) return
-    set({ openProjectPaths })
+    set({
+      openProjectPaths,
+      pinnedWorkspaceKeys: get().pinnedWorkspaceKeys.filter((item) => item !== path),
+    })
     persistOpenProjects(openProjectPaths)
   },
 
@@ -253,12 +293,18 @@ export const useOpenProjectsStore = create<OpenProjectsState>((set, get) => ({
       recentWorkspaceRefs.length === get().recentWorkspaceRefs.length
     )
       return
-    set({ openProjectPaths, recentWorkspaceRefs })
+    set({
+      openProjectPaths,
+      recentWorkspaceRefs,
+      pinnedWorkspaceKeys: get().pinnedWorkspaceKeys.filter((item) => item !== normalized),
+    })
     persistOpenProjects(openProjectPaths, get().openRemoteWorkspaceRefs, recentWorkspaceRefs)
   },
 
   reorderProject: (sourcePath, targetPath, placement) => {
-    const current = get().openProjectPaths
+    const { pinnedWorkspaceKeys, openProjectPaths: current } = get()
+    if (pinnedWorkspaceKeys.includes(sourcePath) !== pinnedWorkspaceKeys.includes(targetPath))
+      return
     const openProjectPaths = reorderOpenProjectPaths(current, sourcePath, targetPath, placement)
     if (
       openProjectPaths === current ||
@@ -302,12 +348,11 @@ export async function restoreOpenProjects(
   recentLocalPaths: string[] = [],
 ): Promise<void> {
   const snapshot = await window.cclinkStudio.workspaceState.get(null, null).catch(() => null)
-  let persistedPaths = readProjectStripSnapshot(snapshot?.sections.projectStrip)
-  let persistedRemoteRefs = readRemoteProjectStripSnapshot(snapshot?.sections.projectStrip)
-  let persistedRecentRefs = readRecentProjectStripSnapshot(snapshot?.sections.projectStrip)
-  let persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(
-    snapshot?.sections.projectStrip,
-  )
+  let strip = snapshot?.sections.projectStrip
+  let persistedPaths = readProjectStripSnapshot(strip)
+  let persistedRemoteRefs = readRemoteProjectStripSnapshot(strip)
+  let persistedRecentRefs = readRecentProjectStripSnapshot(strip)
+  let persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(strip)
   let snapshotVersion = (snapshot?.sections.projectStrip as { version?: unknown } | undefined)
     ?.version
   let migratedLegacySnapshot = false
@@ -322,12 +367,11 @@ export async function restoreOpenProjects(
     const legacySnapshot = await window.cclinkStudio.workspaceState
       .get(null, getWorkspaceStateOwnerKey())
       .catch(() => null)
-    persistedPaths = readProjectStripSnapshot(legacySnapshot?.sections.projectStrip)
-    persistedRemoteRefs = readRemoteProjectStripSnapshot(legacySnapshot?.sections.projectStrip)
-    persistedRecentRefs = readRecentProjectStripSnapshot(legacySnapshot?.sections.projectStrip)
-    persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(
-      legacySnapshot?.sections.projectStrip,
-    )
+    strip = legacySnapshot?.sections.projectStrip
+    persistedPaths = readProjectStripSnapshot(strip)
+    persistedRemoteRefs = readRemoteProjectStripSnapshot(strip)
+    persistedRecentRefs = readRecentProjectStripSnapshot(strip)
+    persistedRecentRemoteRefs = readRecentRemoteProjectStripSnapshot(strip)
     snapshotVersion = (legacySnapshot?.sections.projectStrip as { version?: unknown } | undefined)
       ?.version
     migratedLegacySnapshot =
@@ -368,8 +412,14 @@ export async function restoreOpenProjects(
     )
   }
 
-  useOpenProjectsStore.getState().hydrate(openProjectPaths)
+  const openKeys = new Set([...openProjectPaths, ...persistedRemoteRefs.map(workspaceRefKey)])
+  const pinnedWorkspaceKeys = normalizeOpenProjectPaths(
+    (strip as Partial<ProjectStripSnapshot> | undefined)?.pinnedWorkspaceKeys,
+  ).filter((key) => openKeys.has(key))
   useOpenProjectsStore.setState({
+    hydrated: true,
+    openProjectPaths,
+    pinnedWorkspaceKeys,
     openRemoteWorkspaceRefs: persistedRemoteRefs,
     recentWorkspaceRefs,
   })
