@@ -1,6 +1,7 @@
 import {
   MAX_AGENT_IMAGE_BYTES,
   MAX_AGENT_SOURCE_IMAGE_BYTES,
+  MAX_AGENT_SOURCE_IMAGE_MB,
   MAX_AGENT_SOURCE_IMAGE_PIXELS,
   MAX_AGENT_SOURCE_IMAGE_EDGE,
   MAX_AGENT_IMAGE_EDGE,
@@ -16,14 +17,16 @@ export interface PreparedAgentImage {
 /** Runs in a dedicated worker. Each encoding starts from the original bitmap. */
 export async function prepareAgentImage(file: File): Promise<PreparedAgentImage> {
   if (file.size <= 0 || file.size > MAX_AGENT_SOURCE_IMAGE_BYTES) {
-    throw new Error('单张原图不能超过 20MB，且不能为空')
+    throw new Error(`单张原图不能超过 ${MAX_AGENT_SOURCE_IMAGE_MB}MB，且不能为空`)
   }
   const header = readImageHeader(new Uint8Array(await file.arrayBuffer()))
   if (
     header.width * header.height > MAX_AGENT_SOURCE_IMAGE_PIXELS ||
     Math.max(header.width, header.height) > MAX_AGENT_SOURCE_IMAGE_EDGE
   ) {
-    throw new Error('图片像素过大（最多 5000 万像素、单边 32768），请截取重点后添加')
+    throw new Error(
+      `图片像素过大（最多 ${MAX_AGENT_SOURCE_IMAGE_PIXELS / 10_000} 万像素、单边 ${MAX_AGENT_SOURCE_IMAGE_EDGE}），请截取重点后添加`,
+    )
   }
   const source = file.slice(0, file.size, header.mediaType)
   const bitmap = await createImageBitmap(source, { imageOrientation: 'from-image' })

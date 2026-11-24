@@ -3,6 +3,7 @@ import {
   MAX_AGENT_IMAGES,
   MAX_AGENT_IMAGE_BYTES,
   MAX_AGENT_SOURCE_IMAGE_BYTES,
+  MAX_AGENT_SOURCE_IMAGE_MB,
 } from '@shared/agent-image-limits'
 import type { PreparedAgentImage } from './prepare-agent-image'
 
@@ -40,7 +41,9 @@ export async function importAgentImageFiles(
       continue
     }
     if (file.size <= 0 || file.size > MAX_AGENT_SOURCE_IMAGE_BYTES) {
-      errors.push(`${file.name || '图片'}：单张原图不能超过 20MB，且不能为空`)
+      errors.push(
+        `${file.name || '图片'}：单张原图不能超过 ${MAX_AGENT_SOURCE_IMAGE_MB}MB，且不能为空`,
+      )
       continue
     }
     try {

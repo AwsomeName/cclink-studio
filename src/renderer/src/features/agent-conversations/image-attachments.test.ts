@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { importAgentImageFiles } from './image-attachments'
-import { MAX_AGENT_IMAGE_BYTES, MAX_AGENT_SOURCE_IMAGE_BYTES } from '@shared/agent-image-limits'
+import {
+  MAX_AGENT_IMAGE_BYTES,
+  MAX_AGENT_SOURCE_IMAGE_BYTES,
+  MAX_AGENT_SOURCE_IMAGE_MB,
+} from '@shared/agent-image-limits'
 import { agentImagesSchema } from '@shared/ipc/image-attachment-schema'
 
 afterEach(() => {
@@ -48,7 +52,7 @@ describe('importAgentImageFiles', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('prepares five 20MB sources and only encodes the bounded sending copies', async () => {
+  it('prepares five maximum-size sources and only encodes the bounded sending copies', async () => {
     const source = new File([new Uint8Array(MAX_AGENT_SOURCE_IMAGE_BYTES)], 'large.png', {
       type: 'image/png',
     })
@@ -79,7 +83,7 @@ describe('importAgentImageFiles', () => {
     const result = await importAgentImageFiles([huge, bad, good], 5, { prepare })
     expect(result.attachments.map((image) => image.name)).toEqual(['ok.png'])
     expect(result.errors).toEqual([
-      expect.stringContaining('20MB'),
+      expect.stringContaining(`${MAX_AGENT_SOURCE_IMAGE_MB}MB`),
       expect.stringContaining('图片损坏'),
     ])
     expect(prepare).toHaveBeenCalledTimes(2)

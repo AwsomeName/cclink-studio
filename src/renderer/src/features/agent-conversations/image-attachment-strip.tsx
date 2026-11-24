@@ -1,3 +1,4 @@
+import { MAX_AGENT_IMAGES, MAX_AGENT_SOURCE_IMAGE_MB } from '@shared/agent-image-limits'
 import type { AgentImageAttachment } from '@shared/ipc/agent'
 import { useRef, useState } from 'react'
 import { IconClose } from '../../components/common/Icons'
@@ -29,7 +30,8 @@ export function ImageAttachmentStrip({
         <div className="agent-image-preparation" role={preparation.error ? 'alert' : 'status'}>
           <span>
             {[
-              preparation.busy && '正在处理图片…（单张原图最多 20MB，每次 5 张）',
+              preparation.busy &&
+                `正在处理图片…（单张原图最多 ${MAX_AGENT_SOURCE_IMAGE_MB}MB，每次 ${MAX_AGENT_IMAGES} 张）`,
               preparation.error,
             ]
               .filter(Boolean)

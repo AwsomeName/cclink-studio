@@ -483,7 +483,8 @@
   outline: 1px solid var(--chat-blue);
 }
 .agent-chat-compact .agent-composer-wrap:not(.resized) textarea.agent-input {
-  min-height: 32px;
+  min-height: 120px;
+  max-height: 240px;
   padding: 8px 9px 2px;
   font-size: 12px;
 }
