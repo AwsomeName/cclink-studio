@@ -110,8 +110,8 @@
   "errors": []
  },
  {
-  "name": "unlocked",
-  "view": "unlocked",
+  "name": "public-repo",
+  "view": "public",
   "w": 1440,
   "h": 900,
   "theme": "dark",
@@ -164,8 +164,11 @@
    "↻ 已同步 · 14:00",
    "record continue disabled before choice: true",
    "↻ 已同步 · 14:00",
-   "⚠ 需要同步密码",
-   "已读入公司记录"
+   "setup password inputs: 0",
+   "↻ 已同步 · 14:00",
+   "已下载并读入公司记录",
+   "⚠ 同步暂停 · 查看原因",
+   "↻ 已同步 · 14:00"
   ],
   "errors": []
  }

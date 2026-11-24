@@ -114,9 +114,7 @@ dl.kv dd { margin: 0; overflow-wrap: anywhere; }
 .opt .faint { display: block; }
 .repo input, .field { height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); }
 .scope { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-.scope .card.enc { border-color: var(--ok); }
-.lock { color: var(--ok); }
-.pw { display: grid; grid-template-columns: repeat(2, minmax(0, 220px)); gap: 8px; margin: 8px 0; }
+.scope .card.rec { border-color: var(--accent); }
 .fields { width: 100%; border-collapse: collapse; }
 .fields th, .fields td { text-align: left; padding: 8px 14px; border-top: 1px solid var(--border); vertical-align: top; }
 .fields th { font-weight: 500; color: var(--faint); font-size: 12px; }
@@ -173,7 +171,7 @@ textarea { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid v
   .scope { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 980px) {
-  .grid, .scope, .cmp, .pw { grid-template-columns: 1fr; }
+  .grid, .scope, .cmp { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .body { grid-template-columns: 1fr; }
@@ -195,8 +193,8 @@ textarea { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid v
   <button data-v="binary">7 表格冲突</button>
   <button data-v="deleted">8 大量删除</button>
   <button data-v="clone">9 另一台电脑下载</button>
-  <button data-v="cloned">10 输入同步密码</button>
-  <button data-v="unlocked">11 解锁后</button>
+  <button data-v="cloned">10 下载后</button>
+  <button data-v="public">11 仓库变为公开</button>
   <button data-v="git">12 代码项目</button>
   <span class="say" id="say"></span>
 </nav>
@@ -274,14 +272,14 @@ if (clean) document.getElementById('demo').hidden = true
 const sizeDemo = () => document.documentElement.style.setProperty('--demo-h', clean ? '0px' : document.getElementById('demo').offsetHeight + 'px')
 
 const S = {
-  view: params.get('view') || 'home',
+  view: params.get('view') === 'unlocked' ? 'cloned' : params.get('view') || 'home',
   mode: 'create', repo: 'woniu-company', progress: 63,
   textChoice: '', binary: 'both', rec: '', synced: false,
 }
 
 const SAY = {
   home: '公司项目还没有设置同步：首页右上角和状态栏都写“未设置同步”，首页卡片说明同步什么、不同步什么。',
-  setup: '与“我的空间”同一套选择。项目比日记大得多，第一次上传前先看到“会上传什么”；公司记录和账目加密后同步，需要设一个同步密码。',
+  setup: '与“我的空间”同一套选择。项目比日记大得多，第一次上传前先看到“会上传什么”；公司记录和账目也随项目同步；用已保存的 GitHub 账号，只能同步到私有仓库，没有额外密码。',
   running: '首次同步按真实步骤显示进度；进行中可以继续工作，正在编辑的文件需先保存。',
   synced: '之后不需要操作：进入项目时、留在前台每个整点自动双向同步。背景项目在顶栏用小点提示“有待同步”。',
   text: '两台电脑改了同一段文字：两份原文都保留，用户用自己的话告诉 AI 怎么合并，其余文件照常同步。',
@@ -289,8 +287,8 @@ const SAY = {
   binary: '表格、Word、图片、CAD 无法自动合并：让用户选一份，或者两份都留。',
   deleted: '另一台电脑一次删了很多文件：先暂停，问用户是照做还是把文件重新上传。',
   clone: '在第二台电脑上：打开其他空间 → 从 GitHub 下载项目。列出已保存账号下的私有仓库。',
-  cloned: '公司记录和账目已随项目下载，但是加密的：在这台电脑输入一次同步密码即可读出。未输入前不会建一份空公司。',
-  unlocked: '解锁后待办、收支、客户记录与原电脑一致；之后两台电脑自动保持一致。',
+  cloned: '下载后直接读入公司记录和账目，不用再输入任何密码：待办、收支、客户记录与原电脑一致；之后两台电脑自动保持一致。',
+  public: '每次上传前确认仓库仍是私有的。一旦变成公开就暂停，本机记录不受影响，改回私有后继续。',
   git: '本身就是 Git 仓库并有远程地址的代码项目，不做自动同步，继续用左下角 Git 显式提交与推送。',
 }
 
@@ -299,9 +297,8 @@ const view = $('view')
 
 function chip() {
   if (S.view === 'home') return '<button class="chip" data-go="setup">↻ 未设置同步 ›</button>'
-  if (S.view === 'text' || S.view === 'record' || S.view === 'binary' || S.view === 'deleted') return '<button class="chip warn" data-go="' + S.view + '">⚠ 同步暂停 · 查看原因 ›</button>'
+  if (['text', 'record', 'binary', 'deleted', 'public'].includes(S.view)) return '<button class="chip warn" data-go="' + S.view + '">⚠ 同步暂停 · 查看原因 ›</button>'
   if (S.view === 'running') return '<span class="chip">↻ 同步中…</span>'
-  if (S.view === 'cloned') return '<button class="chip warn">⚠ 需要同步密码</button>'
   return '<button class="chip ok" data-go="settings">✓ 已同步 · 14:00 ›</button>'
 }
 
@@ -313,7 +310,7 @@ function syncCard() {
         <p style="margin:0 0 10px">把这个项目的文件同步到你自己的 GitHub 私有仓库，另一台电脑下载后两边自动保持一致，也可当作备份。</p>
         <dl class="kv">
           <dt>会同步</dt><dd>项目里的文档、图片、设计稿，项目设置和共享定时任务</dd>
-          <dt>加密同步</dt><dd>公司记录（业务、客户与售后、决策）、公司账目与原件</dd>
+          <dt>也会同步</dt><dd>公司记录（业务、客户与售后、决策）、公司账目与原件</dd>
           <dt>只在本机</dt><dd>Agent 会话、网站登录、Token</dd>
         </dl>
       </div>
@@ -321,16 +318,16 @@ function syncCard() {
     </div>`
   return `
     <div class="card" aria-label="同步">
-      <header><h2>同步</h2>${S.view === 'cloned' ? '<span class="tag t-warn">等待同步密码</span>' : '<span class="tag t-ok">已同步</span>'}<div class="right"><button class="btn" data-act="sync">立即同步</button></div></header>
+      <header><h2>同步</h2>${S.view === 'public' ? '<span class="tag t-warn">已暂停</span>' : '<span class="tag t-ok">已同步</span>'}<div class="right"><button class="btn" data-act="sync">立即同步</button></div></header>
       <div class="in">
         <dl class="kv">
           <dt>位置</dt><dd>github.com/zhangsan/woniu-company（私有）</dd>
-          <dt>上次</dt><dd>${S.view === 'unlocked' ? '刚刚 · 下载 412 个文件，读入 19 条公司记录、312 条流水' : S.view === 'cloned' ? '刚刚 · 下载 412 个文件；公司记录等待同步密码' : '今天 14:00 · 从 MacBook Air 收到 3 个文件、2 条客户记录、5 条流水；上传 1 个文件'}</dd>
+          <dt>上次</dt><dd>${S.view === 'cloned' ? '刚刚 · 下载 412 个文件，读入 19 条公司记录、312 条流水' : '今天 14:00 · 从 MacBook Air 收到 3 个文件、2 条客户记录、5 条流水；上传 1 个文件'}</dd>
           <dt>下次</dt><dd>15:00，或下次进入项目时</dd>
-          ${S.view === 'unlocked' || S.view === 'cloned' ? '' : '<dt>未同步</dt><dd>2 个大文件 · <button class="btn link" data-go="settings">查看</button></dd>'}
+          ${S.view === 'cloned' ? '' : '<dt>未同步</dt><dd>2 个大文件 · <button class="btn link" data-go="settings">查看</button></dd>'}
         </dl>
       </div>
-      <div class="foot"><span class="lock">🔒</span> 公司记录与账目加密同步 · 会话与网站登录只在这台电脑</div>
+      <div class="foot">只同步到私有仓库 · 会话与网站登录只在这台电脑</div>
     </div>`
 }
 
@@ -353,7 +350,7 @@ function scopeBlock() {
         <li><span>其他文件</span><span>8</span></li>
         <li><span>项目设置、共享定时任务</span><span>2</span></li>
       </ul></div>
-    <div class="card enc"><header><h3><span class="lock">🔒</span> 公司记录与账目</h3><span class="right faint">加密后同步</span></header>
+    <div class="card rec"><header><h3>公司记录与账目</h3><span class="right faint">逐条同步</span></header>
       <ul>
         <li><span>业务项目与资料关联</span><span>4</span></li>
         <li><span>客户与售后</span><span>12</span></li>
@@ -373,7 +370,7 @@ function scopeBlock() {
         <li><span>Agent 会话</span><span>本机</span></li>
         <li><span>发布任务记录</span><span>本机</span></li>
         <li><span>网站账号登录、Token</span><span>从不上传</span></li>
-        <li><span>同步密码</span><span>只存本机</span></li>
+        <li><span>公司数据库文件</span><span>由记录读入</span></li>
       </ul></div>
   </div>`
 }
@@ -387,13 +384,11 @@ function setupPage() {
     <section><h2>同步到哪里</h2>
       ${opt('none', '不同步', '<span class="faint">项目只留在这台电脑。</span>')}
       ${opt('create', '在 GitHub 新建私有仓库', `<span class="faint">使用已保存的 GitHub 账号</span>${S.mode === 'create' ? `<span class="repo">zhangsan / <input aria-label="GitHub 仓库名" value="${S.repo}"></span>` : ''}`)}
-      ${opt('url', '使用已有仓库地址', S.mode === 'url' ? '<input class="field" style="width:100%;margin-top:6px" placeholder="https://github.com/你的账号/仓库.git" aria-label="仓库地址">' : '<span class="faint">仓库需为私有且只用于这个项目。</span>')}
+      ${opt('url', '使用已有仓库地址', S.mode === 'url' ? '<input class="field" style="width:100%;margin-top:6px" placeholder="https://github.com/你的账号/仓库.git" aria-label="仓库地址"><span class="faint">只接受已保存账号能访问的 GitHub 私有仓库；保存时检查，公开仓库或其他网站的地址无法保存。</span>' : '<span class="faint">GitHub 私有仓库，且只用于这个项目。</span>')}
     </section>
     <section><h2>第一次会上传什么</h2>${scopeBlock()}</section>
-    ${S.mode === 'none' ? '' : `<section><h2>同步密码</h2>
-      <div class="muted">公司记录和账目先用这个密码加密再上传，GitHub 上看不到客户、金额和原件。另一台电脑下载后输入一次即可。</div>
-      <div class="pw"><input class="field" type="password" aria-label="同步密码" placeholder="至少 10 位"><input class="field" type="password" aria-label="再输一次" placeholder="再输一次"></div>
-      <div class="faint">密码只存在这台电脑。忘记时只有这台电脑还能读出记录，可在这里更换密码。</div></section>`}
+    ${S.mode === 'none' ? '' : `<section><h2>谁能看到</h2>
+      <div class="muted">公司记录（含客户姓名、电话）和账目原件会以文件形式存在这个私有仓库里，能打开仓库的人都能读到，不需要另设密码。不要把仓库设为公开或添加不需要的协作者；仓库变成公开时同步会自动暂停。</div></section>`}
     <section><div class="note">保存后，进入这个项目时、留在前台每个整点自动双向同步，也可随时点“立即同步”。两边改了同一处时会暂停等你决定，不会覆盖任何一份。</div></section>
     <div class="actions"><button class="btn primary" data-go="running" ${S.mode === 'none' ? 'disabled' : ''}>保存并同步</button><button class="btn" data-go="home">取消</button></div>
   </div>`
@@ -403,10 +398,10 @@ function runningPage() {
   return `<div class="page sync"><h1>正在第一次同步</h1>
     <div class="muted">可以继续工作；正在编辑的文件请先保存。</div>
     <section><div class="card"><ul class="steps">
-      <li><span class="s-ok">✓</span><span>在 GitHub 新建私有仓库 zhangsan/woniu-company</span><span class="faint">完成</span></li>
+      <li><span class="s-ok">✓</span><span>在 GitHub 新建私有仓库 zhangsan/woniu-company，确认为私有</span><span class="faint">完成</span></li>
       <li><span class="s-ok">✓</span><span>检查文件：412 个可同步，排除 2 个大文件、1 个可能含密钥的文件</span><span class="faint">完成</span></li>
-      <li><span class="s-ok">✓</span><span>加密公司记录：19 条记录、312 条流水、140 份原件</span><span class="faint">完成</span></li>
-      <li><span class="s-run">●</span><span>上传 412 个文件和加密的公司记录（124 MB）</span><span class="bar"><i style="width:${S.progress}%"></i></span></li>
+      <li><span class="s-ok">✓</span><span>整理公司记录：19 条记录、312 条流水、140 份原件</span><span class="faint">完成</span></li>
+      <li><span class="s-run">●</span><span>上传 412 个文件和公司记录（124 MB）</span><span class="bar"><i style="width:${S.progress}%"></i></span></li>
       <li><span class="faint">○</span><span class="muted">核对两端内容一致</span><span></span></li>
     </ul></div></section>
     <div class="actions"><button class="btn primary" data-go="synced">（演示）完成</button></div>
@@ -420,7 +415,8 @@ function settingsPage() {
       <dt>仓库</dt><dd>github.com/zhangsan/woniu-company（私有） <button class="btn link">更换地址</button></dd>
       <dt>上次</dt><dd>今天 14:00 · 已同步</dd>
       <dt>自动</dt><dd>进入项目时、留在前台每个整点</dd>
-      <dt>同步密码</dt><dd>已设置，公司记录与账目加密同步 <button class="btn link">更换密码</button></dd>
+      <dt>账号</dt><dd>已保存的 GitHub 账号 zhangsan</dd>
+      <dt>公司记录</dt><dd>随项目同步；每次上传前确认仓库仍是私有的</dd>
     </dl></div></div></section>
     <section><h2>最近几次</h2><div class="card"><ul class="steps">
       <li><span class="s-ok">✓</span><span>收到 3 个文件、2 条客户记录、5 条流水（MacBook Air）</span><span class="faint">14:00</span></li>
@@ -497,6 +493,18 @@ function deletedPage() {
   </div>`
 }
 
+function publicPage() {
+  return `<div class="page sync"><h1>仓库变成了公开，同步已暂停</h1>
+    <div class="muted">github.com/zhangsan/woniu-company 现在任何人都能看到。为保护客户和账目记录，Studio 不会再上传，也不会从中接收。</div>
+    <section><div class="note warn">这台电脑上的项目、公司记录和账目都没有变化，可以照常使用。之前已上传的内容在仓库改回私有前仍可被看到。</div></section>
+    <section><h2>怎么处理</h2><div class="card"><ul class="steps">
+      <li><span class="faint">1</span><span>在 GitHub 打开仓库 Settings → Danger Zone，改回 Private</span><span><button class="btn link">在浏览器打开</button></span></li>
+      <li><span class="faint">2</span><span>回到这里重新检查，确认是私有后自动继续同步</span><span></span></li>
+    </ul></div></section>
+    <div class="actions"><button class="btn primary" data-go="synced">已改回私有，重新检查</button><button class="btn">停止同步</button></div>
+  </div>`
+}
+
 function cloneModal() {
   return `<div class="modal-wrap"><div class="modal" role="dialog" aria-label="打开其他空间">
     <header>打开其他空间<button class="x" data-go="synced" aria-label="关闭">✕</button></header>
@@ -531,7 +539,7 @@ function render() {
   for (const b of document.querySelectorAll('.demo button')) b.setAttribute('aria-pressed', String(b.dataset.v === S.view))
   $('say').textContent = SAY[S.view] || ''
   const v = S.view
-  const onSyncTab = ['setup', 'running', 'settings', 'text', 'record', 'binary', 'deleted'].includes(v)
+  const onSyncTab = ['setup', 'running', 'settings', 'text', 'record', 'binary', 'deleted', 'public'].includes(v)
   $('tab-sync').hidden = !onSyncTab
   $('tab-sync').classList.toggle('active', onSyncTab)
   $('tab-home').classList.toggle('active', !onSyncTab)
@@ -542,30 +550,21 @@ function render() {
   for (const n of document.querySelectorAll('.company-nav')) n.hidden = code
   $('nav-company-group').hidden = code
   $('sb-name').textContent = code ? 'cclink-studio' : '蜗牛眼镜'
-  const paused = ['text', 'record', 'binary', 'deleted', 'cloned'].includes(v)
+  const paused = ['text', 'record', 'binary', 'deleted', 'public'].includes(v)
   const dot = $('company-dot')
   dot.hidden = !paused
   dot.className = 'dot paused'
   const sb = $('sb-sync')
   sb.classList.toggle('alert', paused)
-  sb.textContent = code ? '⑂ main  ● 4' : v === 'home' || v === 'setup' ? '↻ 未设置同步' : v === 'running' ? '↻ 同步中…' : v === 'cloned' ? '⚠ 需要同步密码' : paused ? '⚠ 同步暂停 · 查看原因' : '↻ 已同步 · 14:00'
-  sb.dataset.go = v === 'cloned' ? 'cloned' : paused ? v : v === 'home' ? 'setup' : 'settings'
+  sb.textContent = code ? '⑂ main  ● 4' : v === 'home' || v === 'setup' ? '↻ 未设置同步' : v === 'running' ? '↻ 同步中…' : paused ? '⚠ 同步暂停 · 查看原因' : '↻ 已同步 · 14:00'
+  sb.dataset.go = paused ? v : v === 'home' ? 'setup' : 'settings'
 
   view.replaceChildren()
   if (v === 'home' || v === 'synced') view.append(companyHome())
   else if (v === 'clone') { view.append(companyHome()); view.insertAdjacentHTML('beforeend', cloneModal()) }
-  else if (v === 'cloned') view.append(companyHome(`<div class="banner" role="status"><div style="flex:1"><b>公司记录已下载，需要同步密码才能读取</b>
-    文件已同步。19 条公司记录、312 条流水和 140 份原件已加密下载，输入在原电脑设置的同步密码后读入。
-    <div class="actions" style="margin-top:8px"><input class="field" type="password" aria-label="同步密码" placeholder="同步密码" style="width:220px"><button class="btn primary" data-go="unlocked">解锁公司记录</button>
-    <span class="faint">忘记密码：回原电脑在“同步位置”更换密码。</span></div></div></div>`))
-  else if (v === 'unlocked') view.append(companyHome(`<div class="banner ok" role="status"><div><b>已读入公司记录</b>待办、收支、客户记录与 MacBook Air 一致；之后两台电脑自动保持一致。</div></div>`))
+  else if (v === 'cloned') view.append(companyHome(`<div class="banner ok" role="status"><div><b>已下载并读入公司记录</b>待办、收支、客户记录与 MacBook Air 一致；之后两台电脑自动保持一致。</div></div>`))
   else if (v === 'git') view.innerHTML = codePage()
-  else view.innerHTML = { setup: setupPage, running: runningPage, settings: settingsPage, text: textPage, record: recordPage, binary: binaryPage, deleted: deletedPage }[v]()
-  if (v === 'cloned') {
-    // Records are downloaded but still encrypted: no to-dos until unlocked.
-    const todo = view.querySelector('.grid .card')
-    todo.innerHTML = '<header><h2>今天要处理</h2></header><div class="in muted">输入同步密码后显示公司待办。</div>'
-  }
+  else view.innerHTML = { setup: setupPage, running: runningPage, settings: settingsPage, text: textPage, record: recordPage, binary: binaryPage, deleted: deletedPage, public: publicPage }[v]()
   sizeDemo()
 }
 
