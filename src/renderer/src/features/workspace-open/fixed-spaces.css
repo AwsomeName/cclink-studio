@@ -965,6 +965,8 @@
 }
 .editor-toolbar.compact .toolbar-group {
   gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .editor-toolbar.compact .toolbar-group button {
   width: auto;
@@ -972,4 +974,21 @@
   padding: 0 8px;
   white-space: nowrap;
   font-size: 12px;
+}
+/* The home header is one line too: buttons keep their text, status text shortens first. */
+.project-home-header {
+  min-width: 0;
+}
+.project-home-header > *,
+.project-home-header-slot > * {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.project-home-header > .project-home-breadcrumb,
+.project-home-header-slot,
+.project-home-header-slot > .diary-today-state {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -74,6 +74,22 @@ try {
   )
   assert(written.includes('首页直接写的一行'), 'typing on the home page did not save to the file')
   await page.screenshot({ path: join(shots, 'v3-today-editable.png') })
+  // The status bar stays one line even in a narrow window.
+  await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 700))
+  await page.waitForTimeout(500)
+  const wrapped = await page.evaluate(() => {
+    const bar = document.querySelector('.status-bar')
+    const limit = bar.getBoundingClientRect().height
+    return [...bar.querySelectorAll('.status-bar-left > *, .status-bar-right > *')]
+      .filter((el) => el.getBoundingClientRect().height > limit + 1)
+      .map((el) => el.textContent)
+  })
+  assert.deepEqual(wrapped, [], 'status bar items wrapped: ' + wrapped.join(' | '))
+  const headerHeight = await page.evaluate(
+    () => document.querySelector('.project-home-header').getBoundingClientRect().height,
+  )
+  assert(headerHeight < 60, 'home header wrapped: ' + headerHeight)
+  await page.screenshot({ path: join(shots, 'v3-status-bar-narrow.png') })
   const month = join(defaultDir, '个人计划')
   const years = await readdir(month)
   result.files = years

@@ -389,6 +389,11 @@ export function PersonalDiaryHome(): React.ReactElement {
   // to the blank template instead of starting again.
   const autoDraftKey = useRef('')
   const [autoTried, setAutoTried] = useState('')
+  // The "drafting started" note is stale once today's file is open.
+  const hasToday = today.length > 0
+  useEffect(() => {
+    if (hasToday) setNotice('')
+  }, [hasToday])
   useEffect(() => {
     if (busy || !source || page !== '今天' || today.length) return
     if (dailyRun && ['queued', 'running'].includes(dailyRun.status)) return

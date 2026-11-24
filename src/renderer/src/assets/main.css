@@ -10204,6 +10204,14 @@ body.is-resizing-composer .agent-composer-resize-handle::after {
 .status-bar-left > *,
 .status-bar-right > * {
   min-width: 0;
+  /* The status bar is always one line: items shorten with an ellipsis, never wrap. */
+  white-space: nowrap;
+}
+
+/* Short status items (AI, diary sync) keep their full text; longer labels shrink first. */
+.status-bar-left > .status-bar-ai,
+.status-bar-left > .diary-sync {
+  flex-shrink: 0;
 }
 
 .status-bar-text {

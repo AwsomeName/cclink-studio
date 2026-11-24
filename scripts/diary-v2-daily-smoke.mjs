@@ -57,6 +57,12 @@ const remote = join(s.home, 'remote.git')
 const seed = join(s.home, '另一台设备')
 await git(s.home, ['init', '--bare', '--initial-branch=main', remote])
 const S = '个人计划'
+// Another device already set up the same address and wrote today's diary.
+await git(s.home, ['clone', remote, seed])
+await writeDiary(seed, S, todayRel, '# 另一台设备写的今天\n## 今日待做\n- [ ] 复查电源方案\n')
+await git(seed, ['add', '.'])
+await git(seed, ['commit', '-m', 'today'])
+await git(seed, ['push', 'origin', 'HEAD:main'])
 const result = {}
 let space
 try {
@@ -76,13 +82,14 @@ try {
       .first()
       .click()
 
-  // Today: waiting for the automatic draft at the configured time.
-  await home
-    .getByRole('article', { name: '今天的日记' })
-    .or(home.getByText(/AI 正在/))
-    .first()
-    .waitFor({ timeout: 60000 })
-  await page.screenshot({ path: join(shots, 'v2-today-waiting.png') })
+  // Today: first use took back the other device's diary first, so it opens as is (no new draft).
+  const todayArticle = home.getByRole('article', { name: '今天的日记' })
+  await todayArticle.getByText('复查电源方案').waitFor({ timeout: 60000 })
+  assert.equal(
+    await readFile(join(space, S, todayRel), 'utf8'),
+    '# 另一台设备写的今天\n## 今日待做\n- [ ] 复查电源方案\n',
+  )
+  await page.screenshot({ path: join(shots, 'v2-today-synced.png') })
 
   // Tasks: listed directly, both enabled on this device, no linking checkboxes.
   await nav('定时整理')
@@ -117,51 +124,12 @@ try {
   await home.getByText('周度').first().waitFor()
   await page.screenshot({ path: join(shots, 'v2-plans.png') })
 
-  // Sync before drafting: another device already pushed today's diary.
-  for (let i = 0; i < 20; i++) {
-    const r = await page.evaluate(
-      (p) => window.cclinkStudio.git.transfer({ action: 'diary-sync', workspacePath: p }),
-      space,
-    )
-    if (r.success && !r.snapshot.localChanges) break
-    await page.waitForTimeout(1000)
-  }
-  await git(s.home, ['clone', remote, seed])
-  await writeDiary(seed, S, todayRel, '# 另一台设备写的今天\n## 今日待做\n- [ ] 复查电源方案\n')
-  await git(seed, ['add', '.'])
-  await git(seed, ['commit', '-m', 'today'])
-  await git(seed, ['push'])
   await nav('今天')
-  await home.getByRole('button', { name: '现在起草' }).click()
-  await page.waitForFunction(async (root) => {
-    const service = window.cclinkStudio.scheduledTasks
-    const daily = (await service.list(root)).tasks.find((t) => t.definition.title === '每日起草')
-    return (await service.listRuns(root, daily.definition.id)).runs[0]?.status === 'skipped'
-  }, space)
-  await page.locator('.status-bar .diary-sync').click()
-  await page
-    .getByRole('region', { name: '我的空间同步' })
-    .getByRole('button', { name: '同步', exact: true })
-    .click()
-  await page.locator('.status-bar .diary-sync').filter({ hasText: '已同步' }).waitFor()
-  await nav('今天')
-  await home.getByRole('article', { name: '今天的日记' }).waitFor({ timeout: 60000 })
-  assert.equal(
-    await readFile(join(space, S, todayRel), 'utf8'),
-    '# 另一台设备写的今天\n## 今日待做\n- [ ] 复查电源方案\n',
-  )
-  const runs = await page.evaluate(async (path) => {
-    const list = await window.cclinkStudio.scheduledTasks.list(path)
-    const daily = list.tasks.find((t) => t.definition.title === '每日起草')
-    return (await window.cclinkStudio.scheduledTasks.listRuns(path, daily.definition.id)).runs
-  }, space)
-  result.presync = { status: runs[0].status, step: runs[0].currentStep }
-  assert.equal(runs[0].status, 'skipped')
-  await page.screenshot({ path: join(shots, 'v2-today-synced.png') })
+  await todayArticle.waitFor({ timeout: 60000 })
 
   // AI edit on request, change report, undo.
   const before = await readFile(join(space, S, todayRel), 'utf8')
-  await home.getByRole('button', { name: '让 AI 修改…' }).click()
+  await page.getByRole('button', { name: '让 AI 修改…' }).click()
   const composer = page.getByPlaceholder(/继续提问|输入消息/).first()
   await composer.waitFor()
   await composer.click()
@@ -170,6 +138,14 @@ try {
     '在「今日待做」下新增一条任务：- [ ] 联系散热片供应商。只改这一处，不要改其他内容。',
   )
   await page.keyboard.press('Enter')
+  // A Codex file change may ask once in the default 自动 permission mode; approve it if it does.
+  const report = home.getByRole('article', { name: 'AI 改动报告' })
+  const allow = page.getByRole('button', { name: /^允许/ }).first()
+  await allow
+    .or(report)
+    .first()
+    .waitFor({ timeout: 5 * 60_000 })
+  if (await allow.isVisible().catch(() => false)) await allow.click()
   await home.getByRole('article', { name: 'AI 改动报告' }).waitFor({ timeout: 5 * 60_000 })
   const edited = await readFile(join(space, S, todayRel), 'utf8')
   result.aiEdit = { changed: edited !== before, mentions: edited.includes('散热片') }
@@ -181,6 +157,7 @@ try {
   await page.screenshot({ path: join(shots, 'v2-ai-change-undone.png') })
 
   // In-place pull after review.
+  await git(seed, ['pull', '--no-rebase', 'origin', 'main'])
   await writeDiary(seed, S, '2026/11/1119_周四.md', '# 周四\n来自另一台设备\n')
   await git(seed, ['add', '.'])
   await git(seed, ['commit', '-m', 'thursday'])
