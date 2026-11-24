@@ -963,3 +963,13 @@
   padding: 4px 10px;
   font-size: 12px;
 }
+.editor-toolbar.compact .toolbar-group {
+  gap: 4px;
+}
+.editor-toolbar.compact .toolbar-group button {
+  width: auto;
+  min-width: 28px;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
