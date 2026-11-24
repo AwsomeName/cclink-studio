@@ -8,9 +8,8 @@ import { DiaryTasksView } from './DiaryTasksView'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
-import { useDiaryHeaderSlot, useDiaryNavigation } from './personal-diary-navigation'
+import { useDiaryNavigation } from './personal-diary-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { isoWeek } from '@shared/scheduled-task/scheduled-task-file-name'
 import {
   defaultDiaryDirectory,
@@ -288,7 +287,6 @@ export function PersonalDiaryHome(): React.ReactElement {
       ? daily.latestRun
       : undefined
   const selectedPreview = page === '今天' ? '' : previewPath
-  const headerSlot = useDiaryHeaderSlot((state) => state.slot)
   const todayDirty = useEditorStore((state) =>
     Boolean(todayFile && state.files[todayFile.path]?.dirty),
   )
@@ -453,25 +451,22 @@ export function PersonalDiaryHome(): React.ReactElement {
         ? 'AI 起草'
         : `${daily?.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''} 自动起草`
       : ''
-  const headerContent =
-    page === '今天' && todayFile && headerSlot
-      ? createPortal(
-          <>
-            <span className="diary-today-state" aria-label="今天的日记状态">
-              {draftLabel && <b>{draftLabel}</b>}
-              {draftLabel && ' · '}
-              {todayDirty ? '未保存' : '已保存'}
-            </span>
-            <button
-              className="diary-header-action"
-              onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
-            >
-              让 AI 修改…
-            </button>
-          </>,
-          headerSlot,
-        )
-      : null
+  // Status and 让 AI 修改 sit at the right of the editor toolbar; the page has no header row.
+  const toolbarExtra = todayFile ? (
+    <span className="diary-today-actions">
+      <span className="diary-today-state" aria-label="今天的日记状态">
+        {draftLabel && <b>{draftLabel}</b>}
+        {draftLabel && ' · '}
+        {todayDirty ? '未保存' : '已保存'}
+      </span>
+      <button
+        className="diary-header-action"
+        onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
+      >
+        让 AI 修改…
+      </button>
+    </span>
+  ) : null
   const previousDay = Object.keys(useDiaryCalendar.getState().days)
     .filter((date) => date < `${day.year}-${day.month}-${day.day}`)
     .sort()
@@ -509,6 +504,7 @@ export function PersonalDiaryHome(): React.ReactElement {
               filePath={todayFile.path}
               tabId={'today:' + todayFile.path}
               compact
+              toolbarExtra={toolbarExtra}
             />
           </div>
         </article>
@@ -658,7 +654,6 @@ export function PersonalDiaryHome(): React.ReactElement {
     <section
       className={page === '今天' ? 'personal-diary-home diary-today-doc' : 'personal-diary-home'}
     >
-      {headerContent}
       {page !== '今天' && (
         <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
       )}

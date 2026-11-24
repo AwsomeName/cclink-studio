@@ -67,7 +67,7 @@ try {
     await page.locator(`.project-strip-item[data-project-path="${fixedDir}"]`).count(),
     1,
   )
-  await page.locator('.project-home-breadcrumb').filter({ hasText: '我的空间 / 今天' }).waitFor()
+  await page.locator('.activity-bar-icon[aria-current="page"]', { hasText: '今天' }).waitFor()
   await page.screenshot({ path: join(shots, 'v3-after-import.png') })
 
   // Later imports go through 项目设置 › 从历史导入; same-name files are kept, not overwritten.

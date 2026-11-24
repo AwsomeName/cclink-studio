@@ -12,6 +12,8 @@ interface EditorToolbarProps {
   tabId?: string
   /** A slim toolbar for an editor embedded in a page that shows save state itself. */
   compact?: boolean
+  /** Page-owned status and actions, shown before the file name. */
+  extra?: React.ReactNode
   editor: Editor | null
   filePath?: string
   dirty: boolean
@@ -86,6 +88,7 @@ const compactLabels: Record<string, string> = {
 export function EditorToolbar({
   tabId,
   compact,
+  extra,
   editor,
   filePath,
   dirty,
@@ -387,6 +390,7 @@ export function EditorToolbar({
             {diagnosticsCount} 项提示
           </button>
         )}
+        {extra}
         {compact && filePath && (
           <span className="toolbar-file-name">{filePath.split('/').pop()}</span>
         )}

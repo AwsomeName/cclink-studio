@@ -85,10 +85,17 @@ try {
       .map((el) => el.textContent)
   })
   assert.deepEqual(wrapped, [], 'status bar items wrapped: ' + wrapped.join(' | '))
-  const headerHeight = await page.evaluate(
-    () => document.querySelector('.project-home-header').getBoundingClientRect().height,
-  )
-  assert(headerHeight < 60, 'home header wrapped: ' + headerHeight)
+  // My Space has no header row; status and 让 AI 修改 sit in the editor toolbar, which stays one line.
+  assert.equal(await page.locator('.project-home-header').count(), 0, 'no header row')
+  const toolbar = page.locator('.diary-today-editor .editor-toolbar')
+  await toolbar.getByRole('button', { name: '让 AI 修改…' }).waitFor()
+  await page.getByRole('button', { name: '项目设置', exact: true }).waitFor()
+  const actionsTop = await page.evaluate(() => {
+    const a = document.querySelector('.diary-today-actions').getBoundingClientRect()
+    const t = document.querySelector('.diary-today-editor .editor-toolbar').getBoundingClientRect()
+    return { a: a.height, t: t.height }
+  })
+  assert(actionsTop.a < 32, 'toolbar actions wrapped: ' + JSON.stringify(actionsTop))
   await page.screenshot({ path: join(shots, 'v3-status-bar-narrow.png') })
   const month = join(defaultDir, '个人计划')
   const years = await readdir(month)

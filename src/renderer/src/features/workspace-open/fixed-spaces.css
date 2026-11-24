@@ -1113,3 +1113,55 @@
   font-size: 13px;
   padding: 6px 14px;
 }
+/* My Space sync choice (docs/design/github-new-repo-2026-11-24). */
+.diary-sync-choice {
+  display: grid;
+  gap: 8px;
+}
+.personal-diary-home .diary-option.off > span > b {
+  opacity: 0.55;
+}
+.diary-sync-repo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--text-secondary);
+}
+.diary-sync-repo input {
+  width: 180px;
+}
+.diary-sync-choice .diary-option input[aria-label='Git 项目地址'] {
+  margin-top: 6px;
+  width: min(420px, 100%);
+}
+.diary-sync-choice .diary-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--text-accent, #3794ff);
+  cursor: pointer;
+}
+.diary-sync-ok {
+  color: #89d185;
+}
+/* Today status and 让 AI 修改 at the right of the editor toolbar (no header row). */
+.diary-today-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.editor-toolbar.compact .diary-today-actions .diary-header-action {
+  width: auto;
+  font-size: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.diary-today-actions + .toolbar-file-name {
+  border-left: 1px solid var(--border-color);
+  padding-left: 10px;
+}

@@ -86,6 +86,8 @@ interface MarkdownEditorProps {
   tabId: string
   /** Slim toolbar for an editor embedded in a page (the My Space today page). */
   compact?: boolean
+  /** Page-owned status and actions shown at the right of the compact toolbar. */
+  toolbarExtra?: React.ReactNode
 }
 
 interface ImageDraft {
@@ -98,6 +100,7 @@ export function MarkdownEditor({
   filePath,
   tabId,
   compact,
+  toolbarExtra,
 }: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -1067,6 +1070,7 @@ export function MarkdownEditor({
       <EditorToolbar
         tabId={tabId}
         compact={compact}
+        extra={toolbarExtra}
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}

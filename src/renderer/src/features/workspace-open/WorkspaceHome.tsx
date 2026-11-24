@@ -6,7 +6,6 @@ import { HardwareProductionSection } from '../../components/sidebar/HardwareProd
 import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
 import { useUIStore } from '../../stores/ui-store'
 import { PersonalDiaryHome } from './PersonalDiaryHome'
-import { useDiaryHeaderSlot, useDiaryNavigation } from './personal-diary-navigation'
 import { useAgentStore } from '../../stores/agent-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -37,33 +36,23 @@ export function WorkspaceHome({ settings = false }: { settings?: boolean }): Rea
   const config = useWorkspaceStore((s) => s.settingsSnapshot?.settings)
   const personalPath = useFixedSpacesStore((s) => s.spaces?.personal?.workspacePath)
   const isPersonal = ref.kind === 'local' && ref.path === personalPath
-  const diaryPage = useDiaryNavigation((s) => s.page)
   const name = isPersonal ? '我的空间' : (config?.name ?? workspaceRefLabel(ref))
-  // Diary homes use the mockup breadcrumb (「我的空间 / 今天」); the page title sits below it.
   const diary = config?.type === 'diary' || (isPersonal && !config)
   return (
     <div className="project-home-shell">
-      <header className="project-home-header">
-        {diary ? (
-          <nav className="project-home-breadcrumb" aria-label="位置">
-            {name} / {settings ? '项目设置' : diaryPage === 'Git' ? '同步' : diaryPage}
-          </nav>
-        ) : (
-          <>
-            <h1>{name}</h1>
-            <small>{config && workspaceTypeLabels[config.type]}</small>
-          </>
-        )}
-        {diary && !settings && (
-          <span className="project-home-header-slot" ref={useDiaryHeaderSlot.getState().setSlot} />
-        )}
-        {ref.kind === 'local' && (
-          <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>
-            <IconSettings size={14} />
-            {settings ? '返回首页' : '项目设置'}
-          </button>
-        )}
-      </header>
+      {/* Diary homes have no header row: 项目设置 lives in the left sidebar. */}
+      {!diary && (
+        <header className="project-home-header">
+          <h1>{name}</h1>
+          <small>{config && workspaceTypeLabels[config.type]}</small>
+          {ref.kind === 'local' && (
+            <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>
+              <IconSettings size={14} />
+              {settings ? '返回首页' : '项目设置'}
+            </button>
+          )}
+        </header>
+      )}
       {settings ? (
         <main className="project-settings-page">
           <WorkspaceSettingsForm />
