@@ -62,6 +62,13 @@ function OpenAsSelect({
     </select>
   )
 }
+/** Browser toolbar slot: only rendered when the page has a real alternative (local HTML source). */
+export function BrowserOpenAs({ tab }: { tab: Tab }): React.ReactElement | null {
+  const presentation = contentPresentation(tab)
+  if (!presentation || presentation.options.length < 2) return null
+  return <OpenAsSelect tab={tab} presentation={presentation} />
+}
+
 export function MarkdownOpenAs({ tabId }: { tabId: string }): React.ReactElement | null {
   const tab = useTabStore((state) => state.tabs.find((item) => item.id === tabId))
   const presentation = tab && contentPresentation(tab)

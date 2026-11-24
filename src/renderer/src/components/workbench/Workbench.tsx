@@ -349,9 +349,9 @@ export function Workbench({
         folded={foldStrip}
       />
 
-      {!(activeTab?.type === 'editor' && isMarkdownPath(activeTab.filePath)) && (
-        <ContentPresentationBar tab={activeTab} />
-      )}
+      {/* Markdown editors and browser tabs carry their open-as switch in their own toolbar. */}
+      {!(activeTab?.type === 'editor' && isMarkdownPath(activeTab.filePath)) &&
+        activeTab?.type !== 'browser' && <ContentPresentationBar tab={activeTab} />}
 
       {isBrowserTab && activeTabId && (
         <BrowserToolbar

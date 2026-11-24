@@ -19,6 +19,7 @@ import {
   IconZoomOut,
 } from '../common/Icons'
 import { BrowserHistoryMenu } from './BrowserHistoryMenu'
+import { BrowserOpenAs } from './ContentPresentationBar'
 import { useBrowserFindStore } from '../../features/browser/browser-find-store'
 import { useToastStore } from '../common/Toast'
 import {
@@ -524,6 +525,7 @@ export function BrowserToolbar({
           </div>
         )}
 
+        <BrowserOpenAs tab={tab} />
         <button
           type="button"
           className="browser-zoom-summary"

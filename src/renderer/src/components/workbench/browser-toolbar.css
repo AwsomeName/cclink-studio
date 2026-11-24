@@ -108,6 +108,11 @@
   min-width: 96px;
   font-variant-numeric: tabular-nums;
 }
+.browser-toolbar .content-open-as {
+  flex: 0 0 auto;
+  height: 28px;
+  font-size: 12px;
+}
 .zoom-mode-label {
   color: var(--text-accent);
   white-space: nowrap;
