@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>日记按天查看</title>
+    <style>
+      body {
+        margin: 0;
+        background: #151515;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 6px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1250px;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 0;
+        line-height: 1.6;
+        max-width: 620px;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .win {
+        display: flex;
+        width: 620px;
+        height: 560px;
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .side {
+        width: 120px;
+        background: #202124;
+        border-right: 1px solid #333;
+        padding: 12px 8px;
+        font-size: 13px;
+      }
+      .side div {
+        padding: 6px 8px;
+        border-radius: 5px;
+        color: #bbb;
+      }
+      .side .on {
+        background: #24364a;
+        color: #fff;
+      }
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 20px;
+        border-bottom: 1px solid #333;
+        font-size: 12.5px;
+        color: #aaa;
+        white-space: nowrap;
+      }
+      .bar b {
+        color: #ddd;
+        font-weight: 600;
+      }
+      .bar .gap {
+        flex: 1;
+      }
+      .bar .btn {
+        border: 1px solid #444;
+        border-radius: 5px;
+        padding: 2px 8px;
+        color: #ddd;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 20px 0;
+        font-size: 13px;
+        color: #aaa;
+      }
+      .nav b {
+        color: #fff;
+        font-size: 13px;
+      }
+      .doc {
+        flex: 1;
+        overflow: hidden;
+        padding: 12px 20px;
+        font-size: 13px;
+        line-height: 1.8;
+        color: #eee;
+      }
+      .doc h2 {
+        font-size: 18px;
+        margin: 0 0 6px;
+        color: #fff;
+      }
+      .doc h3 {
+        font-size: 14px;
+        margin: 10px 0 2px;
+        color: #fff;
+      }
+      .doc p {
+        margin: 0;
+      }
+      .foot {
+        display: flex;
+        gap: 18px;
+        padding: 8px 20px;
+        border-top: 1px solid #333;
+        font-size: 12px;
+        color: #999;
+      }
+      .foot b {
+        color: #ddd;
+        font-weight: 500;
+      }
+      .old {
+        opacity: 0.9;
+      }
+      .red {
+        outline: 2px solid #e05252;
+        outline-offset: 2px;
+      }
+      .old .hdr {
+        padding: 14px 20px 0;
+      }
+      .old .hdr h2 {
+        font-size: 20px;
+        margin: 0 0 8px;
+        color: #fff;
+      }
+      .old .chip {
+        display: inline-block;
+        border: 1px solid #444;
+        border-radius: 5px;
+        padding: 2px 8px;
+        margin-right: 6px;
+        font-size: 12px;
+      }
+      .old .card {
+        margin: 10px 20px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 12.5px;
+        line-height: 1.7;
+        color: #aaa;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>日记 · 按天查看：和「今天」同一个样子</h1>
+    <p class="note">
+      点日历或「日记」里的某一天，整页就是那天的文档，和「今天」页完全同一套版式：一条工具栏、一列正文、底部一行。去掉大标题「日记」、「问
+      AI」三个按钮和外面那层卡片；日期只出现一次（文档自己的标题）；上一篇 /
+      下一篇放到工具栏左侧；「继续写」不要了（正文本来就能直接编辑），「让 AI
+      修改…」留在工具栏右侧。
+    </p>
+    <div class="row">
+      <div>
+        <div class="win old">
+          <div class="side">
+            <div>今天</div>
+            <div class="on">日记</div>
+            <div>计划</div>
+          </div>
+          <div class="main">
+            <div class="red">
+              <div class="hdr">
+                <h2>日记</h2>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px">
+                  <span class="chip">‹ 上一篇</span
+                  ><b style="color: #fff">2026 年 11 月 6 日 周五</b><span style="flex: 1"></span
+                  ><span class="chip">下一篇 ›</span>
+                </div>
+                <div style="margin-bottom: 8px">
+                  问 AI：<span class="chip">这天做了什么</span
+                  ><span class="chip">最近一周花了多少钱</span><span class="chip">这个月总结</span>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div style="display: flex">
+                <b style="color: #ddd">1106_周五.md</b><span style="flex: 1"></span
+                ><span class="chip">继续写</span><span class="chip">让 AI 修改…</span>
+              </div>
+              <hr style="border-color: #333" />
+              <b style="color: #ddd; font-size: 15px">2026年11月6日 周五</b
+              ><br />今日体重：95.5KG<br />昨日睡眠：2:00 入睡，6:30 起<br />昨日花销：72 元……
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          <b>现在</b>：红框是旧的「按天查看」头部（大标题、日期、问
+          AI），下面再套一张卡片和第二个日期，正文是灰色的预览样式。
+        </p>
+      </div>
+      <div>
+        <div class="win">
+          <div class="side">
+            <div>今天</div>
+            <div class="on">日记</div>
+            <div>计划</div>
+          </div>
+          <div class="main">
+            <div class="bar">
+              <span>‹ 11/5</span><b>1106_周五.md</b><span>11/7 ›</span
+              ><span style="color: #555">|</span
+              ><span>正文 · B · I · 列表 · 待办 · 链接 · 图片 · 表格</span><span class="gap"></span
+              ><span class="btn">让 AI 修改…</span>
+            </div>
+            <div class="doc">
+              <h2>2026年11月6日 周五</h2>
+              <p>今日体重：95.5KG（11/5 记录；昨晚吃多，今日暂不称重）</p>
+              <p>昨日睡眠：2:00 入睡，6:30 起。</p>
+              <p>昨日花销：72 元（阿里云充值 12 元；超市采购 60 元）</p>
+              <p>昨日办公地点：奥森（12:00 出门，16:51 撤退）</p>
+              <h3>昨日总结</h3>
+              <p>节奏前松后紧：上午补觉，午后到奥森办公，晚间居家持续工作至凌晨……</p>
+              <h3>今日待做</h3>
+              <p>☐ AIR APP 产品说明</p>
+            </div>
+            <div class="foot">
+              <span>本周计划 <b>周一-2026-11-02.md</b> ›</span><span>同步 <b>已同步</b> ›</span
+              ><span style="flex: 1"></span><span>回到今天 ›</span>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          <b>改成</b>：和「今天」页一样，直接是这天的可编辑文档。工具栏左侧「‹ 11/5 · 文件名 · 11/7
+          ›」切换前后一天，右侧「让 AI 修改…」；正文同样 760 宽、15 号字、亮色；底部一行「本周计划 ·
+          同步 · 回到今天」。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

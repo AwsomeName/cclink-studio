@@ -1,3 +1,4 @@
+import { SourceTextEditor } from './SourceTextEditor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
@@ -88,6 +89,8 @@ interface MarkdownEditorProps {
   compact?: boolean
   /** Page-owned status and actions shown at the right of the compact toolbar. */
   toolbarExtra?: React.ReactNode
+  /** Page-owned controls at the left of the compact toolbar. */
+  toolbarLead?: React.ReactNode
 }
 
 interface ImageDraft {
@@ -101,6 +104,7 @@ export function MarkdownEditor({
   tabId,
   compact,
   toolbarExtra,
+  toolbarLead,
 }: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -1065,12 +1069,30 @@ export function MarkdownEditor({
     )
   }
 
+  // Embedded (My Space) pages have no 打开方式 switch: content the rich editor cannot round-trip,
+  // such as raw HTML, is edited as source right here instead of being shown as read-only.
+  if (compact && filePath && parseBlockedReason) {
+    return (
+      <div className="markdown-editor-wrapper compact-source">
+        {toolbarLead || toolbarExtra ? (
+          <div className="editor-toolbar compact">
+            {toolbarLead}
+            <span className="toolbar-file-name muted">源码模式</span>
+            {toolbarExtra}
+          </div>
+        ) : null}
+        <SourceTextEditor filePath={filePath} tabId={tabId} />
+      </div>
+    )
+  }
+
   return (
     <div className="markdown-editor-wrapper" ref={wrapperRef}>
       <EditorToolbar
         tabId={tabId}
         compact={compact}
         extra={toolbarExtra}
+        lead={toolbarLead}
         editor={parseBlockedReason || hydrationPending ? null : editor}
         filePath={filePath}
         dirty={dirty}

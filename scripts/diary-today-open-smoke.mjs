@@ -1,5 +1,5 @@
 // Real Electron + real local AI: entering 今天 before the scheduled draft time still ends in
-// today's file open for editing (drafted right away), and 本周计划 shows only this week's plan.
+// today's file open for editing (drafted right away), with the toolbar as the only row above it.
 // Simulated data only.
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
@@ -32,14 +32,14 @@ try {
   // The scheduled time is far ahead: the page must not just wait for it.
   await firstUse(s, { importFrom: history, dailyTime: '23:59' })
   const home = page.locator('.personal-diary-home')
-  await home
-    .locator('.diary-today-foot')
-    .filter({ hasText: `周一-${mondayText}.md` })
-    .waitFor()
-  assert.equal(await home.locator('.diary-today-foot').getByText('2026-08-24').count(), 0)
   assert.equal(await home.getByText(/23:59.*自动生成今天的草稿/).count(), 0)
   const article = home.getByRole('article', { name: '今天的日记' })
   await article.locator('.tiptap[contenteditable=true]').waitFor({ timeout: 5 * 60_000 })
+  // Redesign v3: with only the home tab open the tab strip folds away (its create buttons sit in
+  // the editor toolbar) and there is no bottom link row.
+  assert.equal(await page.locator('.tab-bar').isVisible(), false)
+  await article.getByRole('button', { name: '新建浏览器页' }).waitFor()
+  assert.equal(await home.locator('.diary-today-foot').count(), 0)
   await page.screenshot({ path: join(shots, 'v3-today-opened-before-time.png') })
   console.log('PASS today opens before the scheduled time')
 } catch (e) {

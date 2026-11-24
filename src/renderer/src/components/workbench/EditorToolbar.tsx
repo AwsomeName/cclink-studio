@@ -14,6 +14,8 @@ interface EditorToolbarProps {
   compact?: boolean
   /** Page-owned status and actions, shown before the file name. */
   extra?: React.ReactNode
+  /** Page-owned controls at the left of the compact toolbar; replaces the file name at the right. */
+  lead?: React.ReactNode
   editor: Editor | null
   filePath?: string
   dirty: boolean
@@ -89,6 +91,7 @@ export function EditorToolbar({
   tabId,
   compact,
   extra,
+  lead,
   editor,
   filePath,
   dirty,
@@ -251,6 +254,7 @@ export function EditorToolbar({
 
   return (
     <div className={compact ? 'editor-toolbar compact' : 'editor-toolbar'}>
+      {compact && lead}
       {tabId && !compact && <MarkdownOpenAs tabId={tabId} />}
       <div className="toolbar-group">
         <select
@@ -391,7 +395,7 @@ export function EditorToolbar({
           </button>
         )}
         {extra}
-        {compact && filePath && (
+        {compact && filePath && !lead && (
           <span className="toolbar-file-name">{filePath.split('/').pop()}</span>
         )}
         {/* The embedding page shows 已保存 itself; only unsaved or failed states show here. */}

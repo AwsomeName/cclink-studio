@@ -5594,6 +5594,10 @@ body.is-resizing-panels .main-area > div {
 }
 
 /* Tab Bar */
+/* My Space with only its home tab: the strip folds away; its create buttons sit in the page toolbar. */
+.tab-bar.tab-bar-folded {
+  display: none;
+}
 .tab-bar {
   display: flex;
   align-items: stretch;

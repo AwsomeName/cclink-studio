@@ -713,38 +713,47 @@
   margin-top: 4px;
   text-align: right;
 }
-.diary-day-head {
-  display: flex;
+.diary-day-nav {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  margin-right: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-secondary);
 }
-.diary-day-head h3 {
-  flex: 1;
-  margin: 0;
-  font-size: 18px;
+.diary-day-nav b {
+  color: var(--text-primary);
+  font-weight: 600;
 }
-.diary-ask {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin: 10px 0;
+.editor-toolbar.compact .diary-day-nav button {
+  width: auto;
+  padding: 2px 4px;
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
 }
-.diary-day-tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 6px;
+.editor-toolbar.compact .diary-day-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
-.diary-day-tabs button.on {
-  border-color: var(--accent-color, #2b74c4);
+.diary-day-nav + .toolbar-group {
+  border-left: 1px solid var(--border-color);
+  padding-left: 8px;
 }
-.diary-day-doc header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.diary-day-empty-bar {
+  padding: 8px 28px;
+  border-bottom: 1px solid var(--border-color);
 }
-.diary-day-doc header strong {
-  flex: 1;
+.diary-day-empty-bar .diary-day-nav button {
+  background: none;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.diary-day-empty > p {
+  margin: 24px 28px;
 }
 
 .diary-sync-panel {
@@ -855,16 +864,6 @@
   align-items: stretch;
   gap: 0;
 }
-.diary-today-switch {
-  display: flex;
-  gap: 12px;
-  padding: 6px 28px;
-  border-bottom: 1px solid var(--border-color);
-}
-.diary-today-switch .diary-link.on {
-  color: var(--text-primary);
-  font-weight: 600;
-}
 .diary-today-editor {
   flex: 1;
   min-height: 0;
@@ -872,8 +871,22 @@
   overflow: hidden;
 }
 .diary-today-editor .editor-toolbar {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding-left: 20px;
+  overflow: hidden;
+}
+/* One row always: the formatting buttons give way first; nav, AI and create buttons stay. */
+.diary-today-editor .editor-toolbar.compact > .toolbar-group {
+  flex: 0 1 auto;
+  min-width: 0;
+  /* Buttons that do not fit wrap onto a hidden second line: whole buttons hide, never halves. */
+  flex-wrap: wrap;
+  height: 28px;
+  overflow: hidden;
+  align-content: flex-start;
+}
+.diary-today-editor .editor-toolbar.compact > :not(.toolbar-group) {
+  flex-shrink: 0;
 }
 .editor-toolbar.compact .toolbar-file-name {
   color: var(--text-secondary);
@@ -885,32 +898,9 @@
   margin: 24px 28px 12px;
 }
 .diary-today-doc .diary-today > .diary-card,
-.diary-today-doc .diary-today > :not(.diary-today-entry):not(.diary-today-foot):not(h1) {
+.diary-today-doc .diary-today > :not(.diary-today-entry):not(h1) {
   margin-left: 28px;
   margin-right: 28px;
-}
-.diary-today-foot {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-top: auto;
-  padding: 8px 28px;
-  border-top: 1px solid var(--border-color);
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.diary-today-foot b {
-  color: var(--text-primary);
-  font-weight: 500;
-}
-.diary-today-foot-gap {
-  flex: 1;
-}
-.personal-diary-home .diary-today-foot button.diary-link {
-  background: none;
-  border: 0;
-  padding: 2px 0;
-  color: var(--text-secondary);
 }
 .project-home-header-slot {
   margin-left: auto;
@@ -1137,4 +1127,30 @@
 .diary-today-actions + .toolbar-file-name {
   border-left: 1px solid var(--border-color);
   padding-left: 10px;
+}
+/* Redesign v3: the toolbar is the only row above the text (docs/design/diary-day-view-2026-11-24). */
+.diary-file-picker {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 600;
+  padding: 1px 2px;
+  cursor: pointer;
+}
+.diary-file-picker:hover {
+  border-color: var(--border-color);
+}
+.editor-toolbar.compact .tab-create-actions {
+  background: transparent;
+  padding: 0 0 0 10px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border-color);
+}
+.editor-toolbar.compact .tab-create-actions .tab-create-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-color: transparent;
 }

@@ -101,21 +101,29 @@ try {
   // the date in the file name, project records not counted.
   const calendar = page.getByLabel('日记日历')
   await calendar.getByRole('gridcell', { name: '2026-11-18 有日记' }).click()
-  await home.getByRole('tab', { name: '1118_周三.md' }).waitFor()
-  await home.getByRole('tab', { name: '1118-周三.md' }).waitFor()
+  // Same-day pair: one dropdown beside the file name, no separate switch row.
+  const sameDay = home.getByLabel('当天的日记')
+  await sameDay.waitFor()
+  assert.deepEqual(await sameDay.locator('option').allInnerTexts(), [
+    '1118_周三.md',
+    '1118-周三.md',
+  ])
   assert.equal(await calendar.getByRole('gridcell', { name: '2026-11-01 有日记' }).count(), 0)
   await page.screenshot({ path: join(shots, 'v2-history.png') })
   for (let i = 0; i < 12 && !(await calendar.getByText('2026 年 7 月').isVisible()); i++)
     await calendar.getByRole('button', { name: '上个月' }).click()
   await calendar.getByRole('gridcell', { name: '2026-07-15 有日记' }).click()
-  await home.getByRole('heading', { name: '2026 年 7 月 15 日 周三' }).waitFor()
+  await home.getByLabel('切换日期').getByText(/^0715/).waitFor()
 
   // A file with raw HTML opens in source mode instead of being refused.
   for (let i = 0; i < 12 && !(await calendar.getByText('2026 年 11 月').isVisible()); i++)
     await calendar.getByRole('button', { name: '下个月' }).click()
   await calendar.getByRole('gridcell', { name: '2026-11-17 有日记' }).click()
-  await home.getByRole('button', { name: '继续写' }).click()
-  await page.getByRole('button', { name: '切到正文' }).waitFor()
+  // The day opens right here, editable as source (no 继续写 step, no read-only notice).
+  const source = home.getByRole('article', { name: '当天日记' }).locator('textarea').first()
+  await source.waitFor()
+  assert.match(await source.inputValue(), /原始 HTML/)
+  assert(await source.isEditable())
   assert.equal(await page.getByText('文档未被改写').count(), 0)
   await page.screenshot({ path: join(shots, 'v2-html-source.png') })
 

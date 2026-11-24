@@ -1,15 +1,15 @@
 import { DiaryPlans } from './DiaryPlans'
 import { DiarySetupWizard } from './DiarySetupWizard'
-import { DiarySyncPage, useDiarySyncLabel, useDiarySyncRevision } from './DiarySyncStatus'
-import { DiaryDayView } from './DiaryDayView'
+import { DiarySyncPage, useDiarySyncRevision } from './DiarySyncStatus'
+import { DiaryDayView, DiaryFilePicker } from './DiaryDayView'
+import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
 import { useDiaryNavigation } from './personal-diary-navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { isoWeek } from '@shared/scheduled-task/scheduled-task-file-name'
+import { useEffect, useRef, useState } from 'react'
 import {
   defaultDiaryDirectory,
   defaultDiaryTimezone,
@@ -270,15 +270,6 @@ export function PersonalDiaryHome(): React.ReactElement {
       )
     useDiaryCalendar.getState().publish(byDay, `${day.year}-${day.month}-${day.day}`)
   }, [files.diaries, day.year, day.month, day.day])
-  const readDiary = useCallback(
-    (path: string) =>
-      window.cclinkStudio.workspaceState.diaryDocument({
-        action: 'read',
-        workspacePath: ownerPath ?? undefined,
-        path: path.slice((source?.workspacePath.length ?? 0) + 1),
-      }),
-    [ownerPath, source?.workspacePath],
-  )
   const daily = findDailyDraft(tasks)
   const dailyRun =
     daily?.latestRun &&
@@ -289,37 +280,6 @@ export function PersonalDiaryHome(): React.ReactElement {
   const todayDirty = useEditorStore((state) =>
     Boolean(todayFile && state.files[todayFile.path]?.dirty),
   )
-  const syncText = useDiarySyncLabel(source?.workspacePath ?? null)
-  // This week's plan for the home row: only a file that belongs to the current week
-  // (its Monday's date, 第N周 or YYYY-WNN), from <diary>/<year>/周计划 or <plans>/周/<year>.
-  const [weekPlan, setWeekPlan] = useState<string | null>(null)
-  useEffect(() => {
-    if (!source) return
-    let alive = true
-    const today = new Date(Date.UTC(Number(day.year), Number(day.month) - 1, Number(day.day)))
-    const monday = new Date(today)
-    monday.setUTCDate(today.getUTCDate() - ((today.getUTCDay() + 6) % 7))
-    const mondayText = monday.toISOString().slice(0, 10)
-    const week = isoWeek(today)
-    const matches = (name: string): boolean =>
-      name.endsWith('.md') &&
-      (name.includes(mondayText) ||
-        name.includes(`${week.year}-W${week.week}`) ||
-        new RegExp(`第0?${Number(week.week)}周`).test(name))
-    const planRoot = config?.settings.diary?.planDirectory ?? '计划'
-    void Promise.all(
-      [
-        `${source.workspacePath}/${source.directory}/${day.year}/周计划`,
-        `${source.workspacePath}/${planRoot}/周/${week.year}`,
-      ].map((dir) => window.cclinkStudio.fs.readDir(dir).catch(() => [])),
-    ).then((lists) => {
-      const found = lists.flat().find((entry) => entry.type === 'file' && matches(entry.name))
-      if (alive) setWeekPlan(found?.name ?? null)
-    })
-    return () => {
-      alive = false
-    }
-  }, [source, day.year, day.month, day.day, revision, config?.settings.diary?.planDirectory])
   useEffect(() => {
     setPreviewPath('')
   }, [page, todayKey])
@@ -457,6 +417,7 @@ export function PersonalDiaryHome(): React.ReactElement {
         {draftLabel && <b>{draftLabel}</b>}
         {draftLabel && ' · '}
         {todayDirty ? '未保存' : '已保存'}
+        {notice && ` · ${notice}`}
       </span>
       <button
         className="diary-header-action"
@@ -464,12 +425,9 @@ export function PersonalDiaryHome(): React.ReactElement {
       >
         让 AI 修改…
       </button>
+      <FoldedTabCreateActions />
     </span>
   ) : null
-  const previousDay = Object.keys(useDiaryCalendar.getState().days)
-    .filter((date) => date < `${day.year}-${day.month}-${day.day}`)
-    .sort()
-    .pop()
   // Until the automatic draft or blank file has started, show no waiting card at all.
   const opening =
     !today.length &&
@@ -484,25 +442,22 @@ export function PersonalDiaryHome(): React.ReactElement {
       {todayFile && (
         // Entering 今天 opens today's diary right here, ready to type (no summary card).
         <article className="diary-today-entry" aria-label="今天的日记">
-          {today.length > 1 && (
-            <nav className="diary-today-switch" aria-label="今天的日记">
-              {today.map((file) => (
-                <button
-                  key={file.path}
-                  className={file.path === todayFile.path ? 'diary-link on' : 'diary-link'}
-                  onClick={() => setTodayPick(file.path)}
-                >
-                  {file.name}
-                </button>
-              ))}
-            </nav>
-          )}
           <div className="diary-today-editor">
             <MarkdownEditor
               key={todayFile.path}
               filePath={todayFile.path}
               tabId={'today:' + todayFile.path}
               compact
+              toolbarLead={
+                <span className="diary-day-nav">
+                  <DiaryFilePicker
+                    files={today}
+                    current={todayFile.path}
+                    onPick={setTodayPick}
+                    label="今天的日记"
+                  />
+                </span>
+              }
               toolbarExtra={toolbarExtra}
             />
           </div>
@@ -619,38 +574,22 @@ export function PersonalDiaryHome(): React.ReactElement {
           )}
         </div>
       )}
-      <footer className="diary-today-foot">
-        <button className="diary-link" onClick={() => setPage('计划')}>
-          本周计划 <b>{weekPlan ?? '还没有'}</b> ›
-        </button>
-        {source && (
-          <button className="diary-link" onClick={() => setPage('Git')}>
-            同步 <b>{syncText}</b> ›
-          </button>
-        )}
-        <span className="diary-today-foot-gap" />
-        {previousDay && (
-          <button
-            className="diary-link"
-            onClick={() => {
-              useDiaryCalendar.getState().select(previousDay)
-              setPage('日记')
-            }}
-          >
-            ‹ 前一篇 {Number(previousDay.slice(5, 7))}/{Number(previousDay.slice(8))}
-          </button>
-        )}
-      </footer>
     </div>
   )
   return (
     <section
-      className={page === '今天' ? 'personal-diary-home diary-today-doc' : 'personal-diary-home'}
+      className={
+        page === '今天' || page === '日记'
+          ? 'personal-diary-home diary-today-doc'
+          : 'personal-diary-home'
+      }
     >
-      {page !== '今天' && (
+      {page !== '今天' && page !== '日记' && (
         <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
       )}
-      {notice && <p role="status">{notice}</p>}
+      {notice && page !== '日记' && !(page === '今天' && todayFile) && (
+        <p role="status">{notice}</p>
+      )}
       {error && <p role="alert">{error}</p>}
       {busy && !todayFile && (
         <p role="status" className="muted">
@@ -669,9 +608,7 @@ export function PersonalDiaryHome(): React.ReactElement {
       ) : (
         <>
           {page === '今天' && todayView}
-          {page === '日记' && source && (
-            <DiaryDayView read={readDiary} openFile={openFile} directory={source.directory} />
-          )}
+          {page === '日记' && source && <DiaryDayView />}
           {page === '计划' && source && source.workspacePath === ownerPath && (
             <DiaryPlans
               key={ownerPath}

@@ -1,3 +1,4 @@
+import { create } from 'zustand'
 import { useUIStore } from '../../stores/ui-store'
 import {
   useCallback,
@@ -77,6 +78,8 @@ interface TabBarProps {
   onNewTerminal: () => void
   onShowMenu: (tabId: string, x: number, y: number, focusReturn: HTMLElement) => void
   conversationDropActive: boolean
+  /** Only My Space's home tab is open: the strip folds away (its buttons move to the page). */
+  folded?: boolean
 }
 
 export function TabBar({
@@ -95,6 +98,7 @@ export function TabBar({
   onNewTerminal,
   onShowMenu,
   conversationDropActive,
+  folded,
 }: TabBarProps): React.ReactElement {
   const setAgentMode = useUIStore((state) => state.setAgentPanelMode)
   const layout = tabs.find((tab) => tab.id === activeTabId)?.workbenchLayout
@@ -386,7 +390,7 @@ export function TabBar({
   return (
     <div
       ref={tabBarRef}
-      className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}`}
+      className={`tab-bar ${conversationDropActive ? 'conversation-drop-target' : ''}${folded ? ' tab-bar-folded' : ''}`}
     >
       <div className="tab-strip-shell" ref={shellRef} role="tablist" aria-label="工作台标签">
         {visiblePins.map(renderTab)}
@@ -445,45 +449,12 @@ export function TabBar({
           </div>
         )}
       </div>
-      <div className="tab-create-actions" role="group" aria-label="新建">
-        {/* 按各图标的轮廓留白校准到约 13px 可见高度，保持视觉居中。 */}
-        <button
-          type="button"
-          className="tab-create-button tab-new-browser-button"
-          title="新建浏览器页"
-          aria-label="新建浏览器页"
-          onClick={onNewBrowser}
-        >
-          <IconGlobe size={16} />
-        </button>
-        <button
-          type="button"
-          className="tab-create-button"
-          title="新建 Markdown 草稿"
-          aria-label="新建 Markdown 草稿"
-          onClick={onNewDocument}
-        >
-          <IconFile size={13} />
-        </button>
-        <button
-          type="button"
-          className="tab-create-button"
-          title="新建 Terminal"
-          aria-label="新建 Terminal"
-          onClick={onNewTerminal}
-        >
-          <IconTerminal size={17} />
-        </button>
-        <button
-          type="button"
-          className="tab-create-button"
-          title="新建远程桌面"
-          aria-label="新建远程桌面"
-          onClick={onNewDesktop}
-        >
-          <IconMonitor size={16} />
-        </button>
-      </div>
+      <TabCreateActions
+        onNewBrowser={onNewBrowser}
+        onNewDocument={onNewDocument}
+        onNewTerminal={onNewTerminal}
+        onNewDesktop={onNewDesktop}
+      />
       {conversationDropActive && (
         <div className="conversation-tab-drop-hint" aria-hidden="true">
           松开以在中间 Tab 打开会话
@@ -503,4 +474,72 @@ function takePins(pins: Tab[], units: number, wide: (tab: Tab) => boolean): Tab[
     used += cost
   }
   return visible
+}
+
+export interface TabCreateHandlers {
+  onNewDocument: () => void
+  onNewBrowser: () => void
+  onNewDesktop: () => void
+  onNewTerminal: () => void
+}
+
+/** 新建浏览器页 / Markdown / Terminal / 远程桌面. Also shown in a My Space page toolbar when the
+ * tab strip is folded away (only the home tab is open). */
+export function TabCreateActions({
+  onNewDocument,
+  onNewBrowser,
+  onNewDesktop,
+  onNewTerminal,
+}: TabCreateHandlers): React.ReactElement {
+  return (
+    <div className="tab-create-actions" role="group" aria-label="新建">
+      {/* 按各图标的轮廓留白校准到约 13px 可见高度，保持视觉居中。 */}
+      <button
+        type="button"
+        className="tab-create-button tab-new-browser-button"
+        title="新建浏览器页"
+        aria-label="新建浏览器页"
+        onClick={onNewBrowser}
+      >
+        <IconGlobe size={16} />
+      </button>
+      <button
+        type="button"
+        className="tab-create-button"
+        title="新建 Markdown 草稿"
+        aria-label="新建 Markdown 草稿"
+        onClick={onNewDocument}
+      >
+        <IconFile size={13} />
+      </button>
+      <button
+        type="button"
+        className="tab-create-button"
+        title="新建 Terminal"
+        aria-label="新建 Terminal"
+        onClick={onNewTerminal}
+      >
+        <IconTerminal size={17} />
+      </button>
+      <button
+        type="button"
+        className="tab-create-button"
+        title="新建远程桌面"
+        aria-label="新建远程桌面"
+        onClick={onNewDesktop}
+      >
+        <IconMonitor size={16} />
+      </button>
+    </div>
+  )
+}
+
+/** Set by the workbench; a My Space page shows the create buttons when the strip is folded. */
+export const useFoldedTabStrip = create<{ folded: boolean; handlers: TabCreateHandlers | null }>(
+  () => ({ folded: false, handlers: null }),
+)
+
+export function FoldedTabCreateActions(): React.ReactElement | null {
+  const { folded, handlers } = useFoldedTabStrip()
+  return folded && handlers ? <TabCreateActions {...handlers} /> : null
 }

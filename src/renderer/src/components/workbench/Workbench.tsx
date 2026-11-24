@@ -7,7 +7,8 @@ import { workspaceRefKey } from '@shared/workspace-ref'
 import { CompanySidebar } from '../../features/company-workspace/CompanySidebar'
 import { AndroidToolbar } from './AndroidToolbar'
 import { BrowserToolbar } from './BrowserToolbar'
-import { TabBar } from './TabBar'
+import { TabBar, useFoldedTabStrip } from './TabBar'
+import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-store'
 import { WorkbenchContent } from './WorkbenchContent'
 import { useBrowserEvents } from './use-browser-events'
 import { useWorkbenchBounds } from './use-workbench-bounds'
@@ -59,6 +60,13 @@ export function Workbench({
   const clearBrowserNavigation = useBrowserStore((s) => s.clearNavigation)
   const contentRef = useRef<HTMLDivElement>(null)
   const tabBarRef = useRef<HTMLDivElement>(null)
+  const personalPath = useFixedSpacesStore((state) => state.spaces?.personal?.workspacePath)
+  // My Space with only its home tab: fold the strip; its buttons move to the page toolbar.
+  const foldStrip =
+    tabs.length === 1 &&
+    tabs[0].type === 'workspace-home' &&
+    activeWorkspaceRef.kind === 'local' &&
+    activeWorkspaceRef.path === personalPath
   const [conversationDropActive, setConversationDropActive] = useState(false)
   const [addressFocusRequestTabId, setAddressFocusRequestTabId] = useState<string | null>(null)
 
@@ -178,6 +186,18 @@ export function Workbench({
     },
     [executeCommand, showToast],
   )
+  useEffect(() => {
+    useFoldedTabStrip.setState({
+      folded: foldStrip,
+      handlers: {
+        onNewDocument: () => void createTab('workbench.newTab'),
+        onNewBrowser: () => void createTab('browser.newTab'),
+        onNewDesktop: () => void createTab('desktop.newTab'),
+        onNewTerminal: () => void createTab('terminal.newTab'),
+      },
+    })
+  }, [foldStrip, createTab])
+  useEffect(() => () => useFoldedTabStrip.setState({ folded: false }), [])
 
   const handleAddressFocusHandled = useCallback((tabId: string): void => {
     setAddressFocusRequestTabId((requestedTabId) =>
@@ -326,6 +346,7 @@ export function Workbench({
         onNewTerminal={() => void createTab('terminal.newTab')}
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
         conversationDropActive={conversationDropActive}
+        folded={foldStrip}
       />
 
       {!(activeTab?.type === 'editor' && isMarkdownPath(activeTab.filePath)) && (

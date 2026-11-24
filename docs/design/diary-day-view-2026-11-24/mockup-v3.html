@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>日记按天查看效果图</title>
+    <style>
+      :root {
+        --bg: #1e1e1e;
+        --side: #202124;
+        --top: #2a2a2b;
+        --line: #333;
+        --text: #ccc;
+        --hi: #fff;
+        --mut: #8b8f96;
+        --acc: #3b8eea;
+        --sel: #24364a;
+        --status: #2b6cb0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: var(--text);
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1300px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 10px 0 28px;
+        line-height: 1.6;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .app {
+        width: 1300px;
+        height: 760px;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+      }
+      .top {
+        height: 40px;
+        background: var(--top);
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 0 16px;
+        font-size: 13px;
+        color: #bbb;
+        border-bottom: 1px solid var(--line);
+      }
+      .top .on {
+        color: #fff;
+        border-bottom: 2px solid var(--acc);
+        padding: 10px 4px;
+      }
+      .top .gap {
+        flex: 1;
+      }
+      .body {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+      .side {
+        width: 220px;
+        background: var(--side);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        padding: 10px 8px;
+        font-size: 13.5px;
+      }
+      .side .h {
+        color: var(--mut);
+        font-size: 12px;
+        padding: 4px 10px;
+      }
+      .side .it {
+        padding: 7px 10px;
+        border-radius: 6px;
+        color: #ccc;
+      }
+      .side .it.on {
+        background: var(--sel);
+        color: #fff;
+        box-shadow: inset 2px 0 var(--acc);
+      }
+      .side hr {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 8px 0;
+      }
+      .cal {
+        margin-top: auto;
+        border-top: 1px solid var(--line);
+        padding: 10px 6px 0;
+        font-size: 12px;
+      }
+      .cal .t {
+        display: flex;
+        justify-content: space-between;
+        color: #ddd;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .cal .g {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        text-align: center;
+        color: #bbb;
+      }
+      .cal .g span {
+        padding: 3px 0;
+        border-radius: 4px;
+        position: relative;
+      }
+      .cal .g .d::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -1px;
+        width: 3px;
+        height: 3px;
+        margin-left: -1.5px;
+        border-radius: 50%;
+        background: var(--acc);
+      }
+      .cal .g .sel {
+        background: var(--acc);
+        color: #fff;
+      }
+      .cal .g .now {
+        outline: 1px solid var(--acc);
+      }
+      .cal .f {
+        color: var(--mut);
+        text-align: right;
+        margin-top: 6px;
+      }
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .tabs {
+        height: 34px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        color: var(--acc);
+        font-size: 14px;
+      }
+      .switch {
+        display: flex;
+        gap: 16px;
+        padding: 8px 28px;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--mut);
+      }
+      .switch b {
+        color: #fff;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 7px 28px;
+        border-bottom: 1px solid var(--line);
+        font-size: 12.5px;
+        color: var(--mut);
+        white-space: nowrap;
+      }
+      .bar .nav {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding-right: 12px;
+        border-right: 1px solid var(--line);
+      }
+      .bar .nav b {
+        color: #eee;
+      }
+      .bar .tools {
+        display: flex;
+        gap: 14px;
+        color: #bbb;
+      }
+      .bar .gap {
+        flex: 1;
+      }
+      .bar .ai {
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 3px 10px;
+        color: #ddd;
+      }
+      .doc {
+        flex: 1;
+        overflow: hidden;
+        padding: 22px 28px;
+      }
+      .col {
+        max-width: 760px;
+        color: #f2f2f2;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+      .col h2 {
+        font-size: 24px;
+        margin: 0 0 10px;
+        color: #fff;
+      }
+      .col h3 {
+        font-size: 17px;
+        margin: 16px 0 4px;
+        color: #fff;
+      }
+      .col p {
+        margin: 0 0 4px;
+      }
+      .col .caret {
+        display: inline-block;
+        width: 1.5px;
+        height: 18px;
+        background: #fff;
+        vertical-align: -3px;
+        margin-left: 1px;
+      }
+      .col .todo {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .col .todo i {
+        width: 13px;
+        height: 13px;
+        border: 1.5px solid #999;
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .foot {
+        display: flex;
+        gap: 24px;
+        padding: 9px 28px;
+        border-top: 1px solid var(--line);
+        font-size: 12.5px;
+        color: var(--mut);
+      }
+      .foot b {
+        color: #ddd;
+        font-weight: 500;
+      }
+      .foot .gap {
+        flex: 1;
+      }
+      .agent {
+        width: 300px;
+        border-left: 1px solid var(--line);
+        background: #1b1c1f;
+        display: flex;
+        flex-direction: column;
+      }
+      .agent .h {
+        padding: 14px 16px;
+        color: #fff;
+        font-weight: 600;
+        border-bottom: 1px solid var(--line);
+      }
+      .agent .in {
+        margin: auto 12px 12px;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        height: 110px;
+        padding: 10px;
+        color: #777;
+        font-size: 12.5px;
+      }
+      .status {
+        height: 24px;
+        background: var(--status);
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 0 14px;
+        font-size: 12px;
+        color: #e8f0ff;
+      }
+      .empty {
+        padding: 40px 28px;
+        color: var(--mut);
+        font-size: 14px;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+      }
+      .mini .app {
+        width: 640px;
+        height: 420px;
+      }
+      .mini .side,
+      .mini .agent {
+        display: none;
+      }
+
+      .small {
+        width: 640px;
+        height: 430px;
+      }
+      .small .main {
+        border-left: 0;
+      }
+      .mark {
+        position: relative;
+        outline: 2px solid #e05252;
+        outline-offset: -2px;
+      }
+      .mark em {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-style: normal;
+        font-size: 11.5px;
+        color: #ff8a8a;
+        background: #2a1414;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+      .tabs .gap,
+      .switch {
+        position: relative;
+      }
+      .tabs {
+        gap: 10px;
+      }
+      .tabs .gap {
+        flex: 1;
+      }
+      .icons {
+        color: #999;
+        letter-spacing: 3px;
+        font-size: 12px;
+        padding-left: 10px;
+        border-left: 1px solid var(--line);
+      }
+      .bar.first {
+        padding-top: 9px;
+        padding-bottom: 9px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>重新设计 · 去掉没内容却占一整行的行</h1>
+    <p class="note">
+      现在「我的空间」的页面里有 4 行几乎没有内容：① 只有一个 ⌂ 和右侧 4 个小图标的标签栏；②
+      同一天两份日记的切换行；③ 底部「本周计划 · 同步 · 回到今天」；④
+      提示行（如「今天还没有日记，已开始起草…」）。改成：<b style="color: #fff"
+        >编辑器工具栏就是第一行，下面直接是正文</b
+      >。① 只有首页时不显示标签栏，4 个图标并到工具栏最右；打开别的文件后标签栏才出现。②
+      同一天多份并成文件名旁的下拉 ▾。③
+      删除：本周计划、同步、今天都已在左侧栏，同步状态在底部状态栏。④
+      提示只在需要时出现，并且出现在工具栏里，不单独占行。「今天」页同样处理。
+    </p>
+    <div class="row">
+      <div>
+        <div class="app small">
+          <div class="body">
+            <div class="main">
+              <div class="tabs mark">
+                ⌂<span class="gap"></span><span class="icons">◍ ▯ ▣ ▭</span
+                ><em>① 只有一个图标</em>
+              </div>
+              <div class="switch mark">
+                <b>1118_周三.md</b><span>1118-周三.md</span><em>② 切换行</em>
+              </div>
+              <div class="bar">
+                <span class="nav"><span>‹ 11/17</span><b>1118_周三.md</b><span>11/20 ›</span></span
+                ><span class="tools"
+                  ><span>正文 ▾</span><span>B</span><span>I</span><span>列表</span
+                  ><span>待办</span></span
+                ><span class="gap"></span><span class="ai">让 AI 修改…</span>
+              </div>
+              <div class="doc">
+                <div class="col">
+                  <h2>周三</h2>
+                  <h3>今日打卡</h3>
+                  <p>12:00　午饭　35 元</p>
+                </div>
+              </div>
+              <div class="foot mark">
+                <span>本周计划 <b>还没有</b> ›</span><span>同步 <b>未设置</b> ›</span
+                ><span class="gap"></span><span>回到今天 ›</span><em>③ 底部一行</em>
+              </div>
+            </div>
+          </div>
+          <div class="status">
+            <span>本地 · 我的空间</span><span>AI 就绪</span><span>未设置同步</span>
+          </div>
+        </div>
+        <p class="cap"><b>现在</b>：正文上面 3 行、下面 1 行，红色标出的都是几乎空的行。</p>
+      </div>
+      <div>
+        <div class="app small">
+          <div class="body">
+            <div class="main">
+              <div class="bar first">
+                <span class="nav"
+                  ><span>‹ 11/17</span><b>1118_周三.md ▾</b><span>11/20 ›</span></span
+                ><span class="tools"
+                  ><span>正文 ▾</span><span>B</span><span>I</span><span>列表</span
+                  ><span>待办</span></span
+                ><span class="gap"></span><span>已保存</span><span class="ai">让 AI 修改…</span
+                ><span class="icons">◍ ▯ ▣ ▭</span>
+              </div>
+              <div class="doc">
+                <div class="col">
+                  <h2>周三</h2>
+                  <h3>今日打卡</h3>
+                  <p>12:00　午饭　35 元</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="status">
+            <span>本地 · 我的空间</span><span>AI 就绪</span><span>未设置同步</span>
+          </div>
+        </div>
+        <p class="cap">
+          <b>改成</b>：只剩一行工具栏，正文从第二行开始。同一天两份时点「1118_周三.md ▾」选另一份。
+        </p>
+      </div>
+    </div>
+
+    <div class="app">
+      <div class="top">
+        <span class="on">我的空间</span><span>woniu-forward</span><span>研发日记</span
+        ><span>＋ 新建 / 打开</span><span>历史项目</span><span class="gap"></span
+        ><span>Studio 设置</span>
+      </div>
+      <div class="body">
+        <div class="side">
+          <div class="h">我的空间</div>
+          <div class="it">今天</div>
+          <div class="it on">日记</div>
+          <div class="it">计划</div>
+          <div class="it">定时整理</div>
+          <div class="it">同步</div>
+          <div class="it">项目设置</div>
+          <hr />
+          <div class="h">工作</div>
+          <div class="it">文件</div>
+          <div class="it">会话</div>
+          <div class="it">工具</div>
+          <div class="cal">
+            <div class="t"><span>‹</span><span>2026 年 11 月</span><span>›</span></div>
+            <div class="g">
+              <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span
+              ><span>六</span><span>日</span> <span></span><span></span><span></span><span></span
+              ><span></span><span></span><span>1</span> <span>2</span><span class="d">3</span
+              ><span class="d">4</span><span class="d">5</span><span class="sel">6</span
+              ><span class="d">7</span><span class="d">8</span> <span class="d">9</span
+              ><span class="d">10</span><span class="d">11</span><span class="d">12</span
+              ><span class="d">13</span><span class="d">14</span><span class="d">15</span>
+              <span class="d">16</span><span class="d">17</span><span class="d">18</span
+              ><span class="d">19</span><span class="d">20</span><span class="d">21</span
+              ><span class="d">22</span> <span class="d">23</span><span class="now d">24</span
+              ><span>25</span><span>26</span><span>27</span><span>28</span><span>29</span>
+            </div>
+            <div class="f">本月 22 篇</div>
+          </div>
+        </div>
+        <div class="main">
+          <div class="bar first">
+            <span class="nav"><span>‹ 11/5</span><b>1106_周五.md</b><span>11/7 ›</span></span>
+            <span class="tools"
+              ><span>正文 ▾</span><span>B</span><span>I</span><span>• 列表</span><span>☐ 待办</span
+              ><span>链接</span><span>图片</span><span>表格</span></span
+            >
+            <span class="gap"></span><span>已保存</span><span class="ai">让 AI 修改…</span
+            ><span class="icons">◍ ▯ ▣ ▭</span>
+          </div>
+          <div class="doc">
+            <div class="col">
+              <h2>2026年11月6日 周五</h2>
+              <p>今日体重：95.5KG（11/5 记录；昨晚吃多，今日暂不称重）</p>
+              <p>昨日睡眠：2:00 入睡，6:30 起。</p>
+              <p>
+                昨日花销：72 元（阿里云充值 12 元；超市采购 60 元，鸡蛋、蔬菜等），另购儿童腰凳 30
+                元<span class="caret"></span>
+              </p>
+              <p>AI 剩余额度：Codex 周额度约剩 33%；Claude 已用 22%</p>
+              <p>昨日办公地点：奥森（12:00 出门，16:51 撤退；晚间居家工作至凌晨）</p>
+              <h3>昨日总结</h3>
+              <p>
+                节奏前松后紧：上午补觉，午后到奥森办公，晚间居家持续工作至凌晨，战略思考与基建修复为主。
+              </p>
+              <h3>今日待做</h3>
+              <p class="todo"><i></i>AIR APP 产品说明定稿</p>
+              <p class="todo"><i></i>核对本周计划的优先级</p>
+            </div>
+          </div>
+        </div>
+        <div class="agent">
+          <div class="h">新会话</div>
+          <div class="in">继续提问，或用 @ 引用资源…</div>
+        </div>
+      </div>
+      <div class="status"><span>本地 · 我的空间</span><span>AI 就绪</span><span>已同步</span></div>
+    </div>
+    <p class="cap">
+      <b>整体效果（日记某一天）</b
+      >：项目栏下面第一行就是工具栏，接着就是正文，一直到状态栏。「今天」页完全一样，只是工具栏左侧没有前后切换、状态显示「01:00
+      自动起草 · 已保存」；起草中这类提示也写在这里，不另起一行。
+    </p>
+  </body>
+</html>

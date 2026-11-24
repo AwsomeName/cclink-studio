@@ -91,7 +91,11 @@ try {
   }
   assert(log, 'new repository received the first sync')
   // The sync settings page shows the repository, synced.
-  await page.locator('.diary-today-foot button').filter({ hasText: '同步' }).first().click()
+  await page
+    .locator('.workspace-sidebar-shell')
+    .getByRole('button', { name: '同步', exact: true })
+    .first()
+    .click()
   const panel = page.getByRole('region', { name: '我的空间同步' })
   await panel.getByText('tester-my-space.git').waitFor()
   await page.screenshot({ path: join(shots, 'created-and-synced.png') })
