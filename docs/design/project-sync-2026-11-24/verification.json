@@ -1,0 +1,135 @@
+[
+ {
+  "name": "home",
+  "view": "home",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "setup",
+  "view": "setup",
+  "w": 1440,
+  "h": 1000,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "running",
+  "view": "running",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "synced",
+  "view": "synced",
+  "w": 1440,
+  "h": 900,
+  "theme": "light",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "conflict-text",
+  "view": "text",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "conflict-binary",
+  "view": "binary",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "deleted",
+  "view": "deleted",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "clone",
+  "view": "clone",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "cloned-company",
+  "view": "cloned",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "code-project",
+  "view": "git",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "setup-narrow",
+  "view": "setup",
+  "w": 375,
+  "h": 1500,
+  "theme": "light",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "interaction",
+  "steps": [
+   "设置同步",
+   "none disables save: true",
+   "正在第一次同步",
+   "↻ 已同步 · 14:00",
+   "text continue disabled before feedback: true",
+   "↻ 已同步 · 14:00"
+  ],
+  "errors": []
+ }
+]

@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>项目同步效果稿</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f5; --chrome: #e9ecf0;
+  --border: #dde1e6; --text: #1d2228; --muted: #5f6873; --faint: #8a939d;
+  --accent: #0a6ccf; --accent-soft: #e3effb; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #9a5b00; --warn-soft: #fdf1dc; --danger: #b42318; --danger-soft: #fdecea;
+  --ok: #1d7a43; --ok-soft: #e3f4ea; --add: #e6f4ea; --del: #fbe9e7; --demo: #fffbe6; --demo-border: #e8d48a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+    --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+    --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+    --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+    --ok: #6fcf97; --ok-soft: #1d3326; --add: #1d3326; --del: #3c2322; --demo: #2c2a1f; --demo-border: #5a5030;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1e1f21; --surface: #232427; --surface-2: #2b2d31; --chrome: #2a2b2e;
+  --border: #393b40; --text: #e4e6ea; --muted: #a2a8b1; --faint: #757c86;
+  --accent: #4ea3f5; --accent-soft: #1f3550; --statusbar: #0a6ccf; --on-accent: #fff;
+  --warn: #f0b35a; --warn-soft: #3a2e1a; --danger: #f2877d; --danger-soft: #3c2322;
+  --ok: #6fcf97; --ok-soft: #1d3326; --add: #1d3326; --del: #3c2322; --demo: #2c2a1f; --demo-border: #5a5030;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.55 -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+.demo { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 8px 12px; background: var(--demo); border-bottom: 1px solid var(--demo-border); font-size: 12px; }
+.demo b { margin-right: 4px; }
+.demo button { border: 1px solid var(--demo-border); background: transparent; border-radius: 12px; padding: 1px 10px; }
+.demo button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.demo .say { flex-basis: 100%; color: var(--muted); }
+
+.app { display: grid; grid-template-rows: 40px minmax(0, 1fr) 24px; height: calc(100vh - var(--demo-h, 0px)); min-height: 640px; }
+.strip { display: flex; align-items: center; gap: 2px; padding: 0 8px; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.proj { position: relative; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); white-space: nowrap; }
+.proj.active { color: var(--text); background: var(--surface); border-color: var(--accent); }
+.proj .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot.pending { background: var(--accent); }
+.dot.paused { background: var(--warn); }
+.strip .sep { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+
+.body { display: grid; grid-template-columns: 180px minmax(0, 1fr); min-height: 0; }
+.side { background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+.side .item { display: flex; align-items: center; gap: 9px; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); text-align: left; white-space: nowrap; }
+.side .item.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.side .group { margin: 14px 10px 4px; font-size: 11px; color: var(--faint); }
+
+.center { display: grid; grid-template-rows: 34px minmax(0, 1fr); min-width: 0; min-height: 0; }
+.tabs { display: flex; background: var(--chrome); border-bottom: 1px solid var(--border); overflow: hidden; }
+.tab { display: flex; align-items: center; gap: 7px; padding: 0 14px; border: 0; border-right: 1px solid var(--border); background: none; color: var(--muted); white-space: nowrap; }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px 0 var(--accent); }
+.view { min-height: 0; overflow: auto; }
+.page { padding: 18px 24px 40px; max-width: 1180px; }
+
+.head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.head h1 { margin: 0; font-size: 20px; font-weight: 600; }
+.head .type { font-size: 12px; color: var(--muted); padding: 1px 8px; border: 1px solid var(--border); border-radius: 10px; margin-left: 8px; vertical-align: 3px; font-weight: 400; }
+.head .sub { color: var(--muted); margin-top: 2px; }
+.head .right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.link { border: 0; background: none; color: var(--accent); padding: 0 2px; height: auto; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--muted); }
+.chip.ok { color: var(--ok); }
+.chip.warn { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; min-width: 0; }
+.card > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.card > header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.card > header .right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.card .in { padding: 12px 14px; }
+.card .foot { padding: 8px 14px; border-top: 1px solid var(--border); color: var(--faint); font-size: 12px; }
+.row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row .d { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.row .t { font-weight: 600; }
+.row .m { font-size: 12px; color: var(--faint); }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); font-size: 12px; }
+.tag { display: inline-flex; align-items: center; height: 19px; padding: 0 7px; border-radius: 4px; font-size: 11.5px; white-space: nowrap; }
+.t-ok { background: var(--ok-soft); color: var(--ok); }
+.t-warn { background: var(--warn-soft); color: var(--warn); }
+.t-plain { background: var(--surface-2); color: var(--muted); }
+.t-acc { background: var(--accent-soft); color: var(--accent); }
+
+dl.kv { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+dl.kv dt { color: var(--faint); }
+dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+.sync { max-width: 880px; }
+.sync h1 { font-size: 18px; margin: 0 0 4px; }
+.sync section { margin-top: 18px; }
+.sync h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+.opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 7px; margin-bottom: 8px; background: var(--surface); }
+.opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.opt input[type=radio] { margin-top: 3px; accent-color: var(--accent); }
+.opt b { display: block; }
+.repo { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.opt .faint { display: block; }
+.repo input, .field { height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); }
+.scope { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.scope .card h3 { margin: 0; font-size: 13px; }
+.scope ul { margin: 0; padding: 0; list-style: none; }
+.scope li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 14px; border-top: 1px solid var(--border); font-size: 12.5px; }
+.scope li span:last-child { color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.scope .card > header { border-bottom: 0; }
+.note { padding: 10px 12px; border-radius: 7px; background: var(--surface-2); color: var(--muted); }
+.note.warn { background: var(--warn-soft); color: var(--warn); }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+
+.steps { list-style: none; margin: 0; padding: 0; }
+.steps li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--border); align-items: center; }
+.steps li:first-child { border-top: 0; }
+.steps .s-ok { color: var(--ok); }
+.steps .s-run { color: var(--accent); }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; width: 160px; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cmp .card > header { font-weight: 600; }
+.cmp pre { margin: 0; padding: 10px 14px; white-space: pre-wrap; font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+.cmp mark { background: var(--add); color: inherit; border-radius: 2px; }
+.cmp mark.del { background: var(--del); }
+textarea { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); resize: vertical; }
+
+.files { list-style: none; margin: 0; padding: 0; max-height: 210px; overflow: auto; }
+.files li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 14px; border-top: 1px solid var(--border); font-size: 12.5px; }
+
+.modal-wrap { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.28); padding: 16px; }
+.modal { width: min(620px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.25); }
+.modal > header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; }
+.modal > header .x { margin-left: auto; border: 0; background: none; color: var(--faint); }
+.modal .in { padding: 14px 16px; }
+.repos { border: 1px solid var(--border); border-radius: 7px; overflow: hidden; margin: 8px 0 12px; }
+.repos label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--border); }
+.repos label:first-child { border-top: 0; }
+.repos label.on { background: var(--accent-soft); }
+
+.banner { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 8px; margin-bottom: 14px; }
+.banner b { display: block; color: var(--text); }
+
+.statusbar { display: flex; align-items: center; gap: 2px; padding: 0 6px; background: var(--statusbar); color: #fff; font-size: 12px; white-space: nowrap; overflow: hidden; }
+.statusbar .si { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 0; background: none; color: #fff; border-radius: 3px; }
+.statusbar .si.alert { background: #c27c0e; }
+.statusbar .grow { flex: 1; }
+.relative { position: relative; }
+
+@media (max-width: 980px) {
+  .grid, .scope, .cmp { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .body { grid-template-columns: 1fr; }
+  .side { display: none; }
+  .page { padding: 14px 16px 32px; }
+  .strip .proj.extra { display: none; }
+}
+</style>
+</head>
+<body>
+<nav class="demo" id="demo" aria-label="演示步骤">
+  <b>演示</b>
+  <button data-v="home">1 未设置</button>
+  <button data-v="setup">2 设置同步</button>
+  <button data-v="running">3 首次同步</button>
+  <button data-v="synced">4 日常</button>
+  <button data-v="text">5 文字冲突</button>
+  <button data-v="binary">6 表格冲突</button>
+  <button data-v="deleted">7 大量删除</button>
+  <button data-v="clone">8 另一台电脑下载</button>
+  <button data-v="cloned">9 下载后的公司首页</button>
+  <button data-v="git">10 代码项目</button>
+  <span class="say" id="say"></span>
+</nav>
+
+<div class="app" id="app">
+  <div class="strip" role="tablist" aria-label="空间">
+    <button class="proj">我的空间</button>
+    <button class="proj active" id="p-company">我的公司 · 蜗牛眼镜 <span class="dot" id="company-dot" hidden></span></button>
+    <span class="sep"></span>
+    <button class="proj" id="p-code">cclink-studio</button>
+    <button class="proj extra" id="p-rnd">眼镜研发 <span class="dot pending" title="有待同步的改动"></span></button>
+    <button class="proj extra" style="color:var(--faint)">＋ 打开其他空间</button>
+  </div>
+
+  <div class="body">
+    <aside class="side" aria-label="导航">
+      <div class="group">工作</div>
+      <button class="item active" id="nav-home">项目首页</button>
+      <button class="item">文件</button>
+      <button class="item">会话</button>
+      <button class="item">浏览器</button>
+      <div class="group" id="nav-company-group">公司经营</div>
+      <button class="item company-nav">业务项目</button>
+      <button class="item company-nav">推广</button>
+      <button class="item company-nav">客户与售后</button>
+      <button class="item company-nav">公司账目</button>
+      <div class="group">　</div>
+      <button class="item">设置</button>
+    </aside>
+
+    <main class="center">
+      <div class="tabs" role="tablist">
+        <button class="tab" id="tab-home">项目首页</button>
+        <button class="tab" id="tab-sync" hidden>同步 · 蜗牛眼镜</button>
+      </div>
+      <div class="view relative" id="view"></div>
+    </main>
+  </div>
+
+  <footer class="statusbar" aria-label="状态栏">
+    <span class="si">本地 · <span id="sb-name">蜗牛眼镜</span></span>
+    <button class="si" id="sb-sync"></button>
+    <span class="grow"></span>
+    <span class="si">UTF-8</span>
+  </footer>
+</div>
+
+<template id="t-company-home">
+  <div class="page">
+    <div class="head">
+      <div>
+        <h1>蜗牛眼镜 <span class="type">公司</span></h1>
+        <div class="sub">~/CCLink Studio/我的公司</div>
+      </div>
+      <div class="right"><span data-slot="chip"></span></div>
+    </div>
+    <div data-slot="banner"></div>
+    <div class="grid">
+      <div class="card">
+        <header><h2>今天要处理</h2><span class="faint">3</span></header>
+        <div class="row"><span class="d" style="background:var(--warn)"></span><div><div class="t">回复 1 个售后问题</div><div class="m">镜腿松动 · 等了 5 小时</div></div><button class="btn">去处理售后</button></div>
+        <div class="row"><span class="d" style="background:var(--accent)"></span><div><div class="t">核对 4 条流水</div><div class="m">11 月 · 网店结算、物流</div></div><button class="btn">去核对</button></div>
+        <div class="row"><span class="d"></span><div><div class="t">发布任务等你批准</div><div class="m">双十一返场文案 · 小红书</div></div><button class="btn">打开发布任务</button></div>
+      </div>
+      <div data-slot="sync-card"></div>
+    </div>
+  </div>
+</template>
+
+<script>
+const params = new URLSearchParams(location.search)
+if (params.get('theme')) document.documentElement.dataset.theme = params.get('theme')
+const clean = params.has('clean')
+if (clean) document.getElementById('demo').hidden = true
+const sizeDemo = () => document.documentElement.style.setProperty('--demo-h', clean ? '0px' : document.getElementById('demo').offsetHeight + 'px')
+
+const S = {
+  view: params.get('view') || 'home',
+  mode: 'create', repo: 'woniu-company', progress: 63,
+  textChoice: '', binary: 'both', synced: false,
+}
+
+const SAY = {
+  home: '公司项目还没有设置同步：首页右上角和状态栏都写“未设置同步”，首页卡片说明同步什么、不同步什么。',
+  setup: '与“我的空间”同一套选择：不同步 / 在 GitHub 新建私有仓库 / 使用已有仓库地址。项目比日记大得多，所以第一次上传前必须先看到“会上传什么”。',
+  running: '首次同步按真实步骤显示进度；进行中可以继续工作，正在编辑的文件需先保存。',
+  synced: '之后不需要操作：进入项目时、留在前台每个整点自动双向同步。背景项目在顶栏用小点提示“有待同步”。',
+  text: '两台电脑改了同一段文字：两份原文都保留，用户用自己的话告诉 AI 怎么合并，其余文件照常同步。',
+  binary: '表格、Word、图片、CAD 无法自动合并：让用户选一份，或者两份都留。',
+  deleted: '另一台电脑一次删了很多文件：先暂停，问用户是照做还是把文件重新上传。',
+  clone: '在第二台电脑上：打开其他空间 → 从 GitHub 下载项目。列出已保存账号下的私有仓库。',
+  cloned: '下载下来的是文件；公司记录与账目不随同步传输。首页说明原因，不让用户误以为数据丢了，也不静默建一份空公司。',
+  git: '本身就是 Git 仓库并有远程地址的代码项目，不做自动同步，继续用左下角 Git 显式提交与推送。',
+}
+
+const $ = (id) => document.getElementById(id)
+const view = $('view')
+
+function chip() {
+  if (S.view === 'home') return '<button class="chip" data-go="setup">↻ 未设置同步 ›</button>'
+  if (S.view === 'text' || S.view === 'binary' || S.view === 'deleted') return '<button class="chip warn" data-go="' + S.view + '">⚠ 同步暂停 · 查看原因 ›</button>'
+  if (S.view === 'running') return '<span class="chip">↻ 同步中…</span>'
+  return '<button class="chip ok" data-go="settings">✓ 已同步 · 14:00 ›</button>'
+}
+
+function syncCard() {
+  if (S.view === 'home') return `
+    <div class="card" aria-label="同步">
+      <header><h2>同步</h2><span class="tag t-plain">未设置</span></header>
+      <div class="in">
+        <p style="margin:0 0 10px">把这个项目的文件同步到你自己的 GitHub 私有仓库，另一台电脑下载后两边自动保持一致，也可当作备份。</p>
+        <dl class="kv">
+          <dt>会同步</dt><dd>项目里的文档、图片、设计稿，项目设置和共享定时任务</dd>
+          <dt>只在本机</dt><dd>公司记录、公司账目与原件、Agent 会话、网站登录</dd>
+        </dl>
+      </div>
+      <div class="foot"><button class="btn primary" data-go="setup">设置同步</button></div>
+    </div>`
+  return `
+    <div class="card" aria-label="同步">
+      <header><h2>同步</h2><span class="tag t-ok">已同步</span><div class="right"><button class="btn" data-act="sync">立即同步</button></div></header>
+      <div class="in">
+        <dl class="kv">
+          <dt>位置</dt><dd>github.com/zhangsan/woniu-company（私有）</dd>
+          <dt>上次</dt><dd>${S.view === 'cloned' ? '刚刚 · 从 GitHub 下载 412 个文件' : '今天 14:00 · 收到 3 个文件（来自 MacBook Air），上传 1 个'}</dd>
+          <dt>下次</dt><dd>15:00，或下次进入项目时</dd>
+          ${S.view === 'cloned' ? '' : '<dt>未同步</dt><dd>2 个大文件 · <button class="btn link" data-go="settings">查看</button></dd>'}
+        </dl>
+      </div>
+      <div class="foot">公司记录、账目、会话与网站登录只在这台电脑。</div>
+    </div>`
+}
+
+function companyHome(extraBanner) {
+  const node = $('t-company-home').content.cloneNode(true)
+  node.querySelector('[data-slot=chip]').innerHTML = chip()
+  node.querySelector('[data-slot=sync-card]').innerHTML = syncCard()
+  node.querySelector('[data-slot=banner]').innerHTML = extraBanner || ''
+  return node
+}
+
+function scopeBlock() {
+  return `
+  <div class="scope">
+    <div class="card"><header><h3>会同步</h3><span class="right faint">412 个文件 · 86 MB</span></header>
+      <ul>
+        <li><span>产品资料/</span><span>128 · 31 MB</span></li>
+        <li><span>推广稿件/</span><span>64 · 12 MB</span></li>
+        <li><span>设计/</span><span>210 · 43 MB</span></li>
+        <li><span>其他文件</span><span>8</span></li>
+        <li><span>项目设置、共享定时任务</span><span>2</span></li>
+      </ul></div>
+    <div class="card"><header><h3>不会上传</h3><span class="right faint">已排除</span></header>
+      <ul>
+        <li><span>演示视频.mov</span><span>820 MB · 超过 50 MB</span></li>
+        <li><span>结构件 v3.step</span><span>120 MB · 超过 50 MB</span></li>
+        <li><span>.env</span><span>可能含密钥</span></li>
+        <li><span>node_modules/、构建输出</span><span>可重新生成</span></li>
+      </ul></div>
+    <div class="card"><header><h3>只在这台电脑</h3><span class="right faint">不随同步</span></header>
+      <ul>
+        <li><span>公司记录（业务、客户与售后、决策）</span><span>本机数据库</span></li>
+        <li><span>公司账目与原件</span><span>用账目备份</span></li>
+        <li><span>Agent 会话、发布任务记录</span><span>本机</span></li>
+        <li><span>网站账号登录、Token</span><span>从不上传</span></li>
+      </ul></div>
+  </div>`
+}
+
+function setupPage() {
+  const opt = (m, title, body) => `
+    <label class="opt ${S.mode === m ? 'on' : ''}"><input type="radio" name="mode" value="${m}" ${S.mode === m ? 'checked' : ''}><span><b>${title}</b>${body}</span></label>`
+  return `<div class="page sync">
+    <h1>设置同步</h1>
+    <div class="muted">蜗牛眼镜 · ~/CCLink Studio/我的公司</div>
+    <section><h2>同步到哪里</h2>
+      ${opt('none', '不同步', '<span class="faint">项目只留在这台电脑。</span>')}
+      ${opt('create', '在 GitHub 新建私有仓库', `<span class="faint">使用已保存的 GitHub 账号</span>${S.mode === 'create' ? `<span class="repo">zhangsan / <input aria-label="GitHub 仓库名" value="${S.repo}"></span>` : ''}`)}
+      ${opt('url', '使用已有仓库地址', S.mode === 'url' ? '<input class="field" style="width:100%;margin-top:6px" placeholder="https://github.com/你的账号/仓库.git" aria-label="仓库地址">' : '<span class="faint">仓库需为私有且只用于这个项目。</span>')}
+    </section>
+    <section><h2>第一次会上传什么</h2>${scopeBlock()}</section>
+    <section><div class="note">保存后，进入这个项目时、留在前台每个整点自动双向同步，也可随时点“立即同步”。两边改了同一处时会暂停等你决定，不会覆盖任何一份。</div></section>
+    <div class="actions"><button class="btn primary" data-go="running" ${S.mode === 'none' ? 'disabled' : ''}>保存并同步</button><button class="btn" data-go="home">取消</button></div>
+  </div>`
+}
+
+function runningPage() {
+  return `<div class="page sync"><h1>正在第一次同步</h1>
+    <div class="muted">可以继续工作；正在编辑的文件请先保存。</div>
+    <section><div class="card"><ul class="steps">
+      <li><span class="s-ok">✓</span><span>在 GitHub 新建私有仓库 zhangsan/woniu-company</span><span class="faint">完成</span></li>
+      <li><span class="s-ok">✓</span><span>检查文件：412 个可同步，排除 2 个大文件、1 个可能含密钥的文件</span><span class="faint">完成</span></li>
+      <li><span class="s-run">●</span><span>上传 412 个文件（86 MB）</span><span class="bar"><i style="width:${S.progress}%"></i></span></li>
+      <li><span class="faint">○</span><span class="muted">核对两端内容一致</span><span></span></li>
+    </ul></div></section>
+    <div class="actions"><button class="btn primary" data-go="synced">（演示）完成</button></div>
+  </div>`
+}
+
+function settingsPage() {
+  return `<div class="page sync"><h1>同步位置</h1>
+    <div class="muted">蜗牛眼镜</div>
+    <section><div class="card"><div class="in"><dl class="kv">
+      <dt>仓库</dt><dd>github.com/zhangsan/woniu-company（私有） <button class="btn link">更换地址</button></dd>
+      <dt>上次</dt><dd>今天 14:00 · 已同步</dd>
+      <dt>自动</dt><dd>进入项目时、留在前台每个整点</dd>
+    </dl></div></div></section>
+    <section><h2>最近几次</h2><div class="card"><ul class="steps">
+      <li><span class="s-ok">✓</span><span>收到 3 个文件（MacBook Air）：推广稿件/双十一返场.md 等</span><span class="faint">14:00</span></li>
+      <li><span class="s-ok">✓</span><span>上传 1 个文件：产品资料/保修政策.md</span><span class="faint">13:00</span></li>
+      <li><span class="s-ok">✓</span><span>没有改动</span><span class="faint">12:00</span></li>
+    </ul></div></section>
+    <section><h2>不会上传的文件</h2>${scopeBlock()}</section>
+    <div class="actions"><button class="btn primary" data-act="sync">立即同步</button><button class="btn">停止同步</button></div>
+  </div>`
+}
+
+function textPage() {
+  return `<div class="page sync"><h1>两份内容需要你决定</h1>
+    <div class="muted">推广稿件/双十一返场.md · 这台电脑和 MacBook Air 都改了同一段。两份原文都已保留，其余 14 个文件已同步。</div>
+    <section class="cmp">
+      <div class="card"><header>这台电脑 · 13:52</header><pre>## 返场价
+限时 3 天，<mark class="del">到手价 699 元</mark>，
+送镜布和眼镜盒。</pre></div>
+      <div class="card"><header>MacBook Air · 13:40</header><pre>## 返场价
+限时 3 天，<mark>到手价 659 元（前 100 名）</mark>，
+送镜布和眼镜盒。</pre></div>
+    </section>
+    <section><label><h2>告诉 AI 怎么处理</h2>
+      <textarea id="fb" placeholder="例如：用 659 元，保留“前 100 名”。">${S.textChoice}</textarea></label></section>
+    <div class="actions"><button class="btn primary" id="go-text" data-go="synced" ${S.textChoice.trim() ? '' : 'disabled'}>继续同步</button><button class="btn" data-go="synced">稍后处理</button>
+      <span class="faint">稍后处理时状态栏保持“同步暂停”，你可以继续写；这个文件不会被覆盖。</span></div>
+  </div>`
+}
+
+function binaryPage() {
+  const o = (v, t, d) => `<label class="opt ${S.binary === v ? 'on' : ''}"><input type="radio" name="bin" value="${v}" ${S.binary === v ? 'checked' : ''}><span><b>${t}</b><span class="faint">${d}</span></span></label>`
+  return `<div class="page sync"><h1>表格两边都改了</h1>
+    <div class="muted">产品资料/经销报价单.xlsx · 表格、Word、图片和 CAD 无法自动合并。</div>
+    <section>
+      ${o('local', '用这台电脑的', '今天 14:02 修改 · 48 KB')}
+      ${o('remote', '用 MacBook Air 的', '今天 13:40 修改 · 51 KB')}
+      ${o('both', '两份都留', '另一份另存为“经销报价单（MacBook Air 11-24）.xlsx”，你之后自己合并')}
+      <div class="actions" style="margin-top:4px"><button class="btn">打开这台的</button><button class="btn">打开另一份</button></div>
+    </section>
+    <section><div class="note">没选中的那份仍在同步历史里，可以从“同步位置 › 最近几次”找回。</div></section>
+    <div class="actions"><button class="btn primary" data-go="synced">继续同步</button><button class="btn" data-go="synced">稍后处理</button></div>
+  </div>`
+}
+
+function deletedPage() {
+  const files = ['设计/包装 v1/正面.png', '设计/包装 v1/背面.png', '设计/包装 v1/侧面.png', '设计/包装 v1/刀版.pdf', '设计/包装 v1/说明.md', '…另外 32 个']
+  return `<div class="page sync"><h1>MacBook Air 删除了 37 个文件</h1>
+    <div class="muted">一次删除超过 20 个文件时先暂停，确认后才在这台电脑删除。</div>
+    <section><div class="card"><header><h2>将被删除</h2><span class="right faint">设计/包装 v1/ 整个目录</span></header>
+      <ul class="files">${files.map((f) => `<li><span>${f}</span><span class="faint">${f.startsWith('…') ? '' : '未在这台电脑修改'}</span></li>`).join('')}</ul></div></section>
+    <div class="actions"><button class="btn primary" data-go="synced">照做，删除这些文件</button><button class="btn" data-go="synced">不删除，重新上传它们</button>
+      <span class="faint">删除后仍可从同步历史找回。</span></div>
+  </div>`
+}
+
+function cloneModal() {
+  return `<div class="modal-wrap"><div class="modal" role="dialog" aria-label="打开其他空间">
+    <header>打开其他空间<button class="x" data-go="synced" aria-label="关闭">✕</button></header>
+    <div class="in">
+      <div class="opt"><input type="radio" name="o"><span><b>打开已有项目</b><span class="faint">这台电脑上的文件夹</span></span></div>
+      <div class="opt on"><input type="radio" name="o" checked><span><b>从 GitHub 下载项目</b><span class="faint">使用已保存的 GitHub 账号 zhangsan</span></span></div>
+      <div class="repos">
+        <label class="on"><input type="radio" name="r" checked><span><b>woniu-company</b> <span class="faint">私有 · 2 分钟前更新 · 公司项目</span></span><span class="tag t-acc">项目同步</span></label>
+        <label><input type="radio" name="r"><span><b>my-space</b> <span class="faint">私有 · 今天 09:00 更新</span></span><span class="tag t-plain">我的空间</span></label>
+        <label><input type="radio" name="r"><span><b>glasses-rnd</b> <span class="faint">私有 · 昨天更新</span></span><span class="tag t-acc">项目同步</span></label>
+      </div>
+      <dl class="kv"><dt>保存到</dt><dd>~/CCLink Studio/woniu-company <button class="btn link">更改</button></dd></dl>
+      <div class="actions"><button class="btn primary" data-go="cloned">下载并打开</button><span class="faint">下载后自动开启同步，地址不用再填。</span></div>
+    </div></div></div>`
+}
+
+function codePage() {
+  return `<div class="page">
+    <div class="head"><div><h1>cclink-studio <span class="type">通用</span></h1><div class="sub">~/Desktop/cclink-dev/cclink-studio</div></div>
+      <div class="right"><span class="chip">⑂ 由 Git 管理 ›</span></div></div>
+    <div class="grid"><div class="card"><header><h2>最近文件</h2></header>
+      <div class="row"><span class="d"></span><div><div class="t">src/renderer/src/App.tsx</div><div class="m">10 分钟前</div></div><span></span></div>
+      <div class="row"><span class="d"></span><div><div class="t">docs/project-memo.md</div><div class="m">1 小时前</div></div><span></span></div></div>
+    <div class="card"><header><h2>同步</h2><span class="tag t-plain">由 Git 管理</span></header>
+      <div class="in"><p style="margin:0 0 8px">这个文件夹本身是 Git 仓库（origin · main）。Studio 不会替你自动提交或推送代码。</p>
+      <p class="muted" style="margin:0">用左下角 Git 查看变更、提交并推送；另一台电脑用 git clone 或“从 GitHub 下载项目”。</p></div>
+      <div class="foot"><button class="btn">打开 Git</button></div></div></div>
+  </div>`
+}
+
+function render() {
+  for (const b of document.querySelectorAll('.demo button')) b.setAttribute('aria-pressed', String(b.dataset.v === S.view))
+  $('say').textContent = SAY[S.view] || ''
+  const v = S.view
+  const onSyncTab = ['setup', 'running', 'settings', 'text', 'binary', 'deleted'].includes(v)
+  $('tab-sync').hidden = !onSyncTab
+  $('tab-sync').classList.toggle('active', onSyncTab)
+  $('tab-home').classList.toggle('active', !onSyncTab)
+  $('tab-sync').textContent = v === 'setup' ? '设置同步 · 蜗牛眼镜' : '同步 · 蜗牛眼镜'
+  const code = v === 'git'
+  $('p-company').classList.toggle('active', !code)
+  $('p-code').classList.toggle('active', code)
+  for (const n of document.querySelectorAll('.company-nav')) n.hidden = code
+  $('nav-company-group').hidden = code
+  $('sb-name').textContent = code ? 'cclink-studio' : '蜗牛眼镜'
+  const paused = ['text', 'binary', 'deleted'].includes(v)
+  const dot = $('company-dot')
+  dot.hidden = !paused
+  dot.className = 'dot paused'
+  const sb = $('sb-sync')
+  sb.classList.toggle('alert', paused)
+  sb.textContent = code ? '⑂ main  ● 4' : v === 'home' || v === 'setup' ? '↻ 未设置同步' : v === 'running' ? '↻ 同步中…' : paused ? '⚠ 同步暂停 · 查看原因' : '↻ 已同步 · 14:00'
+  sb.dataset.go = paused ? v : v === 'home' ? 'setup' : 'settings'
+
+  view.replaceChildren()
+  if (v === 'home' || v === 'synced') view.append(companyHome())
+  else if (v === 'clone') { view.append(companyHome()); view.insertAdjacentHTML('beforeend', cloneModal()) }
+  else if (v === 'cloned') view.append(companyHome(`<div class="banner" role="status"><div style="flex:1"><b>这份公司项目是从 GitHub 下载的</b>
+    文件已同步。公司记录（业务、客户与售后、决策）和公司账目不随同步传输，仍在原来那台电脑上。
+    <div class="actions" style="margin-top:8px"><button class="btn primary">从备份恢复公司记录</button><button class="btn">在这台电脑从空白开始</button>
+    <span class="faint">从空白开始后，两台电脑的公司记录各自独立，不会合并。</span></div></div></div>`))
+  else if (v === 'git') view.innerHTML = codePage()
+  else view.innerHTML = { setup: setupPage, running: runningPage, settings: settingsPage, text: textPage, binary: binaryPage, deleted: deletedPage }[v]()
+  if (v === 'cloned') {
+    // The downloaded copy has no company records yet: hide the to-do card content.
+    const todo = view.querySelector('.grid .card')
+    todo.innerHTML = '<header><h2>今天要处理</h2></header><div class="in muted">还没有公司记录。恢复备份或从空白开始后才会出现待办。</div>'
+  }
+  sizeDemo()
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-v],[data-go],[data-act]')
+  if (t?.dataset.v) S.view = t.dataset.v
+  else if (t?.dataset.go) S.view = t.dataset.go
+  else if (t?.dataset.act === 'sync') { S.view = 'running'; S.progress = 20 }
+  else return
+  history.replaceState(null, '', '?' + new URLSearchParams({ ...Object.fromEntries(params), view: S.view }))
+  render()
+})
+document.addEventListener('change', (e) => {
+  if (e.target.name === 'mode') { S.mode = e.target.value; render() }
+  if (e.target.name === 'bin') { S.binary = e.target.value; render() }
+})
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'fb') { S.textChoice = e.target.value; $('go-text').disabled = !S.textChoice.trim() }
+  if (e.target.getAttribute('aria-label') === 'GitHub 仓库名') S.repo = e.target.value
+})
+addEventListener('resize', sizeDemo)
+render()
+</script>
+</body>
+</html>
