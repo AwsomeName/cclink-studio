@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { MarkdownOpenAs } from './ContentPresentationBar'
 import { type Editor, useEditorState } from '@tiptap/react'
 import { formatKeyChord, isMacPlatform } from '@shared/keybindings'
@@ -219,7 +220,24 @@ export function EditorToolbar({
     : []
   const headingLevel = editor?.getAttributes('heading').level as number | undefined
   const codeLanguage = (editor?.getAttributes('codeBlock').language as string | undefined) ?? ''
-  const inTable = editor?.isActive('table') ?? false
+  // The compact toolbar shows table tools only while the cursor is really in a table.
+  const [focused, setFocused] = useState(() => editor?.isFocused ?? false)
+  useEffect(() => {
+    if (!editor || !compact) return
+    const onFocus = (): void => setFocused(true)
+    const onBlur = ({ event }: { event: FocusEvent }): void => {
+      const next = event.relatedTarget
+      if (next instanceof Element && next.closest('.editor-toolbar')) return
+      setFocused(false)
+    }
+    editor.on('focus', onFocus)
+    editor.on('blur', onBlur)
+    return () => {
+      editor.off('focus', onFocus)
+      editor.off('blur', onBlur)
+    }
+  }, [editor, compact])
+  const inTable = (editor?.isActive('table') ?? false) && (!compact || focused)
   const imageSelected = editor?.isActive('image') ?? false
   const saveControl = resolveEditorSaveControl(filePath, dirty, persistenceStatus)
   const shown = compact
