@@ -13,6 +13,7 @@ import { useAgentStore } from '../../stores/agent-store'
 import { useUIStore } from '../../stores/ui-store'
 import { captureActiveWorkspaceTarget } from '../../stores/workspace-store'
 import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
+import { resumeDiarySyncAfterAccountChange } from '../../features/workspace-open/DiarySyncStatus'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { IconDatabase, IconRobot } from '../common/Icons'
 
@@ -384,6 +385,7 @@ function ConnectionForm({
             }),
           )
           setUsername(username.trim())
+          resumeDiarySyncAfterAccountChange()
         } else {
           checked(
             await window.cclinkStudio.credentials.set({

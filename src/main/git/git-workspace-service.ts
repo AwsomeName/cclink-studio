@@ -145,7 +145,8 @@ export class GitWorkspaceService {
         copyRoot: input.destinationParent,
         authentication: input.token
           ? { username: input.username || 'git', token: input.token }
-          : undefined,
+          : // My Space sync uses the GitHub account saved in Studio settings for github.com HTTPS.
+            (diary && input.url && (await this.resolveAuthentication(input.url))) || undefined,
       })
       if (diary) await this.workspaceStateService.setSection(key, diarySection, result)
       // Register only a newly-created copy. Never initialize or migrate the connected old root.

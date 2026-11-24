@@ -57,6 +57,12 @@ export async function syncDiarySpace(
     })
   }
 }
+/** A newly saved GitHub account lifts authentication pauses; conflicts still wait for the user. */
+export function resumeDiarySyncAfterAccountChange(): void {
+  for (const [path, state] of Object.entries(useSync.getState()))
+    if (state.authentication && !state.busy && !state.snapshot?.conflict)
+      void syncDiarySpace(path, true)
+}
 function label(s: State) {
   return s.busy
     ? '同步中…'
@@ -246,6 +252,9 @@ export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
             />
           </label>
         </>
+      )}
+      {state.authentication && (
+        <p>在 Studio 设置里保存正确的 GitHub 账号和 Token 后，会自动继续同步。</p>
       )}
       {state.authentication && (
         <label>
