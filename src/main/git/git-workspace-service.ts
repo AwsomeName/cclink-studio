@@ -133,21 +133,34 @@ export class GitWorkspaceService {
           }
         diary = settings.diary
       }
-      const result = await transferRepository(input, {
-        diary,
-        decide: this.options.decide,
-        onDiaryAddress: raw.url
-          ? async (url) => {
-              await this.workspaceStateService.setSection(key, diarySection, { remoteUrl: url })
-            }
-          : undefined,
-        runner: this.transferRunner,
-        copyRoot: input.destinationParent,
-        authentication: input.token
-          ? { username: input.username || 'git', token: input.token }
-          : // My Space sync uses the GitHub account saved in Studio settings for github.com HTTPS.
-            (diary && input.url && (await this.resolveAuthentication(input.url))) || undefined,
-      })
+      const authentication = input.token
+        ? { username: input.username || 'git', token: input.token }
+        : // My Space sync uses the GitHub account saved in Studio settings for github.com HTTPS.
+          (diary && input.url && (await this.resolveAuthentication(input.url))) || undefined
+      const authSource: TransferAuthSource = input.token
+        ? 'one-off'
+        : authentication
+          ? 'saved-github'
+          : input.sshKeyPath
+            ? 'ssh-key'
+            : 'none'
+      let result: GitTransferSnapshot
+      try {
+        result = await transferRepository(input, {
+          diary,
+          decide: this.options.decide,
+          onDiaryAddress: raw.url
+            ? async (url) => {
+                await this.workspaceStateService.setSection(key, diarySection, { remoteUrl: url })
+              }
+            : undefined,
+          runner: this.transferRunner,
+          copyRoot: input.destinationParent,
+          authentication,
+        })
+      } catch (error) {
+        throw reportTransferFailure(error, input.action, input.url, authSource)
+      }
       if (diary) await this.workspaceStateService.setSection(key, diarySection, result)
       // Register only a newly-created copy. Never initialize or migrate the connected old root.
       if (result.newCopy) {
@@ -651,6 +664,45 @@ function limitDiff(result: GitDiffResult): GitDiffResult {
     binary,
     ...(binary ? { error: '二进制文件不提供文本 Diff' } : {}),
   }
+}
+
+type TransferAuthSource = 'one-off' | 'saved-github' | 'ssh-key' | 'none'
+
+function remoteHost(url: string | undefined): string {
+  if (!url) return '-'
+  try {
+    return new URL(url).hostname || '-'
+  } catch {
+    return /^[^@\s]+@([^:\s]+):/.exec(url)?.[1] ?? '-'
+  }
+}
+
+/**
+ * Logs a sanitized, bounded failure record for the framework diagnostic report and turns an
+ * authentication failure without any credential into an actionable message. The executor already
+ * redacts the token and `user:pass@` from stderr; only the host (never the path) is added here.
+ */
+function reportTransferFailure(
+  error: unknown,
+  action: GitTransferInput['action'],
+  url: string | undefined,
+  authSource: TransferAuthSource,
+): unknown {
+  const code = error instanceof GitBackupError ? error.code : 'GIT_TRANSFER_FAILED'
+  const rawStderr = error instanceof GitBackupError ? error.details?.stderr : undefined
+  const stderr =
+    typeof rawStderr === 'string'
+      ? rawStderr.replace(/\s+/g, ' ').trim().slice(0, 500)
+      : (error instanceof Error ? error.message : String(error)).slice(0, 200)
+  const host = remoteHost(url)
+  console.warn(`[GitSync] ${action} failed ${JSON.stringify({ code, authSource, host, stderr })}`)
+  if (!(error instanceof GitBackupError) || error.code !== 'AUTHENTICATION_FAILED') return error
+  if (authSource !== 'none') return error
+  const message =
+    host === 'github.com'
+      ? 'Git 认证失败：这台电脑的 Studio 尚未保存 GitHub 用户名和 Token。请在 设置 → API Key 与连接 → GitHub 中配置，或在下方填写本次认证。'
+      : 'Git 认证失败：未提供任何凭证。请在下方填写本次认证（HTTPS Token 或 SSH 私钥路径）。'
+  return new GitBackupError(error.code, message, error.details, { cause: error })
 }
 
 function operationFailure(
