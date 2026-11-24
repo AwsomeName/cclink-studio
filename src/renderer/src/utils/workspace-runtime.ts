@@ -25,6 +25,10 @@ import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import { syncWorkbenchTabProjectionNow } from './workbench-tab-model'
 import { syncWorkbenchBookmarksNow, syncWorkbenchBrowserStateNow } from './workbench-browser-state'
 import { applyAgentRunStatusToStore } from '../bootstrap/use-agent-stream-events'
+import {
+  parkLiveDesktopTabs,
+  unparkDesktopTabs,
+} from '../features/remote-desktop/desktop-keep-alive'
 
 function isWorkspaceTab(tab: ReturnType<typeof useTabStore.getState>['tabs'][number]): boolean {
   return tab.type !== 'settings' || tab.settingsSection === 'workspace'
@@ -77,9 +81,14 @@ export function hydrateRuntimeSections(
     const preserveTabIds = Object.values(placements)
       .filter(isDetachedFromMain)
       .map((placement) => placement.tabId)
+    const tabsBefore = useTabStore.getState().tabs
     useTabStore
       .getState()
       .hydrateFromWorkspaceState(scopedTabsSnapshot, { preserveTabIds, workspaceRef })
+    // A connected remote desktop outlives a project switch for a while instead of dropping VNC.
+    const tabIdsAfter = new Set(useTabStore.getState().tabs.map((tab) => tab.id))
+    parkLiveDesktopTabs(tabsBefore.filter((tab) => !tabIdsAfter.has(tab.id)))
+    unparkDesktopTabs(tabIdsAfter)
     useEditorStore
       .getState()
       .hydrateFromWorkspaceState(

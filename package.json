@@ -66,6 +66,7 @@
     "smoke:pdf-preview": "node scripts/ui-smoke.mjs --pdf-only",
     "smoke:media-production": "node scripts/media-production-smoke.mjs",
     "smoke:workflow": "node scripts/workflow-smoke.mjs",
+    "smoke:remote-desktop-keep-alive": "node scripts/remote-desktop-keep-alive-smoke.mjs",
     "smoke:restore": "node scripts/restore-smoke.mjs",
     "smoke:scheduled-tasks": "node scripts/scheduled-tasks-smoke.mjs",
     "smoke:scheduled-task-git-sharing": "node scripts/scheduled-task-git-sharing-smoke.mjs",
