@@ -4,17 +4,19 @@ import {
   DESKTOP_KEEP_ALIVE_MS,
   mountedDesktopTabs,
   parkLiveDesktopTabs,
+  releaseParkedDesktopsOf,
   unparkDesktopTabs,
   useDesktopKeepAliveStore,
 } from './desktop-keep-alive'
 import { useDesktopSessionStore, type DesktopPhase } from './desktop-session-store'
+import { useOpenProjectsStore } from '../../stores/open-projects-store'
 
-const desktop = (id: string): Tab => ({
+const desktop = (id: string, path = '/projects/a'): Tab => ({
   id,
   type: 'remote-desktop',
   title: '美国 Mac',
   icon: '🖥',
-  workspaceRef: { kind: 'local', path: '/projects/a' },
+  workspaceRef: { kind: 'local', path },
 })
 
 function setPhase(id: string, phase: DesktopPhase): void {
@@ -81,5 +83,25 @@ describe('desktop keep-alive', () => {
       b: desktop('b'),
     }).map((tab) => tab.id)
     expect(ids).toEqual(['a', 'b'])
+  })
+
+  it('closing a project disconnects its parked desktops at once, and only those', () => {
+    setPhase('a', 'connected')
+    setPhase('b', 'connected')
+    parkLiveDesktopTabs([desktop('a'), desktop('b', '/projects/b')])
+    releaseParkedDesktopsOf(['/projects/a'])
+    expect(Object.keys(useDesktopKeepAliveStore.getState().parked)).toEqual(['b'])
+  })
+
+  it('removing a project from the open list releases its parked desktops', () => {
+    useOpenProjectsStore.setState({ openProjectPaths: ['/projects/a', '/projects/b'] })
+    setPhase('a', 'connected')
+    setPhase('b', 'connected')
+    parkLiveDesktopTabs([desktop('a'), desktop('b', '/projects/b')])
+    // A change that removes nothing (e.g. reorder) keeps them.
+    useOpenProjectsStore.setState({ openProjectPaths: ['/projects/b', '/projects/a'] })
+    expect(Object.keys(useDesktopKeepAliveStore.getState().parked).sort()).toEqual(['a', 'b'])
+    useOpenProjectsStore.setState({ openProjectPaths: ['/projects/b'] })
+    expect(Object.keys(useDesktopKeepAliveStore.getState().parked)).toEqual(['b'])
   })
 })

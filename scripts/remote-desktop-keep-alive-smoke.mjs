@@ -115,7 +115,26 @@ try {
   const deadline = Date.now() + 5000
   while (stats.closed === 0 && Date.now() < deadline) await page.waitForTimeout(100)
   assert.equal(stats.closed, 1, 'closing the Tab disconnects')
-  console.log('PASS remote desktop survives project switch; closing the Tab disconnects')
+
+  // Closing a project disconnects its parked desktop at once instead of after ten minutes.
+  await page.getByRole('button', { name: '新建远程桌面' }).click()
+  await desk.getByRole('combobox').selectOption({ label: `127.0.0.1 · 127.0.0.1` })
+  await desk.getByRole('button', { name: '连接', exact: true }).click()
+  await desk.locator('.remote-desktop-screen canvas').waitFor()
+  assert.equal(stats.opened, 2)
+  await itemB.click()
+  await page.locator(`.project-strip-item.active[data-project-path="${projectB}"]`).waitFor()
+  await page.waitForTimeout(1000)
+  assert.equal(stats.closed, 1, 'parked while A is still open')
+  await itemA.click({ button: 'right' })
+  await page.locator('[data-context-action="project.close"]', { hasText: '关闭项目' }).click()
+  await itemA.waitFor({ state: 'detached' })
+  const closeDeadline = Date.now() + 5000
+  while (stats.closed < 2 && Date.now() < closeDeadline) await page.waitForTimeout(100)
+  assert.equal(stats.closed, 2, 'closing the project disconnects its parked desktop')
+  console.log(
+    'PASS remote desktop survives project switch; closing the Tab or the project disconnects',
+  )
 } catch (e) {
   await s.fail(e)
 } finally {
