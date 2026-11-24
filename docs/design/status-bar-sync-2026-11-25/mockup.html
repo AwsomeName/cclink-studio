@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>状态栏同步项</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1300px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 26px;
+        line-height: 1.6;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .win {
+        width: 1300px;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #1e1e1e;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 8px 28px;
+        border-bottom: 1px solid #333;
+        font-size: 12.5px;
+        color: #999;
+        white-space: nowrap;
+      }
+      .bar .gap {
+        flex: 1;
+      }
+      .bar .ai {
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 3px 10px;
+        color: #ddd;
+      }
+      .bar .icons {
+        color: #999;
+        letter-spacing: 3px;
+        border-left: 1px solid #333;
+        padding-left: 10px;
+      }
+      .doc {
+        height: 250px;
+        padding: 22px 28px;
+        color: #f2f2f2;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+      .doc h2 {
+        font-size: 24px;
+        margin: 0 0 8px;
+        color: #fff;
+      }
+      .doc p {
+        margin: 0;
+      }
+      .foot {
+        display: flex;
+        gap: 24px;
+        padding: 9px 28px;
+        border-top: 1px solid #333;
+        font-size: 12.5px;
+        color: #999;
+      }
+      .foot b {
+        color: #ddd;
+        font-weight: 500;
+      }
+      .mark {
+        outline: 2px solid #e05252;
+        outline-offset: -2px;
+        position: relative;
+      }
+      .mark em {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-style: normal;
+        font-size: 11.5px;
+        color: #ff8a8a;
+        background: #2a1414;
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+      .status {
+        height: 26px;
+        background: #2b6cb0;
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        padding: 0 14px;
+        font-size: 13px;
+        color: #fff;
+        white-space: nowrap;
+      }
+      .status .gap {
+        flex: 1;
+      }
+      .status .bad {
+        font-size: 11px;
+        color: #c9d6e8;
+        outline: 2px solid #e05252;
+        outline-offset: 2px;
+      }
+      .status .warn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .status .warn i {
+        font-style: normal;
+        color: #ffd479;
+      }
+      .status .warn u {
+        text-decoration: none;
+        opacity: 0.85;
+      }
+      .status .sep {
+        width: 1px;
+        height: 14px;
+        background: #ffffff55;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 · 去掉底部链接行，状态栏同步项和其他项同字号同颜色</h1>
+    <p class="note">
+      ① 页面底部「本周计划 · 同步 ·
+      前一篇」整行删除：同步状态已在最下面的状态栏，本周计划和前后日记在左侧栏「计划」「日记」。②
+      状态栏的同步项现在字号偏小、颜色发灰，改成和「本地 · 我的空间」「AI 就绪」完全一样：13
+      号字、白色；需要处理时只在前面加一个黄色 ⚠，文字仍是白色；点它进入「同步」页看原因。
+    </p>
+
+    <div class="win">
+      <div class="bar">
+        <span>正文 ▾</span><span>B</span><span>I</span><span>• 列表</span><span>☐ 待办</span
+        ><span>链接</span><span>图片</span><span>表格</span><span class="gap"></span
+        ><span>已保存</span><span class="ai">让 AI 修改…</span><span>1125_周三.md</span>
+      </div>
+      <div class="doc">
+        <h2>2026-11-25 周三</h2>
+        <p>今日体重：</p>
+        <p>昨日睡眠：</p>
+        <p>昨日花销：</p>
+      </div>
+      <div class="foot mark">
+        <span>本周计划 <b>2026-W48.md</b> ›</span><span>同步 <b>同步暂停 · 查看原因</b> ›</span
+        ><span style="flex: 1"></span><span>‹ 前一篇 11/24</span><em>① 多余的一行</em>
+      </div>
+      <div class="status">
+        <span>☰ 进行中的工作 · 1 个会话</span><span>本地 · 我的空间</span><span>AI 就绪</span
+        ><span class="bad">↻ 同步暂停 · 查看原因</span><span class="sep"></span><span>朗读</span
+        ><span class="gap"></span><span>2026/11/25 周三 · 01:05</span><span class="gap"></span
+        ><span>框架日志</span><span>检查更新</span><span>CCLink Studio 开源版 v0.2.26</span>
+      </div>
+    </div>
+    <p class="cap">
+      <b>现在</b>：红框①是多余的底部行；状态栏里红框的同步项字小、发灰，和旁边不一样。
+    </p>
+
+    <div class="win">
+      <div class="bar">
+        <span>正文 ▾</span><span>B</span><span>I</span><span>• 列表</span><span>☐ 待办</span
+        ><span>链接</span><span>图片</span><span>表格</span><span class="gap"></span
+        ><span>已保存</span><span class="ai">让 AI 修改…</span><span>1125_周三.md</span
+        ><span class="icons">◍ ▯ ▣ ▭</span>
+      </div>
+      <div class="doc" style="height: 290px">
+        <h2>2026-11-25 周三</h2>
+        <p>今日体重：</p>
+        <p>昨日睡眠：</p>
+        <p>昨日花销：</p>
+      </div>
+      <div class="status">
+        <span>☰ 进行中的工作 · 1 个会话</span><span>本地 · 我的空间</span><span>AI 就绪</span
+        ><span class="warn"><i>⚠</i>同步暂停 <u>· 查看原因</u></span
+        ><span class="sep"></span><span>朗读</span><span class="gap"></span
+        ><span>2026/11/25 周三 · 01:05</span><span class="gap"></span><span>框架日志</span
+        ><span>检查更新</span><span>CCLink Studio 开源版 v0.2.27</span>
+      </div>
+    </div>
+    <p class="cap">
+      <b>改成（需要处理时）</b
+      >：底部行没有了，正文一直到状态栏；同步项和其他项同字号、白色，前面黄色 ⚠ 提醒。
+    </p>
+
+    <div class="win">
+      <div class="doc" style="height: 60px; padding-top: 14px; color: #777">……正文……</div>
+      <div class="status">
+        <span>☰ 进行中的工作</span><span>本地 · 我的空间</span><span>AI 就绪</span
+        ><span>↻ 已同步 · 01:05</span><span class="sep"></span><span>朗读</span
+        ><span class="gap"></span><span>2026/11/25 周三 · 01:05</span><span class="gap"></span
+        ><span>框架日志</span><span>检查更新</span><span>CCLink Studio 开源版 v0.2.27</span>
+      </div>
+    </div>
+    <p class="cap"><b>改成（正常时）</b>：「↻ 已同步 · 01:05」，样式和左右各项一致。</p>
+  </body>
+</html>

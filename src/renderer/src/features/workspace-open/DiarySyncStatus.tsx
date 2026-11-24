@@ -94,13 +94,19 @@ export function DiarySyncStatus({
   onOpenGit: () => void
 }): React.ReactElement {
   const state = useSync((s) => s[workspacePath] ?? empty)
+  // Same size and colour as the other status items; a paused sync only adds a yellow ⚠.
+  const paused = !state.busy && Boolean(state.error || state.snapshot?.conflict)
   return (
     <button
-      className="diary-sync status-bar-item"
+      type="button"
+      className={paused ? 'diary-sync status-bar-item paused' : 'diary-sync status-bar-item'}
       onClick={onOpenGit}
       aria-label={'同步：' + label(state)}
     >
-      ↻ {label(state)}
+      <span className="diary-sync-icon" aria-hidden="true">
+        {paused ? '⚠' : '↻'}
+      </span>
+      {label(state)}
     </button>
   )
 }
