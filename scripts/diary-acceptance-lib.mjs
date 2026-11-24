@@ -99,7 +99,10 @@ export async function firstUse(s, { importFrom, url, dailyTime = '23:59', shot }
     await wizard.getByRole('button', { name: '选择文件夹…' }).click()
     await wizard.getByLabel('导入核对').waitFor()
   }
-  if (url) await wizard.getByLabel('Git 项目地址').fill(url)
+  if (url) {
+    await wizard.getByRole('radio', { name: /使用已有仓库地址/ }).check()
+    await wizard.getByLabel('Git 项目地址').fill(url)
+  }
   await wizard.getByLabel('每日起草时间').fill(dailyTime)
   if (shot) await page.screenshot({ path: shot })
   await wizard.getByRole('button', { name: '开始使用' }).click()

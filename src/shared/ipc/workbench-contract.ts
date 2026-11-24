@@ -74,6 +74,12 @@ export const gitBackupTestAccountSchema = z
   })
   .strict()
   .optional()
+export const gitHubRepositoryNameSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._-]{1,100}$/)
+  .refine((name) => name !== '.' && name !== '..')
+
 export const gitBackupRunSchema = z
   .object({
     workspacePath: absolutePathSchema,
@@ -343,6 +349,9 @@ export const gitBackupIpcContracts = {
     ipcArgs(gitBackupWorkspacePathSchema.parse(args[0])),
   ),
   backup: bindIpcParser(gitBackupIpc.backup, (args) => ipcArgs(gitBackupRunSchema.parse(args[0]))),
+  createPrivateRepository: bindIpcParser(gitBackupIpc.createPrivateRepository, (args) =>
+    ipcArgs(gitHubRepositoryNameSchema.parse(args[0])),
+  ),
 } as const
 
 export const hardwareIpcContracts = {

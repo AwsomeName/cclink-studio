@@ -33,4 +33,9 @@ export function registerGitBackupIpc(
   registerTrustedIpcContract(gitBackupIpcContracts.backup, trustedRendererGuard, (_event, input) =>
     service.backup(input),
   )
+  registerTrustedIpcContract(
+    gitBackupIpcContracts.createPrivateRepository,
+    trustedRendererGuard,
+    (_event, name) => service.createPrivateRepository(name),
+  )
 }

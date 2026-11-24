@@ -29,6 +29,7 @@ export const gitBackupApi: GitBackupApiContract = {
   getProjectStatus: (workspacePath) =>
     invokeIpcContract(gitBackupIpc.getProjectStatus, workspacePath),
   backup: (input) => invokeIpcContract(gitBackupIpc.backup, input),
+  createPrivateRepository: (name) => invokeIpcContract(gitBackupIpc.createPrivateRepository, name),
 }
 
 export const hardwareApi: HardwareApiContract = {

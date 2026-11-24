@@ -60,6 +60,14 @@ export interface GitBackupRunResult {
   sensitiveFiles?: string[]
 }
 
+export interface GitBackupCreateRepositoryResult {
+  success: boolean
+  cloneUrl?: string
+  fullName?: string
+  error?: string
+  errorCode?: GitBackupErrorCode
+}
+
 export interface GitBackupOperationResult {
   success: boolean
   message?: string
@@ -75,6 +83,8 @@ export interface GitBackupApiContract {
   testAccount(input?: GitBackupTestAccountInput): Promise<GitBackupOperationResult>
   getProjectStatus(workspacePath: string): Promise<GitBackupProjectStatus>
   backup(input: GitBackupRunInput): Promise<GitBackupRunResult>
+  /** Creates (or reuses a writable) private GitHub repository with the saved account. */
+  createPrivateRepository(name: string): Promise<GitBackupCreateRepositoryResult>
 }
 
 export const gitBackupIpc = {
@@ -91,5 +101,8 @@ export const gitBackupIpc = {
     'gitBackup:getProjectStatus',
   ),
   backup: defineIpcCall<[input: GitBackupRunInput], GitBackupRunResult>('gitBackup:backup'),
+  createPrivateRepository: defineIpcCall<[name: string], GitBackupCreateRepositoryResult>(
+    'gitBackup:createPrivateRepository',
+  ),
 } as const
 import { defineIpcCall } from './contract'

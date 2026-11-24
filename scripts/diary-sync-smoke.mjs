@@ -52,6 +52,7 @@ try {
   const file = D + '/周三.md'
   await mkdir(join(path, D), { recursive: true })
   await writeFile(join(path, file), '复测时间：上午九点\n')
+  await panel.getByRole('radio', { name: /使用已有仓库地址/ }).check()
   await panel.getByLabel('Git 项目地址').fill(remote)
   await panel.getByRole('button', { name: '保存并同步' }).click()
   const done = () =>

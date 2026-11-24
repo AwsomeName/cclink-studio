@@ -1,3 +1,10 @@
+import {
+  DiarySyncChoice,
+  defaultDiarySyncChoice,
+  diarySyncChoiceReady,
+  resolveDiarySyncUrl,
+  type DiarySyncChoiceValue,
+} from './DiarySyncChoice'
 import { syncDiarySpace } from './DiarySyncStatus'
 import { useEffect, useState } from 'react'
 import type { DiaryImportPreview } from '@shared/ipc/workspace-state'
@@ -24,7 +31,7 @@ export function DiarySetupWizard({ onDone }: { onDone?: () => void }): React.Rea
   const [root, setRoot] = useState('')
   const [preview, setPreview] = useState<DiaryImportPreview | null>(null)
   const suggestion = useFixedSpacesStore((state) => state.spaces?.importSuggestion)
-  const [url, setUrl] = useState('')
+  const [sync, setSync] = useState<DiarySyncChoiceValue>(defaultDiarySyncChoice)
   const [choice, setChoice] = useState<BuiltInTaskChoice>(defaultBuiltInChoice)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -45,22 +52,25 @@ export function DiarySetupWizard({ onDone }: { onDone?: () => void }): React.Rea
   useEffect(() => {
     if (suggestion) setMode('import')
   }, [suggestion])
-  const ready = Boolean(root) && (mode === 'fresh' || Boolean(preview))
+  const ready =
+    Boolean(root) && (mode === 'fresh' || Boolean(preview)) && diarySyncChoiceReady(sync)
   const confirm = (): void =>
     run(async () => {
+      // Create the GitHub repository first: if that fails, nothing has been written yet.
+      const url = (await resolveDiarySyncUrl(sync)) ?? ''
       const fixed = await ws.initializePersonalSpace()
       // Stay open until history, tasks and sync are set up, so any failure is shown here.
       useFixedSpacesStore.setState({ spaces: fixed })
       const path = fixed.personal!.workspacePath
       // Take back what another device already shared first, so its tasks are reused, not doubled.
-      if (url.trim()) await syncDiarySpace(path, true, { url: url.trim() })
+      if (url) await syncDiarySpace(path, true, { url })
       if (mode === 'import' && preview) await ws.importDiaryHistory(preview)
       const settings = (await ws.getSettings(path)).settings
       const directory = settings.diary?.directory ?? defaultDiaryDirectory
       const timezone = settings.diary?.timezone ?? defaultDiaryTimezone
       // Enabling the daily draft after today's time makes the scheduler draft today once.
       await ensureBuiltInDiaryTasks(path, directory, timezone, choice)
-      if (url.trim() && mode === 'import') void syncDiarySpace(path, true)
+      if (url && mode === 'import') void syncDiarySpace(path, true)
       await openPersonalSpace()
       await useWorkspaceStore.getState().refreshSettings()
       useDiaryNavigation.getState().setPage('今天')
@@ -100,15 +110,14 @@ export function DiarySetupWizard({ onDone }: { onDone?: () => void }): React.Rea
           />
         )}
         <h3>同步（可选）</h3>
-        <label className="diary-facts-form">
-          Git 项目地址
-          <input
-            aria-label="Git 项目地址"
-            placeholder="https://github.com/你的账号/my-diary.git · 不填也能用"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </label>
+        <DiarySyncChoice
+          value={sync}
+          onChange={(next) => {
+            setSync(next)
+            setError('')
+          }}
+          disabled={busy}
+        />
         <h3>自动整理</h3>
         <label>
           <input

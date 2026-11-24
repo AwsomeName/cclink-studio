@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>我的空间新建仓库</title>
+    <style>
+      body {
+        margin: 0;
+        background: #151515;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        color: #ccc;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 6px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 20px;
+        line-height: 1.7;
+        max-width: 1250px;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+      }
+      .col {
+        width: 410px;
+      }
+      .card {
+        background: #1e1e1e;
+        border: 1px solid #333;
+        border-radius: 10px;
+        padding: 18px 20px;
+      }
+      .card h3 {
+        font-size: 13px;
+        color: #fff;
+        margin: 0 0 10px;
+      }
+      .opt {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 9px 10px;
+        border: 1px solid #333;
+        border-radius: 7px;
+        margin-bottom: 8px;
+      }
+      .opt.on {
+        border-color: #0e639c;
+        background: #0e639c22;
+      }
+      .opt b {
+        color: #eee;
+        font-weight: 500;
+      }
+      .muted {
+        color: #888;
+        font-size: 12.5px;
+        display: block;
+        margin-top: 2px;
+      }
+      .dot {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        border: 1.5px solid #888;
+        margin-top: 3px;
+        flex: none;
+      }
+      .on .dot {
+        border: 4px solid #3794ff;
+      }
+      .in {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        font-size: 13px;
+      }
+      .in span {
+        color: #999;
+      }
+      input {
+        background: #2a2a2a;
+        border: 1px solid #444;
+        border-radius: 5px;
+        color: #ddd;
+        padding: 5px 8px;
+        font: inherit;
+        font-size: 13px;
+      }
+      .ok {
+        color: #89d185;
+        font-size: 12.5px;
+        margin-top: 8px;
+      }
+      .err {
+        color: #f48771;
+        font-size: 12.5px;
+        margin-top: 8px;
+        line-height: 1.6;
+      }
+      .hint {
+        color: #999;
+        font-size: 12.5px;
+        margin-top: 8px;
+        line-height: 1.6;
+      }
+      a {
+        color: #3794ff;
+        text-decoration: none;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        border-radius: 6px;
+        padding: 6px 14px;
+        border: 1px solid #444;
+        background: #2d2d2d;
+        color: #ddd;
+      }
+      button.primary {
+        background: #0e639c;
+        border-color: #0e639c;
+        color: #fff;
+      }
+      .foot {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 14px;
+        gap: 8px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 0;
+        line-height: 1.6;
+      }
+      .cap b {
+        color: #fff;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        gap: 6px 10px;
+        margin: 0;
+        font-size: 13px;
+      }
+      dt {
+        color: #888;
+      }
+      dd {
+        margin: 0;
+        color: #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>我的空间 · 同步：用已保存的 GitHub 账号直接新建仓库</h1>
+    <p class="note">
+      首次使用页和「同步设置」页的同步区改成两种方式。已在「设置 → API Key 与连接」保存了 GitHub
+      Token 时，默认选「在 GitHub 新建私有仓库」，仓库名默认
+      my-space、可改；点「开始使用」时才真正建仓，建好后自动填入地址并做第一次同步。没有 Token
+      时这一项灰掉，给出去设置的链接，仍可以填写已有地址。只建私有仓库；同名仓库已存在时：私有且可写就直接用，公开或不可写就报错、不覆盖。
+    </p>
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <h3>同步（可选）</h3>
+          <div class="opt">
+            <span class="dot"></span><span><b>不同步</b></span>
+          </div>
+          <div class="opt on">
+            <span class="dot"></span
+            ><span
+              ><b>在 GitHub 新建私有仓库</b>
+              <span class="muted">使用已保存的 GitHub 账号</span>
+              <span class="in"><span>你的账号 /</span><input value="my-space" size="14" /></span
+            ></span>
+          </div>
+          <div class="opt">
+            <span class="dot"></span><span><b>使用已有仓库地址</b></span>
+          </div>
+          <div class="foot"><button class="primary">开始使用</button></div>
+        </div>
+        <p class="cap"><b>A 已保存 GitHub Token</b>：默认新建私有仓库，只需确认仓库名。</p>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h3>同步（可选）</h3>
+          <div class="opt">
+            <span class="dot"></span><span><b>不同步</b></span>
+          </div>
+          <div class="opt" style="opacity: 0.55">
+            <span class="dot"></span
+            ><span
+              ><b>在 GitHub 新建私有仓库</b>
+              <span class="muted">需要先保存 GitHub 账号和 Token · <a>去设置</a></span></span
+            >
+          </div>
+          <div class="opt on">
+            <span class="dot"></span
+            ><span
+              ><b>使用已有仓库地址</b>
+              <span class="in"
+                ><input placeholder="https://github.com/你的账号/my-diary.git" size="36" /></span
+            ></span>
+          </div>
+          <div class="foot"><button class="primary">开始使用</button></div>
+        </div>
+        <p class="cap"><b>B 没有 Token</b>：新建项灰掉并给出「去设置」；仍可手填已有地址。</p>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h3>同步设置</h3>
+          <dl>
+            <dt>仓库</dt>
+            <dd>你的账号/my-space · 私有</dd>
+            <dt>状态</dt>
+            <dd>已同步 · 刚刚</dd>
+          </dl>
+          <p class="ok">已在 GitHub 新建私有仓库并完成第一次同步。</p>
+        </div>
+        <div class="card" style="margin-top: 12px">
+          <h3>同步（可选）</h3>
+          <div class="opt on">
+            <span class="dot"></span
+            ><span
+              ><b>在 GitHub 新建私有仓库</b>
+              <span class="in"><span>你的账号 /</span><input value="my-space" size="14" /></span
+            ></span>
+          </div>
+          <p class="err">
+            GitHub 上已有公开仓库
+            my-space，不能用作日记同步。请换一个仓库名，或改用已有私有仓库的地址。
+          </p>
+          <div class="foot"><button class="primary">开始使用</button></div>
+        </div>
+        <p class="cap">
+          <b>C 结果</b>：成功后同步设置页显示仓库和状态；同名公开仓库或 Token
+          无写入权限时就地报错，不覆盖任何仓库，「我的空间」已建好的内容不受影响。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

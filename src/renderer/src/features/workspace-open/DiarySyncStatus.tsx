@@ -1,3 +1,10 @@
+import {
+  DiarySyncChoice,
+  defaultDiarySyncChoice,
+  diarySyncChoiceReady,
+  resolveDiarySyncUrl,
+  type DiarySyncChoiceValue,
+} from './DiarySyncChoice'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useEffect, useState } from 'react'
 import { create } from 'zustand'
@@ -170,7 +177,13 @@ export function useDiarySyncSchedule(path: string | null): void {
 }
 export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
   const state = useSync((s) => s[path] ?? empty),
-    [url, setUrl] = useState(''),
+    [choice, setChoice] = useState<DiarySyncChoiceValue>({
+      ...defaultDiarySyncChoice,
+      mode: 'url',
+    }),
+    [creating, setCreating] = useState(false),
+    [createError, setCreateError] = useState(''),
+    [created, setCreated] = useState(''),
     [feedback, setFeedback] = useState(''),
     [credential, setCredential] = useState(''),
     [editing, setEditing] = useState(false)
@@ -190,23 +203,22 @@ export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
       </h3>
       {first ? (
         <>
-          <label>
-            Git 项目地址
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="粘贴项目地址"
-            />
-          </label>
+          <DiarySyncChoice
+            value={choice}
+            onChange={setChoice}
+            allowNone={false}
+            disabled={state.busy || creating}
+          />
           <p>进入空间时自动接收和上传；留在前台，每小时整点再同步。</p>
         </>
       ) : (
         !conflict && (
           <div>
-            <small>{snap?.remoteUrl || url}</small>{' '}
+            <small>{snap?.remoteUrl}</small>{' '}
             <button
               onClick={() => {
-                setUrl(snap?.remoteUrl || '')
+                setChoice({ ...choice, mode: 'url', url: snap?.remoteUrl || '' })
+                setCreated('')
                 setEditing(true)
               }}
               disabled={state.busy}
@@ -215,6 +227,10 @@ export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
             </button>
           </div>
         )
+      )}
+      {createError && <p role="alert">{createError}</p>}
+      {created && !first && !state.error && !state.busy && (
+        <p className="diary-sync-ok">已在 GitHub 新建私有仓库 {created} 并完成第一次同步。</p>
       )}
       {state.error && <p role="alert">{state.error}</p>}
       {conflict && (
@@ -244,10 +260,29 @@ export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
       )}
       <button
         className="primary"
-        disabled={state.busy || (first && !url.trim()) || (!!conflict && !feedback.trim())}
-        onClick={() => {
+        disabled={
+          state.busy ||
+          creating ||
+          (first && !diarySyncChoiceReady(choice)) ||
+          (!!conflict && !feedback.trim())
+        }
+        onClick={async () => {
+          let url = ''
+          if (first) {
+            setCreateError('')
+            setCreating(true)
+            try {
+              url = (await resolveDiarySyncUrl(choice)) ?? ''
+            } catch (e) {
+              setCreateError(e instanceof Error ? e.message : String(e))
+              return
+            } finally {
+              setCreating(false)
+            }
+            setCreated(choice.mode === 'create' ? choice.name.trim() : '')
+          }
           void syncDiarySpace(path, true, {
-            ...(first ? { url: url.trim() } : {}),
+            ...(first ? { url } : {}),
             feedback: (!first && feedback) || undefined,
             ...(credential
               ? credential.startsWith('/')
@@ -259,13 +294,15 @@ export function DiarySyncPage({ path }: { path: string }): React.ReactElement {
           setCredential('')
         }}
       >
-        {state.busy
-          ? '正在同步…'
-          : first
-            ? '保存并同步'
-            : state.error || conflict
-              ? '继续同步'
-              : '同步'}
+        {creating
+          ? '正在新建仓库…'
+          : state.busy
+            ? '正在同步…'
+            : first
+              ? '保存并同步'
+              : state.error || conflict
+                ? '继续同步'
+                : '同步'}
       </button>
       {snap?.remoteUrl && !state.error && !conflict && <small>{label(state)}</small>}
     </section>

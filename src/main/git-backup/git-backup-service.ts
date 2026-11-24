@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type {
   GitBackupAccountStatus,
+  GitBackupCreateRepositoryResult,
   GitBackupOperationResult,
   GitBackupProjectStatus,
   GitBackupRunInput,
@@ -215,6 +216,23 @@ export class GitBackupService {
     } catch (error: unknown) {
       this.connectedLogin = null
       return operationFailure(error)
+    }
+  }
+
+  /** My Space sync: a private repository under the saved GitHub account, never a public one. */
+  async createPrivateRepository(name: string): Promise<GitBackupCreateRepositoryResult> {
+    try {
+      const username = normalizeGitHubUsername(this.settingsService.getAll().gitBackupUsername)
+      const token = this.getToken()
+      if (!token)
+        throw new GitBackupError('ACCOUNT_NOT_CONFIGURED', '请先在设置中保存 GitHub 账号和 Token')
+      const github = this.githubClientFactory(token)
+      await github.verifyAccount(username)
+      const repository = await github.getOrCreatePrivateRepository(username, name)
+      return { success: true, cloneUrl: repository.cloneUrl, fullName: repository.fullName }
+    } catch (error: unknown) {
+      const failure = toGitBackupError(error)
+      return { success: false, error: failure.message, errorCode: failure.code }
     }
   }
 
