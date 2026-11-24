@@ -1,6 +1,5 @@
 import { DiaryPlans } from './DiaryPlans'
 import { DiarySetupWizard } from './DiarySetupWizard'
-import { DiaryChangeReports } from './DiaryChangeReports'
 import { DiarySyncPage, useDiarySyncLabel, useDiarySyncRevision } from './DiarySyncStatus'
 import { DiaryDayView } from './DiaryDayView'
 import { useDiaryCalendar } from './diary-calendar-store'
@@ -619,12 +618,6 @@ export function PersonalDiaryHome(): React.ReactElement {
             </>
           )}
         </div>
-      )}
-      {source && (
-        <DiaryChangeReports
-          workspacePath={source.workspacePath}
-          onOpen={(path) => openFile({ path, name: path.split('/').pop()! })}
-        />
       )}
       <footer className="diary-today-foot">
         <button className="diary-link" onClick={() => setPage('计划')}>

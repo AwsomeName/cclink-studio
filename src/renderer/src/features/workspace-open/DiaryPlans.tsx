@@ -11,7 +11,6 @@ import { createConversationRunController } from '../agent-conversations/conversa
 import { createConversationRuntimeForWorkspace } from '../agent-conversations/view-model'
 import { removeTrashedTargets } from '../context-actions/domains/file-context-actions'
 import { describeSchedule } from '../scheduled-tasks/scheduled-task-view-model'
-import { DiaryChangeReports } from './DiaryChangeReports'
 import { editRule } from './diary-ai'
 import { ensurePlanTask, planOutputs, type PlanTaskKind } from './diary-builtin-tasks'
 import './diary-plans.css'
@@ -359,11 +358,6 @@ export function DiaryPlans({
                 发送
               </button>
             </section>
-            <DiaryChangeReports
-              workspacePath={workspace}
-              filePath={path.slice(workspace.length + 1)}
-              onOpen={(p) => openFile({ path: p, name: p.split('/').pop()! })}
-            />
           </>
         ) : current ? (
           <section>

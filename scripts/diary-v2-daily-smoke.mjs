@@ -127,7 +127,8 @@ try {
   await nav('今天')
   await todayArticle.waitFor({ timeout: 60000 })
 
-  // AI edit on request, change report, undo.
+  // AI edit on request: the change lands in today's file and shows in the open editor;
+  // the today page shows no change report.
   const before = await readFile(join(space, S, todayRel), 'utf8')
   await page.getByRole('button', { name: '让 AI 修改…' }).click()
   const composer = page.getByPlaceholder(/继续提问|输入消息/).first()
@@ -139,22 +140,18 @@ try {
   )
   await page.keyboard.press('Enter')
   // A Codex file change may ask once in the default 自动 permission mode; approve it if it does.
-  const report = home.getByRole('article', { name: 'AI 改动报告' })
   const allow = page.getByRole('button', { name: /^允许/ }).first()
-  await allow
-    .or(report)
-    .first()
-    .waitFor({ timeout: 5 * 60_000 })
-  if (await allow.isVisible().catch(() => false)) await allow.click()
-  await home.getByRole('article', { name: 'AI 改动报告' }).waitFor({ timeout: 5 * 60_000 })
-  const edited = await readFile(join(space, S, todayRel), 'utf8')
+  let edited = before
+  for (let i = 0; i < 300 && !edited.includes('散热片'); i += 1) {
+    if (await allow.isVisible().catch(() => false)) await allow.click()
+    await page.waitForTimeout(1000)
+    edited = await readFile(join(space, S, todayRel), 'utf8')
+  }
   result.aiEdit = { changed: edited !== before, mentions: edited.includes('散热片') }
   assert(edited.includes('散热片'))
-  await page.screenshot({ path: join(shots, 'v2-ai-change-report.png') })
-  await home.getByRole('button', { name: '撤销本次修改' }).click()
-  await home.getByText(/已撤销 1 个文件/).waitFor()
-  assert.equal(await readFile(join(space, S, todayRel), 'utf8'), before)
-  await page.screenshot({ path: join(shots, 'v2-ai-change-undone.png') })
+  await todayArticle.getByText('联系散热片供应商').waitFor({ timeout: 30000 })
+  assert.equal(await page.getByRole('article', { name: 'AI 改动报告' }).count(), 0)
+  await page.screenshot({ path: join(shots, 'v2-ai-edit-applied.png') })
 
   // In-place pull after review.
   await git(seed, ['pull', '--no-rebase', 'origin', 'main'])
