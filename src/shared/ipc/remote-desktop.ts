@@ -86,6 +86,20 @@ export const desktopIpc = {
     'remoteDesktop:rememberCredential',
     (args) => ipcArgs(id.parse(args[0]), credential.parse(args[1])),
   ),
+  copyText: defineIpcInvoke<[string, number, string | null], boolean>(
+    'remoteDesktop:copyText',
+    (args) =>
+      ipcArgs(
+        id.parse(args[0]),
+        z.number().int().positive().max(0xffffffff).parse(args[1]),
+        z
+          .string()
+          .min(1)
+          .max(1024 * 1024)
+          .nullable()
+          .parse(args[2]),
+      ),
+  ),
   pasteImage: defineIpcInvoke<[string, boolean], DesktopImagePasteResult>(
     'remoteDesktop:pasteImage',
     (args) => ipcArgs(id.parse(args[0]), z.boolean().parse(args[1])),
@@ -113,6 +127,7 @@ export interface DesktopApi {
   open(input: DesktopConnection): Promise<DesktopOpenResult>
   savedCredential(sessionId: string): Promise<DesktopCredential | null>
   rememberCredential(sessionId: string, credential: DesktopCredential): Promise<boolean>
+  copyText(sessionId: string, sequence: number, text: string | null): Promise<boolean>
   pasteImage(sessionId: string, serverSupportsImage: boolean): Promise<DesktopImagePasteResult>
   read(sessionId: string): Promise<DesktopRead>
   write(sessionId: string, bytes: Uint8Array): Promise<boolean>

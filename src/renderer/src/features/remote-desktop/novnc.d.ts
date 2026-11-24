@@ -7,6 +7,7 @@ declare module '@novnc/novnc' {
     )
     scaleViewport: boolean
     readonly capabilities: { appleImageClipboard?: boolean }
+    armAppleCopy(sequence: number): void
     sendKey(keysym: number, code: string, down?: boolean): void
     viewOnly: boolean
     showDotCursor: boolean

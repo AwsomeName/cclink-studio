@@ -1,4 +1,6 @@
 import { app, clipboard, type Input } from 'electron'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { createConnection, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { desktopIpc, type RemoteDesktopDevice } from '../../shared/ipc/remote-desktop'
@@ -11,7 +13,30 @@ import type { RuntimeService } from '../runtime/service-registry'
 import { packClipboardImage } from './apple-image-clipboard'
 import { RemoteDesktopDeviceStore, type StoredDesktopDevice } from './device-store'
 
+// Electron exposes pasteboard contents but not NSPasteboard.changeCount. Read only
+// the generation, asynchronously, without opening another app or copying any contents.
+const run = promisify(execFile)
+async function pasteboardRevision(): Promise<number | null> {
+  try {
+    const { stdout } = await run(
+      '/usr/bin/osascript',
+      [
+        '-l',
+        'JavaScript',
+        '-e',
+        "ObjC.import('AppKit'); Number($.NSPasteboard.generalPasteboard.changeCount)",
+      ],
+      { timeout: 2000, maxBuffer: 128 },
+    )
+    return /^\d+$/.test(stdout.trim()) ? Number(stdout.trim()) : null
+  } catch {
+    return null
+  }
+}
+
 interface Session {
+  remoteCopy?: { sequence: number; expires: number; baseline: Promise<number | null> }
+
   socket: Socket
   chunks: AsyncIterator<Buffer>
   workspaceKey: string | null
@@ -80,13 +105,23 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
       let generation = 0
       // Renderer code alone cannot trigger a read of the system pasteboard.
       let pasteGestureUntil = 0
+      let copyGestureUntil = 0
       let focusRevision = 0
       const invalidateGesture = (): void => {
         pasteGestureUntil = 0
+        copyGestureUntil = 0
         focusRevision++
       }
       const beforeInput = (_event: Electron.Event, input: Input): void => {
         if (input.type !== 'keyDown' || input.isAutoRepeat) return
+        copyGestureUntil =
+          (input.code === 'KeyC' || input.code === 'KeyX') &&
+          input.meta &&
+          !input.shift &&
+          !input.alt &&
+          !input.control
+            ? Date.now() + 1000
+            : 0
         pasteGestureUntil =
           input.code === 'KeyV' && input.meta && !input.shift && !input.alt && !input.control
             ? Date.now() + 1000
@@ -239,6 +274,36 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
         close(id)
         return null
       })
+      registerTrustedIpcContract(desktopIpc.copyText, guard, async (event, id, sequence, text) => {
+        const s = sessions.get(id)
+        if (!s?.appleViewer || !s.verified || s.senderId !== event.sender.id) return false
+        if (text === null) {
+          if (Date.now() > copyGestureUntil || !wc.isFocused()) return false
+          copyGestureUntil = 0
+          s.remoteCopy = { sequence, expires: Date.now() + 8000, baseline: pasteboardRevision() }
+          return true
+        }
+        const copy = s.remoteCopy
+        if (!copy || copy.sequence !== sequence || Date.now() > copy.expires) return false
+        copy.expires = 0 // consume this gesture before awaiting validation
+        const original = await copy.baseline
+        if (original === null) return false
+        const [current, revision] = await Promise.all([
+          runtime.workbenchTabModel?.getProjection(s.workspaceKey, s.ownerKey),
+          pasteboardRevision(),
+        ])
+        if (
+          s.remoteCopy !== copy ||
+          sessions.get(id) !== s ||
+          current?.activeTabId !== s.tabId ||
+          original !== revision
+        )
+          return false
+        clipboard.writeText(text)
+        // Writing text replaces the old image. Any subsequent local image is new.
+        s.remoteCopy = undefined
+        return true
+      })
       registerTrustedIpcContract(desktopIpc.pasteImage, guard, async (event, id, supported) => {
         const s = sessions.get(id)
         if (
@@ -271,12 +336,20 @@ export function createDesktopRuntime(runtime: CclinkStudioRuntimeState): Runtime
             )
           )
             return 'no-image'
+          const copy = s.remoteCopy
+          if (copy) {
+            const [atCopy, now] = await Promise.all([copy.baseline, pasteboardRevision()])
+            // The reply may have replaced the local image with remote text during the read.
+            if (!s.remoteCopy) return 'no-image'
+            if (s.remoteCopy !== copy) return 'cancelled'
+            if (atCopy === null || now === null || atCopy === now) return 'no-image'
+          }
           if (!supported) return 'unsupported'
           const image = clipboard.readImage()
           if (image.isEmpty()) return 'failed'
           const content = await packClipboardImage(image)
           if (!content) return 'failed'
-          if (!(await isCurrent())) return 'cancelled'
+          if (!(await isCurrent()) || s.remoteCopy !== copy) return 'cancelled'
           // One socket write keeps input packets out of the compressed body.
           s.pendingImageBytes = content.packet.length
           await new Promise<void>((resolve, reject) =>

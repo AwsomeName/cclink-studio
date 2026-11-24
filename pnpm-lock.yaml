@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@novnc/novnc@1.7.0': 31aa3141f77473e319a5c9d9ab420ebfc6ffba2d8aece05b992b0d5130a475be
+  '@novnc/novnc@1.7.0': 6c8947cbf665b133108270a354b72f239a512ae4b7271f4f507d302415b3ba16
 
 importers:
 
@@ -31,7 +31,7 @@ importers:
         version: 1.29.0(zod@4.4.3)
       '@novnc/novnc':
         specifier: 1.7.0
-        version: 1.7.0(patch_hash=31aa3141f77473e319a5c9d9ab420ebfc6ffba2d8aece05b992b0d5130a475be)
+        version: 1.7.0(patch_hash=6c8947cbf665b133108270a354b72f239a512ae4b7271f4f507d302415b3ba16)
       '@tencentcloud/chat':
         specifier: 3.6.6
         version: 3.6.6
@@ -4217,7 +4217,7 @@ snapshots:
 
   '@nodable/entities@2.1.1': {}
 
-  '@novnc/novnc@1.7.0(patch_hash=31aa3141f77473e319a5c9d9ab420ebfc6ffba2d8aece05b992b0d5130a475be)': {}
+  '@novnc/novnc@1.7.0(patch_hash=6c8947cbf665b133108270a354b72f239a512ae4b7271f4f507d302415b3ba16)': {}
 
   '@openai/codex@0.147.0':
     optionalDependencies:

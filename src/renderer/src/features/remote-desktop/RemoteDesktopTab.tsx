@@ -6,6 +6,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { getWorkspaceStateKey, getWorkspaceStateOwnerKey } from '../../utils/workspace-state'
 import { flushPendingWorkbenchTabWrites } from '../../utils/workbench-tab-model'
 import { DesktopChannel } from './desktop-channel'
+import { installMacCopyText } from './mac-copy-text'
 import { installMacImagePaste } from './mac-image-paste'
 import { applyMacServerModifiers } from './mac-keys'
 import { installMacWheel } from './mac-scroll'
@@ -211,6 +212,13 @@ export function RemoteDesktopTab({
       client.current = rfb
       const diag = createDesktopDiagnostics(`${device.host}:${device.port}`)
       diag.stage('connecting')
+      const uncopy = installMacCopyText(
+        rfb,
+        target.current,
+        () => activeRef.current && generation.current === attempt && !rfb.viewOnly,
+        (sequence, text) => api().copyText(sessionId, sequence, text),
+        setPasteNotice,
+      )
       const unpaste = installMacImagePaste(
         rfb,
         target.current,
@@ -235,6 +243,7 @@ export function RemoteDesktopTab({
       // macOS hides the pointer while typing and then sends a transparent cursor shape.
       rfb.showDotCursor = true
       releaseDiagnostics.current = () => {
+        uncopy()
         unpaste()
         unwatch()
         unwheel?.()
