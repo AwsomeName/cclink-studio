@@ -1081,7 +1081,7 @@ export function MarkdownEditor({
             {toolbarExtra}
           </div>
         ) : null}
-        <SourceTextEditor filePath={filePath} tabId={tabId} />
+        <SourceTextEditor filePath={filePath} tabId={tabId} reuseLoaded />
       </div>
     )
   }

@@ -24,6 +24,8 @@ import { resolveMountedEditorSaveTarget } from '../../features/editor-save-targe
 interface SourceTextEditorProps {
   filePath: string
   tabId: string
+  /** Use the file the embedding editor already loaded instead of reading it again. */
+  reuseLoaded?: boolean
 }
 
 function sourceSelectionRange(
@@ -58,7 +60,11 @@ function findSourceTextMatches(
   }))
 }
 
-export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): React.ReactElement {
+export function SourceTextEditor({
+  filePath,
+  tabId,
+  reuseLoaded,
+}: SourceTextEditorProps): React.ReactElement {
   const fileState = useEditorStore((state) => state.files[filePath])
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
@@ -118,6 +124,10 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
 
   useEffect(() => {
     let disposed = false
+    // Embedded in a page whose rich editor already loaded this file: reloading would put that
+    // editor back into its loading state and unmount this one.
+    const loaded = useEditorStore.getState().files[filePath]
+    if (reuseLoaded && loaded && !loaded.loading) return
     void useEditorStore
       .getState()
       .openFile(filePath)
@@ -127,7 +137,7 @@ export function SourceTextEditor({ filePath, tabId }: SourceTextEditorProps): Re
     return () => {
       disposed = true
     }
-  }, [filePath])
+  }, [filePath, reuseLoaded])
 
   useEffect(() => {
     const directory = filePath.slice(0, filePath.lastIndexOf('/')) || '/'
