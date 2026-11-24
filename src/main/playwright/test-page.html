@@ -1,140 +1,225 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>CCLink Studio Playwright 测试页</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-    h1 { color: #333; }
-    .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
-    input[type="text"], input[type="email"], input[type="file"] { display: block; margin: 8px 0; padding: 6px; width: 300px; }
-    select { display: block; margin: 8px 0; padding: 6px; width: 310px; }
-    textarea { display: block; margin: 8px 0; padding: 6px; width: 300px; height: 60px; }
-    button { padding: 8px 16px; margin: 4px; cursor: pointer; }
-    .checkbox-group label { display: block; margin: 4px 0; }
-    #drag-source, #drag-target { width: 150px; height: 80px; border: 2px dashed #999; display: inline-block; text-align: center; line-height: 80px; margin: 8px; vertical-align: top; }
-    #drag-target { background: #f0f0f0; }
-    #delayed-btn { display: none; }
-  </style>
-</head>
-<body>
-  <h1>🧪 CCLink Studio Playwright 测试页</h1>
-  <p>此页面用于验证 Playwright 的所有核心能力</p>
+  <head>
+    <meta charset="UTF-8" />
+    <title>CCLink Studio Playwright 测试页</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      h1 {
+        color: #333;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      input[type='text'],
+      input[type='email'],
+      input[type='file'] {
+        display: block;
+        margin: 8px 0;
+        padding: 6px;
+        width: 300px;
+      }
+      select {
+        display: block;
+        margin: 8px 0;
+        padding: 6px;
+        width: 310px;
+      }
+      textarea {
+        display: block;
+        margin: 8px 0;
+        padding: 6px;
+        width: 300px;
+        height: 60px;
+      }
+      button {
+        padding: 8px 16px;
+        margin: 4px;
+        cursor: pointer;
+      }
+      .checkbox-group label {
+        display: block;
+        margin: 4px 0;
+      }
+      #drag-source,
+      #drag-target {
+        width: 150px;
+        height: 80px;
+        border: 2px dashed #999;
+        display: inline-block;
+        text-align: center;
+        line-height: 80px;
+        margin: 8px;
+        vertical-align: top;
+      }
+      #drag-target {
+        background: #f0f0f0;
+      }
+      #delayed-btn {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 CCLink Studio Playwright 测试页</h1>
+    <p>此页面用于验证 Playwright 的所有核心能力</p>
 
-  <div class="test-section">
-    <h2>1. 点击测试</h2>
-    <button id="click-btn" onclick="document.getElementById('click-result').textContent='已点击！时间:' + new Date().toLocaleTimeString()">点我</button>
-    <span id="click-result">等待点击...</span>
-  </div>
-
-  <div class="test-section">
-    <h2>2. 表单填写</h2>
-    <input type="text" id="input-name" placeholder="姓名">
-    <input type="email" id="input-email" placeholder="邮箱">
-    <textarea id="input-message" placeholder="消息"></textarea>
-  </div>
-
-  <div class="test-section">
-    <h2>3. 下拉选择</h2>
-    <select id="select-city">
-      <option value="">请选择城市</option>
-      <option value="beijing">北京</option>
-      <option value="shanghai">上海</option>
-      <option value="shenzhen">深圳</option>
-      <option value="hangzhou">杭州</option>
-    </select>
-  </div>
-
-  <div class="test-section">
-    <h2>4. 复选框</h2>
-    <div class="checkbox-group">
-      <label><input type="checkbox" id="chk-agree"> 同意条款</label>
-      <label><input type="checkbox" id="chk-newsletter"> 订阅新闻</label>
+    <div class="test-section">
+      <h2>1. 点击测试</h2>
+      <button
+        id="click-btn"
+        onclick="
+          document.getElementById('click-result').textContent =
+            '已点击！时间:' + new Date().toLocaleTimeString()
+        "
+      >
+        点我
+      </button>
+      <span id="click-result">等待点击...</span>
     </div>
-  </div>
 
-  <div class="test-section">
-    <h2>5. 文件上传</h2>
-    <input type="file" id="file-upload">
-  </div>
+    <div class="test-section">
+      <h2>2. 表单填写</h2>
+      <input type="text" id="input-name" placeholder="姓名" />
+      <input type="email" id="input-email" placeholder="邮箱" />
+      <textarea id="input-message" placeholder="消息"></textarea>
+    </div>
 
-  <div class="test-section">
-    <h2>6. 拖拽测试</h2>
-    <div id="drag-source" draggable="true">拖拽我</div>
-    <div id="drag-target">放到这里</div>
-  </div>
+    <div class="test-section">
+      <h2>3. 下拉选择</h2>
+      <select id="select-city">
+        <option value="">请选择城市</option>
+        <option value="beijing">北京</option>
+        <option value="shanghai">上海</option>
+        <option value="shenzhen">深圳</option>
+        <option value="hangzhou">杭州</option>
+      </select>
+    </div>
 
-  <div class="test-section">
-    <h2>7. 对话框</h2>
-    <button onclick="alert('Hello from CCLink Studio!')">触发 Alert</button>
-    <button onclick="confirm('确认操作？')">触发 Confirm</button>
-  </div>
+    <div class="test-section">
+      <h2>4. 复选框</h2>
+      <div class="checkbox-group">
+        <label><input type="checkbox" id="chk-agree" /> 同意条款</label>
+        <label><input type="checkbox" id="chk-newsletter" /> 订阅新闻</label>
+      </div>
+    </div>
 
-  <div class="test-section">
-    <h2>8. iframe</h2>
-    <iframe id="test-iframe" srcdoc="<h3>iframe 内容</h3><p id='iframe-text'>iframe 中的文字</p>" width="300" height="100"></iframe>
-  </div>
+    <div class="test-section">
+      <h2>5. 文件上传</h2>
+      <input type="file" id="file-upload" />
+    </div>
 
-  <div class="test-section">
-    <h2>9. 链接（新窗口）</h2>
-    <a id="popup-link" href="https://example.com" target="_blank">在新窗口打开</a>
-  </div>
+    <div class="test-section">
+      <h2>6. 拖拽测试</h2>
+      <div id="drag-source" draggable="true">拖拽我</div>
+      <div id="drag-target">放到这里</div>
+    </div>
 
-  <div class="test-section">
-    <h2>10. 文件下载</h2>
-    <button id="download-json" onclick="downloadJson()">下载 JSON</button>
-    <button id="download-text" onclick="downloadText()">下载 TXT</button>
-    <span id="download-result">等待下载...</span>
-  </div>
+    <div class="test-section">
+      <h2>7. 对话框</h2>
+      <button onclick="alert('Hello from CCLink Studio!')">触发 Alert</button>
+      <button onclick="confirm('确认操作？')">触发 Confirm</button>
+    </div>
 
-  <div class="test-section">
-    <h2>11. 延迟元素</h2>
-    <button id="show-delayed" onclick="showDelayedButton()">2 秒后显示按钮</button>
-    <button id="delayed-btn" onclick="document.getElementById('delayed-result').textContent='延迟按钮已点击'">延迟按钮</button>
-    <span id="delayed-result">等待...</span>
-  </div>
+    <div class="test-section">
+      <h2>8. iframe</h2>
+      <iframe
+        id="test-iframe"
+        srcdoc="<h3>iframe 内容</h3><p id='iframe-text'>iframe 中的文字</p>"
+        width="300"
+        height="100"
+      ></iframe>
+    </div>
 
-  <div class="test-section">
-    <h2>12. 失败场景</h2>
-    <p>用于验证不存在 selector：<code>#never-appears</code></p>
-  </div>
+    <div class="test-section">
+      <h2>9. 链接（新窗口）</h2>
+      <a id="popup-link" href="https://example.com" target="_blank">在新窗口打开</a>
+    </div>
 
-  <script>
-    // 拖拽逻辑
-    const source = document.getElementById('drag-source');
-    const target = document.getElementById('drag-target');
-    source.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/plain', 'dragged'); });
-    target.addEventListener('dragover', (e) => { e.preventDefault(); });
-    target.addEventListener('drop', (e) => { e.preventDefault(); target.textContent = '已接收！'; target.style.background = '#90ee90'; });
+    <div class="test-section">
+      <h2>10. 文件下载</h2>
+      <button id="download-json" onclick="downloadJson()">下载 JSON</button>
+      <button id="download-text" onclick="downloadText()">下载 TXT</button>
+      <span id="download-result">等待下载...</span>
+    </div>
 
-    function triggerDownload(filename, content, type) {
-      const blob = new Blob([content], { type });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      document.getElementById('download-result').textContent = '已触发下载: ' + filename;
-    }
+    <div class="test-section">
+      <h2>11. 延迟元素</h2>
+      <button id="show-delayed" onclick="showDelayedButton()">2 秒后显示按钮</button>
+      <button
+        id="delayed-btn"
+        onclick="document.getElementById('delayed-result').textContent = '延迟按钮已点击'"
+      >
+        延迟按钮
+      </button>
+      <span id="delayed-result">等待...</span>
+    </div>
 
-    function downloadJson() {
-      triggerDownload('cclink-studio-test-download.json', JSON.stringify({ source: 'cclink-studio-test-page', ok: true }, null, 2), 'application/json');
-    }
+    <div class="test-section">
+      <h2>12. 失败场景</h2>
+      <p>用于验证不存在 selector：<code>#never-appears</code></p>
+    </div>
 
-    function downloadText() {
-      triggerDownload('cclink-studio-test-download.txt', 'CCLink Studio download test\n', 'text/plain');
-    }
+    <script>
+      // 拖拽逻辑
+      const source = document.getElementById('drag-source')
+      const target = document.getElementById('drag-target')
+      source.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', 'dragged')
+      })
+      target.addEventListener('dragover', (e) => {
+        e.preventDefault()
+      })
+      target.addEventListener('drop', (e) => {
+        e.preventDefault()
+        target.textContent = '已接收！'
+        target.style.background = '#90ee90'
+      })
 
-    function showDelayedButton() {
-      document.getElementById('delayed-result').textContent = '等待延迟按钮出现...';
-      setTimeout(() => {
-        document.getElementById('delayed-btn').style.display = 'inline-block';
-        document.getElementById('delayed-result').textContent = '延迟按钮已出现';
-      }, 2000);
-    }
-  </script>
-</body>
+      function triggerDownload(filename, content, type) {
+        const blob = new Blob([content], { type })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        URL.revokeObjectURL(url)
+        document.getElementById('download-result').textContent = '已触发下载: ' + filename
+      }
+
+      function downloadJson() {
+        triggerDownload(
+          'cclink-studio-test-download.json',
+          JSON.stringify({ source: 'cclink-studio-test-page', ok: true }, null, 2),
+          'application/json',
+        )
+      }
+
+      function downloadText() {
+        triggerDownload(
+          'cclink-studio-test-download.txt',
+          'CCLink Studio download test\n',
+          'text/plain',
+        )
+      }
+
+      function showDelayedButton() {
+        document.getElementById('delayed-result').textContent = '等待延迟按钮出现...'
+        setTimeout(() => {
+          document.getElementById('delayed-btn').style.display = 'inline-block'
+          document.getElementById('delayed-result').textContent = '延迟按钮已出现'
+        }, 2000)
+      }
+    </script>
+  </body>
 </html>
