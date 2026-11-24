@@ -992,3 +992,46 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Today page document typography (mockup 24): a readable column, light headings, no rules. */
+.diary-today-editor .tiptap-editor {
+  padding: 20px 28px 32px;
+}
+.diary-today-editor .tiptap-editor .tiptap {
+  max-width: 760px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.diary-today-editor .tiptap-editor .tiptap h1 {
+  font-size: 24px;
+  margin: 0.2em 0 0.6em;
+  padding: 0;
+  border: 0;
+}
+.diary-today-editor .tiptap-editor .tiptap h2 {
+  font-size: 17px;
+  margin: 1.4em 0 0.3em;
+  padding: 0;
+  border: 0;
+}
+.diary-today-editor .tiptap-editor .tiptap h3 {
+  font-size: 15px;
+  margin: 1.1em 0 0.2em;
+}
+.diary-today-editor .tiptap-editor .tiptap p {
+  margin: 0 0 0.4em;
+}
+.diary-today-editor .editor-toolbar.compact {
+  background: transparent;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.diary-today-editor .tiptap-editor .tiptap .tableWrapper,
+.diary-today-editor .tiptap-editor .tiptap table {
+  max-width: 760px;
+}
+/* The today page always wraps to its reading column, whatever the global word-wrap setting. */
+.diary-today-editor .tiptap-editor.no-wrap .tiptap {
+  width: auto;
+  min-width: 0;
+  white-space: pre-wrap;
+}
