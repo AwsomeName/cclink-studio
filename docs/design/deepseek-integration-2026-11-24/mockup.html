@@ -1,0 +1,1779 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DeepSeek 接入效果稿</title>
+    <style>
+      :root {
+        --bg-primary: #1e1e1e;
+        --bg-secondary: #252526;
+        --bg-elevated: #2d2d2d;
+        --bg-hover: #2a2d2e;
+        --border-color: #3c3c3c;
+        --text-primary: #cccccc;
+        --text-strong: #e7e7e7;
+        --text-secondary: #969696;
+        --accent-color: #4d9cf8;
+        --accent-soft: rgba(77, 156, 248, 0.14);
+        --success-color: #4caf7a;
+        --warning-color: #d7a03a;
+        --error-color: #e06c6c;
+        --new-color: #b48cf2;
+        --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+        --font-mono: 'SF Mono', Menlo, monospace;
+      }
+      :root[data-theme='light'] {
+        --bg-primary: #ffffff;
+        --bg-secondary: #f3f3f3;
+        --bg-elevated: #ececec;
+        --bg-hover: #e8e8e8;
+        --border-color: #d4d4d4;
+        --text-primary: #333333;
+        --text-strong: #1e1e1e;
+        --text-secondary: #616161;
+        --accent-color: #1f6fd1;
+        --accent-soft: rgba(31, 111, 209, 0.1);
+        --new-color: #7b4fd0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font: 13px/1.55 var(--font-ui);
+      }
+      button {
+        font: inherit;
+        color: var(--text-primary);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+        color: #fff;
+      }
+      button.link {
+        background: none;
+        border: 0;
+        padding: 0;
+        color: var(--accent-color);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 6px 8px;
+        min-width: 0;
+        width: 100%;
+      }
+      code,
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .muted {
+        color: var(--text-secondary);
+      }
+      small {
+        font-size: 12px;
+      }
+
+      /* Shell */
+      .app {
+        display: grid;
+        grid-template-rows: 40px 1fr 24px;
+        height: 100vh;
+        min-height: 640px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 10px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .topbar .proj {
+        padding: 4px 10px;
+        border-radius: 5px;
+        color: var(--text-secondary);
+      }
+      .topbar .proj.active {
+        background: var(--bg-elevated);
+        color: var(--text-strong);
+        border: 1px solid var(--border-color);
+      }
+      .topbar .spacer {
+        flex: 1;
+      }
+      .statusbar {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding: 0 10px;
+        background: #2f6fc0;
+        color: #fff;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .body {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr) 340px;
+        min-height: 0;
+      }
+      .body.no-agent {
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+      .side {
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border-color);
+        padding: 10px 8px;
+        overflow: auto;
+      }
+      .side .group {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin: 12px 8px 4px;
+      }
+      .side .item {
+        display: flex;
+        justify-content: space-between;
+        padding: 5px 8px;
+        border-radius: 4px;
+      }
+      .side .item.active {
+        background: var(--bg-hover);
+        color: var(--text-strong);
+        box-shadow: inset 2px 0 var(--accent-color);
+      }
+      .side .item small {
+        color: var(--text-secondary);
+      }
+      .main {
+        overflow: auto;
+        min-width: 0;
+      }
+      .agent {
+        border-left: 1px solid var(--border-color);
+        background: var(--bg-secondary);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        min-height: 0;
+      }
+      .agent header {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .agent .thread {
+        overflow: auto;
+        padding: 12px 14px;
+        display: grid;
+        gap: 12px;
+        align-content: start;
+      }
+      .agent .composer {
+        border-top: 1px solid var(--border-color);
+        padding: 10px 14px;
+      }
+      .agent .composer .cbox {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: var(--text-secondary);
+        background: var(--bg-primary);
+      }
+      .agent .composer .tools {
+        display: flex;
+        gap: 12px;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .new-badge {
+        display: inline-block;
+        font-size: 10px;
+        line-height: 16px;
+        padding: 0 5px;
+        border-radius: 3px;
+        color: var(--new-color);
+        border: 1px solid var(--new-color);
+        margin-left: 6px;
+        vertical-align: 1px;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        padding: 0 6px;
+        border-radius: 9px;
+        background: var(--bg-hover);
+        color: var(--text-secondary);
+      }
+      .tag.ok {
+        color: var(--success-color);
+      }
+      .tag.warn {
+        color: var(--warning-color);
+      }
+      .tag.err {
+        color: var(--error-color);
+      }
+
+      /* Settings */
+      .settings {
+        padding: 24px 32px 80px;
+        max-width: 980px;
+      }
+      .settings h1 {
+        font-size: 20px;
+        font-weight: 500;
+        margin: 0 0 4px;
+        color: var(--text-strong);
+      }
+      .settings h2 {
+        font-size: 16px;
+        font-weight: 500;
+        margin: 0;
+        color: var(--text-strong);
+      }
+      .settings h3 {
+        font-size: 14px;
+        font-weight: 500;
+        margin: 0 0 2px;
+        color: var(--text-strong);
+      }
+      .settings-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+      .conn-layout {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        gap: 18px;
+      }
+      .conn-services {
+        display: grid;
+        gap: 2px;
+        align-content: start;
+      }
+      .conn-services .grp {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin: 10px 8px 4px;
+      }
+      .conn-services .svc {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 7px 9px;
+        border-radius: 4px;
+        border: 1px solid transparent;
+      }
+      .conn-services .svc.active {
+        background: var(--bg-hover);
+        border-color: var(--border-color);
+        color: var(--text-strong);
+      }
+      .conn-services .svc small {
+        color: var(--text-secondary);
+      }
+      .panel {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-secondary);
+        padding: 16px 18px;
+      }
+      .panel + .panel {
+        margin-top: 14px;
+      }
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .form {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .form label {
+        display: grid;
+        gap: 5px;
+        font-size: 12px;
+      }
+      .form .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .note {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 2px 0 0;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 14px;
+      }
+      .model-choice {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .model-choice .opt {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: var(--bg-primary);
+      }
+      .model-choice .opt.on {
+        border-color: var(--accent-color);
+        box-shadow: inset 0 0 0 1px var(--accent-color);
+      }
+      .model-choice .opt strong {
+        color: var(--text-strong);
+      }
+      .model-choice ul {
+        margin: 6px 0 0;
+        padding-left: 16px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .checks {
+        display: grid;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .check {
+        display: grid;
+        grid-template-columns: 18px 1fr auto;
+        gap: 8px;
+        align-items: baseline;
+        padding: 8px 10px;
+        border-radius: 5px;
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+      }
+      .check .ico {
+        font-weight: 700;
+      }
+      .check.ok .ico {
+        color: var(--success-color);
+      }
+      .check.warn .ico {
+        color: var(--warning-color);
+      }
+      .check.off .ico {
+        color: var(--text-secondary);
+      }
+      .callout {
+        border-left: 3px solid var(--warning-color);
+        background: rgba(215, 160, 58, 0.08);
+        padding: 8px 12px;
+        border-radius: 0 5px 5px 0;
+        font-size: 12px;
+        margin-top: 12px;
+      }
+      .callout.info {
+        border-left-color: var(--accent-color);
+        background: var(--accent-soft);
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 6px 14px;
+        font-size: 12px;
+        margin-top: 10px;
+      }
+      .kv dt {
+        color: var(--text-secondary);
+      }
+      .kv dd {
+        margin: 0;
+      }
+      .switch {
+        width: 32px;
+        height: 18px;
+        border-radius: 9px;
+        background: var(--border-color);
+        position: relative;
+        flex-shrink: 0;
+      }
+      .switch::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+      }
+      .switch.on {
+        background: var(--accent-color);
+      }
+      .switch.on::after {
+        left: 16px;
+      }
+      .radio {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 6px 0;
+      }
+      .radio .rdot {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid var(--text-secondary);
+        margin-top: 3px;
+        flex-shrink: 0;
+      }
+      .radio .rdot.on {
+        border: 4px solid var(--accent-color);
+      }
+
+      /* Tools module */
+      .module {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-primary);
+      }
+      .module + .module {
+        margin-top: 8px;
+      }
+      .module-row {
+        display: grid;
+        grid-template-columns: 14px 10px minmax(0, 1fr) auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+      }
+      .module-row strong {
+        color: var(--text-strong);
+        display: block;
+      }
+      .module-row span.desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--success-color);
+      }
+      .dot.off {
+        background: var(--text-secondary);
+      }
+      .tool-list {
+        border-top: 1px solid var(--border-color);
+        padding: 6px 12px 10px 46px;
+        display: grid;
+        gap: 6px;
+      }
+      .tool-row {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr) auto;
+        gap: 10px;
+        font-size: 12px;
+        align-items: baseline;
+      }
+      .risk {
+        font-style: normal;
+        font-size: 11px;
+        color: var(--warning-color);
+      }
+      .backends {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .backends div {
+        border: 1px solid var(--border-color);
+        border-radius: 5px;
+        padding: 8px 10px;
+        background: var(--bg-primary);
+        font-size: 12px;
+      }
+      .backends strong {
+        display: block;
+        color: var(--text-strong);
+        font-size: 13px;
+      }
+
+      /* Usage */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .metric {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: var(--bg-primary);
+      }
+      .metric span {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .metric strong {
+        display: block;
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--text-strong);
+        font-variant-numeric: tabular-nums;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--border-color);
+      }
+      th {
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .bar {
+        height: 6px;
+        border-radius: 3px;
+        background: var(--border-color);
+        overflow: hidden;
+        margin-top: 8px;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--accent-color);
+      }
+
+      /* Conversation */
+      .msg.user {
+        justify-self: end;
+        max-width: 88%;
+        background: var(--bg-elevated);
+        border-radius: 8px;
+        padding: 8px 10px;
+        color: var(--text-strong);
+      }
+      .msg.assistant {
+        max-width: 100%;
+      }
+      .toolcard {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-primary);
+        font-size: 12px;
+        min-width: 0;
+      }
+      .toolcard .th {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .toolcard .th strong {
+        color: var(--text-strong);
+        white-space: nowrap;
+      }
+      .toolcard .th code,
+      .toolcard .th .u {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .toolcard .th .right {
+        white-space: nowrap;
+      }
+      .toolcard .th .right {
+        margin-left: auto;
+        color: var(--text-secondary);
+      }
+      .toolcard .tb {
+        padding: 8px 10px;
+        display: grid;
+        gap: 6px;
+      }
+      .result {
+        display: grid;
+        gap: 1px;
+      }
+      .result a {
+        color: var(--accent-color);
+        text-decoration: none;
+      }
+      .result .u {
+        color: var(--text-secondary);
+        font-size: 11px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .toolcard .tf {
+        padding: 6px 10px;
+        border-top: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .cite {
+        color: var(--accent-color);
+        font-size: 11px;
+        vertical-align: super;
+      }
+      .blocked {
+        border: 1px dashed var(--warning-color);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+      .session-chip {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      /* Owner */
+      .page {
+        padding: 22px 28px 80px;
+        max-width: 900px;
+      }
+      .page h1 {
+        font-size: 20px;
+        font-weight: 500;
+        margin: 0 0 2px;
+        color: var(--text-strong);
+      }
+      .page h2 {
+        font-size: 15px;
+        font-weight: 500;
+        margin: 0 0 8px;
+        color: var(--text-strong);
+      }
+      .card {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-secondary);
+        padding: 14px 16px;
+        margin-top: 14px;
+      }
+      .src-list {
+        display: grid;
+        gap: 6px;
+      }
+      .src {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: baseline;
+        padding: 7px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 5px;
+        background: var(--bg-primary);
+      }
+      .box {
+        width: 14px;
+        height: 14px;
+        border: 1px solid var(--text-secondary);
+        border-radius: 3px;
+        display: inline-block;
+      }
+      .box.on {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+        position: relative;
+      }
+      .box.on::after {
+        content: '✓';
+        color: #fff;
+        font-size: 11px;
+        position: absolute;
+        left: 2px;
+        top: -2px;
+      }
+      .finding {
+        border-top: 1px solid var(--border-color);
+        padding: 12px 0 4px;
+      }
+      .finding:first-of-type {
+        border-top: 0;
+      }
+      .finding h3 {
+        font-size: 13px;
+        margin: 0 0 4px;
+        color: var(--text-strong);
+        font-weight: 600;
+      }
+      blockquote {
+        margin: 6px 0;
+        padding: 4px 10px;
+        border-left: 3px solid var(--border-color);
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      /* Decision dialog */
+      .dim {
+        position: relative;
+      }
+      .dim::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1;
+      }
+      .dialog {
+        position: absolute;
+        z-index: 2;
+        left: 50%;
+        top: 56px;
+        transform: translateX(-50%);
+        width: min(560px, calc(100% - 32px));
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      }
+      .dialog header {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        color: var(--text-strong);
+        font-weight: 600;
+      }
+      .dialog .db {
+        padding: 14px 16px;
+        display: grid;
+        gap: 10px;
+      }
+      .dialog footer {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+      }
+      .opt-row {
+        display: grid;
+        grid-template-columns: 16px 1fr;
+        gap: 8px;
+        align-items: baseline;
+        font-size: 12px;
+        padding: 3px 0;
+      }
+      .opt-sub {
+        margin: 4px 0 0 24px;
+        padding: 8px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 5px;
+        background: var(--bg-primary);
+        font-size: 12px;
+        display: grid;
+        gap: 4px;
+      }
+
+      /* Review notes */
+      .anno {
+        display: none;
+      }
+      .show-notes .anno {
+        display: block;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #fff;
+        background: var(--new-color);
+        border-radius: 4px;
+        padding: 3px 7px;
+        margin: 6px 0;
+        max-width: 640px;
+      }
+      .reviewbar {
+        position: fixed;
+        left: 50%;
+        bottom: 34px;
+        transform: translateX(-50%);
+        z-index: 50;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        max-width: calc(100% - 24px);
+        background: rgba(20, 20, 20, 0.92);
+        border: 1px solid #444;
+        border-radius: 8px;
+        padding: 6px;
+      }
+      .reviewbar button {
+        font-size: 12px;
+        padding: 3px 8px;
+        background: #2d2d2d;
+        color: #ddd;
+        border-color: #555;
+      }
+      .reviewbar button.on {
+        background: var(--accent-color);
+        color: #fff;
+        border-color: var(--accent-color);
+      }
+      .clean .reviewbar {
+        display: none;
+      }
+      [data-view]:not(.on) {
+        display: none !important;
+      }
+
+      @media (max-width: 1180px) {
+        .body {
+          grid-template-columns: 200px minmax(0, 1fr);
+        }
+        .agent {
+          display: none;
+        }
+        .body.chat-only {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .body.chat-only .side,
+        .body.chat-only .main {
+          display: none;
+        }
+        .body.chat-only .agent {
+          display: grid;
+          border-left: 0;
+        }
+      }
+      @media (max-width: 760px) {
+        .body,
+        .body.no-agent {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .side {
+          display: none;
+        }
+        .settings,
+        .page {
+          padding: 16px;
+        }
+        .conn-layout,
+        .model-choice,
+        .form .row2,
+        .backends {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .conn-services {
+          display: flex;
+          overflow-x: auto;
+        }
+        .conn-services .grp {
+          display: none;
+        }
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .tool-row {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .kv {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="topbar">
+        <span class="proj">我的空间</span>
+        <span class="proj" id="tb-company">星河科技</span>
+        <span class="proj" id="tb-settings">Studio 设置</span>
+        <span class="proj">＋ 新建／打开</span>
+        <span class="spacer"></span>
+        <span class="proj">◇ Owner</span>
+      </div>
+
+      <!-- 1. Settings · API Key 与连接 · Claude Code with DeepSeek -->
+      <div class="body no-agent" data-view="agent-model">
+        <nav class="side">
+          <div class="group">资源管理</div>
+          <div class="item">网站与账号</div>
+          <div class="item">角色</div>
+          <div class="group">AI 与服务</div>
+          <div class="item active">API Key 与连接</div>
+          <div class="item">Agent 行为与工具</div>
+          <div class="item">模型用量</div>
+          <div class="item">组件管理</div>
+          <div class="group">应用</div>
+          <div class="item">运行状态与诊断</div>
+        </nav>
+        <main class="main">
+          <section class="settings">
+            <div class="settings-head">
+              <div>
+                <h1>API Key 与连接</h1>
+                <div class="muted">选择要用的服务，填入密钥，再验证是否可用。</div>
+              </div>
+              <span class="tag">本机全局</span>
+            </div>
+            <div class="conn-layout">
+              <nav class="conn-services">
+                <div class="grp">Agent 模型</div>
+                <div class="svc active">Claude Code <small>已验证</small></div>
+                <div class="grp">搜索与网页 <span class="new-badge">新</span></div>
+                <div class="svc">联网搜索 <small>沿用 DeepSeek</small></div>
+                <div class="grp">图像、3D 与素材</div>
+                <div class="svc">Meshy <small>未配置</small></div>
+                <div class="svc">即梦 <small>未配置</small></div>
+                <div class="svc">Pexels <small>已保存</small></div>
+                <div class="grp">开发服务</div>
+                <div class="svc">GitHub <small>已保存</small></div>
+                <div class="svc">数据源 <small>按连接管理</small></div>
+              </nav>
+              <div>
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2>Claude Code</h2>
+                    <span class="tag ok st-legacy-hide">✓ 已验证 · 11-24 10:12</span
+                    ><span class="tag warn st-legacy">已保存 · 模型待更新</span>
+                  </div>
+                  <div class="note">通过 API Key 连接模型服务，供 Claude Code 会话使用。</div>
+                  <div class="form">
+                    <div class="row2">
+                      <label
+                        >模型服务商<select>
+                          <option>DeepSeek</option>
+                        </select></label
+                      >
+                      <label>API Key<input value="sk-••••••••••••3f9a" /></label>
+                    </div>
+                    <label
+                      >API 地址<input class="mono" value="https://api.deepseek.com/anthropic"
+                    /></label>
+                    <div>
+                      <div style="font-size: 12px; margin-bottom: 5px">
+                        模型 <span class="new-badge">改</span>
+                      </div>
+                      <div class="model-choice">
+                        <div class="opt on">
+                          <strong>deepseek-flash</strong> <span class="tag ok">推荐</span>
+                          <ul>
+                            <li>可以看图、可以联网搜索</li>
+                            <li>价格低：输入 $0.3 / 输出 $1.2 每百万 Token（高峰）</li>
+                          </ul>
+                        </div>
+                        <div class="opt">
+                          <strong>deepseek-v4-pro</strong>
+                          <ul>
+                            <li>推理更强，适合复杂改动</li>
+                            <li>不能看图：截图会被替换为占位</li>
+                            <li>输入 $1.32 / 输出 $3.96 每百万 Token（高峰）</li>
+                          </ul>
+                        </div>
+                      </div>
+                      <p class="note">
+                        也可以填其他 DeepSeek 支持的模型 ID。<button class="link">手动填写</button>
+                      </p>
+                      <p class="anno">
+                        原为自由输入框，默认
+                        deepseek-chat。改为两个当前模型的选择，并说明差异；其他服务商仍是输入框。
+                      </p>
+                    </div>
+                  </div>
+                  <div class="callout st-legacy">
+                    你之前保存的模型是 <code>deepseek-chat</code>，DeepSeek
+                    当前文档已不再列出它。建议改为 <code>deepseek-flash</code>。
+                    <div class="actions" style="margin-top: 6px">
+                      <button>改为 deepseek-flash 并验证</button
+                      ><button class="link">保持不变</button>
+                    </div>
+                  </div>
+                  <p class="anno st-legacy">
+                    只对已保存 deepseek-chat 的用户出现一次；不自动改用户配置。
+                  </p>
+                  <div class="actions">
+                    <button class="primary">验证连接</button><button>仅保存</button
+                    ><button class="link" style="color: var(--error-color)">删除密钥</button>
+                  </div>
+                  <div class="checks st-legacy-hide">
+                    <div class="check ok">
+                      <span class="ico">✓</span><span>模型请求 · deepseek-flash 回复正常</span
+                      ><small class="muted">0.9 秒</small>
+                    </div>
+                    <div class="check ok">
+                      <span class="ico">✓</span><span>工具调用 · 读取 Studio 文件成功</span
+                      ><small class="muted">1.4 秒</small>
+                    </div>
+                    <div class="check ok">
+                      <span class="ico">✓</span
+                      ><span
+                        >联网搜索 · Claude Code 内置搜索由 DeepSeek 执行，返回 5 条带来源结果
+                        <span class="new-badge">新</span></span
+                      ><small class="muted">3.2 秒</small>
+                    </div>
+                  </div>
+                  <p class="note">
+                    验证会用当前模型发送一次最小请求和一次搜索，可能产生少量费用。自 2026-11-18
+                    起，模型内搜索不单独收费，结果按输入 Token 计费。
+                  </p>
+                  <p class="anno">
+                    新增第三项检查：真实搜索一次再显示“可用”，不按文档推断。失败时显示原因并说明普通会话仍可用、只是不能联网搜索。
+                  </p>
+                </div>
+                <div class="panel">
+                  <h3>Claude Code 会话里的联网搜索</h3>
+                  <dl class="kv">
+                    <dt>普通会话</dt>
+                    <dd>可以搜索。搜索在 DeepSeek 服务端完成，回答附来源。</dd>
+                    <dt>绑定可视浏览器的任务</dt>
+                    <dd>不能搜索，仍在可视浏览器里搜索（现有规则不变）。</dd>
+                    <dt>使用 deepseek-v4-pro 时</dt>
+                    <dd>以验证结果为准；若不可用，此处显示“该模型不支持联网搜索”。</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 2. Settings · API Key 与连接 · 联网搜索 (new service) -->
+      <div class="body no-agent" data-view="search-service">
+        <nav class="side">
+          <div class="group">资源管理</div>
+          <div class="item">网站与账号</div>
+          <div class="group">AI 与服务</div>
+          <div class="item active">API Key 与连接</div>
+          <div class="item">Agent 行为与工具</div>
+          <div class="item">模型用量</div>
+        </nav>
+        <main class="main">
+          <section class="settings">
+            <div class="settings-head">
+              <div>
+                <h1>API Key 与连接</h1>
+                <div class="muted">选择要用的服务，填入密钥，再验证是否可用。</div>
+              </div>
+              <span class="tag">本机全局</span>
+            </div>
+            <div class="conn-layout">
+              <nav class="conn-services">
+                <div class="grp">Agent 模型</div>
+                <div class="svc">Claude Code <small>已验证</small></div>
+                <div class="grp">搜索与网页 <span class="new-badge">新</span></div>
+                <div class="svc active">联网搜索 <small class="st-label">沿用 DeepSeek</small></div>
+                <div class="grp">图像、3D 与素材</div>
+                <div class="svc">Meshy <small>未配置</small></div>
+                <div class="svc">Pexels <small>已保存</small></div>
+                <div class="grp">开发服务</div>
+                <div class="svc">GitHub <small>已保存</small></div>
+              </nav>
+              <div>
+                <div class="panel">
+                  <div class="panel-head">
+                    <h2>联网搜索 <span class="new-badge">新服务</span></h2>
+                    <span class="tag ok st-ok">✓ 已验证 · 11-24 10:15</span>
+                    <span class="tag st-empty">未启用</span>
+                  </div>
+                  <div class="note">
+                    让 Codex、Claude Code 和 Owner 通过 Studio 工具搜索网页、读取网页正文。由
+                    DeepSeek 搜索与网页读取接口提供，与 Agent 模型无关：用 Codex 时也能用。
+                  </div>
+                  <div class="form">
+                    <div>
+                      <div style="font-size: 12px; margin-bottom: 2px">密钥</div>
+                      <div class="radio">
+                        <span class="rdot on"></span>
+                        <div>
+                          沿用 Claude Code 中保存的 DeepSeek Key
+                          <div class="muted" style="font-size: 12px">
+                            同一账户余额；删除那边的 Key 时这里也停用。
+                          </div>
+                        </div>
+                      </div>
+                      <div class="radio">
+                        <span class="rdot"></span>
+                        <div>
+                          单独填写一个 DeepSeek Key
+                          <div class="muted" style="font-size: 12px">
+                            例如想把搜索费用记到另一个账户。
+                          </div>
+                        </div>
+                      </div>
+                      <p class="anno st-empty-only">
+                        未保存任何 DeepSeek Key 时，第一项不可选，只显示 API Key 输入框。
+                      </p>
+                    </div>
+                    <div class="row2">
+                      <label>每月最多调用次数（可选）<input value="2000" /></label>
+                      <label
+                        >搜索结果默认条数<select>
+                          <option>10 条</option>
+                          <option>5 条</option>
+                          <option>20 条</option>
+                        </select></label
+                      >
+                    </div>
+                    <p class="note">
+                      到达上限后停止调用并在会话里说明原因，不会悄悄失败。DeepSeek
+                      按成功次数收费：搜索、读取网页各 $0.75 / 千次（约每次 $0.00075）。
+                    </p>
+                  </div>
+                  <div class="actions">
+                    <button class="primary">验证：搜索一次并读取一页</button><button>仅保存</button
+                    ><button class="link" style="color: var(--error-color)">停用联网搜索</button>
+                  </div>
+                  <div class="checks st-ok">
+                    <div class="check ok">
+                      <span class="ico">✓</span><span>搜索“AR 眼镜 续航 评测”返回 10 条结果</span
+                      ><small class="muted">$0.00075</small>
+                    </div>
+                    <div class="check ok">
+                      <span class="ico">✓</span><span>读取 1 个网页并转为正文</span
+                      ><small class="muted">$0.00075</small>
+                    </div>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>会发生什么</h3>
+                  <dl class="kv">
+                    <dt>发到 DeepSeek 的内容</dt>
+                    <dd>搜索词和要读取的网址。不发送项目文件、账号或 Cookie。</dd>
+                    <dt>谁可以用</dt>
+                    <dd>在“Agent 行为与工具”里按 Codex / Claude Code / Owner 分别开关。</dd>
+                    <dt>不能用来做什么</dt>
+                    <dd>
+                      不能证明网页上的操作已完成（例如已发布、已登录）。这些仍由可视浏览器核验。
+                    </dd>
+                    <dt>不可用时</dt>
+                    <dd>本地功能全部正常；Agent 只是看不到这两个工具。</dd>
+                  </dl>
+                  <p class="anno">
+                    与现有“API Key
+                    与连接”一致：密钥明文保存在本机凭证文件，不进系统钥匙串、不随工作空间同步。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 3. Settings · Agent 行为与工具 -->
+      <div class="body no-agent" data-view="tools">
+        <nav class="side">
+          <div class="group">AI 与服务</div>
+          <div class="item">API Key 与连接</div>
+          <div class="item active">Agent 行为与工具</div>
+          <div class="item">模型用量</div>
+          <div class="item">组件管理</div>
+        </nav>
+        <main class="main">
+          <section class="settings">
+            <div class="settings-head">
+              <div>
+                <h1>Agent 能力</h1>
+                <div class="muted">统一管理 SDK 可见的内置工具、外部 MCP 和操作确认策略。</div>
+              </div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <h3>内置工具</h3>
+                  <div class="note">关闭后会从 SDK 工具列表移除，并拒绝已经缓存的旧调用。</div>
+                </div>
+                <span class="muted">58 个已暴露</span>
+              </div>
+              <div class="module">
+                <div class="module-row">
+                  <span>›</span><span class="dot"></span>
+                  <div><strong>浏览器</strong><span class="desc">操作 Studio 可视浏览器</span></div>
+                  <span class="muted">14 个工具</span><span class="switch on"></span>
+                </div>
+              </div>
+              <div class="module" style="border-color: var(--new-color)">
+                <div class="module-row">
+                  <span>⌄</span><span class="dot"></span>
+                  <div>
+                    <strong>联网搜索 <span class="new-badge">新</span></strong
+                    ><span class="desc"
+                      >通过 DeepSeek 搜索网页、读取网页正文。只读，会把搜索词和网址发到
+                      DeepSeek。</span
+                    >
+                  </div>
+                  <span class="muted">2 个工具</span><span class="switch on"></span>
+                </div>
+                <div class="tool-list">
+                  <div class="tool-row">
+                    <code>web_search</code
+                    ><span>搜索网页，返回标题、网址、摘要，可选正文；支持 site:、after: 等筛选</span
+                    ><em class="risk">只读 · 外发</em>
+                  </div>
+                  <div class="tool-row">
+                    <code>web_fetch</code><span>读取一个网址，返回 Markdown 正文</span
+                    ><em class="risk">只读 · 外发</em>
+                  </div>
+                  <div style="font-size: 12px; margin-top: 6px">谁可以用</div>
+                  <div class="backends">
+                    <div>
+                      <strong>Codex</strong><span class="switch on" style="float: right"></span>默认
+                      Agent。Codex 自带搜索保持关闭，改用这两个工具。
+                    </div>
+                    <div>
+                      <strong>Claude Code</strong
+                      ><span class="switch" style="float: right"></span>使用 DeepSeek
+                      模型时已有内置搜索，默认不重复提供。
+                    </div>
+                    <div>
+                      <strong>Owner 调研</strong
+                      ><span class="switch on" style="float: right"></span
+                      >每个事务仍需在简报里勾选“允许联网搜索”。
+                    </div>
+                  </div>
+                  <div class="callout info">
+                    绑定可视浏览器 Tab
+                    的任务里，这两个工具不提供；搜索在可视浏览器完成。权限模式不影响这两个工具：只读调用不弹确认，每次调用都显示在会话里。
+                  </div>
+                  <p class="anno">
+                    联网搜索未启用（无 Key）时：圆点为灰，开关不可用，原因写“去 API Key
+                    与连接启用联网搜索”。
+                  </p>
+                </div>
+              </div>
+              <div class="module">
+                <div class="module-row">
+                  <span>›</span><span class="dot"></span>
+                  <div>
+                    <strong>编辑器</strong><span class="desc">读写 Markdown 与本地文件</span>
+                  </div>
+                  <span class="muted">9 个工具</span><span class="switch on"></span>
+                </div>
+              </div>
+              <div class="module">
+                <div class="module-row">
+                  <span>›</span><span class="dot"></span>
+                  <div><strong>网页事务</strong><span class="desc">文章发布与网页任务</span></div>
+                  <span class="muted">11 个工具</span><span class="switch on"></span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 4. Settings · 模型用量 -->
+      <div class="body no-agent" data-view="usage">
+        <nav class="side">
+          <div class="group">AI 与服务</div>
+          <div class="item">API Key 与连接</div>
+          <div class="item">Agent 行为与工具</div>
+          <div class="item active">模型用量</div>
+        </nav>
+        <main class="main">
+          <section class="settings">
+            <div class="settings-head">
+              <div>
+                <h1>模型用量</h1>
+                <div class="muted">本机统计，按调用记录计算；以服务商账单为准。</div>
+              </div>
+              <select style="width: auto">
+                <option>2026 年 11 月</option>
+              </select>
+            </div>
+            <div class="panel">
+              <h3>模型 Token</h3>
+              <div class="metrics">
+                <div class="metric"><span>输入</span><strong>18.4M</strong></div>
+                <div class="metric"><span>缓存命中</span><strong>12.9M</strong></div>
+                <div class="metric"><span>输出</span><strong>1.2M</strong></div>
+                <div class="metric"><span>会话</span><strong>146</strong></div>
+              </div>
+              <table>
+                <tr>
+                  <th>服务商 · 模型</th>
+                  <th class="num">输入</th>
+                  <th class="num">输出</th>
+                  <th class="num">其中搜索结果</th>
+                </tr>
+                <tr>
+                  <td>DeepSeek · deepseek-flash</td>
+                  <td class="num">9.8M</td>
+                  <td class="num">0.7M</td>
+                  <td class="num">1.1M <span class="new-badge">新</span></td>
+                </tr>
+                <tr>
+                  <td>DeepSeek · deepseek-v4-pro</td>
+                  <td class="num">2.1M</td>
+                  <td class="num">0.2M</td>
+                  <td class="num">—</td>
+                </tr>
+                <tr>
+                  <td>Codex · gpt-5-codex</td>
+                  <td class="num">6.5M</td>
+                  <td class="num">0.3M</td>
+                  <td class="num">—</td>
+                </tr>
+              </table>
+              <p class="anno">“其中搜索结果”只在服务商返回该字段时显示；读不到写“—”，不估算。</p>
+            </div>
+            <div class="panel" style="border-color: var(--new-color)">
+              <div class="panel-head">
+                <h3>联网搜索 <span class="new-badge">新</span></h3>
+                <button class="link">设置上限</button>
+              </div>
+              <div class="metrics">
+                <div class="metric"><span>搜索</span><strong>412</strong></div>
+                <div class="metric"><span>读取网页</span><strong>238</strong></div>
+                <div class="metric"><span>失败（不计费）</span><strong>9</strong></div>
+                <div class="metric"><span>估算费用</span><strong>$0.49</strong></div>
+              </div>
+              <div class="bar"><i style="width: 32.5%"></i></div>
+              <p class="note">本月 650 / 2,000 次上限。按 $0.75 / 千次成功调用估算。</p>
+              <table>
+                <tr>
+                  <th>来源</th>
+                  <th class="num">搜索</th>
+                  <th class="num">读取</th>
+                  <th class="num">估算</th>
+                </tr>
+                <tr>
+                  <td>Codex 会话</td>
+                  <td class="num">301</td>
+                  <td class="num">172</td>
+                  <td class="num">$0.35</td>
+                </tr>
+                <tr>
+                  <td>Owner 调研</td>
+                  <td class="num">98</td>
+                  <td class="num">61</td>
+                  <td class="num">$0.12</td>
+                </tr>
+                <tr>
+                  <td>公司 · 帮我想清楚</td>
+                  <td class="num">13</td>
+                  <td class="num">5</td>
+                  <td class="num">$0.01</td>
+                </tr>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 5. Conversation panel -->
+      <div class="body chat-only" data-view="chat">
+        <nav class="side">
+          <div class="item active">项目首页</div>
+          <div class="group">工作</div>
+          <div class="item">文件</div>
+          <div class="item">会话</div>
+        </nav>
+        <main class="main"><div class="page muted">（工作区内容）</div></main>
+        <aside class="agent">
+          <header>
+            <strong>竞品续航对比</strong><span class="session-chip">本机 Codex · 联网搜索 开</span>
+          </header>
+          <div class="thread">
+            <div class="msg user">帮我查一下市面上主流 AR 眼镜的续航，整理成表格。</div>
+            <div class="toolcard">
+              <div class="th">
+                <span>🔎</span><strong>联网搜索</strong><code>AR 眼镜 续航 实测 after:2026-06</code
+                ><span class="right">10 条 · 1.2 秒</span>
+              </div>
+              <div class="tb">
+                <div class="result">
+                  <a>某品牌 AR 眼镜深度评测：续航实测 3 小时 40 分</a
+                  ><span class="u">example-review.com/ar-glasses-battery</span>
+                </div>
+                <div class="result">
+                  <a>2026 年 AR 眼镜横评（含续航、重量）</a
+                  ><span class="u">tech-site.cn/2026-ar-roundup</span>
+                </div>
+                <div class="result">
+                  <a>官方参数页 · 续航最长 4 小时</a><span class="u">brand-official.com/specs</span>
+                </div>
+                <button class="link" style="justify-self: start; font-size: 12px">
+                  展开其余 7 条
+                </button>
+              </div>
+              <div class="tf">
+                <span>DeepSeek 搜索</span><span>约 $0.00075</span><span>只读</span>
+              </div>
+            </div>
+            <div class="toolcard">
+              <div class="th">
+                <span>📄</span><strong>读取网页</strong
+                ><span
+                  class="u mono"
+                  style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+                  >tech-site.cn/2026-ar-roundup</span
+                ><span class="right">4,820 字</span>
+              </div>
+              <div class="tf">
+                <span>DeepSeek 网页读取</span><span>约 $0.00075</span
+                ><span>正文已作为模型输入</span>
+              </div>
+            </div>
+            <div class="msg assistant">
+              整理如下（数据来自公开评测，发布时间不同，仅供参考）：
+              <table>
+                <tr>
+                  <th>产品</th>
+                  <th>官方续航</th>
+                  <th>评测实测</th>
+                </tr>
+                <tr>
+                  <td>A 品牌</td>
+                  <td>4 小时<span class="cite">[3]</span></td>
+                  <td>3 小时 40 分<span class="cite">[1]</span></td>
+                </tr>
+                <tr>
+                  <td>B 品牌</td>
+                  <td>3.5 小时<span class="cite">[2]</span></td>
+                  <td>未找到</td>
+                </tr>
+              </table>
+              <div class="muted" style="font-size: 12px; margin-top: 6px">
+                来源：[1] example-review.com · [2][3] tech-site.cn、brand-official.com
+              </div>
+            </div>
+            <p class="anno">
+              工具卡片复用现有会话工具块样式；新增的是来源列表、费用和“只读”标记。网址只显示，不自动在浏览器打开。
+            </p>
+            <div class="msg user">把 B 品牌的官网登录一下，看看后台有没有续航数据。</div>
+            <div class="blocked">
+              <strong>此任务改在可视浏览器里进行</strong>
+              <div class="muted">
+                涉及登录和后台页面，Agent 使用 Studio 左侧的浏览器
+                Tab；这一步不使用联网搜索和网页读取。
+              </div>
+            </div>
+            <p class="anno">已有规则：绑定可视浏览器时禁用不可见搜索。这里只是让用户看到原因。</p>
+            <div class="toolcard" style="border-style: dashed">
+              <div class="th"><span>🔎</span><strong>联网搜索未启用</strong></div>
+              <div class="tb muted" style="display: block">
+                这次会话里 Agent 想搜索，但还没有启用联网搜索。<button class="link">去设置</button
+                >　Agent 会继续用已有资料回答，或在可视浏览器里搜索。
+              </div>
+            </div>
+            <p class="anno">
+              未配置时的样子：不报错、不阻断会话；只有 Agent 实际需要搜索时才出现一次。
+            </p>
+          </div>
+          <div class="composer">
+            <div class="cbox">继续提问，或用 @ 引用资源…</div>
+            <div class="tools">
+              <span>本机 Codex ⌄</span><span>权限：自动 ⌄</span
+              ><span>🔎 联网搜索 开 <span class="new-badge">新</span></span>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 6. Owner research -->
+      <div class="body" data-view="owner">
+        <nav class="side">
+          <div class="item">Owner 主页</div>
+          <div class="group">事务</div>
+          <div class="item active">OW-031 AR 眼镜续航竞品 <small>进行中</small></div>
+          <div class="item">OW-026 首批定价 <small>已交付</small></div>
+          <div class="item">OW-025 BOM 成本 <small>已交付</small></div>
+        </nav>
+        <main class="main">
+          <div class="page">
+            <div class="muted">Owner 事务 · OW-031</div>
+            <h1>AR 眼镜续航竞品调研</h1>
+            <div class="card">
+              <h2>调研简报 · 可以使用的资料</h2>
+              <div class="src-list">
+                <div class="src">
+                  <span class="box on"></span
+                  ><span>本机文件 · 眼镜研发/测试报告/续航测试-1108.md</span
+                  ><span class="tag">只读</span>
+                </div>
+                <div class="src">
+                  <span class="box on"></span><span>GitHub 公开仓库 · 2 个</span
+                  ><span class="tag">只读</span>
+                </div>
+                <div class="src" style="border-color: var(--new-color)">
+                  <span class="box on"></span>
+                  <span
+                    >联网搜索与网页读取 <span class="new-badge">新</span><br /><small class="muted"
+                      >最多 40 次调用（约
+                      $0.03）。引用必须带网址和读取时间；网页内容可能随后变化。</small
+                    ></span
+                  >
+                  <span class="tag">外发</span>
+                </div>
+              </div>
+              <p class="anno">
+                与 GitHub 来源并列，默认不勾；只有设置里启用联网搜索且对 Owner
+                开放时才出现。调用上限按事务设置，跑满就停下并在时间线写明。
+              </p>
+            </div>
+            <div class="card">
+              <h2>时间线</h2>
+              <div class="muted" style="font-size: 12px; display: grid; gap: 4px">
+                <div>10:21 读取本机测试报告 · 1 个文件</div>
+                <div>10:22 联网搜索 6 次 · 读取网页 9 个 <span class="new-badge">新</span></div>
+                <div>10:24 跳过 2 个网页：读取失败（站点拒绝），不作为证据</div>
+                <div>10:26 生成简报</div>
+              </div>
+            </div>
+            <div class="card">
+              <h2>调研简报</h2>
+              <p>
+                三款主流产品官方续航 3.5–4 小时，评测实测普遍低 10–20%。我们的 1108 测试 3.5
+                小时与官方口径相当。
+              </p>
+              <div class="finding">
+                <h3>网页 · tech-site.cn/2026-ar-roundup <span class="new-badge">新</span></h3>
+                <p>横评中 A 品牌实测 3 小时 40 分，低于官方 4 小时。</p>
+                <blockquote>“连续播放视频，亮度 50%，续航 3 小时 40 分。”</blockquote>
+                <small class="muted"
+                  >2026-11-24 10:22 读取 · 网页可能已变化 ·
+                  <button class="link">在浏览器打开</button></small
+                >
+              </div>
+              <div class="finding">
+                <h3>本机文件 · 续航测试-1108.md</h3>
+                <p>我们的样机在相同条件下 3 小时 31 分。</p>
+                <blockquote>“视频播放 50% 亮度：3h31m”</blockquote>
+                <small class="muted">第 12 行</small>
+              </div>
+              <p class="anno">
+                网页来源与现有“仓库/文件 + 原文引用 +
+                位置”同格式；位置换成网址与读取时间。导出简报时一并写出。
+              </p>
+            </div>
+          </div>
+        </main>
+        <aside class="agent">
+          <header><strong>Owner 主对话</strong><span class="session-chip">OW-031</span></header>
+          <div class="thread">
+            <div class="msg user">查一下竞品续航，和我们的测试对比。</div>
+            <div class="msg assistant">
+              好。我会读本机测试报告；你在简报里允许了联网搜索，最多 40 次调用。<br /><br />已完成，用了
+              15 次。
+            </div>
+          </div>
+          <div class="composer"><div class="cbox">继续提问…</div></div>
+        </aside>
+      </div>
+
+      <!-- 7. Company decision dialog -->
+      <div class="body dim" data-view="decision">
+        <nav class="side">
+          <div class="item active">项目首页</div>
+          <div class="group">公司经营</div>
+          <div class="item">业务项目</div>
+          <div class="item">推广</div>
+          <div class="item">客户与售后</div>
+          <div class="item">公司账目</div>
+        </nav>
+        <main class="main">
+          <div class="page">
+            <h1>星河科技</h1>
+            <div class="muted">项目首页</div>
+          </div>
+        </main>
+        <aside class="agent">
+          <header><strong>新会话</strong></header>
+          <div class="thread"></div>
+          <div class="composer"><div class="cbox">继续提问…</div></div>
+        </aside>
+        <div class="dialog">
+          <header><span>💡 帮我想清楚一个问题</span><span>✕</span></header>
+          <div class="db">
+            <label style="display: grid; gap: 5px; font-size: 12px"
+              >你想决定什么<textarea rows="2">首批 AR 眼镜一代先卖给谁，怎么定价？</textarea>
+            </label>
+            <div style="font-size: 12px">Owner 可以读（只读）</div>
+            <div class="opt-row">
+              <span class="box on"></span
+              ><span
+                >公司账目 · 11 月已确认汇总 <span class="muted">不读待核对流水的原件</span></span
+              >
+            </div>
+            <div class="opt-row">
+              <span class="box on"></span
+              ><span
+                >推广与销售 · 感兴趣的客户、成交和售后
+                <span class="muted">只读记录，不发消息</span></span
+              >
+            </div>
+            <div class="opt-row">
+              <span class="box on"></span><span>业务项目 · AR 眼镜一代</span>
+            </div>
+            <div class="opt-row">
+              <span class="box on"></span
+              ><span>网上公开资料 <span class="new-badge">改</span></span>
+            </div>
+            <div class="opt-sub">
+              <span
+                >通过联网搜索（DeepSeek）查竞品价格、渠道政策等公开信息；最多 20 次调用（约
+                $0.02）。</span
+              >
+              <span class="muted"
+                >引用必须带网址和读取时间；找不到出处的标“未核实”，不参与建议。会把搜索词发到
+                DeepSeek，不发送账目或客户数据。</span
+              >
+            </div>
+            <p class="anno">
+              原稿已有“网上公开资料”勾选项但没有来源；现在由联网搜索提供。未启用联网搜索时此项不可勾，提示“去设置启用”。
+            </p>
+            <div class="muted" style="font-size: 12px">
+              🛡 Owner 只给建议，不改价格、不发消息、不动账目。
+            </div>
+          </div>
+          <footer>
+            <span class="muted">新建事务 OW-032</span
+            ><span><button>取消</button> <button class="primary">交给 Owner 想</button></span>
+          </footer>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <span>进行中的工作</span><span id="sb-where">Studio 设置</span
+        ><span style="margin-left: auto">效果稿 · 数据为示意</span>
+      </div>
+    </div>
+
+    <div class="reviewbar" id="reviewbar"></div>
+
+    <script>
+      const VIEWS = [
+        ['agent-model', '① Agent 模型 · DeepSeek'],
+        ['search-service', '② 联网搜索服务'],
+        ['tools', '③ Agent 工具'],
+        ['usage', '④ 模型用量'],
+        ['chat', '⑤ 会话'],
+        ['owner', '⑥ Owner 调研'],
+        ['decision', '⑦ 公司 · 帮我想清楚'],
+      ]
+      const params = new URLSearchParams(location.search)
+      let view = params.get('view') || 'agent-model'
+      let state = params.get('state') || 'ok'
+      let notes = params.get('notes') === '1'
+      const theme = params.get('theme')
+      if (theme) document.documentElement.dataset.theme = theme
+      if (params.get('clean') === '1') document.body.classList.add('clean')
+      function render() {
+        document.querySelectorAll('[data-view]').forEach((el) => {
+          el.classList.toggle('on', el.dataset.view === view)
+        })
+        document.body.classList.toggle('show-notes', notes)
+        const settings = ['agent-model', 'search-service', 'tools', 'usage'].includes(view)
+        document.getElementById('tb-settings').classList.toggle('active', settings)
+        document.getElementById('tb-company').classList.toggle('active', !settings)
+        document.getElementById('sb-where').textContent = settings
+          ? 'Studio 设置'
+          : '本地 · 星河科技'
+        const empty = state === 'empty'
+        document
+          .querySelectorAll('.st-ok')
+          .forEach((el) => (el.style.display = empty ? 'none' : ''))
+        document
+          .querySelectorAll('.st-empty')
+          .forEach((el) => (el.style.display = empty ? '' : 'none'))
+        document
+          .querySelectorAll('.st-legacy')
+          .forEach((el) => (el.style.display = state === 'legacy' ? '' : 'none'))
+        document
+          .querySelectorAll('.st-legacy-hide')
+          .forEach((el) => (el.style.display = state === 'legacy' ? 'none' : ''))
+        document
+          .querySelectorAll('.st-label')
+          .forEach((el) => (el.textContent = empty ? '未启用' : '沿用 DeepSeek'))
+        const bar = document.getElementById('reviewbar')
+        bar.innerHTML = ''
+        for (const [id, label] of VIEWS) {
+          const b = document.createElement('button')
+          b.textContent = label
+          b.className = id === view ? 'on' : ''
+          b.onclick = () => {
+            view = id
+            render()
+          }
+          bar.append(b)
+        }
+        const n = document.createElement('button')
+        n.textContent = notes ? '隐藏标注' : '显示标注'
+        n.className = notes ? 'on' : ''
+        n.onclick = () => {
+          notes = !notes
+          render()
+        }
+        bar.append(n)
+        if (view === 'agent-model') {
+          const s = document.createElement('button')
+          s.textContent = state === 'legacy' ? '看已迁移' : '看旧配置 deepseek-chat'
+          s.onclick = () => {
+            state = state === 'legacy' ? 'ok' : 'legacy'
+            render()
+          }
+          bar.append(s)
+        }
+        if (view === 'search-service') {
+          const s = document.createElement('button')
+          s.textContent = empty ? '看已启用' : '看未启用'
+          s.onclick = () => {
+            state = empty ? 'ok' : 'empty'
+            render()
+          }
+          bar.append(s)
+        }
+      }
+      render()
+    </script>
+  </body>
+</html>

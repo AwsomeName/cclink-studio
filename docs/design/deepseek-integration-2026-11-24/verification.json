@@ -1,0 +1,122 @@
+[
+  {
+    "name": "01-agent-model",
+    "query": "view=agent-model",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "02-search-service",
+    "query": "view=search-service",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "02b-search-service-empty",
+    "query": "view=search-service&state=empty",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "03-tools",
+    "query": "view=tools",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "04-usage",
+    "query": "view=usage",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "05-chat",
+    "query": "view=chat",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "06-owner",
+    "query": "view=owner",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "07-decision",
+    "query": "view=decision",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "01b-agent-model-legacy",
+    "query": "view=agent-model&state=legacy",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "01-agent-model-notes",
+    "query": "view=agent-model&notes=1",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "05-chat-notes",
+    "query": "view=chat&notes=1",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "05-chat-1180",
+    "query": "view=chat",
+    "viewport": [1180, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "02-search-service-light",
+    "query": "view=search-service&theme=light",
+    "viewport": [1440, 900],
+    "horizontalOverflow": 0,
+    "overflowingElements": [],
+    "errors": []
+  },
+  {
+    "name": "narrow-agent-model",
+    "query": "view=agent-model",
+    "viewport": [375, 812],
+    "horizontalOverflow": 0,
+    "overflowingElements": ["proj", "svc", "SMALL", "svc", "SMALL"],
+    "errors": []
+  },
+  {
+    "name": "narrow-chat",
+    "query": "view=chat",
+    "viewport": [375, 812],
+    "horizontalOverflow": 0,
+    "overflowingElements": ["proj"],
+    "errors": []
+  }
+]

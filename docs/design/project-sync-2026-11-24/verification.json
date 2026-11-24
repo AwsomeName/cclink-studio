@@ -14,7 +14,7 @@
   "name": "setup",
   "view": "setup",
   "w": 1440,
-  "h": 1000,
+  "h": 1150,
   "theme": "dark",
   "docOverflow": 0,
   "viewOverflow": 0,
@@ -46,6 +46,17 @@
  {
   "name": "conflict-text",
   "view": "text",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "conflict-record",
+  "view": "record",
   "w": 1440,
   "h": 900,
   "theme": "dark",
@@ -99,6 +110,28 @@
   "errors": []
  },
  {
+  "name": "unlocked",
+  "view": "unlocked",
+  "w": 1440,
+  "h": 900,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
+  "name": "settings",
+  "view": "settings",
+  "w": 1440,
+  "h": 1100,
+  "theme": "dark",
+  "docOverflow": 0,
+  "viewOverflow": 0,
+  "overflowing": [],
+  "errors": []
+ },
+ {
   "name": "code-project",
   "view": "git",
   "w": 1440,
@@ -128,7 +161,11 @@
    "正在第一次同步",
    "↻ 已同步 · 14:00",
    "text continue disabled before feedback: true",
-   "↻ 已同步 · 14:00"
+   "↻ 已同步 · 14:00",
+   "record continue disabled before choice: true",
+   "↻ 已同步 · 14:00",
+   "⚠ 需要同步密码",
+   "已读入公司记录"
   ],
   "errors": []
  }
