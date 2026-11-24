@@ -4,6 +4,7 @@ import { ownerResearchIpc } from '../../shared/ipc/owner-research'
 import { ownerSourceIpc } from '../../shared/ipc/owner-source'
 import { ownerPreferencesIpc } from '../../shared/ipc/owner-preferences'
 import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
+import { webSearchIpc } from '../../shared/ipc/web-search'
 import { localTtsIpc } from '../../shared/local-tts'
 import { articlePublishingIpc } from '../../shared/article-publishing/article-publishing'
 import { gitIpc } from '../../shared/git/git-contract'
@@ -317,6 +318,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitions: companyAccountsIpc,
     handlerFiles: ['src/main/company-accounts/company-accounts-ipc.ts'],
     preloadFiles: ['src/preload/company-accounts-api.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'WebSearch',
+    definitionFile: 'src/shared/ipc/web-search.ts',
+    definitionName: 'webSearchIpc',
+    definitions: webSearchIpc,
+    handlerFiles: ['src/main/web-search/web-search-ipc.ts'],
+    preloadFiles: ['src/preload/web-search-api.ts'],
   }),
   ...expandInvokeGroup({
     owner: 'CompanyWorkspace',

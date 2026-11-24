@@ -381,3 +381,159 @@
   background: color-mix(in srgb, var(--accent) 85%, var(--text-primary));
   color: #fff;
 }
+
+/* DeepSeek model choice */
+.deepseek-models {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+.deepseek-model-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.deepseek-model-choice button {
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.deepseek-model-choice button.active {
+  border-color: var(--accent-color);
+  box-shadow: inset 0 0 0 1px var(--accent-color);
+}
+.deepseek-model-choice strong {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+}
+.deepseek-model-choice em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--success-color, #4caf7a);
+}
+.deepseek-model-choice ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-secondary);
+}
+.connections-inline-link {
+  border: 0;
+  background: none;
+  padding: 0 0 0 4px;
+  color: var(--accent-color);
+  cursor: pointer;
+  font: inherit;
+}
+.deepseek-legacy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warning-color, #d7a03a);
+  background: rgba(215, 160, 58, 0.08);
+  font-size: 12px;
+}
+
+/* Web search service */
+.web-search-key {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.web-search-radio {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 8px;
+  align-items: flex-start;
+}
+.web-search-radio input {
+  margin-top: 3px;
+  width: auto;
+}
+.web-search-radio span {
+  display: grid;
+  gap: 2px;
+}
+.web-search-radio small {
+  color: var(--text-secondary);
+}
+.web-search-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.web-search-checks {
+  margin: 6px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.web-search-facts {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 6px 14px;
+  margin-top: 18px;
+  font-size: 12px;
+}
+.web-search-facts dt {
+  color: var(--text-secondary);
+}
+.web-search-facts dd {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .deepseek-model-choice,
+  .web-search-row,
+  .web-search-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Agent tools · web search access (rendered inside the module's tool list) */
+.web-search-access {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.web-search-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.web-search-access-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-primary);
+}
+.web-search-access-grid > div > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.web-search-access-grid span {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.web-search-access-grid small {
+  color: var(--text-secondary);
+}
+@media (max-width: 900px) {
+  .web-search-access-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

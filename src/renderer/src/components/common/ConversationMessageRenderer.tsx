@@ -457,7 +457,9 @@ function ToolExecutionGroup({
         ? productToolLabel(block.name)
         : block.is_error
           ? '工具失败'
-          : (parseCadModificationResult(block.content)?.summary ?? '工具完成'),
+          : (parseCadModificationResult(block.content)?.summary ??
+            parseWebSearchResult(block.content)?.summary ??
+            '工具完成'),
     )
     .join('、')
 
@@ -531,6 +533,7 @@ function ToolExecutionRow({
 
   if (block.type === 'tool_result') {
     const cadResult = parseCadModificationResult(block.content)
+    const webResult = cadResult ? null : parseWebSearchResult(block.content)
     return (
       <details
         className={`tool-group-row tool-group-row-result ${block.is_error ? 'error' : 'success'}`}
@@ -540,12 +543,15 @@ function ToolExecutionRow({
           <span>{block.is_error ? '工具失败' : '工具完成'}</span>
           <em>
             {cadResult?.summary ||
+              webResult?.summary ||
               previewText(block.content, 92) ||
               (block.is_error ? '执行失败' : '执行成功')}
           </em>
         </summary>
         {cadResult ? (
           <CadModificationResultDetails result={cadResult} />
+        ) : webResult ? (
+          <WebSearchResultDetails result={webResult} />
         ) : (
           <div className="tool-result-content">{block.content}</div>
         )}
@@ -554,6 +560,63 @@ function ToolExecutionRow({
   }
 
   return <div className="tool-result-content">未知工具事件</div>
+}
+
+interface WebSearchResultView {
+  summary: string
+  items: Array<{ title: string; url: string; snippet?: string }>
+  note?: string
+}
+
+/** Recognises the Studio web_search / web_fetch result shape; anything else renders as raw text. */
+export function parseWebSearchResult(content: string): WebSearchResultView | null {
+  let value: unknown
+  try {
+    value = JSON.parse(content)
+  } catch {
+    return null
+  }
+  if (!value || typeof value !== 'object') return null
+  const data = value as Record<string, unknown>
+  if (data.provider !== 'DeepSeek' || data.success !== true) return null
+  const text = (input: unknown) => (typeof input === 'string' ? input : '')
+  if (Array.isArray(data.results)) {
+    const items = data.results
+      .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+      .map((item) => ({
+        title: text(item.title),
+        url: text(item.url),
+        snippet: text(item.snippet),
+      }))
+    return {
+      summary: `搜索“${text(data.query)}” · ${items.length} 条 · DeepSeek${items.length ? ' · 约 $0.00075' : ' · 无结果不计费'}`,
+      items,
+      note: text(data.note) || undefined,
+    }
+  }
+  if (typeof data.content === 'string' && typeof data.url === 'string') {
+    return {
+      summary: `读取 ${data.url} · ${data.content.length.toLocaleString()} 字 · DeepSeek · 约 $0.00075`,
+      items: [{ title: text(data.title) || data.url, url: data.url }],
+      note: text(data.note) || '正文已作为模型输入',
+    }
+  }
+  return null
+}
+
+function WebSearchResultDetails({ result }: { result: WebSearchResultView }): React.ReactElement {
+  return (
+    <div className="tool-web-search">
+      {result.items.map((item, index) => (
+        <div key={index} className="tool-web-search-item">
+          <strong>{item.title || item.url}</strong>
+          <span>{item.url}</span>
+          {item.snippet && <p>{item.snippet}</p>}
+        </div>
+      ))}
+      <small>只读 · 网址只显示，不会自动打开{result.note ? ` · ${result.note}` : ''}</small>
+    </div>
+  )
 }
 
 interface CadModificationResultView {
@@ -722,6 +785,8 @@ function productToolLabel(name: string): string {
     fs_read_file: '读取文件',
     fs_write_file: '写入文件',
     terminal_run: '运行命令',
+    web_search: '联网搜索',
+    web_fetch: '读取网页',
   }
 
   return labels[normalized] ?? normalized.replace(/_/g, ' ')

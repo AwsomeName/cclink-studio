@@ -80,6 +80,7 @@ function fixture() {
     createToolSession: vi.fn(() => 'fixture-session'),
     cancelToolSession: vi.fn(async () => {}),
     getAllTools: () => ['browser_title', 'editor_read'].map((name) => ({ name })),
+    getToolsVisibleTo: () => ['browser_title', 'editor_read'].map((name) => ({ name })),
     authorizeSdkTool: vi.fn(async () => ({ behavior: 'deny' })),
     authorizeClassifiedTool: vi.fn<McpToolHost['authorizeClassifiedTool']>(async () => ({
       behavior: 'deny',

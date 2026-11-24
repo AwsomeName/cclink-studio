@@ -14,6 +14,7 @@ import {
   IconRefresh,
 } from '../common/Icons'
 import { Toggle } from '../common/Toggle'
+import { WebSearchAccess } from './web-search-access'
 
 interface AgentCapabilitiesSettingsProps {
   settings: AppSettings
@@ -346,6 +347,9 @@ export function AgentCapabilitiesSettings({
                         <em className={`agent-tool-risk ${tool.risk}`}>{riskLabel(tool.risk)}</em>
                       </div>
                     ))}
+                    {module.id === 'web-search' && (
+                      <WebSearchAccess onChanged={() => void refresh()} />
+                    )}
                   </div>
                 )}
               </div>

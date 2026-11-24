@@ -87,6 +87,7 @@ function createBridge(
       {
         getPort: () => 39876,
         getAllTools: () => [],
+        getToolsVisibleTo: () => [],
         createToolSession: vi.fn(() => 'mcp-session'),
         releaseToolSession: vi.fn(),
         cancelToolSession,

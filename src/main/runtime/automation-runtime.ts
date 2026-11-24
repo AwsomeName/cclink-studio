@@ -6,6 +6,7 @@ import { EditorToolModule } from '../mcp/modules/editor'
 import { registerEditorIpc } from '../ipc/editor-ipc'
 import { MeshyToolModule } from '../mcp/modules/meshy'
 import { ImageGenerationToolModule } from '../mcp/modules/image-generation'
+import { WebSearchToolModule } from '../mcp/modules/web-search'
 import { HardwareToolModule } from '../mcp/modules/hardware'
 import { CadToolModule } from '../mcp/modules/cad'
 import { AndroidToolModule } from '../mcp/modules/android'
@@ -167,6 +168,15 @@ export async function bootstrapAutomationRuntime(runtime: CclinkStudioRuntimeSta
       console.log('[CCLink Studio] web-resources MCP 目录与受控打开工具模块已注册')
     } catch (error) {
       console.error('[CCLink Studio] web-resources MCP 工具模块注册失败:', error)
+    }
+  }
+
+  if (runtime.webSearchService) {
+    try {
+      runtime.toolHost.registerModule(new WebSearchToolModule(runtime.webSearchService))
+      console.log('[CCLink Studio] web-search MCP 工具模块已注册')
+    } catch (error) {
+      console.error('[CCLink Studio] web-search MCP 工具模块注册失败:', error)
     }
   }
 

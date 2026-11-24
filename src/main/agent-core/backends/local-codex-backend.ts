@@ -129,6 +129,8 @@ export class LocalCodexBackend implements IAgentBackend {
       scheduledTaskPolicy: options.scheduledTaskPolicy,
       articlePublishingPolicy: options.articlePublishingPolicy,
       imageResearchPolicy: options.imageResearchPolicy,
+      agentBackend: 'codex',
+      ...(options.forceVisibleBrowser ? { forceVisibleBrowser: true } : {}),
     }
     const server = new CodexAppServer(
       (event) => this.handleMessage(event),
@@ -167,7 +169,10 @@ export class LocalCodexBackend implements IAgentBackend {
       const allowed = options.allowedTools
       const noTools = options.disableBuiltinTools && allowed?.length === 0
       if (!noTools) this.sessionToken = this.toolHost.createToolSession(this.context)
-      const tools = filterToolsByScope(this.toolHost.getAllTools(), this.scope).filter(
+      const tools = filterToolsByScope(
+        this.toolHost.getToolsVisibleTo(this.context),
+        this.scope,
+      ).filter(
         (tool) =>
           (!options.forceVisibleBrowser || tool.name !== 'browser_new_tab') &&
           (!allowed ||

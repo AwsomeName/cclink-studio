@@ -216,9 +216,13 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
     const currentUrl = page?.url() ?? 'about:blank'
 
     // 按作用域过滤工具表（all = 全部；其余只列该域）
-    const scopedTools = filterToolsByScope(this.toolHost.getAllTools(), scope).filter(
-      (tool) => !(forceVisibleBrowser && DISALLOWED_TOOL_NAMES.has(tool.name)),
-    )
+    const scopedTools = filterToolsByScope(
+      this.toolHost.getToolsVisibleTo({
+        agentBackend: 'claude-code',
+        ...(forceVisibleBrowser ? { forceVisibleBrowser: true } : {}),
+      }),
+      scope,
+    ).filter((tool) => !(forceVisibleBrowser && DISALLOWED_TOOL_NAMES.has(tool.name)))
 
     const toolLines = scopedTools.map((tool: ToolDefinition) => {
       const params = Object.entries(tool.inputSchema.properties ?? {})
@@ -508,6 +512,8 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         ? { articlePublishingPolicy: options.articlePublishingPolicy }
         : {}),
       ...(options?.imageResearchPolicy ? { imageResearchPolicy: options.imageResearchPolicy } : {}),
+      agentBackend: 'claude-code',
+      ...(options?.forceVisibleBrowser ? { forceVisibleBrowser: true } : {}),
     }
     const noTools = options?.disableBuiltinTools === true && options.allowedTools?.length === 0
     const mcpServers: Record<string, McpServerConfig> = Object.create(null)

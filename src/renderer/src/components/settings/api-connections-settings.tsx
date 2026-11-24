@@ -16,6 +16,30 @@ import { createConversationRuntimeForWorkspace } from '../../features/agent-conv
 import { resumeDiarySyncAfterAccountChange } from '../../features/workspace-open/DiarySyncStatus'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { IconDatabase, IconRobot } from '../common/Icons'
+import {
+  WEB_SEARCH_OWN_CREDENTIAL_ID,
+  type WebSearchStatus,
+} from '@shared/web-search/web-search-types'
+import { WebSearchConnectionForm, webSearchNavLabel } from './web-search-settings'
+
+/** Current DeepSeek models offered as a choice instead of a free-text field. */
+const DEEPSEEK_MODELS = [
+  {
+    id: 'deepseek-flash',
+    recommended: true,
+    points: ['可以看图、可以联网搜索', '价格低：输入 $0.3 / 输出 $1.2 每百万 Token（高峰）'],
+  },
+  {
+    id: 'deepseek-v4-pro',
+    recommended: false,
+    points: [
+      '推理更强，适合复杂改动',
+      '不能看图：截图会被替换为占位',
+      '输入 $1.32 / 输出 $3.96 每百万 Token（高峰）',
+    ],
+  },
+] as const
+const LEGACY_DEEPSEEK_MODELS = new Set(['deepseek-chat', 'deepseek-reasoner'])
 
 const SERVICES = [
   {
@@ -25,6 +49,14 @@ const SERVICES = [
     credential: 'agent:default',
     description: '通过 API Key 连接模型服务，供 Claude Code 会话使用。',
     usage: '用于 Claude Code 会话。保存不会切换默认 Codex；新建会话时选择 Claude Code 使用。',
+  },
+  {
+    id: 'web-search',
+    name: '联网搜索',
+    group: '搜索与网页',
+    credential: WEB_SEARCH_OWN_CREDENTIAL_ID,
+    description: '让 Agent 通过 DeepSeek 搜索网页、读取网页正文。',
+    usage: '用于 Codex、Claude Code 和 Owner 的联网搜索；与 Agent 模型无关。',
   },
   {
     id: 'meshy',
@@ -125,6 +157,18 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
   const [codexMessage, setCodexMessage] = useState(
     '使用本机 Codex 的 ChatGPT 登录；无需填写 API Key。',
   )
+  const [webSearch, setWebSearch] = useState<WebSearchStatus | null>(null)
+  const loadWebSearch = async (): Promise<void> => {
+    try {
+      const result = await window.cclinkStudio.webSearch.getStatus()
+      if (result.success) setWebSearch(result.data)
+    } catch {
+      // The status stays “正在读取…”; other services remain usable.
+    }
+  }
+  useEffect(() => {
+    void loadWebSearch()
+  }, [props.metadata, props.settings.provider])
   useEffect(() => {
     const refresh = (): void => {
       if (!busy) void props.onRefresh()
@@ -187,29 +231,44 @@ export function ApiConnectionsSettings(props: Props): React.ReactElement {
               >
                 {item.name}
                 <small>
-                  {item.id === 'datasource'
-                    ? '按连接管理'
-                    : props.storageStatus === null
-                      ? '正在读取…'
-                      : props.storageStatus.status !== 'ready'
-                        ? '凭证不可用'
-                        : props.metadata.some(
-                              (record) => record.id === item.credential && record.configured,
-                            )
-                          ? '已保存'
-                          : '未配置'}
+                  {item.id === 'web-search'
+                    ? webSearchNavLabel(webSearch)
+                    : item.id === 'datasource'
+                      ? '按连接管理'
+                      : props.storageStatus === null
+                        ? '正在读取…'
+                        : props.storageStatus.status !== 'ready'
+                          ? '凭证不可用'
+                          : props.metadata.some(
+                                (record) => record.id === item.credential && record.configured,
+                              )
+                            ? '已保存'
+                            : '未配置'}
                 </small>
               </button>
             </div>
           ))}
         </nav>
-        <ConnectionForm
-          key={service}
-          {...props}
-          service={service}
-          setBusy={props.onBusyChange}
-          setDirty={props.onDirtyChange}
-        />
+        {service === 'web-search' ? (
+          <WebSearchConnectionForm
+            status={webSearch}
+            ownKeyWritable={props.storageStatus?.status === 'ready'}
+            onChanged={async () => {
+              await props.onRefresh()
+              await loadWebSearch()
+            }}
+            onBusyChange={props.onBusyChange}
+            onDirtyChange={props.onDirtyChange}
+          />
+        ) : (
+          <ConnectionForm
+            key={service}
+            {...props}
+            service={service}
+            setBusy={props.onBusyChange}
+            setDirty={props.onDirtyChange}
+          />
+        )}
       </div>
       <p className="connections-storage-note">
         <IconDatabase size={14} />
@@ -254,6 +313,9 @@ function ConnectionForm({
     settings.apiBaseUrl || getPresetBaseUrl(settings.provider, 'anthropic'),
   )
   const [model, setModel] = useState(settings.modelName)
+  const [manualModel, setManualModel] = useState(
+    () => !DEEPSEEK_MODELS.some((item) => item.id === settings.modelName),
+  )
   const [username, setUsername] = useState(settings.gitBackupUsername)
   const [secret, setSecret] = useState('')
   const [secondSecret, setSecondSecret] = useState('')
@@ -557,6 +619,7 @@ function ConnectionForm({
                       setProvider(next)
                       setUrl(getPresetBaseUrl(next, 'anthropic'))
                       setModel(next === 'custom' ? '' : PROVIDER_PRESETS[next].defaultModel)
+                      setManualModel(false)
                       setSecret('')
                     })
                   }
@@ -643,16 +706,80 @@ function ConnectionForm({
                 <p className="connections-field-note">
                   当前 Claude Code 仅支持 Anthropic 兼容接口。
                 </p>
-                <label>
-                  模型名称
-                  <input
-                    value={model}
-                    maxLength={256}
-                    spellCheck={false}
-                    placeholder="服务商支持的模型 ID"
-                    onChange={(event) => change(() => setModel(event.target.value))}
-                  />
-                </label>
+                {provider === 'deepseek' && !manualModel ? (
+                  <div className="deepseek-models">
+                    <span>模型</span>
+                    <div
+                      className="deepseek-model-choice"
+                      role="radiogroup"
+                      aria-label="DeepSeek 模型"
+                    >
+                      {DEEPSEEK_MODELS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={model === option.id}
+                          className={model === option.id ? 'active' : ''}
+                          onClick={() => change(() => setModel(option.id))}
+                        >
+                          <strong>
+                            {option.id}
+                            {option.recommended && <em>推荐</em>}
+                          </strong>
+                          <ul>
+                            {option.points.map((point) => (
+                              <li key={point}>{point}</li>
+                            ))}
+                          </ul>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="connections-field-note">
+                      也可以填其他 DeepSeek 支持的模型 ID。
+                      <button
+                        type="button"
+                        className="connections-inline-link"
+                        onClick={() => setManualModel(true)}
+                      >
+                        手动填写
+                      </button>
+                    </p>
+                  </div>
+                ) : (
+                  <label>
+                    模型名称
+                    <input
+                      value={model}
+                      maxLength={256}
+                      spellCheck={false}
+                      placeholder="服务商支持的模型 ID"
+                      onChange={(event) => change(() => setModel(event.target.value))}
+                    />
+                  </label>
+                )}
+                {provider === 'deepseek' &&
+                  settings.provider === 'deepseek' &&
+                  LEGACY_DEEPSEEK_MODELS.has(settings.modelName) &&
+                  model === settings.modelName && (
+                    <div className="deepseek-legacy" role="status">
+                      你之前保存的模型是 <code>{settings.modelName}</code>
+                      ，DeepSeek 当前文档已不再列出它。建议改为 <code>deepseek-flash</code>
+                      ，保存后重新验证。
+                      <button
+                        type="button"
+                        className="settings-secondary-btn"
+                        onClick={() =>
+                          change(() => {
+                            setModel('deepseek-flash')
+                            setManualModel(false)
+                          })
+                        }
+                      >
+                        改为 deepseek-flash
+                      </button>
+                    </div>
+                  )}
               </>
             )}
           </fieldset>

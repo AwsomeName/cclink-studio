@@ -9319,6 +9319,36 @@ body.is-resizing-panels .main-area > div {
   color: #4ade80;
 }
 
+.tool-web-search {
+  display: grid;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+.tool-web-search-item {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.tool-web-search-item strong {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+.tool-web-search-item span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+.tool-web-search-item p {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+}
+.tool-web-search small {
+  color: var(--text-secondary);
+}
 .tool-result-content {
   max-height: 160px;
   overflow: auto;

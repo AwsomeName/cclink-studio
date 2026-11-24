@@ -85,6 +85,14 @@ export interface ToolExecutionContext {
     executionGeneration: number
     launchOperationId: string
   }
+  /** 启动本次 MCP session 的本地 Agent；由宿主写入，模型不能覆盖。 */
+  agentBackend?: 'codex' | 'claude-code'
+  /** 本轮任务绑定可视浏览器；不可见的联网搜索等工具不出现。 */
+  forceVisibleBrowser?: boolean
+  /** 联网搜索的调用来源（用量统计）；Owner / 公司决策由宿主签发。 */
+  webSearchSource?: 'owner' | 'decision'
+  /** Owner / 公司决策事务已由用户勾选允许联网搜索。 */
+  webSearchAllowed?: boolean
   /** 工具宿主已为本次调用取得显式用户确认。 */
   confirmationGranted?: boolean
   /** run 取消时触发；执行时间较长的模块应协作停止尚未提交的工作。 */
@@ -106,6 +114,8 @@ export interface ToolModule {
   name: string
   /** 该模块提供的所有工具定义 */
   tools: ToolDefinition[]
+  /** 按本次 MCP session 决定是否列出并允许该模块的工具；省略表示始终可见。 */
+  isVisible?(context?: ToolExecutionContext): boolean
   /** 根据目标页面和参数追加运行时确认策略。 */
   getExecutionPolicy?(
     toolName: string,

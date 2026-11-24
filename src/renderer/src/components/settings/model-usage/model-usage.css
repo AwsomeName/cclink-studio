@@ -367,3 +367,22 @@
     transition: none;
   }
 }
+.web-search-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.web-search-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-color);
+  overflow: hidden;
+}
+.web-search-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent-color);
+}
+@media (max-width: 760px) {
+  .web-search-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

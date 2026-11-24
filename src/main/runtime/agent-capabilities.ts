@@ -22,6 +22,11 @@ const MODULE_CATALOG: Record<string, { label: string; description: string }> = {
     label: '网页事务',
     description: '读取事务事实、记录办理证据并提出待用户确认的流程变更。',
   },
+  'web-search': {
+    label: '联网搜索',
+    description:
+      '通过 DeepSeek 搜索网页、读取网页正文。只读，会把搜索词和网址发到 DeepSeek；绑定可视浏览器的任务不提供。',
+  },
   'scheduled-task': {
     label: '定时任务',
     description: '只读查询当前工作空间的 Studio 定时任务、运行状态和历史。',
@@ -193,6 +198,19 @@ function getModuleAvailability(
       return runtime.agentDeviceManager?.isAvailable()
         ? { available: true }
         : { available: false, reason: '设备语义层不可用' }
+    case 'web-search': {
+      const status = runtime.webSearchService?.getStatus()
+      if (!status) return { available: false, reason: '联网搜索服务未就绪' }
+      return status.state === 'ready'
+        ? { available: true }
+        : {
+            available: false,
+            reason:
+              status.state === 'disabled'
+                ? '去“API Key 与连接 · 联网搜索”启用'
+                : (status.reason ?? '联网搜索不可用'),
+          }
+    }
     case 'web-affairs':
       return runtime.webAffairService
         ? { available: true }

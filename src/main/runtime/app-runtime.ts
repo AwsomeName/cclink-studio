@@ -37,6 +37,7 @@ import type { CadConversionService } from '../cad/cad-conversion-service'
 import type { CadModificationService } from '../cad/cad-modification-service'
 import type { DataSourceService } from '../data-source/data-source-service'
 import type { CompanyAccountsService } from '../company-accounts/company-accounts-service'
+import type { WebSearchService } from '../web-search/web-search-service'
 import type { TerminalAuditStore } from '../terminal/terminal-audit-store'
 import type { TerminalConfirmationService } from '../terminal/terminal-confirmation-service'
 import type { TerminalSessionRegistry } from '../terminal/terminal-session-registry'
@@ -121,6 +122,7 @@ export interface CclinkStudioRuntimeState {
   dataSourceService: DataSourceService | null
   companyWorkspaceService: CompanyWorkspaceService | null
   companyAccountsService: CompanyAccountsService | null
+  webSearchService: WebSearchService | null
   terminalAuditStore: TerminalAuditStore | null
   terminalConfirmationService: TerminalConfirmationService | null
   terminalSessionRegistry: TerminalSessionRegistry | null
@@ -201,6 +203,7 @@ export function createRuntimeState(isDev: boolean): CclinkStudioRuntimeState {
     dataSourceService: null,
     companyWorkspaceService: null,
     companyAccountsService: null,
+    webSearchService: null,
     terminalAuditStore: null,
     terminalConfirmationService: null,
     terminalSessionRegistry: null,

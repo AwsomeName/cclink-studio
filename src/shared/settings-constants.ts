@@ -220,7 +220,7 @@ export const PROVIDER_PRESETS: Record<Provider, ProviderPreset> = {
     label: 'DeepSeek',
     anthropicBaseUrl: 'https://api.deepseek.com/anthropic',
     openaiBaseUrl: 'https://api.deepseek.com',
-    defaultModel: 'deepseek-chat',
+    defaultModel: 'deepseek-flash',
   },
   glm: {
     label: '智谱 GLM',

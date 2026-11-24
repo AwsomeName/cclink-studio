@@ -32,6 +32,7 @@ describe('AgentBridge cclink-agent capability boundary', () => {
       {
         getPort: () => 39876,
         getAllTools: () => [],
+        getToolsVisibleTo: () => [],
         createToolSession: vi.fn(() => 'mcp-session'),
         releaseToolSession: vi.fn(),
         cancelToolSession: vi.fn(),

@@ -45,6 +45,7 @@ import { ModelUsageSettings } from './model-usage/ModelUsageSettings'
 import { ApiConnectionsSettings, connectionServiceFromSection } from './api-connections-settings'
 import type { ConnectionServiceId } from './api-connections-settings'
 import './api-connections-settings.css'
+import { WebSearchUsageSection } from './model-usage/web-search-usage'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
 import {
   buildKeyboardContextMenuInput,
@@ -924,7 +925,14 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         )}
 
         {activeSection === 'components' && <ComponentManagementSettings />}
-        {activeSection === 'model-usage' && <ModelUsageSettings />}
+        {activeSection === 'model-usage' && (
+          <>
+            <ModelUsageSettings />
+            <WebSearchUsageSection
+              onOpenSettings={() => navigateSettings('connections', 'web-search')}
+            />
+          </>
+        )}
 
         {activeSection === 'connections' && (
           <ApiConnectionsSettings

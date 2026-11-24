@@ -471,6 +471,13 @@ export class McpToolHost {
       }
     }
 
+    if (module.isVisible && !module.isVisible(context)) {
+      return {
+        content: [{ type: 'text' as const, text: `工具 "${toolName}" 在这个任务中不可用` }],
+        isError: true,
+      }
+    }
+
     try {
       // 权限检查
       const toolDef = module.tools.find((t) => t.name === toolName)
@@ -544,8 +551,19 @@ export class McpToolHost {
     return tracked
   }
 
+  /** Tools a session with this host-signed context may see; modules can hide themselves per session. */
+  getToolsVisibleTo(context: Omit<ToolExecutionContext, 'confirmationGranted'>): ToolDefinition[] {
+    const visible: ToolDefinition[] = []
+    for (const module of this.modules.values()) {
+      if (this.disabledModules.has(module.name)) continue
+      if (module.isVisible && !module.isVisible(context)) continue
+      visible.push(...module.tools)
+    }
+    return visible
+  }
+
   private getToolsForContext(context: McpRequestContext): ToolDefinition[] {
-    const tools = this.getAllTools()
+    const tools = this.getToolsVisibleTo(context)
     const allowedTools = context.scheduledTaskPolicy?.allowedTools
     if (!allowedTools) return tools
     const allowlist = new Set(allowedTools)

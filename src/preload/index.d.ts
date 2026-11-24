@@ -5,6 +5,7 @@ import type { BrowserApiContract, BrowserWorkbenchBounds } from '../shared/ipc/b
 import type { CadApiContract } from '../shared/ipc/cad'
 import type { DataSourceApiContract } from '../shared/ipc/data-source'
 import type { CompanyAccountsApiContract } from '../shared/ipc/company-accounts'
+import type { WebSearchApiContract } from '../shared/ipc/web-search'
 import type { DiagnosticsApiContract } from '../shared/ipc/diagnostics'
 import type { CredentialsApiContract } from '../shared/ipc/credentials'
 import type { DialogApiContract } from '../shared/ipc/dialog'
@@ -59,6 +60,7 @@ export interface CCLinkStudioAPI {
   dataSource: DataSourceApiContract
 
   companyAccounts: CompanyAccountsApiContract
+  webSearch: WebSearchApiContract
   companyWorkspace: CompanyWorkspaceApiContract
 
   diagnostics: DiagnosticsApiContract

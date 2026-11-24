@@ -64,6 +64,39 @@ describe('McpToolHost tool session context', () => {
     expect(execute).toHaveBeenCalledTimes(2)
   })
 
+  it('hides a module per session: neither listed nor callable when isVisible is false', async () => {
+    const execute = vi.fn(async () => ({ ok: true }))
+    host = new McpToolHost({ needsConfirmation: () => false, requestConfirmation: vi.fn() })
+    host.registerModule({
+      ...createModule(execute),
+      name: 'web-search',
+      isVisible: (context) => context?.agentBackend === 'codex',
+      tools: [
+        {
+          name: 'web_search',
+          description: 'Search',
+          inputSchema: { type: 'object', properties: {} },
+          annotations: { readOnlyHint: true, destructiveHint: false },
+        },
+      ],
+    })
+    const port = await host.start()
+    const hidden = host.createToolSession({ conversationId: 'c', agentBackend: 'claude-code' })
+    const shown = host.createToolSession({ conversationId: 'c', agentBackend: 'codex' })
+    const names = async (token: string) =>
+      ((await callMcp(port, token, 'tools/list', {})).result.tools as Array<{ name: string }>).map(
+        (tool) => tool.name,
+      )
+    expect(await names(hidden)).not.toContain('web_search')
+    expect(await names(shown)).toContain('web_search')
+    const refused = await callMcp(port, hidden, 'tools/call', { name: 'web_search', arguments: {} })
+    expect(refused.result.isError).toBe(true)
+    expect(execute).not.toHaveBeenCalled()
+    expect(host.getToolsVisibleTo({ agentBackend: 'codex' }).map((tool) => tool.name)).toContain(
+      'web_search',
+    )
+  })
+
   it('attaches conversationId to tool confirmation requests', async () => {
     const requestConfirmation = vi.fn(async () => true)
     const execute = vi.fn(async () => ({ ok: true }))

@@ -90,6 +90,9 @@ import { GitExecutor } from '../git-backup/git-executor'
 import { remoteDiaryNames } from '../git/git-fast-forward'
 import { DiaryChangeTracker } from '../workspace/diary-change-tracker'
 import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
+import { WebSearchService } from '../web-search/web-search-service'
+import { registerWebSearchIpc } from '../web-search/web-search-ipc'
+import { WEB_SEARCH_OWN_CREDENTIAL_ID } from '../../shared/web-search/web-search-types'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
   runtime.agentRuntimeStateStore ??= new AgentRuntimeStateStore(
@@ -304,6 +307,28 @@ export async function bootstrapMainProcessServices(
   } catch (error) {
     runtime.companyAccountsService = null
     console.error('[CCLink Studio] 公司账目能力初始化失败，其他本地能力继续启动:', error)
+  }
+
+  try {
+    const readKey = (id: string): string | null => {
+      try {
+        return runtime.credentialService?.resolveCredential(id)?.apiKey?.trim() || null
+      } catch {
+        return null
+      }
+    }
+    runtime.webSearchService = new WebSearchService({
+      statePath: join(app.getPath('userData'), 'web-search', 'state.json'),
+      resolveAgentKey: () =>
+        runtime.settingsService?.getAll().provider === 'deepseek' ? readKey('agent:default') : null,
+      resolveOwnKey: () => readKey(WEB_SEARCH_OWN_CREDENTIAL_ID),
+    })
+    await runtime.webSearchService.load()
+    registerWebSearchIpc(() => runtime.webSearchService, runtime.trustedRendererGuard)
+    console.log('[CCLink Studio] 联网搜索 IPC 已注册')
+  } catch (error) {
+    runtime.webSearchService = null
+    console.error('[CCLink Studio] 联网搜索初始化失败，其他本地能力继续启动:', error)
   }
 
   registerScheduledTaskIpc(
@@ -850,6 +875,7 @@ export async function shutdownMainProcessServices(
   runtime.hardwareService = null
   runtime.dataSourceService = null
   runtime.companyAccountsService = null
+  runtime.webSearchService = null
   runtime.meshyService = null
   runtime.imageGenerationService = null
   runtime.markdownIllustrationService = null

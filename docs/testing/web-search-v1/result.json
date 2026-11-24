@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "name": "联网搜索默认未启用，本地功能不受影响",
+      "status": "pass"
+    },
+    {
+      "name": "联网搜索设置页：未启用、无法沿用时禁用该选项",
+      "status": "pass"
+    },
+    {
+      "name": "单独填写的 Key 已保存；未验证前不启用",
+      "status": "pass"
+    },
+    {
+      "name": "启用后显示“已启用”和停用按钮",
+      "status": "pass"
+    },
+    {
+      "name": "Agent 工具页显示联网搜索模块，按 Agent 的开关已保存",
+      "status": "pass"
+    },
+    {
+      "name": "模型用量页显示联网搜索次数与估算费用",
+      "status": "pass"
+    },
+    {
+      "name": "选择 DeepSeek 时显示两个模型，默认 deepseek-flash",
+      "status": "pass"
+    }
+  ]
+}

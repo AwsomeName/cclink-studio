@@ -132,6 +132,11 @@ function createBackendFixture(
       createTool('browser_new_tab'),
       createTool('editor_write'),
     ],
+    getToolsVisibleTo: () => [
+      createTool('browser_navigate'),
+      createTool('browser_new_tab'),
+      createTool('editor_write'),
+    ],
   } as unknown as McpToolHost
   const composeMcpConfig = vi.fn((internalPort: number, sessionToken?: string) => {
     const url = new URL(`http://127.0.0.1:${internalPort}/mcp`)
@@ -661,6 +666,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       cancelToolSession: vi.fn(),
       authorizeSdkTool: vi.fn(async () => ({ behavior: 'allow' as const })),
       getAllTools: () => [],
+      getToolsVisibleTo: () => [],
     } as unknown as McpToolHost
     const backend = new LocalClaudeCodeBackend(
       playwrightBridge,
@@ -1312,6 +1318,7 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
       },
       agentRunId: null,
       agentGoal: '操作当前会话',
+      agentBackend: 'claude-code',
     })
     expect(composeMcpConfig).toHaveBeenCalledWith(39876, 'mcp-session-1')
     await vi.waitFor(() => expect(releaseToolSession).toHaveBeenCalledWith('mcp-session-1'))
