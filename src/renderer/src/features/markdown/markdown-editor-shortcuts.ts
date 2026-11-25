@@ -1,6 +1,7 @@
 import { Extension, type Editor } from '@tiptap/core'
 import { closeHistory } from '@tiptap/pm/history'
 import type { MarkdownEditorAction } from '../context-actions/editor-context-surface'
+import { useSettingsStore } from '../../stores/settings-store'
 
 interface MarkdownKeyboardShortcutOptions {
   openLinkEditor: (editor: Editor) => boolean
@@ -149,6 +150,35 @@ export function toggleMarkdownBlockquote(editor: Editor): boolean {
   return chain.unsetBlockquote().run()
 }
 
+/**
+ * The text a timestamp shortcut inserts, on the same wall clock as the status bar: the Studio
+ * time zone setting (`system` = the OS time zone).
+ */
+export function formatInsertedTimestamp(
+  date: Date,
+  action: 'insert-time' | 'insert-date-time',
+  timeZone: string,
+): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: timeZone === 'system' ? undefined : timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(date)
+      .map(({ type, value }) => [type, value]),
+  )
+  const time = `${parts.hour}:${parts.minute}`
+  return action === 'insert-time'
+    ? time
+    : `${parts.year}-${parts.month}-${parts.day} ${time}:${parts.second}`
+}
+
 export function runMarkdownEditorAction(
   editor: Editor,
   action: MarkdownEditorAction,
@@ -158,13 +188,11 @@ export function runMarkdownEditorAction(
   switch (action) {
     case 'insert-date-time':
     case 'insert-time': {
-      const now = new Date()
-      const pad = (value: number): string => String(value).padStart(2, '0')
-      const time = `${pad(now.getHours())}:${pad(now.getMinutes())}`
-      const text =
-        action === 'insert-time'
-          ? time
-          : `${String(now.getFullYear()).padStart(4, '0')}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${time}:${pad(now.getSeconds())}`
+      const text = formatInsertedTimestamp(
+        new Date(),
+        action,
+        useSettingsStore.getState().settings.clockTimeZone,
+      )
       const inserted = editor
         .chain()
         .focus()

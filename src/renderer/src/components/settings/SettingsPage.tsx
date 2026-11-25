@@ -841,8 +841,10 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
 
               <SettingsRow settingKey="clockTimeZone" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
-                  <label htmlFor="clock-time-zone">状态栏时区</label>
-                  <span className="settings-description">设置 Studio 状态栏显示的日期和时间。</span>
+                  <label htmlFor="clock-time-zone">时区</label>
+                  <span className="settings-description">
+                    状态栏的日期时间和编辑器插入的时间戳都按此时区。
+                  </span>
                 </div>
                 <div className="settings-control">
                   <select

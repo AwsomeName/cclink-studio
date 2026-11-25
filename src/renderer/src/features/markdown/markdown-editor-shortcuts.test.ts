@@ -5,7 +5,11 @@ import TaskList from '@tiptap/extension-task-list'
 import StarterKit from '@tiptap/starter-kit'
 import { describe, expect, it, vi } from 'vitest'
 import { analyzeMarkdown, prepareMarkdownEditorInput } from './markdown-codec'
-import { applyMarkdownTaskInputShortcut, handleMarkdownTabKey } from './markdown-editor-shortcuts'
+import {
+  applyMarkdownTaskInputShortcut,
+  formatInsertedTimestamp,
+  handleMarkdownTabKey,
+} from './markdown-editor-shortcuts'
 import { MarkdownListItem } from './markdown-list-item'
 
 function createEditor(options?: {
@@ -249,5 +253,32 @@ describe('handleMarkdownTabKey', () => {
     expect(serialized).toBe(source)
     expect(analyzeMarkdown(source, serialized).safeToSave).toBe(true)
     editor.destroy()
+  })
+})
+
+describe('formatInsertedTimestamp', () => {
+  // 2026-11-25 11:21:05 UTC
+  const instant = new Date(Date.UTC(2026, 10, 25, 11, 21, 5))
+
+  it('uses the Studio time zone, not the OS one', () => {
+    expect(formatInsertedTimestamp(instant, 'insert-time', 'Asia/Shanghai')).toBe('19:21')
+    expect(formatInsertedTimestamp(instant, 'insert-time', 'Asia/Tokyo')).toBe('20:21')
+    expect(formatInsertedTimestamp(instant, 'insert-date-time', 'Asia/Shanghai')).toBe(
+      '2026-11-25 19:21:05',
+    )
+  })
+
+  it('rolls the date over in the chosen time zone and keeps midnight as 00', () => {
+    const lateUtc = new Date(Date.UTC(2026, 10, 25, 16, 0, 0))
+    expect(formatInsertedTimestamp(lateUtc, 'insert-date-time', 'Asia/Shanghai')).toBe(
+      '2026-11-26 00:00:00',
+    )
+  })
+
+  it('follows the OS time zone for system', () => {
+    const pad = (value: number): string => String(value).padStart(2, '0')
+    expect(formatInsertedTimestamp(instant, 'insert-time', 'system')).toBe(
+      `${pad(instant.getHours())}:${pad(instant.getMinutes())}`,
+    )
   })
 })

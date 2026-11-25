@@ -175,7 +175,7 @@ export interface AppSettings {
 
   /** 应用缩放级别（Electron webFrame zoom level, 0 = 100%） */
   appZoomLevel: number
-  /** 状态栏使用的 IANA 时区，system 表示跟随系统 */
+  /** 状态栏时钟和编辑器插入时间戳使用的 IANA 时区，system 表示跟随系统 */
   clockTimeZone: string
 
   // ─── 工作区 ───
