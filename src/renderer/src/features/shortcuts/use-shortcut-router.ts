@@ -4,7 +4,10 @@ import { isMacPlatform, keyChordFromKeyboardEvent, keyChordId } from '@shared/ke
 import { useCommandStore } from '../../stores/command-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useTabStore } from '../../stores/tab-store'
-import { getEditorContextSurface } from '../context-actions/editor-context-surface'
+import {
+  getEditorContextSurface,
+  getEmbeddedEditorSurface,
+} from '../context-actions/editor-context-surface'
 import { useContextMenuStore } from '../context-actions/context-menu-store'
 import { isAnyFloatingSurfaceOpen } from '../../components/common/floating-surface-registry'
 import { resolveEffectiveKeybindings } from './keybinding-resolver'
@@ -31,6 +34,11 @@ function activeShortcutScopes(target?: EventTarget | null): Set<string> {
   if (tab.type === 'editor') {
     scopes.add('editor')
     if (getEditorContextSurface(tab.id)?.runMarkdownAction) scopes.add('markdown')
+  }
+  // My Space 今天 / 日记: the home page embeds a Markdown editor; its shortcuts apply there too.
+  if (tab.type === 'workspace-home' && getEmbeddedEditorSurface()?.runMarkdownAction) {
+    scopes.add('editor')
+    scopes.add('markdown')
   }
   if (tab.type === 'terminal') scopes.add('terminal')
   if (tab.type === 'browser') scopes.add('browser')

@@ -54,8 +54,14 @@ try {
   await page.keyboard.press('Meta+End')
   await page.keyboard.press('Enter')
   await page.keyboard.insertText('首页直接写的一行')
+  // Markdown shortcuts work in the embedded editor exactly as in a Markdown tab (⌘B, ⌘S).
+  const saveState = page.locator('.diary-today-editor .toolbar-save-control')
+  await page.keyboard.press('Meta+b')
+  await page.keyboard.insertText('粗体')
+  await page.keyboard.press('Meta+b')
+  await saveState.filter({ hasText: '保存' }).waitFor()
   await page.keyboard.press('Meta+s')
-  await page.getByLabel('今天的日记状态').filter({ hasText: '已保存' }).waitFor()
+  await saveState.filter({ hasText: '已保存' }).waitFor()
   const written = await page.evaluate(
     async (dir) => {
       const walk = async (d) => {
@@ -73,6 +79,7 @@ try {
     join(defaultDir, '个人计划'),
   )
   assert(written.includes('首页直接写的一行'), 'typing on the home page did not save to the file')
+  assert(written.includes('**粗体**'), '⌘B did not bold in the embedded editor: ' + written)
   await page.screenshot({ path: join(shots, 'v3-today-editable.png') })
   // The status bar stays one line even in a narrow window.
   await s.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(900, 700))
@@ -85,10 +92,12 @@ try {
       .map((el) => el.textContent)
   })
   assert.deepEqual(wrapped, [], 'status bar items wrapped: ' + wrapped.join(' | '))
-  // My Space has no header row; status and 让 AI 修改 sit in the editor toolbar, which stays one line.
+  // My Space has no header row; the editor toolbar shows the Markdown save state and stays one
+  // line. AI edits go through the conversation panel, so there is no 让 AI 修改 button.
   assert.equal(await page.locator('.project-home-header').count(), 0, 'no header row')
   const toolbar = page.locator('.diary-today-editor .editor-toolbar')
-  await toolbar.getByRole('button', { name: '让 AI 修改…' }).waitFor()
+  await toolbar.locator('.toolbar-save-control').filter({ hasText: '已保存' }).waitFor()
+  assert.equal(await page.getByRole('button', { name: '让 AI 修改…' }).count(), 0)
   await page.getByRole('button', { name: '项目设置', exact: true }).waitFor()
   const actionsTop = await page.evaluate(() => {
     const a = document.querySelector('.diary-today-actions').getBoundingClientRect()

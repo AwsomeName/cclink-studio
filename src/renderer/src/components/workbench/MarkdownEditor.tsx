@@ -417,35 +417,39 @@ export function MarkdownEditor({
 
   useEffect(() => {
     if (!editor) return
-    return registerEditorContextSurface(tabId, {
-      isFocused: () => editor.isFocused && editor.isEditable,
-      getSelectionText: () => {
-        const { from, to } = editor.state.selection
-        return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')
+    return registerEditorContextSurface(
+      tabId,
+      {
+        isFocused: () => editor.isFocused && editor.isEditable,
+        getSelectionText: () => {
+          const { from, to } = editor.state.selection
+          return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')
+        },
+        copy: async () => {
+          const { from, to } = editor.state.selection
+          if (from !== to) await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
+        },
+        cut: async () => {
+          const { from, to } = editor.state.selection
+          if (from === to) return
+          await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
+          editor.chain().focus().deleteSelection().run()
+        },
+        paste: async () => {
+          const text = await navigator.clipboard.readText()
+          editor.chain().focus().insertContent(text).run()
+        },
+        selectAll: () => {
+          editor.chain().focus().selectAll().run()
+        },
+        openFind,
+        closeFind,
+        save: () => saveRef.current(),
+        runMarkdownAction: (action) => runMarkdownEditorAction(editor, action, openLinkEditor),
       },
-      copy: async () => {
-        const { from, to } = editor.state.selection
-        if (from !== to) await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
-      },
-      cut: async () => {
-        const { from, to } = editor.state.selection
-        if (from === to) return
-        await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
-        editor.chain().focus().deleteSelection().run()
-      },
-      paste: async () => {
-        const text = await navigator.clipboard.readText()
-        editor.chain().focus().insertContent(text).run()
-      },
-      selectAll: () => {
-        editor.chain().focus().selectAll().run()
-      },
-      openFind,
-      closeFind,
-      save: () => saveRef.current(),
-      runMarkdownAction: (action) => runMarkdownEditorAction(editor, action, openLinkEditor),
-    })
-  }, [closeFind, editor, openFind, openLinkEditor, tabId])
+      { embedded: compact },
+    )
+  }, [closeFind, compact, editor, openFind, openLinkEditor, tabId])
 
   const saveClipboardImage = useCallback(
     async (image: File) => {

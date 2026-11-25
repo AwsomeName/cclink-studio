@@ -21,11 +21,9 @@ import {
 import type { FsDirEntry } from '@shared/ipc/fs'
 import type { ScheduledTaskSnapshot } from '@shared/scheduled-task/scheduled-task-types'
 import { useTabStore } from '../../stores/tab-store'
-import { useEditorStore } from '../../stores/editor-store'
 import { MarkdownEditor } from '../../components/workbench/MarkdownEditor'
 import { useCommandStore } from '../../stores/command-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
-import { askAi, editRule } from './diary-ai'
 import { createScheduledTaskTab } from '../scheduled-tasks/scheduled-task-view-model'
 import {
   defaultBuiltInChoice,
@@ -277,9 +275,6 @@ export function PersonalDiaryHome(): React.ReactElement {
       ? daily.latestRun
       : undefined
   const selectedPreview = page === '今天' ? '' : previewPath
-  const todayDirty = useEditorStore((state) =>
-    Boolean(todayFile && state.files[todayFile.path]?.dirty),
-  )
   useEffect(() => {
     setPreviewPath('')
   }, [page, todayKey])
@@ -410,21 +405,15 @@ export function PersonalDiaryHome(): React.ReactElement {
         ? 'AI 起草'
         : `${daily?.definition.schedule.kind === 'daily' ? daily.definition.schedule.time : ''} 自动起草`
       : ''
-  // Status and 让 AI 修改 sit at the right of the editor toolbar; the page has no header row.
+  // Draft source and notices sit at the right of the editor toolbar; saving shows the editor's
+  // own save state, and AI edits go through the conversation panel on the right.
   const toolbarExtra = todayFile ? (
     <span className="diary-today-actions">
-      <span className="diary-today-state" aria-label="今天的日记状态">
-        {draftLabel && <b>{draftLabel}</b>}
-        {draftLabel && ' · '}
-        {todayDirty ? '未保存' : '已保存'}
-        {notice && ` · ${notice}`}
-      </span>
-      <button
-        className="diary-header-action"
-        onClick={() => askAi(`${editRule}请修改今天的日记 ${todayFile.path}：`)}
-      >
-        让 AI 修改…
-      </button>
+      {(draftLabel || notice) && (
+        <span className="diary-today-state" aria-label="今天的日记状态">
+          {[draftLabel, notice].filter(Boolean).join(' · ')}
+        </span>
+      )}
       <FoldedTabCreateActions />
     </span>
   ) : null
@@ -645,9 +634,6 @@ export function PersonalDiaryHome(): React.ReactElement {
                   }
                 >
                   打开原文
-                </button>
-                <button onClick={() => askAi(`${editRule}请修改 ${preview.path}：`)}>
-                  让 AI 修改…
                 </button>
               </header>
               <ConversationMarkdown source={preview.content} />

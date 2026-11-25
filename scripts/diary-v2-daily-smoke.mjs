@@ -138,13 +138,13 @@ try {
   // AI edit on request: the change lands in today's file and shows in the open editor;
   // the today page shows no change report.
   const before = await readFile(join(space, S, todayRel), 'utf8')
-  await page.getByRole('button', { name: '让 AI 修改…' }).click()
+  // AI edits go through the conversation panel on the right (no 让 AI 修改 button).
   const composer = page.getByPlaceholder(/继续提问|输入消息/).first()
   await composer.waitFor()
   await composer.click()
   await page.keyboard.press('Meta+ArrowDown')
   await page.keyboard.type(
-    '在「今日待做」下新增一条任务：- [ ] 联系散热片供应商。只改这一处，不要改其他内容。',
+    `请修改今天的日记 ${join(space, S, todayRel)}：在「今日待做」下新增一条任务：- [ ] 联系散热片供应商。只改这一处，不要改其他内容。`,
   )
   await page.keyboard.press('Enter')
   // A Codex file change may ask once in the default 自动 permission mode; approve it if it does.

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>日记保存状态</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1300px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 22px;
+        line-height: 1.6;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .win {
+        width: 1300px;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #1e1e1e;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 8px 22px;
+        border-bottom: 1px solid #333;
+        font-size: 12.5px;
+        color: #aaa;
+        white-space: nowrap;
+      }
+      .bar b {
+        color: #eee;
+      }
+      .bar .gap {
+        flex: 1;
+      }
+      .bar .sep {
+        width: 1px;
+        height: 16px;
+        background: #3a3a3a;
+      }
+      .ai {
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 3px 10px;
+        color: #ddd;
+      }
+      .muted {
+        color: #888;
+      }
+      .save {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: #9fd39f;
+      }
+      .save.dirty {
+        color: #fff;
+        background: #0e639c;
+        border-radius: 5px;
+        padding: 3px 10px;
+      }
+      .save.busy {
+        color: #bbb;
+      }
+      .save.err {
+        color: #f48771;
+      }
+      .icons {
+        color: #999;
+        letter-spacing: 3px;
+      }
+      .doc {
+        height: 120px;
+        padding: 18px 28px;
+        color: #eee;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+      .doc h2 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        color: #fff;
+      }
+      .ref {
+        outline: 2px dashed #4b8;
+        outline-offset: 3px;
+      }
+      .row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px 14px;
+        background: #1e1e1e;
+        font-size: 12.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 · 日记页加回 Markdown 保存状态（和默认项目的 md 一样）</h1>
+    <p class="note">
+      「今天」和「日记」页的编辑器工具栏，最右边加回和默认项目 Markdown
+      完全相同的保存状态：已保存时显示「✓ 已保存」；有改动时变成蓝色「保存」按钮（⌘S
+      同样可用）；保存中、保存失败也同样显示。「今天」页原来自己写的「·
+      已保存」去掉，避免出现两个状态；「AI 起草」这类来源说明保留为灰色小字。
+    </p>
+
+    <div class="win">
+      <div class="bar">
+        <span>‹ 11/24</span><b>1125_周三.md</b><span>›</span><span class="sep"></span
+        ><span>正文 ▾</span><span>B</span><span>I</span><span>• 列表</span><span>☐ 待办</span
+        ><span>链接</span><span>图片</span><span class="gap"></span
+        ><span class="muted">01:00 自动起草</span><span class="ai">让 AI 修改…</span
+        ><span class="sep"></span><span class="save ref">✓ 已保存</span><span class="sep"></span
+        ><span class="icons">◍ ▯ ▣ ▭</span>
+      </div>
+      <div class="doc">
+        <h2>2026-11-25 周三</h2>
+        今日体重：没称　昨日睡眠：12 点睡的，7 点醒的……
+      </div>
+    </div>
+    <p class="cap">
+      <b>A 已保存</b>：工具栏最右「✓ 已保存」（虚线框处），样式与默认项目 md 编辑器一致。
+    </p>
+
+    <div class="win">
+      <div class="bar">
+        <span>‹ 11/24</span><b>1125_周三.md</b><span>›</span><span class="sep"></span
+        ><span>正文 ▾</span><span>B</span><span>I</span><span>• 列表</span><span>☐ 待办</span
+        ><span>链接</span><span>图片</span><span class="gap"></span
+        ><span class="muted">01:00 自动起草</span><span class="ai">让 AI 修改…</span
+        ><span class="sep"></span><span class="save dirty">保存</span><span class="sep"></span
+        ><span class="icons">◍ ▯ ▣ ▭</span>
+      </div>
+      <div class="doc">
+        <h2>2026-11-25 周三</h2>
+        今日体重：没称　昨日睡眠：12 点睡的，7 点醒的，又迷糊到 8:10 左右才起。<span
+          style="
+            display: inline-block;
+            width: 1.5px;
+            height: 17px;
+            background: #fff;
+            vertical-align: -3px;
+          "
+        ></span>
+      </div>
+    </div>
+    <p class="cap">
+      <b>B 有未保存的改动</b>：变成蓝色「保存」按钮，点它或按 ⌘S 保存；自动保存完成后回到「✓
+      已保存」。
+    </p>
+
+    <div class="row">
+      <div class="chip"><span class="save busy">保存中…</span>　保存进行时</div>
+      <div class="chip">
+        <span class="save err">保存失败 · 重试</span>　写入失败时，红色，可点击重试
+      </div>
+      <div class="chip">
+        <span class="save err">磁盘版本已变 · 处理</span>　外部也改了这个文件时
+      </div>
+    </div>
+    <p class="cap">
+      <b>C 其他状态</b>：与默认项目 md 编辑器的提示完全一致，只是放在日记页的工具栏里。
+    </p>
+  </body>
+</html>

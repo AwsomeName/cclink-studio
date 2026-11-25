@@ -252,6 +252,32 @@ export function EditorToolbar({
         .map((button) => ({ ...button, label: compactLabels[button.title] }))
     : buttons
 
+  const saveBlock = (
+    <div
+      className={`toolbar-save-control${persistenceStatus?.kind === 'error' || persistenceStatus?.kind === 'conflict' ? ' error' : ''}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {saveControl.kind === 'status' ? (
+        <span className="toolbar-save-state" title={saveControl.title}>
+          {saveControl.label === '已保存' && <IconCheck size={13} />}
+          {saveControl.label}
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="toolbar-save-action"
+          title={titleWithShortcut(saveControl.title, 'workbench.save')}
+          onClick={onSave}
+          disabled={saving}
+        >
+          {saving ? '保存中…' : saveControl.label}
+        </button>
+      )}
+    </div>
+  )
+
   return (
     <div className={compact ? 'editor-toolbar compact' : 'editor-toolbar'}>
       {compact && lead}
@@ -394,36 +420,12 @@ export function EditorToolbar({
             {diagnosticsCount} 项提示
           </button>
         )}
+        {compact && saveBlock}
         {extra}
         {compact && filePath && !lead && (
           <span className="toolbar-file-name">{filePath.split('/').pop()}</span>
         )}
-        {/* The embedding page shows 已保存 itself; only unsaved or failed states show here. */}
-        {!(compact && saveControl.label === '已保存') && (
-          <div
-            className={`toolbar-save-control${persistenceStatus?.kind === 'error' || persistenceStatus?.kind === 'conflict' ? ' error' : ''}`}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {saveControl.kind === 'status' ? (
-              <span className="toolbar-save-state" title={saveControl.title}>
-                {saveControl.label === '已保存' && <IconCheck size={13} />}
-                {saveControl.label}
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="toolbar-save-action"
-                title={titleWithShortcut(saveControl.title, 'workbench.save')}
-                onClick={onSave}
-                disabled={saving}
-              >
-                {saving ? '保存中…' : saveControl.label}
-              </button>
-            )}
-          </div>
-        )}
+        {!compact && saveBlock}
       </div>
     </div>
   )
