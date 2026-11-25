@@ -1,0 +1,198 @@
+.techdaily-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+.techdaily-settings h3,
+.techdaily-settings p {
+  margin: 0;
+}
+.techdaily-settings fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  min-width: 0;
+}
+.techdaily-settings legend {
+  padding: 0 6px;
+  color: var(--text-secondary);
+}
+.techdaily-settings code {
+  font-size: 12px;
+}
+.techdaily-new,
+.techdaily-merged {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: normal;
+  vertical-align: middle;
+}
+.techdaily-new {
+  background: var(--accent-color, #3a7bd5);
+  color: #fff;
+}
+.techdaily-merged {
+  border: 1px solid #9b7bd8;
+  color: #b9a1ea;
+}
+.workspace-settings-form label.techdaily-radio {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+}
+.techdaily-radio > input {
+  margin-top: 4px;
+  flex: 0 0 auto;
+}
+.techdaily-radio > span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.techdaily-ok {
+  color: var(--success-color, #7fc98f) !important;
+}
+.techdaily-bad {
+  color: var(--error-color, #ef8c83) !important;
+}
+.techdaily-ok button,
+.techdaily-bad button {
+  margin-left: 8px;
+  padding: 2px 8px !important;
+}
+.techdaily-searxng {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-left: 26px;
+}
+.techdaily-auth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.techdaily-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.techdaily-row > label {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.techdaily-test {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  overflow-wrap: anywhere;
+}
+.techdaily-test.ok {
+  border-color: rgba(127, 201, 143, 0.5);
+}
+.techdaily-test.bad {
+  border-color: rgba(239, 140, 131, 0.6);
+}
+.techdaily-test ul,
+.techdaily-samples {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.techdaily-test li span,
+.techdaily-samples li span {
+  color: var(--text-secondary);
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.techdaily-domains {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.techdaily-domains li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+}
+.techdaily-hint {
+  color: var(--text-secondary);
+}
+.techdaily-collect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.techdaily-table-wrap {
+  overflow-x: auto;
+}
+.techdaily-collect table {
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.techdaily-collect th,
+.techdaily-collect td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: right;
+}
+.techdaily-collect th:first-child,
+.techdaily-collect td:first-child {
+  text-align: left;
+}
+.techdaily-collect th {
+  color: var(--text-secondary);
+  font-weight: normal;
+}
+.techdaily-samples li {
+  margin: 3px 0;
+  overflow-wrap: anywhere;
+}
+.techdaily-samples a {
+  color: var(--text-link, #7ab7ff);
+}
+/* The form-wide input rule sizes every non-checkbox input to 100%; radios must stay small. */
+.workspace-settings-form .techdaily-settings input[type='radio'] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 auto;
+}
+.workspace-settings-form .techdaily-settings label:has(> input[type='radio']) {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.workspace-settings-form .techdaily-settings label.techdaily-radio {
+  align-items: flex-start;
+  gap: 10px;
+}
+.workspace-settings-form .techdaily-settings .techdaily-radio > input {
+  margin-top: 4px;
+}
+.techdaily-settings code,
+.techdaily-settings p,
+.techdaily-settings small {
+  overflow-wrap: anywhere;
+}

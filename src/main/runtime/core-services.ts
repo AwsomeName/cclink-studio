@@ -98,6 +98,10 @@ import { DiaryChangeTracker } from '../workspace/diary-change-tracker'
 import { registerCompanyAccountsIpc } from '../company-accounts/company-accounts-ipc'
 import { WebSearchService } from '../web-search/web-search-service'
 import { registerWebSearchIpc } from '../web-search/web-search-ipc'
+import { TechDailyService } from '../techdaily/techdaily-service'
+import { registerTechDailyIpc } from '../techdaily/techdaily-ipc'
+import { SEARXNG_CREDENTIAL_ID } from '../../shared/techdaily/techdaily-types'
+import { defaultDiaryTimezone } from '../../shared/personal-diary-source'
 import { WEB_SEARCH_OWN_CREDENTIAL_ID } from '../../shared/web-search/web-search-types'
 
 export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState): Promise<void> {
@@ -335,6 +339,58 @@ export async function bootstrapMainProcessServices(
   } catch (error) {
     runtime.webSearchService = null
     console.error('[CCLink Studio] 联网搜索初始化失败，其他本地能力继续启动:', error)
+  }
+
+  try {
+    const credentials = (): NonNullable<typeof runtime.credentialService> => {
+      if (!runtime.credentialService) throw new Error('凭证存储不可用')
+      return runtime.credentialService
+    }
+    runtime.techDailyService = new TechDailyService({
+      dataDirectory: join(app.getPath('userData'), 'techdaily'),
+      personalRoot: () => {
+        try {
+          return runtime.workspaceStateService?.getFixedSpaces().personal?.workspacePath ?? null
+        } catch {
+          return null
+        }
+      },
+      deepSeek: {
+        search: (input, options) => {
+          if (!runtime.webSearchService) throw new Error('联网搜索当前不可用')
+          return runtime.webSearchService.search(input, options)
+        },
+        unavailableReason: () => {
+          const status = runtime.webSearchService?.getStatus()
+          if (!status) return '联网搜索当前不可用'
+          return status.state === 'ready' ? null : (status.reason ?? '联网搜索不可用')
+        },
+      },
+      credentials: {
+        resolve: (id) => {
+          try {
+            return runtime.credentialService?.resolveCredential(id) ?? null
+          } catch {
+            return null
+          }
+        },
+        set: async (id, fields) => {
+          await credentials().setCredential({ id, kind: 'basic', fields })
+        },
+        remove: async (id) => {
+          if (credentials().resolveCredential(id)) await credentials().removeCredential(id)
+        },
+      },
+      credentialId: SEARXNG_CREDENTIAL_ID,
+      timezone: async (root) =>
+        (await readWorkspaceSettings(root, 'diary')).settings.diary?.timezone ??
+        defaultDiaryTimezone,
+    })
+    registerTechDailyIpc(() => runtime.techDailyService, runtime.trustedRendererGuard)
+    console.log('[CCLink Studio] 科技日报 IPC 已注册')
+  } catch (error) {
+    runtime.techDailyService = null
+    console.error('[CCLink Studio] 科技日报初始化失败，其他本地能力继续启动:', error)
   }
 
   registerScheduledTaskIpc(
@@ -929,6 +985,8 @@ export async function shutdownMainProcessServices(
   runtime.dataSourceService = null
   runtime.companyAccountsService = null
   runtime.webSearchService = null
+  runtime.techDailyService?.close()
+  runtime.techDailyService = null
   runtime.meshyService = null
   runtime.imageGenerationService = null
   runtime.markdownIllustrationService = null

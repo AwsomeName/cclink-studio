@@ -43,6 +43,7 @@ import { browserApi, reportWorkbenchBounds } from './browser-api'
 import { dataSourceApi } from './data-source-api'
 import { companyAccountsApi } from './company-accounts-api'
 import { webSearchApi } from './web-search-api'
+import { techDailyApi } from './techdaily-api'
 import { companyWorkspaceApi } from './company-workspace-api'
 import { fsApi } from './fs-api'
 import { gitApi } from './git-api'
@@ -435,6 +436,7 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
 
   companyAccounts: companyAccountsApi,
   webSearch: webSearchApi,
+  techDaily: techDailyApi,
   companyWorkspace: companyWorkspaceApi,
 
   // Terminal 命令确认、执行事件与受限提交

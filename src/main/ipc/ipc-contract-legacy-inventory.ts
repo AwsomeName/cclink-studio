@@ -5,6 +5,7 @@ import { ownerSourceIpc } from '../../shared/ipc/owner-source'
 import { ownerPreferencesIpc } from '../../shared/ipc/owner-preferences'
 import { companyWorkspaceIpc } from '../../shared/company-workspace/company-workspace'
 import { webSearchIpc } from '../../shared/ipc/web-search'
+import { techDailyIpc } from '../../shared/ipc/techdaily'
 import { localTtsIpc } from '../../shared/local-tts'
 import { articlePublishingIpc } from '../../shared/article-publishing/article-publishing'
 import { gitIpc } from '../../shared/git/git-contract'
@@ -326,6 +327,14 @@ export const ipcInvokeContractInventory: readonly IpcInvokeContractInventory[] =
     definitions: webSearchIpc,
     handlerFiles: ['src/main/web-search/web-search-ipc.ts'],
     preloadFiles: ['src/preload/web-search-api.ts'],
+  }),
+  ...expandInvokeGroup({
+    owner: 'TechDaily',
+    definitionFile: 'src/shared/ipc/techdaily.ts',
+    definitionName: 'techDailyIpc',
+    definitions: techDailyIpc,
+    handlerFiles: ['src/main/techdaily/techdaily-ipc.ts'],
+    preloadFiles: ['src/preload/techdaily-api.ts'],
   }),
   ...expandInvokeGroup({
     owner: 'CompanyWorkspace',

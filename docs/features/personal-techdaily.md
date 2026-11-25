@@ -1,8 +1,10 @@
 # 我的空间 · 科技日报（Argus techdaily 复刻方案）
 
-> 日期：2026-11-25。状态：方案 v2，效果图待用户确认，未实现；未提交，DeepSeek 与 SearXNG 实际搜索效果未测。
-> 已确认：不单独配置 GitHub 仓库（§10.1，2026-11-25）；不做语义向量（§6.6，2026-11-25）。
-> 待确认：① v2 效果图（项目设置合并；侧栏 + 日历 + Markdown）；② 去重方案“SQLite + 线索标准标题”（§6）。
+> 日期：2026-11-25。状态：方案 v2 已定稿（2026-11-25 用户确认效果图与去重方案）。
+> **已实现第一块：项目设置里的科技日报配置 + 搜索采集能力**（§15）；日报生成、侧栏与日历、线索去重、定时未实现。
+> DeepSeek 与真实 SearXNG 的实际搜索效果仍未测（本机无 DeepSeek 搜索 Key，SearXNG 地址待用户提供）。
+> 已确认：不单独配置 GitHub 仓库（§10.1）；不做语义向量（§6.6）；SearXNG 先保留接口，地址后续提供。
+> 默认词表：用户 2026-11-25 提供的 Argus `queries.yaml`（9 个领域、54 个搜索词），见 `src/main/techdaily/default-settings.yaml`。
 > 定位（用户确认）：**我的空间的标准功能**，任何用户配好搜索服务（DeepSeek Key 或自建 SearXNG）即可开启。
 > 复刻对象：Argus techdaily。依据本机留存的 Argus 代码（2026-10，`src/argus/techdaily/*`、`stocknews/urlnorm.py`）
 > 和用户给出的 `daily.md` 章节说明；服务器上的完整规格书本机读不到，实现前对照补齐。
@@ -211,14 +213,14 @@ HN topstories 前 25 条且分数 ≥ 50；GitHub 近 14 天按 topic 创建、�
 
 ## 10. 存储
 
-| 路径                                         | 同步 | 内容                                                                              |
-| -------------------------------------------- | ---- | --------------------------------------------------------------------------------- |
-| `科技日报/设置.yaml`                         | 是   | 领域、搜索词、护栏、排除词、黑名单追加、时效、无日期处理、条数、栏目、口味        |
-| `科技日报/榜单.json`                         | 是   | 模型能力榜状态                                                                    |
-| `科技日报/{yyyy}/{mm}/{MMDD}.md`             | 是   | 日报；front matter：状态、生成时间、漏斗、调用数、入选线索 `lead_key` 与标准标题  |
-| `userData/techdaily/<空间>/techdaily.sqlite` | 否   | 文章、线索、别名（§6.1）；文章留 14 天，线索留 30 天                              |
-| `userData/techdaily/<空间>/runs/<日期>/`     | 否   | `run.json`、`daily.json`（结构化日报）、`sources.json`（源站与前沿源快照），60 天 |
-| `userData/techdaily/<空间>/searxng.json`     | 否   | SearXNG 地址与引擎；凭证在凭证文件                                                |
+| 路径                                     | 同步 | 内容                                                                                                |
+| ---------------------------------------- | ---- | --------------------------------------------------------------------------------------------------- |
+| `科技日报/设置.yaml`                     | 是   | 领域、搜索词、护栏、排除词、黑名单追加、时效、无日期处理、条数、栏目、口味                          |
+| `科技日报/榜单.json`                     | 是   | 模型能力榜状态                                                                                      |
+| `科技日报/{yyyy}/{mm}/{MMDD}.md`         | 是   | 日报；front matter：状态、生成时间、漏斗、调用数、入选线索 `lead_key` 与标准标题                    |
+| `userData/techdaily/techdaily.sqlite`    | 否   | 已实现：`articles`（同网址幂等写入，14 天）、`search_calls`（每天调用数）；线索与别名表随 §6.2 实现 |
+| `userData/techdaily/<空间>/runs/<日期>/` | 否   | `run.json`、`daily.json`（结构化日报）、`sources.json`（源站与前沿源快照），60 天                   |
+| `userData/techdaily/searxng.json`        | 否   | SearXNG 地址、采用的引擎、最近一次测试结果；凭证在凭证文件 `extension:searxng:default`              |
 
 写入：只有 `TechDailyService`；原子写入、校验 UTF-8。`techdaily.sqlite` 丢失时从近 30 天日报 front matter 重建线索（§6.4）。
 
@@ -237,7 +239,7 @@ HN topstories 前 25 条且分数 ≥ 50；GitHub 近 14 天按 topic 创建、�
 
 ## 11. 费用
 
-- DeepSeek：约 36 次搜索 + ≤ 3 次补搜 + ≤ 10 页读取 ≈ 49 次/天 ≈ $0.04/天、约 $1.1/月。
+- DeepSeek：Argus 词表实际 54 个搜索词 + ≤ 3 次补搜 + ≤ 10 页读取 ≈ 67 次/天 ≈ $0.05/天、约 $1.5/月（早先按 36 次估算偏低）。
 - SearXNG：搜索免费；读取原文可选 DeepSeek。
 - 前沿源与榜单源站：免费公开页面。AI：本机 Codex / Claude Code。
 - 日报自有每日上限默认 80 次 DeepSeek 调用，同时计入联网搜索每月总上限。
@@ -276,3 +278,33 @@ HN topstories 前 25 条且分数 ≥ 50；GitHub 近 14 天按 topic 创建、�
 - **科技日报要不要独立 GitHub 仓库？** 建议不要，见 §10.1。独立仓库意味着第二个同步绑定和第二套状态，违背 ADR 0026；
   唯一正当理由是公开发布，那属于发布功能，另行设计。
 - **去重靠 AI 抽字段，会不会漏合或误合？** 会漏合（抽取措辞不一），不会大量误合：动作固定一组、对象须是专有名词、型号数字冲突直接判不同。漏合的代价是同一件事多出现一次；抽取整体失败时退回只按网址去重，并在执行详情标出。
+
+## 15. 实现进度
+
+### 15.1 已实现（2026-11-25）：配置与搜索采集
+
+用户现在能做：在“项目设置 · 我的空间”里看到“科技日报”段落，开启、选搜索服务（DeepSeek 沿用联网搜索；或 SearXNG 填地址、
+可选 Basic 凭证、采用的引擎并“测试连接”），调时效天数、每词条数、单次调用上限、是否保留无日期结果，保存到
+`科技日报/设置.yaml`；点“试采一轮”按词表每个搜索词搜一次，看到各领域漏斗（原始 → 黑名单 → 引擎 → 排除词 → 过期 → 跑题 →
+同网址 → 留下）、带日期比例和最新 30 篇，结果写入本机 `techdaily.sqlite`。
+
+还不能做：生成日报（AI 线索抽取、精选、成稿、榜单、前沿源）、侧栏“科技日报”与日历、每日定时与补生成（ADR 0027）。
+
+| 部分         | 位置                                                                                                  | 说明                                                                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 类型与校验   | `src/shared/techdaily/techdaily-types.ts`                                                             | `设置.yaml` 键名与 Argus 一致，可直接粘贴 Argus `queries.yaml`；未知键保留                                                                         |
+| IPC          | `src/shared/ipc/techdaily*.ts`、`src/main/techdaily/techdaily-ipc.ts`、`src/preload/techdaily-api.ts` | 7 个受信调用，只服务“我的空间”；不返回 SearXNG 密码                                                                                                |
+| 设置文件     | `src/main/techdaily/settings-file.ts`                                                                 | 只改页面上的 6 个开关，保留注释和手写内容；修订号防覆盖外部修改                                                                                    |
+| 网址与过滤   | `url-rules.ts`、`filters.ts`                                                                          | 照搬 Argus：网址规范化、11 种网址日期、两级时效、域名黑名单、引擎白名单、排除词、标题护栏                                                          |
+| 搜索服务     | `search-providers.ts`                                                                                 | DeepSeek 经 `WebSearchService`（来源“科技日报”，计入每月上限）；SearXNG 固定 `categories=news`、不传 `time_range`、同主机间隔 3.5 秒、429 退避两次 |
+| 采集与本机库 | `techdaily-service.ts`、`techdaily-store.ts`                                                          | 领域内、跨领域按网址合并；达到单次上限或服务不可用即停，已搜到的保留                                                                               |
+| 界面         | `src/renderer/src/features/techdaily/TechDailySettingsSection.tsx`                                    | 挂在项目设置“我的空间”下，本机侧栏之前                                                                                                             |
+
+验证：`src/main/techdaily/*.test.ts` 40 项单测；全量 `pnpm test` 4269 项通过、`pnpm typecheck`、`pnpm lint` 通过；
+真实 Electron 验收见 [科技日报验收](../testing/techdaily.md)。
+
+### 15.2 下一步
+
+1. 用户在 Studio 设置里启用 DeepSeek 联网搜索后，点“试采一轮”完成阶段 0 的 DeepSeek 一半（约 54 次，约 $0.04）；
+   SearXNG 地址提供后同样试采，对比两边的留下篇数与带日期比例。Argus 当日入选的覆盖率需要 Argus 当天的 `daily.json`。
+2. 线索抽取与 `leads` 表（§6.2–6.3），然后进入阶段 2“手动生成一份”。

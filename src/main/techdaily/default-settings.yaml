@@ -1,0 +1,130 @@
+# 科技日报设置（我的空间 · 随同步）
+#
+# 词表照搬 Argus techdaily 的 queries.yaml（2026-11-25 用户提供），键名保持一致，
+# 可以把 Argus 的 queries.yaml 整段粘进来。下面几项是 Studio 新增的开关，也可在
+# “项目设置 · 我的空间 · 科技日报”里改：
+# - enabled：是否开启科技日报
+# - search_provider：deepseek（沿用“联网搜索”的 Key）或 searxng（地址只存本机）
+# - keep_undated：网址和搜索结果都没有日期时是否保留（Argus 默认保留）
+# - results_per_query：每个搜索词取前几条
+# - daily_call_limit：一次生成最多调用几次搜索；0 表示只受联网搜索每月上限约束
+#
+# 约定（Argus）：
+# - queries.zh 用中文搜索，queries.en 用英文搜索
+# - match 为标题护栏词：该领域结果标题须命中 match 或搜索词核心词之一；
+#   corp 必配（巨头名即护栏），其余可省
+# - 领域边界（跨领域重复按网址合并，归首个命中的领域）：
+#   ai_chip=算力芯片 vs chip=制造；embodied=具身浪潮 vs robot=传统机器人；corp=跨领域兜底
+
+enabled: false
+search_provider: deepseek
+freshness_days: 3
+keep_undated: true
+results_per_query: 15
+daily_call_limit: 80
+
+domains:
+  - id: model_cap
+    name: 模型能力
+    queries:
+      zh:
+        [
+          '大模型 发布',
+          '大模型 榜单 评测',
+          '大模型 跑分',
+          'DeepSeek 发布',
+          '智谱 开源',
+          'Kimi MiniMax 混元',
+        ]
+      en: ['LLM release', 'LLM benchmark leaderboard', 'SWE-bench', 'Anthropic Claude'] # Claude 专项：实测 en 召回39条真新闻（zh 查询全是官网/百科垃圾）
+
+  - id: model_arch
+    name: 模型架构
+    queries:
+      zh: ['模型架构', 'MoE 架构', '新架构 大模型']
+      en: ['model architecture', 'mixture of experts', 'novel LLM architecture']
+
+  - id: ai_chip
+    name: AI 芯片与显卡
+    queries:
+      zh: ['AI 芯片 发布', 'GPU 算力', '国产 GPU'] # 寒武纪/摩尔线程/沐曦/壁仞走这条
+      en: ['AI accelerator', 'GPU datacenter', 'custom AI chip'] # TPU/Trainium/Maia 云自研
+
+  - id: chip
+    name: 芯片制造
+    queries:
+      zh: ['芯片 制程 量产', '晶圆厂 设备']
+      en: ['chip fab process node', 'semiconductor foundry']
+
+  - id: corp
+    name: 科技巨头动态
+    match:
+      [
+        'OpenAI',
+        'Anthropic',
+        'Google',
+        'DeepMind',
+        'Meta',
+        '微软',
+        '苹果',
+        '英伟达',
+        '字节',
+        '阿里',
+        '腾讯',
+        '百度',
+        '小米',
+        '特斯拉',
+        'NVIDIA',
+        'AMD',
+        'Intel',
+        '亚马逊',
+        '谷歌',
+      ]
+    queries:
+      zh: ['字节 阿里 AI', '腾讯 百度 发布']
+      en: ['OpenAI Anthropic Google', 'Meta Microsoft AI']
+
+  - id: embodied
+    name: 具身智能
+    queries:
+      zh: ['具身智能 模型', '人形机器人 融资', '具身智能 应用 落地', '智元 优必选']
+      en:
+        ['embodied AI model', 'humanoid robot funding', 'Figure humanoid', 'Physical Intelligence']
+
+  - id: robot
+    name: 机器人
+    queries:
+      zh: ['工业机器人 服务机器人', '机器人 发布']
+      en: ['robotics launch', 'robot deployment']
+
+  - id: ar
+    name: AR/VR
+    queries:
+      zh: ['AR 眼镜 发布', 'VR 头显', '智能眼镜'] # PICO/Rokid/XREAL/雷鸟多走这条
+      en: ['AR glasses launch', 'VR headset']
+
+  - id: bioai
+    name: 生物×AI
+    match: ['Neuralink', 'Synchron', '脑机接口', '外骨骼'] # BCI 头部公司：标题护栏
+    queries:
+      zh: ['脑机接口', '外骨骼', 'AI 生物 突破']
+      en: ['NeuroAI', 'protein design AI', 'brain computer interface', 'exoskeleton']
+
+# 标题命中即丢（垃圾护栏，运行中观察追加）
+exclude_keywords: ['招聘', '课程', '优惠券', '讲座', '白皮书下载', '华为', '昇腾', '鸿蒙'] # 黑名单品牌（2026-09-21 口味反馈）
+
+# 追加的域名黑名单（在 Argus 内置黑名单之外）
+domain_denylist: []
+
+# 选题口味（精选时交给 AI；改这里不用动代码）
+taste:
+  # 一律不选的品牌（含标题不含品牌词但内容明显的，精选层兜底）
+  blacklist_brands: ['华为', '昇腾', '鸿蒙']
+  # 选题偏好（写给选题编辑看的规则）
+  preferences: |
+    - 模型架构：只收有实质创新的架构进展（新范式、关键能力跃迁、可复现的重要成果）；
+      不收国内二三线公司的常规开源/发布跟进
+    - 公司动态：不收法务/诉讼/监管/反垄断类新闻；要的是产品与服务——
+      新模型、新产品、价格调整（降价/涨价/优惠）、服务变化、技术创新
+    - 同等条件下，海外前沿实验室（OpenAI/Anthropic/Google DeepMind/Meta/Mistral 等）
+      的动作优先级高于国内厂商

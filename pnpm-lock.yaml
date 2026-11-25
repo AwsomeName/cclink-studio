@@ -107,6 +107,9 @@ importers:
       xhr2:
         specifier: 0.2.1
         version: 0.2.1
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
       yauzl:
         specifier: ^3.3.2
         version: 3.3.2

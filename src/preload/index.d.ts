@@ -6,6 +6,7 @@ import type { CadApiContract } from '../shared/ipc/cad'
 import type { DataSourceApiContract } from '../shared/ipc/data-source'
 import type { CompanyAccountsApiContract } from '../shared/ipc/company-accounts'
 import type { WebSearchApiContract } from '../shared/ipc/web-search'
+import type { TechDailyApiContract } from '../shared/ipc/techdaily'
 import type { DiagnosticsApiContract } from '../shared/ipc/diagnostics'
 import type { CredentialsApiContract } from '../shared/ipc/credentials'
 import type { DialogApiContract } from '../shared/ipc/dialog'
@@ -61,6 +62,7 @@ export interface CCLinkStudioAPI {
 
   companyAccounts: CompanyAccountsApiContract
   webSearch: WebSearchApiContract
+  techDaily: TechDailyApiContract
   companyWorkspace: CompanyWorkspaceApiContract
 
   diagnostics: DiagnosticsApiContract

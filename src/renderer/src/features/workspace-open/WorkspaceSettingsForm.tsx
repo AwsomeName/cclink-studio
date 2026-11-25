@@ -17,6 +17,7 @@ import { showWorkspaceHome } from './workspace-home-navigation'
 import { openWorkspaceRef } from './workspace-open-controller'
 import { useTabStore } from '../../stores/tab-store'
 import './workspace-settings.css'
+import { TechDailySettingsSection } from '../techdaily/TechDailySettingsSection'
 
 const descriptions: Record<WorkspaceType, string> = {
   general: '项目首页、文件、会话与通用工具',
@@ -385,6 +386,7 @@ export function WorkspaceSettingsForm(): React.ReactElement {
           重新加载
         </button>
       </div>
+      {isPersonal && <TechDailySettingsSection workspaceRef={ref} />}
       <SidebarPreferences />
     </section>
   )

@@ -1,5 +1,11 @@
 /** Who made a web search call; used for the per-source usage breakdown. */
-export type WebSearchSource = 'codex' | 'claude-code' | 'owner' | 'decision' | 'verify'
+export type WebSearchSource =
+  | 'codex'
+  | 'claude-code'
+  | 'owner'
+  | 'decision'
+  | 'verify'
+  | 'techdaily'
 
 export const WEB_SEARCH_SOURCE_LABELS: Record<WebSearchSource, string> = {
   codex: 'Codex 会话',
@@ -7,6 +13,7 @@ export const WEB_SEARCH_SOURCE_LABELS: Record<WebSearchSource, string> = {
   owner: 'Owner 调研',
   decision: '公司 · 帮我想清楚',
   verify: '设置 · 验证',
+  techdaily: '科技日报',
 }
 
 /** Which agents may see web_search / web_fetch once the service is enabled. */
