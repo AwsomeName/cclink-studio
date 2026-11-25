@@ -4,6 +4,7 @@ import {
   type ModelUsageRecord,
   type NormalizedUsage,
   type RawUsage,
+  type UsageProtocol,
 } from '../../shared/model-usage'
 
 const numericKeys = new Set([
@@ -15,6 +16,10 @@ const numericKeys = new Set([
   'reasoning_tokens',
   'ephemeral_5m_input_tokens',
   'ephemeral_1h_input_tokens',
+  // OpenAI Responses / Codex token_count fields.
+  'cached_input_tokens',
+  'cache_write_input_tokens',
+  'reasoning_output_tokens',
 ])
 const objectKeys = new Set(['output_tokens_details', 'cache_creation'])
 
@@ -38,6 +43,24 @@ export function sanitizeUsage(value: unknown): RawUsage {
   }
   return result
 }
+const codexCamelKeys: Record<string, string> = {
+  inputTokens: 'input_tokens',
+  cachedInputTokens: 'cached_input_tokens',
+  cacheWriteInputTokens: 'cache_write_input_tokens',
+  outputTokens: 'output_tokens',
+  reasoningOutputTokens: 'reasoning_output_tokens',
+  totalTokens: 'total_tokens',
+}
+/** App-server TokenUsageBreakdown (camelCase) or rollout token_count (snake_case) → snake_case. */
+export function codexBreakdown(value: unknown): RawUsage {
+  const result: RawUsage = {}
+  for (const [key, item] of Object.entries(object(value))) {
+    const name = codexCamelKeys[key] ?? key
+    if ((numericKeys.has(name) || name === 'total_tokens') && number(item) !== null)
+      result[name] = item as number
+  }
+  return result
+}
 export function mergeUsage(previous: RawUsage, next: RawUsage): RawUsage {
   const merged = { ...previous }
   for (const [key, value] of Object.entries(next)) {
@@ -49,7 +72,11 @@ export function mergeUsage(previous: RawUsage, next: RawUsage): RawUsage {
   }
   return merged
 }
-export function normalizeUsage(raw: RawUsage): NormalizedUsage {
+export function normalizeUsage(
+  raw: RawUsage,
+  protocol: UsageProtocol = 'anthropic-messages',
+): NormalizedUsage {
+  if (protocol === 'openai-responses') return normalizeOpenAiUsage(raw)
   const details = object(raw.output_tokens_details)
   return {
     input: number(raw.input_tokens),
@@ -64,8 +91,27 @@ export function normalizeUsage(raw: RawUsage): NormalizedUsage {
     outputIncludesThinking: true,
   }
 }
+/**
+ * OpenAI input_tokens already contains cached and cache-write input (Codex reports
+ * total_tokens = input_tokens + output_tokens). Split cache out so totals stay comparable with
+ * the Anthropic caliber: input excludes cache, output includes reasoning.
+ */
+function normalizeOpenAiUsage(raw: RawUsage): NormalizedUsage {
+  const input = number(raw.input_tokens)
+  const cacheRead = number(raw.cached_input_tokens)
+  const cacheWrite = number(raw.cache_write_input_tokens)
+  return {
+    input: input === null ? null : Math.max(0, input - (cacheRead ?? 0) - (cacheWrite ?? 0)),
+    output: number(raw.output_tokens),
+    cacheRead,
+    cacheWrite,
+    thinking: number(raw.reasoning_output_tokens),
+    inputIncludesCache: false,
+    outputIncludesThinking: true,
+  }
+}
 export function withCoverage(record: ModelUsageRecord): ModelUsageRecord {
-  const normalized = normalizeUsage(record.rawUsage)
+  const normalized = normalizeUsage(record.rawUsage, record.protocol)
   // Assistant events can carry a message_start placeholder, even when the run succeeds.
   if (record.outputEvidence === 'unverified') {
     normalized.output = null

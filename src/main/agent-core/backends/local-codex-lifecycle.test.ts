@@ -390,4 +390,69 @@ describe('Codex lifecycle and authorization', () => {
     expect(fake.messages.some((r) => r.method === 'thread/start')).toBe(false)
     expect(host.cancelToolSession).toHaveBeenCalledWith('fixture-session')
   })
+  it('forwards per-response token usage to the usage observer and finishes it with the run status', async () => {
+    const observe = vi.fn()
+    const finish = vi.fn()
+    const createUsageObserver = vi.fn(() => ({ observe, finish }))
+    const host = fixture().host
+    const backend = new LocalCodexBackend(host as unknown as McpToolHost, () => '/workspace', {
+      createUsageObserver,
+      codexHome: '/codex-home',
+    })
+    fake.policyExtras = { model: 'gpt-test' }
+    const run = backend.sendMessage('hello', { runId: 'run-1', conversationId: 'conv-1' })
+    await started()
+    expect(createUsageObserver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'run-1',
+        conversationId: 'conv-1',
+        sessionId: 'native-thread',
+        provider: 'openai',
+        codexHome: '/codex-home',
+      }),
+    )
+    const tokenUsage = { last: { totalTokens: 10 }, total: { totalTokens: 10 } }
+    fake.incoming?.({
+      method: 'thread/tokenUsage/updated',
+      params: { threadId: 'native-thread', turnId: 'native-turn', tokenUsage },
+    })
+    // Notifications for another thread are not this run's usage.
+    fake.incoming?.({
+      method: 'thread/tokenUsage/updated',
+      params: { threadId: 'other-thread', turnId: 'x', tokenUsage },
+    })
+    complete()
+    await run
+    expect(observe).toHaveBeenCalledTimes(1)
+    expect(observe).toHaveBeenCalledWith({
+      type: 'codex_token_usage',
+      session_id: 'native-thread',
+      model: 'gpt-test',
+      ...tokenUsage,
+    })
+    expect(finish).toHaveBeenCalledWith('succeeded')
+  })
+  it('keeps running when the usage observer throws', async () => {
+    const host = fixture().host
+    const backend = new LocalCodexBackend(host as unknown as McpToolHost, () => '/workspace', {
+      createUsageObserver: () => ({
+        observe: () => {
+          throw new Error('usage down')
+        },
+        finish: () => {
+          throw new Error('usage down')
+        },
+      }),
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const run = backend.sendMessage('hello')
+    await started()
+    fake.incoming?.({
+      method: 'thread/tokenUsage/updated',
+      params: { threadId: 'native-thread', tokenUsage: { last: {}, total: {} } },
+    })
+    complete()
+    await expect(run).resolves.toBeUndefined()
+    expect(fake.markRunSucceeded).toHaveBeenCalled()
+  })
 })

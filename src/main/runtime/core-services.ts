@@ -1,5 +1,11 @@
 import { app, dialog, shell, type Event } from 'electron'
 import { join, resolve } from 'node:path'
+import {
+  companySyncHooks,
+  countCompanyRows,
+  describeRecordConflict,
+} from '../company-sync/company-sync'
+import { readWorkspaceSettings } from '../workspace/workspace-settings-files'
 import { LocalIdentityService } from '../identity/local-identity-service'
 import { registerIdentityIpc } from '../identity/identity-ipc'
 import { FileService } from '../fs/file-service'
@@ -561,6 +567,53 @@ export async function bootstrapMainProcessServices(
         } catch {
           return null
         }
+      },
+      companyPreview: async (root) => {
+        const { settings } = await readWorkspaceSettings(root)
+        if (settings.type !== 'company') return undefined
+        const ledger = join(root, '.cclink-studio', 'company-accounts')
+        return countCompanyRows({
+          company: {
+            path: join(root, '.cclink-studio', 'company-workspace', 'company.sqlite'),
+            create: async () => {},
+          },
+          accounts: {
+            path: join(ledger, 'accounts.sqlite'),
+            documents: '',
+            create: async () => {},
+          },
+        })
+      },
+      projectHooks: async (root) => {
+        const { settings } = await readWorkspaceSettings(root)
+        if (settings.type !== 'company') return undefined
+        const workspaceId = await runtime.workspaceStateService?.getLocalProjectId(root)
+        if (!workspaceId) return undefined
+        const target = { workspacePath: root, workspaceId }
+        const ledger = join(root, '.cclink-studio', 'company-accounts')
+        const hooks = companySyncHooks(root, {
+          company: {
+            path: join(root, '.cclink-studio', 'company-workspace', 'company.sqlite'),
+            create: async () => {
+              if (!runtime.companyWorkspaceService) throw Error('公司服务未就绪')
+              await runtime.companyWorkspaceService.ensureDatabaseForSync(target)
+            },
+          },
+          accounts: {
+            path: join(ledger, 'accounts.sqlite'),
+            documents: join(ledger, 'documents'),
+            create: async () => {
+              if (!runtime.companyAccountsService) throw Error('公司账目服务未就绪')
+              runtime.companyAccountsService.initializeForWorkspace(root)
+            },
+          },
+          changed: () => void runtime.companyWorkspaceService?.notifySynced(target).catch(() => {}),
+        })
+        return { ...hooks, describeRecordConflict }
+      },
+      assertPrivateRepository: async (remoteUrl) => {
+        if (!runtime.gitBackupService) throw Error('GitHub 账号服务未就绪')
+        return runtime.gitBackupService.assertPrivateRepository(remoteUrl)
       },
     })
     registerGitIpc(runtime.gitWorkspaceService, runtime.trustedRendererGuard, runtime.fileService)

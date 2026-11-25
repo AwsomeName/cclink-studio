@@ -4,6 +4,7 @@ import {
   type GitTransferResult,
 } from './git-transfer'
 import { bindIpcParser, defineIpcCall } from '../ipc/contract'
+import type { ProjectSyncPreview } from './project-sync'
 import type {
   GitCommitInput,
   GitDiffRequest,
@@ -22,6 +23,9 @@ export const gitIpc = {
   getDiff: defineIpcCall<[input: GitDiffRequest], GitDiffResult>('git:getDiff'),
   commit: defineIpcCall<[input: GitCommitInput], GitOperationResult>('git:commit'),
   push: defineIpcCall<[input: GitPushInput], GitOperationResult>('git:push'),
+  previewProjectSync: defineIpcCall<[workspacePath: string], ProjectSyncPreview>(
+    'git:previewProjectSync',
+  ),
 } as const
 
 export const gitIpcContracts = {
@@ -105,6 +109,11 @@ export const gitIpcContracts = {
       throw new Error('Git Push 请求无效')
     }
     return [input as GitPushInput]
+  }),
+  previewProjectSync: bindIpcParser(gitIpc.previewProjectSync, (args): [workspacePath: string] => {
+    if (args.length !== 1 || typeof args[0] !== 'string' || !isValidWorkspacePath(args[0].trim()))
+      throw new Error('项目路径无效')
+    return [args[0].trim()]
   }),
 } as const
 

@@ -30,6 +30,8 @@ export interface ModelUsageContext {
   provider?: string | null
   instanceId?: string | null
   transcriptRoot?: string
+  /** Codex home whose sessions/ holds this run's rollout; enables incremental reconcile. */
+  codexHome?: string
 }
 export interface ModelUsageObserver {
   observe(event: unknown): void
@@ -53,6 +55,17 @@ export const normalizedUsageSchema = z
   })
   .strict()
 export type NormalizedUsage = z.infer<typeof normalizedUsageSchema>
+export const usageProtocols = ['anthropic-messages', 'openai-responses'] as const
+export type UsageProtocol = (typeof usageProtocols)[number]
+export const usageSources = [
+  'claude-sdk',
+  'claude-transcript',
+  'codex-app-server',
+  'codex-rollout',
+] as const
+export type UsageSource = (typeof usageSources)[number]
+/** Live sources carry Studio run attribution; log replays never overwrite it. */
+export const liveUsageSources: readonly UsageSource[] = ['claude-sdk', 'codex-app-server']
 export type RawUsage = { [key: string]: number | RawUsage }
 export const rawUsageSchema: z.ZodType<RawUsage> = z.lazy(() =>
   z.record(
@@ -82,9 +95,9 @@ export const modelUsageRecordSchema = z
     status: z.enum(['in-progress', 'succeeded', 'failed', 'interrupted', 'unknown']),
     durationMs: token,
     timingBasis: z.enum(['observed-stream', 'unavailable']),
-    sources: z.array(z.enum(['claude-sdk', 'claude-transcript'])),
+    sources: z.array(z.enum(usageSources)),
     estimated: z.literal(false),
-    protocol: z.literal('anthropic-messages'),
+    protocol: z.enum(usageProtocols),
     rawUsage: rawUsageSchema,
     normalized: normalizedUsageSchema,
     final: z.boolean(),

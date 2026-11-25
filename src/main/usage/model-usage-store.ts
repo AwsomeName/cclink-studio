@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import {
+  liveUsageSources,
   modelUsageRecordSchema,
   usageConfigSchema,
   usageRunSchema,
@@ -73,8 +74,9 @@ export class ModelUsageStore {
       let merged = next
       if (previous) {
         // Live metadata is richer; transcript replay must not erase it or its origin identity.
-        const preferNext =
-          next.sources.includes('claude-sdk') || !previous.sources.includes('claude-sdk')
+        const live = (row: ModelUsageRecord) =>
+          row.sources.some((source) => liveUsageSources.includes(source))
+        const preferNext = live(next) || !live(previous)
         const preferred = preferNext ? next : previous
         const fallback = preferNext ? previous : next
         merged = {

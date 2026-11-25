@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>科技日报架构图</title>
+    <style>
+      :root {
+        --bg: #1e1e1e; --panel: #252526; --box: #2d2d2d; --line: #5a5a5a; --border: #3c3c3c;
+        --text: #cccccc; --strong: #e7e7e7; --muted: #969696; --accent: #4d9cf8; --ok: #4caf7a;
+        --warn: #d7a03a; --err: #e06c6c; --ai: #b48cf2; --ext: #d7a03a;
+        --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+      }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.6 var(--font); }
+      main { max-width: 1240px; margin: 0 auto; padding: 24px 20px 60px; }
+      h1 { color: var(--strong); font-size: 20px; margin: 0 0 4px; }
+      h2 { color: var(--strong); font-size: 16px; margin: 0 0 6px; }
+      section { border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; margin: 18px 0; background: #1b1b1b; }
+      p.note { color: var(--muted); margin: 0 0 10px; }
+      svg { width: 100%; height: auto; display: block; }
+      svg text { font-family: var(--font); fill: var(--text); font-size: 13px; }
+      svg .t { fill: var(--strong); font-weight: 600; }
+      svg .m { fill: var(--muted); font-size: 12px; }
+      svg .s { font-size: 12px; }
+      svg .box { fill: var(--box); stroke: var(--border); }
+      svg .grp { fill: var(--panel); stroke: var(--border); }
+      svg .own { fill: rgba(77,156,248,.10); stroke: var(--accent); }
+      svg .aiB { fill: rgba(180,140,242,.12); stroke: var(--ai); }
+      svg .extB { fill: rgba(215,160,58,.10); stroke: var(--ext); }
+      svg .okB { fill: rgba(76,175,122,.12); stroke: var(--ok); }
+      svg .errB { fill: rgba(224,108,108,.10); stroke: var(--err); }
+      svg .ln { stroke: var(--line); stroke-width: 1.4; fill: none; }
+      svg .lnA { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+      svg .lnE { stroke: var(--err); stroke-width: 1.3; fill: none; stroke-dasharray: 4 3; }
+      .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+      .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 5px; border: 1px solid; }
+      table { border-collapse: collapse; width: 100%; font-size: 12.5px; margin-top: 10px; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      th { color: var(--muted); font-weight: 500; }
+      code { font-family: 'SF Mono', Menlo, monospace; font-size: 12px; color: var(--strong); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>科技日报：架构、流程、存储与去重</h1>
+      <p class="note">复刻 Argus techdaily，按 Studio 架构宪法落地：一个状态所有者、一个调度者、不用系统钥匙串、本地功能不依赖日报。</p>
+      <div class="legend">
+        <span><i style="background:rgba(77,156,248,.10);border-color:#4d9cf8"></i>Studio 主进程（确定性代码）</span>
+        <span><i style="background:rgba(180,140,242,.12);border-color:#b48cf2"></i>AI（纯文本，只做语义判断与写作）</span>
+        <span><i style="background:rgba(215,160,58,.10);border-color:#d7a03a"></i>外部服务</span>
+        <span><i style="background:rgba(76,175,122,.12);border-color:#4caf7a"></i>存储</span>
+      </div>
+
+      <!-- ① 架构图 -->
+      <section id="arch">
+        <h2>① 架构图</h2>
+        <p class="note">TechDailyService 是科技日报唯一的状态所有者；定时任务服务只负责“什么时候跑”。界面只经类型化 IPC 读写，不直连文件和网络。</p>
+        <svg viewBox="0 0 1200 820" role="img" aria-label="科技日报架构图">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5a5a5a" /></marker>
+            <marker id="arA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4d9cf8" /></marker>
+          </defs>
+          <rect class="grp" x="16" y="40" width="236" height="470" rx="8" />
+          <text class="t" x="30" y="66">界面（Renderer）</text>
+          <rect class="box" x="30" y="84" width="208" height="62" rx="6" /><text x="42" y="108">科技日报页</text><text class="m" x="42" y="128">复用日记的 Markdown 编辑器</text>
+          <rect class="box" x="30" y="160" width="208" height="62" rx="6" /><text x="42" y="184">侧栏 + 日历</text><text class="m" x="42" y="204">圆点 = 那天有日报；点日期看当天</text>
+          <rect class="box" x="30" y="236" width="208" height="62" rx="6" /><text x="42" y="260">项目设置 · 科技日报</text><text class="m" x="42" y="280">搜索服务、栏目、领域、口味</text>
+          <rect class="box" x="30" y="312" width="208" height="62" rx="6" /><text x="42" y="336">定时整理</text><text class="m" x="42" y="356">与每日起草同列的运行历史</text>
+          <rect class="box" x="30" y="388" width="208" height="62" rx="6" /><text x="42" y="412">执行详情</text><text class="m" x="42" y="432">10 步状态与证据（只读）</text>
+
+          <rect class="grp" x="280" y="40" width="170" height="470" rx="8" />
+          <text class="t" x="294" y="66">IPC 契约（Zod）</text>
+          <text class="s" x="294" y="98">techDaily.listMonth</text>
+          <text class="s" x="294" y="122">techDaily.getDay</text>
+          <text class="s" x="294" y="146">techDaily.getRun</text>
+          <text class="s" x="294" y="170">techDaily.generate / stop</text>
+          <text class="s" x="294" y="194">techDaily.getSettings</text>
+          <text class="s" x="294" y="218">techDaily.saveSettings</text>
+          <text class="s" x="294" y="242">techDaily.testSearxng</text>
+          <text class="s" x="294" y="266">techDaily.feedback</text>
+          <text class="m" x="294" y="300">事件：</text>
+          <text class="s" x="294" y="322">techDaily:run-progress</text>
+          <text class="m" x="294" y="356">只返回计数、状态、</text>
+          <text class="m" x="294" y="376">文件路径；不返回 Key</text>
+          <text class="m" x="294" y="396">或 SearXNG 凭证</text>
+
+          <rect class="grp" x="478" y="40" width="452" height="610" rx="8" />
+          <text class="t" x="492" y="66">主进程</text>
+          <rect class="own" x="492" y="80" width="424" height="44" rx="6" /><text x="504" y="107">定时任务服务（唯一调度者）：到点 · 启动补生成 · 手动 → run(日期)</text>
+          <rect class="own" x="492" y="138" width="424" height="314" rx="6" />
+          <text class="t" x="504" y="162">TechDailyService（科技日报唯一状态所有者）</text>
+          <rect class="box" x="504" y="176" width="196" height="50" rx="5" /><text x="514" y="198">采集 Collector</text><text class="m" x="514" y="216">按提供方逐领域逐词搜索</text>
+          <rect class="box" x="710" y="176" width="196" height="50" rx="5" /><text x="720" y="198">L0 过滤（纯函数）</text><text class="m" x="720" y="216">黑名单·排除词·时效·护栏</text>
+          <rect class="box" x="504" y="236" width="196" height="50" rx="5" /><text x="514" y="258">L1 合并 + L2 候选库</text><text class="m" x="514" y="276">规范化网址为键，幂等</text>
+          <rect class="box" x="710" y="236" width="196" height="50" rx="5" /><text x="720" y="258">前沿源 + 热点补采</text><text class="m" x="720" y="276">HN · GitHub · arXiv</text>
+          <rect class="aiB" x="504" y="296" width="196" height="50" rx="5" /><text x="514" y="318">精选 / 成稿 Digest</text><text class="m" x="514" y="336">L3 归组 · 写稿（AI）</text>
+          <rect class="box" x="710" y="296" width="196" height="50" rx="5" /><text x="720" y="318">事件登记 L4</text><text class="m" x="720" y="336">相似事件名兜底</text>
+          <rect class="box" x="504" y="356" width="196" height="50" rx="5" /><text x="514" y="378">渲染与核对</text><text class="m" x="514" y="396">回填网址/日期，写 Markdown</text>
+          <rect class="box" x="710" y="356" width="196" height="50" rx="5" /><text x="720" y="378">模型能力榜</text><text class="m" x="720" y="396">源站分数 + 新闻维护</text>
+          <text class="m" x="504" y="434">运行记录：10 步状态、各领域漏斗、错误 → run-progress 事件</text>
+
+          <rect class="own" x="492" y="472" width="196" height="76" rx="6" /><text x="502" y="496">凭证文件</text><text class="m" x="502" y="516">userData，权限收紧</text><text class="m" x="502" y="534">不用系统钥匙串</text>
+          <rect class="own" x="720" y="472" width="196" height="48" rx="6" /><text x="730" y="492">WebSearchService</text><text class="m" x="730" y="510">DeepSeek Key · 用量 · 上限</text>
+          <rect class="own" x="720" y="530" width="196" height="48" rx="6" /><text x="730" y="550">SearXNG 提供方</text><text class="m" x="730" y="568">地址/凭证只在本机</text>
+          <rect class="own" x="720" y="588" width="196" height="48" rx="6" /><text x="730" y="608">AgentBridge</text><text class="m" x="730" y="626">纯文本：无工具、不联网</text>
+          <path class="ln" d="M704 452 V612" />
+          <path class="ln" d="M704 496 H718" marker-end="url(#ar)" />
+          <path class="ln" d="M704 554 H718" marker-end="url(#ar)" />
+          <path class="ln" d="M704 612 H718" marker-end="url(#ar)" />
+          <path class="ln" d="M690 510 H702" marker-start="url(#ar)" />
+
+          <rect class="grp" x="958" y="40" width="226" height="610" rx="8" />
+          <text class="t" x="972" y="66">外部</text>
+          <rect class="extB" x="972" y="236" width="198" height="50" rx="6" /><text x="984" y="257">HN / GitHub / arXiv</text><text class="m" x="984" y="276">公开 API，免费</text>
+          <rect class="extB" x="972" y="356" width="198" height="50" rx="6" /><text x="984" y="377">llm-stats / AA</text><text class="m" x="984" y="396">公开榜单页，每天 ≤ 6 页</text>
+          <rect class="extB" x="972" y="472" width="198" height="48" rx="6" /><text x="984" y="492">DeepSeek</text><text class="m" x="984" y="510">/v1/tools/search · /fetch</text>
+          <rect class="extB" x="972" y="530" width="198" height="48" rx="6" /><text x="984" y="550">SearXNG 远程服务</text><text class="m" x="984" y="568">用户自建，categories=news</text>
+          <rect class="extB" x="972" y="588" width="198" height="48" rx="6" /><text x="984" y="608">本机 Codex / Claude Code</text><text class="m" x="984" y="626">跟随定时整理的选择</text>
+          <path class="ln" d="M906 261 H970" marker-end="url(#ar)" />
+          <path class="ln" d="M906 381 H970" marker-end="url(#ar)" />
+          <path class="ln" d="M916 496 H970" marker-end="url(#ar)" />
+          <path class="ln" d="M916 554 H970" marker-end="url(#ar)" />
+          <path class="ln" d="M916 612 H970" marker-end="url(#ar)" />
+
+          <rect class="okB" x="16" y="690" width="576" height="116" rx="8" />
+          <text class="t" x="30" y="716">我的空间 · 科技日报/（随 Git 同步）</text>
+          <text class="s" x="30" y="742">设置.yaml（领域、搜索词、护栏、黑名单、口味、栏目）</text>
+          <text class="s" x="30" y="764">事件.json（近 30 天事件登记）· 榜单.json（模型能力榜状态）</text>
+          <text class="s" x="30" y="786">2026/11/1125.md（当天日报，日历与编辑器读取它）</text>
+          <rect class="okB" x="608" y="690" width="576" height="116" rx="8" />
+          <text class="t" x="622" y="716">本机 userData/techdaily/&lt;空间 id&gt;/（不同步）</text>
+          <text class="s" x="622" y="742">candidates.jsonl（候选库 L2，保留 14 天）</text>
+          <text class="s" x="622" y="764">runs/2026-11-25/run.json · daily.json · sources.json</text>
+          <text class="s" x="622" y="786">searxng.json（地址；凭证在凭证文件）</text>
+
+          <path class="lnA" d="M252 270 H278" marker-end="url(#arA)" marker-start="url(#arA)" />
+          <path class="lnA" d="M450 270 H490" marker-end="url(#arA)" marker-start="url(#arA)" />
+          <path class="ln" d="M704 124 V136" marker-end="url(#ar)" />
+          <path class="ln" d="M560 650 V688" marker-end="url(#ar)" />
+          <path class="ln" d="M840 650 V688" marker-end="url(#ar)" />
+          <path class="ln" d="M134 510 V688" marker-end="url(#ar)" marker-start="url(#ar)" />
+          <text class="m" x="142" y="600">界面只经 IPC</text>
+          <text class="m" x="142" y="618">读 Markdown</text>
+        </svg>
+      </section>
+
+      <!-- ② 流程图 -->
+      <section id="flow">
+        <h2>② 每日流程图</h2>
+        <p class="note">10 步与“执行详情”一一对应。增强层（热点补采、前沿源、榜单）失败只跳过，不阻塞日报；主链路失败停在该步并保留已得结果。</p>
+        <svg viewBox="0 0 1200 1160" role="img" aria-label="科技日报每日流程图">
+          <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#5a5a5a" /></marker></defs>
+          <rect class="own" x="300" y="16" width="400" height="44" rx="22" /><text x="500" y="43" text-anchor="middle">触发：到点 06:10 · 打开 Studio 补生成（当天）· 手动</text>
+          <path class="ln" d="M500 60 V78" marker-end="url(#ar2)" />
+          <polygon class="box" points="500,80 640,116 500,152 360,116" /><text x="500" y="112" text-anchor="middle">今天已完成或</text><text x="500" y="130" text-anchor="middle">正在运行？</text>
+          <path class="ln" d="M640 116 H780" marker-end="url(#ar2)" /><text class="m" x="660" y="108">是</text>
+          <rect class="box" x="782" y="96" width="220" height="40" rx="6" /><text x="794" y="121">结束（每天最多自动一次）</text>
+          <path class="ln" d="M500 152 V170" marker-end="url(#ar2)" /><text class="m" x="508" y="166">否</text>
+
+          <g id="steps">
+            <rect class="own" x="300" y="172" width="400" height="54" rx="6" /><text class="t" x="314" y="194">1 检查</text><text class="m" x="314" y="214">搜索服务可用 · AI 可用 · 今日调用余量</text>
+            <rect class="own" x="300" y="244" width="400" height="54" rx="6" /><text class="t" x="314" y="266">2 读取</text><text class="m" x="314" y="286">设置.yaml · 近 5 天事件登记 · 榜单.json</text>
+            <rect class="own" x="300" y="316" width="400" height="66" rx="6" /><text class="t" x="314" y="338">3 按领域搜索并过滤（循环 9 领域 × 搜索词）</text><text class="m" x="314" y="358">每条结果当场过 L0；领域内同网址合并 L1a</text><text class="m" x="314" y="374">串行；单词失败重试 1 次</text>
+            <rect class="own" x="300" y="400" width="400" height="66" rx="6" /><text class="t" x="314" y="422">4 前沿信号与热点补采</text><text class="m" x="314" y="442">读 HN / GitHub / arXiv → AI 列出缺席热点（≤3 词）</text><text class="m" x="314" y="458">→ 补搜，同样过 L0</text>
+            <rect class="own" x="300" y="484" width="400" height="54" rx="6" /><text class="t" x="314" y="506">5 合并入库</text><text class="m" x="314" y="526">跨领域合并 L1b → 写候选库 L2（同网址只更新抓取日）</text>
+            <rect class="own" x="300" y="556" width="400" height="54" rx="6" /><text class="t" x="314" y="578">6 整理候选</text><text class="m" x="314" y="598">抓取日 ≥ 昨天 · 日期降序、无日期殿后 · ≤ 300 · 标已报道</text>
+            <polygon class="box" points="500,626 610,656 500,686 390,656" /><text x="500" y="661" text-anchor="middle">候选 ≥ 8？</text>
+            <rect class="aiB" x="300" y="704" width="400" height="66" rx="6" /><text class="t" x="314" y="726">7 AI 精选 5–10 条</text><text class="m" x="314" y="746">L3 同事件归组 · L4 跨天去重 · 口味</text><text class="m" x="314" y="762">代码校验编号；相似事件名兜底复用 uid</text>
+            <rect class="aiB" x="300" y="788" width="400" height="66" rx="6" /><text class="t" x="314" y="810">8 读取原文并成稿</text><text class="m" x="314" y="830">每条 ≤ 1 页 → 头条解读 · 摘要与点评 · 速览 · 趋势</text><text class="m" x="314" y="846">网址、日期、来源数由代码回填</text>
+            <rect class="own" x="300" y="872" width="400" height="66" rx="6" /><text class="t" x="314" y="894">9 更新模型能力榜</text><text class="m" x="314" y="914">源站读取真实分数 → AI 按新闻维护观察区</text><text class="m" x="314" y="930">无证据不改排名</text>
+            <rect class="own" x="300" y="956" width="400" height="66" rx="6" /><text class="t" x="314" y="978">10 保存并核对</text><text class="m" x="314" y="998">渲染 Markdown → 写 1125.md、事件.json、榜单.json</text><text class="m" x="314" y="1014">候选标“已入选 11-25”；剔除缺网址条目</text>
+            <rect class="okB" x="300" y="1040" width="400" height="44" rx="22" /><text x="500" y="1067" text-anchor="middle">完成：侧栏“未读”、日历圆点、编辑器显示</text>
+          </g>
+          <path class="ln" d="M500 226 V242" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 298 V314" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 382 V398" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 466 V482" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 538 V554" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 610 V624" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 686 V702" marker-end="url(#ar2)" /><text class="m" x="508" y="699">是</text>
+          <path class="ln" d="M500 770 V786" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 854 V870" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 938 V954" marker-end="url(#ar2)" />
+          <path class="ln" d="M500 1022 V1038" marker-end="url(#ar2)" />
+
+          <!-- left: failure exits -->
+          <rect class="errB" x="20" y="176" width="250" height="46" rx="6" /><text class="s" x="32" y="196">不可用 → 停在第 1 步</text><text class="m" x="32" y="214">说明原因与去哪里修</text>
+          <path class="lnE" d="M300 199 H272" marker-end="url(#ar2)" />
+          <rect class="errB" x="20" y="320" width="250" height="58" rx="6" /><text class="s" x="32" y="340">达到每日/每月上限</text><text class="m" x="32" y="358">停止搜索，带已得结果继续；</text><text class="m" x="32" y="372">日报标“搜索未完成 24/36”</text>
+          <path class="lnE" d="M300 349 H272" marker-end="url(#ar2)" />
+          <rect class="errB" x="20" y="634" width="250" height="46" rx="6" /><text class="s" x="32" y="654">否 → 写“候选不足”短报</text><text class="m" x="32" y="672">列出各领域结果数，状态 empty</text>
+          <path class="lnE" d="M390 656 H272" marker-end="url(#ar2)" />
+          <rect class="errB" x="20" y="708" width="250" height="58" rx="6" /><text class="s" x="32" y="728">AI 不可用 / JSON 两次失败</text><text class="m" x="32" y="746">停在该步；候选已入库，</text><text class="m" x="32" y="762">“重新成稿”不再搜索</text>
+          <path class="lnE" d="M300 737 H272" marker-end="url(#ar2)" />
+          <path class="lnE" d="M300 821 C 286 821 286 737 272 737" />
+
+          <!-- right: enhancement degradation + outputs -->
+          <rect class="box" x="730" y="404" width="450" height="58" rx="6" /><text class="s" x="742" y="424">增强层失败（HN/GitHub/arXiv/AI 规划）</text><text class="m" x="742" y="442">跳过补采，记入运行记录，不影响主链路</text>
+          <path class="ln" d="M700 433 H728" />
+          <rect class="box" x="730" y="876" width="450" height="58" rx="6" /><text class="s" x="742" y="896">源站失败 → 该榜缺席或只用新闻维护</text><text class="m" x="742" y="914">已有真实分数不被 AI 改回空</text>
+          <path class="ln" d="M700 905 H728" />
+          <rect class="box" x="730" y="316" width="450" height="66" rx="6" /><text class="s" x="742" y="338">每步写运行记录并发 run-progress 事件</text><text class="m" x="742" y="356">执行者 · 开始/结束 · 计数证据 · 等待或失败原因</text><text class="m" x="742" y="372">界面状态只由这些事件推进</text>
+          <rect class="box" x="730" y="960" width="450" height="58" rx="6" /><text class="s" x="742" y="980">退出 Studio → 记 interrupted</text><text class="m" x="742" y="998">下次打开按第一个判断重新生成当天的；不补前一天</text>
+        </svg>
+      </section>
+
+      <!-- ③ 存储方案 -->
+      <section id="storage">
+        <h2>③ 本地存储方案</h2>
+        <p class="note">原则：用户看得懂、要跟着走的放进我的空间（随 Git 同步）；体积大、可重建、只有本机关心的放 userData。不新建数据库，不用系统钥匙串。</p>
+        <svg viewBox="0 0 1200 430" role="img" aria-label="科技日报存储方案">
+          <rect class="okB" x="16" y="16" width="570" height="398" rx="8" />
+          <text class="t" x="32" y="44">我的空间/科技日报/（随 Git 同步）</text>
+          <text class="s" x="32" y="76" style="font-family:SF Mono,Menlo,monospace">科技日报/</text>
+          <text class="s" x="52" y="100" style="font-family:SF Mono,Menlo,monospace">├─ 设置.yaml</text><text class="m" x="250" y="100">领域/搜索词/护栏/黑名单/口味/栏目</text>
+          <text class="s" x="52" y="124" style="font-family:SF Mono,Menlo,monospace">├─ 事件.json</text><text class="m" x="250" y="124">近 30 天事件登记（L4）</text>
+          <text class="s" x="52" y="148" style="font-family:SF Mono,Menlo,monospace">├─ 榜单.json</text><text class="m" x="250" y="148">模型能力榜当前状态，可手改</text>
+          <text class="s" x="52" y="172" style="font-family:SF Mono,Menlo,monospace">└─ 2026/</text>
+          <text class="s" x="72" y="196" style="font-family:SF Mono,Menlo,monospace">└─ 11/</text>
+          <text class="s" x="92" y="220" style="font-family:SF Mono,Menlo,monospace">├─ 1124.md</text>
+          <text class="s" x="92" y="244" style="font-family:SF Mono,Menlo,monospace">└─ 1125.md</text><text class="m" x="250" y="244">当天日报；头部 front matter：</text>
+          <text class="m" x="250" y="262">状态、生成时间、漏斗、事件 uid</text>
+          <text class="s" x="32" y="300">写入者：只有 TechDailyService（原子写入、校验 UTF-8）</text>
+          <text class="s" x="32" y="324">用户可编辑：设置.yaml、榜单.json、日报正文（“让 AI 修改”）</text>
+          <text class="s" x="32" y="348">另一台设备：看到日报和设置；生成任务默认不启用，</text>
+          <text class="s" x="32" y="368">需确认后才在那台运行，避免两台各生成一份</text>
+          <text class="m" x="32" y="396">每年约 365 个 Markdown，单个 10–20 KB</text>
+
+          <rect class="grp" x="614" y="16" width="570" height="398" rx="8" style="stroke:#4caf7a" />
+          <text class="t" x="630" y="44">userData/techdaily/&lt;空间 id&gt;/（只在本机）</text>
+          <text class="s" x="630" y="76" style="font-family:SF Mono,Menlo,monospace">├─ candidates.jsonl</text><text class="m" x="850" y="76">候选库 L2；主键=网址键；保留 14 天</text>
+          <text class="s" x="630" y="100" style="font-family:SF Mono,Menlo,monospace">├─ runs/2026-11-25/</text>
+          <text class="s" x="650" y="124" style="font-family:SF Mono,Menlo,monospace">├─ run.json</text><text class="m" x="850" y="124">10 步状态、各领域漏斗、错误</text>
+          <text class="s" x="650" y="148" style="font-family:SF Mono,Menlo,monospace">├─ daily.json</text><text class="m" x="850" y="148">结构化日报（重新成稿/导出用）</text>
+          <text class="s" x="650" y="172" style="font-family:SF Mono,Menlo,monospace">└─ sources.json</text><text class="m" x="850" y="172">榜单源站快照、HN/GitHub/arXiv</text>
+          <text class="s" x="630" y="196" style="font-family:SF Mono,Menlo,monospace">└─ searxng.json</text><text class="m" x="850" y="196">SearXNG 地址与引擎</text>
+          <text class="s" x="630" y="236">SearXNG 凭证与 DeepSeek Key：凭证文件（userData，</text>
+          <text class="s" x="630" y="256">权限收紧），不进日报目录、不进日志、不回界面</text>
+          <text class="s" x="630" y="292">运行记录保留 60 天；候选库每次运行后清理 14 天前的</text>
+          <text class="s" x="630" y="316">丢了也能恢复：事件登记可从最近 3 份日报头部重建；</text>
+          <text class="s" x="630" y="336">候选库丢失只影响“昨天遗留”和“已报道”标记</text>
+          <text class="m" x="630" y="372">候选库每天约 100 条 × 1 KB；14 天约 1.5 MB</text>
+          <text class="m" x="630" y="396">JSONL 追加写，每次运行结束整体压实一次</text>
+        </svg>
+        <table>
+          <thead><tr><th>候选记录字段（candidates.jsonl 一行）</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td><code>key</code></td><td>规范化网址的 SHA-256 前 16 位（主键）</td></tr>
+            <tr><td><code>url</code> · <code>title</code> · <code>snippet</code></td><td>原始网址（展示与回溯）、标题、摘要 ≤ 500 字</td></tr>
+            <tr><td><code>domain</code> · <code>lang</code></td><td>首次命中的领域；搜索词语言</td></tr>
+            <tr><td><code>publishedAt</code> · <code>dateKnown</code></td><td>发布日期（YYYY-MM-DD）与“是否确知”；无日期不写哨兵值</td></tr>
+            <tr><td><code>firstSeen</code> · <code>lastFetched</code></td><td>首见日不变；再次命中只更新最近抓取日</td></tr>
+            <tr><td><code>queries[]</code> · <code>engines[]</code> · <code>provider</code></td><td>所有命中的搜索词、引擎（SearXNG）、提供方</td></tr>
+            <tr><td><code>selectedOn[]</code></td><td>入选日报的日期；精选时据此标“已报道过”</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ④ 去重方案 -->
+      <section id="dedupe">
+        <h2>④ 去除与去重方案</h2>
+        <p class="note">从结果到入选共 6 层。L0–L2 全部是确定性代码；L3、L4 由 AI 做语义判断，代码校验并兜底。数字为一天的示例。</p>
+        <svg viewBox="0 0 1200 560" role="img" aria-label="科技日报去重漏斗">
+          <g>
+            <rect class="extB" x="20" y="20" width="460" height="56" rx="6" /><text class="t" x="36" y="44">搜索结果 412 条</text><text class="m" x="36" y="64">36 次搜索 × 每次 ≤ 15 条</text>
+            <rect class="own" x="50" y="96" width="400" height="56" rx="6" /><text class="t" x="66" y="120">L0 过滤门 → 126</text><text class="m" x="66" y="140">代码 · 每条结果当场判断</text>
+            <rect class="own" x="80" y="172" width="340" height="56" rx="6" /><text class="t" x="96" y="196">L1a 领域内合并 → 105</text><text class="m" x="96" y="216">代码 · 同一领域同网址</text>
+            <rect class="own" x="105" y="248" width="290" height="56" rx="6" /><text class="t" x="121" y="272">L1b 跨领域合并 → 91</text><text class="m" x="121" y="292">代码 · 先到领域保留</text>
+            <rect class="own" x="125" y="324" width="250" height="56" rx="6" /><text class="t" x="141" y="348">L2 候选库 → 91 候选</text><text class="m" x="141" y="368">新增 74 · 前几天已有 17</text>
+            <rect class="aiB" x="150" y="400" width="200" height="56" rx="6" /><text class="t" x="166" y="424">L3 同事件归组</text><text class="m" x="166" y="444">AI · 11 组</text>
+            <rect class="aiB" x="170" y="476" width="160" height="56" rx="6" /><text class="t" x="186" y="500">L4 跨天去重</text><text class="m" x="186" y="520">AI + 代码 · 入选 8</text>
+          </g>
+          <g>
+            <text class="s" x="520" y="40"><tspan class="t">规则</tspan></text>
+            <text class="s" x="520" y="114">① 网址合法、标题非空　② 域名黑名单（百科、词典、课程、产品官网、仿冒域名）</text>
+            <text class="s" x="520" y="134">③ 排除词　④ 时效：网址日期（11 种形态）→ 结果日期；早于 3 天丢；都没有则保留并标无日期</text>
+            <text class="s" x="520" y="154">⑤ 护栏：标题含搜索核心词或领域词；无日期且只沾品牌词 → 拦（官网落地页）</text>
+            <text class="s" x="520" y="196">网址规范化：小写主机、去端口、去 #、去 utm_/spm/from/share/src/ref… 、参数排序、去尾斜杠</text>
+            <text class="s" x="520" y="216">再次命中：追加搜索词与引擎、日期缺失则补齐，不新增条目</text>
+            <text class="s" x="520" y="272">同一次运行里，后面领域命中前面领域的网址 → 并入；计“跨域合并”</text>
+            <text class="s" x="520" y="292">SearXNG：只采用白名单引擎的结果（engines 参数不可靠）</text>
+            <text class="s" x="520" y="348">跨天：同网址只存一份，首见日不变；取“抓取日 ≥ 昨天”，昨天没选上的还有机会</text>
+            <text class="s" x="520" y="368">曾入选过的候选标“⚠ 已报道过”交给精选</text>
+            <text class="s" x="520" y="424">多家（含中英文）报道同一事件 → 一条代表 + 其余并入，来源数 = 组大小</text>
+            <text class="s" x="520" y="444">代码校验：编号越界、重复使用、also 已被用 → 剔除</text>
+            <text class="s" x="520" y="500">近 5 天事件登记（≤ 120 条，全量给 AI）；已报道默认不选，新进展最多 1 条且不做头条</text>
+            <text class="s" x="520" y="520">AI 自造 uid 丢弃 → 事件名相似度兜底（实体 + 动作组 + 对象；型号冲突、Sonnet≠Opus 硬否决）</text>
+            <text class="m" x="520" y="540">宁可漏合不可错合：错合会把两个真事件永久缝在一起并压制后续报道</text>
+          </g>
+          <path class="ln" d="M480 124 H512" /><path class="ln" d="M420 200 H512" /><path class="ln" d="M395 276 H512" /><path class="ln" d="M375 352 H512" /><path class="ln" d="M350 428 H512" /><path class="ln" d="M330 504 H512" />
+        </svg>
+      </section>
+    </main>
+  </body>
+</html>

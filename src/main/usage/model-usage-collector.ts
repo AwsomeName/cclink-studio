@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { ModelUsageRecord, ModelUsageContext, UsageRun } from '../../shared/model-usage'
+import type {
+  ModelUsageRecord,
+  ModelUsageContext,
+  UsageProtocol,
+  UsageRun,
+  UsageSource,
+} from '../../shared/model-usage'
 import type { ModelUsageStore } from './model-usage-store'
 import {
   mergeUsage,
@@ -21,11 +27,12 @@ export function createCall(
   sessionId: string | null,
   messageId: string,
   timestamp: string,
-  source: 'claude-sdk' | 'claude-transcript',
+  source: UsageSource,
+  protocol: UsageProtocol = 'anthropic-messages',
 ): ModelUsageRecord {
   return withCoverage({
     version: 1,
-    id: usageId('anthropic-messages', sessionId ?? context.runId ?? originId, messageId),
+    id: usageId(protocol, sessionId ?? context.runId ?? originId, messageId),
     originId,
     timestamp,
     provider: context.provider ?? null,
@@ -46,7 +53,7 @@ export function createCall(
     timingBasis: 'unavailable',
     sources: [source],
     estimated: false,
-    protocol: 'anthropic-messages',
+    protocol,
     rawUsage: {},
     normalized: normalizeUsage({}),
     final: false,
@@ -56,6 +63,43 @@ export function createCall(
     missing: [],
     missingMetadata: [],
   })
+}
+
+/**
+ * Codex reports one token_count per model response, carrying that response (`last`) and the
+ * thread's cumulative total. The cumulative total is the only identity shared by the live
+ * app-server notification and the rollout log, so it keys the call; replays are idempotent.
+ */
+export function createCodexCall(
+  context: ModelUsageContext,
+  originId: string,
+  threadId: string,
+  usage: { last: unknown; total: unknown; model?: string | null },
+  timestamp: string,
+  source: 'codex-app-server' | 'codex-rollout',
+): ModelUsageRecord | null {
+  const last = sanitizeUsage(usage.last)
+  const totalTokens = number(object(usage.total).total_tokens)
+  const lastTokens = number(object(usage.last).total_tokens)
+  if (totalTokens === null || !lastTokens) return null
+  const record = createCall(
+    context,
+    originId,
+    threadId,
+    `thread-total:${totalTokens}`,
+    timestamp,
+    source,
+    'openai-responses',
+  )
+  record.messageId = null
+  record.provider = context.provider ?? 'openai'
+  record.model = usage.model ?? null
+  record.rawUsage = last
+  record.final = true
+  record.status = 'succeeded'
+  record.outputEvidence = source === 'codex-app-server' ? 'stream-delta' : 'transcript-final'
+  record.thinkingEvidence = record.outputEvidence
+  return withCoverage(record)
 }
 
 /** Observes only SDK messages. Run totals are an audit record, never billable child calls. */
@@ -99,6 +143,19 @@ export class ModelUsageCollector {
     const sessionId = string(event.session_id)
     if (sessionId) this.sessionId = sessionId
     const lane = string(event.parent_tool_use_id) ?? 'main'
+    if (event.type === 'codex_token_usage') {
+      if (!this.sessionId) return
+      const record = createCodexCall(
+        { ...this.context, runId: this.run.id },
+        this.store.originId,
+        this.sessionId,
+        { last: event.last, total: event.total, model: string(event.model) },
+        this.now().toISOString(),
+        'codex-app-server',
+      )
+      if (record) this.save(record)
+      return
+    }
     if (event.type === 'system' && event.subtype === 'api_retry') {
       const retryId =
         string(event.uuid) ?? `${this.run.id}:${lane}:${event.attempt}:${this.calls.size}`

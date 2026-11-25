@@ -362,6 +362,7 @@ export function registerWorkspaceStateIpc(
         assertWorkspaceAccess(_event.sender.id, workspaceKey)
         if (section === personalDiarySourceSection)
           throw new Error('日记只能放在项目自己的目录里，不再支持关联外部目录')
+        if (section === 'project-sync') throw new Error('项目同步状态只由 Git 同步服务写入')
         if (section === 'tabs' || section === 'browserTabs' || section === 'browserBookmarks') {
           throw new Error(`${section} 已由主进程 Workbench model 单独拥有，renderer 不得直接写入`)
         }

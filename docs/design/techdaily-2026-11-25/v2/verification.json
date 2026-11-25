@@ -1,0 +1,82 @@
+[
+  {
+    "name": "A1-settings-top",
+    "query": "mockup.html?view=settings",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "A2-settings-techdaily-deepseek",
+    "query": "mockup.html?view=settings&scroll=td",
+    "viewport": [
+      1440,
+      1500
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "A3-settings-searxng",
+    "query": "mockup.html?view=settings&svc=searxng&scroll=td",
+    "viewport": [
+      1440,
+      1500
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "B1-day",
+    "query": "mockup.html?view=day",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "B1-day-full",
+    "query": "mockup.html?view=day",
+    "viewport": [
+      1440,
+      2300
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "B2-day-empty",
+    "query": "mockup.html?view=day-empty",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "B3-day-running",
+    "query": "mockup.html?view=day-running",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  },
+  {
+    "name": "narrow-day",
+    "query": "mockup.html?view=day",
+    "viewport": [
+      390,
+      844
+    ],
+    "horizontalOverflow": 0,
+    "errors": []
+  }
+]

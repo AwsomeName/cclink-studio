@@ -12,6 +12,7 @@ import {
 } from '../../shared/model-usage'
 import { ModelUsageStore } from './model-usage-store'
 import { importTranscripts } from './model-usage-import'
+import { codexHomeDirectory, importCodexRollouts } from './model-usage-codex-import'
 import { buildReport, classified, exportCsv, formatReport, timeRange } from './model-usage-report'
 import { APP_USER_DATA_DIR_NAME } from '../runtime/app-metadata'
 
@@ -20,7 +21,7 @@ const help = `Studio 模型用量 · 本地元数据统计（Node >=22.15）
   pnpm usage report --month 2026-11
   pnpm usage report --day 2026-11-05 | --week 2026-11-05
   pnpm usage report --from 2026-11-01 --to 2026-12-01
-  pnpm usage backfill                         # 仅 Studio 管理的 Claude projects 日志
+  pnpm usage backfill                         # Studio 管理的 Claude 日志 + Studio 发起的 Codex 会话
   pnpm usage backfill --root /path/to/projects # 指定目录，包含 subagents
   pnpm usage export --month 2026-11 --format json --out usage.json
   pnpm usage export --all --format csv --out usage.csv
@@ -117,8 +118,9 @@ export async function runUsageCli(args: string[]): Promise<void> {
           ? JSON.parse(readFileSync(errorPath, 'utf8'))
           : null,
         transcriptRoots: await managedTranscriptRoots(dataDir),
+        codexHome: codexHomeDirectory(),
         coverage:
-          'Claude Code SDK + explicitly imported logs. Hidden HTTP retries and other backends may be absent.',
+          'Claude Code SDK + Studio-started Codex threads + explicitly imported logs. Hidden HTTP retries, ACP/remote Agents and Codex used outside Studio are absent.',
       })
     } else if (command === 'classify') {
       if (!values.category || Boolean(values.task) === Boolean(values.session))
@@ -143,14 +145,21 @@ export async function runUsageCli(args: string[]): Promise<void> {
       console.log('配置已保存；价格仅保留配置，未启用费用计算。')
     } else if (command === 'backfill') {
       const roots = values.root ?? (await managedTranscriptRoots(dataDir))
-      if (!roots.length)
+      const codexHome = values.root ? null : codexHomeDirectory()
+      if (!roots.length && !(codexHome && existsSync(codexHome)))
         throw new Error('没有找到 Studio 管理的会话日志；请使用 --root 指定 Claude projects 目录')
-      const result = await importTranscripts(store, roots, {
-        provider: values.provider,
-        category: values.category ? usageCategorySchema.parse(values.category) : undefined,
-      })
-      emit(result)
-      if (result.invalidLines || result.pendingLines || result.unidentifiable)
+      const result = roots.length
+        ? await importTranscripts(store, roots, {
+            provider: values.provider,
+            category: values.category ? usageCategorySchema.parse(values.category) : undefined,
+          })
+        : null
+      const codex =
+        codexHome && existsSync(codexHome) ? await importCodexRollouts(store, codexHome) : null
+      emit({ claude: result, codex })
+      if (codex && (codex.invalidLines || codex.pendingLines || codex.unidentifiable))
+        console.warn('[ModelUsage] 部分 Codex 日志未能导入；重复回填会重试未完成行。')
+      if (result && (result.invalidLines || result.pendingLines || result.unidentifiable))
         console.warn('[ModelUsage] 部分日志未能导入；详情见计数，重复回填会重试未完成行。')
     } else if (command === 'import') {
       if (!values.file) throw new Error('请用 --file 指定本工具导出的 JSON')

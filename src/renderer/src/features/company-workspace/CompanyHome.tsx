@@ -11,6 +11,7 @@ import {
 } from './company-home-model'
 import type { CompanyWebAccountRow } from './use-company-sources'
 import { CompanyDecisionCard } from './CompanyDecisionCard'
+import { ProjectSyncCard } from '../project-sync/ProjectSyncCard'
 
 export interface CompanyHomeActions {
   openLedger(projectId?: string): void
@@ -315,6 +316,7 @@ export function CompanyHome({
           </button>
         </div>
       </section>
+      <ProjectSyncCard className="company-card" />
     </div>
   )
 }

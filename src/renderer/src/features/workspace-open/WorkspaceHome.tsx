@@ -16,6 +16,7 @@ import { useFixedSpacesStore } from './fixed-spaces-store'
 import { workspaceRefKey, workspaceRefLabel } from '@shared/workspace-ref'
 import { openConversationInWorkbench } from '../agent-conversations/conversation-workbench'
 import './fixed-spaces.css'
+import { ProjectSyncCard } from '../project-sync/ProjectSyncCard'
 
 export async function createPersonalNote(): Promise<void> {
   const { activeWorkspaceRef: ref, generation } = useWorkspaceStore.getState()
@@ -186,6 +187,7 @@ function HomeContent(): React.ReactElement {
           <p>还没有打开的文档。新建一份笔记，或从“文件”打开已有资料。</p>
         )}
       </section>
+      {ref.kind === 'local' && <ProjectSyncCard />}
       <section>
         <h2>最近会话</h2>
         {chats.length ? (

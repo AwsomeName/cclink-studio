@@ -39,6 +39,32 @@ node:sqlite，独立保存在 userData/model-usage/usage.sqlite，由现有 Usag
 - UI 只拥有筛选和展开等临时展示状态。IPC 跟随现有可信注册表清理，Worker 跟随原用量服务
   关闭；不新增代理、后台守护进程或调度器，不依赖登录或远程初始化。
 
+## Studio 内 Codex（2026-11-25 接入）
+
+2026-11-24 复核发现：11/06 采集上线后数据库没有新增任何调用，因为 Studio 实际运行的是
+Codex，而采集只挂在 Claude Code 后端。用户确认统计范围为**只统计 Studio 发起的 Codex**，
+Codex 桌面版／CLI 等 Studio 外使用不计入。
+
+- 实时：`LocalCodexBackend` 把 app-server 的 `thread/tokenUsage/updated` 交给同一个
+  用量观察者。每条通知是一次模型响应（`last`），并带线程累计值（`total`）。
+- 回填与补扫：读取 `CODEX_HOME`（默认 `~/.codex`）下 `sessions/`、`archived_sessions/` 的
+  rollout，只取首行 `session_meta.originator === "cclink_studio"` 的文件；其他文件只读首行即
+  跳过并记住。只解析 `turn_context.model` 与 `token_count` 数值，正文不进入数据库。
+  “回填 Studio 历史”与 `pnpm usage backfill` 同时覆盖 Claude 与 Codex；维护补扫只处理本机
+  Studio 观察过的 Codex 线程。
+- 去重：通知没有 response id，实时与 rollout 共有的唯一身份是“线程 ID + 线程累计
+  total_tokens”。同一响应重复上报或先实时后回填都只计一次，实时记录的 Run 归属保留。
+- 口径：OpenAI `input_tokens` 含缓存（Codex 的 `total_tokens = input + output`），标准化时
+  输入 = input − cached − cache write，缓存读/写单列；输出含 reasoning，思考只列分项。
+  标准化后的五项之和等于 Codex 自身的 total。协议记为 `openai-responses`，服务商 `openai`。
+- 不覆盖：Codex 隐藏的重试（重试数显示为未知）、套餐额度百分比（`rate_limits`，账号共享，
+  无法归属到 Studio）、Codex ACP、远程 Agent。
+
+真实数据核对（本机日志副本，未写入真实数据库）：30 个 Studio Codex 会话、74 次调用、
+1 条重复上报被合并；21 个 Codex 桌面版会话未读取正文。11 月合计输入（不含缓存）370,550、
+缓存读取 1,138,304、输出 32,831、思考 1,570，与原始日志逐项一致。其中约 59 次来自
+临时目录和 `.cclink-*-smoke` 工作区的自动化验证，并非用户业务任务。
+
 ## 已核实的来源
 
 - 本仓库使用 @anthropic-ai/claude-agent-sdk 0.3.211，启用了 includePartialMessages。
@@ -204,7 +230,9 @@ CSV/JSON → 关闭采集并重启检查历史。**未发起用户 GLM 新付费
 - 已观测会话的晚到子代理通过增量补扫记录，无法证明所属 Run 时不强行绑定。未观测的
   会话、被删除或轮转丢失的日志仍可能缺失；历史缺少的元数据保留 null。
 - 连接测试也采集，显式类别为 other。实验性 cclink-agent、Codex ACP、CCLink 远程 Agent、
-  其他机器、独立外部 Claude 使用和图像/视频服务 Token 不在此采集链；图片/视频原账本保留。
+  其他机器、Studio 外的 Claude／Codex 使用和图像/视频服务 Token 不在此采集链；图片/视频原账本保留。
+- 覆盖热力图按 Studio 运行时段判断，不区分后端；使用上述未接入后端的日子仍可能显示为
+  已观察的零。
 - GLM 的独立思考字段缺失，不能根据输出正文猜测；兼容协议的 Token 口径也不能证明套餐
   prompts、相对额度、积分与 Token 存在固定兑换比例。
 - 价格配置接口已经提供；实际账单导入和费用计算未实现，设置页明确显示未启用。
@@ -212,6 +240,8 @@ CSV/JSON → 关闭采集并重启检查历史。**未发起用户 GLM 新付费
 ## 修改位置
 
 - `src/shared/model-usage.ts`：持久化、观察者与价格配置契约。
+- `src/main/usage/model-usage-codex-import.ts`、`model-usage-codex.test.ts`、
+  `src/main/agent-core/backends/local-codex-backend.ts`：Studio Codex 实时采集与 rollout 回填。
 - `src/main/usage/model-usage-{normalize,collector,store,service,import,report,cli}.ts`：白名单采集、
   SQLite、历史回填、统计/导出/配置；`model-usage.test.ts` 为风险验证。
 - `src/main/usage/usage-ledger-service.ts`：复用现有生命周期拥有模型统计服务。

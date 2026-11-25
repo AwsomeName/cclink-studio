@@ -1,0 +1,1379 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>科技日报效果稿</title>
+    <style>
+      :root {
+        --bg-primary: #1e1e1e;
+        --bg-secondary: #252526;
+        --bg-elevated: #2d2d2d;
+        --bg-hover: #2a2d2e;
+        --border-color: #3c3c3c;
+        --text-primary: #cccccc;
+        --text-strong: #e7e7e7;
+        --text-secondary: #969696;
+        --accent-color: #4d9cf8;
+        --accent-soft: rgba(77, 156, 248, 0.14);
+        --success-color: #4caf7a;
+        --warning-color: #d7a03a;
+        --error-color: #e06c6c;
+        --new-color: #b48cf2;
+        --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', sans-serif;
+        --font-mono: 'SF Mono', Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font: 13px/1.55 var(--font-ui);
+      }
+      button {
+        font: inherit;
+        color: var(--text-primary);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      button.ghost {
+        background: transparent;
+      }
+      button.link {
+        background: none;
+        border: none;
+        color: var(--accent-color);
+        padding: 0;
+        white-space: nowrap;
+      }
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 4px 8px;
+      }
+      a {
+        color: var(--accent-color);
+        text-decoration: none;
+      }
+      .muted {
+        color: var(--text-secondary);
+      }
+      .small {
+        font-size: 12px;
+      }
+      .new {
+        color: var(--new-color);
+        font-size: 11px;
+        border: 1px solid var(--new-color);
+        border-radius: 3px;
+        padding: 0 4px;
+        margin-left: 6px;
+      }
+
+      /* shell */
+      .app {
+        display: grid;
+        grid-template-rows: 38px 1fr 24px;
+        height: 100vh;
+      }
+      .projects {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+        padding: 0 8px;
+        overflow: hidden;
+      }
+      .projects span {
+        padding: 6px 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .projects span.on {
+        color: var(--text-strong);
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-color);
+        border-radius: 4px;
+      }
+      .body {
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        min-height: 0;
+      }
+      .side {
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border-color);
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        overflow: hidden;
+      }
+      .side h6 {
+        margin: 6px 8px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-secondary);
+      }
+      .side .item {
+        padding: 6px 10px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .side .item.on {
+        background: var(--bg-hover);
+        color: var(--text-strong);
+        box-shadow: inset 2px 0 var(--accent-color);
+      }
+      .side .item .badge {
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+      .side .cal {
+        margin-top: auto;
+        border-top: 1px solid var(--border-color);
+        padding-top: 10px;
+      }
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+        text-align: center;
+        font-size: 11px;
+      }
+      .cal-grid b {
+        font-weight: 400;
+        color: var(--text-secondary);
+      }
+      .cal-grid i {
+        font-style: normal;
+        padding: 3px 0;
+        border-radius: 3px;
+        position: relative;
+      }
+      .cal-grid i.d::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        width: 4px;
+        height: 4px;
+        margin-left: -2px;
+        border-radius: 50%;
+        background: var(--accent-color);
+      }
+      .cal-grid i.t::after {
+        background: var(--new-color);
+      }
+      .cal-grid i.on {
+        background: var(--accent-color);
+        color: #fff;
+      }
+      .status {
+        background: #0e639c;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 0 12px;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .main {
+        min-width: 0;
+        overflow: auto;
+      }
+      .view {
+        display: none;
+      }
+      .view.on {
+        display: block;
+      }
+
+      /* page header */
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 24px;
+        border-bottom: 1px solid var(--border-color);
+        flex-wrap: wrap;
+      }
+      .head h1 {
+        font-size: 16px;
+        margin: 0;
+        color: var(--text-strong);
+        font-weight: 600;
+      }
+      .head .grow {
+        flex: 1;
+      }
+      .pill {
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .pill.ok {
+        color: var(--success-color);
+        border-color: var(--success-color);
+      }
+      .pill.warn {
+        color: var(--warning-color);
+        border-color: var(--warning-color);
+      }
+      .pill.err {
+        color: var(--error-color);
+        border-color: var(--error-color);
+      }
+      .pill.run {
+        color: var(--accent-color);
+        border-color: var(--accent-color);
+      }
+
+      /* report */
+      .report {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 18px 24px 60px;
+      }
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        padding: 10px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-secondary);
+      }
+      .facts b {
+        color: var(--text-primary);
+        font-weight: 500;
+      }
+      .funnel {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .funnel span {
+        white-space: nowrap;
+      }
+      .trend {
+        margin: 14px 0 4px;
+        padding-left: 10px;
+        border-left: 3px solid var(--new-color);
+        color: var(--text-primary);
+      }
+      .report h2 {
+        font-size: 18px;
+        color: var(--text-strong);
+        margin: 22px 0 6px;
+      }
+      .report h3 {
+        font-size: 13px;
+        color: var(--text-secondary);
+        font-weight: 500;
+        margin: 26px 0 4px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border-color);
+        letter-spacing: 0.04em;
+      }
+      .news {
+        padding: 12px 0;
+        border-bottom: 1px dashed var(--border-color);
+      }
+      .news.lead h4 {
+        font-size: 17px;
+      }
+      .news h4 {
+        margin: 0 0 6px;
+        font-size: 14.5px;
+        color: var(--text-strong);
+      }
+      .news p {
+        margin: 0 0 8px;
+        line-height: 1.75;
+      }
+      .news .meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 14px;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .news .meta .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+      }
+      .news .meta .acts button {
+        font-size: 11.5px;
+        padding: 1px 8px;
+      }
+      .tag {
+        font-size: 11px;
+        color: var(--warning-color);
+      }
+      .quick li {
+        margin: 4px 0;
+      }
+      .menu {
+        position: relative;
+        display: inline-block;
+      }
+      .menu .pop {
+        position: absolute;
+        right: 0;
+        top: 24px;
+        z-index: 2;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px;
+        width: 230px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+      }
+      .menu .pop div {
+        padding: 5px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      .menu .pop div:hover,
+      .menu .pop div.hl {
+        background: var(--accent-soft);
+      }
+      .menu .pop small {
+        display: block;
+        color: var(--text-secondary);
+        padding: 4px 8px 2px;
+        border-top: 1px solid var(--border-color);
+        margin-top: 4px;
+      }
+
+      /* plan */
+      .plan {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 18px 24px 60px;
+      }
+      .why {
+        padding: 10px 12px;
+        border-radius: 6px;
+        background: var(--accent-soft);
+        margin-bottom: 14px;
+      }
+      .steps {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .step {
+        display: grid;
+        grid-template-columns: 26px 1fr auto;
+        gap: 10px;
+        padding: 10px 12px;
+        border-top: 1px solid var(--border-color);
+        align-items: start;
+      }
+      .step:first-child {
+        border-top: none;
+      }
+      .step .ic {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        margin-top: 1px;
+        border: 1px solid var(--border-color);
+        color: var(--text-secondary);
+      }
+      .step.done .ic {
+        background: var(--success-color);
+        border-color: var(--success-color);
+        color: #fff;
+      }
+      .step.run .ic {
+        border-color: var(--accent-color);
+        color: var(--accent-color);
+      }
+      .step.fail .ic {
+        background: var(--error-color);
+        border-color: var(--error-color);
+        color: #fff;
+      }
+      .step.run {
+        background: var(--accent-soft);
+      }
+      .step.fail {
+        background: rgba(224, 108, 108, 0.08);
+      }
+      .step .t {
+        color: var(--text-strong);
+      }
+      .step .who {
+        font-size: 11px;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 0 4px;
+        margin-left: 6px;
+      }
+      .step .ev {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+      .step .ev code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+      }
+      .step .right {
+        font-size: 12px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+      }
+      .bar {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--bg-elevated);
+        margin-top: 6px;
+        overflow: hidden;
+        width: 260px;
+        max-width: 100%;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--accent-color);
+      }
+      .doms {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 10px;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .doms span.ok {
+        color: var(--success-color);
+      }
+      .doms span.run {
+        color: var(--accent-color);
+      }
+      .doms span.wait {
+        color: var(--text-secondary);
+      }
+      .fixbox {
+        margin-top: 8px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      /* diary */
+      .diary-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 24px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .td-card {
+        max-width: 860px;
+        margin: 14px auto 0;
+        padding: 10px 14px;
+        border: 1px solid var(--border-color);
+        border-left: 3px solid var(--new-color);
+        border-radius: 6px;
+        background: var(--bg-secondary);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 4px 14px;
+        align-items: center;
+      }
+      .td-card .k {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+      .td-card .h {
+        color: var(--text-strong);
+      }
+      .td-card ol {
+        margin: 4px 0 0;
+        padding-left: 18px;
+        font-size: 12.5px;
+      }
+      .doc {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 10px 24px 40px;
+      }
+      .doc h1 {
+        font-size: 20px;
+        color: var(--text-strong);
+      }
+      .doc h2 {
+        font-size: 15px;
+        color: var(--text-strong);
+        margin-top: 18px;
+      }
+      .doc li {
+        margin: 3px 0;
+      }
+
+      /* settings */
+      .form {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 18px 24px 60px;
+      }
+      .sec {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 14px 16px;
+        margin-bottom: 14px;
+      }
+      .sec h3 {
+        margin: 0 0 10px;
+        font-size: 13.5px;
+        color: var(--text-strong);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        align-items: center;
+        margin: 8px 0;
+      }
+      .row label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .note {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 4px 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: top;
+      }
+      th {
+        color: var(--text-secondary);
+        font-weight: 500;
+      }
+      td .q {
+        display: inline-block;
+        background: var(--bg-elevated);
+        border-radius: 3px;
+        padding: 0 5px;
+        margin: 1px 2px;
+        font-size: 12px;
+      }
+      .chips span {
+        display: inline-block;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 0 8px;
+        margin: 2px 3px 2px 0;
+        font-size: 12px;
+      }
+      .chips span em {
+        font-style: normal;
+        color: var(--text-secondary);
+        margin-left: 4px;
+      }
+      .cost {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .cost div {
+        background: var(--bg-secondary);
+        border-radius: 6px;
+        padding: 8px 10px;
+      }
+      .cost span {
+        display: block;
+        font-size: 11.5px;
+        color: var(--text-secondary);
+      }
+      .cost strong {
+        font-size: 15px;
+        color: var(--text-strong);
+        font-weight: 500;
+      }
+      .warnline {
+        color: var(--warning-color);
+        font-size: 12px;
+      }
+
+      /* setup */
+      .setup {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 28px 24px 60px;
+      }
+      .setup h2 {
+        color: var(--text-strong);
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      .card {
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-top: 12px;
+      }
+      .card .n {
+        display: inline-grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--bg-elevated);
+        font-size: 11px;
+        margin-right: 8px;
+      }
+      .card .n.ok {
+        background: var(--success-color);
+        color: #fff;
+      }
+      .grid3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px 14px;
+        margin-top: 8px;
+      }
+      .grid3 label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      @media (max-width: 760px) {
+        .body {
+          grid-template-columns: 1fr;
+        }
+        .side {
+          display: none;
+        }
+        .cost,
+        .grid3 {
+          grid-template-columns: 1fr 1fr;
+        }
+        .head,
+        .report,
+        .plan,
+        .form,
+        .setup,
+        .doc {
+          padding-left: 16px;
+          padding-right: 16px;
+        }
+        .news .meta .acts {
+          margin-left: 0;
+        }
+        .step {
+          grid-template-columns: 22px 1fr;
+        }
+        .step .right {
+          grid-column: 2;
+        }
+        .td-card {
+          grid-template-columns: 1fr;
+          margin: 12px 16px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <div class="projects">
+        <span class="on">我的空间</span><span>air-app</span><span>研发日记</span
+        ><span>桌面机器人</span><span>我的公司</span><span>argus</span><span>+ 新建 / 打开</span>
+      </div>
+      <div class="body">
+        <aside class="side">
+          <h6>我的空间</h6>
+          <div class="item">今天</div>
+          <div class="item" data-nav="diary">日记</div>
+          <div class="item" data-nav="report">
+            科技日报 <span class="new">新</span><span class="badge" id="navBadge">8 条</span>
+          </div>
+          <div class="item">计划</div>
+          <div class="item">定时整理</div>
+          <div class="item">同步</div>
+          <div class="item">项目设置</div>
+          <div class="cal">
+            <div style="display: flex; justify-content: space-between; padding: 0 4px 6px">
+              <span>‹</span><b style="font-weight: 500">2026 年 11 月</b><span>›</span>
+            </div>
+            <div class="cal-grid">
+              <b>一</b><b>二</b><b>三</b><b>四</b><b>五</b><b>六</b><b>日</b> <i></i><i></i><i></i
+              ><i></i><i></i><i></i><i class="d">1</i> <i class="d">2</i><i class="d">3</i
+              ><i class="d">4</i><i class="d">5</i><i class="d">6</i><i class="d">7</i
+              ><i class="d">8</i> <i class="d">9</i><i class="d">10</i><i class="d">11</i
+              ><i class="d">12</i><i class="d">13</i><i class="d">14</i><i class="d">15</i>
+              <i class="d">16</i><i class="d">17</i><i class="d">18</i><i class="d">19</i
+              ><i class="d">20</i><i class="d">21</i><i class="d">22</i> <i class="d">23</i
+              ><i class="d t">24</i><i class="d t on">25</i><i>26</i><i>27</i><i>28</i><i>29</i>
+              <i>30</i>
+            </div>
+            <div class="small muted" style="padding: 6px 4px 0">蓝点：日记 · 紫点：科技日报</div>
+          </div>
+        </aside>
+
+        <main class="main">
+          <!-- ① 当天日报 -->
+          <section class="view" data-view="report">
+            <div class="head">
+              <h1>科技日报 · 11 月 25 日 周三</h1>
+              <span class="pill ok">已生成 06:14</span>
+              <span class="pill">未读</span>
+              <span class="grow"></span>
+              <button>‹ 前一天</button>
+              <button>复制 Markdown</button>
+              <button>复制公众号 HTML</button>
+              <button>标记已读</button>
+              <button class="ghost" title="不重新搜索，用已保存的候选再选一次、写一次">
+                重新成稿
+              </button>
+              <button class="ghost" data-go="settings">设置</button>
+            </div>
+            <div class="report">
+              <div class="facts">
+                <div class="funnel">
+                  <span>搜索 <b>36</b> 次</span>→<span>结果 <b>412</b></span
+                  >→<span>过滤后 <b>126</b></span
+                  >→<span>去重后 <b>91</b></span
+                  >→<span>同事件归组 <b>11</b> 组</span>→<span>入选 <b>8</b></span>
+                </div>
+                <span>读取原文 <b>8</b> 页</span>
+                <span>DeepSeek 调用 <b>44</b> 次 ≈ <b>$0.03</b></span>
+                <span>精选与成稿：<b>本机 Codex</b></span>
+                <span>文件：<a href="#">科技日报/2026/11/1125.md</a></span>
+              </div>
+              <p class="trend">
+                <b>今日观察：</b
+                >模型厂商的竞争从榜单分数转向“能交付的工程闭环”；三条硬件新闻都指向端侧推理成本下降。
+              </p>
+
+              <h3>头条</h3>
+              <div class="news lead">
+                <h4>示例：某开源模型发布代码专用版本，官方称工程基准提升明显</h4>
+                <p>
+                  这是开源阵营首次在代码基准上逼近闭源前沿。真正需要验证的是：第三方复现分数、长任务稳定性，以及许可证是否允许商用微调。对国内团队而言，本地部署成本会是比分数更关键的变量。
+                </p>
+                <div class="meta">
+                  <span
+                    >原文：<a href="#">官方博客</a> · <a href="#">示例科技媒体</a>（2 个来源）</span
+                  >
+                  <span>11-24 发布</span>
+                  <span class="acts"><button>有用</button><button>不感兴趣 ▾</button></span>
+                </div>
+              </div>
+
+              <h3>模型与 AI 应用</h3>
+              <div class="news">
+                <h4>示例：一款 AI 编程工具开放团队版，按席位收费</h4>
+                <p>
+                  团队版补齐了权限、审计和私有部署，说明 AI
+                  编程工具开始从个人订阅转向企业采购。值得关注定价和数据不出域的承诺能否兑现。
+                </p>
+                <div class="meta">
+                  <span>原文：<a href="#">产品公告</a>（1 个来源）</span><span>11-25 发布</span>
+                  <span class="acts"
+                    ><button>有用</button>
+                    <span class="menu"
+                      ><button>不感兴趣 ▾</button>
+                      <span class="pop">
+                        <div>只是这一条</div>
+                        <div class="hl">少推这类话题：AI 编程工具定价</div>
+                        <div>不再推这个品牌</div>
+                        <small>记录到「口味」，明天精选时生效；可在设置里撤销。</small>
+                      </span>
+                    </span>
+                  </span>
+                </div>
+              </div>
+              <div class="news">
+                <h4>示例：多家云厂商下调推理价格，长上下文降幅最大</h4>
+                <p>
+                  降价集中在长上下文和批量推理，对做文档、代码类 Agent
+                  的团队是直接利好；短对话价格基本没动。
+                </p>
+                <div class="meta">
+                  <span
+                    >原文：<a href="#">示例财经媒体</a> · <a href="#">官方价格页</a>（2
+                    个来源）</span
+                  ><span>11-24 发布</span><span class="tag">新进展 · 11-22 曾报道</span>
+                  <span class="acts"><button>有用</button><button>不感兴趣 ▾</button></span>
+                </div>
+              </div>
+
+              <h3>芯片与硬件</h3>
+              <div class="news">
+                <h4>示例：一款端侧 NPU 量产，面向 AR 眼镜和机器人</h4>
+                <p>
+                  功耗和外设接口是这类芯片能否进眼镜的关键；公告给了功耗区间但没给实测续航，先观察首批整机。
+                </p>
+                <div class="meta">
+                  <span>原文：<a href="#">公司公告</a>（1 个来源）</span><span>11-25 发布</span>
+                  <span class="acts"><button>有用</button><button>不感兴趣 ▾</button></span>
+                </div>
+              </div>
+
+              <h3>速览</h3>
+              <ul class="quick">
+                <li>示例开源项目：本地语音识别工具，一周新增约 3,000 星。<a href="#">GitHub</a></li>
+                <li>示例论文：小模型做长程规划的新训练方法。<a href="#">arXiv</a></li>
+                <li>示例：某机器人公司完成新一轮融资。<a href="#">来源</a></li>
+              </ul>
+              <p class="small muted" style="margin-top: 22px">
+                摘要与评论由 AI
+                根据原文撰写，只保留标题、要点和链接；事实以原文为准。网址、日期和来源数由 Studio
+                从搜索结果回填；无法确定发布日期的条目标“无日期”。
+              </p>
+            </div>
+          </section>
+
+          <!-- ② 生成中：执行计划 -->
+          <section class="view" data-view="running">
+            <div class="head">
+              <h1>科技日报 · 11 月 25 日 周三</h1>
+              <span class="pill run">生成中 · 第 3 步，共 8 步</span>
+              <span class="grow"></span>
+              <button>停止</button>
+            </div>
+            <div class="plan">
+              <div class="why">
+                今天 06:10 时 Studio 没有运行，09:41 打开 Studio
+                后补生成今天的日报。只补今天，不补之前错过的日子。
+              </div>
+              <div class="steps">
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">检查联网搜索与 AI</span><span class="who">Studio</span>
+                    <div class="ev">
+                      联网搜索已启用（沿用 DeepSeek Key）；今天还可调用 80 次；本机 Codex 可用
+                    </div>
+                  </div>
+                  <span class="right">09:41:02</span>
+                </div>
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">读取设置与近 5 天已报道事件</span
+                    ><span class="who">Studio</span>
+                    <div class="ev">9 个领域、36 个搜索词；事件登记 31 条（11-20 至 11-24）</div>
+                  </div>
+                  <span class="right">09:41:02</span>
+                </div>
+                <div class="step run">
+                  <span class="ic">3</span>
+                  <div>
+                    <span class="t">按领域搜索并过滤</span
+                    ><span class="who">Studio → DeepSeek</span>
+                    <div class="ev">
+                      已完成 24 / 36 次 · 271 条结果，过滤后留 83 条 · 1 次超时（不计费，已重试）
+                    </div>
+                    <div class="bar"><i style="width: 67%"></i></div>
+                    <div class="doms">
+                      <span class="ok">✓ 模型</span><span class="ok">✓ AI 应用</span
+                      ><span class="ok">✓ 芯片</span><span class="ok">✓ 机器人</span
+                      ><span class="ok">✓ AR/VR</span><span class="ok">✓ 大厂动态</span
+                      ><span class="run">… 开源</span><span class="wait">· 论文</span
+                      ><span class="wait">· 投融资</span>
+                    </div>
+                  </div>
+                  <span class="right">09:41:05 起</span>
+                </div>
+                <div class="step">
+                  <span class="ic">4</span>
+                  <div>
+                    <span class="t">合并去重</span><span class="who">Studio</span>
+                    <div class="ev">同一网址只留一条：领域内、跨领域、与前几天已抓到的候选</div>
+                  </div>
+                  <span class="right">等待第 3 步</span>
+                </div>
+                <div class="step">
+                  <span class="ic">5</span>
+                  <div>
+                    <span class="t">整理候选</span><span class="who">Studio</span>
+                    <div class="ev">
+                      取昨天以来的候选，按发布日期排序，最多 300 条；标出近 5 天已报道过的
+                    </div>
+                  </div>
+                  <span class="right">等待</span>
+                </div>
+                <div class="step">
+                  <span class="ic">6</span>
+                  <div>
+                    <span class="t">AI 精选 5–10 条</span><span class="who">Codex · 不带工具</span>
+                    <div class="ev">只把候选标题、摘要、来源交给 AI；AI 不联网、不读文件</div>
+                  </div>
+                  <span class="right">等待</span>
+                </div>
+                <div class="step">
+                  <span class="ic">7</span>
+                  <div>
+                    <span class="t">读取入选原文并成稿</span
+                    ><span class="who">Studio → DeepSeek，然后 Codex</span>
+                    <div class="ev">每条最多读取 1 页；写评论、分组、速览；只保留要点和链接</div>
+                  </div>
+                  <span class="right">等待</span>
+                </div>
+                <div class="step">
+                  <span class="ic">8</span>
+                  <div>
+                    <span class="t">保存并核对</span><span class="who">Studio</span>
+                    <div class="ev">
+                      写入 <code>科技日报/2026/11/1125.md</code>；核对每条都有来源网址与发布时间
+                    </div>
+                  </div>
+                  <span class="right">等待</span>
+                </div>
+              </div>
+              <p class="note" style="margin-top: 12px">
+                关闭这个页面不影响生成；退出 Studio 会中断，下次打开时从头再生成今天的。
+              </p>
+            </div>
+          </section>
+
+          <!-- ③ 失败：AI 不可用 -->
+          <section class="view" data-view="failed">
+            <div class="head">
+              <h1>科技日报 · 11 月 25 日 周三</h1>
+              <span class="pill err">未完成 · 第 6 步失败</span>
+              <span class="grow"></span>
+            </div>
+            <div class="plan">
+              <div class="steps">
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div><span class="t">检查联网搜索与 AI</span><span class="who">Studio</span></div>
+                  <span class="right">06:10:01</span>
+                </div>
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">读取设置与近 5 天已报道事件</span
+                    ><span class="who">Studio</span>
+                  </div>
+                  <span class="right">06:10:01</span>
+                </div>
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">按领域搜索并过滤</span
+                    ><span class="who">Studio → DeepSeek</span>
+                    <div class="ev">
+                      36 / 36 次 · 412 条结果，留 126 条：过期 201 · 不含领域关键词 39 · 黑名单域名
+                      31 · 排除词 15；其中无日期 47 条保留待 AI 判断
+                    </div>
+                  </div>
+                  <span class="right">06:10:58</span>
+                </div>
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">合并去重</span><span class="who">Studio</span>
+                    <div class="ev">
+                      领域内合并 21 · 跨领域合并 14 · 前几天已抓到 17（更新抓取日）· 新增候选 74
+                    </div>
+                  </div>
+                  <span class="right">06:10:58</span>
+                </div>
+                <div class="step done">
+                  <span class="ic">✓</span>
+                  <div>
+                    <span class="t">整理候选</span><span class="who">Studio</span>
+                    <div class="ev">候选 91 条（含昨天遗留 17）；9 条标“已报道过”</div>
+                  </div>
+                  <span class="right">06:10:59</span>
+                </div>
+                <div class="step fail">
+                  <span class="ic">!</span>
+                  <div>
+                    <span class="t">AI 精选 5–10 条</span><span class="who">Codex · 不带工具</span>
+                    <div class="ev">
+                      Codex 没有登录（本机 ChatGPT 登录已过期）；Claude Code 没有可用的 Studio API
+                      Key。
+                    </div>
+                    <div class="ev">
+                      74 条候选已保存，今天之内重新成稿不会再搜索、不再产生搜索费用。
+                    </div>
+                    <div class="fixbox">
+                      <button class="primary">登录 Codex 后重新成稿</button
+                      ><button>改用 Claude Code 成稿</button><button>只看候选清单（74 条）</button>
+                    </div>
+                  </div>
+                  <span class="right">06:11:03</span>
+                </div>
+                <div class="step">
+                  <span class="ic">7</span>
+                  <div>
+                    <span class="t">读取入选原文并成稿</span
+                    ><span class="who">Studio → DeepSeek，然后 Codex</span>
+                  </div>
+                  <span class="right">未开始</span>
+                </div>
+                <div class="step">
+                  <span class="ic">8</span>
+                  <div><span class="t">保存并核对</span><span class="who">Studio</span></div>
+                  <span class="right">未开始</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ④ 日记中的入口 -->
+          <section class="view" data-view="diary">
+            <div class="diary-bar">
+              <span>‹ 11/24</span><b style="color: var(--text-strong)">1125_周三.md</b><span>›</span
+              ><span style="margin-left: auto"
+                >正文 · B · I · 列表 · 待办 · 链接 · 图片 · 让 AI 修改…</span
+              >
+            </div>
+            <div class="td-card">
+              <div>
+                <div class="k">今日科技日报 · 8 条 · 06:14 生成 · 未读</div>
+                <div class="h">头条：示例：某开源模型发布代码专用版本，官方称工程基准提升明显</div>
+                <ol start="2">
+                  <li>示例：一款 AI 编程工具开放团队版，按席位收费</li>
+                  <li>示例：多家云厂商下调推理价格，长上下文降幅最大</li>
+                </ol>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <button class="primary" data-go="report">打开日报</button
+                ><button class="ghost">收起</button>
+              </div>
+            </div>
+            <div class="doc">
+              <h1>2026-11-25 周三</h1>
+              <h2>昨日总结</h2>
+              <ul>
+                <li>眼镜项目：统一账号方案已理顺，联调结果待确认。</li>
+                <li>AIR APP：首次自动化尝试完成，卡点仍待解决。</li>
+              </ul>
+              <h2>今日待做</h2>
+              <ul>
+                <li>☐ 推进 AIR APP 板卡问题</li>
+                <li>☐ 确认统一账号联调结果</li>
+              </ul>
+              <h2>强调事项</h2>
+              <p class="muted">（空）</p>
+              <p class="small muted" style="margin-top: 30px">
+                日报不写进日记文件。上方卡片读取
+                <code>科技日报/2026/11/1125.md</code
+                >；想在日记里留痕时，可在日报的条目上选“记到今天日记”，只插入一行标题和链接。
+              </p>
+            </div>
+          </section>
+
+          <!-- ⑤ 设置 -->
+          <section class="view" data-view="settings">
+            <div class="head">
+              <h1>科技日报设置</h1>
+              <span class="pill ok">已开启 · 每天 06:10</span><span class="grow"></span
+              ><button>停用</button><button class="primary">保存</button>
+            </div>
+            <div class="form">
+              <div class="sec">
+                <h3>什么时候生成</h3>
+                <div class="row">
+                  <label>每天 <input type="time" value="06:10" /></label>
+                  <label
+                    ><input type="checkbox" checked /> 那时 Studio 没开，打开 Studio
+                    时补生成今天的</label
+                  >
+                </div>
+                <p class="note">只补当天；昨天错过的不会补。生成在后台进行，不占用当前会话。</p>
+              </div>
+              <div class="sec">
+                <h3>领域与搜索词</h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style="width: 90px">领域</th>
+                      <th>中文搜索词</th>
+                      <th>英文搜索词</th>
+                      <th style="width: 170px">标题须含（任一）</th>
+                      <th style="width: 56px"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>模型</td>
+                      <td><span class="q">大模型 发布</span><span class="q">开源模型</span></td>
+                      <td>
+                        <span class="q">LLM release</span><span class="q">open weights model</span>
+                      </td>
+                      <td class="muted">模型 · LLM · GPT · Claude …</td>
+                      <td><button class="link">编辑</button></td>
+                    </tr>
+                    <tr>
+                      <td>AI 应用</td>
+                      <td><span class="q">AI 应用 上线</span><span class="q">AI 编程</span></td>
+                      <td>
+                        <span class="q">AI agent launch</span><span class="q">AI coding</span>
+                      </td>
+                      <td class="muted">不限</td>
+                      <td><button class="link">编辑</button></td>
+                    </tr>
+                    <tr>
+                      <td>芯片</td>
+                      <td><span class="q">芯片 量产</span><span class="q">NPU</span></td>
+                      <td><span class="q">AI chip</span><span class="q">semiconductor</span></td>
+                      <td class="muted">芯片 · 半导体 · GPU …</td>
+                      <td><button class="link">编辑</button></td>
+                    </tr>
+                    <tr>
+                      <td>机器人</td>
+                      <td><span class="q">人形机器人</span><span class="q">具身智能</span></td>
+                      <td>
+                        <span class="q">humanoid robot</span><span class="q">embodied AI</span>
+                      </td>
+                      <td class="muted">机器人 · robot …</td>
+                      <td><button class="link">编辑</button></td>
+                    </tr>
+                    <tr>
+                      <td>AR/VR</td>
+                      <td><span class="q">AR 眼镜</span><span class="q">智能眼镜</span></td>
+                      <td><span class="q">AR glasses</span><span class="q">smart glasses</span></td>
+                      <td class="muted">眼镜 · AR · XR …</td>
+                      <td><button class="link">编辑</button></td>
+                    </tr>
+                    <tr>
+                      <td class="muted" colspan="5">
+                        还有 4 个：大厂动态 · 开源 · 论文 · 投融资　<button class="link">
+                          展开</button
+                        >　<button class="link">+ 添加领域</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="row">
+                  <label>排除词 <input value="招聘, 课程, 优惠, 行情" style="width: 260px" /></label
+                  ><label
+                    >只收
+                    <select>
+                      <option>3 天内</option>
+                      <option>1 天内</option>
+                      <option>7 天内</option>
+                    </select>
+                    发布的</label
+                  >
+                </div>
+                <p class="note">
+                  保存在 <code>科技日报/设置.yaml</code>，随我的空间同步；也可以直接编辑这个文件。
+                </p>
+              </div>
+              <div class="sec">
+                <h3>口味</h3>
+                <textarea rows="3" style="width: 100%">
+更关心能落地的工程进展和端侧硬件；少写融资传闻；同一公司一周内不重复做头条。</textarea
+                >
+                <p class="note">来自你在日报里的反馈：</p>
+                <div class="chips">
+                  <span>少推：AI 编程工具定价<em>11-25 ×</em></span
+                  ><span>不推品牌：示例品牌 A<em>11-20 ×</em></span
+                  ><span>少推：手机发布会<em>11-12 ×</em></span>
+                </div>
+              </div>
+              <div class="sec">
+                <h3>篇幅与费用</h3>
+                <div class="row">
+                  <label
+                    >每天入选 <input type="number" value="5" style="width: 56px" /> –
+                    <input type="number" value="10" style="width: 56px" /> 条</label
+                  >
+                  <label
+                    >每天最多调用 DeepSeek
+                    <input type="number" value="80" style="width: 70px" /> 次</label
+                  >
+                  <label
+                    >精选与成稿
+                    <select>
+                      <option>跟随定时任务（Codex 优先）</option>
+                      <option>Claude Code</option>
+                    </select></label
+                  >
+                </div>
+                <div class="cost">
+                  <div><span>每天搜索</span><strong>36 次</strong></div>
+                  <div><span>每天读取原文</span><strong>≤ 10 页</strong></div>
+                  <div><span>每月估算</span><strong>≈ 1,400 次 · $1.05</strong></div>
+                  <div><span>本月已用（日报）</span><strong>1,012 次</strong></div>
+                </div>
+                <p class="warnline">
+                  联网搜索每月上限 2,000 次是 Agent 会话和日报共用的。日报每月约 1,400
+                  次，建议把上限调到 4,000。<button class="link">去调整</button>
+                </p>
+                <p class="note">
+                  AI 精选和成稿用你本机的 Codex / Claude
+                  Code，不另外计费；它们只拿到候选文本，不联网、不读文件。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ⑥ 首次开启 -->
+          <section class="view" data-view="setup">
+            <div class="setup">
+              <h2>科技日报</h2>
+              <p class="muted">
+                每天按你的领域搜索网页新闻，过滤、去重后由 AI 精选 5–10
+                条，写成带来源链接的日报。和日记放在一起，但不写进日记文件。
+              </p>
+              <div class="card">
+                <span class="n">1</span><b>搜索服务</b>　<span class="pill warn">未配置</span>
+                <p class="note">
+                  日报需要一个搜索服务来搜索和读取网页，Key 只保存在本机。配置一次，Agent
+                  会话里的联网搜索也能用。
+                </p>
+                <table style="margin: 6px 0 10px">
+                  <tbody>
+                    <tr>
+                      <td>DeepSeek 搜索</td>
+                      <td class="muted">中英文 · $0.75 / 千次 · 失败不计费</td>
+                      <td><button class="primary">填写 Key 并验证</button></td>
+                    </tr>
+                    <tr>
+                      <td class="muted">自建 SearXNG</td>
+                      <td class="muted">填服务地址，免费</td>
+                      <td class="muted">后续支持</td>
+                    </tr>
+                    <tr>
+                      <td class="muted">Brave · Tavily · 博查</td>
+                      <td class="muted">按需接入</td>
+                      <td class="muted">后续支持</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="card">
+                <span class="n ok">✓</span><b>AI</b>　<span class="pill ok">本机 Codex 可用</span>
+                <p class="note">
+                  精选和成稿用本机 Codex（不可用时用 Claude
+                  Code），只拿到候选文字，不联网、不读文件。
+                </p>
+              </div>
+              <div class="card">
+                <span class="n">3</span><b>关注哪些领域</b>　<span class="muted small"
+                  >之后可以改搜索词</span
+                >
+                <div class="grid3">
+                  <label><input type="checkbox" checked /> 模型</label
+                  ><label><input type="checkbox" checked /> AI 应用</label
+                  ><label><input type="checkbox" checked /> 芯片</label>
+                  <label><input type="checkbox" checked /> 机器人</label
+                  ><label><input type="checkbox" checked /> AR/VR</label
+                  ><label><input type="checkbox" checked /> 大厂动态</label>
+                  <label><input type="checkbox" checked /> 开源</label
+                  ><label><input type="checkbox" /> 论文</label
+                  ><label><input type="checkbox" /> 投融资</label>
+                </div>
+              </div>
+              <div class="card">
+                <span class="n">4</span><b>时间与费用</b>
+                <div class="row">
+                  <label>每天 <input type="time" value="06:10" /></label
+                  ><label
+                    ><input type="checkbox" checked /> Studio 没开时，打开后补生成今天的</label
+                  >
+                </div>
+                <p class="note">7 个领域约 28 次搜索 + 最多 10 页原文，每天约 $0.03，每月约 $1。</p>
+              </div>
+              <div style="margin-top: 16px; display: flex; gap: 8px">
+                <button class="primary" disabled>开启并生成今天的日报</button
+                ><span class="muted small" style="align-self: center">配置搜索服务后可用</span>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+      <div class="status">
+        <span>进行中的工作</span><span>本地 · 我的空间</span><span>AI 就绪</span
+        ><span id="sbar">科技日报：今天 8 条 · 未读</span
+        ><span style="margin-left: auto">2026/11/25 周三 · 09:44</span>
+      </div>
+    </div>
+    <script>
+      const p = new URLSearchParams(location.search)
+      const view = p.get('view') || 'report'
+      const show = (v) => {
+        document
+          .querySelectorAll('.view')
+          .forEach((el) => el.classList.toggle('on', el.dataset.view === v))
+        document
+          .querySelectorAll('.side .item[data-nav]')
+          .forEach((el) =>
+            el.classList.toggle('on', el.dataset.nav === (v === 'diary' ? 'diary' : 'report')),
+          )
+        const bar = {
+          running: '科技日报：生成中 3/8',
+          failed: '科技日报：未完成，需要处理',
+          setup: '科技日报：未开启',
+        }[v]
+        document.getElementById('sbar').textContent = bar || '科技日报：今天 8 条 · 未读'
+        document.getElementById('navBadge').textContent =
+          { running: '生成中', failed: '需处理', setup: '' }[v] ?? '8 条'
+      }
+      document.addEventListener('click', (e) => {
+        const go = e.target.closest('[data-go],[data-nav]')
+        if (go) show(go.dataset.go || go.dataset.nav)
+      })
+      show(view)
+    </script>
+  </body>
+</html>

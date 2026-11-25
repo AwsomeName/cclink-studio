@@ -21,6 +21,7 @@ import { CclinkWorkspacePicker } from '../cclink-remote/CclinkPanel'
 import { openWorkspaceRef, pickLocalWorkspace } from './workspace-open-controller'
 import { useWorkspaceOpenStore } from './workspace-open-store'
 import { useCommandStore } from '../../stores/command-store'
+import { ProjectDownload } from '../project-sync/ProjectDownload'
 
 interface WorkspaceOpenSurfaceProps {
   anchorRef: RefObject<HTMLElement | null>
@@ -61,7 +62,13 @@ export function WorkspaceOpenSurface({
       {step === 'create' ? (
         <WorkspaceCreationForm onOpened={close} />
       ) : step === 'git' ? (
-        <WorkspaceGitAcquire onOpened={close} />
+        <>
+          <ProjectDownload onOpened={close} />
+          <details className="workspace-open-other-git">
+            <summary>其他 Git 地址</summary>
+            <WorkspaceGitAcquire onOpened={close} />
+          </details>
+        </>
       ) : step === 'sources' ? (
         <WorkspaceSourceChooser onRemote={showRemote} onOpened={close} />
       ) : (
@@ -192,8 +199,8 @@ function WorkspaceSourceChooser({
           className="workspace-open-source-card"
           onClick={() => useWorkspaceOpenStore.getState().show('git')}
         >
-          <strong>从 Git 获取…</strong>
-          <small>下载到新目录后读取项目设置</small>
+          <strong>从 GitHub 下载项目…</strong>
+          <small>另一台电脑上已同步的项目，下载后自动保持一致</small>
         </button>
         <button
           type="button"

@@ -29,7 +29,7 @@ export type CompanyCreateDecisionInput = z.infer<typeof companyCreateDecisionSch
 export type CompanyUpdateDecisionInput = z.infer<typeof companyUpdateDecisionSchema>
 export type CompanyCustomerCaseKind = CompanyCreateCaseInput['kind']
 export type CompanyCustomerCaseStatus = CompanyUpdateCaseInput['status']
-/** A customer inquiry or after-sales case the user records; stored locally under .cclink-studio, not uploaded or included in diagnostics. */
+/** A customer inquiry or after-sales case the user records; stored locally under .cclink-studio and never in diagnostics. Project sync (ADR 0026) uploads it to the user's private GitHub repository. */
 export interface CompanyCustomerCase {
   id: string
   version: number

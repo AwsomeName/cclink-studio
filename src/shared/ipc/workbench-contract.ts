@@ -352,6 +352,7 @@ export const gitBackupIpcContracts = {
   createPrivateRepository: bindIpcParser(gitBackupIpc.createPrivateRepository, (args) =>
     ipcArgs(gitHubRepositoryNameSchema.parse(args[0])),
   ),
+  listPrivateRepositories: bindLegacyNoArgs(gitBackupIpc.listPrivateRepositories),
 } as const
 
 export const hardwareIpcContracts = {

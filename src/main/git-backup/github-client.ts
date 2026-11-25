@@ -11,6 +11,9 @@ interface GitHubRepositoryResponse {
   clone_url?: string
   private?: boolean
   permissions?: { push?: boolean }
+  updated_at?: string
+  pushed_at?: string
+  description?: string | null
 }
 
 interface GitHubResponse<T> {
@@ -104,6 +107,54 @@ export class GitHubClient {
       cloneUrl: created.clone_url,
       private: created.private === true,
     }
+  }
+
+  /** Exact visibility of one repository; `null` when it does not exist or is not visible. */
+  async getRepositoryVisibility(
+    owner: string,
+    repositoryName: string,
+  ): Promise<{ fullName: string; private: boolean; push: boolean } | null> {
+    const repository = await this.requestOptional<GitHubRepositoryResponse>(
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}`,
+    )
+    if (!repository?.full_name) return null
+    return {
+      fullName: repository.full_name,
+      private: repository.private === true,
+      push: repository.permissions?.push === true,
+    }
+  }
+
+  /** Private repositories the account owns or can write to, most recently pushed first. */
+  async listPrivateRepositories(): Promise<
+    Array<{
+      name: string
+      fullName: string
+      cloneUrl: string
+      updatedAt: string | null
+      description: string | null
+    }>
+  > {
+    const items = await this.request<GitHubRepositoryResponse[]>(
+      '/user/repos?visibility=private&sort=pushed&per_page=100',
+    )
+    if (!Array.isArray(items)) return []
+    return items
+      .filter(
+        (item) =>
+          item.private === true &&
+          item.permissions?.push === true &&
+          item.name &&
+          item.full_name &&
+          item.clone_url,
+      )
+      .map((item) => ({
+        name: item.name!,
+        fullName: item.full_name!,
+        cloneUrl: item.clone_url!,
+        updatedAt: item.pushed_at ?? item.updated_at ?? null,
+        description: item.description?.slice(0, 200) ?? null,
+      }))
   }
 
   private async request<T>(

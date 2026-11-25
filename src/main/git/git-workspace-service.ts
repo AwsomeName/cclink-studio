@@ -6,8 +6,16 @@ import {
   type GitTransferSnapshot,
 } from '../../shared/git'
 import { transferRepository } from './git-transfer'
-import { readFile, readdir, realpath, stat } from 'node:fs/promises'
-import { basename, isAbsolute, relative, resolve } from 'node:path'
+import { lstat, mkdir, readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { PROJECT_SYNC_SECTION, parseGitHubHttpsRepository } from '../../shared/git/project-sync'
+import type { SyncScope } from './sync-diary'
+import {
+  isProjectSyncRepository,
+  markProjectSyncRepository,
+  previewProjectFiles,
+} from './project-sync-scope'
+import type { ProjectSyncPreview } from '../../shared/git/project-sync'
 import { createHash } from 'node:crypto'
 import type {
   GitChangeEntry,
@@ -47,6 +55,16 @@ interface GitWorkspaceServiceOptions {
   runner?: GitCommandRunner
   now?: () => Date
   resolveAuthentication?: (remoteUrl: string) => Promise<{ username: string; token: string } | null>
+  /** Company projects: row counts shown in 第一次会上传什么. */
+  companyPreview?: (root: string) => Promise<Array<{ label: string; count: number }> | undefined>
+  /** ADR 0026: throws unless the saved GitHub account sees this repository as private. */
+  assertPrivateRepository?: (remoteUrl: string) => Promise<{ fullName: string }>
+  /** Company export/import around a project sync round; undefined for other projects. */
+  projectHooks?: (
+    root: string,
+  ) => Promise<
+    Pick<SyncScope, 'beforeCommit' | 'afterUpdate' | 'describeRecordConflict'> | undefined
+  >
 }
 
 export class GitWorkspaceService {
@@ -103,6 +121,8 @@ export class GitWorkspaceService {
       await this.workspaceStateService.verifyLocalIdentity(input.workspacePath, known.projectId)
       key = await realpath(input.workspacePath)
     }
+    if (input.action === 'project-sync') return this.syncProject(input, raw.url, key)
+    if (input.action === 'clone' && input.projectSync) return this.downloadProject(input)
     if (this.activeOperations.has(key)) throw Error('此仓库已有 Git 操作正在执行')
     this.activeOperations.add(key)
     try {
@@ -133,21 +153,34 @@ export class GitWorkspaceService {
           }
         diary = settings.diary
       }
-      const result = await transferRepository(input, {
-        diary,
-        decide: this.options.decide,
-        onDiaryAddress: raw.url
-          ? async (url) => {
-              await this.workspaceStateService.setSection(key, diarySection, { remoteUrl: url })
-            }
-          : undefined,
-        runner: this.transferRunner,
-        copyRoot: input.destinationParent,
-        authentication: input.token
-          ? { username: input.username || 'git', token: input.token }
-          : // My Space sync uses the GitHub account saved in Studio settings for github.com HTTPS.
-            (diary && input.url && (await this.resolveAuthentication(input.url))) || undefined,
-      })
+      const authentication = input.token
+        ? { username: input.username || 'git', token: input.token }
+        : // My Space sync uses the GitHub account saved in Studio settings for github.com HTTPS.
+          (diary && input.url && (await this.resolveAuthentication(input.url))) || undefined
+      const authSource: TransferAuthSource = input.token
+        ? 'one-off'
+        : authentication
+          ? 'saved-github'
+          : input.sshKeyPath
+            ? 'ssh-key'
+            : 'none'
+      let result: GitTransferSnapshot
+      try {
+        result = await transferRepository(input, {
+          diary,
+          decide: this.options.decide,
+          onDiaryAddress: raw.url
+            ? async (url) => {
+                await this.workspaceStateService.setSection(key, diarySection, { remoteUrl: url })
+              }
+            : undefined,
+          runner: this.transferRunner,
+          copyRoot: input.destinationParent,
+          authentication,
+        })
+      } catch (error) {
+        throw reportTransferFailure(error, input.action, input.url, authSource)
+      }
       if (diary) await this.workspaceStateService.setSection(key, diarySection, result)
       // Register only a newly-created copy. Never initialize or migrate the connected old root.
       if (result.newCopy) {
@@ -159,6 +192,155 @@ export class GitWorkspaceService {
         }
       }
       return result
+    } finally {
+      this.activeOperations.delete(key)
+    }
+  }
+
+  /** 第一次会上传什么 / 同步范围 for a local project. Read-only for folders not yet synced. */
+  async previewProjectSync(requestedPath: string): Promise<ProjectSyncPreview> {
+    const resolved = await this.workspaceStateService.resolveLocalWorkspace(requestedPath)
+    if (!resolved.valid || !resolved.workspacePath) throw Error(resolved.error ?? '项目不可用')
+    const root = await realpath(resolved.workspacePath)
+    const hasRepository = Boolean(await lstat(join(root, '.git')).catch(() => null))
+    const synced = hasRepository && (await isProjectSyncRepository(root))
+    const run = async (args: string[]) =>
+      (await this.transferRunner.run(root, ['-c', 'core.quotepath=false', ...args])).stdout
+    const preview = await previewProjectFiles(root, run, synced)
+    const company = await this.options.companyPreview?.(root).catch(() => undefined)
+    return {
+      workspacePath: root,
+      gitManaged: hasRepository && !synced,
+      ...preview,
+      ...(company ? { company } : {}),
+    }
+  }
+
+  /** Project sync status as last recorded on this computer, or null when never set up. */
+  async getProjectSyncState(path: string): Promise<GitTransferSnapshot | null> {
+    const saved = (await this.workspaceStateService.getSnapshot(path)).sections[
+      PROJECT_SYNC_SECTION
+    ] as GitTransferSnapshot | undefined
+    return saved?.remoteUrl ? saved : null
+  }
+
+  /**
+   * ADR 0026. One round of whole-project two-way sync with a private GitHub repository.
+   * Only folders that are not Git repositories, or that project sync itself set up, qualify.
+   */
+  private async syncProject(
+    input: GitTransferInput,
+    requestedUrl: string | undefined,
+    key: string,
+  ): Promise<GitTransferSnapshot> {
+    if (this.activeOperations.has(key)) throw Error('这个项目正在同步，请稍候')
+    this.activeOperations.add(key)
+    try {
+      const personal = this.workspaceStateService.getFixedSpaces().personal
+      if (personal?.workspacePath === key) throw Error('我的空间使用自己的同步')
+      const { settings } = await readWorkspaceSettings(key)
+      if (settings.type === 'diary') throw Error('日记项目使用我的空间同步')
+      const saved = await this.getProjectSyncState(key)
+      if (input.stop) {
+        await this.workspaceStateService.setSection(key, PROJECT_SYNC_SECTION, null)
+        return {
+          workspacePath: key,
+          remoteUrl: '',
+          branch: '',
+          head: '',
+          target: '',
+          checkedAt: '',
+          changes: '',
+          localChanges: '',
+          diverged: false,
+        }
+      }
+      const paused =
+        saved?.conflict || saved?.conflictFiles?.length || saved?.pendingDeletions?.length
+      if (!requestedUrl && paused && !input.feedback && !input.resolutions && !input.deletions)
+        return saved!
+      if (!saved) {
+        if (!requestedUrl) throw Error('这个项目还没有设置同步')
+        const isRepository = await lstat(join(key, '.git')).catch(() => null)
+        if (isRepository && !(await isProjectSyncRepository(key)))
+          throw Error('这个文件夹本身是 Git 仓库，请用左下角 Git 提交和推送，不提供自动同步。')
+      }
+      const parsed = parseGitHubHttpsRepository(requestedUrl ?? saved!.remoteUrl)
+      if (!parsed) throw Error('项目同步只支持 GitHub 私有仓库地址')
+      const url = parsed.url
+      if (!this.options.assertPrivateRepository) throw Error('GitHub 账号服务未就绪')
+      const { fullName } = await this.options.assertPrivateRepository(url)
+      const authentication = await this.resolveAuthentication(url)
+      if (!authentication) throw Error('请先在 设置 → API Key 与连接 → GitHub 中保存账号和 Token')
+      if (requestedUrl && requestedUrl !== saved?.remoteUrl)
+        await this.workspaceStateService.setSection(key, PROJECT_SYNC_SECTION, {
+          ...(saved ?? {}),
+          remoteUrl: url,
+          repository: fullName,
+        })
+      let result: GitTransferSnapshot
+      try {
+        result = await transferRepository(
+          { ...input, url },
+          {
+            runner: this.transferRunner,
+            authentication,
+            decide: this.options.decide,
+            project: (await this.options.projectHooks?.(key)) ?? {},
+          },
+        )
+      } catch (error) {
+        throw reportTransferFailure(error, input.action, url, 'saved-github')
+      }
+      result = { ...result, repository: fullName }
+      await this.workspaceStateService.setSection(key, PROJECT_SYNC_SECTION, result)
+      return result
+    } finally {
+      this.activeOperations.delete(key)
+    }
+  }
+
+  /**
+   * Second computer: download a private project repository into a new folder with the saved
+   * GitHub account, register it, and keep syncing it with the same address.
+   */
+  private async downloadProject(input: GitTransferInput): Promise<GitTransferSnapshot> {
+    const parsed = parseGitHubHttpsRepository(input.url ?? '')
+    if (!parsed) throw Error('只能下载 GitHub 私有仓库')
+    if (!input.destinationParent || !input.destinationName) throw Error('请选择保存位置')
+    if (!this.options.assertPrivateRepository) throw Error('GitHub 账号服务未就绪')
+    const { fullName } = await this.options.assertPrivateRepository(parsed.url)
+    const authentication = await this.resolveAuthentication(parsed.url)
+    if (!authentication) throw Error('请先在 设置 → API Key 与连接 → GitHub 中保存账号和 Token')
+    const parent = await realpath(input.destinationParent)
+    const destination = join(parent, input.destinationName!)
+    const existing = await lstat(destination).catch(() => null)
+    if (existing && (!existing.isDirectory() || (await readdir(destination)).length))
+      throw Error(`${destination} 已存在且不是空文件夹，请换一个名字或位置`)
+    if (!existing) await mkdir(destination)
+    const key = 'download:' + destination
+    if (this.activeOperations.has(key)) throw Error('正在下载这个项目')
+    this.activeOperations.add(key)
+    try {
+      let result: GitTransferSnapshot
+      try {
+        result = await transferRepository(
+          { action: 'clone', url: parsed.url, destination },
+          { runner: this.transferRunner, authentication },
+        )
+      } catch (error) {
+        throw reportTransferFailure(error, 'clone', parsed.url, 'saved-github')
+      }
+      await markProjectSyncRepository(result.workspacePath)
+      // Registers the copy with a fresh project identity (project.json is never synced).
+      await this.workspaceStateService.getSnapshot(result.workspacePath)
+      const synced: GitTransferSnapshot = { ...result, remoteUrl: parsed.url, repository: fullName }
+      await this.workspaceStateService.setSection(
+        result.workspacePath,
+        PROJECT_SYNC_SECTION,
+        synced,
+      )
+      return synced
     } finally {
       this.activeOperations.delete(key)
     }
@@ -651,6 +833,45 @@ function limitDiff(result: GitDiffResult): GitDiffResult {
     binary,
     ...(binary ? { error: '二进制文件不提供文本 Diff' } : {}),
   }
+}
+
+type TransferAuthSource = 'one-off' | 'saved-github' | 'ssh-key' | 'none'
+
+function remoteHost(url: string | undefined): string {
+  if (!url) return '-'
+  try {
+    return new URL(url).hostname || '-'
+  } catch {
+    return /^[^@\s]+@([^:\s]+):/.exec(url)?.[1] ?? '-'
+  }
+}
+
+/**
+ * Logs a sanitized, bounded failure record for the framework diagnostic report and turns an
+ * authentication failure without any credential into an actionable message. The executor already
+ * redacts the token and `user:pass@` from stderr; only the host (never the path) is added here.
+ */
+function reportTransferFailure(
+  error: unknown,
+  action: GitTransferInput['action'],
+  url: string | undefined,
+  authSource: TransferAuthSource,
+): unknown {
+  const code = error instanceof GitBackupError ? error.code : 'GIT_TRANSFER_FAILED'
+  const rawStderr = error instanceof GitBackupError ? error.details?.stderr : undefined
+  const stderr =
+    typeof rawStderr === 'string'
+      ? rawStderr.replace(/\s+/g, ' ').trim().slice(0, 500)
+      : (error instanceof Error ? error.message : String(error)).slice(0, 200)
+  const host = remoteHost(url)
+  console.warn(`[GitSync] ${action} failed ${JSON.stringify({ code, authSource, host, stderr })}`)
+  if (!(error instanceof GitBackupError) || error.code !== 'AUTHENTICATION_FAILED') return error
+  if (authSource !== 'none') return error
+  const message =
+    host === 'github.com'
+      ? 'Git 认证失败：这台电脑的 Studio 尚未保存 GitHub 用户名和 Token。请在 设置 → API Key 与连接 → GitHub 中配置，或在下方填写本次认证。'
+      : 'Git 认证失败：未提供任何凭证。请在下方填写本次认证（HTTPS Token 或 SSH 私钥路径）。'
+  return new GitBackupError(error.code, message, error.details, { cause: error })
 }
 
 function operationFailure(
