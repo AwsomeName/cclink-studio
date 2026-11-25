@@ -1,5 +1,8 @@
 # 我的空间 · 科技日报：方案评估与效果稿
 
+> **本页是 v1，已被用户否决**（独立页面与单独设置页；前沿源、榜单延后）。现行方案见 [v2/README.md](v2/README.md)
+> 与 [personal-techdaily.md](../../features/personal-techdaily.md)。下文仅作记录。
+>
 > 日期：2026-11-25。状态：效果稿，未实现。
 > 参考：Argus techdaily（服务器上的复刻规格书 `/home/lc/argus/docs/techdaily-每日搜索流程复刻方案.md` 本机读不到；
 > 本评估依据 2026-10 本机留存的 Argus 代码 `src/argus/techdaily/`、用户给出的流程摘要和截图）。
