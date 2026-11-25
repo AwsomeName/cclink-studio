@@ -35,10 +35,12 @@ function activeShortcutScopes(target?: EventTarget | null): Set<string> {
     scopes.add('editor')
     if (getEditorContextSurface(tab.id)?.runMarkdownAction) scopes.add('markdown')
   }
-  // My Space 今天 / 日记: the home page embeds a Markdown editor; its shortcuts apply there too.
-  if (tab.type === 'workspace-home' && getEmbeddedEditorSurface()?.runMarkdownAction) {
+  // My Space 今天 / 日记 / 计划: the home page embeds an editor; its shortcuts apply there too
+  // (an embedded source view gets the editor scope, a rich one the Markdown scope as well).
+  const embedded = tab.type === 'workspace-home' ? getEmbeddedEditorSurface() : null
+  if (embedded) {
     scopes.add('editor')
-    scopes.add('markdown')
+    if (embedded.runMarkdownAction) scopes.add('markdown')
   }
   if (tab.type === 'terminal') scopes.add('terminal')
   if (tab.type === 'browser') scopes.add('browser')

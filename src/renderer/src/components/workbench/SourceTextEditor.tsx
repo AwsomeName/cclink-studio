@@ -234,73 +234,73 @@ export function SourceTextEditor({
       registerEditorContextSurface(
         tabId,
         {
-        isFocused: () =>
-          Boolean(textareaRef.current) && document.activeElement === textareaRef.current,
-        getSelectionTarget: () => {
-          const textarea = textareaRef.current
-          if (!textarea) return null
-          return {
-            kind: 'editor',
-            workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
-            tabId,
-            filePath,
-            editorKind: 'source',
-            range: sourceSelectionRange(
-              textarea.value,
-              textarea.selectionStart,
-              textarea.selectionEnd,
-            ),
-            dirty: useEditorStore.getState().files[filePath]?.dirty ?? false,
-          }
-        },
-        getSelectionText: () => {
-          const textarea = textareaRef.current
-          return textarea?.value.slice(textarea.selectionStart, textarea.selectionEnd) ?? ''
-        },
-        copy: async () => {
-          const textarea = textareaRef.current
-          if (!textarea) return
-          await copyTextToClipboard(
-            textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
-          )
-        },
-        cut: async () => {
-          const textarea = textareaRef.current
-          if (!textarea) return
-          const { selectionStart, selectionEnd, value } = textarea
-          await copyTextToClipboard(value.slice(selectionStart, selectionEnd))
-          useEditorStore
-            .getState()
-            .updateContent(filePath, value.slice(0, selectionStart) + value.slice(selectionEnd))
-          requestAnimationFrame(() => {
-            textarea.focus()
-            textarea.setSelectionRange(selectionStart, selectionStart)
-          })
-        },
-        paste: async () => {
-          const textarea = textareaRef.current
-          if (!textarea) return
-          const text = await navigator.clipboard.readText()
-          const { selectionStart, selectionEnd, value } = textarea
-          useEditorStore
-            .getState()
-            .updateContent(
+          isFocused: () =>
+            Boolean(textareaRef.current) && document.activeElement === textareaRef.current,
+          getSelectionTarget: () => {
+            const textarea = textareaRef.current
+            if (!textarea) return null
+            return {
+              kind: 'editor',
+              workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+              tabId,
               filePath,
-              value.slice(0, selectionStart) + text + value.slice(selectionEnd),
+              editorKind: 'source',
+              range: sourceSelectionRange(
+                textarea.value,
+                textarea.selectionStart,
+                textarea.selectionEnd,
+              ),
+              dirty: useEditorStore.getState().files[filePath]?.dirty ?? false,
+            }
+          },
+          getSelectionText: () => {
+            const textarea = textareaRef.current
+            return textarea?.value.slice(textarea.selectionStart, textarea.selectionEnd) ?? ''
+          },
+          copy: async () => {
+            const textarea = textareaRef.current
+            if (!textarea) return
+            await copyTextToClipboard(
+              textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
             )
-          requestAnimationFrame(() => {
-            const cursor = selectionStart + text.length
-            textarea.focus()
-            textarea.setSelectionRange(cursor, cursor)
-          })
-        },
-        selectAll: () => {
-          textareaRef.current?.select()
-          textareaRef.current?.focus()
-        },
-        openFind,
-        closeFind,
-        save: handleSave,
+          },
+          cut: async () => {
+            const textarea = textareaRef.current
+            if (!textarea) return
+            const { selectionStart, selectionEnd, value } = textarea
+            await copyTextToClipboard(value.slice(selectionStart, selectionEnd))
+            useEditorStore
+              .getState()
+              .updateContent(filePath, value.slice(0, selectionStart) + value.slice(selectionEnd))
+            requestAnimationFrame(() => {
+              textarea.focus()
+              textarea.setSelectionRange(selectionStart, selectionStart)
+            })
+          },
+          paste: async () => {
+            const textarea = textareaRef.current
+            if (!textarea) return
+            const text = await navigator.clipboard.readText()
+            const { selectionStart, selectionEnd, value } = textarea
+            useEditorStore
+              .getState()
+              .updateContent(
+                filePath,
+                value.slice(0, selectionStart) + text + value.slice(selectionEnd),
+              )
+            requestAnimationFrame(() => {
+              const cursor = selectionStart + text.length
+              textarea.focus()
+              textarea.setSelectionRange(cursor, cursor)
+            })
+          },
+          selectAll: () => {
+            textareaRef.current?.select()
+            textareaRef.current?.focus()
+          },
+          openFind,
+          closeFind,
+          save: handleSave,
         },
         { embedded },
       ),

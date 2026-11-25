@@ -213,7 +213,7 @@ export function createTerminalContextCommands(): Command[] {
     },
     {
       id: 'terminal.sendSelectionToAgent',
-      label: '将选区挂到 Agent',
+      label: '添加到会话',
       contextOnly: true,
       category: 'Terminal',
       enabled: (context) => Boolean(terminalTarget(context)?.selectionText),

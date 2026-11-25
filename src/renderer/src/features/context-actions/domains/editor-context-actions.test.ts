@@ -3,7 +3,16 @@ import { localWorkspaceRef, workspaceRefKey } from '@shared/workspace-ref'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useTabStore } from '../../../stores/tab-store'
 import type { CommandContext } from '../context-target'
-import { registerEditorContextSurface, type EditorContextSurface } from '../editor-context-surface'
+import { keyChordId } from '@shared/keybindings'
+import { useToastStore } from '../../../components/common/Toast'
+import { createBrowserCommands } from '../../../bootstrap/commands/browser-commands'
+import { resolveEffectiveKeybindings } from '../../shortcuts/keybinding-resolver'
+import { selectShortcutBinding } from '../../shortcuts/use-shortcut-router'
+import {
+  registerEditorContextSurface,
+  SEND_SELECTION_COMMAND_ID,
+  type EditorContextSurface,
+} from '../editor-context-surface'
 import { createEditorContextCommands } from './editor-context-actions'
 
 const EMBEDDED_ID = 'today:/diary/1125_周三.md'
@@ -187,5 +196,87 @@ describe('Markdown table context commands', () => {
     )
     await command('markdown.table.deleteRow').action(editorContext({ headerRow: false }))
     expect(runMarkdownAction).toHaveBeenCalledWith('table-delete-row')
+  })
+})
+
+describe('添加到会话 from the keyboard (⌘L)', () => {
+  function focusedSurface(selectedText: string | null): EditorContextSurface {
+    const context = selectionContext(EMBEDDED_ID)
+    const target = context.target as Extract<
+      NonNullable<CommandContext['target']>,
+      { kind: 'markdown-selection' }
+    >
+    return {
+      ...surface(),
+      isFocused: () => true,
+      getSelectionText: () => selectedText ?? '',
+      getSelectionTarget: () => ({
+        kind: 'editor',
+        workspaceKey: target.workspaceKey,
+        tabId: EMBEDDED_ID,
+        filePath: target.filePath,
+        editorKind: 'markdown',
+        range: selectedText ? target.range : null,
+        dirty: false,
+      }),
+    }
+  }
+
+  function mounted() {
+    const state = useAgentStore.getState()
+    return state.conversations[state.activeConversationId]?.mountedResources ?? []
+  }
+
+  it('binds ⌘L in the editor scope only, leaving the browser ⌘L alone', () => {
+    const send = command(SEND_SELECTION_COMMAND_ID)
+    expect(send.label).toBe('添加到会话')
+    expect(send.contextOnly).toBeFalsy()
+    expect(send.shortcutPolicy).toEqual({
+      scope: 'editor',
+      inputPolicy: 'allow',
+      defaultBindings: [{ code: 'KeyL', modifiers: ['primary'] }],
+    })
+    const commands = [...createBrowserCommands(), ...createEditorContextCommands()]
+    const bindings = resolveEffectiveKeybindings(commands, [])
+    const chord = keyChordId({ code: 'KeyL', modifiers: ['primary'] })
+    expect(
+      selectShortcutBinding(bindings, chord, new Set(['global', 'workbench', 'editor']), true)
+        ?.commandId,
+    ).toBe(SEND_SELECTION_COMMAND_ID)
+    expect(
+      selectShortcutBinding(bindings, chord, new Set(['global', 'workbench', 'browser']), true)
+        ?.commandId,
+    ).toBe('browser.navigate')
+  })
+
+  it('mounts the focused editor selection when the shortcut carries no target', async () => {
+    openHome()
+    unregister = registerEditorContextSurface(EMBEDDED_ID, focusedSurface(SELECTED), {
+      embedded: true,
+    })
+    await command(SEND_SELECTION_COMMAND_ID).action({ source: 'shortcut' })
+    expect(mounted()).toHaveLength(1)
+    expect(mounted()[0]).toMatchObject({ label: '1125_周三.md:L142-L142' })
+  })
+
+  it('does not add the same selection twice', async () => {
+    openHome()
+    unregister = registerEditorContextSurface(EMBEDDED_ID, focusedSurface(SELECTED), {
+      embedded: true,
+    })
+    await command(SEND_SELECTION_COMMAND_ID).action({ source: 'shortcut' })
+    await command(SEND_SELECTION_COMMAND_ID).action({ source: 'shortcut' })
+    expect(mounted()).toHaveLength(1)
+  })
+
+  it('asks for a selection instead of sending anything when nothing is selected', async () => {
+    openHome()
+    unregister = registerEditorContextSurface(EMBEDDED_ID, focusedSurface(null), {
+      embedded: true,
+    })
+    const show = vi.spyOn(useToastStore.getState(), 'show')
+    await command(SEND_SELECTION_COMMAND_ID).action({ source: 'shortcut' })
+    expect(mounted()).toHaveLength(0)
+    expect(show).toHaveBeenCalledWith('先在编辑器里选中要添加到会话的内容', 'info')
   })
 })

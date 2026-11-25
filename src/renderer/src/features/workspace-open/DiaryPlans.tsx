@@ -335,7 +335,7 @@ export function DiaryPlans({
         ) : file ? (
           <>
             <div className="diary-plan-editor" data-file={file.name}>
-              <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} />
+              <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} embedded />
             </div>
           </>
         ) : current ? (
