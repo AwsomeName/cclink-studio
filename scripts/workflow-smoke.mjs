@@ -572,6 +572,7 @@ async function main() {
         'new find binding was not persisted',
       )
 
+      await page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' }).click()
       await page.getByRole('tab', { name: /notes\.md/ }).click()
       const editor = page.locator('.tiptap').first()
       await editor.click()
@@ -1474,6 +1475,7 @@ async function main() {
     )
     assert((await findRow.locator('kbd').innerText()).includes('F'), 'find default did not return')
 
+    await page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' }).click()
     await page.getByRole('tab', { name: /notes\.md/ }).click()
     await page.locator('.tiptap').first().click()
     await page.keyboard.press(`${modifier}+F`)
@@ -1743,6 +1745,7 @@ async function main() {
     )
     await settingsCopyKeyAction.press('Space')
     await page.locator('.unified-context-menu').waitFor({ state: 'hidden' })
+    await page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' }).click()
     return 'mouse/Shift+F10/Space/disabled reason'
   })
 

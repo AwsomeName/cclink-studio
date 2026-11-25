@@ -597,8 +597,7 @@ export class TechDailyService {
   ): Promise<void> {
     const step = (id: TechDailyStepId) => run.steps.find((s) => s.id === id)!
     let writes = Promise.resolve()
-    const save = () => {
-      const snapshot = structuredClone(run)
+    const save = (snapshot = structuredClone(run)) => {
       writes = writes.then(() => this.persistRun(snapshot)).catch(() => undefined)
     }
     const begin = (id: TechDailyStepId, detail?: string) => {
@@ -621,8 +620,13 @@ export class TechDailyService {
       for (const s of run.steps)
         if (s.state === 'pending')
           Object.assign(s, { state: 'skipped', detail: s.detail ?? '未执行' })
-      Object.assign(run, { status, endedAt: this.now().toISOString(), ...(error ? { error } : {}) })
-      save()
+      // getRun exposes the active run until queued writes finish and the generation lock is released.
+      save({
+        ...structuredClone(run),
+        status,
+        endedAt: this.now().toISOString(),
+        ...(error ? { error } : {}),
+      })
       await writes
     }
     const failAt = async (id: TechDailyStepId, message: string) => {

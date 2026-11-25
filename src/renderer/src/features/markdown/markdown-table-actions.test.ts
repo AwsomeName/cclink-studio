@@ -247,7 +247,9 @@ describe('Markdown table grip operations', () => {
   it('copies a cell range as tab-separated rows', () => {
     const cells = cellPositions()
     editor.view.dispatch(
-      editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0][0], cells[1][1])),
+      editor.state.tr.setSelection(
+        CellSelection.create(editor.state.doc, cells[0][0], cells[1][1]),
+      ),
     )
     expect(markdownTableSelectionToTsv(editor.state)).toBe('事项\t进展\n统一账号\t已推进')
     caretIn(1)

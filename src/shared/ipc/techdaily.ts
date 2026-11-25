@@ -57,8 +57,17 @@ export interface TechDailyApiContract {
   saveSearxng(input: SearxngConfigInput): Promise<TechDailyResult<SearxngConfigSnapshot>>
   testSearxng(input: SearxngConfigInput): Promise<TechDailyResult<SearxngTestResult>>
   collect(input: WorkspaceInput): Promise<TechDailyResult<TechDailyCollectResult>>
-  listMonth(input: { workspacePath: string; month: string }): Promise<TechDailyResult<TechDailyMonth>>
-  getRun(input: { workspacePath: string; day: string }): Promise<TechDailyResult<TechDailyRun | null>>
-  generate(input: { workspacePath: string; overwrite: boolean }): Promise<TechDailyResult<TechDailyRun>>
+  listMonth(input: {
+    workspacePath: string
+    month: string
+  }): Promise<TechDailyResult<TechDailyMonth>>
+  getRun(input: {
+    workspacePath: string
+    day: string
+  }): Promise<TechDailyResult<TechDailyRun | null>>
+  generate(input: {
+    workspacePath: string
+    overwrite: boolean
+  }): Promise<TechDailyResult<TechDailyRun>>
   stop(input: WorkspaceInput): Promise<TechDailyResult<TechDailyRun | null>>
 }

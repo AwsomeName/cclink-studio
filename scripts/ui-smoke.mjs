@@ -257,8 +257,18 @@ async function stopWebFixture() {
   })
 }
 
+async function openStudioSettings(page) {
+  if (!(await page.locator('#studio-settings-page').isVisible()))
+    await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
+}
+
+async function returnToWorkbench(page) {
+  const back = page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' })
+  if (await back.isVisible()) await back.click()
+}
+
 async function openResourceSettings(page, title) {
-  await page.getByRole('button', { name: 'Studio 设置', exact: true }).click()
+  await openStudioSettings(page)
   await page.locator('.settings-nav').getByRole('button', { name: title, exact: true }).click()
   if (title === '网站与账号') {
     await page.locator('.web-resources-sidebar').waitFor({ state: 'visible' })
@@ -269,6 +279,7 @@ async function openResourceSettings(page, title) {
 }
 
 async function showProjectNavigation(page) {
+  await returnToWorkbench(page)
   const expand = page.locator('[title="展开左侧栏"]')
   if (await expand.count()) await expand.click()
   const back = page.locator('.sidebar-back')
@@ -298,6 +309,7 @@ async function ensureActivityPanel(page, panelId, title) {
     await openResourceSettings(page, title)
     return
   }
+  await returnToWorkbench(page)
   const state = await page.evaluate(async () => {
     const { useUIStore } = await import('/src/stores/ui-store.ts')
     const { activePanel, sidebarVisible } = useUIStore.getState()
@@ -2237,10 +2249,7 @@ async function main() {
         undefined,
         { timeout: 10_000 },
       )
-      await page.evaluate(async (tabId) => {
-        const { useTabStore } = await import('/src/stores/tab-store.ts')
-        useTabStore.getState().activateTab(tabId)
-      }, browserTabId)
+      await page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' }).click()
       await waitForAsyncFunction(
         page,
         async (tabId) => (await window.cclinkStudio.browser.getActiveViewId()) === tabId,
@@ -3572,7 +3581,7 @@ async function main() {
   )
 
   await runCheck('settings page opens and searches locally', async () => {
-    await clickByTitle(page, 'Studio 设置')
+    await openStudioSettings(page)
     await page.waitForSelector('.settings-page', { timeout: 10_000 })
     await page.locator('.settings-search input').waitFor({ state: 'visible' })
     await page.locator('.settings-search input').fill('agent')
@@ -3612,6 +3621,7 @@ async function main() {
     )
     await updatePanel.locator('.update-panel-header button[title="关闭"]').click()
     await updateTrack.selectOption('stable')
+    await returnToWorkbench(page)
     return 'settings search, truthful Agent API options, and stable/beta update track projection'
   })
 

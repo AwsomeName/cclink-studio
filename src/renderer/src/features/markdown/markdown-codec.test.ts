@@ -652,7 +652,9 @@ describe('editor output keeps untouched Markdown text', () => {
   })
 
   it('keeps the final newline of a file that had one', () => {
-    expect(normalizeMarkdownEditorOutput('前文\n\n后文 改过', reference)).toBe('前文\n\n后文 改过\n')
+    expect(normalizeMarkdownEditorOutput('前文\n\n后文 改过', reference)).toBe(
+      '前文\n\n后文 改过\n',
+    )
     expect(normalizeMarkdownEditorOutput('前文', '前文')).toBe('前文')
     expect(normalizeMarkdownEditorOutput('', '前文\n')).toBe('')
   })
