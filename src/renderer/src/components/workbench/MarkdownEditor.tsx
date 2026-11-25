@@ -144,6 +144,9 @@ export function MarkdownEditor({
       ? fileState.error
       : null
   const [selectionRange, setSelectionRange] = useState<MarkdownSourceRange | null>(null)
+  // ProseMirror keeps a selection after the editor loses focus, but nothing shows it any more;
+  // the 发给会话 bar only belongs to a selection the user can see.
+  const [editorFocused, setEditorFocused] = useState(false)
   const [resourceInspection, setResourceInspection] = useState<FsMarkdownDocumentInspection | null>(
     null,
   )
@@ -292,6 +295,8 @@ export function MarkdownEditor({
       onSelectionUpdate: () => {
         setSelectionRange(currentWysiwygSelection())
       },
+      onFocus: () => setEditorFocused(true),
+      onBlur: () => setEditorFocused(false),
     },
     [extensions],
   )
@@ -1365,8 +1370,9 @@ export function MarkdownEditor({
         </div>
       )}
 
-      {selectionRange && (
-        <div className="markdown-selection-toolbar">
+      {selectionRange && editorFocused && (
+        // Pressing the bar must not blur the editor, or the bar would vanish before its click.
+        <div className="markdown-selection-toolbar" onMouseDown={(event) => event.preventDefault()}>
           <span>
             L{selectionRange.startLine}-L{selectionRange.endLine}
           </span>
