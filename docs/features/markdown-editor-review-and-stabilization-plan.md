@@ -5,6 +5,12 @@
 > 审查范围：Markdown 打开、编辑、保存、关闭、恢复、外部冲突、Agent 操作、资源组、文件类型路由、状态所有权、IPC、生命周期与测试门禁。
 > 本文是本轮 Markdown 稳定化的整改事实源；产品支持范围仍以 `docs/features/markdown-wysiwyg.md` 为准，但其中“首轮完成”的声明在本文退出条件满足前暂停生效。
 
+## 2026-11-25 真实应用验收
+
+A1-A9 已用 `scripts/markdown-a1-a9-acceptance.mjs` 在真实 Electron 中跑过：A2、A3、A6、A9
+通过；A1、A5、A7 部分通过；A4、A8 不通过。逐项证据和整改顺序见
+`docs/testing/markdown-a1-a9-acceptance-2026-11-25.md`。稳定完成声明仍不恢复。
+
 ## 结论
 
 当前 Markdown 只形成了窄范围 happy path：用户可以打开支持范围内的普通 Markdown，使用
