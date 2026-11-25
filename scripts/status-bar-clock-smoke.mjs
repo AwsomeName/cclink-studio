@@ -87,10 +87,7 @@ async function verifyTimeZoneSetting() {
   await timezone.selectOption('Asia/Shanghai')
   await waitForClock('2026/12/31 周四 · 23:30（Asia/Shanghai）')
   pass('choosing mainland China in Settings updates the clock across the date boundary')
-  await page
-    .getByRole('tab', { name: /Studio 设置/ })
-    .locator('.tab-close')
-    .click()
+  await page.locator('#studio-settings-page').getByRole('button', { name: '返回工作台' }).click()
   await page.locator('.settings-page').waitFor({ state: 'hidden' })
   await app.close()
 

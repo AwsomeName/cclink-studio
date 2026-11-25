@@ -708,7 +708,6 @@ export function SettingsPage({
   return (
     <div className="settings-page">
       <aside className="settings-sidebar">
-        <strong className="studio-settings-title">Studio 设置</strong>
         <div className="settings-search">
           <IconSearch size={14} />
           <input
@@ -775,7 +774,6 @@ export function SettingsPage({
         ].includes(activeSection) && (
           <div className="settings-header">
             <div>
-              <h1>Studio 设置</h1>
               <p>管理本机工作台的外观、工具和使用偏好。</p>
             </div>
             <button type="button" className="settings-reset-all" onClick={() => void resetAll()}>

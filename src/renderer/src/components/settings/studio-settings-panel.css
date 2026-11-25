@@ -41,3 +41,27 @@
   flex: 1;
   min-width: 0;
 }
+.studio-settings-panel .settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.studio-settings-panel .settings-header p {
+  margin: 0;
+  opacity: 0.72;
+}
+.studio-settings-panel .settings-reset-all {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.studio-settings-panel .settings-reset-all:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--text-primary) 8%, transparent));
+}
