@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文档图片尺寸与附图</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        color: #fff;
+        margin: 40px 0 6px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.75;
+        max-width: 1100px;
+      }
+      .note b {
+        color: #eee;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 10px 0 0;
+        line-height: 1.7;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .frames {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+        gap: 28px 32px;
+        max-width: 1140px;
+      }
+      .frame-title {
+        color: #fff;
+        font-size: 13.5px;
+        margin: 0 0 8px;
+      }
+      .frame-title span {
+        color: #6aa9ff;
+        margin-right: 6px;
+      }
+      .doc {
+        position: relative;
+        background: #1e1e1e;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        padding: 26px 28px 30px;
+        min-height: 300px;
+      }
+      .doc h3 {
+        margin: 0 0 12px;
+        color: #f1f1f1;
+        font-size: 15px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #3b3b3b;
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: #d6d6d6;
+        line-height: 1.5;
+      }
+      th {
+        background: #262626;
+        color: #f0f0f0;
+      }
+      /* fake images */
+      .img {
+        display: block;
+        border-radius: 5px;
+        background: linear-gradient(135deg, #3b5f8f, #8b5a7a 55%, #c9a35a);
+        position: relative;
+        overflow: hidden;
+      }
+      .img.b {
+        background: linear-gradient(160deg, #2f6d5b, #5c8f3b 60%, #d0c06a);
+      }
+      .img.c {
+        background: linear-gradient(120deg, #6b4a2f, #a8753d 50%, #e2c38f);
+      }
+      .img::after {
+        content: '';
+        position: absolute;
+        left: 18%;
+        bottom: 18%;
+        width: 34%;
+        height: 30%;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 3px;
+      }
+      .thumb {
+        height: 72px;
+        width: 96px;
+        cursor: zoom-in;
+      }
+      .hint {
+        position: absolute;
+        right: 4px;
+        bottom: 4px;
+        font-size: 10.5px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        padding: 1px 5px;
+        border-radius: 3px;
+        z-index: 2;
+      }
+      .sel {
+        outline: 2px solid #4b8dff;
+        outline-offset: 2px;
+      }
+      .handle {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: #4b8dff;
+        border: 2px solid #1e1e1e;
+        border-radius: 2px;
+        z-index: 3;
+      }
+      .badge {
+        position: absolute;
+        background: #4b8dff;
+        color: #fff;
+        font-size: 11px;
+        border-radius: 4px;
+        padding: 1px 6px;
+        z-index: 3;
+      }
+      .float {
+        position: absolute;
+        z-index: 5;
+        display: flex;
+        gap: 2px;
+        background: #2a2a2a;
+        border: 1px solid #444;
+        border-radius: 7px;
+        padding: 3px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+        font-size: 12.5px;
+      }
+      .float span {
+        padding: 4px 9px;
+        border-radius: 4px;
+        color: #e0e0e0;
+        white-space: nowrap;
+      }
+      .float span.on {
+        background: #3b5f9e;
+      }
+      .float span.dim {
+        color: #6f6f6f;
+      }
+      .src {
+        margin-top: 14px;
+        background: #161616;
+        border: 1px solid #333;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font:
+          12px/1.7 ui-monospace,
+          Menlo,
+          monospace;
+        color: #b9b9b9;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .src .k {
+        color: #e6c07b;
+      }
+      .src .m {
+        color: #7a7a7a;
+      }
+      /* lightbox */
+      .lightbox {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.78);
+        border-radius: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        z-index: 6;
+      }
+      .lightbox .img {
+        width: 360px;
+        height: 230px;
+      }
+      .lb-bar {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        font-size: 12.5px;
+        color: #ddd;
+      }
+      .lb-bar .btn {
+        border: 1px solid #555;
+        border-radius: 5px;
+        padding: 3px 10px;
+      }
+      .lb-close {
+        position: absolute;
+        right: 14px;
+        top: 12px;
+        color: #ddd;
+        font-size: 16px;
+      }
+      /* agent panel */
+      .panel {
+        background: #1b1c1f;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        padding: 16px;
+        min-height: 300px;
+        position: relative;
+      }
+      .panel-title {
+        color: #eee;
+        font-size: 13.5px;
+        margin-bottom: 12px;
+      }
+      .composer {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        border: 1px solid #4b8dff;
+        border-radius: 8px;
+        background: #202226;
+        padding: 10px;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #263247;
+        border: 1px solid #36507a;
+        color: #cfe0ff;
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-size: 12px;
+      }
+      .chip .img {
+        width: 22px;
+        height: 16px;
+        border-radius: 3px;
+      }
+      .chip .x {
+        color: #8aa3c9;
+      }
+      .chip.warn {
+        background: #3a3020;
+        border-color: #7a6230;
+        color: #f0d9a8;
+      }
+      .chip.path {
+        background: #2a2a2a;
+        border-color: #444;
+        color: #bdbdbd;
+      }
+      .placeholder {
+        color: #777;
+        font-size: 13px;
+      }
+      .meta {
+        color: #8a8a8a;
+        font-size: 11.5px;
+        margin-top: 8px;
+        line-height: 1.6;
+      }
+      .msg {
+        margin-left: auto;
+        max-width: 80%;
+        background: #2b3a55;
+        color: #e9f0ff;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .msg .row {
+        display: flex;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .msg .img {
+        width: 56px;
+        height: 40px;
+      }
+      .diary p {
+        margin: 0 0 8px;
+        color: #d8d8d8;
+        line-height: 1.7;
+        font-size: 13.5px;
+      }
+      .diary .hl {
+        background: rgba(64, 132, 255, 0.22);
+      }
+      .diary .img {
+        width: 150px;
+        height: 90px;
+        margin: 6px 0 10px;
+      }
+      /* logic */
+      .logic {
+        border-collapse: collapse;
+        width: 100%;
+        max-width: 1140px;
+        font-size: 13px;
+        table-layout: auto;
+      }
+      .logic th,
+      .logic td {
+        border: 1px solid #333;
+        padding: 8px 10px;
+        vertical-align: top;
+        line-height: 1.65;
+      }
+      .logic th {
+        background: #1f1f1f;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 11.5px;
+        padding: 1px 7px;
+        border-radius: 10px;
+        border: 1px solid #555;
+        color: #bbb;
+      }
+      .p0 {
+        border-color: #4b8dff;
+        color: #8fb8ff;
+      }
+      .p1 {
+        border-color: #9a7b2f;
+        color: #e1c06b;
+      }
+      .no {
+        border-color: #7a3b3b;
+        color: #e38c8c;
+      }
+      code {
+        font:
+          12px ui-monospace,
+          Menlo,
+          monospace;
+        color: #e6c07b;
+      }
+      .decide {
+        background: #1c2433;
+        border: 1px solid #2f4a78;
+        border-radius: 8px;
+        padding: 14px 18px;
+        max-width: 1100px;
+        line-height: 1.85;
+      }
+      .decide b {
+        color: #fff;
+      }
+      .rec {
+        color: #8fb8ff;
+      }
+      ol {
+        line-height: 1.85;
+        max-width: 1100px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>文档图片：显示尺寸与发给 Agent</h1>
+    <p class="note">
+      两件事：① <b>单击</b>图片后拖动放大缩小，<b>双击</b>看原图；② 文档里的图片发给会话时<b
+        >让 Agent 真正看到</b
+      >。原图文件始终不动；拖过的宽度写在 Markdown 正文里，Agent 读写文档时也能看到并保留。
+    </p>
+
+    <h2>A. 调整图片大小：只有两个动作</h2>
+    <div class="frames">
+      <div>
+        <p class="frame-title"><span>①</span>单击选中，拖动手柄放大缩小</p>
+        <div class="doc">
+          <h3>硬件选型</h3>
+          <table>
+            <tr>
+              <th style="width: 22%">事项</th>
+              <th style="width: 40%">照片</th>
+              <th>结论</th>
+            </tr>
+            <tr>
+              <td>喇叭 A</td>
+              <td style="position: relative">
+                <div class="img sel" style="width: 160px; height: 120px"></div>
+                <span class="handle" style="left: 170px; top: 126px"></span>
+                <span class="badge" style="left: 120px; top: 140px">160 px</span>
+              </td>
+              <td>低频好，体积偏大。</td>
+            </tr>
+            <tr>
+              <td>喇叭 B</td>
+              <td><div class="img b" style="width: 100%; height: 150px"></div></td>
+              <td>音量足，待测功耗。</td>
+            </tr>
+          </table>
+        </div>
+        <p class="cap">
+          <b>单击</b
+          >图片出现蓝框和右下角手柄；<b>拖动手柄</b>等比放大缩小，拖动时显示当前宽度，松手即生效，⌘Z
+          可撤销。没有浮条、档位或菜单。 表格里的图片和正文里的图片同样操作。
+        </p>
+      </div>
+
+      <div>
+        <p class="frame-title"><span>②</span>双击，弹出原图</p>
+        <div class="doc">
+          <h3>硬件选型</h3>
+          <table>
+            <tr>
+              <th style="width: 22%">事项</th>
+              <th style="width: 40%">照片</th>
+              <th>结论</th>
+            </tr>
+            <tr>
+              <td>喇叭 A</td>
+              <td><div class="img" style="width: 160px; height: 120px"></div></td>
+              <td>低频好，体积偏大。</td>
+            </tr>
+          </table>
+          <div class="lightbox">
+            <span class="lb-close">✕</span>
+            <div class="img"></div>
+            <div class="lb-bar"><span>喇叭A.png · 1600×1200 · 2.3 MB</span></div>
+          </div>
+        </div>
+        <p class="cap">
+          <b>双击</b>图片，全窗口显示原图，底部只有文件名、原始像素和大小；Esc
+          或点空白处关闭。查看不改动任何东西。
+        </p>
+      </div>
+
+      <div>
+        <p class="frame-title"><span>③</span>保存成什么</p>
+        <div class="doc" style="min-height: 0">
+          <h3>选型.md（源码）</h3>
+          <pre
+            class="src"
+            style="margin-top: 0"
+          ><span class="m">&lt;!-- 没调过：保持标准 Markdown --&gt;</span>
+![喇叭B](选型.assets/喇叭B.png)
+
+<span class="m">&lt;!-- 拖过大小：记录宽度 --&gt;</span>
+<span class="k">&lt;img src="选型.assets/喇叭A.png" alt="喇叭A" width="160"&gt;</span></pre>
+        </div>
+        <p class="cap">
+          拖过大小才写成 <code>&lt;img src alt width&gt;</code>（只放行这三个属性，其他 HTML
+          仍按“不支持的语法”保护）；拖回铺满宽度就写回普通的
+          <code>![]()</code>。原图文件始终不动。Typora、GitHub、VS Code、Obsidian
+          打开同样按这个宽度显示。
+        </p>
+      </div>
+    </div>
+
+    <h2>B. 发给 Agent 时附带图片</h2>
+    <div class="frames">
+      <div>
+        <p class="frame-title"><span>④</span>选区里有图：“发给会话”自动附图</p>
+        <div class="doc diary">
+          <h3>11 月 25 日 周三</h3>
+          <p class="hl">上午测了两个喇叭，A 的低频更好，见下图：</p>
+          <div class="img sel" style="outline-offset: 0"></div>
+          <p class="hl">B 的外壳装配记录：</p>
+          <div class="img c sel" style="outline-offset: 0"></div>
+          <p>下午继续推进统一账号。</p>
+          <div class="float" style="right: 24px; bottom: 18px">
+            <span>L12-L16</span><span class="on">发给会话</span>
+          </div>
+        </div>
+        <p class="cap">
+          选中的段落里引用了 2
+          张<b>工作区内的本地图片</b>：发给会话时，除了带行号的文字片段，还自动把这 2
+          张图作为附图挂上（走会话附图的同一条处理流程）。
+        </p>
+      </div>
+
+      <div>
+        <p class="frame-title"><span>⑤</span>会话输入框：文字片段 + 附图，可逐个移除</p>
+        <div class="panel">
+          <div class="panel-title">新会话</div>
+          <div class="msg">
+            帮我总结这两个喇叭的差异
+            <div class="row">
+              <div class="img"></div>
+              <div class="img c"></div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="chips">
+              <span class="chip">1125_周三.md:L12-L16 <span class="x">✕</span></span>
+              <span class="chip"
+                ><span class="img"></span>喇叭A.png · 1.1 MB <span class="x">✕</span></span
+              >
+              <span class="chip warn"
+                ><span class="img c"></span>装配.jpg · 已压缩，请检查清晰度
+                <span class="x">✕</span></span
+              >
+            </div>
+            <div class="placeholder">继续提问，或用 @ 引用资源…</div>
+            <div class="meta">
+              附图沿用现有上限：每条最多 5 张，每张原图 ≤20 MB，自动处理为 ≤3
+              MB；压缩明显时需先预览确认。
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          附图和手动粘贴的图片完全一样：显示缩略图、大小和“请检查清晰度”提醒，点 ✕
+          可去掉。发出去后，Agent 收到的是<b>图片本身</b>，不再只有路径。
+        </p>
+      </div>
+
+      <div>
+        <p class="frame-title"><span>⑥</span>超出上限或拿不到的图：退回为路径</p>
+        <div class="panel" style="min-height: 210px">
+          <div class="panel-title">新会话</div>
+          <div class="composer" style="position: static">
+            <div class="chips">
+              <span class="chip">周报.md:L1-L60 <span class="x">✕</span></span>
+              <span class="chip"><span class="img"></span>图1.png</span>
+              <span class="chip"><span class="img b"></span>图2.png</span>
+              <span class="chip"><span class="img c"></span>图3.png</span>
+              <span class="chip"><span class="img"></span>图4.png</span>
+              <span class="chip"><span class="img b"></span>图5.png</span>
+              <span class="chip path">另 1 张只附路径</span>
+              <span class="chip path">1 张网络图片未下载</span>
+            </div>
+            <div class="placeholder">继续提问，或用 @ 引用资源…</div>
+          </div>
+        </div>
+        <p class="cap">
+          超过 5 张时按出现顺序只附前 5
+          张，其余在文字里保留路径并明确告诉你；<b>网络图片不下载</b>（避免替你访问外部地址）；文件缺失或格式不支持时同样退回为路径。
+        </p>
+      </div>
+    </div>
+
+    <h2>规则</h2>
+    <table class="logic">
+      <tr>
+        <th style="width: 26%">操作</th>
+        <th>结果</th>
+      </tr>
+      <tr>
+        <td>单击图片 → 拖动手柄</td>
+        <td>
+          等比缩放；最小 48px，最大铺满所在区域（单元格或正文）。拖回铺满即恢复为普通
+          <code>![]()</code>。可撤销。
+        </td>
+      </tr>
+      <tr>
+        <td>双击图片</td>
+        <td>弹出原图查看；超过 5 MB 未自动加载的图在这里加载。</td>
+      </tr>
+      <tr>
+        <td>选区/文件发给会话</td>
+        <td>
+          工作区内的本地图片自动作为附图挂上，最多 5 张，可逐个 ✕
+          去掉；其余和网络图片只给路径，并提示。
+        </td>
+      </tr>
+      <tr>
+        <td>不做</td>
+        <td>档位浮条、裁剪、旋转、对齐/环绕、单独设高度、保存时压缩原图。</td>
+      </tr>
+    </table>
+
+    <h2>验收（真实应用里能做到）</h2>
+    <ol>
+      <li>
+        单击表格里的图片，拖手柄缩到约 160px；保存后源码为
+        <code>&lt;img src="…" alt="…" width="160"&gt;</code>，关闭重开仍是 160px，文档仍可正常编辑。
+      </li>
+      <li>再拖回铺满：源码回到 <code>![…](…)</code>；⌘Z 能撤回每一次缩放。</li>
+      <li>双击图片：弹出原图并显示原始尺寸；Esc 关闭，文档无改动。</li>
+      <li>
+        选中含 2 张本地图片的段落发给会话：输入框出现文字片段 + 2 张附图；Agent 能描述图片内容。
+      </li>
+      <li>以上操作后磁盘上原图文件的哈希不变。</li>
+    </ol>
+  </body>
+</html>

@@ -2,6 +2,16 @@ import { Extension, type Editor } from '@tiptap/core'
 import { closeHistory } from '@tiptap/pm/history'
 import { CellSelection } from '@tiptap/pm/tables'
 import type { MarkdownEditorAction } from '../context-actions/editor-context-surface'
+import {
+  clearSelectedMarkdownTableCells,
+  duplicateSelectedMarkdownTableRow,
+  markdownTableTarget,
+  moveMarkdownTableCaretVertically,
+  moveSelectedMarkdownTableColumn,
+  moveSelectedMarkdownTableRow,
+  setMarkdownTableColumnAlign,
+  type MarkdownTableTarget,
+} from './markdown-table-ops'
 import { useSettingsStore } from '../../stores/settings-store'
 
 interface MarkdownKeyboardShortcutOptions {
@@ -116,34 +126,22 @@ function adjustMarkdownTextBlockIndent(
 }
 
 /** Where the selection sits in a Markdown table, or null outside one. */
-export function markdownTableContext(editor: Editor): { headerRow: boolean } | null {
-  const { selection } = editor.state
-  if (selection instanceof CellSelection) {
-    let headerRow = false
-    selection.forEachCell((cell) => {
-      if (cell.type.name === 'tableHeader') headerRow = true
-    })
-    return { headerRow }
-  }
-  const { $from } = selection
-  for (let depth = $from.depth; depth > 0; depth -= 1) {
-    const name = $from.node(depth).type.name
-    if (name === 'tableHeader') return { headerRow: true }
-    if (name === 'tableCell') return { headerRow: false }
-  }
-  return null
+export function markdownTableContext(editor: Editor): MarkdownTableTarget | null {
+  return markdownTableTarget(editor.state)
 }
 
 /**
- * Backspace/Delete on whole selected body rows deletes those rows; prosemirror-tables would only
- * clear their cells, leaving an empty row behind.
+ * Backspace/Delete on whole selected body rows deletes those rows, and on whole selected columns
+ * deletes those columns; prosemirror-tables would only clear their cells. A range of cells is
+ * only cleared, as in Feishu.
  */
 export function deleteSelectedMarkdownTableRows(editor: Editor): boolean {
   const { selection } = editor.state
-  if (!(selection instanceof CellSelection) || !selection.isRowSelection()) return false
-  if (selection.isColSelection()) return false
-  if (markdownTableContext(editor)?.headerRow !== false) return false
-  return editor.chain().focus().deleteRow().run()
+  if (!(selection instanceof CellSelection)) return false
+  const target = markdownTableTarget(editor.state)
+  if (target?.scope === 'row' && !target.headerRow) return editor.chain().focus().deleteRow().run()
+  if (target?.scope === 'column') return editor.chain().focus().deleteColumn().run()
+  return false
 }
 
 function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent'): boolean {
@@ -284,6 +282,28 @@ export function runMarkdownEditorAction(
       return editor.chain().focus().deleteColumn().run()
     case 'table-delete':
       return editor.chain().focus().deleteTable().run()
+    case 'table-add-column-before':
+      return editor.chain().focus().addColumnBefore().run()
+    case 'table-add-column-after':
+      return editor.chain().focus().addColumnAfter().run()
+    case 'table-align-left':
+      return setMarkdownTableColumnAlign(editor, 'left')
+    case 'table-align-center':
+      return setMarkdownTableColumnAlign(editor, 'center')
+    case 'table-align-right':
+      return setMarkdownTableColumnAlign(editor, 'right')
+    case 'table-duplicate-row':
+      return duplicateSelectedMarkdownTableRow(editor)
+    case 'table-move-row-up':
+      return moveSelectedMarkdownTableRow(editor, -1)
+    case 'table-move-row-down':
+      return moveSelectedMarkdownTableRow(editor, 1)
+    case 'table-move-column-left':
+      return moveSelectedMarkdownTableColumn(editor, -1)
+    case 'table-move-column-right':
+      return moveSelectedMarkdownTableColumn(editor, 1)
+    case 'table-clear-cells':
+      return clearSelectedMarkdownTableCells(editor)
     case 'indent-list':
       return adjustMarkdownListIndent(editor, 'indent')
     case 'outdent-list':
@@ -371,6 +391,10 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
       'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
       Backspace: () => deleteSelectedMarkdownTableRows(this.editor),
       Delete: () => deleteSelectedMarkdownTableRows(this.editor),
+      Enter: () => moveMarkdownTableCaretVertically(this.editor, 1),
+      'Shift-Enter': () => moveMarkdownTableCaretVertically(this.editor, -1),
+      'Alt-ArrowUp': () => moveSelectedMarkdownTableRow(this.editor, -1),
+      'Alt-ArrowDown': () => moveSelectedMarkdownTableRow(this.editor, 1),
     }
   },
 })

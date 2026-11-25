@@ -3,6 +3,16 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type { KeptItem } from './filters'
 
+export interface CandidateRow {
+  key: string
+  url: string
+  title: string
+  content: string
+  date: string | null
+  domain: string
+  reportedOn: string | null
+}
+
 /**
  * Local tech daily database (`userData/techdaily/techdaily.sqlite`, never synced).
  * Replaces Argus' Elasticsearch: one row per normalised URL, idempotent upsert.
@@ -34,6 +44,11 @@ export class TechDailyStore {
           last_seen TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS articles_last_seen ON articles(last_seen);
+        CREATE TABLE IF NOT EXISTS reported (
+          url_key TEXT NOT NULL, day TEXT NOT NULL, title TEXT NOT NULL,
+          PRIMARY KEY (url_key, day)
+        );
+        CREATE INDEX IF NOT EXISTS reported_day ON reported(day);
         CREATE TABLE IF NOT EXISTS search_calls (
           day TEXT NOT NULL, provider TEXT NOT NULL, calls INTEGER NOT NULL,
           PRIMARY KEY (day, provider)
@@ -141,6 +156,49 @@ export class TechDailyStore {
          ON CONFLICT(day, provider) DO UPDATE SET calls = calls + 1`,
       )
       .run(day, provider)
+  }
+
+  /**
+   * Candidates for `day`: seen since yesterday, newest published first, undated last
+   * (Argus `search_candidates`). `reportedOn` = earliest day already in a report.
+   */
+  candidates(day: string, yesterday: string, limit = 300): CandidateRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT a.url_key, a.url, a.title, a.content, a.published_day, a.domain,
+           (SELECT MIN(r.day) FROM reported r WHERE r.url_key = a.url_key AND r.day < ?) AS reported_on
+         FROM articles a WHERE a.last_seen >= ?
+         ORDER BY a.published_day IS NULL, a.published_day DESC, a.first_seen DESC
+         LIMIT ?`,
+      )
+      .all(day, yesterday, limit) as unknown as Array<Record<string, string | null>>
+    return rows.map((r) => ({
+      key: String(r.url_key),
+      url: String(r.url),
+      title: String(r.title),
+      content: String(r.content),
+      date: r.published_day ?? null,
+      domain: String(r.domain),
+      reportedOn: r.reported_on ?? null,
+    }))
+  }
+
+  /** Titles reported on days in [from, before); the cross-day comparison list. */
+  reportedTitles(from: string, before: string, limit = 60): string[] {
+    return (
+      this.db
+        .prepare('SELECT title FROM reported WHERE day >= ? AND day < ? ORDER BY day DESC LIMIT ?')
+        .all(from, before, limit) as Array<{ title: string }>
+    ).map((r) => r.title)
+  }
+
+  /** Replaces what `day` reported (regenerating a day overwrites it). */
+  markReported(day: string, items: Array<{ key: string; title: string }>): void {
+    this.transaction(() => {
+      this.db.prepare('DELETE FROM reported WHERE day=?').run(day)
+      const insert = this.db.prepare('INSERT OR REPLACE INTO reported VALUES (?, ?, ?)')
+      for (const item of items) insert.run(item.key, day, item.title)
+    })
   }
 
   articleCount(): number {

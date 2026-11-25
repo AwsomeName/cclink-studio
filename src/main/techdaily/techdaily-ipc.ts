@@ -44,4 +44,16 @@ export function registerTechDailyIpc(
   registerTrustedIpcContract(techDailyIpcContracts.collect, guard, (_e, input) =>
     run(() => service().collect(input)),
   )
+  registerTrustedIpcContract(techDailyIpcContracts.listMonth, guard, (_e, input) =>
+    run(() => service().listMonth(input)),
+  )
+  registerTrustedIpcContract(techDailyIpcContracts.getRun, guard, (_e, input) =>
+    run(() => service().getRun(input)),
+  )
+  registerTrustedIpcContract(techDailyIpcContracts.generate, guard, (_e, input) =>
+    run(() => service().generate(input)),
+  )
+  registerTrustedIpcContract(techDailyIpcContracts.stop, guard, (_e, input) =>
+    run(() => service().stop(input)),
+  )
 }

@@ -19,6 +19,8 @@ import { copyTextToClipboard } from '../../../utils/clipboard'
 import type { CommandContext, ContextTarget } from '../context-target'
 import { getEditorContextSurface } from '../editor-context-surface'
 import type { MenuContribution } from '../menu-contribution-registry'
+import type { MarkdownTableTarget } from '../../markdown/markdown-table-ops'
+import { MARKDOWN_TABLE_COMMANDS } from './markdown-table-commands'
 
 type EditorTarget = Extract<ContextTarget, { kind: 'editor' | 'markdown-selection' }>
 
@@ -151,7 +153,7 @@ async function sendSelection(context?: CommandContext): Promise<void> {
   }
 }
 
-function tableTarget(context?: CommandContext): { headerRow: boolean } | null {
+function tableTarget(context?: CommandContext): MarkdownTableTarget | null {
   const target = editorTarget(context)
   return target?.kind === 'editor' && target.editorKind === 'markdown'
     ? (target.table ?? null)
@@ -160,35 +162,37 @@ function tableTarget(context?: CommandContext): { headerRow: boolean } | null {
 
 function runTableAction(context: CommandContext | undefined, action: MarkdownEditorAction): void {
   const { surface } = resolveSurface(context)
-  if (!surface.runMarkdownAction?.(action)) throw new Error('光标已不在表格内')
+  if (!surface.runMarkdownAction?.(action)) throw new Error('表格选区已变化')
 }
-
-const TABLE_COMMANDS: Array<{ id: string; label: string; action: MarkdownEditorAction }> = [
-  { id: 'markdown.table.addRowBefore', label: '在上方插入行', action: 'table-add-row-before' },
-  { id: 'markdown.table.addRowAfter', label: '在下方插入行', action: 'table-add-row-after' },
-  { id: 'markdown.table.deleteRow', label: '删除行', action: 'table-delete-row' },
-  { id: 'markdown.table.deleteColumn', label: '删除列', action: 'table-delete-column' },
-  { id: 'markdown.table.delete', label: '删除表格', action: 'table-delete' },
-]
 
 export function createEditorContextCommands(): Command[] {
   return [
-    ...TABLE_COMMANDS.map(
-      ({ id, label, action }): Command => ({
-        id,
-        label,
+    ...MARKDOWN_TABLE_COMMANDS.map(
+      (spec): Command => ({
+        id: spec.id,
+        label: spec.label,
+        shortcut: spec.shortcut,
         contextOnly: true,
         category: '编辑器',
-        risk: 'local-write',
-        visible: (context) => Boolean(tableTarget(context)),
-        enabled:
-          action === 'table-delete-row'
-            ? (context) => ({
-                enabled: tableTarget(context)?.headerRow === false,
-                reason: '表头行不能单独删除，可删除整个表格',
-              })
-            : undefined,
-        action: (context) => runTableAction(context, action),
+        risk: spec.destructive ? 'destructive' : 'local-write',
+        visible: (context) => {
+          const table = tableTarget(context)
+          return Boolean(table && spec.scopes.includes(table.scope))
+        },
+        enabled: spec.blocked
+          ? (context) => {
+              const table = tableTarget(context)
+              const reason = table ? spec.blocked?.(table) : '表格目标已失效'
+              return { enabled: !reason, reason: reason ?? undefined }
+            }
+          : undefined,
+        checked: spec.checked
+          ? (context) => {
+              const table = tableTarget(context)
+              return Boolean(table && spec.checked?.(table))
+            }
+          : undefined,
+        action: (context) => runTableAction(context, spec.action),
       }),
     ),
     {
@@ -282,13 +286,13 @@ export function createEditorContextCommands(): Command[] {
 }
 
 export const editorMenuContributions: MenuContribution[] = [
-  ...TABLE_COMMANDS.map(
-    ({ id }, index): MenuContribution => ({
-      id: id.replace('markdown.table.', 'editor.table-'),
+  ...MARKDOWN_TABLE_COMMANDS.map(
+    (spec, index): MenuContribution => ({
+      id: spec.id.replace('markdown.table.', 'editor.table-'),
       targetKinds: ['editor'],
-      group: '30-table',
+      group: spec.group,
       order: (index + 1) * 10,
-      commandId: id,
+      commandId: spec.id,
     }),
   ),
   {

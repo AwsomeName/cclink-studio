@@ -1,4 +1,5 @@
 import type { MarkdownSourceRange } from '../markdown/markdown-codec'
+import type { MarkdownTableTarget } from '../markdown/markdown-table-ops'
 
 export type ContextTarget =
   | {
@@ -74,8 +75,8 @@ export type ContextTarget =
       dirty: boolean
       linkUrl?: string | null
       imageSrc?: string | null
-      /** Set when the menu opened inside a Markdown table cell. */
-      table?: { headerRow: boolean } | null
+      /** Set when the menu opened inside a Markdown table (cell, row/column grip or range). */
+      table?: MarkdownTableTarget | null
     }
   | {
       kind: 'terminal'

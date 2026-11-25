@@ -5,6 +5,7 @@ import { DiaryDayView, DiaryFilePicker } from './DiaryDayView'
 import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
+import { TechDailyDayView } from '../techdaily/TechDailyDayView'
 import { DiaryLedgerView } from './DiaryLedgerView'
 import { financeLedger, healthLedger } from './diary-ledger'
 import { useFixedSpacesStore } from './fixed-spaces-store'
@@ -116,7 +117,7 @@ export function PersonalDiaryHome(): React.ReactElement {
   }, [])
   useEffect(() => {
     // Import, sync, 财务 and 健康 are My Space pages; other diary projects return to 今天.
-    if (['导入历史', 'Git', '财务', '健康'].includes(page) && ownerPath !== fixedPath)
+    if (['导入历史', 'Git', '财务', '健康', '科技日报'].includes(page) && ownerPath !== fixedPath)
       setPage('今天')
   }, [page, setPage, ownerPath, fixedPath])
   useEffect(() => {
@@ -568,6 +569,13 @@ export function PersonalDiaryHome(): React.ReactElement {
       )}
     </div>
   )
+  // 科技日报 is its own page in My Space (docs/features/personal-techdaily.md §2).
+  if (page === '科技日报' && ownerRef.kind === 'local' && ownerPath === fixedPath)
+    return (
+      <section className="personal-diary-home diary-today-doc">
+        <TechDailyDayView workspaceRef={ownerRef} />
+      </section>
+    )
   return (
     <section
       className={

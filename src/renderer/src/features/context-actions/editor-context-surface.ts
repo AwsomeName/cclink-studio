@@ -30,6 +30,17 @@ export type MarkdownEditorAction =
   | 'table-delete-row'
   | 'table-delete-column'
   | 'table-delete'
+  | 'table-add-column-before'
+  | 'table-add-column-after'
+  | 'table-align-left'
+  | 'table-align-center'
+  | 'table-align-right'
+  | 'table-duplicate-row'
+  | 'table-move-row-up'
+  | 'table-move-row-down'
+  | 'table-move-column-left'
+  | 'table-move-column-right'
+  | 'table-clear-cells'
 
 /** The single command behind 添加到会话: context menu, selection bar, ⌘L and the palette. */
 export const SEND_SELECTION_COMMAND_ID = 'markdown.sendSelectionToConversation'

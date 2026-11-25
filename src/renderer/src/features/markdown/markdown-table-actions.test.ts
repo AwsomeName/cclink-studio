@@ -10,6 +10,16 @@ import { TextSelection } from '@tiptap/pm/state'
 import { CellSelection } from '@tiptap/pm/tables'
 import { parseMarkdownEditorDocument } from './markdown-editor-document'
 import {
+  insertMarkdownTableColumnAt,
+  insertMarkdownTableRowAt,
+  markdownTableSelectionToTsv,
+  moveMarkdownTableColumn,
+  moveMarkdownTableRow,
+  moveMarkdownTableCaretVertically,
+  selectMarkdownTableColumn,
+  selectMarkdownTableRow,
+} from './markdown-table-ops'
+import {
   deleteSelectedMarkdownTableRows,
   markdownTableContext,
   runMarkdownEditorAction,
@@ -96,9 +106,18 @@ describe('Markdown table row actions', () => {
     editor.commands.setTextSelection(1)
     expect(markdownTableContext(editor)).toBeNull()
     caretIn(0)
-    expect(markdownTableContext(editor)).toEqual({ headerRow: true })
-    caretIn(2)
-    expect(markdownTableContext(editor)).toEqual({ headerRow: false })
+    expect(markdownTableContext(editor)).toMatchObject({ headerRow: true, scope: 'caret' })
+    caretIn(2, 1)
+    expect(markdownTableContext(editor)).toMatchObject({
+      headerRow: false,
+      scope: 'caret',
+      firstRow: 2,
+      firstColumn: 1,
+      rowCount: 4,
+      columnCount: 2,
+    })
+    selectRow(2)
+    expect(markdownTableContext(editor)).toMatchObject({ scope: 'row', firstRow: 2 })
   })
 
   it('deletes the body row holding the caret', () => {
@@ -140,5 +159,98 @@ describe('Markdown table row actions', () => {
     caretIn(1)
     expect(deleteSelectedMarkdownTableRows(editor)).toBe(false)
     expect(cellPositions()).toHaveLength(4)
+  })
+})
+
+function tablePos(): number {
+  let found = -1
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name === 'table' && found < 0) found = pos
+    return found < 0
+  })
+  return found
+}
+
+function firstColumnTexts(): string[] {
+  return bodyRows()
+    .filter((line) => !/^\| :?-/.test(line))
+    .map((line) => line.split('|')[1].trim())
+}
+
+describe('Markdown table grip operations', () => {
+  it('inserts rows and columns at border positions, never above the header', () => {
+    expect(insertMarkdownTableRowAt(editor, tablePos(), 0)).toBe(false)
+    expect(insertMarkdownTableRowAt(editor, tablePos(), 1)).toBe(true)
+    expect(firstColumnTexts()).toEqual(['事项', '', '统一账号', '', '外壳'])
+    expect(insertMarkdownTableRowAt(editor, tablePos(), 5)).toBe(true)
+    expect(cellPositions()).toHaveLength(6)
+    expect(insertMarkdownTableColumnAt(editor, tablePos(), 0)).toBe(true)
+    expect(cellPositions()[0]).toHaveLength(3)
+    expect(editor.state.doc.nodeAt(cellPositions()[0][0])?.type.name).toBe('tableHeader')
+    expect(editor.state.doc.nodeAt(cellPositions()[1][0])?.type.name).toBe('tableCell')
+  })
+
+  it('moves body rows but never the header or above it', () => {
+    expect(moveMarkdownTableRow(editor, tablePos(), 3, 1)).toBe(true)
+    expect(firstColumnTexts()).toEqual(['事项', '外壳', '统一账号', ''])
+    expect(moveMarkdownTableRow(editor, tablePos(), 1, 0)).toBe(false)
+    expect(moveMarkdownTableRow(editor, tablePos(), 0, 2)).toBe(false)
+  })
+
+  it('moves the caret row with Alt+Up/Down and keeps the caret in it', () => {
+    caretIn(3)
+    expect(runMarkdownEditorAction(editor, 'table-move-row-up', () => false)).toBe(true)
+    expect(firstColumnTexts()).toEqual(['事项', '统一账号', '外壳', ''])
+    expect(markdownTableContext(editor)).toMatchObject({ scope: 'caret', firstRow: 2 })
+  })
+
+  it('moves a column with its alignment and writes alignment to the delimiter row', () => {
+    selectMarkdownTableColumn(editor, tablePos(), 1)
+    expect(runMarkdownEditorAction(editor, 'table-align-center', () => false)).toBe(true)
+    expect(editor.getMarkdown()).toMatch(/\| -{3,} \| :-{3,}: \|/)
+    expect(markdownTableContext(editor)).toMatchObject({ scope: 'column', align: 'center' })
+    expect(moveMarkdownTableColumn(editor, tablePos(), 1, 0)).toBe(true)
+    expect(editor.getMarkdown()).toMatch(/\| :-{3,}: \| -{3,} \|/)
+    expect(editor.getMarkdown()).toMatch(/\| 进展\s*\| 事项\s*\|/)
+  })
+
+  it('duplicates a body row below itself and clears a row without removing it', () => {
+    selectMarkdownTableRow(editor, tablePos(), 1)
+    expect(runMarkdownEditorAction(editor, 'table-duplicate-row', () => false)).toBe(true)
+    expect(firstColumnTexts()).toEqual(['事项', '统一账号', '统一账号', '', '外壳'])
+    selectMarkdownTableRow(editor, tablePos(), 0)
+    expect(runMarkdownEditorAction(editor, 'table-duplicate-row', () => false)).toBe(false)
+    selectMarkdownTableRow(editor, tablePos(), 4)
+    expect(runMarkdownEditorAction(editor, 'table-clear-cells', () => false)).toBe(true)
+    expect(firstColumnTexts()).toEqual(['事项', '统一账号', '统一账号', '', ''])
+  })
+
+  it('deletes a selected column on Backspace but only clears a partial range', () => {
+    selectMarkdownTableColumn(editor, tablePos(), 1)
+    expect(deleteSelectedMarkdownTableRows(editor)).toBe(true)
+    expect(cellPositions()[0]).toHaveLength(1)
+  })
+
+  it('Enter moves down a cell and grows the table from the last row; Shift+Enter moves up', () => {
+    caretIn(2, 1)
+    expect(moveMarkdownTableCaretVertically(editor, 1)).toBe(true)
+    expect(markdownTableContext(editor)).toMatchObject({ firstRow: 3, firstColumn: 1 })
+    expect(moveMarkdownTableCaretVertically(editor, 1)).toBe(true)
+    expect(cellPositions()).toHaveLength(5)
+    expect(markdownTableContext(editor)).toMatchObject({ firstRow: 4, firstColumn: 1 })
+    expect(moveMarkdownTableCaretVertically(editor, -1)).toBe(true)
+    expect(markdownTableContext(editor)).toMatchObject({ firstRow: 3 })
+    editor.commands.setTextSelection(1)
+    expect(moveMarkdownTableCaretVertically(editor, 1)).toBe(false)
+  })
+
+  it('copies a cell range as tab-separated rows', () => {
+    const cells = cellPositions()
+    editor.view.dispatch(
+      editor.state.tr.setSelection(CellSelection.create(editor.state.doc, cells[0][0], cells[1][1])),
+    )
+    expect(markdownTableSelectionToTsv(editor.state)).toBe('事项\t进展\n统一账号\t已推进')
+    caretIn(1)
+    expect(markdownTableSelectionToTsv(editor.state)).toBeNull()
   })
 })

@@ -793,6 +793,15 @@ function expandSameLineListHeadings(source: string): string {
 }
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
+  const output = normalizeEditorOutputBody(source, referenceSource)
+  // The serializer never ends with a newline; a file that had one keeps it, so saving an edit
+  // does not also rewrite the last line.
+  return referenceSource?.endsWith('\n') && output !== '' && !output.endsWith('\n')
+    ? `${output}\n`
+    : output
+}
+
+function normalizeEditorOutputBody(source: string, referenceSource?: string): string {
   const normalized = restoreUntouchedMarkdownTables(
     collapseSerializerBlankLines(normalizeMarkdownSource(source)),
     referenceSource === undefined ? undefined : normalizeMarkdownSource(referenceSource),

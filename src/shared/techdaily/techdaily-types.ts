@@ -232,3 +232,68 @@ export const techDailyWorkspaceInputSchema = z
   .strict()
 
 export type TechDailyResult<T> = { success: true; data: T } | { success: false; error: string }
+
+// ── Daily report runs ─────────────────────────────────────────────
+
+/** `科技日报/{yyyy}/{mm}/{MMDD}.md` relative to the workspace. */
+export function techDailyReportPath(day: string): string {
+  const [year, month, date] = day.split('-')
+  return `${TECHDAILY_DIRECTORY}/${year}/${month}/${month}${date}.md`
+}
+
+export const techDailyStepIds = [
+  'check',
+  'read',
+  'search',
+  'frontier',
+  'merge',
+  'candidates',
+  'select',
+  'render',
+  'leaderboard',
+  'save',
+] as const
+export type TechDailyStepId = (typeof techDailyStepIds)[number]
+
+export interface TechDailyStep {
+  id: TechDailyStepId
+  label: string
+  actor: 'Studio' | 'AI' | '搜索服务' | '公开数据源'
+  state: 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+  /** What happened, from real execution events (counts, reasons). */
+  detail?: string
+  startedAt?: string
+  endedAt?: string
+}
+
+export interface TechDailyRun {
+  day: string
+  runId: string
+  /** empty = saved a "候选不足" short report; interrupted = Studio quit mid-run. */
+  status: 'running' | 'completed' | 'empty' | 'failed' | 'interrupted' | 'stopped'
+  startedAt: string
+  endedAt?: string
+  steps: TechDailyStep[]
+  error?: string
+  /** Relative to the workspace, once written. */
+  filePath?: string
+  itemCount?: number
+}
+
+export interface TechDailyMonth {
+  month: string
+  today: string
+  /** YYYY-MM-DD → report path (absolute) for days that have a report file. */
+  days: Record<string, string>
+}
+
+const daySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+export const techDailyMonthInputSchema = z
+  .object({ workspacePath: workspacePathSchema, month: z.string().regex(/^\d{4}-\d{2}$/) })
+  .strict()
+export const techDailyDayInputSchema = z
+  .object({ workspacePath: workspacePathSchema, day: daySchema })
+  .strict()
+export const techDailyGenerateInputSchema = z
+  .object({ workspacePath: workspacePathSchema, overwrite: z.boolean() })
+  .strict()

@@ -5,6 +5,9 @@ import {
   saveTechDailySettingsSchema,
   searxngConfigInputSchema,
   techDailyWorkspaceInputSchema,
+  techDailyMonthInputSchema,
+  techDailyDayInputSchema,
+  techDailyGenerateInputSchema,
 } from '../techdaily/techdaily-types'
 
 function bind<Args extends unknown[], Result>(
@@ -34,4 +37,8 @@ export const techDailyIpcContracts = {
   saveSearxng: bind(techDailyIpc.saveSearxng, (args) => one(args, searxngConfigInputSchema)),
   testSearxng: bind(techDailyIpc.testSearxng, (args) => one(args, searxngConfigInputSchema)),
   collect: bind(techDailyIpc.collect, (args) => one(args, techDailyWorkspaceInputSchema)),
+  listMonth: bind(techDailyIpc.listMonth, (args) => one(args, techDailyMonthInputSchema)),
+  getRun: bind(techDailyIpc.getRun, (args) => one(args, techDailyDayInputSchema)),
+  generate: bind(techDailyIpc.generate, (args) => one(args, techDailyGenerateInputSchema)),
+  stop: bind(techDailyIpc.stop, (args) => one(args, techDailyWorkspaceInputSchema)),
 } as const

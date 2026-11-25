@@ -2,11 +2,18 @@ import { shiftMonth, useDiaryCalendar } from './diary-calendar-store'
 import { useDiaryNavigation } from './personal-diary-navigation'
 import { showWorkspaceHome } from './workspace-home-navigation'
 import { useWorkspaceStore } from '../../stores/workspace-store'
+import { useTechDailyCalendar } from '../techdaily/techdaily-calendar-store'
 
 /** Bottom-left month calendar for My Space: days with diaries are marked; a click opens the day. */
 export function DiaryCalendar(): React.ReactElement | null {
-  const { days, today, month, selected, setMonth, select } = useDiaryCalendar()
+  const diary = useDiaryCalendar()
+  const techDaily = useTechDailyCalendar()
   const page = useDiaryNavigation((state) => state.page)
+  // On the 科技日报 page the same calendar marks days that have a report instead.
+  const tech = page === '科技日报'
+  const { today, month, selected, setMonth, select } = tech ? techDaily : diary
+  const days: Record<string, unknown> = tech ? techDaily.days : diary.days
+  const dayPage = tech ? '科技日报' : '日记'
   if (!month) return null
   const [year, monthNumber] = month.split('-').map(Number)
   const first = new Date(Date.UTC(year, monthNumber - 1, 1))
@@ -19,11 +26,11 @@ export function DiaryCalendar(): React.ReactElement | null {
   const monthCount = Object.keys(days).filter((key) => key.startsWith(month)).length
   const open = (date: string): void => {
     select(date)
-    useDiaryNavigation.getState().setPage('日记')
+    useDiaryNavigation.getState().setPage(dayPage)
     showWorkspaceHome(useWorkspaceStore.getState().activeWorkspaceRef)
   }
   return (
-    <div className="diary-calendar" aria-label="日记日历">
+    <div className="diary-calendar" aria-label={tech ? '科技日报日历' : '日记日历'}>
       <div className="diary-calendar-head">
         <button aria-label="上个月" onClick={() => setMonth(shiftMonth(month, -1))}>
           ‹
@@ -46,13 +53,13 @@ export function DiaryCalendar(): React.ReactElement | null {
             <button
               key={date}
               role="gridcell"
-              aria-label={`${date}${days[date] ? ' 有日记' : ''}`}
-              aria-selected={page === '日记' && date === selected}
+              aria-label={`${date}${days[date] ? (tech ? ' 有日报' : ' 有日记') : ''}`}
+              aria-selected={page === dayPage && date === selected}
               className={[
                 'diary-calendar-day',
                 days[date] ? 'has' : '',
                 date === today ? 'today' : '',
-                page === '日记' && date === selected ? 'selected' : '',
+                page === dayPage && date === selected ? 'selected' : '',
               ].join(' ')}
               onClick={() => open(date)}
             >
@@ -63,7 +70,9 @@ export function DiaryCalendar(): React.ReactElement | null {
           ),
         )}
       </div>
-      <div className="diary-calendar-foot">本月 {monthCount} 篇</div>
+      <div className="diary-calendar-foot">
+        本月 {monthCount} {tech ? '份日报' : '篇'}
+      </div>
     </div>
   )
 }

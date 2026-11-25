@@ -8,6 +8,8 @@ import type {
   TechDailyResult,
   TechDailySettingsSnapshot,
   TechDailyStatus,
+  TechDailyMonth,
+  TechDailyRun,
 } from '../techdaily/techdaily-types'
 
 type WorkspaceInput = { workspacePath: string }
@@ -32,6 +34,19 @@ export const techDailyIpc = {
   collect: defineIpcCall<[WorkspaceInput], TechDailyResult<TechDailyCollectResult>>(
     'techdaily:collect',
   ),
+  listMonth: defineIpcCall<
+    [{ workspacePath: string; month: string }],
+    TechDailyResult<TechDailyMonth>
+  >('techdaily:list-month'),
+  getRun: defineIpcCall<
+    [{ workspacePath: string; day: string }],
+    TechDailyResult<TechDailyRun | null>
+  >('techdaily:get-run'),
+  generate: defineIpcCall<
+    [{ workspacePath: string; overwrite: boolean }],
+    TechDailyResult<TechDailyRun>
+  >('techdaily:generate'),
+  stop: defineIpcCall<[WorkspaceInput], TechDailyResult<TechDailyRun | null>>('techdaily:stop'),
 } as const
 
 export interface TechDailyApiContract {
@@ -42,4 +57,8 @@ export interface TechDailyApiContract {
   saveSearxng(input: SearxngConfigInput): Promise<TechDailyResult<SearxngConfigSnapshot>>
   testSearxng(input: SearxngConfigInput): Promise<TechDailyResult<SearxngTestResult>>
   collect(input: WorkspaceInput): Promise<TechDailyResult<TechDailyCollectResult>>
+  listMonth(input: { workspacePath: string; month: string }): Promise<TechDailyResult<TechDailyMonth>>
+  getRun(input: { workspacePath: string; day: string }): Promise<TechDailyResult<TechDailyRun | null>>
+  generate(input: { workspacePath: string; overwrite: boolean }): Promise<TechDailyResult<TechDailyRun>>
+  stop(input: WorkspaceInput): Promise<TechDailyResult<TechDailyRun | null>>
 }

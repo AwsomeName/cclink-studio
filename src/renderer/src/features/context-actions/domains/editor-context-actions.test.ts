@@ -14,6 +14,8 @@ import {
   type EditorContextSurface,
 } from '../editor-context-surface'
 import { createEditorContextCommands } from './editor-context-actions'
+import { MARKDOWN_TABLE_COMMANDS } from './markdown-table-commands'
+import type { MarkdownTableTarget } from '../../markdown/markdown-table-ops'
 
 const EMBEDDED_ID = 'today:/diary/1125_周三.md'
 const SELECTED = '统一账号'
@@ -154,7 +156,22 @@ describe('editor context commands on page-embedded editors', () => {
 })
 
 describe('Markdown table context commands', () => {
-  function editorContext(table: { headerRow: boolean } | null): CommandContext {
+  function table(overrides: Partial<MarkdownTableTarget> = {}): MarkdownTableTarget {
+    return {
+      headerRow: false,
+      scope: 'caret',
+      firstRow: 2,
+      lastRow: 2,
+      firstColumn: 1,
+      lastColumn: 1,
+      rowCount: 4,
+      columnCount: 3,
+      align: null,
+      ...overrides,
+    }
+  }
+
+  function editorContext(target: MarkdownTableTarget | null): CommandContext {
     return {
       source: 'context-menu',
       target: {
@@ -165,25 +182,65 @@ describe('Markdown table context commands', () => {
         editorKind: 'markdown',
         range: null,
         dirty: false,
-        table,
+        table: target,
       },
     } as CommandContext
+  }
+
+  function visibleIds(target: MarkdownTableTarget): string[] {
+    return MARKDOWN_TABLE_COMMANDS.filter((spec) =>
+      command(spec.id).visible?.(editorContext(target)),
+    ).map((spec) => spec.id)
   }
 
   it('shows table commands only inside a table', () => {
     const deleteRow = command('markdown.table.deleteRow')
     expect(deleteRow.visible?.(editorContext(null))).toBe(false)
-    expect(deleteRow.visible?.(editorContext({ headerRow: false }))).toBe(true)
+    expect(deleteRow.visible?.(editorContext(table()))).toBe(true)
   })
 
-  it('disables deleting the header row but not the whole table', () => {
-    expect(
-      command('markdown.table.deleteRow').enabled?.(editorContext({ headerRow: true })),
-    ).toEqual({
+  it('shows the row menu for a row grip and the column menu for a column grip', () => {
+    const rowMenu = visibleIds(table({ scope: 'row' }))
+    expect(rowMenu).toContain('markdown.table.moveRowUp')
+    expect(rowMenu).toContain('markdown.table.duplicateRow')
+    expect(rowMenu).not.toContain('markdown.table.alignCenter')
+    expect(rowMenu).not.toContain('markdown.table.deleteColumn')
+    const columnMenu = visibleIds(table({ scope: 'column' }))
+    expect(columnMenu).toContain('markdown.table.alignCenter')
+    expect(columnMenu).toContain('markdown.table.addColumnBefore')
+    expect(columnMenu).not.toContain('markdown.table.deleteRow')
+    expect(visibleIds(table({ scope: 'cells' }))).toEqual([
+      'markdown.table.clearCells',
+      'markdown.table.delete',
+    ])
+  })
+
+  it('greys out header-row deletes and moves with the reason', () => {
+    const header = editorContext(table({ headerRow: true, scope: 'row', firstRow: 0, lastRow: 0 }))
+    expect(command('markdown.table.deleteRow').enabled?.(header)).toEqual({
       enabled: false,
-      reason: '表头行不能单独删除，可删除整个表格',
+      reason: 'Markdown 表格必须有表头，可删除整个表格',
+    })
+    expect(command('markdown.table.moveRowUp').enabled?.(header)).toMatchObject({ enabled: false })
+    expect(command('markdown.table.addRowBefore').enabled?.(header)).toMatchObject({
+      enabled: false,
     })
     expect(command('markdown.table.delete').enabled).toBeUndefined()
+    const firstBody = editorContext(table({ scope: 'row', firstRow: 1, lastRow: 1 }))
+    expect(command('markdown.table.moveRowUp').enabled?.(firstBody)).toEqual({
+      enabled: false,
+      reason: '已在表头下第一行',
+    })
+    expect(command('markdown.table.moveRowDown').enabled?.(firstBody)).toEqual({
+      enabled: true,
+      reason: undefined,
+    })
+  })
+
+  it('checks the current column alignment', () => {
+    const centered = editorContext(table({ scope: 'column', align: 'center' }))
+    expect(command('markdown.table.alignCenter').checked?.(centered)).toBe(true)
+    expect(command('markdown.table.alignLeft').checked?.(centered)).toBe(false)
   })
 
   it('runs the table action on the embedded editor surface', async () => {
@@ -194,7 +251,7 @@ describe('Markdown table context commands', () => {
       { ...surface(), getSelectionText: () => '', runMarkdownAction },
       { embedded: true },
     )
-    await command('markdown.table.deleteRow').action(editorContext({ headerRow: false }))
+    await command('markdown.table.deleteRow').action(editorContext(table()))
     expect(runMarkdownAction).toHaveBeenCalledWith('table-delete-row')
   })
 })

@@ -41,6 +41,8 @@ import {
   type MarkdownRevealRange,
 } from '../../features/markdown/markdown-navigation'
 import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
+import { MarkdownTableControls } from '../../features/markdown/MarkdownTableControls'
+import { markdownTableSelectionToTsv } from '../../features/markdown/markdown-table-ops'
 import {
   applyMarkdownLink,
   MarkdownKeyboardShortcuts,
@@ -122,6 +124,11 @@ export function MarkdownEditor({
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
+  const attachScrollContainer = useCallback((node: HTMLDivElement | null) => {
+    scrollContainerRef.current = node
+    setScrollContainer(node)
+  }, [])
   const scrollSaveTimerRef = useRef<number | null>(null)
   const latestScrollTopRef = useRef(0)
   const restoringScrollRef = useRef(false)
@@ -220,7 +227,8 @@ export function MarkdownEditor({
       MarkdownImage.configure({ documentPath: filePath, inline: false, allowBase64: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: true }),
+      // Markdown has no column widths, so dragging one would be lost on save (design D1).
+      Table.configure({ resizable: false }),
       TableRow,
       TableCell,
       TableHeader,
@@ -237,6 +245,10 @@ export function MarkdownEditor({
       extensions,
       editorProps: {
         attributes: { class: 'tiptap' },
+        // A copied cell range pastes into Feishu or Excel as a grid; the HTML flavor is the table.
+        clipboardTextSerializer: (slice, view) =>
+          markdownTableSelectionToTsv(view.state) ??
+          slice.content.textBetween(0, slice.content.size, '\n\n'),
         handlePaste: (_view, event) => {
           const image = Array.from(event.clipboardData?.files ?? []).find((file) =>
             file.type.startsWith('image/'),
@@ -458,10 +470,18 @@ export function MarkdownEditor({
           return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')
         },
         copy: async () => {
+          if (editor.state.selection instanceof CellSelection) {
+            copyMarkdownTableCells(editor, 'copy')
+            return
+          }
           const { from, to } = editor.state.selection
           if (from !== to) await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
         },
         cut: async () => {
+          if (editor.state.selection instanceof CellSelection) {
+            copyMarkdownTableCells(editor, 'cut')
+            return
+          }
           const { from, to } = editor.state.selection
           if (from === to) return
           await copyTextToClipboard(editor.state.doc.textBetween(from, to, '\n'))
@@ -872,6 +892,31 @@ export function MarkdownEditor({
     setImageDraft(null)
   }, [editor, filePath, imageDraft, showToast])
 
+  /** Row/column grips open the same editor context menu a right-click in the table opens. */
+  const showTableMenu = useCallback(
+    (x: number, y: number, anchor: HTMLElement) => {
+      if (!editor) return
+      useContextMenuStore.getState().show({
+        target: {
+          kind: 'editor',
+          workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+          tabId,
+          filePath: filePathRef.current ?? '',
+          editorKind: 'markdown',
+          range: currentWysiwygSelection(),
+          dirty: useEditorStore.getState().files[fileKeyRef.current]?.dirty ?? false,
+          linkUrl: null,
+          imageSrc: null,
+          table: markdownTableContext(editor),
+        },
+        x,
+        y,
+        focusReturn: anchor,
+      })
+    },
+    [currentWysiwygSelection, editor, tabId],
+  )
+
   const sendSelectionToConversation = useCallback(
     (range: MarkdownSourceRange) => {
       const workspaceKey = workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef)
@@ -1227,7 +1272,7 @@ export function MarkdownEditor({
           </div>
         ) : (
           <div
-            ref={scrollContainerRef}
+            ref={attachScrollContainer}
             className={`tiptap-editor${editorWordWrap ? '' : ' no-wrap'}${parseBlockedReason ? ' protected' : ''}`}
             onScroll={handleEditorScroll}
             onWheelCapture={cancelScrollRestoration}
@@ -1242,6 +1287,13 @@ export function MarkdownEditor({
             }
           >
             {editor && <EditorContent editor={editor} />}
+            {editor && scrollContainer && !parseBlockedReason && (
+              <MarkdownTableControls
+                editor={editor}
+                container={scrollContainer}
+                onOpenMenu={showTableMenu}
+              />
+            )}
           </div>
         )}
       </div>
@@ -1369,6 +1421,22 @@ export function MarkdownEditor({
           <span>
             L{selectionRange.startLine}-L{selectionRange.endLine}
           </span>
+          {editor?.state.selection instanceof CellSelection && editor.isEditable && (
+            <>
+              <button type="button" onClick={() => copyMarkdownTableCells(editor, 'copy')}>
+                复制
+              </button>
+              <button type="button" onClick={() => copyMarkdownTableCells(editor, 'cut')}>
+                剪切
+              </button>
+              <button
+                type="button"
+                onClick={() => runMarkdownEditorAction(editor, 'table-clear-cells', () => false)}
+              >
+                清空内容
+              </button>
+            </>
+          )}
           <button
             type="button"
             title={sendShortcut ? `添加到会话（${sendShortcut}）` : '添加到会话'}
@@ -1381,6 +1449,15 @@ export function MarkdownEditor({
       )}
     </div>
   )
+}
+
+/**
+ * Copy or cut a cell range through the editor's own clipboard handler, which writes the HTML
+ * table and (via clipboardTextSerializer) tab-separated text.
+ */
+function copyMarkdownTableCells(editor: Editor, mode: 'copy' | 'cut'): void {
+  editor.view.focus()
+  document.execCommand(mode)
 }
 
 /**

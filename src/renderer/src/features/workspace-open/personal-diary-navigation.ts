@@ -2,6 +2,7 @@ import { create } from 'zustand'
 export const diaryPages = [
   '今天',
   '日记',
+  '科技日报',
   '计划',
   '定时整理',
   '财务',

@@ -9,4 +9,8 @@ export const techDailyApi: TechDailyApiContract = {
   saveSearxng: (input) => invokeIpcContract(techDailyIpc.saveSearxng, input),
   testSearxng: (input) => invokeIpcContract(techDailyIpc.testSearxng, input),
   collect: (input) => invokeIpcContract(techDailyIpc.collect, input),
+  listMonth: (input) => invokeIpcContract(techDailyIpc.listMonth, input),
+  getRun: (input) => invokeIpcContract(techDailyIpc.getRun, input),
+  generate: (input) => invokeIpcContract(techDailyIpc.generate, input),
+  stop: (input) => invokeIpcContract(techDailyIpc.stop, input),
 }

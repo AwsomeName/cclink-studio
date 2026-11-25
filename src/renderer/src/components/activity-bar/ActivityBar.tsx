@@ -17,6 +17,7 @@ import {
   IconClock,
   IconDollar,
   IconHeart,
+  IconNewspaper,
   IconTool,
   IconList,
   IconUser,
@@ -260,6 +261,8 @@ export function ActivityBar(): React.ReactElement {
                 [
                   ['今天', ActivityProjectsIcon],
                   ['日记', IconPencil],
+                  // 科技日报 is a My Space feature (docs/features/personal-techdaily.md §2).
+                  ...(isPersonal ? ([['科技日报', IconNewspaper]] as const) : []),
                   ['计划', IconClipboard],
                   ['定时整理', IconClock],
                   // 财务、健康 gather My Space's diary header lines; sync is its own Git address

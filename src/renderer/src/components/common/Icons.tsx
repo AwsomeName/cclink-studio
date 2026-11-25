@@ -850,3 +850,30 @@ export function IconCrown(p: IconProps = defaults): React.ReactElement {
     />,
   )
 }
+
+/** 报纸（科技日报） */
+export function IconNewspaper(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <>
+      <path
+        d="M2.5 3.5h9v9a1.5 1.5 0 0 0 1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-9Z"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.5 6h2v6.5a1.5 1.5 0 0 1-1.5 1.5"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 6h5M4.5 8.5h5M4.5 11h3"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+    </>,
+  )
+}
