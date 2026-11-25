@@ -108,7 +108,12 @@ describe('editor context commands on page-embedded editors', () => {
 
   it('rejects an embedded editor once the home page is no longer the active tab', async () => {
     openHome()
-    useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+    useTabStore.getState().openTab({
+      type: 'agent-role',
+      title: '角色配置',
+      icon: '◇',
+      agentRole: { roleId: 'fact-checker', version: 1 },
+    })
     unregister = registerEditorContextSurface(EMBEDDED_ID, surface(), { embedded: true })
 
     await expect(
@@ -125,7 +130,12 @@ describe('editor context commands on page-embedded editors', () => {
       forceNew: true,
     })
     const editorTabId = useTabStore.getState().tabs[0].id
-    useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+    useTabStore.getState().openTab({
+      type: 'agent-role',
+      title: '角色配置',
+      icon: '◇',
+      agentRole: { roleId: 'fact-checker', version: 1 },
+    })
     unregister = registerEditorContextSurface(editorTabId, surface())
 
     await expect(

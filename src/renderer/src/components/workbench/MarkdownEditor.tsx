@@ -21,6 +21,7 @@ import { useEditorStore } from '../../stores/editor-store'
 import { useTabStore } from '../../stores/tab-store'
 import { useSettingsStore } from '../../stores/settings-store'
 import { useCommandStore } from '../../stores/command-store'
+import { useCommandShortcutLabel } from '../../features/shortcuts/use-command-shortcut-label'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { useToastStore } from '../common/Toast'
 import { useEscapeDismiss } from '../common/dismissable-layer'
@@ -66,7 +67,10 @@ import {
 import type { FsMarkdownDocumentInspection } from '@shared/ipc/fs'
 import { workspaceRefKey } from '@shared/workspace-ref'
 import { useContextMenuStore } from '../../features/context-actions/context-menu-store'
-import { registerEditorContextSurface } from '../../features/context-actions/editor-context-surface'
+import {
+  registerEditorContextSurface,
+  SEND_SELECTION_COMMAND_ID,
+} from '../../features/context-actions/editor-context-surface'
 import { copyTextToClipboard } from '../../utils/clipboard'
 import {
   clearMarkdownDiagnosticReport,
@@ -94,6 +98,11 @@ interface MarkdownEditorProps {
   toolbarExtra?: React.ReactNode
   /** Page-owned controls at the left of the compact toolbar. */
   toolbarLead?: React.ReactNode
+  /**
+   * Shown inside a page (My Space 今天 / 日记 / 计划) rather than a tab of its own, so page
+   * shortcuts (Markdown actions, ⌘S, ⌘L) reach it. Defaults to `compact`.
+   */
+  embedded?: boolean
 }
 
 interface ImageDraft {
@@ -108,6 +117,7 @@ export function MarkdownEditor({
   compact,
   toolbarExtra,
   toolbarLead,
+  embedded = compact,
 }: MarkdownEditorProps): React.ReactElement {
   const fileKey = filePath ?? `virtual:${tabId}`
   const wrapperRef = useRef<HTMLDivElement | null>(null)
@@ -125,6 +135,7 @@ export function MarkdownEditor({
 
   const fileState = useEditorStore((state) => state.files[fileKey])
   const executeCommand = useCommandStore((state) => state.executeCommand)
+  const sendShortcut = useCommandShortcutLabel(SEND_SELECTION_COMMAND_ID)
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
   const editorFontSize = useSettingsStore((state) => state.settings.editorFontSize)
   const editorTabSize = useSettingsStore((state) => state.settings.editorTabSize)
@@ -144,7 +155,7 @@ export function MarkdownEditor({
       : null
   const [selectionRange, setSelectionRange] = useState<MarkdownSourceRange | null>(null)
   // ProseMirror keeps a selection after the editor loses focus, but nothing shows it any more;
-  // the 发给会话 bar only belongs to a selection the user can see.
+  // the 添加到会话 bar only belongs to a selection the user can see.
   const [editorFocused, setEditorFocused] = useState(false)
   const [resourceInspection, setResourceInspection] = useState<FsMarkdownDocumentInspection | null>(
     null,
@@ -433,6 +444,15 @@ export function MarkdownEditor({
       tabId,
       {
         isFocused: () => editor.isFocused && editor.isEditable,
+        getSelectionTarget: () => ({
+          kind: 'editor',
+          workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+          tabId,
+          filePath: filePathRef.current ?? '',
+          editorKind: 'markdown',
+          range: currentWysiwygSelection(),
+          dirty: useEditorStore.getState().files[fileKeyRef.current]?.dirty ?? false,
+        }),
         getSelectionText: () => {
           const { from, to } = editor.state.selection
           return from === to ? '' : editor.state.doc.textBetween(from, to, '\n')
@@ -459,9 +479,9 @@ export function MarkdownEditor({
         save: () => saveRef.current(),
         runMarkdownAction: (action) => runMarkdownEditorAction(editor, action, openLinkEditor),
       },
-      { embedded: compact },
+      { embedded },
     )
-  }, [closeFind, compact, editor, openFind, openLinkEditor, tabId])
+  }, [closeFind, currentWysiwygSelection, editor, embedded, openFind, openLinkEditor, tabId])
 
   const saveClipboardImage = useCallback(
     async (image: File) => {
@@ -855,7 +875,7 @@ export function MarkdownEditor({
   const sendSelectionToConversation = useCallback(
     (range: MarkdownSourceRange) => {
       const workspaceKey = workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef)
-      void executeCommand('markdown.sendSelectionToConversation', {
+      void executeCommand(SEND_SELECTION_COMMAND_ID, {
         source: 'toolbar',
         target: {
           kind: 'markdown-selection',
@@ -1071,7 +1091,7 @@ export function MarkdownEditor({
             {toolbarExtra}
           </div>
         ) : null}
-        <SourceTextEditor filePath={filePath} tabId={tabId} reuseLoaded />
+        <SourceTextEditor filePath={filePath} tabId={tabId} reuseLoaded embedded />
       </div>
     )
   }
@@ -1349,8 +1369,13 @@ export function MarkdownEditor({
           <span>
             L{selectionRange.startLine}-L{selectionRange.endLine}
           </span>
-          <button type="button" onClick={() => sendSelectionToConversation(selectionRange)}>
-            发给会话
+          <button
+            type="button"
+            title={sendShortcut ? `添加到会话（${sendShortcut}）` : '添加到会话'}
+            onClick={() => sendSelectionToConversation(selectionRange)}
+          >
+            添加到会话
+            {sendShortcut && <kbd>{sendShortcut}</kbd>}
           </button>
         </div>
       )}

@@ -3,6 +3,7 @@ import type { FixedSpaces } from '@shared/ipc/workspace-state'
 import { useFsStore } from '../../../stores/fs-store'
 import { useUIStore } from '../../../stores/ui-store'
 import { useTabStore } from '../../../stores/tab-store'
+import { useAppPageStore } from '../../../stores/app-page-store'
 import { useWorkspaceStore } from '../../../stores/workspace-store'
 import { localWorkspaceRef } from '@shared/workspace-ref'
 import { createShellContextCommands } from './shell-context-actions'
@@ -104,7 +105,8 @@ describe('shell context commands', () => {
       source: 'context-menu',
       target: { kind: 'activity', activityId: 'settings' },
     })
-    expect(useTabStore.getState().getActiveTab()?.type).toBe('settings')
+    expect(useAppPageStore.getState().page).toBe('settings')
+    expect(useTabStore.getState().tabs.some((tab) => tab.type === 'settings')).toBe(false)
     expect(useUIStore.getState()).toMatchObject({
       activePanel: 'workspace-home',
       sidebarVisible: false,

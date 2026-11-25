@@ -1,3 +1,5 @@
+import type { ContextTarget } from './context-target'
+
 export type MarkdownEditorAction =
   | 'undo'
   | 'redo'
@@ -29,8 +31,16 @@ export type MarkdownEditorAction =
   | 'table-delete-column'
   | 'table-delete'
 
+/** The single command behind 添加到会话: context menu, selection bar, ⌘L and the palette. */
+export const SEND_SELECTION_COMMAND_ID = 'markdown.sendSelectionToConversation'
+
+/** What the editor would pass to the context menu for its current selection. */
+export type EditorSelectionTarget = Extract<ContextTarget, { kind: 'editor' }>
+
 export interface EditorContextSurface {
   isFocused?: () => boolean
+  /** The current selection as a context target (⌘L and the command palette use it). */
+  getSelectionTarget?: () => EditorSelectionTarget | null
   getSelectionText: () => string
   cut: () => void | Promise<void>
   copy: () => void | Promise<void>
@@ -70,4 +80,10 @@ export function getEmbeddedEditorSurface(): EditorContextSurface | null {
 
 export function getEditorContextSurface(tabId: string): EditorContextSurface | null {
   return surfaces.get(tabId) ?? null
+}
+
+/** The editor that currently has keyboard focus, whether it is a tab or embedded in a page. */
+export function getFocusedEditorSurface(): EditorContextSurface | null {
+  for (const surface of surfaces.values()) if (surface.isFocused?.()) return surface
+  return null
 }

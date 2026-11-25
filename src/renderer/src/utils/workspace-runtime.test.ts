@@ -128,7 +128,12 @@ describe('workspace-runtime', () => {
         sessionId: conversationId,
       },
     })
-    useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+    useTabStore.getState().openTab({
+      type: 'agent-role',
+      title: '角色配置',
+      icon: '◇',
+      agentRole: { roleId: 'fact-checker', version: 1 },
+    })
 
     await persistRuntimeSections('/workspace/a')
 
@@ -174,12 +179,12 @@ describe('workspace-runtime', () => {
 
     expect(useTabStore.getState().tabs.map((tab) => tab.type)).toEqual([
       'workspace-home',
-      'settings',
+      'agent-role',
       'browser',
     ])
     expect(useTabStore.getState().tabs.some((tab) => tab.id === 'browser-b')).toBe(true)
     expect(useTabStore.getState().activeTabId).toBe(
-      useTabStore.getState().tabs.find((tab) => tab.type === 'settings')?.id,
+      useTabStore.getState().tabs.find((tab) => tab.type === 'agent-role')?.id,
     )
   })
 

@@ -1,0 +1,43 @@
+.studio-settings-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+.studio-settings-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.studio-settings-panel > header span {
+  opacity: 0.72;
+}
+.studio-settings-panel > header button {
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.studio-settings-panel > header button:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--text-primary) 8%, transparent));
+}
+.studio-settings-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.studio-settings-panel-body > * {
+  flex: 1;
+  min-width: 0;
+}

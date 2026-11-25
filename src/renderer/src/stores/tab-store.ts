@@ -3,6 +3,7 @@ import type { ConversationTabRef, Tab, TabType } from '../types'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import { useBrowserStore } from './browser-store'
 import { useEditorStore } from './editor-store'
+import { useAppPageStore } from './app-page-store'
 import { getModelFileIcon, getTabTypeForFile } from '../utils/model-files'
 import {
   getWorkspaceStateKey,
@@ -374,6 +375,15 @@ export const useTabStore = create<TabState>((set, get) => ({
     forceNew,
     workspaceRef,
   }) => {
+    // Studio 设置是顶栏独立页面，不再作为 Tab 打开；项目设置（workspace）仍是项目 Tab。
+    if (type === 'settings' && settingsSection !== 'workspace') {
+      useAppPageStore.getState().openSettings(settingsSection)
+      return
+    }
+    // 与原先设置 Tab 的行为一致：从设置页里打开其它 Tab 时回到工作台显示它。
+    if (!restore && useAppPageStore.getState().page === 'settings') {
+      useAppPageStore.getState().showWorkbench()
+    }
     const resolvedWorkspaceRef = workspaceRef ?? workspaceRefFromKey(getWorkspaceStateKey())
     if (
       type === 'browser' &&

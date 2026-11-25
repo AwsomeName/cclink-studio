@@ -110,8 +110,13 @@ afterEach(async () => {
 })
 
 describe('Agent system layout after workspace commit', () => {
-  it('recomputes system layout for the exact same preserved global settings Tab', async () => {
-    useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+  it('recomputes system layout for the exact same preserved global role Tab', async () => {
+    useTabStore.getState().openTab({
+      type: 'agent-role',
+      title: '角色配置',
+      icon: '◇',
+      agentRole: { roleId: 'fact-checker', version: 1 },
+    })
     const settingsTab = useTabStore.getState().getActiveTab()
     renderEffect()
     expect(useUIStore.getState().agentPanelMode).toBe('right')
@@ -132,7 +137,12 @@ describe('Agent system layout after workspace commit', () => {
   it.each(['center', 'right', 'hidden'] as const)(
     'keeps restored user %s above the new workspace system context',
     async (mode) => {
-      useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+      useTabStore.getState().openTab({
+        type: 'agent-role',
+        title: '角色配置',
+        icon: '◇',
+        agentRole: { roleId: 'fact-checker', version: 1 },
+      })
       const settingsTab = useTabStore.getState().getActiveTab()
       renderEffect()
       targetSections = { layout: { agentPanelMode: mode, agentPanelModeSource: 'user' } }

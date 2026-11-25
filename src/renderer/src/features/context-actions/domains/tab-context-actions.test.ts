@@ -33,9 +33,10 @@ describe('renameWorkbenchTab', () => {
 
   it('keeps the current title when the new title is empty or cancelled', async () => {
     useTabStore.getState().openTab({
-      type: 'settings',
+      type: 'agent-role',
       title: '设置',
-      icon: '⚙️',
+      icon: '◇',
+      agentRole: { roleId: 'fact-checker', version: 1 },
     })
     const tab = useTabStore.getState().tabs[0]
 

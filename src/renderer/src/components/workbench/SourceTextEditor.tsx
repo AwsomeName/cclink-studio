@@ -25,6 +25,8 @@ interface SourceTextEditorProps {
   tabId: string
   /** Use the file the embedding editor already loaded instead of reading it again. */
   reuseLoaded?: boolean
+  /** Shown inside a page (My Space) rather than its own tab, so page shortcuts reach it. */
+  embedded?: boolean
 }
 
 function sourceSelectionRange(
@@ -63,6 +65,7 @@ export function SourceTextEditor({
   filePath,
   tabId,
   reuseLoaded,
+  embedded = false,
 }: SourceTextEditorProps): React.ReactElement {
   const fileState = useEditorStore((state) => state.files[filePath])
   const editorFontFamily = useSettingsStore((state) => state.settings.editorFontFamily)
@@ -228,7 +231,28 @@ export function SourceTextEditor({
 
   useEffect(
     () =>
-      registerEditorContextSurface(tabId, {
+      registerEditorContextSurface(
+        tabId,
+        {
+        isFocused: () =>
+          Boolean(textareaRef.current) && document.activeElement === textareaRef.current,
+        getSelectionTarget: () => {
+          const textarea = textareaRef.current
+          if (!textarea) return null
+          return {
+            kind: 'editor',
+            workspaceKey: workspaceRefKey(useWorkspaceStore.getState().activeWorkspaceRef),
+            tabId,
+            filePath,
+            editorKind: 'source',
+            range: sourceSelectionRange(
+              textarea.value,
+              textarea.selectionStart,
+              textarea.selectionEnd,
+            ),
+            dirty: useEditorStore.getState().files[filePath]?.dirty ?? false,
+          }
+        },
         getSelectionText: () => {
           const textarea = textareaRef.current
           return textarea?.value.slice(textarea.selectionStart, textarea.selectionEnd) ?? ''
@@ -277,8 +301,10 @@ export function SourceTextEditor({
         openFind,
         closeFind,
         save: handleSave,
-      }),
-    [closeFind, filePath, handleSave, openFind, tabId],
+        },
+        { embedded },
+      ),
+    [closeFind, embedded, filePath, handleSave, openFind, tabId],
   )
 
   const showEditorContextMenu = (

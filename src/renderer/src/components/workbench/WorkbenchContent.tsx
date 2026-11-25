@@ -34,7 +34,6 @@ import { WebResourceDetailTab } from '../../features/web-resources/WebResourceDe
 import { WebAffairTab } from '../../features/web-affairs/WebAffairTab'
 import { WebAffairDraftTab } from '../../features/web-affairs/WebAffairDraftTab'
 import { ArticlePublishingTab } from '../../features/article-publishing/ArticlePublishingTab'
-import { SettingsPage } from '../settings/SettingsPage'
 import { FilePreview } from './FilePreview'
 import { AndroidDisplay } from './AndroidDisplay'
 import { GerberLayerPreview } from './GerberLayerPreview'
@@ -150,12 +149,9 @@ export function WorkbenchContent({
         )}
         {!isBrowserTab && activeTab && (
           <>
-            {activeTab.type === 'settings' &&
-              (activeTab.settingsSection === 'workspace' ? (
-                <WorkspaceHome settings />
-              ) : (
-                <SettingsPage key={activeTab.id} initialSection={activeTab.settingsSection} />
-              ))}
+            {activeTab.type === 'settings' && activeTab.settingsSection === 'workspace' && (
+              <WorkspaceHome settings />
+            )}
             {activeTab.type === 'agent-role' && <AgentRoleDetailTab tab={activeTab} />}
             {activeTab.type === 'remote-file' && activeTab.remoteFile && (
               <RemoteFileViewer

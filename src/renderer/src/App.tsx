@@ -48,6 +48,8 @@ import { useBrowserOpenRequests } from './bootstrap/use-browser-open-requests'
 import { useAgentWebResourceLaunchRequests } from './bootstrap/use-agent-web-resource-launch-requests'
 import { useComponentSetupOnboarding } from './bootstrap/use-component-setup-onboarding'
 import { OwnerEntry, OwnerPanel } from './features/owner/owner-panel'
+import { StudioSettingsPanel } from './components/settings/StudioSettingsPanel'
+import { useAppPageStore } from './stores/app-page-store'
 import { ProjectStrip } from './components/project-strip/ProjectStrip'
 import { useAnyFloatingSurfaceOpen } from './components/common/floating-surface-registry'
 import { clampPanelWidth } from './utils/panel-layout'
@@ -64,7 +66,8 @@ import { EditorDraftFailureBanner } from './features/markdown/EditorPersistenceS
 
 /** 主布局。 */
 function MainLayout(): React.ReactElement {
-  const [ownerOpen, setOwnerOpen] = useState(false)
+  const appPage = useAppPageStore((s) => s.page)
+  const ownerOpen = appPage === 'owner'
   const workspaceReady = useWorkspaceBootstrap()
   useComponentSetupOnboarding(workspaceReady)
   useWorkspaceStateFlush()
@@ -268,12 +271,14 @@ function MainLayout(): React.ReactElement {
         className="app-topbar"
         onClickCapture={(e) => {
           if (
-            ownerOpen &&
+            appPage !== 'workbench' &&
             e.target instanceof Element &&
             e.target.closest('button') &&
-            !e.target.closest('[aria-controls="owner-board"]')
+            !e.target.closest(
+              '[aria-controls="owner-board"], [aria-controls="studio-settings-page"]',
+            )
           )
-            setOwnerOpen(false)
+            useAppPageStore.getState().showWorkbench()
         }}
       >
         <div className="app-topbar-left">
@@ -316,6 +321,8 @@ function MainLayout(): React.ReactElement {
             className="app-topbar-open-project"
             title="Studio 设置"
             aria-label="Studio 设置"
+            aria-expanded={appPage === 'settings'}
+            aria-controls="studio-settings-page"
             onContextMenu={(event) => {
               event.preventDefault()
               useContextMenuStore.getState().show({
@@ -337,12 +344,15 @@ function MainLayout(): React.ReactElement {
                   ),
                 )
             }}
-            onClick={() => void executeCommand('settings.open', { source: 'toolbar' })}
+            onClick={() => {
+              if (appPage === 'settings') useAppPageStore.getState().showWorkbench()
+              else void executeCommand('settings.open', { source: 'toolbar' })
+            }}
           >
             <IconSettings size={15} />
             <span>Studio 设置</span>
           </button>
-          <OwnerEntry open={ownerOpen} toggle={() => setOwnerOpen((v) => !v)} />
+          <OwnerEntry open={ownerOpen} toggle={() => useAppPageStore.getState().toggleOwner()} />
           <div className="app-topbar-agent-actions" role="group" aria-label="会话操作">
             <button
               type="button"
@@ -407,8 +417,9 @@ function MainLayout(): React.ReactElement {
           </button>
         </div>
       )}
-      <OwnerPanel open={ownerOpen} close={() => setOwnerOpen(false)} />
-      <div className="main-area" style={ownerOpen ? { display: 'none' } : undefined}>
+      <OwnerPanel open={ownerOpen} close={() => useAppPageStore.getState().showWorkbench()} />
+      <StudioSettingsPanel />
+      <div className="main-area" style={appPage !== 'workbench' ? { display: 'none' } : undefined}>
         <div
           id="workspace-sidebar"
           className={`workspace-sidebar-shell ${sidebarContentVisible ? '' : 'collapsed'}`}

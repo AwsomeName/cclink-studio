@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useTabStore } from './tab-store'
+import { useAppPageStore } from './app-page-store'
 import { useBrowserStore } from './browser-store'
 import { useEditorStore } from './editor-store'
 import type { BrowserTabState } from './browser-store'
@@ -25,6 +26,7 @@ beforeEach(() => {
     tabs: { browser: browserTab() },
   })
   useEditorStore.setState({ files: {}, markdownViewStates: {}, pendingUpdates: [] })
+  useAppPageStore.setState({ page: 'workbench', settingsSection: undefined })
 })
 
 describe('useTabStore', () => {
@@ -240,15 +242,8 @@ describe('useTabStore', () => {
       expect(useTabStore.getState().activeTabId).toBe(firstId)
     })
 
-    it('settings Tab 保持单例，并更新目标设置分组', () => {
-      useTabStore.getState().openTab({
-        type: 'settings',
-        title: '设置',
-        icon: '⚙️',
-        settingsSection: 'sync',
-      })
-      const firstSettingsId = useTabStore.getState().activeTabId
-
+    it('Studio 设置打开独立页面而不是 Tab，并定位目标设置分组', () => {
+      const before = useTabStore.getState().tabs.length
       useTabStore.getState().openTab({
         type: 'settings',
         title: '远程连接',
@@ -256,12 +251,24 @@ describe('useTabStore', () => {
         settingsSection: 'remote-connections',
       })
 
-      const state = useTabStore.getState()
-      const settingsTabs = state.tabs.filter((tab) => tab.type === 'settings')
-      expect(settingsTabs).toHaveLength(1)
-      expect(state.activeTabId).toBe(firstSettingsId)
-      expect(settingsTabs[0].title).toBe('远程连接')
-      expect(settingsTabs[0].settingsSection).toBe('remote-connections')
+      expect(useTabStore.getState().tabs).toHaveLength(before)
+      expect(useAppPageStore.getState().page).toBe('settings')
+      expect(useAppPageStore.getState().settingsSection).toBe('remote-connections')
+
+      // 与原设置 Tab 一致：从设置页打开其它 Tab 时回到工作台。
+      useTabStore.getState().openTab({ type: 'editor', title: '笔记', icon: '📝' })
+      expect(useAppPageStore.getState().page).toBe('workbench')
+    })
+
+    it('项目设置仍是项目 Tab', () => {
+      useTabStore.getState().openTab({
+        type: 'settings',
+        title: '项目设置',
+        icon: '⚙️',
+        settingsSection: 'workspace',
+      })
+      expect(useTabStore.getState().tabs.filter((tab) => tab.type === 'settings')).toHaveLength(1)
+      expect(useAppPageStore.getState().page).toBe('workbench')
     })
 
     it('不同角色复用同一个全局配置 Tab，并只切换查看目标', () => {
@@ -706,7 +713,9 @@ describe('useTabStore', () => {
 
   describe('activateTab', () => {
     it('切换活跃 Tab', () => {
-      useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+      useTabStore
+        .getState()
+        .openTab({ type: 'settings', title: '项目设置', icon: '⚙️', settingsSection: 'workspace' })
       const settingsTab = useTabStore.getState().tabs.find((t) => t.type === 'settings')!
 
       useTabStore.getState().activateTab('browser')
@@ -831,7 +840,9 @@ describe('useTabStore', () => {
     })
 
     it('settings/preview/android → 无操作', () => {
-      useTabStore.getState().openTab({ type: 'settings', title: '设置', icon: '⚙️' })
+      useTabStore
+        .getState()
+        .openTab({ type: 'settings', title: '项目设置', icon: '⚙️', settingsSection: 'workspace' })
       const settingsTab = useTabStore.getState().tabs.find((t) => t.type === 'settings')!
       const before = useTabStore.getState().tabs.length
 

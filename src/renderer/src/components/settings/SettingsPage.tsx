@@ -315,9 +315,14 @@ function SettingsRow({
 
 interface SettingsPageProps {
   initialSection?: string
+  /** 外部再次请求定位分区时递增，即使分区与上次相同也重新定位。 */
+  sectionRequest?: number
 }
 
-export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.ReactElement {
+export function SettingsPage({
+  initialSection,
+  sectionRequest,
+}: SettingsPageProps = {}): React.ReactElement {
   const workspaceRef = useWorkspaceStore((state) => state.activeWorkspaceRef)
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(
     normalizeSection(initialSection),
@@ -419,7 +424,7 @@ export function SettingsPage({ initialSection }: SettingsPageProps = {}): React.
         connectionServiceFromSection(initialSection),
       )
     }
-  }, [initialSection])
+  }, [initialSection, sectionRequest])
 
   useEffect(() => {
     if (activeSection === 'connections') {
