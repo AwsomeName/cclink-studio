@@ -360,11 +360,15 @@ export class CclinkRemoteService implements RemoteProvider {
     if (this.openWorkspaceOperations.has(requestId)) throw new Error('远程打开请求标识重复')
     const operation = { cancelled: false }
     this.openWorkspaceOperations.set(requestId, operation)
+    const startedAt = Date.now()
     try {
       const result = await this.browseDirectory(serverId, requestedPath, requestId)
       if (operation.cancelled) throw new Error('远程请求已取消')
       if (!result.success || !result.tree || result.tree.type !== 'directory') {
-        throw new Error(result.error || '远程目录无法打开')
+        const message = result.error || '远程目录无法打开'
+        throw result.remoteError
+          ? new CclinkRequestError(message, result.remoteError)
+          : new Error(message)
       }
       if (!result.workspaceId) {
         throw new Error('远程 Agent 未返回规范 workspace_id，无法安全打开该工作空间')
@@ -388,9 +392,37 @@ export class CclinkRemoteService implements RemoteProvider {
         ]
       }
       return workspace
+    } catch (error) {
+      this.recordOpenWorkspaceFailure(serverId, requestId, operation.cancelled, startedAt, error)
+      throw error
     } finally {
       this.openWorkspaceOperations.delete(requestId)
     }
+  }
+
+  /** 远程打开失败只有 toast 可见；这里留下可随框架诊断导出的事实，不记录远程路径。 */
+  private recordOpenWorkspaceFailure(
+    serverId: string,
+    requestId: string,
+    cancelled: boolean,
+    startedAt: number,
+    error: unknown,
+  ): void {
+    this.recordDiagnostic('workspace.open', serverId, error)
+    const server = this.servers.get(serverId)
+    const source = error instanceof CclinkRequestError ? error.remoteError : undefined
+    console.warn('[CclinkRemote] 远程工作空间打开失败', {
+      endpointId: serverId,
+      requestId,
+      cancelled,
+      elapsedMs: Date.now() - startedAt,
+      realtime: this.status.state,
+      serverKnown: Boolean(server),
+      serverStatus: server?.status ?? 'unknown',
+      layer: source?.layer ?? 'unknown',
+      code: source?.code ?? 'REMOTE_OPERATION_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+    })
   }
 
   cancelOpenWorkspace(requestId: string): boolean {

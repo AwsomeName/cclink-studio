@@ -418,4 +418,47 @@ describe('workspace-open-controller', () => {
     expect(openWorkspace).toHaveBeenCalledTimes(2)
     expect(useWorkspaceStore.getState().activeWorkspaceRef).toMatchObject(remoteA)
   })
+
+  it('logs the failing stage when the refreshed device projection is still not online', async () => {
+    const openWorkspace = window.cclinkStudio.cclink.openWorkspace as ReturnType<typeof vi.fn>
+    const listServers = window.cclinkStudio.cclink.listServers as ReturnType<typeof vi.fn>
+    openWorkspace.mockRejectedValue(new Error('远程设备不在线'))
+    listServers.mockResolvedValue([
+      {
+        id: remoteA.endpointId,
+        name: 'Agent A',
+        hostname: 'agent-a',
+        os: 'linux',
+        status: 'connecting',
+        agentVersion: '1.0.0',
+        lastSeen: Date.now(),
+        workspaces: [],
+      },
+    ])
+    useCclinkStore.setState({
+      initialized: true,
+      service: { configured: true },
+      session: { loggedIn: true, user: null },
+      realtime: { state: 'online' },
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(openWorkspaceRef(remoteA)).rejects.toThrow('远程设备不在线')
+
+    expect(warn).toHaveBeenCalledWith(
+      '[WorkspaceOpen] 远程项目打开失败',
+      expect.objectContaining({
+        endpointId: remoteA.endpointId,
+        workspaceId: remoteA.workspaceId,
+        stage: 'refresh-retry',
+        realtimeBefore: 'online',
+        realtimeAfter: 'online',
+        serverStatus: 'connecting',
+        message: '远程设备不在线',
+      }),
+    )
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(remoteA.path)
+    expect(useWorkspaceStore.getState().activeWorkspaceRef).toEqual(localRef)
+    warn.mockRestore()
+  })
 })

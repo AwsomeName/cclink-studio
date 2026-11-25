@@ -237,6 +237,32 @@ describe('CclinkRemoteService runtime protocol', () => {
     )
   })
 
+  it('logs the failure layer and device projection when a workspace cannot be opened', async () => {
+    const { service } = createService()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(
+      service.openWorkspace('agent-1', '/srv/project', 'open-request-2'),
+    ).rejects.toThrow('远程设备不在线')
+
+    expect(warn).toHaveBeenCalledWith(
+      '[CclinkRemote] 远程工作空间打开失败',
+      expect.objectContaining({
+        endpointId: 'agent-1',
+        requestId: 'open-request-2',
+        cancelled: false,
+        realtime: 'idle',
+        serverKnown: false,
+        serverStatus: 'unknown',
+        layer: 'remote-agent',
+        code: 'REMOTE_SERVER_OFFLINE',
+        message: '远程设备不在线',
+      }),
+    )
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('/srv/project')
+    warn.mockRestore()
+  })
+
   it('cancels an open-workspace request without updating remembered workspaces', async () => {
     const { service } = createService()
     installOnlineServer(service)

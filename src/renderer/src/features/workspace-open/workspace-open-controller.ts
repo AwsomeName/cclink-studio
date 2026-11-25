@@ -20,6 +20,36 @@ export interface OpenWorkspaceRefOptions {
   remoteRequestId?: string
 }
 
+type RemoteOpenStage = 'connect' | 'confirm' | 'refresh-retry' | 'prepare' | 'apply'
+
+/**
+ * 远程打开失败对用户只显示短暂 toast；这里写入框架诊断日志，便于导出报告定位失败阶段。
+ * 只记录设备与工作空间标识，不记录远程路径。
+ */
+function logRemoteOpenFailure(
+  ref: RemoteWorkspaceRef,
+  stage: RemoteOpenStage,
+  startedAt: number,
+  realtimeBefore: string,
+  options: OpenWorkspaceRefOptions,
+  error: unknown,
+): void {
+  const state = useCclinkStore.getState()
+  const server = state.servers.find((candidate) => candidate.id === ref.endpointId)
+  console.warn('[WorkspaceOpen] 远程项目打开失败', {
+    endpointId: ref.endpointId,
+    workspaceId: ref.workspaceId,
+    stage,
+    confirmedRemote: Boolean(options.confirmedRemote),
+    elapsedMs: Date.now() - startedAt,
+    realtimeBefore,
+    realtimeAfter: state.realtime.state,
+    serverStatus: server?.status ?? 'unknown',
+    storeError: state.error,
+    message: error instanceof Error ? error.message : String(error),
+  })
+}
+
 /** 从系统目录选择器打开本地工作空间，保持目标工作空间恢复出的布局。 */
 export async function pickLocalWorkspace(): Promise<boolean> {
   const opened = await useFsStore.getState().openWorkspacePicker()
@@ -64,38 +94,50 @@ export async function openWorkspaceRef(
   }
 
   const generation = options.generation ?? beginWorkspaceRuntimeTransition()
+  const startedAt = Date.now()
+  const realtimeBefore = useCclinkStore.getState().realtime.state
+  let stage: RemoteOpenStage = 'connect'
   let confirmedRef: RemoteWorkspaceRef = ref
-  if (!options.confirmedRemote) {
-    await useCclinkStore.getState().initialize()
-    let state = useCclinkStore.getState()
-    if (!state.service?.configured) {
-      throw new Error(state.service?.message || 'CCLink 远程服务未配置')
-    }
-    if (!state.session.loggedIn) throw new Error('请先登录 CCLink 远程服务')
-    if (!(await state.connectRealtime())) {
-      throw new Error(useCclinkStore.getState().error || 'CCLink 远程连接失败')
-    }
-    state = useCclinkStore.getState()
-    try {
-      confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
-    } catch (error) {
-      // 启动后首次远程打开可能命中尚未刷新的设备在线投影。只对该可恢复失败刷新并重试一次。
-      const failure = error instanceof Error ? error.message : String(error)
-      if (!failure.includes('远程设备不在线')) throw error
-      await state.refreshServers()
-      if (!isWorkspaceRuntimeTransitionCurrent(generation)) {
-        throw new Error('远程项目打开已取消')
+  try {
+    if (!options.confirmedRemote) {
+      await useCclinkStore.getState().initialize()
+      let state = useCclinkStore.getState()
+      if (!state.service?.configured) {
+        throw new Error(state.service?.message || 'CCLink 远程服务未配置')
+      }
+      if (!state.session.loggedIn) throw new Error('请先登录 CCLink 远程服务')
+      if (!(await state.connectRealtime())) {
+        throw new Error(useCclinkStore.getState().error || 'CCLink 远程连接失败')
       }
       state = useCclinkStore.getState()
-      const server = state.servers.find((candidate) => candidate.id === ref.endpointId)
-      if (server?.status !== 'online') throw error
-      confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+      stage = 'confirm'
+      try {
+        confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+      } catch (error) {
+        // 启动后首次远程打开可能命中尚未刷新的设备在线投影。只对该可恢复失败刷新并重试一次。
+        const failure = error instanceof Error ? error.message : String(error)
+        if (!failure.includes('远程设备不在线')) throw error
+        stage = 'refresh-retry'
+        await state.refreshServers()
+        if (!isWorkspaceRuntimeTransitionCurrent(generation)) {
+          throw new Error('远程项目打开已取消')
+        }
+        state = useCclinkStore.getState()
+        const server = state.servers.find((candidate) => candidate.id === ref.endpointId)
+        if (server?.status !== 'online') throw error
+        confirmedRef = await confirmRemoteWorkspaceRef(ref, options.remoteRequestId)
+      }
     }
-  }
 
-  const transition = await prepareWorkspaceRuntimeTransition(confirmedRef, { generation })
-  const applied = await applyWorkspaceRuntimeTransition(transition)
-  if (!applied) throw new Error('工作空间已发生变化，请重试')
+    stage = 'prepare'
+    const transition = await prepareWorkspaceRuntimeTransition(confirmedRef, { generation })
+    stage = 'apply'
+    const applied = await applyWorkspaceRuntimeTransition(transition)
+    if (!applied) throw new Error('工作空间已发生变化，请重试')
+  } catch (error) {
+    logRemoteOpenFailure(ref, stage, startedAt, realtimeBefore, options, error)
+    throw error
+  }
 
   const projects = useOpenProjectsStore.getState()
   projects.replaceRemoteProject(ref, confirmedRef)
