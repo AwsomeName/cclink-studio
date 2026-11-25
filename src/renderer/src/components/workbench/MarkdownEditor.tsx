@@ -58,7 +58,6 @@ import {
   type MarkdownSearchMatch,
 } from '../../features/markdown/markdown-search'
 import { registerEditorSaveGuard, runEditorSaveGuard } from '../../features/editor-save-guard'
-import { resolveMountedEditorSaveTarget } from '../../features/editor-save-target'
 import {
   isMarkdownHydrationPending,
   setMarkdownEditorEditable,
@@ -721,34 +720,8 @@ export function MarkdownEditor({
         normalizeMarkdownEditorOutput(editor.getMarkdown())
       window.cclinkStudio.editor.readResponse(request.id, content)
     })
-    const offSave = window.cclinkStudio.editor.onSaveRequest(async (request) => {
-      const target = resolveMountedEditorSaveTarget(request.filePath, filePathRef.current)
-      if (!target.ok) {
-        window.cclinkStudio.editor.saveResult(request.id, false, target.error)
-        return
-      }
-      try {
-        const result = await useEditorStore.getState().saveFile(target.filePath)
-        window.cclinkStudio.editor.saveResult(
-          request.id,
-          result === 'saved',
-          result === 'conflict'
-            ? '文件已被外部修改'
-            : result === 'moved'
-              ? '文件在保存期间已移动，请在新位置重新保存'
-              : undefined,
-        )
-      } catch (error) {
-        window.cclinkStudio.editor.saveResult(
-          request.id,
-          false,
-          error instanceof Error ? error.message : '保存失败',
-        )
-      }
-    })
     return () => {
       offRead()
-      offSave()
     }
   }, [editor])
 

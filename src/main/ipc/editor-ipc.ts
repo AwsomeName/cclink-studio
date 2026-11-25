@@ -34,5 +34,12 @@ export function registerEditorIpc(
     },
   )
 
+  // 编辑器会话状态（renderer → main），Agent 写入前确认不会越过用户未保存的修改
+  registerTrustedIpcContract(
+    editorIpcContracts.sessionStateResult,
+    trustedRendererGuard,
+    (_event, id, state) => editorModule.resolveOperation(id, state),
+  )
+
   console.log('[CCLink Studio] 编辑器 IPC 已注册')
 }

@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image, { type ImageOptions } from '@tiptap/extension-image'
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react'
 import { decodeMarkdownPath, splitMarkdownDestinationSuffix } from '@shared/markdown-document'
+import {
+  MARKDOWN_IMAGE_VIEWPORT_MARGIN,
+  formatImageSize,
+  markdownImageLoadQueue,
+  shouldAutoLoadMarkdownImage,
+} from './markdown-image-budget'
 
 interface MarkdownImageOptions extends ImageOptions {
   documentPath?: string
@@ -70,45 +76,88 @@ export function resolveMarkdownImageSource(source: string, documentPath?: string
   return `/${normalized.join('/')}`
 }
 
+type LocalImageState =
+  | { phase: 'waiting' }
+  | { phase: 'loading' }
+  | { phase: 'loaded'; src: string }
+  | { phase: 'oversize'; size: number }
+  | { phase: 'error'; message: string }
+
 function MarkdownImageNodeView({ node, selected, extension }: NodeViewProps): React.ReactElement {
   const documentPath = (extension.options as MarkdownImageOptions).documentPath
   const source = resolveMarkdownImageSource(String(node.attrs.src ?? ''), documentPath)
   const alt = String(node.attrs.alt ?? '')
   const title = node.attrs.title ? String(node.attrs.title) : undefined
-  const [previewSource, setPreviewSource] = useState(() =>
-    /^(?:https?:|data:|blob:)/i.test(source) ? source : '',
-  )
-  const [error, setError] = useState('')
+  const remote = /^(?:https?:|data:|blob:)/i.test(source)
+  const frameRef = useRef<HTMLDivElement | null>(null)
+  const [visible, setVisible] = useState(false)
+  const [forced, setForced] = useState(false)
+  const [local, setLocal] = useState<LocalImageState>({ phase: 'waiting' })
+
+  // Local images load only once they come near the viewport.
+  useEffect(() => {
+    setVisible(false)
+    setForced(false)
+    setLocal({ phase: 'waiting' })
+    if (remote) return
+    const element = frameRef.current
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: MARKDOWN_IMAGE_VIEWPORT_MARGIN },
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [remote, source])
 
   useEffect(() => {
-    let cancelled = false
-    if (/^(?:https?:|data:|blob:)/i.test(source)) {
-      setPreviewSource(source)
-      setError('')
-      return
-    }
+    if (remote || !visible) return
     if (!source.startsWith('/')) {
-      setPreviewSource('')
-      setError('无法定位本地图片')
+      setLocal({ phase: 'error', message: '无法定位本地图片' })
       return
     }
-    void window.cclinkStudio.fs
-      .renderFile(source)
-      .then((result) => {
+    let cancelled = false
+    let cancelQueued: (() => void) | undefined
+    void (async () => {
+      try {
+        if (!forced) {
+          const { size } = await window.cclinkStudio.fs.stat(source)
+          if (cancelled) return
+          if (!shouldAutoLoadMarkdownImage(size)) {
+            setLocal({ phase: 'oversize', size })
+            return
+          }
+        }
+        setLocal({ phase: 'loading' })
+        const job = markdownImageLoadQueue.enqueue(() => window.cclinkStudio.fs.renderFile(source))
+        cancelQueued = job.cancel
+        const result = await job.promise
         if (cancelled) return
         if (result.kind !== 'image') throw new Error('文件不是受支持的图片')
-        setPreviewSource(`data:${result.mimeType};base64,${result.content}`)
-        setError('')
-      })
-      .catch((reason: unknown) => {
+        setLocal({ phase: 'loaded', src: `data:${result.mimeType};base64,${result.content}` })
+      } catch (reason) {
         if (cancelled) return
-        setPreviewSource('')
-        setError(reason instanceof Error ? reason.message : '图片加载失败')
-      })
+        setLocal({
+          phase: 'error',
+          message: reason instanceof Error ? reason.message : '图片加载失败',
+        })
+      }
+    })()
     return () => {
       cancelled = true
+      cancelQueued?.()
     }
-  }, [source])
+  }, [forced, remote, source, visible])
+
+  const imageSource = remote ? source : local.phase === 'loaded' ? local.src : ''
 
   return (
     <NodeViewWrapper
@@ -116,11 +165,24 @@ function MarkdownImageNodeView({ node, selected, extension }: NodeViewProps): Re
       className={`markdown-image-node${selected ? ' selected' : ''}`}
       data-markdown-image
     >
-      {previewSource ? (
-        <img src={previewSource} alt={alt} title={title} draggable={false} />
-      ) : (
-        <div className="markdown-image-error">{error || '正在加载图片...'}</div>
-      )}
+      <div ref={frameRef} className="markdown-image-frame">
+        {imageSource ? (
+          <img src={imageSource} alt={alt} title={title} draggable={false} decoding="async" />
+        ) : local.phase === 'oversize' ? (
+          <div className="markdown-image-placeholder" data-image-state="oversize">
+            <span>图片较大（{formatImageSize(local.size)}），为保持编辑流畅未自动加载</span>
+            <button type="button" contentEditable={false} onClick={() => setForced(true)}>
+              加载此图片
+            </button>
+          </div>
+        ) : local.phase === 'error' ? (
+          <div className="markdown-image-error">{local.message}</div>
+        ) : (
+          <div className="markdown-image-placeholder" data-image-state={local.phase}>
+            {local.phase === 'loading' ? '正在加载图片...' : '图片将在滚动到附近时加载'}
+          </div>
+        )}
+      </div>
       {(alt || title) && (
         <figcaption>
           {alt}

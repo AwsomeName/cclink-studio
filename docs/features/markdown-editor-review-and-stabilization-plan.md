@@ -7,9 +7,10 @@
 
 ## 2026-11-25 真实应用验收
 
-A1-A9 已用 `scripts/markdown-a1-a9-acceptance.mjs` 在真实 Electron 中跑过：A2、A3、A6、A9
-通过；A1、A5、A7 部分通过；A4、A8 不通过。逐项证据和整改顺序见
-`docs/testing/markdown-a1-a9-acceptance-2026-11-25.md`。稳定完成声明仍不恢复。
+A1-A9 已用 `scripts/markdown-a1-a9-acceptance.mjs` 在真实 Electron 中验收。首轮 4 通过、3 部分
+通过、2 不通过；整改 Agent 写入会话检查（P1-1）、后台 Tab 定向保存、图片预算（P1-6）与表格保真后，
+第二轮 A1-A9 全部通过。证据与残余风险见 `docs/testing/markdown-a1-a9-acceptance-2026-11-25.md`；
+Agent 经 shell 写文件仍不受会话保护，DocumentSession（M3）未建立，S 级完成声明暂不恢复。
 
 ## 结论
 

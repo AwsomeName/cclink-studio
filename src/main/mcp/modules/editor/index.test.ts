@@ -2,8 +2,20 @@ import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { EditorToolModule, type EditorFileAccess } from './index'
 
-function createFixture() {
-  const send = vi.fn()
+function createFixture(
+  session: { open: boolean; dirty: boolean; conflict: boolean } | null = {
+    open: false,
+    dirty: false,
+    conflict: false,
+  },
+) {
+  // The renderer answers session-state requests; `null` models a renderer that never answers.
+  const holder: { module?: EditorToolModule } = {}
+  const send = vi.fn((channel: string, request: { id: string }) => {
+    if (channel === 'editor:sessionStateRequest' && session) {
+      queueMicrotask(() => holder.module?.resolveOperation(request.id, session))
+    }
+  })
   const mainWindow = {
     isDestroyed: () => false,
     webContents: { send },
@@ -17,10 +29,28 @@ function createFixture() {
       { name: 'docs', path: '/project/docs', type: 'directory' },
       { name: 'package.json', path: '/project/package.json', type: 'file', extension: '.json' },
     ]),
-    writeFile: vi.fn().mockResolvedValue(undefined),
+    readTextDocument: vi.fn(async (path: string) => ({
+      path,
+      content: '# Report\n',
+      size: 9,
+      modifiedAt: 1,
+      hash: 'disk-hash',
+    })),
+    saveTextDocument: vi.fn(async (input: { filePath: string; content: string }) => ({
+      status: 'saved' as const,
+      snapshot: {
+        path: input.filePath,
+        content: input.content,
+        size: input.content.length,
+        modifiedAt: 2,
+        hash: 'new-hash',
+      },
+    })),
     withAccess,
   }
-  return { module: new EditorToolModule(mainWindow, fileAccess), fileAccess, send }
+  const module = new EditorToolModule(mainWindow, fileAccess)
+  holder.module = module
+  return { module, fileAccess, send }
 }
 
 describe('EditorToolModule file access', () => {
@@ -99,66 +129,116 @@ describe('EditorToolModule file access', () => {
     ).rejects.toThrow('不支持把二进制文件作为文本读取')
   })
 
-  it('指定 filePath 写入时直接持久化，不依赖编辑器 Tab ACK', async () => {
+  it('写入经受管保存落盘，并携带读取时的磁盘版本', async () => {
     const { module, fileAccess, send } = createFixture()
-    vi.mocked(fileAccess.readFile).mockResolvedValueOnce({
-      content: '# Report',
-      encoding: 'utf-8',
-    })
 
     await expect(
       module.execute('editor_write', {
         filePath: '/project/docs/report.md',
-        content: '# Report',
+        content: '# New',
       }),
     ).resolves.toEqual({
       success: true,
       persisted: true,
       verified: true,
       filePath: '/project/docs/report.md',
-      bytes: 8,
+      bytes: 5,
     })
 
-    expect(fileAccess.writeFile).toHaveBeenCalledWith('/project/docs/report.md', '# Report')
-    expect(send).not.toHaveBeenCalled()
+    expect(fileAccess.saveTextDocument).toHaveBeenCalledWith({
+      filePath: '/project/docs/report.md',
+      content: '# New',
+      expectedHash: 'disk-hash',
+    })
+    expect(send).toHaveBeenCalledWith('editor:sessionStateRequest', {
+      id: expect.any(String),
+      filePath: '/project/docs/report.md',
+    })
   })
 
-  it('指定 filePath 追加时基于磁盘内容持久化', async () => {
-    const { module, fileAccess, send } = createFixture()
-    vi.mocked(fileAccess.readFile).mockResolvedValueOnce({
-      content: '# Report\n',
-      encoding: 'utf-8',
-    })
-    vi.mocked(fileAccess.readFile).mockResolvedValueOnce({
-      content: '# Report\n\nSecond section',
-      encoding: 'utf-8',
-    })
+  it('追加基于磁盘内容合并', async () => {
+    const { module, fileAccess } = createFixture()
 
     await module.execute('editor_append', {
       filePath: '/project/docs/report.md',
       content: 'Second section',
     })
 
-    expect(fileAccess.writeFile).toHaveBeenCalledWith(
-      '/project/docs/report.md',
-      '# Report\n\nSecond section',
-    )
-    expect(send).not.toHaveBeenCalled()
+    expect(fileAccess.saveTextDocument).toHaveBeenCalledWith({
+      filePath: '/project/docs/report.md',
+      content: '# Report\n\nSecond section',
+      expectedHash: 'disk-hash',
+    })
   })
 
-  it('磁盘回读内容不一致时不报告写入成功', async () => {
+  it('新文件没有磁盘版本时直接创建', async () => {
     const { module, fileAccess } = createFixture()
-    vi.mocked(fileAccess.readFile).mockResolvedValueOnce({
-      content: 'stale content',
-      encoding: 'utf-8',
+    vi.mocked(fileAccess.readFile).mockRejectedValueOnce(
+      Object.assign(new Error('ENOENT: no such file'), { code: 'ENOENT' }),
+    )
+
+    await module.execute('editor_write', { filePath: '/project/new.md', content: '# New' })
+
+    expect(fileAccess.saveTextDocument).toHaveBeenCalledWith({
+      filePath: '/project/new.md',
+      content: '# New',
+      expectedHash: undefined,
+    })
+  })
+
+  it('用户在编辑器里有未保存修改时拒绝写入，不碰磁盘', async () => {
+    for (const session of [
+      { open: true, dirty: true, conflict: false },
+      { open: true, dirty: false, conflict: true },
+    ]) {
+      const { module, fileAccess } = createFixture(session)
+      await expect(
+        module.execute('editor_write', { filePath: '/project/a.md', content: '# Agent' }),
+      ).rejects.toThrow('EDITOR_SESSION_DIRTY')
+      expect(fileAccess.saveTextDocument).not.toHaveBeenCalled()
+    }
+  })
+
+  it('打开但没有未保存修改时正常写入，交给编辑器实时重载', async () => {
+    const { module, fileAccess } = createFixture({ open: true, dirty: false, conflict: false })
+    await module.execute('editor_write', { filePath: '/project/a.md', content: '# Agent' })
+    expect(fileAccess.saveTextDocument).toHaveBeenCalledOnce()
+  })
+
+  it('读取后磁盘被他人改动时报告冲突而不是覆盖', async () => {
+    const { module, fileAccess } = createFixture()
+    vi.mocked(fileAccess.saveTextDocument).mockResolvedValueOnce({
+      status: 'conflict',
+      current: null,
     })
 
     await expect(
-      module.execute('editor_write', {
-        filePath: '/project/docs/report.md',
-        content: '# Report',
-      }),
-    ).rejects.toThrow('文件写入后校验失败')
+      module.execute('editor_write', { filePath: '/project/a.md', content: '# Agent' }),
+    ).rejects.toThrow('EDITOR_DISK_CHANGED')
+  })
+
+  it('渲染进程无应答时不写入', async () => {
+    vi.useFakeTimers()
+    try {
+      const { module, fileAccess } = createFixture(null)
+      const pending = module.execute('editor_write', { filePath: '/project/a.md', content: 'x' })
+      const assertion = expect(pending).rejects.toThrow('EDITOR_SESSION_UNKNOWN')
+      await vi.advanceTimersByTimeAsync(5_000)
+      await assertion
+      expect(fileAccess.saveTextDocument).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('拒绝修改二进制文件', async () => {
+    const { module, fileAccess } = createFixture()
+    vi.mocked(fileAccess.readFile).mockResolvedValueOnce({ content: 'AA==', encoding: 'base64' })
+
+    await expect(
+      module.execute('editor_append', { filePath: '/project/a.bin', content: 'x' }),
+    ).rejects.toThrow('不支持修改二进制文件')
+    expect(fileAccess.saveTextDocument).not.toHaveBeenCalled()
   })
 
   it('拒绝缺失或只有空白的隐式 editor 写入路径', async () => {

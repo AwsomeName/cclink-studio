@@ -15,16 +15,28 @@ import {
   editorIpcEvents,
   type EditorReadRequest,
   type EditorSaveRequest,
+  type EditorSessionState,
+  type EditorSessionStateRequest,
 } from '../../../../shared/ipc/editor'
+import type { FsSaveTextDocumentResult, FsTextDocumentSnapshot } from '../../../../shared/ipc/fs'
 import type { DirEntry } from '../../../fs/file-service'
 import type { FileAccessContext } from '../../../fs/file-service'
 
 export interface EditorFileAccess {
   readFile(filePath: string): Promise<{ content: string; encoding: string }>
   readDir(dirPath: string, options?: { showHiddenFiles?: boolean }): Promise<DirEntry[]>
-  writeFile(filePath: string, content: string): Promise<void>
+  readTextDocument(filePath: string): Promise<FsTextDocumentSnapshot>
+  /** Versioned, atomic document save (the same path the editor's own save uses). */
+  saveTextDocument(input: {
+    filePath: string
+    content: string
+    expectedHash?: string
+  }): Promise<FsSaveTextDocumentResult>
   withAccess?<T>(context: FileAccessContext, operation: () => T): T
 }
+
+/** The renderer must answer quickly; a hung renderer must not let a write slip past a draft. */
+const SESSION_STATE_TIMEOUT = 5_000
 
 /** 等待中的编辑器操作 */
 interface PendingOperation {
@@ -43,7 +55,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_write',
     description:
-      '写入完整 Markdown 文档。必须指定 filePath，内容直接持久化到磁盘并自动创建父目录。',
+      '写入完整 Markdown 文档。必须指定 filePath，内容持久化到磁盘并自动创建父目录。若用户正在编辑器中修改该文件且尚未保存，会拒绝写入并返回 EDITOR_SESSION_DIRTY，不覆盖任何一方。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +78,8 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
   {
     name: 'editor_append',
-    description: '在 Markdown 文档末尾追加内容。必须指定 filePath，内容直接持久化到磁盘。',
+    description:
+      '在 Markdown 文档末尾追加内容。必须指定 filePath，内容持久化到磁盘。用户有未保存修改时返回 EDITOR_SESSION_DIRTY。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -86,7 +99,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_insert',
     description:
-      '在 Markdown 文档指定位置插入内容。必须指定 filePath，position 可选 "start" 或 "end"。',
+      '在 Markdown 文档指定位置插入内容。必须指定 filePath，position 可选 "start" 或 "end"。用户有未保存修改时返回 EDITOR_SESSION_DIRTY。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -223,44 +236,72 @@ export class EditorToolModule implements ToolModule {
     const filePath = typeof params.filePath === 'string' ? params.filePath.trim() : ''
     const content = typeof params.content === 'string' ? params.content : ''
     if (!filePath) throw new Error('编辑器写入必须提供明确的文件路径')
-    const nextContent = await this.resolveDiskContent(type, filePath, content, params.position)
+    // An open document with unsaved edits owns the text: never write around the user's draft.
+    const session = await this.requestSessionState(filePath)
+    if (session.dirty || session.conflict) {
+      throw new Error(
+        `EDITOR_SESSION_DIRTY: 用户正在编辑器中修改 ${filePath}，${
+          session.conflict ? '且有待处理的外部变更冲突' : '且有未保存的修改'
+        }；为避免覆盖，本次未写入。请让用户先保存或放弃修改后再试。`,
+      )
+    }
     abortSignal?.throwIfAborted()
-    await this.fileAccess.writeFile(filePath, nextContent)
-    const persisted = await this.fileAccess.readFile(filePath)
-    if (persisted.encoding !== 'utf-8' || persisted.content !== nextContent) {
-      throw new Error(`文件写入后校验失败: ${filePath}`)
+    const disk = await this.readDiskDocument(filePath)
+    const nextContent = mergeEditorContent(type, disk?.content ?? '', content, params.position)
+    abortSignal?.throwIfAborted()
+    const result = await this.fileAccess.saveTextDocument({
+      filePath,
+      content: nextContent,
+      expectedHash: disk?.hash,
+    })
+    if (result.status === 'conflict') {
+      throw new Error(
+        `EDITOR_DISK_CHANGED: ${filePath} 在写入期间被其他程序修改，本次未写入；请重新读取后再试。`,
+      )
     }
     return {
       success: true,
       persisted: true,
       verified: true,
       filePath,
-      bytes: Buffer.byteLength(nextContent, 'utf-8'),
+      bytes: Buffer.byteLength(result.snapshot.content, 'utf-8'),
     }
   }
 
-  private async resolveDiskContent(
-    type: 'write' | 'append' | 'insert',
-    filePath: string,
-    content: string,
-    position: unknown,
-  ): Promise<string> {
-    if (type === 'write') return content
-
-    let current = ''
+  /** The current disk text and its version, or null for a file that does not exist yet. */
+  private async readDiskDocument(filePath: string): Promise<FsTextDocumentSnapshot | null> {
     try {
-      const result = await this.fileAccess.readFile(filePath)
-      if (result.encoding !== 'utf-8') {
-        throw new Error(`不支持修改二进制文件: ${filePath}`)
-      }
-      current = result.content
+      const raw = await this.fileAccess.readFile(filePath)
+      if (raw.encoding !== 'utf-8') throw new Error(`不支持修改二进制文件: ${filePath}`)
+      return await this.fileAccess.readTextDocument(filePath)
     } catch (error) {
-      if (!isMissingFileError(error)) throw error
+      if (isMissingFileError(error)) return null
+      throw error
     }
+  }
 
-    return type === 'insert' && position === 'start'
-      ? joinMarkdown(content, current)
-      : joinMarkdown(current, content)
+  /** Ask the renderer whether `filePath` has an editor session with unsaved edits. */
+  private requestSessionState(filePath: string): Promise<EditorSessionState> {
+    const window = this.mainWindow
+    if (!window || window.isDestroyed()) {
+      return Promise.resolve({ open: false, dirty: false, conflict: false })
+    }
+    return new Promise((resolve, reject) => {
+      const id = randomUUID()
+      const timeout = setTimeout(() => {
+        this.pending.delete(id)
+        reject(
+          new Error('EDITOR_SESSION_UNKNOWN: 无法确认编辑器中该文件是否有未保存修改，本次未写入'),
+        )
+      }, SESSION_STATE_TIMEOUT)
+      this.pending.set(id, {
+        resolve: (state) => resolve(state as EditorSessionState),
+        reject,
+        timeout,
+      })
+      const request: EditorSessionStateRequest = { id, filePath }
+      window.webContents.send(editorIpcEvents.sessionStateRequest, request)
+    })
   }
 
   /**
@@ -373,6 +414,18 @@ export class EditorToolModule implements ToolModule {
     this.pending.clear()
     this.mainWindow = null
   }
+}
+
+function mergeEditorContent(
+  type: 'write' | 'append' | 'insert',
+  current: string,
+  content: string,
+  position: unknown,
+): string {
+  if (type === 'write') return content
+  return type === 'insert' && position === 'start'
+    ? joinMarkdown(content, current)
+    : joinMarkdown(current, content)
 }
 
 function joinMarkdown(before: string, after: string): string {

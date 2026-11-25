@@ -429,6 +429,15 @@ export const editorIpcContracts = {
       editorErrorSchema.parse(args[2]),
     ),
   ),
+  sessionStateResult: bindIpcParser(editorIpc.sessionStateResult, (args) =>
+    ipcArgs(
+      editorOperationIdSchema.parse(args[0]),
+      z
+        .object({ open: z.boolean(), dirty: z.boolean(), conflict: z.boolean() })
+        .strict()
+        .parse(args[1]),
+    ),
+  ),
 } as const
 
 export const wechatIpcContracts = {

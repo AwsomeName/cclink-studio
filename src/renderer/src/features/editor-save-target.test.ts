@@ -1,32 +1,65 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMountedEditorSaveTarget } from './editor-save-target'
+import type { EditorFileState } from '../stores/editor-store'
+import {
+  EDITOR_SAVE_TARGET_NOT_OPEN,
+  editorSessionState,
+  resolveEditorSaveTarget,
+} from './editor-save-target'
 
-describe('resolveMountedEditorSaveTarget', () => {
-  it('accepts an explicitly matching mounted document', () => {
-    expect(resolveMountedEditorSaveTarget('/project/b.md', '/project/b.md')).toEqual({
+function file(overrides: Partial<EditorFileState> = {}): EditorFileState {
+  return {
+    savedContent: 'a',
+    currentContent: 'a',
+    dirty: false,
+    loading: false,
+    ...overrides,
+  }
+}
+
+const open = { '/project/a.md': file(), '/project/b.md': file({ dirty: true }) }
+
+describe('resolveEditorSaveTarget', () => {
+  it('saves the named document even when it is not the active one', () => {
+    expect(resolveEditorSaveTarget('/project/b.md', open, '/project/a.md')).toEqual({
       ok: true,
       filePath: '/project/b.md',
     })
   })
 
-  it('keeps compatibility with a request that omits the mounted path', () => {
-    expect(resolveMountedEditorSaveTarget(undefined, '/project/a.md')).toEqual({
+  it('uses the active document when the request names none', () => {
+    expect(resolveEditorSaveTarget(undefined, open, '/project/a.md')).toEqual({
       ok: true,
       filePath: '/project/a.md',
     })
   })
 
-  it('rejects a different target instead of reusing the active buffer', () => {
-    expect(resolveMountedEditorSaveTarget('/project/b.md', '/project/a.md')).toEqual({
+  it('fails at once for a document without an editor session', () => {
+    expect(resolveEditorSaveTarget('/project/c.md', open, '/project/a.md')).toEqual({
       ok: false,
-      error: '目标文件未在当前编辑器会话中打开，无法保存',
+      error: EDITOR_SAVE_TARGET_NOT_OPEN,
     })
   })
 
-  it('rejects a request when neither side has a file path', () => {
-    expect(resolveMountedEditorSaveTarget(undefined, null)).toEqual({
+  it('fails when neither side names a file', () => {
+    expect(resolveEditorSaveTarget(undefined, open, null)).toEqual({
       ok: false,
       error: '无文件路径',
     })
+  })
+})
+
+describe('editorSessionState', () => {
+  it('reports closed, clean, dirty, saving and conflicted sessions', () => {
+    expect(editorSessionState({}, '/x.md')).toEqual({ open: false, dirty: false, conflict: false })
+    expect(editorSessionState({ '/x.md': file() }, '/x.md')).toEqual({
+      open: true,
+      dirty: false,
+      conflict: false,
+    })
+    expect(editorSessionState({ '/x.md': file({ dirty: true }) }, '/x.md').dirty).toBe(true)
+    expect(editorSessionState({ '/x.md': file({ saving: true }) }, '/x.md').dirty).toBe(true)
+    expect(
+      editorSessionState({ '/x.md': file({ externalContent: 'disk' }) }, '/x.md').conflict,
+    ).toBe(true)
   })
 })

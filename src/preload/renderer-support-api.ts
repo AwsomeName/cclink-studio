@@ -5,6 +5,7 @@ import {
   editorIpcEvents,
   parseEditorReadRequest,
   parseEditorSaveRequest,
+  parseEditorSessionStateRequest,
   type EditorApiContract,
 } from '../shared/ipc/editor'
 import { identityIpc, type IdentityApiContract } from '../shared/ipc/identity'
@@ -100,6 +101,14 @@ export const editorApi: EditorApiContract = {
     return registerOwnedEditorListener(editorIpcEvents.saveRequest, handler)
   },
   saveResult: (id, success, error) => invokeIpcContract(editorIpc.saveResult, id, success, error),
+  onSessionStateRequest: (callback) => {
+    const handler: OwnedEditorListener = (_event, data): void => {
+      const request = parseEditorSessionStateRequest(data)
+      if (request) callback(request)
+    }
+    return registerOwnedEditorListener(editorIpcEvents.sessionStateRequest, handler)
+  },
+  sessionStateResult: (id, state) => invokeIpcContract(editorIpc.sessionStateResult, id, state),
 }
 
 export const updateApi: UpdateApiContract = {

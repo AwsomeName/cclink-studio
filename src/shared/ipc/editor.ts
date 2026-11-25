@@ -29,6 +29,21 @@ export interface EditorSaveRequest {
   filePath?: string
 }
 
+/** Main asks the renderer whether an Agent write would land under an open document session. */
+export interface EditorSessionStateRequest {
+  id: string
+  filePath: string
+}
+
+export interface EditorSessionState {
+  /** The file has an editor session in this window (any Tab or page-embedded editor). */
+  open: boolean
+  /** The session holds edits that are not on disk yet. */
+  dirty: boolean
+  /** The session is showing an unresolved external-change conflict. */
+  conflict: boolean
+}
+
 function parseEditorRequest<T extends EditorReadRequest | EditorSaveRequest>(
   value: unknown,
 ): T | null {
@@ -60,11 +75,20 @@ export const parseEditorReadRequest = (value: unknown): EditorReadRequest | null
 export const parseEditorSaveRequest = (value: unknown): EditorSaveRequest | null =>
   parseEditorRequest<EditorSaveRequest>(value)
 
+export const parseEditorSessionStateRequest = (
+  value: unknown,
+): EditorSessionStateRequest | null => {
+  const request = parseEditorRequest<EditorSaveRequest>(value)
+  return request?.filePath ? { id: request.id, filePath: request.filePath } : null
+}
+
 export interface EditorApiContract {
   onReadRequest: (callback: (request: EditorReadRequest) => void) => () => void
   readResponse: (id: string, content: string) => Promise<void>
   onSaveRequest: (callback: (request: EditorSaveRequest) => void) => () => void
   saveResult: (id: string, success: boolean, error?: string) => Promise<void>
+  onSessionStateRequest: (callback: (request: EditorSessionStateRequest) => void) => () => void
+  sessionStateResult: (id: string, state: EditorSessionState) => Promise<void>
 }
 
 export const editorIpc = {
@@ -72,9 +96,13 @@ export const editorIpc = {
   saveResult: defineIpcCall<[id: string, success: boolean, error: string | undefined], void>(
     'editor:saveResult',
   ),
+  sessionStateResult: defineIpcCall<[id: string, state: EditorSessionState], void>(
+    'editor:sessionStateResult',
+  ),
 } as const
 
 export const editorIpcEvents = {
   readRequest: 'editor:readRequest',
   saveRequest: 'editor:saveRequest',
+  sessionStateRequest: 'editor:sessionStateRequest',
 } as const

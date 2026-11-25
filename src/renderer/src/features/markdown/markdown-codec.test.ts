@@ -9,6 +9,8 @@ import {
   prepareMarkdownEditorInput,
   scanMarkdownBlocks,
   sourceRangeFromOffsets,
+  collapseSerializerBlankLines,
+  restoreUntouchedMarkdownTables,
 } from './markdown-codec'
 
 describe('markdown-codec', () => {
@@ -616,5 +618,56 @@ describe('markdown-codec', () => {
     await expect(hashMarkdownSnapshotSha256('same')).resolves.toBe(
       '0967115f2813a3541eaef77de9d9d5773f1c0c04314b0bbfe4ff3b3b1c55b5d5',
     )
+  })
+})
+
+describe('editor output keeps untouched Markdown text', () => {
+  const reference = [
+    '前文',
+    '',
+    '| 列A | 列B |',
+    '| --- | :-: |',
+    '| a1 | b1 |',
+    '',
+    '后文',
+    '',
+  ].join('\n')
+
+  it('restores an unchanged table and drops the serializer blank-line padding', () => {
+    const serialized = [
+      '前文',
+      '',
+      '',
+      '| 列A  | 列B  |',
+      '| --- | :---: |',
+      '| a1  | b1  |',
+      '',
+      '',
+      '后文 改过',
+      '',
+    ].join('\n')
+    expect(normalizeMarkdownEditorOutput(serialized, reference)).toBe(
+      ['前文', '', '| 列A | 列B |', '| --- | :-: |', '| a1 | b1 |', '', '后文 改过', ''].join('\n'),
+    )
+  })
+
+  it('keeps the serializer text for a table the user changed', () => {
+    const serialized = ['| 列A  | 列B  |', '| --- | :---: |', '| a1  | 新值  |', ''].join('\n')
+    expect(restoreUntouchedMarkdownTables(serialized, reference)).toBe(serialized)
+  })
+
+  it('treats a changed alignment as a change', () => {
+    const serialized = ['| 列A  | 列B  |', '| --- | ---: |', '| a1  | b1  |'].join('\n')
+    expect(restoreUntouchedMarkdownTables(serialized, reference)).toBe(serialized)
+  })
+
+  it('never touches blank lines or pipes inside fenced code', () => {
+    const fenced = ['```', 'a', '', '', 'b', '| x | y |', '| - | - |', '```', '', '', 'c'].join(
+      '\n',
+    )
+    expect(collapseSerializerBlankLines(fenced)).toBe(
+      ['```', 'a', '', '', 'b', '| x | y |', '| - | - |', '```', '', 'c'].join('\n'),
+    )
+    expect(restoreUntouchedMarkdownTables(fenced, '| x | y |\n| - | - |')).toBe(fenced)
   })
 })

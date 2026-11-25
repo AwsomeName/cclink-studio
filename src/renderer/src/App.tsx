@@ -38,6 +38,7 @@ import { useAppSession } from './bootstrap/use-app-session'
 import { useShortcutRouter } from './features/shortcuts/use-shortcut-router'
 import { ShortcutHelp } from './features/shortcuts/ShortcutHelp'
 import { useMainProcessEvents } from './bootstrap/use-main-process-events'
+import { useEditorAgentRequests } from './bootstrap/use-editor-agent-requests'
 import { useRegisterCommands } from './bootstrap/use-register-commands'
 import { useTerminalEvents } from './bootstrap/use-terminal-events'
 import { useWorkspaceBootstrap } from './bootstrap/use-workspace-bootstrap'
@@ -183,6 +184,7 @@ function MainLayout(): React.ReactElement {
   const inlineShortcutHelp = activeTab?.type === 'browser' && !agentInCenter
   useBrowserFindBridge()
   useMainProcessEvents()
+  useEditorAgentRequests()
   useAgentStreamEvents()
   useAgentConversationRestore(workspaceReady)
   useRemoteConversationRestore(workspaceReady)

@@ -362,7 +362,11 @@ describe('IPC invoke contracts', () => {
     expect(Object.keys(projectOpsIpcContracts)).toEqual(Object.keys(projectOpsIpc))
     expect(Object.keys(editorIpcContracts)).toEqual(Object.keys(editorIpc))
     expect(Object.keys(wechatIpcContracts)).toEqual(Object.keys(wechatIpc))
-    expect(Object.keys(editorIpcEvents)).toEqual(['readRequest', 'saveRequest'])
+    expect(Object.keys(editorIpcEvents)).toEqual([
+      'readRequest',
+      'saveRequest',
+      'sessionStateRequest',
+    ])
 
     expect(workspaceStateIpcContracts.get.parseArgs(['/workspace', undefined])).toEqual([
       '/workspace',

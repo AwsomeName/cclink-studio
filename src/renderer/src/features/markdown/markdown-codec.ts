@@ -793,7 +793,10 @@ function expandSameLineListHeadings(source: string): string {
 }
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
-  const normalized = normalizeMarkdownSource(source)
+  const normalized = restoreUntouchedMarkdownTables(
+    collapseSerializerBlankLines(normalizeMarkdownSource(source)),
+    referenceSource === undefined ? undefined : normalizeMarkdownSource(referenceSource),
+  )
   // This pass only restores math and escapes literal dollars. Most documents need neither.
   if (!normalized.includes('$')) return normalized
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
@@ -844,6 +847,107 @@ export function normalizeMarkdownEditorOutput(source: string, referenceSource?: 
   }
   restored += restorePlainMarkdownDollars(normalized, masked, cursor, normalized.length)
   return restored
+}
+
+const FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})/
+
+/**
+ * The Tiptap serializer pads blocks such as tables with an extra blank line on each side. Markdown
+ * treats any run of blank lines as one break and the editor cannot keep extra ones anyway, so
+ * outside fenced code a run collapses to a single blank line.
+ */
+export function collapseSerializerBlankLines(markdown: string): string {
+  const out: string[] = []
+  let fence: string | null = null
+  for (const line of markdown.split('\n')) {
+    const marker = FENCE_PATTERN.exec(line)?.[1]
+    if (marker && (fence === null || (marker[0] === fence[0] && marker.length >= fence.length))) {
+      fence = fence === null ? marker : null
+    }
+    if (fence === null && line.trim() === '' && out.length > 0 && out[out.length - 1].trim() === '')
+      continue
+    out.push(line)
+  }
+  return out.join('\n')
+}
+
+interface MarkdownTableBlock {
+  start: number
+  end: number
+  key: string
+}
+
+function splitTableCells(line: string): string[] {
+  const body = line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+  return body.split(/(?<!\\)\|/).map((cell) => cell.trim())
+}
+
+function tableAlignment(cell: string): string {
+  const left = cell.startsWith(':')
+  const right = cell.endsWith(':')
+  return left && right ? 'center' : left ? 'left' : right ? 'right' : 'none'
+}
+
+/** Contiguous `|` tables outside fenced code, keyed by their cell text and column alignment. */
+function findMarkdownTables(lines: string[]): MarkdownTableBlock[] {
+  const tables: MarkdownTableBlock[] = []
+  let fence: string | null = null
+  let index = 0
+  while (index < lines.length) {
+    const marker = FENCE_PATTERN.exec(lines[index])?.[1]
+    if (marker && (fence === null || (marker[0] === fence[0] && marker.length >= fence.length))) {
+      fence = fence === null ? marker : null
+      index += 1
+      continue
+    }
+    const isRow = (line: string | undefined): boolean =>
+      line !== undefined && line.trim().startsWith('|')
+    const delimiter = lines[index + 1]
+    if (
+      fence === null &&
+      isRow(lines[index]) &&
+      delimiter !== undefined &&
+      /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(delimiter)
+    ) {
+      let end = index + 2
+      while (isRow(lines[end])) end += 1
+      const rows = lines.slice(index, end).map(splitTableCells)
+      const key = JSON.stringify([rows[0], rows[1].map(tableAlignment), ...rows.slice(2)])
+      tables.push({ start: index, end, key })
+      index = end
+      continue
+    }
+    index += 1
+  }
+  return tables
+}
+
+/**
+ * The serializer re-pads every table and rewrites `:-:` as `:---:`. A table whose cells and
+ * alignment are unchanged from the document on disk keeps its original text, so saving one edit
+ * elsewhere does not rewrite tables the user never touched.
+ */
+export function restoreUntouchedMarkdownTables(markdown: string, reference?: string): string {
+  if (!reference || !markdown.includes('|')) return markdown
+  const referenceLines = reference.split('\n')
+  const available = findMarkdownTables(referenceLines)
+  if (available.length === 0) return markdown
+  const lines = markdown.split('\n')
+  const tables = findMarkdownTables(lines)
+  for (const table of [...tables].reverse()) {
+    const matchIndex = available.findIndex((candidate) => candidate.key === table.key)
+    if (matchIndex < 0) continue
+    const [match] = available.splice(matchIndex, 1)
+    lines.splice(
+      table.start,
+      table.end - table.start,
+      ...referenceLines.slice(match.start, match.end),
+    )
+  }
+  return lines.join('\n')
 }
 
 function hasEquivalentMathExpressionContent(

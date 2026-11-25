@@ -135,7 +135,15 @@ await writeFile(join(workspace, 'a6.json'), '{\n  "a": [1, 2],\n  "b": "# x"\n}\
 await writeFile(join(workspace, 'a6.ts'), '// - item\nexport const a = <T,>(x: T) => x\n')
 await writeFile(join(workspace, 'a6.py'), '# comment\n- 1\ndef f():\n    return 1\n')
 await writeFile(join(workspace, 'a6.html'), '<h1>HTML 标题</h1>\n<p>段落</p>\n')
-await writeFile(join(workspace, 'a7.md'), 'A7 原文\n')
+for (const name of [
+  'a7.md',
+  'a7-close.md',
+  'a7-double.md',
+  'a7-move.md',
+  'a7-watch.md',
+  'a7-reopen.md',
+])
+  await writeFile(join(workspace, name), `${name} 原文\n`)
 const IMAGE_COUNT = 8
 for (let i = 0; i < IMAGE_COUNT; i++)
   await writeFile(join(workspace, `big-${i}.png`), png(1600, 1200, true))
@@ -145,6 +153,17 @@ await writeFile(
     '# 大图',
     '',
     ...Array.from({ length: IMAGE_COUNT }, (_, i) => `![大图${i}](./big-${i}.png)\n`),
+  ].join('\n'),
+)
+const MANY_COUNT = 14
+for (let i = 0; i < MANY_COUNT; i++)
+  await writeFile(join(workspace, `mid-${i}.png`), png(800, 600, true))
+await writeFile(
+  join(workspace, 'a8-many.md'),
+  [
+    '# 多图',
+    '',
+    ...Array.from({ length: MANY_COUNT }, (_, i) => `![中图${i}](./mid-${i}.png)\n`),
   ].join('\n'),
 )
 await mkdir(join(workspace, 'notes'))
@@ -297,7 +316,10 @@ async function lineDiff(before, after) {
   return out.split('\n').filter((line) => /^[-+](?![-+]{2} )/.test(line))
 }
 
+// ONLY=A4,A8 runs a subset while iterating on a fix.
+const only = process.env.ONLY ? new Set(process.env.ONLY.split(',')) : null
 async function step(id, fn) {
+  if (only && !only.has(id)) return
   try {
     await fn()
   } catch (error) {
@@ -468,43 +490,78 @@ try {
   })
 
   // ---------- A4 ----------
+  // editor_write/append/insert first ask the renderer for the document's session state
+  // (editor:sessionStateRequest) and refuse while the user has unsaved edits; that decision is
+  // covered by src/main/mcp/modules/editor/index.test.ts. The real app must answer truthfully and
+  // show a permitted write live.
+  async function sessionState(filePath) {
+    const id = `a4-${Math.random().toString(36).slice(2)}`
+    await app.evaluate(
+      ({ ipcMain, BrowserWindow }, { id, filePath }) => {
+        globalThis.__sessionStates ??= {}
+        const handlers = ipcMain._invokeHandlers
+        globalThis.__originalSessionState ??= handlers.get('editor:sessionStateResult')
+        handlers.set('editor:sessionStateResult', (event, requestId, state) => {
+          globalThis.__sessionStates[requestId] = state
+          return globalThis.__originalSessionState(event, requestId, state)
+        })
+        BrowserWindow.getAllWindows()
+          .find((w) => !w.isDestroyed())
+          .webContents.send('editor:sessionStateRequest', { id, filePath })
+      },
+      { id, filePath },
+    )
+    let state = null
+    await waitFor(
+      async () => {
+        state = await app.evaluate((_electron, id) => globalThis.__sessionStates?.[id] ?? null, id)
+        return state !== null
+      },
+      'session state answer',
+      3000,
+    ).catch(() => {})
+    return state
+  }
+
   await step('A4', async () => {
+    const path = join(workspace, 'a4.md')
     await openFile('a4.md')
     await editor().waitFor()
     await typeAtEnd('用户未保存')
-    // editor_write → FileService.writeFile(filePath, content): a plain disk write.
-    await writeFile(join(workspace, 'a4.md'), 'A4 Agent 覆盖写入\n')
-    await sleep(2500)
-    const banner = await page
-      .locator('.markdown-conflict-banner')
-      .isVisible()
-      .catch(() => false)
-    const view = await editor()
-      .innerText()
-      .catch(() => '')
-    const onDisk = await disk('a4.md')
-    await shot('A4-agent-write-while-dirty')
-    // Clean document: does the Agent change appear live?
-    await page
-      .locator('.markdown-conflict-banner')
-      .getByRole('button', { name: '重新载入' })
-      .click()
-      .catch(() => {})
-    await sleep(800)
-    await writeFile(join(workspace, 'a4.md'), 'A4 Agent 第二次写入\n')
-    await sleep(2500)
-    const liveWhenClean = (
-      await editor()
-        .innerText()
-        .catch(() => '')
-    ).includes('第二次写入')
-    record('A4', 'FAIL', 'Agent 写入不经过文档会话：直接改写磁盘，只靠外部变更检测兜底', {
-      agentWriteLandedOnDiskWhileUserDirty: onDisk === 'A4 Agent 覆盖写入\n',
-      conflictBannerShown: banner,
-      userDraftStillInView: view.includes('用户未保存'),
-      liveUpdateWhenClean: liveWhenClean,
-      why: 'A4.3 要求请求命中会话、不得绕过草稿写磁盘；editor/index.ts:228 仍是 writeFile',
-    })
+    const whileDirty = await sessionState(path)
+    await page.keyboard.press('Meta+s')
+    await waitFor(async () => (await disk('a4.md')).includes('用户未保存'), 'A4 save')
+    await sleep(300)
+    const whenClean = await sessionState(path)
+    const unopened = await sessionState(join(workspace, 'a5-c.md'))
+    // A permitted Agent write (clean document) lands through the versioned save and shows live.
+    await writeFile(path, 'A4 Agent 写入\n')
+    const live = await waitFor(
+      async () => (await editor().innerText()).includes('A4 Agent 写入'),
+      'live reload',
+      5000,
+    ).catch(() => false)
+    await shot('A4-agent-write-clean')
+    const ok =
+      whileDirty?.open === true &&
+      whileDirty?.dirty === true &&
+      whenClean?.open === true &&
+      whenClean?.dirty === false &&
+      unopened?.open === false &&
+      live
+    record(
+      'A4',
+      ok ? 'PASS' : 'FAIL',
+      '有未保存修改时会话如实上报（Agent 写入据此被拒绝，不碰磁盘）；干净文档的写入实时显示',
+      {
+        sessionWhileDirty: whileDirty,
+        sessionWhenClean: whenClean,
+        sessionForUnopenedFile: unopened,
+        cleanWriteShowsLive: live,
+        mainProcessRefusal:
+          '单测 src/main/mcp/modules/editor/index.test.ts：dirty / conflict → EDITOR_SESSION_DIRTY，且不调用保存',
+      },
+    )
   })
 
   // ---------- A5 ----------
@@ -548,11 +605,18 @@ try {
     const savedByRequestB = Boolean(b && b.success === true)
     const fastErrorForC = Boolean(c && c.success === false && c.latencyMs < 1000)
     const status = !noCrossWrite || !fastErrorForC ? 'FAIL' : savedByRequestB ? 'PASS' : 'PARTIAL'
-    record('A5', status, '保存请求不串写、无会话立即报错；已打开但非当前的 B 未被请求保存', {
-      openButInactiveB: { response: b, diskB },
-      unopenedC: { response: c ?? '4 秒内无响应（主进程会等到 30 秒超时）', diskC },
-      noCrossWrite,
-    })
+    record(
+      'A5',
+      status,
+      savedByRequestB
+        ? '保存请求精确命中目标（含后台 Tab）、不串写；无会话立即报错'
+        : '保存请求不串写、无会话立即报错；已打开但非当前的 B 未被请求保存',
+      {
+        openButInactiveB: { response: b, diskB },
+        unopenedC: { response: c ?? '4 秒内无响应（主进程会等到 30 秒超时）', diskC },
+        noCrossWrite,
+      },
+    )
   })
 
   // ---------- A6 ----------
@@ -611,96 +675,312 @@ try {
   })
 
   // ---------- A7 ----------
+  /**
+   * Hold a main-process IPC handler for `ms` so the test can act while a save or read is in flight.
+   * Wraps Electron's own invoke handler; the app code is unchanged.
+   */
+  async function delayIpc(channel, ms) {
+    await app.evaluate(
+      ({ ipcMain }, { channel, ms }) => {
+        const handlers = ipcMain._invokeHandlers
+        globalThis.__originalIpc ??= {}
+        globalThis.__originalIpc[channel] ??= handlers.get(channel)
+        const original = globalThis.__originalIpc[channel]
+        handlers.set(channel, async (...args) => {
+          await new Promise((resolve) => setTimeout(resolve, ms))
+          return original(...args)
+        })
+      },
+      { channel, ms },
+    )
+  }
+  async function restoreIpc(channel) {
+    await app.evaluate(({ ipcMain }, channel) => {
+      const original = globalThis.__originalIpc?.[channel]
+      if (original) ipcMain._invokeHandlers.set(channel, original)
+    }, channel)
+  }
+  const tabOpen = async (name) => (await tabFor(name).count()) > 0
+
   await step('A7', async () => {
+    const outcome = {}
+    // A7.1/A7.2 two quick saves: ordered, no false external conflict.
     await openFile('a7.md')
     await editor().waitFor()
     await typeAtEnd('第一段输入')
     await page.keyboard.press('Meta+s')
     await page.keyboard.press('Meta+s')
     await sleep(2000)
-    const falseConflict = await page
-      .locator('.markdown-conflict-banner')
-      .isVisible()
-      .catch(() => false)
-    const afterDouble = await disk('a7.md')
-    // Save & close, then keep typing before the save completes.
-    await typeAtEnd('关闭前输入')
+    outcome.doubleSave = {
+      falseConflict: await page
+        .locator('.markdown-conflict-banner')
+        .isVisible()
+        .catch(() => false),
+      diskHasInput: (await disk('a7.md')).includes('第一段输入'),
+    }
+
+    // A7.3 save & close, then keep typing while the save is still on its way to disk.
+    await delayIpc('fs:saveTextDocument', 2500)
+    await openFile('a7-close.md')
+    await editor().waitFor()
+    await typeAtEnd('关闭前')
     await stubMessageBox(0)
-    await closeTab('a7.md')
-    await sleep(2500)
-    const tabOpen = (await tabFor('a7.md').count()) > 0
-    const diskNow = await disk('a7.md')
-    await shot('A7-save-close')
+    await closeTab('a7-close.md')
+    await sleep(300)
+    await typeAtEnd('保存途中继续输入')
+    await sleep(3500)
+    const stillOpen = await tabOpen('a7-close.md')
+    await restoreIpc('fs:saveTextDocument')
+    if (stillOpen) {
+      await openFile('a7-close.md')
+      await page.keyboard.press('Meta+s')
+    }
+    await sleep(2000)
+    const closeDisk = await disk('a7-close.md')
+    outcome.saveCloseWhileTyping = {
+      tabKeptOpen: stillOpen,
+      finalDiskHasBoth: closeDisk.includes('关闭前') && closeDisk.includes('保存途中继续输入'),
+    }
+    await shot('A7-3-save-close-typing')
+
+    // A7.4 two "save & close" in a row: one ordered result, newest text last.
+    await delayIpc('fs:saveTextDocument', 1500)
+    await openFile('a7-double.md')
+    await editor().waitFor()
+    await typeAtEnd('双关闭')
+    await stubMessageBox(0)
+    await closeTab('a7-double.md')
+    await closeTab('a7-double.md').catch(() => {})
+    await sleep(4000)
+    await restoreIpc('fs:saveTextDocument')
+    outcome.doubleSaveClose = {
+      closed: !(await tabOpen('a7-double.md')),
+      diskHasDraft: (await disk('a7-double.md')).includes('双关闭'),
+      prompts: (await prompts()).length,
+    }
+
+    // A7.7 rename the file while "save & close" waits on disk.
+    await delayIpc('fs:saveTextDocument', 3000)
+    await openFile('a7-move.md')
+    await editor().waitFor()
+    await typeAtEnd('迁移草稿')
+    await stubMessageBox(0)
+    await closeTab('a7-move.md')
+    await sleep(300)
+    await revealTree()
+    await page
+      .locator('.file-tree-name')
+      .getByText('a7-move.md', { exact: true })
+      .click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '重命名', exact: true }).click()
+    const renameInput = page.getByRole('menu').locator('input').first()
+    await renameInput.waitFor()
+    await renameInput.fill('a7-moved.md')
+    await renameInput.press('Enter')
+    await sleep(4500)
+    await restoreIpc('fs:saveTextDocument')
+    const movedTabOpen = await tabOpen('a7-moved.md')
+    let movedSaved = false
+    if (movedTabOpen) {
+      await openFile('a7-moved.md')
+      await page.keyboard.press('Meta+s')
+      movedSaved = await waitFor(
+        async () => (await disk('a7-moved.md')).includes('迁移草稿'),
+        'save at new path',
+        6000,
+      ).catch(() => false)
+    } else {
+      movedSaved =
+        existsSync(join(workspace, 'a7-moved.md')) &&
+        (await disk('a7-moved.md')).includes('迁移草稿')
+    }
+    outcome.renameDuringSave = {
+      tabFollowsNewPath: movedTabOpen,
+      oldPathRecreated: existsSync(join(workspace, 'a7-move.md')),
+      draftAtNewPath: movedSaved,
+    }
+    await shot('A7-7-rename-during-save')
+
+    // A7.6 an external change is being read from disk while the user keeps typing.
+    await openFile('a7-watch.md')
+    await editor().waitFor()
+    await delayIpc('fs:readTextDocument', 2000)
+    await writeFile(join(workspace, 'a7-watch.md'), '外部改动\n')
+    await sleep(400)
+    await typeAtEnd('读取途中输入')
+    await sleep(4000)
+    await restoreIpc('fs:readTextDocument')
+    outcome.watcherReadRace = {
+      draftKept: (await editor().innerText()).includes('读取途中输入'),
+      conflictShown: await page
+        .locator('.markdown-conflict-banner')
+        .isVisible()
+        .catch(() => false),
+      diskIsExternal: (await disk('a7-watch.md')) === '外部改动\n',
+    }
+    await page
+      .locator('.markdown-conflict-banner')
+      .getByRole('button', { name: '重新载入' })
+      .click()
+      .catch(() => {})
+    await shot('A7-6-watch-race')
+
+    // A7.5 close and reopen while the old save is still in flight.
+    await delayIpc('fs:saveTextDocument', 2500)
+    await openFile('a7-reopen.md')
+    await editor().waitFor()
+    await typeAtEnd('旧会话')
+    await page.keyboard.press('Meta+s')
+    await sleep(200)
+    await stubMessageBox(1) // 不保存 — the save already in flight carries the text
+    await closeTab('a7-reopen.md')
+    await sleep(300)
+    await openFile('a7-reopen.md')
+    await editor().waitFor()
+    await sleep(3500)
+    await restoreIpc('fs:saveTextDocument')
+    await sleep(1500)
+    outcome.reopenDuringSave = {
+      reopenedClean: (await tabFor('a7-reopen.md').locator('.tab-dirty-dot').count()) === 0,
+      noFalseConflict: !(await page
+        .locator('.markdown-conflict-banner')
+        .isVisible()
+        .catch(() => false)),
+      viewMatchesDisk: (await editor().innerText()).trim() === (await disk('a7-reopen.md')).trim(),
+    }
+    await shot('A7-5-reopen-during-save')
+
+    const ok =
+      !outcome.doubleSave.falseConflict &&
+      outcome.doubleSave.diskHasInput &&
+      outcome.saveCloseWhileTyping.tabKeptOpen &&
+      outcome.saveCloseWhileTyping.finalDiskHasBoth &&
+      outcome.doubleSaveClose.closed &&
+      outcome.doubleSaveClose.diskHasDraft &&
+      !outcome.renameDuringSave.oldPathRecreated &&
+      outcome.renameDuringSave.draftAtNewPath &&
+      outcome.watcherReadRace.draftKept &&
+      outcome.watcherReadRace.conflictShown &&
+      outcome.reopenDuringSave.noFalseConflict &&
+      outcome.reopenDuringSave.viewMatchesDisk
     record(
       'A7',
-      !falseConflict && afterDouble.includes('第一段输入') ? 'PARTIAL' : 'FAIL',
-      '连续保存不误报冲突；保存并关闭期间继续输入（时序依赖）',
-      {
-        doubleSaveFalseConflict: falseConflict,
-        diskAfterDoubleSave: afterDouble,
-        saveAndClose: { tabClosed: !tabOpen, diskHasDraft: diskNow.includes('关闭前输入') },
-        notCovered:
-          'A7.3 保存完成前继续输入（无法在真实对话框流程中可控插入按键）、A7.4 双“保存并关闭”、A7.5 保存中关闭重开/迁移、A7.6 监听读取竞态、A7.7 等待期间重命名——需要可控的主进程延迟注入，本脚本未覆盖',
-      },
+      ok ? 'PASS' : 'FAIL',
+      '保存、关闭、重命名、文件监听交错时不丢草稿、不乱序',
+      outcome,
     )
   })
 
   // ---------- A8 ----------
+  /** Open `name` and watch the renderer for 6 s: stalls, when the editor appeared, images loaded. */
+  async function measureOpen(name) {
+    await page.evaluate(() => {
+      const t0 = performance.now()
+      const marks = { stalls: [] }
+      window.__open = marks
+      let last = t0
+      const sample = () => {
+        const now = performance.now()
+        if (now - last > 200) marks.stalls.push([Math.round(last - t0), Math.round(now - last)])
+        last = now
+        if (
+          marks.editorMs === undefined &&
+          document.querySelector('.tiptap[contenteditable="true"]')
+        )
+          marks.editorMs = Math.round(now - t0)
+        if (now - t0 < 6000) setTimeout(sample, 50)
+      }
+      setTimeout(sample, 50)
+    })
+    const started = Date.now()
+    await openFile(name)
+    await editor().waitFor({ timeout: 30_000 })
+    const playwrightSawEditorMs = Date.now() - started
+    await sleep(Math.max(0, 6500 - playwrightSawEditorMs))
+    const marks = await page.evaluate(() => window.__open)
+    const images = await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll('.tiptap .markdown-image-node')]
+      const loaded = nodes.filter((n) => n.querySelector('img')?.src.startsWith('data:'))
+      return {
+        total: nodes.length,
+        loaded: loaded.length,
+        dataUrlMB: +(
+          loaded.reduce((sum, n) => sum + n.querySelector('img').src.length, 0) / 1e6
+        ).toFixed(1),
+        oversizePlaceholders: document.querySelectorAll('[data-image-state="oversize"]').length,
+      }
+    })
+    const worstStallMs = Math.max(0, ...marks.stalls.map(([, gap]) => gap))
+    return { playwrightSawEditorMs, rendererEditorMs: marks.editorMs, worstStallMs, images }
+  }
+
   await step('A8', async () => {
     const baselineStart = Date.now()
     await openFile('a6.json')
     await openFile('a1.md')
     await editor().waitFor()
     const baselineMs = Date.now() - baselineStart
-    const heapBefore = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? null)
-    const started = Date.now()
-    await openFile('a8.md')
-    await editor().waitFor({ timeout: 30_000 })
-    const stall = await page.evaluate(
-      () =>
-        new Promise((done) => {
-          let last = performance.now()
-          let worst = 0
-          const end = last + 4000
-          const tick = (now) => {
-            worst = Math.max(worst, now - last)
-            last = now
-            if (now < end) requestAnimationFrame(tick)
-            else done(Math.round(worst))
-          }
-          requestAnimationFrame(tick)
-        }),
-    )
-    const openMs = Date.now() - started
-    const loaded = await page.evaluate(
-      () =>
-        [...document.querySelectorAll('.tiptap img')].filter((img) => img.src.startsWith('data:'))
-          .length,
-    )
-    const dataUrlBytes = await page.evaluate(() =>
-      [...document.querySelectorAll('.tiptap img')].reduce((sum, img) => sum + img.src.length, 0),
-    )
-    const heapAfter = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? null)
-    const degradeNotice = await page.getByText(/过大|超出|降级|预算|暂不加载/).count()
+
+    const big = await measureOpen('a8.md')
+    const notice = await page
+      .locator('[data-image-state="oversize"]')
+      .first()
+      .innerText()
+      .catch(() => '')
     await shot('A8-big-images')
-    record(
-      'A8',
-      degradeNotice > 0 ? 'PARTIAL' : 'FAIL',
-      '多张大图：应按预算/可见性加载并对超限给出降级提示',
-      {
-        images: `${IMAGE_COUNT} 张 1600×1200 噪声 PNG，每张约 ${((1600 * 1200 * 4) / 1e6).toFixed(1)}MB`,
-        openToEditorMs: openMs,
-        baselineSmallDocOpenMs: baselineMs,
-        worstFrameGapMsDuring4s: stall,
-        imagesLoadedAsDataUrl: loaded,
-        dataUrlTotalMB: +(dataUrlBytes / 1e6).toFixed(1),
-        jsHeapMB:
-          heapBefore && heapAfter
-            ? { before: +(heapBefore / 1e6).toFixed(1), after: +(heapAfter / 1e6).toFixed(1) }
-            : null,
-        degradeNotice: degradeNotice > 0,
-      },
-    )
+    // The user can still choose to load one oversized picture.
+    let manualLoad = false
+    const loadButton = page.getByRole('button', { name: '加载此图片' }).first()
+    if (await loadButton.isVisible().catch(() => false)) {
+      await loadButton.click()
+      manualLoad = await waitFor(
+        () =>
+          page.evaluate(() =>
+            [...document.querySelectorAll('.tiptap .markdown-image-node img')].some(
+              (img) => img.src.startsWith('data:') && img.complete && img.naturalWidth > 0,
+            ),
+          ),
+        'manual image load',
+        15_000,
+      ).catch(() => false)
+    }
+
+    const many = await measureOpen('a8-many.md')
+    await shot('A8-many-images-top')
+    // Scrolling down loads the rest progressively.
+    await page.locator('.tiptap-editor').evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    const afterScroll = await waitFor(
+      () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('.tiptap .markdown-image-node')]
+            .slice(-2)
+            .every((n) => n.querySelector('img')?.src.startsWith('data:')),
+        ),
+      'images near the bottom',
+      15_000,
+    ).catch(() => false)
+    await shot('A8-many-images-bottom')
+
+    const responsive =
+      big.playwrightSawEditorMs < 4000 &&
+      big.worstStallMs < 500 &&
+      many.playwrightSawEditorMs < 4000 &&
+      many.worstStallMs < 500
+    const budgeted =
+      big.images.oversizePlaceholders > 0 &&
+      big.images.loaded === 0 &&
+      many.images.loaded < many.images.total
+    const ok = responsive && budgeted && Boolean(notice) && manualLoad && afterScroll
+    record('A8', ok ? 'PASS' : 'FAIL', '大图按预算与可见性加载，超限显示降级提示且可手动加载', {
+      bigImages: `${IMAGE_COUNT} 张 1600×1200 噪声 PNG，每张约 ${((1600 * 1200 * 4) / 1e6).toFixed(1)}MB`,
+      manyImages: `${MANY_COUNT} 张 800×600 噪声 PNG，每张约 ${((800 * 600 * 4) / 1e6).toFixed(1)}MB`,
+      baselineSmallDocOpenMs: baselineMs,
+      big,
+      many,
+      oversizeNotice: notice,
+      manualLoadWorks: manualLoad,
+      bottomImagesLoadAfterScroll: afterScroll,
+    })
   })
 
   // ---------- A9 ----------
