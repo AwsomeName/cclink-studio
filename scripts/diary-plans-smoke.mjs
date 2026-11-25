@@ -101,7 +101,7 @@ try {
     assert.equal(monthly.activation.enabled, false)
     await plans.getByRole('button', { name: '月度', exact: true }).click()
     await plans.getByRole('button', { name: '启用', exact: true }).click()
-    await plans.getByText('· 已启用').waitFor()
+    await plans.locator('.diary-plan-info .on').getByText('已启用').waitFor()
     const run = async () => {
       const result = await page.evaluate(
         (input) => window.cclinkStudio.scheduledTasks.runNow(input),
