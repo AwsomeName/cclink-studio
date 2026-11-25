@@ -555,6 +555,18 @@ export function IconRobot(p: IconProps = defaults): React.ReactElement {
 }
 
 /** 费用/美元 */
+export function IconHeart(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <path
+      d="M8 13.5C8 13.5 2 9.7 2 5.8 2 4 3.3 2.7 5 2.7c1.3 0 2.4.8 3 1.9.6-1.1 1.7-1.9 3-1.9 1.7 0 3 1.3 3 3.1 0 3.9-6 7.7-6 7.7Z"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />,
+  )
+}
+
 export function IconDollar(p: IconProps = defaults): React.ReactElement {
   return I(
     p,

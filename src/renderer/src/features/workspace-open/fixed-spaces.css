@@ -1168,3 +1168,44 @@
   height: 44px;
   align-items: center;
 }
+
+/* 我的空间：财务、健康（日记开头字段按天汇总） */
+.diary-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.diary-ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.diary-ledger-table th,
+.diary-ledger-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+.diary-ledger-table thead th {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.diary-ledger-table tbody th {
+  width: 56px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.diary-ledger-table td button {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.diary-ledger-table td button:hover {
+  text-decoration: underline;
+}

@@ -16,6 +16,7 @@ import {
   IconClipboard,
   IconClock,
   IconDollar,
+  IconHeart,
   IconTool,
   IconList,
   IconUser,
@@ -251,7 +252,7 @@ export function ActivityBar(): React.ReactElement {
         <div className="activity-bar-group" role="group" aria-label="项目功能">
           {workspaceType === 'diary' ? (
             <>
-              {/* Product logic §4 / mockup 19: 今天 is the diary home, then 日记、计划、定时整理、同步. */}
+              {/* Product logic §4 / mockup 19: 今天 is the diary home, then 日记、计划、定时整理、财务、健康、同步. */}
               <div className="activity-bar-group-label">
                 {isPersonal ? '我的空间' : '日记与计划'}
               </div>
@@ -261,8 +262,15 @@ export function ActivityBar(): React.ReactElement {
                   ['日记', IconPencil],
                   ['计划', IconClipboard],
                   ['定时整理', IconClock],
-                  // Sync is My Space's own Git address; other diary projects use the Git panel.
-                  ...(isPersonal ? ([['Git', IconRefresh]] as const) : []),
+                  // 财务、健康 gather My Space's diary header lines; sync is its own Git address
+                  // (other diary projects use the Git panel).
+                  ...(isPersonal
+                    ? ([
+                        ['财务', IconDollar],
+                        ['健康', IconHeart],
+                        ['Git', IconRefresh],
+                      ] as const)
+                    : []),
                 ] as const
               ).map(([page, Icon]) => {
                 const selected =

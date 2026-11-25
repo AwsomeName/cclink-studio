@@ -5,6 +5,8 @@ import { DiaryDayView, DiaryFilePicker } from './DiaryDayView'
 import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
+import { DiaryLedgerView } from './DiaryLedgerView'
+import { financeFields, healthFields } from './diary-ledger'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
@@ -113,8 +115,9 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    // Import and sync are My Space pages; other diary projects return to 今天.
-    if ((page === '导入历史' || page === 'Git') && ownerPath !== fixedPath) setPage('今天')
+    // Import, sync, 财务 and 健康 are My Space pages; other diary projects return to 今天.
+    if (['导入历史', 'Git', '财务', '健康'].includes(page) && ownerPath !== fixedPath)
+      setPage('今天')
   }, [page, setPage, ownerPath, fixedPath])
   useEffect(() => {
     let alive = true
@@ -622,6 +625,15 @@ export function PersonalDiaryHome(): React.ReactElement {
               onChanged={() => setRevision((value) => value + 1)}
               openTask={openTask}
               openFile={openFile}
+            />
+          )}
+          {(page === '财务' || page === '健康') && source && ownerPath === fixedPath && (
+            <DiaryLedgerView
+              key={page}
+              title={page}
+              fields={page === '财务' ? financeFields : healthFields}
+              diaries={files.diaries}
+              revision={revision}
             />
           )}
           {page !== '今天' && page !== '日记' && preview && (
