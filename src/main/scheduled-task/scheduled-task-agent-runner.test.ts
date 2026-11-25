@@ -238,6 +238,57 @@ describe('ScheduledTaskAgentRunner', () => {
     }
   })
 
+  it.each([
+    ['the user starts typing into it before autosave', 'dirty'],
+    ['the editor state cannot be confirmed', 'unknown'],
+  ] as const)("does not replace today's blank diary when %s", async (_name, state) => {
+    const folder = join(root, '个人计划/2026/07')
+    await mkdir(folder, { recursive: true })
+    const task = definition()
+    task.outputPolicy = {
+      directory: '个人计划/{year}/{month}',
+      fileNameTemplate: '{monthDay}_{weekday}.md',
+      mode: 'create-only',
+    }
+    const when = Date.parse('2026-07-29T01:00:00Z')
+    const blank = blankDiaryTemplate(diaryDateParts(task.schedule.timezone, new Date(when)))
+    const target = join(folder, '0729_周三.md')
+    await writeFile(target, blank)
+    let complete: (event: AgentRuntimeEvent) => void
+    const send = vi.fn(async (ids: { conversationId: string; runId: string }) => {
+      complete({ ...ids, type: 'complete', data: { result: '# AI 起草' } })
+    })
+    // Clean while the draft is requested; the user begins typing before it lands.
+    let checks = 0
+    const editorSessionState = vi.fn(async () => {
+      checks += 1
+      if (checks === 1) return { open: true, dirty: false, conflict: false }
+      if (state === 'unknown') throw new Error('EDITOR_SESSION_UNKNOWN')
+      return { open: true, dirty: true, conflict: false }
+    })
+    const runner = new ScheduledTaskAgentRunner(
+      {
+        onRuntimeEvent: (listener: typeof complete) => {
+          complete = listener
+          return () => {}
+        },
+        sendScheduledTaskMessage: send,
+      } as never,
+      { editorSessionState },
+    )
+    const run = runner.run({
+      definition: task,
+      runId: 'test',
+      conversationId: 'test',
+      scheduledFor: when,
+    })
+    await expect(run).rejects.toBeInstanceOf(ScheduledTaskSkippedError)
+    await expect(run).rejects.toThrow('用户正在编辑当天日记')
+    expect(send).toHaveBeenCalledOnce()
+    expect(editorSessionState).toHaveBeenLastCalledWith(await realpath(target))
+    expect(await readFile(target, 'utf8')).toBe(blank)
+  })
+
   it("skips without generating when the pre-draft sync brings in today's diary", async () => {
     const folder = join(root, '个人计划/2026/07')
     await mkdir(folder, { recursive: true })

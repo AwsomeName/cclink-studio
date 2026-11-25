@@ -94,6 +94,7 @@ interface ScheduledTaskServiceOptions {
   now?: () => number
   runExecutor?: ScheduledTaskRunExecutor
   beforeDiaryDraft?: ScheduledTaskAgentRunnerOptions['beforeDiaryDraft']
+  editorSessionState?: ScheduledTaskAgentRunnerOptions['editorSessionState']
 }
 
 class ScheduledTaskServiceError extends Error {
@@ -109,6 +110,7 @@ class ScheduledTaskServiceError extends Error {
 
 export class ScheduledTaskService {
   private readonly beforeDiaryDraft?: ScheduledTaskAgentRunnerOptions['beforeDiaryDraft']
+  private readonly editorSessionState?: ScheduledTaskAgentRunnerOptions['editorSessionState']
   private readonly activationFilePath: string
   private readonly activationBackupPath: string
   private readonly activationTempPath: string
@@ -148,6 +150,7 @@ export class ScheduledTaskService {
     this.runStore = new ScheduledTaskRunStore(join(root, 'runs.json'))
     this.runExecutor = options.runExecutor ?? null
     this.beforeDiaryDraft = options.beforeDiaryDraft
+    this.editorSessionState = options.editorSessionState
   }
 
   async load(): Promise<void> {
@@ -190,6 +193,7 @@ export class ScheduledTaskService {
     }
     this.runExecutor ??= new ScheduledTaskAgentRunner(agentBridge, {
       beforeDiaryDraft: this.beforeDiaryDraft,
+      editorSessionState: this.editorSessionState,
     })
     this.runtimeState = 'ready'
     this.runtimeStartedAt = this.now()

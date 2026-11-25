@@ -182,6 +182,11 @@ export async function bootstrapStateServices(runtime: CclinkStudioRuntimeState):
       const saved = snapshot.sections['personal-diary-sync'] as { remoteUrl?: string } | undefined
       return remoteDiaryNames(draftSyncRunner, root, folder, saved?.remoteUrl)
     },
+    // The editor module is created later with the window; look it up at call time.
+    editorSessionState: async (filePath) =>
+      runtime.editorModule
+        ? runtime.editorModule.querySessionState(filePath)
+        : { open: false, dirty: false, conflict: false },
     getLocalOwnerKey: async () => {
       const identity = await runtime.localIdentityService?.ensureIdentity()
       return identity ? `local:${identity.localId}` : null
@@ -382,6 +387,15 @@ export async function bootstrapMainProcessServices(
         },
       },
       credentialId: SEARXNG_CREDENTIAL_ID,
+      // Text-only, no tools: the AI only reads candidate text and returns JSON.
+      ai: async (purpose, prompt, timeoutMs) => {
+        if (!runtime.agentBridge) throw new Error('本机 AI 未就绪')
+        return runtime.agentBridge.requestInternalText({ purpose, prompt, timeoutMs })
+      },
+      fetchPage: async (url) => {
+        if (!runtime.webSearchService) throw new Error('联网搜索当前不可用')
+        return (await runtime.webSearchService.fetchPage({ url }, { source: 'techdaily' })).content
+      },
       timezone: async (root) =>
         (await readWorkspaceSettings(root, 'diary')).settings.diary?.timezone ??
         defaultDiaryTimezone,

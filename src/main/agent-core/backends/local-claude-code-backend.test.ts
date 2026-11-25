@@ -1404,6 +1404,8 @@ describe('LocalClaudeCodeBackend visible browser policy', () => {
     expect(prompt).toContain('不要重复执行已完成任务')
     expect(prompt).toContain('当前会话唯一可信的工作区根目录')
     expect(prompt).toContain('不要搜索用户主目录或猜测其他项目名')
+    // Documents go through editor_* so an unsaved draft is never written underneath.
+    expect(prompt).toContain('EDITOR_SESSION_DIRTY')
   })
 
   it('resumes existing Claude sessions via SDK options', async () => {

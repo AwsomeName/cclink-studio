@@ -237,7 +237,7 @@ export class EditorToolModule implements ToolModule {
     const content = typeof params.content === 'string' ? params.content : ''
     if (!filePath) throw new Error('编辑器写入必须提供明确的文件路径')
     // An open document with unsaved edits owns the text: never write around the user's draft.
-    const session = await this.requestSessionState(filePath)
+    const session = await this.querySessionState(filePath)
     if (session.dirty || session.conflict) {
       throw new Error(
         `EDITOR_SESSION_DIRTY: 用户正在编辑器中修改 ${filePath}，${
@@ -281,7 +281,7 @@ export class EditorToolModule implements ToolModule {
   }
 
   /** Ask the renderer whether `filePath` has an editor session with unsaved edits. */
-  private requestSessionState(filePath: string): Promise<EditorSessionState> {
+  querySessionState(filePath: string): Promise<EditorSessionState> {
     const window = this.mainWindow
     if (!window || window.isDestroyed()) {
       return Promise.resolve({ open: false, dirty: false, conflict: false })

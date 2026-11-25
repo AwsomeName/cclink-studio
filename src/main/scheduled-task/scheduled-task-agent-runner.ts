@@ -1,3 +1,4 @@
+import type { EditorSessionState } from '../../shared/ipc/editor'
 import { readWorkspaceSettings } from '../workspace/workspace-settings-files'
 import { createHash } from 'node:crypto'
 import {
@@ -51,6 +52,11 @@ export class ScheduledTaskSkippedError extends Error {}
 export interface ScheduledTaskAgentRunnerOptions {
   /** Daily diary drafts sync first so two devices never generate two drafts for one day. */
   beforeDiaryDraft?: (workspaceRoot: string, folder: string) => Promise<string[] | void>
+  /**
+   * Whether the open editor holds unsaved edits for a file. A draft only replaces today's untouched
+   * blank template, and the user may have started typing into it before autosave reached disk.
+   */
+  editorSessionState?: (filePath: string) => Promise<EditorSessionState>
 }
 
 export interface ScheduledTaskRunExecutor {
@@ -123,7 +129,16 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
       )
       blankTarget = null
       if (matches.length === 1 && (await isUntouchedBlank(matches[0]))) {
-        blankTarget = resolve(output.canonicalDirectory, matches[0])
+        const candidate = resolve(output.canonicalDirectory, matches[0])
+        const session = this.options.editorSessionState
+          ? await this.options.editorSessionState(candidate).catch(() => null)
+          : { open: false, dirty: false, conflict: false }
+        // Unknown counts as editing: a blank day is better than a draft over the user's typing.
+        if (!session || session.dirty || session.conflict)
+          throw new ScheduledTaskSkippedError(
+            '用户正在编辑当天日记：' + matches[0] + '，未用草稿替换',
+          )
+        blankTarget = candidate
         return
       }
       if (matches.length)

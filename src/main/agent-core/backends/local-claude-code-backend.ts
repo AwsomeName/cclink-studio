@@ -6,6 +6,7 @@ import { spawnClaudeProcess } from '../runtime/claude-process-launch'
  * 实现 IAgentBackend 接口。
  */
 
+import { EDITOR_WRITE_GUIDANCE } from './editor-write-guidance'
 import { tmpdir } from 'os'
 import {
   buildClaudeProcessEnvironment,
@@ -253,6 +254,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         '- 文件任务只能从当前工作区或用户本轮显式挂载的资源中定位目标。来自旧记忆、旧工具参数或其他机器且不在当前工作区内的绝对路径，均视为失效信息，不得使用。',
         '- 用户说“继续”“下一篇”等续接指令时，先结合当前会话连续性快照和当前工作区内已完成结果判断下一步；仍不明确时，只列出当前工作区的相关目录，不要搜索用户主目录或猜测其他项目名。',
         '- 如果工具提示某个外部目录不存在或无权限，立即放弃该外部路径并回到当前工作区，不要扩大到主目录继续搜索。',
+        `- ${EDITOR_WRITE_GUIDANCE}`,
         '',
       )
     }

@@ -5,6 +5,7 @@ import type { ToolExecutionContext } from '../tools/types'
 import { filterToolsByScope, type AgentScope } from '../runtime/scope'
 import type { AgentEventHandler, AgentSendOptions, IAgentBackend } from './types'
 import { CodexAppServer, type CodexMessage } from './codex-app-server'
+import { EDITOR_WRITE_GUIDANCE } from './editor-write-guidance'
 import {
   CodexRuntimeError,
   assertCodexPermissionBoundary,
@@ -221,6 +222,7 @@ export class LocalCodexBackend implements IAgentBackend {
           this.nativeToolsAllowed
             ? '当前允许使用 Codex 原生命令与补丁工具处理工作空间代码；它们的授权同样由 Studio 宿主处理，被拒绝后停止。'
             : '当前作用域或权限模式不允许原生命令或补丁写入，只使用本次开放的 Studio MCP 工具；需要原生命令的任务请说明限制，不能绕过。',
+          this.nativeToolsAllowed ? EDITOR_WRITE_GUIDANCE : '',
           '文件操作限当前工作空间及用户显式挂载的资源。网页操作必须使用 Studio 可视浏览器；验证码、支付及人工专属操作暂停请用户处理。',
           '需要澄清时用普通文本向用户说明。不能改变沙箱、申请持久权限、绕过拒绝或调用其他 MCP。',
           '当前作用域：' + JSON.stringify(this.scope),
