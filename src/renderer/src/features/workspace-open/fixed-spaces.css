@@ -1154,3 +1154,17 @@
   height: 24px;
   border-color: transparent;
 }
+
+/* Diary bars share the conversation header's 44px height so the dividers line up. */
+.diary-day-empty-bar {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+}
+.diary-today-editor .editor-toolbar {
+  box-sizing: border-box;
+  height: 44px;
+  align-items: center;
+}

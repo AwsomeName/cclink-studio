@@ -628,3 +628,33 @@
   color: var(--chat-amber);
   font-weight: 550;
 }
+
+/* One-line header, same height as the workbench bar beside it, so the divider lines meet. */
+.agent-chat-compact .agent-panel-header {
+  min-height: 44px;
+  padding: 0 16px;
+  align-items: center;
+}
+.agent-chat-compact .conversation-edit-title {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 43px;
+  padding: 0;
+}
+.agent-chat-compact .conversation-edit-title strong {
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-chat-compact .agent-panel-heading {
+  /* The heading is a column: keep the title at the left, centre it vertically. */
+  align-items: flex-start;
+  justify-content: center;
+}
+.agent-chat-compact .conversation-edit-title {
+  justify-content: flex-start;
+  text-align: left;
+  min-width: 0;
+}
