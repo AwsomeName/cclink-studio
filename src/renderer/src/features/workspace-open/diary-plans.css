@@ -364,7 +364,7 @@ details.diary-plan-card button.link {
   border: none;
   border-radius: 0;
   background: none;
-  height: calc(100vh - 230px);
+  height: calc(100vh - 170px);
   min-height: 320px;
 }
 .diary-plan-empty {

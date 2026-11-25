@@ -334,43 +334,12 @@ export function DiaryPlans({
           <p className="muted">正在读取计划…</p>
         ) : file ? (
           <>
-            <header className="diary-plan-header" data-file={file.name}>
-              <div className="diary-plan-title">
-                <small className="muted">计划 / {labels[mode]}</small>
-                <h3>{heading}</h3>
-              </div>
-              <span className="spacer" />
-              {source && (
-                <span className={`chip ${source === 'AI 生成' ? 'accent' : ''}`}>{source}</span>
-              )}
-              {progress(text) && <span className="chip done">{progress(text)} 已完成</span>}
-              {chat?.loading && <small role="status">AI 正在处理…</small>}
-              {chatId && (chat?.loading || needsConfirmation) && (
-                <button
-                  className="link small"
-                  onClick={() => {
-                    useAgentStore.getState().switchConversation(chatId)
-                    useUIStore.getState().setAgentPanelMode('right', 'user')
-                  }}
-                >
-                  {needsConfirmation ? '查看待确认操作' : '查看'}
-                </button>
-              )}
-              {/* Adjusting a plan uses the one conversation panel on the right. */}
-              <button
-                className="link"
-                onClick={() => askAi(`调整计划 ${path.slice(workspace.length + 1)}：`)}
-              >
-                让 AI 调整
-              </button>
-            </header>
-            <div className="diary-plan-editor">
+            <div className="diary-plan-editor" data-file={file.name}>
               <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} />
             </div>
           </>
         ) : current ? (
           <section className="diary-plan-empty">
-            <small className="muted">计划 / {labels[mode]}</small>
             <h3>{heading}</h3>
             <p className="muted">还没有计划</p>
             <div className="diary-plan-actions">
@@ -568,6 +537,12 @@ export function DiaryPlans({
               <dd title={file.path}>{file.path.slice(workspace.length + 1)}</dd>
               <dt>修改</dt>
               <dd>{modifiedAt ? new Date(modifiedAt).toLocaleString() : '—'}</dd>
+              {source && (
+                <>
+                  <dt>来源</dt>
+                  <dd>{source}</dd>
+                </>
+              )}
               {current && (
                 <>
                   <dt>本{unit}日记</dt>
@@ -585,6 +560,24 @@ export function DiaryPlans({
                   {d.name.replace(/\.md$/, '')}
                 </button>
               ))}
+            <div className="diary-plan-actions">
+              {/* Adjusting a plan uses the one conversation panel on the right. */}
+              <button onClick={() => askAi(`调整计划 ${path.slice(workspace.length + 1)}：`)}>
+                让 AI 调整
+              </button>
+              {chat?.loading && <small role="status">AI 正在处理…</small>}
+              {chatId && (chat?.loading || needsConfirmation) && (
+                <button
+                  className="link"
+                  onClick={() => {
+                    useAgentStore.getState().switchConversation(chatId)
+                    useUIStore.getState().setAgentPanelMode('right', 'user')
+                  }}
+                >
+                  {needsConfirmation ? '查看待确认操作' : '查看'}
+                </button>
+              )}
+            </div>
           </section>
         )}
         {mode !== 'long' && (
