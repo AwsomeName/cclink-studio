@@ -6,7 +6,7 @@ const headerFile = (page, pattern) =>
   page.waitForFunction(
     (source) =>
       new RegExp(source).test(
-        document.querySelector('.diary-plan-header')?.getAttribute('data-file') ?? '',
+        document.querySelector('.diary-plan-editor')?.getAttribute('data-file') ?? '',
       ),
     pattern.source,
   )
@@ -35,7 +35,7 @@ try {
   await editor.press('Enter')
   await page.keyboard.insertText('本周验收记录')
   await editor.press('Meta+s')
-  const header = plans.locator('.diary-plan-header[data-file*="W"]')
+  const header = plans.locator('.diary-plan-editor[data-file*="W"]')
   await header.waitFor({ state: 'attached' })
   const name = await header.getAttribute('data-file')
   await page.waitForFunction(
@@ -84,11 +84,11 @@ try {
   await plans.getByRole('button', { name: '＋ 新建计划' }).click()
   await plans.getByLabel('计划名称').fill('阅读')
   await plans.getByRole('button', { name: '确认', exact: true }).click()
-  await plans.locator('.diary-plan-header[data-file="阅读.md"]').waitFor({ state: 'attached' })
+  await plans.locator('.diary-plan-editor[data-file="阅读.md"]').waitFor({ state: 'attached' })
   await plans.getByRole('button', { name: '重命名', exact: true }).click()
   await plans.getByLabel('计划名称').fill('晨读')
   await plans.getByRole('button', { name: '确认', exact: true }).click()
-  await plans.locator('.diary-plan-header[data-file="晨读.md"]').waitFor({ state: 'attached' })
+  await plans.locator('.diary-plan-editor[data-file="晨读.md"]').waitFor({ state: 'attached' })
   await plans.getByRole('button', { name: '删除', exact: true }).click()
   await plans.getByRole('button', { name: '确认删除' }).click()
   await plans.getByText('选择或新建一份长期计划').waitFor()
@@ -101,7 +101,7 @@ try {
     assert.equal(monthly.activation.enabled, false)
     await plans.getByRole('button', { name: '月度', exact: true }).click()
     await plans.getByRole('button', { name: '启用', exact: true }).click()
-    await plans.getByText('· 已启用').waitFor()
+    await plans.locator('.diary-plan-info .on').getByText('已启用').waitFor()
     const run = async () => {
       const result = await page.evaluate(
         (input) => window.cclinkStudio.scheduledTasks.runNow(input),

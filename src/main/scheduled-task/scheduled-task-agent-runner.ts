@@ -1,6 +1,15 @@
 import { readWorkspaceSettings } from '../workspace/workspace-settings-files'
 import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { AgentRuntimeEvent } from '../agent-core/runtime/agent-runtime'
 import type { AgentBridge } from '../agent/agent-bridge'
@@ -13,7 +22,11 @@ import {
   renderScheduledTaskDirectory,
 } from '../../shared/scheduled-task/scheduled-task-file-name'
 
-import { diaryDateParts, diaryDayLocation } from '../../shared/personal-diary-source'
+import {
+  blankDiaryTemplate,
+  diaryDateParts,
+  diaryDayLocation,
+} from '../../shared/personal-diary-source'
 
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const RUN_TIMEOUT_MS = 10 * 60 * 1000
@@ -88,20 +101,31 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     const readRoots = await resolveReadRoots(definition, workspaceRoot)
     const occurrenceAt = input.scheduledFor ?? Date.now()
     const output = await resolveOutput(definition, workspaceRoot, occurrenceAt, input.runId)
-    const day = diaryDayLocation(
-      diaryDateParts(definition.schedule.timezone, new Date(occurrenceAt)),
-    )
+    const dayParts = diaryDateParts(definition.schedule.timezone, new Date(occurrenceAt))
+    const day = diaryDayLocation(dayParts)
+    const blank = blankDiaryTemplate(dayParts)
     const diaryOutput =
       definition.schedule.kind === 'daily' &&
       ['{monthDay}_{weekday}.md', '{monthDay}-{weekday}.md'].includes(
         definition.outputPolicy.fileNameTemplate,
       ) &&
       ('/' + dirname(output.relativePath)).endsWith('/' + day.folder)
+    // Today's file may be the untouched blank template that 今天 created while AI could not draft:
+    // the draft fills that file. Anything the user typed keeps the day as theirs (skipped).
+    let blankTarget: string | null = null
+    const isUntouchedBlank = async (name: string): Promise<boolean> =>
+      (await readFile(resolve(output.canonicalDirectory, name), 'utf-8').catch(() => null)) ===
+      blank
     const checkDiaryCollision = async (): Promise<void> => {
       if (!diaryOutput) return
       const matches = (await readdir(output.canonicalDirectory).catch(() => [] as string[])).filter(
         day.matchesName,
       )
+      blankTarget = null
+      if (matches.length === 1 && (await isUntouchedBlank(matches[0]))) {
+        blankTarget = resolve(output.canonicalDirectory, matches[0])
+        return
+      }
       if (matches.length)
         throw new ScheduledTaskSkippedError(
           '当天已有日记：' + matches.join('、') + '，未生成新草稿',
@@ -123,10 +147,11 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         )
     }
     await checkDiaryCollision()
-    await assertOutputDoesNotExist(
-      output.absolutePath,
-      definition.outputPolicy.directory.startsWith('{planRoot}/'),
-    )
+    if (!blankTarget)
+      await assertOutputDoesNotExist(
+        output.absolutePath,
+        definition.outputPolicy.directory.startsWith('{planRoot}/'),
+      )
     assertNotCancelled(active)
 
     let generationError: string | undefined
@@ -214,8 +239,19 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     }
     await checkDiaryCollision()
     assertNotCancelled(active)
+    const target: string = blankTarget ?? output.absolutePath
     try {
-      await writeFile(output.absolutePath, markdown, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+      if (blankTarget) {
+        // Replace the blank template atomically; it was re-checked as untouched just above.
+        const temporary = `${blankTarget}.${input.runId}.tmp`
+        await writeFile(temporary, markdown, { encoding: 'utf-8', flag: 'wx', mode: 0o600 })
+        await rename(temporary, blankTarget)
+      } else
+        await writeFile(output.absolutePath, markdown, {
+          encoding: 'utf-8',
+          flag: 'wx',
+          mode: 0o600,
+        })
     } catch (error) {
       if (
         (error as NodeJS.ErrnoException).code === 'EEXIST' &&
@@ -224,12 +260,12 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
         throw new ScheduledTaskSkippedError('本期计划已存在，保留原文')
       throw error
     }
-    const persisted = await readFile(output.absolutePath, 'utf-8')
+    const persisted = await readFile(target, 'utf-8')
     if (persisted !== markdown) throw new Error('Markdown 写后校验失败')
     return {
       ...(generationError === undefined ? {} : { generationError }),
       artifact: {
-        relativePath: output.relativePath,
+        relativePath: relative(workspaceRoot, target).replaceAll('\\', '/'),
         bytes,
         sha256: createHash('sha256').update(persisted).digest('hex'),
       },

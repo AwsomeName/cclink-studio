@@ -171,6 +171,8 @@ export function DiaryPlans({
   const file = files.find((f) => f.path === path)
   const fileExists = Boolean(file)
   const text = useEditorStore((s) => s.files[path]?.currentContent ?? '')
+  const modifiedAt = useEditorStore((s) => s.files[path]?.modifiedAt)
+  const [showDiaries, setShowDiaries] = useState(false)
   const task =
     mode === 'long'
       ? undefined
@@ -306,6 +308,24 @@ export function DiaryPlans({
     return { name, range: range.replace('–', ' – ') }
   }
   const title = current ? split(current.label) : null
+  const md = (date: string) => `${Number(date.slice(5, 7))}/${date.slice(8, 10)}`
+  // Design 13: "2026 第48周 · 11/23—11/29", "2026 年 11 月", "2026 年".
+  const heading =
+    mode === 'long'
+      ? (file?.name.replace(/\.md$/, '') ?? '')
+      : current
+        ? mode === 'weekly'
+          ? `${current.start.slice(0, 4)} 第${title?.name.slice(1)}周 · ${md(current.start)}—${md(current.end)}`
+          : mode === 'monthly'
+            ? `${current.start.slice(0, 4)} 年 ${Number(current.start.slice(5, 7))} 月`
+            : `${current.start.slice(0, 4)} 年`
+        : ''
+  const source = text.includes('起草来源：AI 生成')
+    ? 'AI 生成'
+    : text.includes('起草来源：手写')
+      ? '手写'
+      : ''
+  const unit = { weekly: '周', monthly: '月', yearly: '年', long: '' }[mode]
   return (
     <div className="diary-plan-layout">
       <div className="diary-plan-center">
@@ -314,39 +334,13 @@ export function DiaryPlans({
           <p className="muted">正在读取计划…</p>
         ) : file ? (
           <>
-            <header className="diary-plan-header" data-file={file.name}>
-              {progress(text) && <span className="chip">待办 {progress(text)}</span>}
-              {chat?.loading && <small role="status">AI 正在处理…</small>}
-              {chatId && (chat?.loading || needsConfirmation) && (
-                <button
-                  className="link small"
-                  onClick={() => {
-                    useAgentStore.getState().switchConversation(chatId)
-                    useUIStore.getState().setAgentPanelMode('right', 'user')
-                  }}
-                >
-                  {needsConfirmation ? '查看待确认操作' : '查看'}
-                </button>
-              )}
-              <span className="spacer" />
-              {/* Adjusting a plan uses the one conversation panel on the right. */}
-              <button
-                className="link"
-                onClick={() => askAi(`调整计划 ${path.slice(workspace.length + 1)}：`)}
-              >
-                让 AI 调整
-              </button>
-            </header>
-            <div className="diary-plan-editor">
+            <div className="diary-plan-editor" data-file={file.name}>
               <MarkdownEditor key={path} filePath={path} tabId={'plan:' + path} />
             </div>
           </>
         ) : current ? (
           <section className="diary-plan-empty">
-            <h3>
-              {title?.name}
-              {title?.range && <span>{title.range}</span>}
-            </h3>
+            <h3>{heading}</h3>
             <p className="muted">还没有计划</p>
             <div className="diary-plan-actions">
               {current.end >= today && (
@@ -377,22 +371,6 @@ export function DiaryPlans({
             </button>
           ))}
         </nav>
-        {(mode === 'weekly' || mode === 'monthly') && (
-          <div className="diary-plan-pager">
-            <button aria-label="上一页" disabled={busy} onClick={() => setOffset(offset - 1)}>
-              ‹
-            </button>
-            <span>{mode === 'monthly' ? `${Number(today.slice(0, 4)) + offset} 年` : ''}</span>
-            <button aria-label="下一页" disabled={busy} onClick={() => setOffset(offset + 1)}>
-              ›
-            </button>
-            {offset !== 0 && (
-              <button className="link" disabled={busy} onClick={() => setOffset(0)}>
-                回到本期
-              </button>
-            )}
-          </div>
-        )}
         <div className={mode === 'monthly' ? 'diary-plan-months' : 'diary-plan-periods'}>
           {periods.map((p) => {
             const label = split(p.label)
@@ -410,16 +388,41 @@ export function DiaryPlans({
                 onClick={() => setSelected(p.path)}
               >
                 <b>{label.name}</b>
-                {label.range && <span className="range">{label.range}</span>}
-                {status === '有计划' ? (
-                  <span className="state dot" title="有计划" />
-                ) : (
-                  status && <span className="state">{status}</span>
+                {label.range && (
+                  <span className="range">
+                    {label.range
+                      .replace(/(\d{2})-(\d{2})/g, (_m, a, b) => `${Number(a)}/${b}`)
+                      .replace(' – ', '—')}
+                  </span>
+                )}
+                {isCurrent(p) && <span className="now-label">本{unit}</span>}
+                {status && (
+                  <span className="state">
+                    <i />
+                    {status === '有计划' ? '' : status}
+                  </span>
                 )}
               </button>
             )
           })}
         </div>
+        {(mode === 'weekly' || mode === 'monthly') && (
+          <div className="diary-plan-pager">
+            <button className="link" disabled={busy} onClick={() => setOffset(offset - 1)}>
+              ‹ 更早的{unit}
+            </button>
+            {offset !== 0 && (
+              <button className="link" disabled={busy} onClick={() => setOffset(0)}>
+                回到本{unit}
+              </button>
+            )}
+            {offset < 0 && (
+              <button className="link" disabled={busy} onClick={() => setOffset(offset + 1)}>
+                更晚的{unit} ›
+              </button>
+            )}
+          </div>
+        )}
         {mode === 'long' && (
           <div className="diary-plan-long">
             {files.map((f) => (
@@ -526,43 +529,90 @@ export function DiaryPlans({
             )}
           </div>
         )}
-        {current && dated.length > 0 && (
-          <details className="diary-plan-card">
-            <summary>本期日记 {dated.length}</summary>
-            {dated.map((d) => (
-              <button className="link" key={d.path} onClick={() => openFile(d)}>
-                {d.name.replace(/\.md$/, '')}
+        {file && (
+          <section className="diary-plan-info">
+            <h4>这份计划</h4>
+            <dl>
+              <dt>文件</dt>
+              <dd title={file.path}>{file.path.slice(workspace.length + 1)}</dd>
+              <dt>修改</dt>
+              <dd>{modifiedAt ? new Date(modifiedAt).toLocaleString() : '—'}</dd>
+              {source && (
+                <>
+                  <dt>来源</dt>
+                  <dd>{source}</dd>
+                </>
+              )}
+              {current && (
+                <>
+                  <dt>本{unit}日记</dt>
+                  <dd>
+                    <button className="link" onClick={() => setShowDiaries(!showDiaries)}>
+                      {dated.length} 篇 {showDiaries ? '⌄' : '›'}
+                    </button>
+                  </dd>
+                </>
+              )}
+            </dl>
+            {showDiaries &&
+              dated.map((d) => (
+                <button className="link diary-plan-diary" key={d.path} onClick={() => openFile(d)}>
+                  {d.name.replace(/\.md$/, '')}
+                </button>
+              ))}
+            <div className="diary-plan-actions">
+              {/* Adjusting a plan uses the one conversation panel on the right. */}
+              <button onClick={() => askAi(`调整计划 ${path.slice(workspace.length + 1)}：`)}>
+                让 AI 调整
               </button>
-            ))}
-          </details>
+              {chat?.loading && <small role="status">AI 正在处理…</small>}
+              {chatId && (chat?.loading || needsConfirmation) && (
+                <button
+                  className="link"
+                  onClick={() => {
+                    useAgentStore.getState().switchConversation(chatId)
+                    useUIStore.getState().setAgentPanelMode('right', 'user')
+                  }}
+                >
+                  {needsConfirmation ? '查看待确认操作' : '查看'}
+                </button>
+              )}
+            </div>
+          </section>
         )}
         {mode !== 'long' && (
-          <section className="diary-plan-card">
+          <section className="diary-plan-info">
+            <h4>{labels[mode]}计划生成</h4>
             {task ? (
               <>
-                <p>
-                  {describeSchedule(task.definition.schedule)} 自动生成
-                  <span className="muted"> · {task.activation.enabled ? '已启用' : '未启用'}</span>
-                </p>
-                <div className="diary-plan-actions">
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        const r = await window.cclinkStudio.scheduledTasks.setEnabled({
-                          workspacePath: workspace,
-                          taskId: task.definition.id,
-                          enabled: !task.activation.enabled,
+                <dl>
+                  <dt>时机</dt>
+                  <dd>{describeSchedule(task.definition.schedule)}</dd>
+                  <dt>本机</dt>
+                  <dd>
+                    <span className={task.activation.enabled ? 'on' : 'muted'}>
+                      {task.activation.enabled ? '已启用' : '未启用'}
+                    </span>{' '}
+                    <button
+                      className="link"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          const r = await window.cclinkStudio.scheduledTasks.setEnabled({
+                            workspacePath: workspace,
+                            taskId: task.definition.id,
+                            enabled: !task.activation.enabled,
+                          })
+                          if (!r.success) throw Error(r.error?.message)
+                          refresh()
                         })
-                        if (!r.success) throw Error(r.error?.message)
-                        refresh()
-                      })
-                    }
-                  >
-                    {task.activation.enabled ? '停用' : '启用'}
-                  </button>
-                  <button onClick={() => openTask(task)}>编辑要求</button>
-                </div>
+                      }
+                    >
+                      {task.activation.enabled ? '停用' : '启用'}
+                    </button>
+                  </dd>
+                </dl>
+                <button onClick={() => openTask(task)}>编辑生成要求</button>
               </>
             ) : (
               <button

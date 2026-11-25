@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentRuntimeEvent } from '../agent-core/runtime/agent-runtime'
 import type { ScheduledTaskDefinition } from '../../shared/scheduled-task/scheduled-task-types'
 import { ScheduledTaskAgentRunner, ScheduledTaskSkippedError } from './scheduled-task-agent-runner'
+import { blankDiaryTemplate, diaryDateParts } from '../../shared/personal-diary-source'
 
 let root = ''
 
@@ -193,6 +194,49 @@ describe('ScheduledTaskAgentRunner', () => {
       await expect(readFile(join(folder, '0729_周三.md'))).rejects.toMatchObject({ code: 'ENOENT' })
     },
   )
+
+  it.each([
+    ['fills the untouched blank template', false],
+    ['keeps a blank template the user already edited', true],
+  ])("today's blank diary: %s", async (_name, edited) => {
+    const folder = join(root, '个人计划/2026/07')
+    await mkdir(folder, { recursive: true })
+    const task = definition()
+    task.outputPolicy = {
+      directory: '个人计划/{year}/{month}',
+      fileNameTemplate: '{monthDay}_{weekday}.md',
+      mode: 'create-only',
+    }
+    const when = Date.parse('2026-07-29T01:00:00Z')
+    const blank = blankDiaryTemplate(diaryDateParts(task.schedule.timezone, new Date(when)))
+    const target = join(folder, '0729_周三.md')
+    await writeFile(target, edited ? blank + '已写一行\n' : blank)
+    let complete: (event: AgentRuntimeEvent) => void
+    const send = vi.fn(async (ids: { conversationId: string; runId: string }) => {
+      complete({ ...ids, type: 'complete', data: { result: '# AI 起草' } })
+    })
+    const runner = new ScheduledTaskAgentRunner({
+      onRuntimeEvent: (listener: typeof complete) => {
+        complete = listener
+        return () => {}
+      },
+      sendScheduledTaskMessage: send,
+    } as never)
+    const run = runner.run({
+      definition: task,
+      runId: 'test',
+      conversationId: 'test',
+      scheduledFor: when,
+    })
+    if (edited) {
+      await expect(run).rejects.toThrow('当天已有日记')
+      expect(await readFile(target, 'utf8')).toBe(blank + '已写一行\n')
+    } else {
+      const result = await run
+      expect(result.artifact.relativePath).toBe('个人计划/2026/07/0729_周三.md')
+      expect(await readFile(target, 'utf8')).toBe('# AI 起草\n')
+    }
+  })
 
   it("skips without generating when the pre-draft sync brings in today's diary", async () => {
     const folder = join(root, '个人计划/2026/07')

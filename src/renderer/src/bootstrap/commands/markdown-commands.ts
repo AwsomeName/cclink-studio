@@ -1,6 +1,9 @@
 import type { KeyChord } from '@shared/keybindings'
 import type { MarkdownEditorAction } from '../../features/context-actions/editor-context-surface'
-import { getEditorContextSurface } from '../../features/context-actions/editor-context-surface'
+import {
+  getEditorContextSurface,
+  getEmbeddedEditorSurface,
+} from '../../features/context-actions/editor-context-surface'
 import type { Command } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
 
@@ -141,8 +144,12 @@ const definitions: MarkdownCommandDefinition[] = [
 
 function getActiveMarkdownSurface(requireFocus = false) {
   const tab = useTabStore.getState().getActiveTab()
-  if (tab?.type !== 'editor') return null
-  const surface = getEditorContextSurface(tab.id)
+  const surface =
+    tab?.type === 'editor'
+      ? getEditorContextSurface(tab.id)
+      : tab?.type === 'workspace-home'
+        ? getEmbeddedEditorSurface()
+        : null
   if (requireFocus && !surface?.isFocused?.()) return null
   return surface?.runMarkdownAction ? surface : null
 }

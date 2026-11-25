@@ -223,7 +223,7 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 10px;
+  padding: 9px 12px;
   border: none;
   border-radius: 6px;
   background: none;
@@ -339,4 +339,97 @@ details.diary-plan-card button.link {
 }
 .diary-plan-header .spacer {
   flex: 1;
+}
+
+/* 对齐设计图 13：标题、整高编辑区、右栏分节 */
+.personal-diary-home:has(.diary-plan-layout) > h2 {
+  display: none;
+}
+.diary-plan-header {
+  align-items: flex-end;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.diary-plan-title h3,
+.diary-plan-empty h3 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.diary-plan-layout .chip.done {
+  background: rgba(63, 179, 127, 0.18);
+  color: #7fd6a8;
+}
+.personal-diary-home .diary-plan-layout .diary-plan-editor {
+  border: none;
+  border-radius: 0;
+  background: none;
+  height: calc(100vh - 170px);
+  min-height: 320px;
+}
+.diary-plan-empty {
+  margin-top: 4px;
+}
+.diary-plan-period .range {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.diary-plan-period .now-label {
+  font-size: 13px;
+}
+.diary-plan-period.now b::after {
+  content: none;
+}
+.diary-plan-period .state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.diary-plan-period .state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7fd6a8;
+}
+.diary-plan-pager {
+  justify-content: flex-start;
+  gap: 14px;
+}
+.diary-plan-info {
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+}
+.diary-plan-info h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.diary-plan-info dl {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 6px 10px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.diary-plan-info dt {
+  color: var(--text-secondary);
+}
+.diary-plan-info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.diary-plan-info .on {
+  color: #7fd6a8;
+}
+.diary-plan-diary {
+  display: block;
+  font-size: 13px;
+}
+.diary-plan-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.diary-plan-header .chip,
+.diary-plan-header button,
+.diary-plan-title h3 {
+  white-space: nowrap;
 }

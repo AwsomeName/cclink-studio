@@ -1,6 +1,9 @@
 import type { Command } from '../../stores/command-store'
 import { useTabStore } from '../../stores/tab-store'
-import { getEditorContextSurface } from '../../features/context-actions/editor-context-surface'
+import {
+  getEditorContextSurface,
+  getEmbeddedEditorSurface,
+} from '../../features/context-actions/editor-context-surface'
 import { getTerminalContextSurface } from '../../features/context-actions/terminal-context-surface'
 import type { CommandContext } from '../../features/context-actions/context-target'
 import { useCommandStore } from '../../stores/command-store'
@@ -57,6 +60,7 @@ export function createWorkbenchCommands(): Command[] {
         const tab = useTabStore.getState().getActiveTab()
         const enabled =
           (tab?.type === 'editor' && Boolean(getEditorContextSurface(tab.id)?.save)) ||
+          (tab?.type === 'workspace-home' && Boolean(getEmbeddedEditorSurface()?.save)) ||
           (tab?.type === 'remote-file' && Boolean(getRemoteFileDraft(tab.id))) ||
           (tab?.type === 'media-production' && Boolean(getMediaProjectDraft(tab.id))) ||
           (tab?.type === 'scheduled-task' && Boolean(getScheduledTaskDraft(tab.id)))
@@ -66,6 +70,12 @@ export function createWorkbenchCommands(): Command[] {
         const tab = useTabStore.getState().getActiveTab()
         if (tab?.type === 'editor') {
           const save = getEditorContextSurface(tab.id)?.save
+          if (!save) throw new Error('当前编辑器尚未就绪')
+          await save()
+          return
+        }
+        if (tab?.type === 'workspace-home') {
+          const save = getEmbeddedEditorSurface()?.save
           if (!save) throw new Error('当前编辑器尚未就绪')
           await save()
           return

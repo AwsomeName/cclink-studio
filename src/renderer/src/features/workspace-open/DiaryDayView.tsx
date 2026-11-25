@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { MarkdownEditor } from '../../components/workbench/MarkdownEditor'
 import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useUIStore } from '../../stores/ui-store'
-import { askAi, editRule } from './diary-ai'
 import { useDiaryCalendar } from './diary-calendar-store'
 
 const short = (date: string): string => `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`
@@ -64,12 +63,6 @@ export function DiaryDayView(): React.ReactElement {
   )
   const extra = entry ? (
     <span className="diary-today-actions">
-      <button
-        className="diary-header-action"
-        onClick={() => askAi(`${editRule}请修改 ${entry.path}：`)}
-      >
-        让 AI 修改…
-      </button>
       <FoldedTabCreateActions />
     </span>
   ) : null

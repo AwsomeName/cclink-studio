@@ -41,6 +41,17 @@ try {
   await article.getByRole('button', { name: '新建浏览器页' }).waitFor()
   assert.equal(await home.locator('.diary-today-foot').count(), 0)
   await page.screenshot({ path: join(shots, 'v3-today-opened-before-time.png') })
+  // The status-bar sync item reads exactly like its neighbours (same size and colour).
+  const look = await page.evaluate(() => {
+    const pick = (sel) => {
+      const el = document.querySelector(sel)
+      if (!el) return null
+      const st = getComputedStyle(el)
+      return { size: st.fontSize, color: st.color, family: st.fontFamily }
+    }
+    return { sync: pick('.status-bar .diary-sync'), workspace: pick('.status-bar-workspace') }
+  })
+  assert.deepEqual(look.sync, look.workspace, JSON.stringify(look))
   console.log('PASS today opens before the scheduled time')
 } catch (e) {
   await s.fail(e)
