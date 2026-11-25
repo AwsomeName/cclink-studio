@@ -1975,10 +1975,9 @@ function isActivationRunnable(
 ): boolean {
   if (!activation?.enabled || activation.suspensionReason !== null) return false
   if (definition.source === 'local') return true
-  return (
-    activation.confirmedTaskRevision === definition.revision &&
-    activation.confirmedExecutionDigest === definition.executionDigest
-  )
+  // Confirmation binds execution semantics only; title edits or no-op saves on another device bump
+  // the revision without changing what runs, so they must not revoke this device's confirmation.
+  return activation.confirmedExecutionDigest === definition.executionDigest
 }
 
 function toStoredDefinition(definition: ScheduledTaskDefinition): StoredScheduledTaskDefinitionV2 {

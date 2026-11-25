@@ -1,8 +1,15 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ScheduledTaskRun } from '@shared/scheduled-task/scheduled-task-types'
-import { ScheduledTaskRunActions } from './ScheduledTaskTab'
+import type {
+  ScheduledTaskRun,
+  ScheduledTaskSnapshot,
+} from '@shared/scheduled-task/scheduled-task-types'
+import {
+  draftSaveKeepsEnabled,
+  ScheduledTaskRunActions,
+  SharedTaskActivationNote,
+} from './ScheduledTaskTab'
 
 describe('ScheduledTaskTab', () => {
   beforeEach(() => {
@@ -30,7 +37,46 @@ describe('ScheduledTaskTab', () => {
 
     expect(markup).not.toContain('>复制日志</button>')
   })
+
+  it('keeps an enabled shared task enabled on plain save', () => {
+    expect(draftSaveKeepsEnabled(createSnapshot('shared', { enabled: true }))).toBe(true)
+    expect(draftSaveKeepsEnabled(createSnapshot('shared', { enabled: false }))).toBe(false)
+    expect(draftSaveKeepsEnabled(createSnapshot('local', { enabled: true }))).toBe(true)
+    expect(draftSaveKeepsEnabled(undefined)).toBe(false)
+  })
+
+  it('explains why a shared task is not enabled on this device', () => {
+    const render = (task: ScheduledTaskSnapshot): string =>
+      renderToStaticMarkup(<SharedTaskActivationNote task={task} />)
+
+    const fresh = render(createSnapshot('shared', { enabled: false }))
+    expect(fresh).toContain('本机未启用')
+    expect(fresh).not.toContain('随项目同步来的')
+
+    const changed = render(
+      createSnapshot('shared', { enabled: false, suspensionReason: 'definition-changed' }),
+    )
+    expect(changed).toContain('本机已暂停')
+    expect(changed).toContain('在别处被修改')
+
+    expect(render(createSnapshot('shared', { enabled: true }))).toBe('')
+    expect(render(createSnapshot('local', { enabled: false }))).toBe('')
+  })
 })
+
+function createSnapshot(
+  source: 'local' | 'shared',
+  activation: Partial<ScheduledTaskSnapshot['activation']>,
+): ScheduledTaskSnapshot {
+  return {
+    definition: { source } as ScheduledTaskSnapshot['definition'],
+    activation: {
+      enabled: false,
+      suspensionReason: null,
+      ...activation,
+    } as ScheduledTaskSnapshot['activation'],
+  } as ScheduledTaskSnapshot
+}
 
 function createRun(): ScheduledTaskRun {
   const createdAt = Date.parse('2026-08-20T00:50:00.000Z')

@@ -205,6 +205,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
         if (
           form.definitionSource === 'shared' &&
           enable &&
+          !task?.activation.enabled &&
           !window.confirm('在此设备启用这个任务？其他设备需各自启用。')
         ) {
           return false
@@ -263,12 +264,9 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   useEffect(() => {
     if (!workspacePath || (taskId && !task)) return
     return registerScheduledTaskDraft(tab.id, {
-      save: () =>
-        handleSave(
-          form.definitionSource === 'shared' ? false : (task?.activation.enabled ?? false),
-        ),
+      save: () => handleSave(draftSaveKeepsEnabled(task)),
     })
-  }, [form.definitionSource, handleSave, tab.id, task, taskId, workspacePath])
+  }, [handleSave, tab.id, task, taskId, workspacePath])
 
   if (!workspacePath) {
     return <TaskUnavailable message="这个 Tab 没有绑定本地工作空间" />
@@ -491,12 +489,7 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       </header>
 
       {actionError && <div className="scheduled-task-form-error">{actionError}</div>}
-      {task?.definition.source === 'shared' && !task.activation.enabled && (
-        <div className="scheduled-task-confirmation-note">
-          <strong>本机未启用</strong>
-          <span>这是随项目同步来的任务，检查内容后点“在此设备启用”。</span>
-        </div>
-      )}
+      {task && <SharedTaskActivationNote task={task} />}
       {gitSharingHint && <div className="scheduled-task-git-note">{gitSharingHint}</div>}
       {externalUpdatePending && task && (
         <div className="scheduled-task-confirmation-note">
@@ -767,6 +760,45 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           </TaskSection>
         )}
       </main>
+    </div>
+  )
+}
+
+/**
+ * Plain save (toolbar / Cmd+S) keeps this device's activation as it is. Saving an enabled shared
+ * task here re-binds the confirmation to the version this device just wrote; only definitions
+ * changed elsewhere need a fresh confirmation.
+ */
+export function draftSaveKeepsEnabled(task: ScheduledTaskSnapshot | undefined): boolean {
+  return task?.activation.enabled ?? false
+}
+
+const sharedSuspensionMessages: Record<
+  NonNullable<ScheduledTaskSnapshot['activation']['suspensionReason']>,
+  string
+> = {
+  'definition-changed':
+    '任务内容在别处被修改（其他设备同步或直接改了任务文件），本机已暂停。检查新内容后点“在此设备启用”。',
+  'definition-removed': '任务定义已从项目删除，本机启用已失效。',
+  'definition-conflict': '任务定义存在冲突，本机已暂停。解决冲突后再点“在此设备启用”。',
+  'migration-conflict': '任务迁移存在冲突，本机已暂停。解决冲突后再点“在此设备启用”。',
+}
+
+export function SharedTaskActivationNote({
+  task,
+}: {
+  task: ScheduledTaskSnapshot
+}): React.ReactElement | null {
+  if (task.definition.source !== 'shared' || task.activation.enabled) return null
+  const reason = task.activation.suspensionReason
+  return (
+    <div className="scheduled-task-confirmation-note">
+      <strong>{reason ? '本机已暂停' : '本机未启用'}</strong>
+      <span>
+        {reason
+          ? sharedSuspensionMessages[reason]
+          : '随项目共享的任务需在每台设备分别启用，检查内容后点“在此设备启用”。'}
+      </span>
     </div>
   )
 }

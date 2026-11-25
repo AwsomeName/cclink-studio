@@ -738,7 +738,7 @@ describe('ScheduledTaskService', () => {
     await service.stopRuntime()
   })
 
-  it('shares only a portable definition and requires device B to confirm each revision', async () => {
+  it('shares only a portable definition and requires device B to reconfirm only execution changes', async () => {
     const workspaceB = join(tempDir, 'workspace-b')
     const userDataB = join(tempDir, 'user-data-b')
     await mkdir(join(workspaceB, '.git/info'), { recursive: true })
@@ -798,17 +798,32 @@ describe('ScheduledTaskService', () => {
       confirmedExecutionDigest: first.task!.definition.executionDigest,
     })
 
+    // A title-only edit bumps the revision without changing what runs: B stays enabled.
     await serviceA.save({
       ...createInput(true),
       taskId,
       expectedRevision: 2,
+      definitionSource: 'shared',
+      title: '改名后的周报',
+    })
+    await copyFile(sharedA, sharedB)
+    const renamed = await serviceB.list(workspaceB)
+    expect(renamed.tasks[0]).toMatchObject({
+      definition: { revision: 3, title: '改名后的周报' },
+      activation: { enabled: true, suspensionReason: null },
+    })
+
+    await serviceA.save({
+      ...createInput(true),
+      taskId,
+      expectedRevision: 3,
       definitionSource: 'shared',
       instruction: '读取工作空间资料并生成新版 Markdown 周报。',
     })
     await copyFile(sharedA, sharedB)
     const refreshed = await serviceB.list(workspaceB)
     expect(refreshed.tasks[0]).toMatchObject({
-      definition: { revision: 3 },
+      definition: { revision: 4 },
       activation: { enabled: false, suspensionReason: 'definition-changed' },
     })
     await serviceB.stopRuntime()
