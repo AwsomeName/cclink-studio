@@ -31,7 +31,10 @@ export interface BackendFactoryDeps {
 export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): IAgentBackend {
   switch (config.type) {
     case 'local-codex':
-      return new LocalCodexBackend(deps.toolHost, config.codex.getWorkspacePath)
+      return new LocalCodexBackend(deps.toolHost, config.codex.getWorkspacePath, {
+        createUsageObserver: config.codex.createUsageObserver,
+        codexHome: config.codex.codexHome,
+      })
     case 'local-claude-code':
       return new LocalClaudeCodeBackend(
         deps.playwrightBridge,

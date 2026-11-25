@@ -96,4 +96,6 @@ export interface GitApiContract {
   getDiff(input: GitDiffRequest): Promise<GitDiffResult>
   commit(input: GitCommitInput): Promise<GitOperationResult>
   push(input: GitPushInput): Promise<GitOperationResult>
+  /** Project sync: what the first / next round would upload (ADR 0026). */
+  previewProjectSync(workspacePath: string): Promise<import('./project-sync').ProjectSyncPreview>
 }

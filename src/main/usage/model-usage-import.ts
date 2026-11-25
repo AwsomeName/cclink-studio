@@ -163,7 +163,7 @@ export async function importTranscripts(
   return result
 }
 
-async function* transcriptLines(
+export async function* transcriptLines(
   input: ReturnType<typeof createReadStream>,
   start: number,
   incremental: boolean,

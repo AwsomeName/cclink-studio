@@ -6,6 +6,12 @@ import { useFixedSpacesStore } from '../../features/workspace-open/fixed-spaces-
 import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
 import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
 import { RunningWork } from './RunningWork'
+import { ProjectSyncStatus, useProjectSyncPath } from '../../features/project-sync/ProjectSyncCard'
+import { ProjectSyncDialog } from '../../features/project-sync/ProjectSyncDialog'
+import {
+  useProjectSync,
+  useProjectSyncSchedule,
+} from '../../features/project-sync/project-sync-store'
 import { useEffect } from 'react'
 import { TtsStatusPlayer } from '../../features/local-tts/TtsStatusPlayer'
 import {
@@ -73,6 +79,9 @@ export function StatusBar(): React.ReactElement {
       ? personal.workspacePath
       : null
   useDiarySyncSchedule(diaryPath)
+  const projectSyncPath = useProjectSyncPath()
+  useProjectSyncSchedule(projectSyncPath)
+  const projectSync = useProjectSync(projectSyncPath)
   const workspaceKey = workspaceRefKey(activeWorkspaceRef)
 
   useFloatingSurfaceRegistration(showGitDialog)
@@ -116,6 +125,7 @@ export function StatusBar(): React.ReactElement {
 
   return (
     <>
+      <ProjectSyncDialog />
       <div className="status-bar">
         <div className="status-bar-left">
           <RunningWork />
@@ -158,6 +168,8 @@ export function StatusBar(): React.ReactElement {
                 showWorkspaceHome(activeWorkspaceRef)
               }}
             />
+          ) : projectSyncPath && (projectSync.snapshot?.remoteUrl || projectSync.busy) ? (
+            <ProjectSyncStatus path={projectSyncPath} />
           ) : (
             <GitStatusBarItem
               workspacePath={workspacePath}

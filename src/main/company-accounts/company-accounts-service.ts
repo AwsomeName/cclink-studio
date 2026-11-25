@@ -110,6 +110,13 @@ export class CompanyAccountsService {
     }
   }
 
+  /** Project sync (ADR 0026): creates the ledger when synced records arrive first. */
+  initializeForWorkspace(workspacePath: string): void {
+    const paths = ledgerPaths(workspacePath)
+    mkdirSync(paths.documents, { recursive: true })
+    this.withDatabase(paths, true, () => undefined)
+  }
+
   initialize(month: string): CompanyAccountsSnapshot {
     assertMonth(month)
     const paths = this.requirePaths()

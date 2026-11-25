@@ -333,7 +333,8 @@ export function ModelUsageSettings() {
             次已观察重试
           </p>
           <p className="mu-note">
-            仅包含 Studio 本机 Claude Code 的可观测调用。
+            仅包含 Studio 本机 Claude Code 与 Codex 的可观测调用；在 Studio 外直接使用的
+            Codex／Claude 不计入。
             {exclude && '仅排除显式标为“开发”的记录；未分类仍保留。'}
             一次用户发起或定时触发算一次执行；无执行归属 {
               scope.callsWithoutTask
@@ -527,7 +528,8 @@ export function ModelUsageSettings() {
               </button>
             </div>
             <p className="mu-note">
-              回填包括子代理，重复导入不会重复累计。其他机器使用 JSON 交换；来源保留。CSV
+              回填包括子代理，以及 Studio 发起的 Codex 会话（只读取 Studio 来源的日志，Codex
+              桌面版／CLI 会话不读取）。重复导入不会重复累计。其他机器使用 JSON 交换；来源保留。CSV
               空值表示缺失，不用于回导。
             </p>
             <p className="mu-path">
@@ -544,7 +546,8 @@ export function ModelUsageSettings() {
               prompts、套餐积分换算为固定 Token。
             </p>
             <p className="mu-note">
-              远程 Agent、Codex ACP、外部独立 Claude 和媒体服务尚未接入本统计。SDK
+              远程 Agent、Codex ACP、Studio 外的 Codex／Claude 和媒体服务尚未接入本统计。Codex
+              的输入 Token 已扣除缓存部分，与 Claude 口径一致；套餐额度百分比不在此统计。SDK
               隐藏调用或未落盘的崩溃请求无法补造；缺失值不代表免费。
             </p>
           </details>

@@ -1,5 +1,5 @@
-import { lstat, realpath, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, realpath, readFile, rename, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
 
 interface Conflict {
   path: string
@@ -13,7 +13,11 @@ interface Conflict {
 }
 
 type Run = (args: string[]) => Promise<string>
-export async function inspectDiaryConflicts(root: string, run: Run): Promise<Conflict[]> {
+export async function inspectDiaryConflicts(
+  root: string,
+  run: Run,
+  textPattern: RegExp = /\.md$/i,
+): Promise<Conflict[]> {
   const result: Conflict[] = []
   const files = (await run(['diff', '--name-only', '--diff-filter=U', '-z']))
     .split('\0')
@@ -28,7 +32,7 @@ export async function inspectDiaryConflicts(root: string, run: Run): Promise<Con
     if (
       hasLocal &&
       hasRemote &&
-      /\.md$/i.test(path) &&
+      textPattern.test(path) &&
       stat?.isFile() &&
       stat.size <= 128 * 1024 &&
       (await realpath(entry)) === join(await realpath(root), path)
@@ -69,13 +73,17 @@ export async function applyDiaryFeedback(
   feedback: string,
   run: Run,
   decide?: (prompt: string) => Promise<string>,
+  /** Project sync: whole-file choices for conflicts without text hunks. */
+  files?: Record<string, 'local' | 'remote' | 'both'>,
 ): Promise<void> {
+  const byFile = (c: Conflict) => (c.hunk === undefined ? files?.[c.path] : undefined)
+  const pending = conflicts.filter((c) => !byFile(c))
   // A literal choice works offline; natural-language decisions go to the existing tool-free AI.
   const literal =
     feedback === '采用这台电脑的写法' ? 'local' : feedback === '采用另一份的写法' ? 'remote' : null
-  let choices: unknown = conflicts.map(() => literal)
-  if (!literal) {
-    const data = conflicts.map(({ path, local, remote }) => ({ path, local, remote }))
+  let picked: unknown = pending.map(() => literal)
+  if (!literal && pending.length) {
+    const data = pending.map(({ path, local, remote }) => ({ path, local, remote }))
     if (JSON.stringify(data).length > 24000)
       throw Error(
         '两份内容太长。请明确填写「采用这台电脑的写法」或「采用另一份的写法」以选择全部差异。',
@@ -86,21 +94,37 @@ export async function applyDiaryFeedback(
         JSON.stringify({ differences: data, feedback }),
     )
     try {
-      choices = JSON.parse(reply.trim().replace(/^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$/g, ''))
+      picked = JSON.parse(reply.trim().replace(/^\x60\x60\x60(?:json)?\s*|\s*\x60\x60\x60$/g, ''))
     } catch {
-      choices = null
+      picked = null
     }
   }
   if (
-    !Array.isArray(choices) ||
-    choices.length !== conflicts.length ||
-    !choices.every((c) => c === 'local' || c === 'remote')
+    !Array.isArray(picked) ||
+    picked.length !== pending.length ||
+    !picked.every((c) => c === 'local' || c === 'remote')
   )
     throw Error('还有差异无法确定。请按文件说明想采用哪一份内容，两份原文已保留。')
+  let next = 0
+  const choices = conflicts.map((c) => byFile(c) ?? (picked as string[])[next++])
+  const kept: string[] = []
   // Reverse offsets keep earlier markers stable when a file contains several hunks.
   for (let i = conflicts.length - 1; i >= 0; i--) {
     const item = conflicts[i],
-      side = choices[i] as 'local' | 'remote'
+      choice = choices[i] as 'local' | 'remote' | 'both'
+    if (choice === 'both' && item.hasLocal && item.hasRemote) {
+      // Keep this computer's file in place and the other one beside it.
+      const temp = (await run(['checkout-index', '--stage=3', '--temp', '--', item.path]))
+        .split('\t')[0]
+        .trim()
+      const copy = await siblingName(root, item.path)
+      await rename(join(root, temp), join(root, copy))
+      kept.push(copy)
+      await run(['checkout', '--ours', '--', item.path])
+      continue
+    }
+    const side: 'local' | 'remote' =
+      choice === 'both' ? (item.hasLocal ? 'local' : 'remote') : choice
     if (item.hunk !== undefined && item.offset !== undefined) {
       const file = join(root, item.path)
       const text = await readFile(file, 'utf8')
@@ -117,5 +141,20 @@ export async function applyDiaryFeedback(
   for (const path of new Set(conflicts.map((c) => c.path))) {
     if (await lstat(join(root, path)).catch(() => null)) await run(['add', '--', path])
   }
+  if (kept.length) await run(['add', '--', ...kept])
   await run(['commit', '--no-edit'])
+}
+
+/** `报价单.xlsx` → `报价单（另一台 11-25）.xlsx`, numbered if taken. */
+async function siblingName(root: string, path: string): Promise<string> {
+  const ext = extname(path)
+  const stem = basename(path, ext)
+  const now = new Date()
+  const day = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const folder = dirname(path) === '.' ? '' : dirname(path) + '/'
+  for (let n = 1; n < 100; n++) {
+    const name = `${folder}${stem}（另一台 ${day}${n > 1 ? ' ' + n : ''}）${ext}`
+    if (!(await lstat(join(root, name)).catch(() => null))) return name
+  }
+  throw Error('无法为另一份文件找到可用的名字')
 }

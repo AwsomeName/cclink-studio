@@ -40,13 +40,23 @@ export function updateCclinkStudioExcludeBlock(current: string): string {
   return `${prefix}${block}\n`
 }
 
+/** The company sync copy (ADR 0026): manifest, one JSON per record, originals by hash. */
+const COMPANY_COPY_PATH_PATTERN =
+  /^\.cclink-studio\/shared\/company\/(?:manifest\.json|records\/(?:company|accounts)\/[a-z_]+\/[A-Za-z0-9_-]{1,80}\.json|originals\/[0-9a-f]{64})$/
+export const isCompanyCopyPath = (path: string): boolean => COMPANY_COPY_PATH_PATTERN.test(path)
+
 export function findForbiddenCclinkStudioPaths(paths: string[]): string[] {
   return Array.from(
     new Set(
       paths
         .map(normalizeGitPath)
         .filter((path) => path === '.cclink-studio' || path.startsWith('.cclink-studio/'))
-        .filter((path) => !SHARED_TASK_PATH_PATTERN.test(path) && path !== workspaceSettingsPath),
+        .filter(
+          (path) =>
+            !SHARED_TASK_PATH_PATTERN.test(path) &&
+            path !== workspaceSettingsPath &&
+            !isCompanyCopyPath(path),
+        ),
     ),
   ).slice(0, 20)
 }

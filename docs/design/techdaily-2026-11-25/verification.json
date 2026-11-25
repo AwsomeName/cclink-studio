@@ -1,0 +1,90 @@
+[
+  {
+    "name": "01-report",
+    "query": "view=report",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "02-running",
+    "query": "view=running",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "03-failed",
+    "query": "view=failed",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "04-diary",
+    "query": "view=diary",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "05-settings",
+    "query": "view=settings",
+    "viewport": [
+      1440,
+      1100
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "06-setup",
+    "query": "view=setup",
+    "viewport": [
+      1440,
+      900
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "narrow-report",
+    "query": "view=report",
+    "viewport": [
+      390,
+      844
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  },
+  {
+    "name": "narrow-running",
+    "query": "view=running",
+    "viewport": [
+      390,
+      844
+    ],
+    "horizontalOverflow": 0,
+    "over": [],
+    "errors": []
+  }
+]

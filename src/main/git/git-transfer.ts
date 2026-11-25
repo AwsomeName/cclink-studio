@@ -7,13 +7,16 @@ import { lstat, mkdir, mkdtemp, readdir, realpath, readFile, writeFile } from 'n
 import { dirname, join, relative, isAbsolute } from 'node:path'
 import type { GitTransferInput, GitTransferSnapshot } from '../../shared/git'
 import type { GitExecutor, GitAuthentication } from '../git-backup/git-executor'
-import { syncDiary } from './sync-diary'
+import { syncDiary, syncScoped, type SyncScope } from './sync-diary'
+import { projectScope } from './project-sync-scope'
 import { fastForwardIfClean } from './git-fast-forward'
 
 export interface TransferContext {
   runner: Pick<GitExecutor, 'run'>
   authentication?: GitAuthentication
   diary?: { directory: string; planDirectory?: string }
+  /** Project sync (ADR 0026): company export/import hooks around the shared engine. */
+  project?: Pick<SyncScope, 'beforeCommit' | 'afterUpdate' | 'describeRecordConflict'>
   onDiaryAddress?: (url: string) => Promise<void>
   decide?: (prompt: string) => Promise<string>
   copyRoot?: string
@@ -215,6 +218,10 @@ export async function transferRepository(
     if ((address.startsWith('ssh://') || address.startsWith('git@')) && !input.sshKeyPath)
       throw Error('SSH 同步需要本次私钥路径')
     return syncDiary(path, address, input, context, flags)
+  }
+  if (input.action === 'project-sync') {
+    if (!context.project) throw Error('项目同步尚未就绪')
+    return syncScoped(path, input.url!, input, context, flags, projectScope(path, context.project))
   }
   const gitDirectory = join(path, '.git')
   if (!(await lstat(gitDirectory)).isDirectory() || (await realpath(gitDirectory)) !== gitDirectory)

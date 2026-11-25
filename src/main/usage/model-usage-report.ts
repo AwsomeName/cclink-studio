@@ -260,8 +260,9 @@ export function buildReport(
     generatedAt: new Date().toISOString(),
     definitions: {
       usage:
-        'Provider-reported usage via Claude Code; not an invoice or subscription quota. No text-length estimates.',
-      input: 'Anthropic protocol: excludes cache read/write',
+        'Provider-reported usage via Claude Code and Studio-started Codex; not an invoice or subscription quota. No text-length estimates.',
+      input:
+        'Excludes cache read/write. Anthropic reports it that way; OpenAI/Codex input_tokens includes cache and is split here (input = input_tokens - cached - cache write)',
       output: 'Includes thinking; do not add thinking again',
       missing:
         'null means unavailable; totals sum observed values only and are lower bounds where fields are missing',

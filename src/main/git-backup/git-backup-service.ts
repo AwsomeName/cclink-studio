@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type {
   GitBackupAccountStatus,
   GitBackupCreateRepositoryResult,
+  GitBackupListRepositoriesResult,
   GitBackupOperationResult,
   GitBackupProjectStatus,
   GitBackupRunInput,
@@ -9,6 +10,7 @@ import type {
   GitBackupSaveAccountInput,
   GitBackupTestAccountInput,
 } from '../../shared/ipc/git-backup'
+import { parseGitHubHttpsRepository } from '../../shared/git/project-sync'
 import type { SettingsService } from '../settings/settings-service'
 import type { WorkspaceStateService } from '../workspace/workspace-state-service'
 import type { CredentialService } from '../credentials/credential-service'
@@ -234,6 +236,61 @@ export class GitBackupService {
       const failure = toGitBackupError(error)
       return { success: false, error: failure.message, errorCode: failure.code }
     }
+  }
+
+  async listPrivateRepositories(): Promise<GitBackupListRepositoriesResult> {
+    try {
+      const username = normalizeGitHubUsername(this.settingsService.getAll().gitBackupUsername)
+      const token = this.getToken()
+      if (!token)
+        throw new GitBackupError('ACCOUNT_NOT_CONFIGURED', '请先在设置中保存 GitHub 账号和 Token')
+      const github = this.githubClientFactory(token)
+      const login = await github.verifyAccount(username)
+      return {
+        success: true,
+        username: login,
+        repositories: await github.listPrivateRepositories(),
+      }
+    } catch (error: unknown) {
+      const failure = toGitBackupError(error)
+      return { success: false, error: failure.message, errorCode: failure.code }
+    }
+  }
+
+  /**
+   * Project sync admission (ADR 0026): the address must be a GitHub repository the saved account
+   * sees as private. Anything else — public, missing, unreachable — is refused.
+   */
+  async assertPrivateRepository(remoteUrl: string): Promise<{ fullName: string }> {
+    const parsed = parseGitHubHttpsRepository(remoteUrl)
+    if (!parsed)
+      throw new GitBackupError(
+        'INVALID_REPOSITORY',
+        '项目同步只支持 GitHub 私有仓库地址，例如 https://github.com/你的账号/仓库.git',
+      )
+    const token = this.getToken()
+    if (!token)
+      throw new GitBackupError('ACCOUNT_NOT_CONFIGURED', '请先在设置中保存 GitHub 账号和 Token')
+    const visibility = await this.githubClientFactory(token).getRepositoryVisibility(
+      parsed.owner,
+      parsed.name,
+    )
+    if (!visibility)
+      throw new GitBackupError(
+        'REPOSITORY_NOT_PRIVATE',
+        `无法确认 ${parsed.owner}/${parsed.name} 是私有仓库：仓库不存在，或已保存的 GitHub 账号无权访问。`,
+      )
+    if (!visibility.private)
+      throw new GitBackupError(
+        'REPOSITORY_NOT_PRIVATE',
+        `仓库 ${visibility.fullName} 是公开的。为保护项目和公司记录，同步已暂停；改回私有后再继续。`,
+      )
+    if (!visibility.push)
+      throw new GitBackupError(
+        'AUTHENTICATION_FAILED',
+        `已保存的 GitHub 账号对 ${visibility.fullName} 没有写入权限`,
+      )
+    return { fullName: visibility.fullName }
   }
 
   async getProjectStatus(workspacePath: string): Promise<GitBackupProjectStatus> {

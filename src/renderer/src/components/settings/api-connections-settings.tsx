@@ -14,6 +14,7 @@ import { useUIStore } from '../../stores/ui-store'
 import { captureActiveWorkspaceTarget } from '../../stores/workspace-store'
 import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import { resumeDiarySyncAfterAccountChange } from '../../features/workspace-open/DiarySyncStatus'
+import { resumeProjectSyncAfterAccountChange } from '../../features/project-sync/project-sync-store'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { IconDatabase, IconRobot } from '../common/Icons'
 import {
@@ -448,6 +449,7 @@ function ConnectionForm({
           )
           setUsername(username.trim())
           resumeDiarySyncAfterAccountChange()
+          resumeProjectSyncAfterAccountChange()
         } else {
           checked(
             await window.cclinkStudio.credentials.set({

@@ -8,4 +8,5 @@ export const gitApi: GitApiContract = {
   getDiff: (input) => invokeIpcContract(gitIpc.getDiff, input),
   commit: (input) => invokeIpcContract(gitIpc.commit, input),
   push: (input) => invokeIpcContract(gitIpc.push, input),
+  previewProjectSync: (path) => invokeIpcContract(gitIpc.previewProjectSync, path),
 }

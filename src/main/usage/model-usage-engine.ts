@@ -5,7 +5,8 @@ import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { ModelUsageStore } from './model-usage-store'
 import { ModelUsageCollector } from './model-usage-collector'
-import { importTranscripts, transcriptFiles } from './model-usage-import'
+import { importTranscripts, transcriptFiles, type ImportResult } from './model-usage-import'
+import { codexHomeDirectory, importCodexRollouts } from './model-usage-codex-import'
 import {
   buildReport,
   classified,
@@ -135,7 +136,14 @@ export class ModelUsageEngine {
       this.store.setMeta('watched-runs', this.watches)
     }
   }
+  private watchActive(row: Watch, timestamp: string) {
+    return (
+      timestamp >= row.from &&
+      (row.to ? timestamp <= row.to : this.collectors.has(row.context.runId!))
+    )
+  }
   async reconcile() {
+    await this.reconcileCodex()
     // Discover once per root per pass, then read only appended bytes. Only Studio-observed sessions qualify.
     const roots = [
       ...new Set(
@@ -201,6 +209,31 @@ export class ModelUsageEngine {
         if (result.invalidLines || result.unidentifiable)
           this.failure({ code: 'TRANSCRIPT_INCOMPLETE' })
       }
+    }
+  }
+  /** Recover live notifications lost to a crash from the same Studio-observed Codex threads. */
+  private async reconcileCodex() {
+    const byHome = new Map<string, Watch[]>()
+    for (const row of this.watches)
+      if (row.context.codexHome && row.context.sessionId)
+        byHome.set(row.context.codexHome, [...(byHome.get(row.context.codexHome) ?? []), row])
+    for (const [home, watches] of byHome) {
+      if (!existsSync(home)) continue
+      const matching = (timestamp: string, threadId: string) =>
+        watches.filter(
+          (row) => row.context.sessionId === threadId && this.watchActive(row, timestamp),
+        )
+      const result = await importCodexRollouts(this.store, home, {
+        threadIds: [...new Set(watches.map((row) => row.context.sessionId!))],
+        incremental: true,
+        accept: (timestamp, threadId) => matching(timestamp, threadId).length > 0,
+        contextAt: (timestamp, threadId) => {
+          const rows = matching(timestamp, threadId)
+          return rows.length === 1 ? rows[0].context : {}
+        },
+      })
+      if (result.invalidLines || result.unidentifiable)
+        this.failure({ code: 'TRANSCRIPT_INCOMPLETE' })
     }
   }
   private selected(query: UsageQuery) {
@@ -307,8 +340,14 @@ export class ModelUsageEngine {
           .map((row) => join(base, row.name, 'config', 'projects'))
           .filter(existsSync)
     }
-    if (!roots.length) throw Object.assign(new Error('NO_TRANSCRIPTS'), { code: 'NO_TRANSCRIPTS' })
-    return importTranscripts(this.store, roots)
+    const codexHome = root ? null : codexHomeDirectory()
+    const hasCodex = codexHome !== null && existsSync(codexHome)
+    if (!roots.length && !hasCodex)
+      throw Object.assign(new Error('NO_TRANSCRIPTS'), { code: 'NO_TRANSCRIPTS' })
+    const results: ImportResult[] = []
+    if (roots.length) results.push(await importTranscripts(this.store, roots))
+    if (hasCodex) results.push(await importCodexRollouts(this.store, codexHome))
+    return combineImports(results)
   }
   importFile(path: string) {
     const data = z
@@ -357,5 +396,23 @@ export class ModelUsageEngine {
     for (const id of this.collectors.keys()) this.finish(id, 'interrupted')
     this.heartbeatEnd()
     this.store.close()
+  }
+}
+
+function combineImports(results: ImportResult[]): ImportResult {
+  const times = (key: 'earliest' | 'latest') =>
+    results
+      .map((row) => row[key])
+      .filter((x): x is string => x !== null)
+      .sort()
+  return {
+    files: results.reduce((sum, row) => sum + row.files, 0),
+    inserted: results.reduce((sum, row) => sum + row.inserted, 0),
+    replayed: results.reduce((sum, row) => sum + row.replayed, 0),
+    invalidLines: results.reduce((sum, row) => sum + row.invalidLines, 0),
+    pendingLines: results.reduce((sum, row) => sum + row.pendingLines, 0),
+    unidentifiable: results.reduce((sum, row) => sum + row.unidentifiable, 0),
+    earliest: times('earliest')[0] ?? null,
+    latest: times('latest').at(-1) ?? null,
   }
 }

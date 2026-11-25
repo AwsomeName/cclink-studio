@@ -46,6 +46,7 @@ import {
 } from '../../shared/agent-runtime'
 import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-backend'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
+import { codexHomeDirectory } from '../usage/model-usage-codex-import'
 import type { CclinkAgentService, CclinkAgentEndpoint } from './cclink-agent-service'
 import { AgentRuntimeStateStore, type TrustedAgentSessionRecord } from './agent-runtime-state-store'
 import {
@@ -1716,7 +1717,14 @@ export class AgentBridge {
     this.runtime.bindConversationBackend(
       conversationId,
       binding.kind === 'codex'
-        ? { type: 'local-codex', codex: { getWorkspacePath: this.getWorkspacePath } }
+        ? {
+            type: 'local-codex',
+            codex: {
+              getWorkspacePath: this.getWorkspacePath,
+              createUsageObserver: this.deps.usageLedgerService?.startModelRun,
+              codexHome: codexHomeDirectory(),
+            },
+          }
         : binding.kind === 'acp'
           ? this.acpConfig
           : this.buildBackendConfigFromCurrentAgent(),

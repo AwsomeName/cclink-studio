@@ -120,7 +120,15 @@ export interface AgentSendOptions {
 
 /** 后端配置 */
 export type BackendConfig =
-  | { type: 'local-codex'; codex: { getWorkspacePath?: () => string } }
+  | {
+      type: 'local-codex'
+      codex: {
+        getWorkspacePath?: () => string
+        createUsageObserver?: import('../../../shared/model-usage').CreateModelUsageObserver
+        /** Codex home holding rollouts (CODEX_HOME or ~/.codex), used for usage reconcile. */
+        codexHome?: string
+      }
+    }
   | {
       type: 'local-claude-code'
       /** Claude Code 配置 */

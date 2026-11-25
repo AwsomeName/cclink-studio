@@ -389,6 +389,32 @@ export class CompanyWorkspaceService {
       return this.snapshot(target, input.month)
     })
   }
+  /**
+   * Project sync (ADR 0026): records can arrive from another computer before 启用公司视图 here.
+   * Creates the (not yet enabled) database bound to this project's identity.
+   */
+  async ensureDatabaseForSync(target: CompanyWorkspaceTarget): Promise<string> {
+    await this.sources.workspace?.(target.workspacePath, target.workspaceId)
+    const path = await this.databasePath(target, true)
+    this.open(path, target.workspaceId).close()
+    return path
+  }
+
+  /** Tells open views that a sync read-in changed the records. */
+  async notifySynced(target: CompanyWorkspaceTarget): Promise<void> {
+    const path = await this.databasePath(target)
+    if (!existsSync(path)) return
+    const db = this.open(path, target.workspaceId, true)
+    try {
+      this.sources.changed?.(
+        target.workspaceId,
+        Number((db.prepare('SELECT revision FROM settings WHERE id=1').get() as Row).revision),
+      )
+    } finally {
+      db.close()
+    }
+  }
+
   private async verifyLedger(
     target: CompanyWorkspaceTarget,
     month: string,

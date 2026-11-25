@@ -72,3 +72,4 @@ ADR 只记录会长期影响安全边界、模块依赖、生命周期、状态�
 - `0023-automatic-task-agent-selection.md`：Studio 自主任务在执行前检测 Codex，再选择已配置的 Claude 备选；显式聊天、原生 Session 和已开始执行的任务保持绑定，复用既有 run 与权限所有权。
 - `0024-personal-company-space-bindings.md`：accepted；“我的空间 / 我的公司”固定入口引用不同的普通本地工作空间，定义旧公司原位关联、混合目录保护和原记录 scope；用户已授权实施，源码及真实 Electron 自动验收已落地，未发布。
 - `0025-company-decision-records.md`：accepted；公司首页“帮我想清楚一个问题”。决策记录归公司数据库（schema v3），思考由该决策专属的本地 Agent 会话完成，公司只保存会话 ID、派工票据和 runId 引用；资料按用户勾选范围只读随委托发出，采纳只写决策、不改账目、客户或推广。
+- `0026-project-sync.md`：accepted；非 Git 项目与公司数据自动双向同步到 GitHub 私有仓库。与我的空间共用同步引擎；不设同步密码，沿用已保存的 GitHub 凭证，每轮上传前确认仓库私有；公司记录以每条一个 JSON 的同步副本进出，数据库仍是唯一事实源；取代“客户数据只留本机”。

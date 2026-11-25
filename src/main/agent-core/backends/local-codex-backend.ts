@@ -11,6 +11,7 @@ import {
   assertNativeChatgptConfiguration,
 } from './codex-runtime-policy'
 import type { CodexRuntimeDiagnostic } from '../../../shared/codex-runtime'
+import type { CreateModelUsageObserver, ModelUsageObserver } from '../../../shared/model-usage'
 import { resolveProjectedSymlinkTarget } from './claude-native-scheduling-policy'
 
 function record(value: unknown): Record<string, unknown> {
@@ -71,10 +72,16 @@ export class LocalCodexBackend implements IAgentBackend {
   private allowedStudioTools = new Set<string>()
   private runDone: Promise<void> | null = null
   private diagnostic: CodexRuntimeDiagnostic | undefined
+  private usage: ModelUsageObserver | undefined
+  private model: string | null = null
 
   constructor(
     private readonly toolHost: McpToolHost,
     private readonly getWorkspacePath?: () => string,
+    private readonly usageOptions: {
+      createUsageObserver?: CreateModelUsageObserver
+      codexHome?: string
+    } = {},
   ) {}
 
   onEvent(handler: AgentEventHandler): void {
@@ -280,6 +287,20 @@ export class LocalCodexBackend implements IAgentBackend {
       }
       if (this.cancelled) return
       this.sessionId = establishedSessionId
+      this.model = text(response.model) || null
+      try {
+        this.usage = this.usageOptions.createUsageObserver?.({
+          workspace: this.cwd,
+          runId: options.runId,
+          conversationId: options.conversationId,
+          sessionId: establishedSessionId,
+          taskId: options.scheduledTaskPolicy?.taskId ?? options.articlePublishingPolicy?.affairId,
+          provider: 'openai',
+          codexHome: this.usageOptions.codexHome,
+        })
+      } catch {
+        console.warn('[ModelUsage] observer unavailable; Agent continues')
+      }
       this.handler?.('system', { type: 'system', subtype: 'init', session_id: this.sessionId })
       this.emit({
         type: 'session',
@@ -314,6 +335,12 @@ export class LocalCodexBackend implements IAgentBackend {
       }
     } finally {
       this.finish = null
+      try {
+        this.usage?.finish(succeeded ? 'succeeded' : this.cancelled ? 'interrupted' : 'failed')
+      } catch {
+        /* statistics never affect the run */
+      }
+      this.usage = undefined
       await server.stop()
       if (this.server === server) this.server = null
       const token = this.sessionToken
@@ -379,6 +406,21 @@ export class LocalCodexBackend implements IAgentBackend {
     }
     if (params.threadId && params.threadId !== this.sessionId) return
     switch (message.method) {
+      case 'thread/tokenUsage/updated': {
+        const usage = record(params.tokenUsage)
+        try {
+          this.usage?.observe({
+            type: 'codex_token_usage',
+            session_id: this.sessionId,
+            model: this.model,
+            last: usage.last,
+            total: usage.total,
+          })
+        } catch {
+          console.warn('[ModelUsage] event recording failed; Agent continues')
+        }
+        break
+      }
       case 'turn/started':
         this.turnId = text(record(params.turn).id)
         break

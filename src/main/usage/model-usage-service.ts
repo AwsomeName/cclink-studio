@@ -10,7 +10,14 @@ import type {
   ModelUsageRecord,
   UsageCategory,
 } from '../../shared/model-usage'
-import { object, sanitizeUsage, sanitizeModelUsage, string, number } from './model-usage-normalize'
+import {
+  codexBreakdown,
+  object,
+  sanitizeUsage,
+  sanitizeModelUsage,
+  string,
+  number,
+} from './model-usage-normalize'
 import type { UsageWorkerCommand } from './model-usage-worker-contract'
 import type { ImportResult } from './model-usage-import'
 
@@ -215,6 +222,14 @@ export function usageEvent(value: unknown): unknown | null {
       usage: sanitizeUsage(row.usage),
     }
   }
+  if (event.type === 'codex_token_usage')
+    return {
+      type: 'codex_token_usage',
+      session_id: string(event.session_id),
+      model: string(event.model),
+      last: codexBreakdown(event.last),
+      total: codexBreakdown(event.total),
+    }
   if (event.type === 'stream_event') {
     const stream = object(event.event)
     if (!['message_start', 'message_delta', 'message_stop', 'error'].includes(String(stream.type)))

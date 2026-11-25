@@ -7,6 +7,8 @@ export type GitBackupErrorCode =
   | 'AUTHENTICATION_FAILED'
   | 'ENCRYPTION_UNAVAILABLE'
   | 'REMOTE_CONFLICT'
+  | 'INVALID_REPOSITORY'
+  | 'REPOSITORY_NOT_PRIVATE'
   | 'SENSITIVE_FILES'
   | 'NETWORK_ERROR'
   | 'BACKUP_IN_PROGRESS'
@@ -68,6 +70,23 @@ export interface GitBackupCreateRepositoryResult {
   errorCode?: GitBackupErrorCode
 }
 
+/** A private repository under the saved GitHub account (project download list). */
+export interface GitHubPrivateRepositorySummary {
+  fullName: string
+  name: string
+  cloneUrl: string
+  updatedAt: string | null
+  description: string | null
+}
+
+export interface GitBackupListRepositoriesResult {
+  success: boolean
+  repositories?: GitHubPrivateRepositorySummary[]
+  username?: string
+  error?: string
+  errorCode?: GitBackupErrorCode
+}
+
 export interface GitBackupOperationResult {
   success: boolean
   message?: string
@@ -85,6 +104,8 @@ export interface GitBackupApiContract {
   backup(input: GitBackupRunInput): Promise<GitBackupRunResult>
   /** Creates (or reuses a writable) private GitHub repository with the saved account. */
   createPrivateRepository(name: string): Promise<GitBackupCreateRepositoryResult>
+  /** Private repositories the saved account can write to, newest first (at most 100). */
+  listPrivateRepositories(): Promise<GitBackupListRepositoriesResult>
 }
 
 export const gitBackupIpc = {
@@ -103,6 +124,9 @@ export const gitBackupIpc = {
   backup: defineIpcCall<[input: GitBackupRunInput], GitBackupRunResult>('gitBackup:backup'),
   createPrivateRepository: defineIpcCall<[name: string], GitBackupCreateRepositoryResult>(
     'gitBackup:createPrivateRepository',
+  ),
+  listPrivateRepositories: defineIpcCall<[], GitBackupListRepositoriesResult>(
+    'gitBackup:listPrivateRepositories',
   ),
 } as const
 import { defineIpcCall } from './contract'

@@ -66,6 +66,15 @@ export function registerGitIpc(
     trustedRendererGuard,
     (_event, workspacePath) => service.getSnapshot(workspacePath),
   )
+  registerTrustedIpcContract(
+    gitIpcContracts.previewProjectSync,
+    trustedRendererGuard,
+    (event, path) => {
+      if (fileService && !fileService.canActivateWorkspace(event.sender.id, path))
+        throw Error('请先打开项目')
+      return service.previewProjectSync(path)
+    },
+  )
   registerTrustedIpcContract(gitIpcContracts.getDiff, trustedRendererGuard, (_event, input) =>
     service.getDiff(input),
   )
