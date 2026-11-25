@@ -88,3 +88,11 @@ export function diaryDayLocation(date: ReturnType<typeof diaryDateParts>) {
     matchesName: (name: string) => name.startsWith(prefix) && /^\d{4}[_-]周.*\.md$/.test(name),
   }
 }
+
+/**
+ * The blank template 今天 creates when AI cannot draft right away. A file still exactly equal to
+ * it holds nothing the user wrote, so the daily draft may fill it instead of skipping the day.
+ */
+export function blankDiaryTemplate(date: ReturnType<typeof diaryDateParts>): string {
+  return `# ${date.year}-${date.month}-${date.day} ${date.weekday}\n\n今日体重：\n昨日睡眠：\n昨日花销：\nAI 剩余额度：\n昨日办公地点：\n昨日运动：\n昨日收入：\n昨日身体情况：\n\n## 昨日总结\n\n\n## 今日待做\n\n\n## 强调事项\n\n\n## 今日打卡\n\n按时间、事项、详细记录填写；尚未填写的事实保持空白。\n`
+}
