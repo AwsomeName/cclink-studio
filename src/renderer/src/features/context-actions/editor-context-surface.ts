@@ -23,6 +23,11 @@ export type MarkdownEditorAction =
   | 'outdent-list'
   | 'insert-date-time'
   | 'insert-time'
+  | 'table-add-row-before'
+  | 'table-add-row-after'
+  | 'table-delete-row'
+  | 'table-delete-column'
+  | 'table-delete'
 
 export interface EditorContextSurface {
   isFocused?: () => boolean

@@ -133,3 +133,49 @@ describe('editor context commands on page-embedded editors', () => {
     ).rejects.toThrow('编辑器 Tab 已切换')
   })
 })
+
+describe('Markdown table context commands', () => {
+  function editorContext(table: { headerRow: boolean } | null): CommandContext {
+    return {
+      source: 'context-menu',
+      target: {
+        kind: 'editor',
+        workspaceKey: null,
+        tabId: EMBEDDED_ID,
+        filePath: '/diary/1125_周三.md',
+        editorKind: 'markdown',
+        range: null,
+        dirty: false,
+        table,
+      },
+    } as CommandContext
+  }
+
+  it('shows table commands only inside a table', () => {
+    const deleteRow = command('markdown.table.deleteRow')
+    expect(deleteRow.visible?.(editorContext(null))).toBe(false)
+    expect(deleteRow.visible?.(editorContext({ headerRow: false }))).toBe(true)
+  })
+
+  it('disables deleting the header row but not the whole table', () => {
+    expect(
+      command('markdown.table.deleteRow').enabled?.(editorContext({ headerRow: true })),
+    ).toEqual({
+      enabled: false,
+      reason: '表头行不能单独删除，可删除整个表格',
+    })
+    expect(command('markdown.table.delete').enabled).toBeUndefined()
+  })
+
+  it('runs the table action on the embedded editor surface', async () => {
+    openHome()
+    const runMarkdownAction = vi.fn(() => true)
+    unregister = registerEditorContextSurface(
+      EMBEDDED_ID,
+      { ...surface(), getSelectionText: () => '', runMarkdownAction },
+      { embedded: true },
+    )
+    await command('markdown.table.deleteRow').action(editorContext({ headerRow: false }))
+    expect(runMarkdownAction).toHaveBeenCalledWith('table-delete-row')
+  })
+})

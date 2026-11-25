@@ -1,5 +1,6 @@
 import { Extension, type Editor } from '@tiptap/core'
 import { closeHistory } from '@tiptap/pm/history'
+import { CellSelection } from '@tiptap/pm/tables'
 import type { MarkdownEditorAction } from '../context-actions/editor-context-surface'
 import { useSettingsStore } from '../../stores/settings-store'
 
@@ -112,6 +113,37 @@ function adjustMarkdownTextBlockIndent(
     }
     return true
   })
+}
+
+/** Where the selection sits in a Markdown table, or null outside one. */
+export function markdownTableContext(editor: Editor): { headerRow: boolean } | null {
+  const { selection } = editor.state
+  if (selection instanceof CellSelection) {
+    let headerRow = false
+    selection.forEachCell((cell) => {
+      if (cell.type.name === 'tableHeader') headerRow = true
+    })
+    return { headerRow }
+  }
+  const { $from } = selection
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const name = $from.node(depth).type.name
+    if (name === 'tableHeader') return { headerRow: true }
+    if (name === 'tableCell') return { headerRow: false }
+  }
+  return null
+}
+
+/**
+ * Backspace/Delete on whole selected body rows deletes those rows; prosemirror-tables would only
+ * clear their cells, leaving an empty row behind.
+ */
+export function deleteSelectedMarkdownTableRows(editor: Editor): boolean {
+  const { selection } = editor.state
+  if (!(selection instanceof CellSelection) || !selection.isRowSelection()) return false
+  if (selection.isColSelection()) return false
+  if (markdownTableContext(editor)?.headerRow !== false) return false
+  return editor.chain().focus().deleteRow().run()
 }
 
 function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent'): boolean {
@@ -240,6 +272,18 @@ export function runMarkdownEditorAction(
       return openLinkEditor(editor)
     case 'paragraph':
       return editor.chain().focus().setParagraph().run()
+    case 'table-add-row-before':
+      return editor.chain().focus().addRowBefore().run()
+    case 'table-add-row-after':
+      return editor.chain().focus().addRowAfter().run()
+    case 'table-delete-row':
+      // GFM tables need their header row; only the whole table can go with it.
+      if (markdownTableContext(editor)?.headerRow !== false) return false
+      return editor.chain().focus().deleteRow().run()
+    case 'table-delete-column':
+      return editor.chain().focus().deleteColumn().run()
+    case 'table-delete':
+      return editor.chain().focus().deleteTable().run()
     case 'indent-list':
       return adjustMarkdownListIndent(editor, 'indent')
     case 'outdent-list':
@@ -325,6 +369,8 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
       Space: () => applyMarkdownTaskInputShortcut(this.editor),
       Tab: () => handleMarkdownTabKey(this.editor, 'indent', this.options.tabSize),
       'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
+      Backspace: () => deleteSelectedMarkdownTableRows(this.editor),
+      Delete: () => deleteSelectedMarkdownTableRows(this.editor),
     }
   },
 })

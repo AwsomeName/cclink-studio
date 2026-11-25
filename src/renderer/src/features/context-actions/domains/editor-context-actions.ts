@@ -1,5 +1,6 @@
 import { workspaceRefKey } from '@shared/workspace-ref'
 import type { AgentMountedResource } from '../../../types'
+import type { MarkdownEditorAction } from '../editor-context-surface'
 import { useAgentStore } from '../../../stores/agent-store'
 import { useTabStore } from '../../../stores/tab-store'
 import { useUIStore } from '../../../stores/ui-store'
@@ -102,8 +103,46 @@ async function mountSelection(context?: CommandContext): Promise<void> {
   requestAnimationFrame(focusAgentComposer)
 }
 
+function tableTarget(context?: CommandContext): { headerRow: boolean } | null {
+  const target = editorTarget(context)
+  return target?.kind === 'editor' && target.editorKind === 'markdown'
+    ? (target.table ?? null)
+    : null
+}
+
+function runTableAction(context: CommandContext | undefined, action: MarkdownEditorAction): void {
+  const { surface } = resolveSurface(context)
+  if (!surface.runMarkdownAction?.(action)) throw new Error('光标已不在表格内')
+}
+
+const TABLE_COMMANDS: Array<{ id: string; label: string; action: MarkdownEditorAction }> = [
+  { id: 'markdown.table.addRowBefore', label: '在上方插入行', action: 'table-add-row-before' },
+  { id: 'markdown.table.addRowAfter', label: '在下方插入行', action: 'table-add-row-after' },
+  { id: 'markdown.table.deleteRow', label: '删除行', action: 'table-delete-row' },
+  { id: 'markdown.table.deleteColumn', label: '删除列', action: 'table-delete-column' },
+  { id: 'markdown.table.delete', label: '删除表格', action: 'table-delete' },
+]
+
 export function createEditorContextCommands(): Command[] {
   return [
+    ...TABLE_COMMANDS.map(
+      ({ id, label, action }): Command => ({
+        id,
+        label,
+        contextOnly: true,
+        category: '编辑器',
+        risk: 'local-write',
+        visible: (context) => Boolean(tableTarget(context)),
+        enabled:
+          action === 'table-delete-row'
+            ? (context) => ({
+                enabled: tableTarget(context)?.headerRow === false,
+                reason: '表头行不能单独删除，可删除整个表格',
+              })
+            : undefined,
+        action: (context) => runTableAction(context, action),
+      }),
+    ),
     {
       id: 'editor.cut',
       label: '剪切',
@@ -188,6 +227,15 @@ export function createEditorContextCommands(): Command[] {
 }
 
 export const editorMenuContributions: MenuContribution[] = [
+  ...TABLE_COMMANDS.map(
+    ({ id }, index): MenuContribution => ({
+      id: id.replace('markdown.table.', 'editor.table-'),
+      targetKinds: ['editor'],
+      group: '30-table',
+      order: (index + 1) * 10,
+      commandId: id,
+    }),
+  ),
   {
     id: 'editor.cut',
     targetKinds: ['editor', 'markdown-selection'],

@@ -12,6 +12,9 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
+import { TextSelection } from '@tiptap/pm/state'
+import { CellSelection } from '@tiptap/pm/tables'
+import type { EditorView } from '@tiptap/pm/view'
 import Link from '@tiptap/extension-link'
 import { common, createLowlight } from 'lowlight'
 import { useEditorStore } from '../../stores/editor-store'
@@ -41,6 +44,7 @@ import {
   applyMarkdownLink,
   MarkdownKeyboardShortcuts,
   MarkdownMigratedShortcutBoundary,
+  markdownTableContext,
   runMarkdownEditorAction,
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
@@ -246,9 +250,10 @@ export function MarkdownEditor({
             void openHttpUrlInNewBrowserTab({ ...link, sourceTabId: tabId })
             return true
           },
-          contextmenu: (_view, event) => {
-            const range = currentWysiwygSelection()
+          contextmenu: (view, event) => {
             const element = event.target instanceof Element ? event.target : null
+            placeSelectionInClickedTableCell(view, event, element)
+            const range = currentWysiwygSelection()
             const linkUrl = element?.closest('a')?.getAttribute('href') ?? null
             const imageSrc = element?.closest('img')?.getAttribute('src') ?? null
             event.preventDefault()
@@ -264,6 +269,9 @@ export function MarkdownEditor({
                 dirty: useEditorStore.getState().files[fileKeyRef.current]?.dirty ?? false,
                 linkUrl,
                 imageSrc,
+                table: tiptapEditorRef.current
+                  ? markdownTableContext(tiptapEditorRef.current)
+                  : null,
               },
               x: event.clientX,
               y: event.clientY,
@@ -1369,6 +1377,32 @@ export function MarkdownEditor({
       )}
     </div>
   )
+}
+
+/**
+ * A right-click in a table cell acts on that cell: move the caret there unless the click falls
+ * inside the current selection (a dragged cell selection keeps its rows).
+ */
+function placeSelectionInClickedTableCell(
+  view: EditorView,
+  event: MouseEvent,
+  element: Element | null,
+): void {
+  if (!element?.closest('td, th')) return
+  const hit = view.posAtCoords({ left: event.clientX, top: event.clientY })
+  if (!hit) return
+  const { selection } = view.state
+  if (selection instanceof CellSelection) {
+    let inside = false
+    selection.forEachCell((_cell, pos) => {
+      const resolved = view.state.doc.resolve(pos)
+      if (hit.pos > pos && hit.pos < pos + (resolved.nodeAfter?.nodeSize ?? 0)) inside = true
+    })
+    if (inside) return
+  } else if (!selection.empty && hit.pos >= selection.from && hit.pos <= selection.to) {
+    return
+  }
+  view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(hit.pos))))
 }
 
 function insertImageNode(
