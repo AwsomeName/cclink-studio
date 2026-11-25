@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>我的空间 · 财务与健康</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      h3 {
+        color: #fff;
+        font-size: 15px;
+        margin: 30px 0 8px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1200px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 26px;
+        line-height: 1.7;
+        max-width: 1200px;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .win {
+        width: 1200px;
+        display: flex;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #1e1e1e;
+        min-height: 470px;
+      }
+      .side {
+        width: 200px;
+        background: #252526;
+        border-right: 1px solid #333;
+        padding: 12px 8px;
+        font-size: 15px;
+      }
+      .side .label {
+        color: #999;
+        font-size: 13px;
+        padding: 0 10px 8px;
+      }
+      .side div.item {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 6px;
+        color: #ddd;
+      }
+      .side div.item.on {
+        background: #2a3a4a;
+        box-shadow: inset 3px 0 0 #0e8ae0;
+      }
+      .side div.item.new {
+        outline: 2px dashed #4b8;
+        outline-offset: -2px;
+      }
+      .side .ico {
+        width: 18px;
+        text-align: center;
+        color: #aaa;
+      }
+      .main {
+        flex: 1;
+        padding: 22px 30px;
+      }
+      .main h2 {
+        margin: 0 0 4px;
+        color: #fff;
+        font-size: 20px;
+      }
+      .muted {
+        color: #888;
+        font-size: 12.5px;
+      }
+      .summary {
+        display: flex;
+        gap: 12px;
+        margin: 16px 0;
+      }
+      .stat {
+        border: 1px solid #333;
+        border-radius: 8px;
+        padding: 10px 14px;
+        min-width: 170px;
+        background: #232323;
+      }
+      .stat b {
+        display: block;
+        color: #fff;
+        font-size: 20px;
+        margin-top: 2px;
+      }
+      .ask {
+        outline: 2px dashed #d9a441;
+        outline-offset: 3px;
+        position: relative;
+      }
+      .ask::after {
+        content: attr(data-q);
+        position: absolute;
+        right: -2px;
+        top: -24px;
+        font-size: 11.5px;
+        color: #1e1e1e;
+        background: #d9a441;
+        border-radius: 4px;
+        padding: 1px 6px;
+        white-space: nowrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid #333;
+        vertical-align: top;
+      }
+      thead th {
+        color: #999;
+        font-weight: 500;
+      }
+      tbody th {
+        color: #999;
+        font-weight: 400;
+        width: 70px;
+        white-space: nowrap;
+      }
+      td {
+        color: #eee;
+      }
+      td .src {
+        color: #6a9fd4;
+        font-size: 11.5px;
+        margin-left: 6px;
+      }
+      td.empty {
+        color: #555;
+      }
+      .spark {
+        display: block;
+        margin-top: 6px;
+      }
+      .legend {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        font-size: 12.5px;
+        margin: 0 0 18px;
+      }
+      .legend span::before {
+        content: '';
+        display: inline-block;
+        width: 14px;
+        height: 10px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+      .legend .g::before {
+        outline: 2px dashed #4b8;
+      }
+      .legend .y::before {
+        outline: 2px dashed #d9a441;
+      }
+      .logic {
+        max-width: 1200px;
+        line-height: 1.8;
+        color: #bbb;
+      }
+      .logic li {
+        margin: 3px 0;
+      }
+      .logic b {
+        color: #fff;
+      }
+      .q {
+        border: 1px solid #5a4a2a;
+        background: #2a2418;
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin: 10px 0;
+        max-width: 1200px;
+        line-height: 1.75;
+      }
+      .q b {
+        color: #f0c060;
+      }
+      .q em {
+        color: #8fd19e;
+        font-style: normal;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 · 我的空间新增「财务」「健康」两个侧栏页</h1>
+    <p class="note">
+      数据直接来自每篇日记开头已有的字段行（今日体重、昨日睡眠、昨日花销、昨日收入……），不另建账本、不重复录入。两页都是「按天一行」的汇总表，点任意内容跳到它所在的那篇日记去改。表格内容为示例数据，11/24
+      一行取自截图里的 1125 日记。
+    </p>
+    <div class="legend">
+      <span class="g">新增的侧栏入口</span>
+      <span class="y">需要你拍板的部分（见下方「待确认」）</span>
+    </div>
+
+    <!-- 健康 -->
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item new"><span class="ico">$</span>财务</div>
+        <div class="item new on"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <h2>健康</h2>
+        <div class="muted">
+          汇总日记开头的体重、睡眠、运动、身体情况（最近 120 篇日记）。点击内容打开所在日记修改。
+        </div>
+        <div class="summary ask" data-q="待确认 ②：要不要顶部概览">
+          <div class="stat">
+            <span class="muted">最近体重 · 11/22</span><b>70.4 kg</b>
+            <svg class="spark" width="140" height="26" viewBox="0 0 140 26">
+              <polyline
+                points="0,8 20,10 40,7 60,12 80,14 100,13 120,16 140,18"
+                fill="none"
+                stroke="#6a9fd4"
+                stroke-width="1.6"
+              />
+            </svg>
+          </div>
+          <div class="stat"><span class="muted">近 7 天有运动</span><b>3 天</b></div>
+          <div class="stat"><span class="muted">近 7 天记录睡眠</span><b>6 天</b></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>体重</th>
+              <th>睡眠</th>
+              <th>运动</th>
+              <th>身体情况</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>11/25 周三</th>
+              <td>没称</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th>11/24 周二</th>
+              <td class="empty">—</td>
+              <td>
+                12点睡的，7点醒的，又迷糊到8:10左右才起。感觉沉重。<span class="src">↗ 1125</span>
+              </td>
+              <td>快走 30 分钟</td>
+              <td>有点鼻塞</td>
+            </tr>
+            <tr>
+              <th>11/23 周一</th>
+              <td>70.6 kg</td>
+              <td>11点半睡，7点起</td>
+              <td class="empty">—</td>
+              <td>正常</td>
+            </tr>
+            <tr>
+              <th>11/22 周日</th>
+              <td>70.4 kg</td>
+              <td>1点睡，9点起</td>
+              <td>羽毛球 1 小时</td>
+              <td>膝盖有点酸</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="cap">
+      <b>健康页。</b
+      >「今日体重」记在当天；「昨日睡眠/运动/身体情况」写在第二天的日记里，归到前一天那一行，并用蓝色「↗
+      1125」标出它实际写在哪篇日记里，点它就打开那篇。没填的格子显示「—」。
+    </p>
+
+    <!-- 财务 -->
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item new on"><span class="ico">$</span>财务</div>
+        <div class="item new"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <h2>财务</h2>
+        <div class="muted">
+          汇总日记开头的花销、收入（最近 120 篇日记）。点击内容打开所在日记修改。
+        </div>
+        <div class="summary ask" data-q="待确认 ③：要不要算金额合计">
+          <div class="stat"><span class="muted">11 月已记花销</span><b>¥ 1,286</b></div>
+          <div class="stat"><span class="muted">11 月已记收入</span><b>¥ 0</b></div>
+          <div class="stat"><span class="muted">有文字但没认出金额</span><b>2 条</b></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>花销</th>
+              <th>收入</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>11/24 周二</th>
+              <td>
+                记有喇叭 25 元，与 23 日晚记录是否为同一笔待确认。<span class="src">↗ 1125</span>
+              </td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th>11/23 周一</th>
+              <td>午饭 32，打车 46，晚上喇叭 25<span class="src">↗ 1124</span></td>
+              <td class="empty">—</td>
+            </tr>
+            <tr>
+              <th>11/22 周日</th>
+              <td>超市 186<span class="src">↗ 1123</span></td>
+              <td>闲鱼卖旧键盘 120<span class="src">↗ 1123</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="cap">
+      <b>财务页。</b>和健康页同一套规则：一天一行，原文照抄，不改写、不合并。像「喇叭 25
+      元是不是同一笔」这种待确认的事，仍然在日记里处理，这里只如实呈现。
+    </p>
+
+    <h3>产品逻辑</h3>
+    <ul class="logic">
+      <li>
+        <b>唯一事实源是日记。</b
+        >两页只读不存，不建财务/健康数据库，也不复制一份数据；改内容一律回到日记里改。
+      </li>
+      <li>
+        <b>字段：</b>健康 = 体重、睡眠、运动、身体情况；财务 = 花销、收入。只认日记开头（第一个 ##
+        标题之前）「今日/昨日 + 字段名：内容」这种行，正文里出现的同名行不算。
+      </li>
+      <li>
+        <b>日期归属：</b
+        >「今日」算日记当天，「昨日」算前一天；同一天同一字段被两篇日记都写了，以较新的那篇为准。
+      </li>
+      <li>
+        <b>范围：</b>只在「我的空间」出现，研发日记等其他日记项目没有这两项。读取最近 120 篇日记。
+      </li>
+      <li><b>AI 剩余额度、办公地点</b>不进这两页，仍只留在日记里。</li>
+    </ul>
+
+    <h3>待确认</h3>
+    <div class="q">
+      <b>① 数据从哪来？</b> <em>推荐 A</em><br />
+      A. 从日记开头字段行汇总（上图）：不用改记录习惯，但只能看到你写进日记的东西。<br />
+      B. 两页各自有独立的记录文件（如 财务.md / 健康.md），可以在页面里直接加一笔；日记里的字段行由
+      AI 每天同步过去。更像账本，但多了一份要保持一致的数据。
+    </div>
+    <div class="q">
+      <b>② 健康页顶部要不要概览？</b> <em>推荐要，但只放体重趋势</em><br />
+      体重能直接解析成数字，适合画趋势；睡眠、运动是自由文字，概览只能数「记了几天」，信息量不大。
+    </div>
+    <div class="q">
+      <b>③ 财务页要不要算合计？</b> <em>推荐先不算</em><br />
+      花销是自由文字（「记有喇叭 25 元，与 23
+      日晚是否同一笔待确认」），自动抽数字会把待确认的重复项也算进去，合计看起来精确、其实不可靠。要算的话，得显示「没认出金额
+      N 条」，并且只当参考。
+    </div>
+    <div class="q">
+      <b>④ 表格里点内容的行为</b> <em>推荐跳到「日记」页打开那一篇</em><br />
+      另一种做法是在右侧弹出那篇日记，不离开财务/健康页。
+    </div>
+  </body>
+</html>

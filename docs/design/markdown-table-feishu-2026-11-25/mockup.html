@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Markdown 表格编辑</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      h2 {
+        font-size: 16px;
+        color: #fff;
+        margin: 40px 0 6px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1100px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 10px 0 0;
+        line-height: 1.7;
+        max-width: 1100px;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .frames {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(540px, 1fr));
+        gap: 28px 32px;
+        max-width: 1140px;
+      }
+      .frame-title {
+        color: #fff;
+        font-size: 13.5px;
+        margin: 0 0 8px;
+      }
+      .frame-title span {
+        color: #6aa9ff;
+        margin-right: 6px;
+      }
+      .doc {
+        position: relative;
+        background: #1e1e1e;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        padding: 30px 30px 34px 40px;
+        overflow: visible;
+      }
+      .doc.tall {
+        min-height: 430px;
+      }
+      .doc h3 {
+        margin: 0 0 12px;
+        color: #f1f1f1;
+        font-size: 15px;
+      }
+      /* the table */
+      .t {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #3b3b3b;
+        padding: 8px 10px;
+        text-align: left;
+        vertical-align: top;
+        color: #d6d6d6;
+        line-height: 1.5;
+        position: relative;
+      }
+      th {
+        background: #262626;
+        color: #f0f0f0;
+        font-weight: 600;
+      }
+      th.c,
+      td.c {
+        text-align: center;
+      }
+      .sel {
+        background: rgba(64, 132, 255, 0.16) !important;
+      }
+      .sel-edge {
+        box-shadow: inset 0 0 0 2px #4b8dff;
+      }
+      .muted {
+        color: #777;
+      }
+      /* grips */
+      .rgrip,
+      .cgrip {
+        position: absolute;
+        background: #2d2d2d;
+        border: 1px solid #4a4a4a;
+        border-radius: 4px;
+        color: #9a9a9a;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: -1px;
+      }
+      .rgrip {
+        left: -22px;
+        width: 14px;
+        height: 26px;
+      }
+      .cgrip {
+        top: -20px;
+        height: 14px;
+        width: 30px;
+      }
+      .on {
+        background: #4b8dff;
+        border-color: #4b8dff;
+        color: #fff;
+      }
+      /* insert dots */
+      .plus {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #4b8dff;
+        color: #fff;
+        font-size: 14px;
+        line-height: 17px;
+        text-align: center;
+        box-shadow: 0 0 0 3px #1e1e1e;
+        z-index: 3;
+      }
+      .line-h {
+        position: absolute;
+        height: 2px;
+        background: #4b8dff;
+        z-index: 2;
+      }
+      .line-v {
+        position: absolute;
+        width: 2px;
+        background: #4b8dff;
+        z-index: 2;
+      }
+      .addbar {
+        margin-top: 4px;
+        height: 24px;
+        border: 1px dashed #4a4a4a;
+        border-radius: 5px;
+        color: #8a8a8a;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .addcol {
+        position: absolute;
+        right: -24px;
+        top: 0;
+        bottom: 28px;
+        width: 16px;
+        border: 1px dashed #4a4a4a;
+        border-radius: 5px;
+        color: #8a8a8a;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      /* menus */
+      .menu {
+        position: absolute;
+        z-index: 5;
+        width: 196px;
+        background: #2a2a2a;
+        border: 1px solid #444;
+        border-radius: 8px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+        padding: 5px;
+        font-size: 13px;
+      }
+      .menu div {
+        padding: 6px 10px;
+        border-radius: 5px;
+        color: #e6e6e6;
+        display: flex;
+        justify-content: space-between;
+      }
+      .menu div.hl {
+        background: #3a3a3a;
+      }
+      .menu div.dis {
+        color: #6b6b6b;
+      }
+      .menu div kbd {
+        color: #888;
+        font: 11px -apple-system;
+      }
+      .menu hr {
+        border: 0;
+        border-top: 1px solid #3d3d3d;
+        margin: 4px 2px;
+      }
+      .menu .why {
+        color: #8b8b8b;
+        font-size: 11.5px;
+        padding: 0 10px 5px;
+        display: block;
+      }
+      .seg {
+        display: flex;
+        gap: 4px;
+        padding: 4px 10px 6px;
+      }
+      .seg span {
+        flex: 1;
+        text-align: center;
+        border: 1px solid #474747;
+        border-radius: 4px;
+        padding: 2px 0;
+        font-size: 12px;
+        color: #cfcfcf;
+      }
+      .seg span.on {
+        background: #3b5f9e;
+        border-color: #4b8dff;
+      }
+      .float {
+        position: absolute;
+        z-index: 5;
+        display: flex;
+        gap: 2px;
+        background: #2a2a2a;
+        border: 1px solid #444;
+        border-radius: 7px;
+        padding: 3px;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+        font-size: 12.5px;
+      }
+      .float span {
+        padding: 4px 9px;
+        border-radius: 4px;
+        color: #e0e0e0;
+        white-space: nowrap;
+      }
+      .float span.dim {
+        color: #8a8a8a;
+      }
+      .ghost {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 38px;
+        background: rgba(75, 141, 255, 0.18);
+        border: 1px solid #4b8dff;
+        border-radius: 4px;
+        color: #cfe0ff;
+        font-size: 13px;
+        padding: 9px 10px;
+        z-index: 4;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+      }
+      .toast {
+        display: inline-block;
+        margin-top: 12px;
+        background: #2b2b2b;
+        border: 1px solid #474747;
+        border-radius: 6px;
+        padding: 7px 12px;
+        font-size: 12.5px;
+        color: #ddd;
+      }
+      .toast b {
+        color: #8fb8ff;
+        font-weight: 500;
+      }
+      .cursor {
+        display: inline-block;
+        width: 1px;
+        height: 14px;
+        background: #fff;
+        vertical-align: -2px;
+      }
+      /* logic tables */
+      .logic {
+        border-collapse: collapse;
+        width: 100%;
+        max-width: 1140px;
+        font-size: 13px;
+        table-layout: auto;
+      }
+      .logic th,
+      .logic td {
+        border: 1px solid #333;
+        padding: 8px 10px;
+        vertical-align: top;
+        line-height: 1.6;
+      }
+      .logic th {
+        background: #1f1f1f;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 11.5px;
+        padding: 1px 7px;
+        border-radius: 10px;
+        border: 1px solid #555;
+        color: #bbb;
+        margin-right: 4px;
+      }
+      .p0 {
+        border-color: #4b8dff;
+        color: #8fb8ff;
+      }
+      .p1 {
+        border-color: #9a7b2f;
+        color: #e1c06b;
+      }
+      .no {
+        border-color: #7a3b3b;
+        color: #e38c8c;
+      }
+      .decide {
+        background: #1c2433;
+        border: 1px solid #2f4a78;
+        border-radius: 8px;
+        padding: 14px 18px;
+        max-width: 1100px;
+        line-height: 1.8;
+      }
+      .decide b {
+        color: #fff;
+      }
+      .decide .rec {
+        color: #8fb8ff;
+      }
+      code {
+        font:
+          12px ui-monospace,
+          Menlo,
+          monospace;
+        color: #e6c07b;
+      }
+      ol,
+      ul {
+        line-height: 1.8;
+        max-width: 1100px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Markdown 表格：飞书式编辑体验</h1>
+    <p class="note">
+      目标：在 Studio 的 Markdown
+      文档（含“我的空间”日记）里，像飞书文档那样直接用鼠标增删、移动行列，
+      不必记右键菜单或快捷键。边界：<b>文件仍是标准 Markdown 表格</b>，任何 Markdown
+      存不下的东西（合并单元格、颜色、列宽、单元格内换行）都不提供，保存后不会悄悄丢失。
+      所有操作和现有右键菜单是同一组命令，只是多了可见的入口。
+    </p>
+
+    <h2>界面状态</h2>
+    <div class="frames">
+      <!-- 1 hover -->
+      <div>
+        <p class="frame-title"><span>①</span>悬停：出现行/列手柄和插入点</p>
+        <div class="doc">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <div class="cgrip" style="left: 18%">⋯</div>
+            <div class="cgrip" style="left: 52%">⋯</div>
+            <div class="cgrip" style="left: 84%">⋯</div>
+            <div class="rgrip" style="top: 44px">⋮⋮</div>
+            <div class="plus" style="left: -27px; top: 74px">+</div>
+            <div class="line-h" style="left: 0; right: 0; top: 82px; opacity: 0.55"></div>
+            <div class="plus" style="left: 33.3%; top: -26px; margin-left: -9px">+</div>
+            <table>
+              <tr>
+                <th>事项</th>
+                <th>进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>统一云端与登录已开始推进。</td>
+                <td>本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td>硬件—喇叭</td>
+                <td>已购买新喇叭。</td>
+                <td>继续选型比较。</td>
+              </tr>
+            </table>
+            <div class="addbar">+ 新增一行</div>
+            <div class="addcol">+</div>
+          </div>
+        </div>
+        <p class="cap">
+          鼠标在表格上时：每列顶部出现<b>列手柄</b>，光标所在行左侧出现<b>行手柄</b>；靠近行/列分隔线时出现蓝色
+          <b>“+”</b
+          >，点一下就在该位置插入一行/一列。底部“新增一行”、右侧“+”追加到末尾。鼠标离开表格后全部隐藏，正文阅读不受干扰。
+        </p>
+      </div>
+
+      <!-- 2 column selected -->
+      <div>
+        <p class="frame-title"><span>②</span>点列手柄：选中整列 + 列菜单</p>
+        <div class="doc tall">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <div class="cgrip on" style="left: 52%">⋯</div>
+            <table>
+              <tr>
+                <th>事项</th>
+                <th class="sel sel-edge">进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td class="sel">统一云端与登录已开始推进。</td>
+                <td>本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td>硬件—喇叭</td>
+                <td class="sel">已购买新喇叭。</td>
+                <td>继续选型比较。</td>
+              </tr>
+            </table>
+            <div class="menu" style="left: 42%; top: 6px">
+              <div class="hl">左侧插入列</div>
+              <div>右侧插入列</div>
+              <hr />
+              <span class="why">对齐（写入 Markdown）</span>
+              <div class="seg"><span class="on">左</span><span>中</span><span>右</span></div>
+              <hr />
+              <div>按此列升序</div>
+              <div>按此列降序</div>
+              <hr />
+              <div>清空此列内容</div>
+              <div>删除列 <kbd>⌫</kbd></div>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          整列高亮，菜单贴着手柄弹出。<b>对齐</b>直接写成 <code>:---</code> / <code>:---:</code> /
+          <code>---:</code>，打开就能看到。<b>排序</b>只重排表头以下的行，⌘Z 可撤销。按 ⌫
+          等同“删除列”。
+        </p>
+      </div>
+
+      <!-- 3 row selected -->
+      <div>
+        <p class="frame-title"><span>③</span>点行手柄：选中整行 + 行菜单</p>
+        <div class="doc tall">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <div class="rgrip on" style="top: 44px">⋮⋮</div>
+            <table>
+              <tr>
+                <th>事项</th>
+                <th>进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td class="sel sel-edge">统一账号</td>
+                <td class="sel">统一云端与登录已开始推进。</td>
+                <td class="sel">本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td>硬件—喇叭</td>
+                <td>已购买新喇叭。</td>
+                <td>继续选型比较。</td>
+              </tr>
+            </table>
+            <div class="menu" style="left: -10px; top: 82px">
+              <div class="hl">上方插入行</div>
+              <div>下方插入行</div>
+              <div>复制此行到下方</div>
+              <hr />
+              <div>上移 <kbd>⌥↑</kbd></div>
+              <div>下移 <kbd>⌥↓</kbd></div>
+              <hr />
+              <div>清空此行内容</div>
+              <div>删除行 <kbd>⌫</kbd></div>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          整行高亮；按 ⌫
+          删除整行（今天已经支持）。<b>表头行</b>的菜单里“删除行”“上移/下移”置灰，并说明“Markdown
+          表格必须有表头，可删除整个表格”。
+        </p>
+      </div>
+
+      <!-- 4 drag reorder -->
+      <div>
+        <p class="frame-title"><span>④</span>拖动手柄：调整行/列顺序</p>
+        <div class="doc">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <div class="rgrip on" style="top: 66px">⋮⋮</div>
+            <table>
+              <tr>
+                <th>事项</th>
+                <th>进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>统一云端与登录已开始推进。</td>
+                <td>本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td class="muted">硬件—喇叭</td>
+                <td class="muted">已购买新喇叭。</td>
+                <td class="muted">继续选型比较。</td>
+              </tr>
+              <tr>
+                <td>外壳</td>
+                <td>已核对本版结构。</td>
+                <td>等喇叭后继续。</td>
+              </tr>
+            </table>
+            <div class="line-h" style="left: 0; right: 0; top: 34px"></div>
+            <div class="ghost" style="top: 44px; left: 24px; right: -12px">
+              硬件—喇叭　　已购买新喇叭。　　继续选型比较。
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          按住行手柄上下拖，蓝线指示落点，松手即移动；列手柄左右拖同理。不能拖到表头之上。拖动是一次可撤销的编辑。
+        </p>
+      </div>
+
+      <!-- 5 cell range -->
+      <div>
+        <p class="frame-title"><span>⑤</span>框选单元格：批量清空 / 复制</p>
+        <div class="doc">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <table>
+              <tr>
+                <th>事项</th>
+                <th>进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td class="sel sel-edge">统一云端与登录已开始推进。</td>
+                <td class="sel sel-edge">本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td>硬件—喇叭</td>
+                <td class="sel sel-edge">已购买新喇叭。</td>
+                <td class="sel sel-edge">继续选型比较。</td>
+              </tr>
+            </table>
+            <div class="float" style="left: 36%; top: 128px">
+              <span>复制</span><span>剪切</span><span>清空内容</span><span class="dim">｜</span
+              ><span>发给会话</span>
+            </div>
+          </div>
+        </div>
+        <p class="cap">
+          在单元格间拖动选出矩形区域，浮条提供复制/剪切/清空/发给会话。复制出去是制表符分隔，粘到飞书、Excel
+          能直接成表；⌫ 只清空内容，不删结构（与飞书一致）。
+        </p>
+      </div>
+
+      <!-- 6 editing + paste -->
+      <div>
+        <p class="frame-title"><span>⑥</span>单元格内编辑与粘贴表格</p>
+        <div class="doc">
+          <h3>眼镜项目</h3>
+          <div class="t">
+            <table>
+              <tr>
+                <th>事项</th>
+                <th>进展记录</th>
+                <th>计划</th>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>统一云端与登录已开始推进。<span class="cursor"></span></td>
+                <td>本周理顺方案。</td>
+              </tr>
+              <tr>
+                <td>新喇叭 A</td>
+                <td>阻抗 8Ω</td>
+                <td>周四测</td>
+              </tr>
+              <tr>
+                <td>新喇叭 B</td>
+                <td>阻抗 4Ω</td>
+                <td>周五测</td>
+              </tr>
+            </table>
+          </div>
+          <div class="toast">已从剪贴板粘贴 <b>2 行 × 3 列</b>，表格自动扩展了 2 行 · ⌘Z 撤销</div>
+        </div>
+        <p class="cap">
+          <b>Tab / ⇧Tab</b> 左右跳格，最后一格 Tab 新增一行（已有）；<b>Enter</b>
+          跳到下方单元格，最后一行 Enter 新增一行；<b>↑↓</b> 在单元格之间移动。从飞书/Excel
+          复制的区域粘进表格时按格填入，超出部分自动扩行列；在表格外粘贴则新建表格。
+        </p>
+      </div>
+    </div>
+
+    <h2>能力范围</h2>
+    <table class="logic">
+      <tr>
+        <th style="width: 22%">能力</th>
+        <th style="width: 12%">首版</th>
+        <th>Markdown 落盘方式 / 说明</th>
+      </tr>
+      <tr>
+        <td>行列手柄、插入“+”、底部/右侧追加</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>普通行列增删，标准 GFM。</td>
+      </tr>
+      <tr>
+        <td>行/列菜单（插入、清空、删除）</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>与右键菜单共用命令（统一上下文操作系统），不新增第二套实现。</td>
+      </tr>
+      <tr>
+        <td>列对齐 左/中/右</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>写入分隔行 <code>:---</code> / <code>:---:</code> / <code>---:</code>。</td>
+      </tr>
+      <tr>
+        <td>拖动调整行/列顺序、⌥↑↓ 移动行</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>只改行列顺序；表头固定在第一行。</td>
+      </tr>
+      <tr>
+        <td>框选单元格浮条、复制为表格</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>剪贴板同时写制表符文本和 HTML 表格。</td>
+      </tr>
+      <tr>
+        <td>Enter 跳下一格、↑↓ 跨格</td>
+        <td><span class="pill p0">本次</span></td>
+        <td>见待确认 D2。</td>
+      </tr>
+      <tr>
+        <td>按列排序</td>
+        <td><span class="pill p1">下一步</span></td>
+        <td>重排数据行；中文按拼音、数字按数值。见 D3。</td>
+      </tr>
+      <tr>
+        <td>从飞书 / Excel 粘贴区域</td>
+        <td><span class="pill p1">下一步</span></td>
+        <td>解析剪贴板 HTML 表格或制表符文本，按格填入。</td>
+      </tr>
+      <tr>
+        <td>拖动调整列宽</td>
+        <td><span class="pill p1">待定</span></td>
+        <td>Markdown 没有列宽。见 D1。</td>
+      </tr>
+      <tr>
+        <td>合并单元格、单元格颜色、冻结、筛选、公式</td>
+        <td><span class="pill no">不做</span></td>
+        <td>
+          标准 Markdown
+          存不下；做了会在保存或别的工具里丢失。需要时应换成多维表格类文件，不在本次范围。
+        </td>
+      </tr>
+      <tr>
+        <td>单元格内换行、列表、多段落</td>
+        <td><span class="pill no">不做</span></td>
+        <td>
+          GFM 单元格只能单行；<code>&lt;br&gt;</code> 属于原始 HTML，会让文档落入“范围外语法”。
+        </td>
+      </tr>
+    </table>
+
+    <h2>待你确认</h2>
+    <div class="decide">
+      <b>D1 列宽拖动：</b>Markdown 没有列宽。①不提供拖动（<span class="rec">推荐</span
+      >，表格按内容自动排版，和飞书“自适应”一致）；
+      ②允许拖动但只在本次打开有效，关闭即恢复；③把列宽写进文件里的 CCLink
+      注释——其他工具看不到、会产生
+      diff。现在编辑器里其实已经能拖列宽但不会保存，属于①②之间的不一致状态。<br />
+      <b>D2 Enter 行为：</b>①跳到下方单元格，最后一行新增一行（<span class="rec">推荐</span
+      >，类似表格软件，且不会产生存不下的换行）；②像飞书那样在格内换行——需要写
+      <code>&lt;br&gt;</code>，会让整篇文档变成“范围外语法”只能源码编辑，不推荐。<br />
+      <b>D3 首版是否带排序和粘贴：</b>建议首版先做 ①–⑤ 的手柄、插入、菜单、拖动、框选；排序和 Excel
+      粘贴放第二步，避免一次铺太大。<br />
+      <b>D4 入口是否也出现在“我的空间”日记里：</b
+      >建议是（日记里的项目进度表正是主要使用场景），和普通 Markdown Tab 同一套实现。
+    </div>
+
+    <h2>验收（你在真实应用里能做到）</h2>
+    <ol>
+      <li>打开今天的日记，鼠标移到项目进度表上，能看到行列手柄和“+”；移开后消失。</li>
+      <li>
+        点两行之间的“+”插入一行、点“新增一行”追加一行；点列之间的“+”插入一列。保存后在源码/Git
+        里是标准 Markdown 表格。
+      </li>
+      <li>点“计划”列手柄 → 设为居中，重开文件仍居中，源码分隔行为 <code>:---:</code>。</li>
+      <li>拖“硬件—喇叭”这一行到第一行数据位置，⌘Z 能撤回；不能拖到表头之上。</li>
+      <li>框选 2×2 单元格 → 复制 → 粘到飞书，得到 2×2 表格；⌫ 只清空这 4 格。</li>
+      <li>表头行的“删除行”“上移”置灰且有原因提示。</li>
+      <li>以上任一操作后，表格以外的内容逐字不变（沿用 A1 保真检查）。</li>
+    </ol>
+  </body>
+</html>
