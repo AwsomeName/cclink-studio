@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>我的空间 · 财务与健康 v3</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+        padding: 28px;
+      }
+      h1 {
+        font-size: 20px;
+        color: #fff;
+        margin: 0 0 4px;
+      }
+      h3 {
+        color: #fff;
+        font-size: 15px;
+        margin: 30px 0 8px;
+      }
+      .note {
+        color: #999;
+        margin: 0 0 18px;
+        line-height: 1.7;
+        max-width: 1200px;
+      }
+      .cap {
+        color: #aaa;
+        font-size: 13px;
+        margin: 8px 0 26px;
+        line-height: 1.7;
+        max-width: 1200px;
+      }
+      .cap b {
+        color: #fff;
+      }
+      .win {
+        width: 1200px;
+        display: flex;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #1e1e1e;
+        min-height: 430px;
+      }
+      .side {
+        width: 200px;
+        flex-shrink: 0;
+        background: #252526;
+        border-right: 1px solid #333;
+        padding: 12px 8px;
+        font-size: 15px;
+      }
+      .side .label {
+        color: #999;
+        font-size: 13px;
+        padding: 0 10px 8px;
+      }
+      .side div.item {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 6px;
+        color: #ddd;
+      }
+      .side div.item.on {
+        background: #2a3a4a;
+        box-shadow: inset 3px 0 0 #0e8ae0;
+      }
+      .side .ico {
+        width: 18px;
+        text-align: center;
+        color: #aaa;
+      }
+      .main {
+        flex: 1;
+        min-width: 0;
+        padding: 22px 30px;
+      }
+      .head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+      }
+      .head h2 {
+        margin: 0;
+        color: #fff;
+        font-size: 20px;
+      }
+      .head .gap {
+        flex: 1;
+      }
+      .link {
+        color: #6a9fd4;
+        font-size: 12.5px;
+      }
+      .muted {
+        color: #888;
+        font-size: 12.5px;
+      }
+      .add {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin: 16px 0 14px;
+        padding: 10px 12px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #232323;
+        outline: 2px dashed #4b8;
+        outline-offset: 3px;
+      }
+      .add input {
+        background: #1a1a1a;
+        border: 1px solid #3c3c3c;
+        border-radius: 5px;
+        color: #eee;
+        padding: 5px 8px;
+        font: inherit;
+        font-size: 13px;
+        min-width: 0;
+      }
+      .add input::placeholder {
+        color: #666;
+      }
+      .add .date {
+        width: 110px;
+      }
+      .add .grow {
+        flex: 1;
+      }
+      .add button {
+        background: #0e639c;
+        color: #fff;
+        border: 0;
+        border-radius: 5px;
+        padding: 6px 14px;
+        font: inherit;
+        font-size: 13px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid #333;
+        vertical-align: top;
+      }
+      thead th {
+        color: #999;
+        font-weight: 500;
+      }
+      tbody th {
+        color: #999;
+        font-weight: 400;
+        width: 84px;
+        white-space: nowrap;
+      }
+      td {
+        color: #eee;
+      }
+      td.empty {
+        color: #555;
+      }
+      td.src {
+        width: 96px;
+        white-space: nowrap;
+      }
+      .tag {
+        font-size: 11.5px;
+        border-radius: 4px;
+        padding: 1px 7px;
+      }
+      .tag.diary {
+        color: #8fb8e0;
+        background: rgba(106, 159, 212, 0.16);
+      }
+      .tag.own {
+        color: #8fd19e;
+        background: rgba(120, 200, 140, 0.16);
+      }
+      tr.fresh td,
+      tr.fresh th {
+        background: rgba(120, 200, 140, 0.07);
+      }
+      .file {
+        width: 1200px;
+        border: 1px solid #3a3a3a;
+        border-radius: 10px;
+        background: #1e1e1e;
+        padding: 14px 20px;
+        font:
+          12.5px ui-monospace,
+          Menlo,
+          monospace;
+        color: #ccc;
+        line-height: 1.7;
+        white-space: pre;
+      }
+      .logic {
+        max-width: 1200px;
+        line-height: 1.8;
+        color: #bbb;
+      }
+      .logic li {
+        margin: 3px 0;
+      }
+      .logic b {
+        color: #fff;
+      }
+
+      .chart {
+        position: relative;
+        margin: 4px 0 18px;
+        padding: 12px 14px 6px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #1a1a19;
+        outline: 2px dashed #4b8;
+        outline-offset: 3px;
+      }
+      .chart-head {
+        display: flex;
+        gap: 14px;
+        align-items: baseline;
+        font-size: 12.5px;
+        color: #c3c2b7;
+        margin-bottom: 4px;
+      }
+      .chart-head b {
+        color: #f0efec;
+        font-weight: 500;
+      }
+      .chart-head .gap {
+        flex: 1;
+      }
+      .key {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #c3c2b7;
+      }
+      .key i {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        display: inline-block;
+      }
+      .tip {
+        position: absolute;
+        background: #2a2a28;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 12px;
+        color: #f0efec;
+        line-height: 1.6;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+        pointer-events: none;
+        white-space: nowrap;
+      }
+      .tip span {
+        color: #c3c2b7;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 v3 · 在 v2 基础上加：体重折线图、花销/收入柱状图</h1>
+    <p class="note">
+      按你的意见改：页面优先汇总日记里的数据，同时每页有一份自己的记录文件，可以在页面顶部直接添一条。两种来源放在同一张表里，用「日记
+      /
+      手记」标签区分。为了简单，不做概览卡片和合计数字，只加两张图：健康页一条体重折线，财务页每天花销、收入的柱子；修改、删除自己的记录就打开记录文件改。表格内容为示例数据。
+    </p>
+
+    <!-- 健康 -->
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item"><span class="ico">$</span>财务</div>
+        <div class="item on"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <div class="head">
+          <h2>健康</h2>
+          <span class="muted">日记开头的体重、睡眠、运动、身体情况 + 自己记的</span>
+          <span class="gap"></span>
+          <span class="link">打开记录文件 健康.md ›</span>
+        </div>
+        <div class="add">
+          <input class="date" value="11/25 周三" />
+          <input placeholder="体重" style="width: 90px" />
+          <input class="grow" placeholder="睡眠" />
+          <input class="grow" placeholder="运动" value="晚上跑步 5 公里" />
+          <input class="grow" placeholder="身体情况" />
+          <button>记一条</button>
+        </div>
+        <div class="chart">
+          <div class="chart-head">
+            <b>体重</b><span>近 90 天 · kg</span><span class="gap"></span
+            ><span>没称、没写的日子不画点，线直接连到下一次</span>
+          </div>
+          <svg width="100%" viewBox="0 0 1060 170">
+            <line x1="44" x2="1048" y1="144.0" y2="144.0" stroke="#2c2c2a" />
+            <text x="36" y="148.0" fill="#898781" font-size="11" text-anchor="end">70</text>
+            <line x1="44" x2="1048" y1="117.2" y2="117.2" stroke="#2c2c2a" />
+            <text x="36" y="121.2" fill="#898781" font-size="11" text-anchor="end">70.5</text>
+            <line x1="44" x2="1048" y1="90.4" y2="90.4" stroke="#2c2c2a" />
+            <text x="36" y="94.4" fill="#898781" font-size="11" text-anchor="end">71</text>
+            <line x1="44" x2="1048" y1="63.6" y2="63.6" stroke="#2c2c2a" />
+            <text x="36" y="67.6" fill="#898781" font-size="11" text-anchor="end">71.5</text>
+            <line x1="44" x2="1048" y1="36.8" y2="36.8" stroke="#2c2c2a" />
+            <text x="36" y="40.8" fill="#898781" font-size="11" text-anchor="end">72</text>
+            <line x1="44" x2="1048" y1="10.0" y2="10.0" stroke="#2c2c2a" />
+            <text x="36" y="14.0" fill="#898781" font-size="11" text-anchor="end">72.5</text>
+            <line x1="44" x2="1048" y1="144" y2="144" stroke="#383835" />
+            <text x="89.1" y="162" fill="#898781" font-size="11" text-anchor="middle">9/1</text>
+            <text x="258.3" y="162" fill="#898781" font-size="11" text-anchor="middle">9/16</text>
+            <text x="427.6" y="162" fill="#898781" font-size="11" text-anchor="middle">10/1</text>
+            <text x="596.8" y="162" fill="#898781" font-size="11" text-anchor="middle">10/16</text>
+            <text x="766.0" y="162" fill="#898781" font-size="11" text-anchor="middle">10/31</text>
+            <text x="935.2" y="162" fill="#898781" font-size="11" text-anchor="middle">11/15</text>
+            <text x="1048.0" y="162" fill="#898781" font-size="11" text-anchor="middle">11/25</text>
+            <polyline
+              points="44.0,20.7 77.8,31.4 100.4,15.4 134.2,36.8 168.1,47.5 190.7,42.2 224.5,58.2 269.6,52.9 303.5,69.0 337.3,63.6 382.4,79.7 416.3,74.3 450.1,90.4 495.2,85.0 540.4,95.8 574.2,79.7 619.3,101.1 664.4,95.8 698.3,106.5 743.4,95.8 788.5,111.8 833.7,101.1 878.8,117.2 923.9,106.5 969.0,117.2 1014.2,122.6 1025.4,111.8"
+              fill="none"
+              stroke="#3987e5"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+            <circle cx="44.0" cy="20.7" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="77.8" cy="31.4" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="100.4" cy="15.4" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="134.2" cy="36.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="168.1" cy="47.5" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="190.7" cy="42.2" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="224.5" cy="58.2" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="269.6" cy="52.9" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="303.5" cy="69.0" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="337.3" cy="63.6" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="382.4" cy="79.7" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="416.3" cy="74.3" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="450.1" cy="90.4" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="495.2" cy="85.0" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="540.4" cy="95.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="574.2" cy="79.7" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="619.3" cy="101.1" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="664.4" cy="95.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="698.3" cy="106.5" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="743.4" cy="95.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="788.5" cy="111.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="833.7" cy="101.1" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="878.8" cy="117.2" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="923.9" cy="106.5" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="969.0" cy="117.2" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="1014.2" cy="122.6" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <circle cx="1025.4" cy="111.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+            <line
+              x1="1025.4"
+              x2="1025.4"
+              y1="10"
+              y2="144"
+              stroke="#898781"
+              stroke-dasharray="3 3"
+            />
+            <circle cx="1025.4" cy="111.8" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2" />
+          </svg>
+          <div class="tip" style="right: 70px; top: 82px">
+            11/23 周一 · <b>70.6 kg</b><br /><span>日记 1124「今日体重：70.6kg」</span>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>体重</th>
+              <th>睡眠</th>
+              <th>运动</th>
+              <th>身体情况</th>
+              <th>来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="fresh">
+              <th>11/25 周三</th>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td>晚上跑步 5 公里</td>
+              <td class="empty">—</td>
+              <td class="src"><span class="tag own">手记</span></td>
+            </tr>
+            <tr>
+              <th>11/25 周三</th>
+              <td>没称</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td class="src"><span class="tag diary">日记 1125</span></td>
+            </tr>
+            <tr>
+              <th>11/24 周二</th>
+              <td class="empty">—</td>
+              <td>12点睡的，7点醒的，又迷糊到8:10左右才起。感觉沉重。</td>
+              <td>快走 30 分钟</td>
+              <td>有点鼻塞</td>
+              <td class="src"><span class="tag diary">日记 1125</span></td>
+            </tr>
+            <tr>
+              <th>11/23 周一</th>
+              <td>70.6 kg</td>
+              <td>11点半睡，7点起</td>
+              <td class="empty">—</td>
+              <td>正常</td>
+              <td class="src"><span class="tag diary">日记 1124</span></td>
+            </tr>
+            <tr>
+              <th>11/22 周日</th>
+              <td>70.4 kg</td>
+              <td class="empty">—</td>
+              <td class="empty">—</td>
+              <td>体检：血压 118/76</td>
+              <td class="src"><span class="tag own">手记</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="cap">
+      <b>健康页。</b>顶部一行就是「记一条」：日期默认今天，填哪格算哪格，点「记一条」写进
+      健康.md，新行马上出现在表里，有体重的话折线图也多一个点（绿色底只在刚添加时闪一下）。日记行和手记行同一天各占一行，不合并、不互相覆盖。点「日记
+      1125」打开那篇日记；点「手记」打开 健康.md。
+    </p>
+
+    <!-- 财务 -->
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item on"><span class="ico">$</span>财务</div>
+        <div class="item"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <div class="head">
+          <h2>财务</h2>
+          <span class="muted">日记开头的花销、收入 + 自己记的</span>
+          <span class="gap"></span>
+          <span class="link">打开记录文件 财务.md ›</span>
+        </div>
+        <div class="add">
+          <input class="date" value="11/25 周三" />
+          <input class="grow" placeholder="花销" value="午饭 28" />
+          <input class="grow" placeholder="收入" />
+          <button>记一条</button>
+        </div>
+        <div class="chart">
+          <div class="chart-head">
+            <b>每天花销 / 收入</b><span>近 30 天 · 元</span><span class="gap"></span
+            ><span class="key"><i style="background: #3987e5"></i>花销</span
+            ><span class="key"><i style="background: #d95926"></i>收入</span
+            ><span>？= 写了但没认出金额</span>
+          </div>
+          <svg width="100%" viewBox="0 0 1060 170">
+            <line x1="44" x2="1048" y1="144.0" y2="144.0" stroke="#2c2c2a" />
+            <text x="36" y="148.0" fill="#898781" font-size="11" text-anchor="end">0</text>
+            <line x1="44" x2="1048" y1="99.3" y2="99.3" stroke="#2c2c2a" />
+            <text x="36" y="103.3" fill="#898781" font-size="11" text-anchor="end">100</text>
+            <line x1="44" x2="1048" y1="54.7" y2="54.7" stroke="#2c2c2a" />
+            <text x="36" y="58.7" fill="#898781" font-size="11" text-anchor="end">200</text>
+            <line x1="44" x2="1048" y1="10.0" y2="10.0" stroke="#2c2c2a" />
+            <text x="36" y="14.0" fill="#898781" font-size="11" text-anchor="end">300</text>
+            <line x1="44" x2="1048" y1="144" y2="144" stroke="#383835" />
+            <path
+              d="M47.0,144 v-19.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v19.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M80.5,144 v-19.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v19.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M113.9,144 v-103.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v103.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M147.4,144 v-19.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v19.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M180.9,144 v-52.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v52.3 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M214.3,144 v-35.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v35.3 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M247.8,144 v-52.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v52.3 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M281.3,144 v-35.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v35.3 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M362.9,144 v-130.0 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v130.0 z"
+              fill="#d95926"
+            />
+            <path
+              d="M381.7,144 v-16.5 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v16.5 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M415.1,144 v-35.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v35.3 z"
+              fill="#3987e5"
+            />
+            <text x="462.3" y="139" fill="#898781" font-size="11" text-anchor="middle">?</text>
+            <path
+              d="M482.1,144 v-79.1 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v79.1 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M582.5,144 v-103.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v103.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M615.9,144 v-103.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v103.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M649.4,144 v-16.5 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v16.5 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M682.9,144 v-79.1 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v79.1 z"
+              fill="#3987e5"
+            />
+            <text x="730.1" y="139" fill="#898781" font-size="11" text-anchor="middle">?</text>
+            <path
+              d="M749.8,144 v-79.1 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v79.1 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M783.3,144 v-35.3 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v35.3 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M816.7,144 v-16.5 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v16.5 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M850.2,144 v-103.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v103.2 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M883.7,144 v-22.8 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v22.8 z"
+              fill="#3987e5"
+            />
+            <path
+              d="M931.9,144 v-49.6 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v49.6 z"
+              fill="#d95926"
+            />
+            <path
+              d="M950.6,144 v-42.0 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v42.0 z"
+              fill="#3987e5"
+            />
+            <path d="M984.1,144 v-7.2 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v7.2 z" fill="#3987e5" />
+            <path
+              d="M1017.5,144 v-8.5 q0,-4.0 4.0,-4.0 h4.7 q4.0,0 4.0,4.0 v8.5 z"
+              fill="#3987e5"
+            />
+            <rect x="948.6" y="10" width="31.5" height="134" fill="rgba(255,255,255,0.05)" rx="3" />
+            <text x="194.6" y="162" fill="#898781" font-size="11" text-anchor="middle">10/31</text>
+            <text x="361.9" y="162" fill="#898781" font-size="11" text-anchor="middle">11/5</text>
+            <text x="529.3" y="162" fill="#898781" font-size="11" text-anchor="middle">11/10</text>
+            <text x="696.6" y="162" fill="#898781" font-size="11" text-anchor="middle">11/15</text>
+            <text x="863.9" y="162" fill="#898781" font-size="11" text-anchor="middle">11/20</text>
+            <text x="1031.3" y="162" fill="#898781" font-size="11" text-anchor="middle">11/25</text>
+          </svg>
+          <div class="tip" style="right: 130px; top: 40px">
+            11/23 周一 · 花销 <b>103 元</b><br /><span
+              >日记 1124「午饭 32，打车 46，晚上喇叭 25」</span
+            >
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>花销</th>
+              <th>收入</th>
+              <th>来源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="fresh">
+              <th>11/25 周三</th>
+              <td>午饭 28</td>
+              <td class="empty">—</td>
+              <td class="src"><span class="tag own">手记</span></td>
+            </tr>
+            <tr>
+              <th>11/24 周二</th>
+              <td>记有喇叭 25 元，与 23 日晚记录是否为同一笔待确认。</td>
+              <td class="empty">—</td>
+              <td class="src"><span class="tag diary">日记 1125</span></td>
+            </tr>
+            <tr>
+              <th>11/23 周一</th>
+              <td>午饭 32，打车 46，晚上喇叭 25</td>
+              <td class="empty">—</td>
+              <td class="src"><span class="tag diary">日记 1124</span></td>
+            </tr>
+            <tr>
+              <th>11/22 周日</th>
+              <td class="empty">—</td>
+              <td>闲鱼卖旧键盘 120</td>
+              <td class="src"><span class="tag own">手记</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="cap">
+      <b>财务页。</b
+      >同一套规则，字段换成花销、收入。柱子是每天认出来的金额：同一天日记和手记的金额加在一起。鼠标停在柱子上显示当天原文；写了但认不出金额的日子在底部标「？」，不瞎猜。图上不显示合计数字。
+    </p>
+
+    <h3>记录文件长这样（我的空间/财务.md，普通 Markdown，可手改，随「同步」进 Git）</h3>
+    <div class="file">
+      # 财务 | 日期 | 花销 | 收入 | | --- | --- | --- | | 2026-11-25 | 午饭 28 | | | 2026-11-22 | |
+      闲鱼卖旧键盘 120 |
+    </div>
+
+    <h3>产品逻辑</h3>
+    <ul class="logic">
+      <li>
+        <b>两个来源，一张表。</b
+        >日记行每次打开页面时从日记现读（只读，改就回日记里改）；手记行来自我的空间根目录下的
+        财务.md / 健康.md。两者按日期倒序排在一起，不合并、不去重。
+      </li>
+      <li>
+        <b>记一条</b
+        >只做追加：把一行写到记录文件的表格末尾；文件不存在就自动创建。页面里不提供编辑、删除，改动一律打开文件改。
+      </li>
+      <li>
+        <b>日记字段：</b>健康 = 体重、睡眠、运动、身体情况；财务 =
+        花销、收入。只认日记开头「今日/昨日 + 字段名：内容」，「昨日」算前一天。读取最近 120
+        篇日记。
+      </li>
+      <li>
+        <b>记录文件里看不懂的行</b>（比如手改坏了表格）不显示，页面顶部提示「健康.md 有 N
+        行没读出来，打开文件查看」，不会改写文件。
+      </li>
+      <li>
+        <b>体重折线：</b>近 90 天，取「体重」里的第一个数字；写「斤」的除以 2 换成 kg，30–200 kg
+        以外和「没称」不画。同一天有多条取最新一条。鼠标停在点上显示原文和来源。
+      </li>
+      <li>
+        <b>花销/收入柱状：</b>近 30 天，每天一组柱子。金额 = 文字里「数字 + 元/块」或「事项 +
+        数字」的数字之和；日期、时间、百分比、距离（如「23 日」「8:10」「5
+        公里」）不算。认不出就标「？」。
+      </li>
+      <li>
+        <b>不做：</b>合计数字、概览卡片、时间范围切换、分类、预算、提醒。只在「我的空间」出现。
+      </li>
+    </ul>
+  </body>
+</html>

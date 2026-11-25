@@ -6,7 +6,7 @@ import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
 import { DiaryLedgerView } from './DiaryLedgerView'
-import { financeFields, healthFields } from './diary-ledger'
+import { financeLedger, healthLedger } from './diary-ledger'
 import { useFixedSpacesStore } from './fixed-spaces-store'
 import { DiaryImportPage } from './DiaryImport'
 import { ConversationMarkdown } from '../../components/common/ConversationMarkdown'
@@ -576,7 +576,7 @@ export function PersonalDiaryHome(): React.ReactElement {
           : 'personal-diary-home'
       }
     >
-      {page !== '今天' && page !== '日记' && (
+      {page !== '今天' && page !== '日记' && page !== '财务' && page !== '健康' && (
         <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
       )}
       {notice && page !== '日记' && !(page === '今天' && todayFile) && (
@@ -630,10 +630,12 @@ export function PersonalDiaryHome(): React.ReactElement {
           {(page === '财务' || page === '健康') && source && ownerPath === fixedPath && (
             <DiaryLedgerView
               key={page}
-              title={page}
-              fields={page === '财务' ? financeFields : healthFields}
+              kind={page === '财务' ? financeLedger : healthLedger}
+              workspacePath={source.workspacePath}
               diaries={files.diaries}
+              today={`${day.year}-${day.month}-${day.day}`}
               revision={revision}
+              openFile={openFile}
             />
           )}
           {page !== '今天' && page !== '日记' && preview && (
