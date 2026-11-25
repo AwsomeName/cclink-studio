@@ -29,8 +29,15 @@ function resolveSurface(context?: CommandContext) {
   if (!target) throw new Error('编辑器目标已失效')
   const tabState = useTabStore.getState()
   const tab = tabState.tabs.find((item) => item.id === target.tabId)
-  if (tabState.activeTabId !== target.tabId || tab?.type !== 'editor') {
-    throw new Error('编辑器 Tab 已切换')
+  if (tab) {
+    if (tabState.activeTabId !== target.tabId || tab.type !== 'editor') {
+      throw new Error('编辑器 Tab 已切换')
+    }
+  } else {
+    // Editors embedded in the My Space home page (今天 / 日记 / 计划) have no tab of their own;
+    // their id is page-scoped, so the home tab hosting them must be the active one.
+    const active = tabState.tabs.find((item) => item.id === tabState.activeTabId)
+    if (active?.type !== 'workspace-home') throw new Error('编辑器 Tab 已切换')
   }
   const surface = getEditorContextSurface(target.tabId)
   if (!surface) throw new Error('编辑器操作面已销毁')
