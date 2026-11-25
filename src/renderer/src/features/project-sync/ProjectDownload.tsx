@@ -4,7 +4,7 @@ import { useTabStore } from '../../stores/tab-store'
 import { useWorkspaceStore } from '../../stores/workspace-store'
 import { openWorkspaceRef } from '../workspace-open/workspace-open-controller'
 import { showWorkspaceHome } from '../workspace-open/workspace-home-navigation'
-import { loadProjectSync } from './project-sync-store'
+import { loadProjectSync } from './project-sync-view-state'
 import './project-sync.css'
 
 /**

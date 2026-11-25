@@ -9,7 +9,7 @@ import {
   projectSyncLabel,
   runProjectSync,
   useProjectSync,
-} from './project-sync-store'
+} from './project-sync-view-state'
 import './project-sync.css'
 
 /** The local project that may use project sync: not My Space, not a diary, not remote. */

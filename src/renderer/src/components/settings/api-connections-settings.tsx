@@ -14,7 +14,7 @@ import { useUIStore } from '../../stores/ui-store'
 import { captureActiveWorkspaceTarget } from '../../stores/workspace-store'
 import { createConversationRuntimeForWorkspace } from '../../features/agent-conversations/view-model'
 import { resumeDiarySyncAfterAccountChange } from '../../features/workspace-open/DiarySyncStatus'
-import { resumeProjectSyncAfterAccountChange } from '../../features/project-sync/project-sync-store'
+import { resumeProjectSyncAfterAccountChange } from '../../features/project-sync/project-sync-view-state'
 import { focusAgentComposer } from '../../features/markdown/markdown-navigation'
 import { IconDatabase, IconRobot } from '../common/Icons'
 import {

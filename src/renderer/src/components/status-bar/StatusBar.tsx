@@ -11,7 +11,7 @@ import { ProjectSyncDialog } from '../../features/project-sync/ProjectSyncDialog
 import {
   useProjectSync,
   useProjectSyncSchedule,
-} from '../../features/project-sync/project-sync-store'
+} from '../../features/project-sync/project-sync-view-state'
 import { useEffect } from 'react'
 import { TtsStatusPlayer } from '../../features/local-tts/TtsStatusPlayer'
 import {

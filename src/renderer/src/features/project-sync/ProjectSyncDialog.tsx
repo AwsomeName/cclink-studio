@@ -21,7 +21,7 @@ import {
   stopProjectSync,
   useProjectSync,
   useProjectSyncDialog,
-} from './project-sync-store'
+} from './project-sync-view-state'
 import '../workspace-open/fixed-spaces.css'
 import './project-sync.css'
 
