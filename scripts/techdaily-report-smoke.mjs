@@ -1,5 +1,6 @@
 // Real Electron: My Space sidebar → 科技日报 → calendar → a day with a report opens its Markdown
-// in the diary editor; today → 生成今天的日报 → the 10 steps change from real service events.
+// in the diary editor; today → 生成今天的日报 → the one-line run bar under the report follows
+// real service events; step 9 reads the real public model leaderboards.
 // Search goes to a local SearXNG stand-in. Whatever the local AI does in this isolated profile
 // is reported as is: success writes today's report, failure must show on the failed step.
 //
@@ -7,7 +8,7 @@
 //   DIARY_BUILD=.cache/techdaily-build node scripts/techdaily-report-smoke.mjs
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { makeRoot, makeHome, firstUse } from './diary-acceptance-lib.mjs'
 
@@ -109,15 +110,15 @@ try {
       .click()
   await page.locator(`[aria-label="${today}"], [aria-label="${today} 有日报"]`).first().click()
   await view.getByRole('button', { name: '生成今天的日报' }).click()
-  const steps = view.getByLabel('执行详情')
-  await steps.waitFor()
-  await steps.getByText('正在生成').waitFor()
-  await steps
-    .getByLabel('第 3 步 按领域搜索并过滤')
-    .getByText(/第 \d+\/6 次/)
-    .waitFor({ timeout: 30000 })
+  const line = view.getByLabel('执行详情')
+  await line.getByText('正在生成').waitFor()
+  // The bar is one line: chips for the 10 steps plus the running step's detail.
+  await line.getByText(/第 \d+\/6 次/).waitFor({ timeout: 30000 })
+  const box = await line.boundingBox()
+  assert(box && box.height <= 40, 'run bar is one line: ' + JSON.stringify(box))
+  assert.equal(await line.getByRole('button', { name: /^第 \d+ 步/ }).count(), 10)
   await page.screenshot({ path: join(shots, 'R3-generating.png') })
-  step('generation shows real step progress (search counts from the service)')
+  step('generation shows real step progress in one line (search counts from the service)')
 
   // Wait for the outcome; with or without a working local AI the page must say what happened.
   const outcome = await Promise.race([
@@ -126,9 +127,8 @@ try {
       .getByText('今日趋势')
       .waitFor({ timeout: 360000 })
       .then(() => 'report'),
-    view
+    line
       .getByText('生成失败')
-      .first()
       .waitFor({ timeout: 360000 })
       .then(() => 'failed'),
   ])
@@ -136,10 +136,31 @@ try {
   if (outcome === 'report') {
     await page.getByLabel('科技日报日历').locator(`[aria-label="${today} 有日报"]`).waitFor()
     step('local AI wrote today’s report; it opens in the editor and the calendar marks today')
+    // The report is the page: the editor takes the height, the run stays one line under it.
+    const editor = await view.locator('.diary-today-editor').boundingBox()
+    const bar = await line.boundingBox()
+    assert(editor.height > bar.height * 8, JSON.stringify({ editor, bar }))
+    // Step 9: real leaderboard pages.
+    await line.getByRole('button', { name: '第 9 步 更新模型能力榜' }).click()
+    const boardDetail = await line.locator('.techdaily-runline-detail').innerText()
+    console.log('step 9: ' + boardDetail)
+    assert(/个榜单今日更新/.test(boardDetail), boardDetail)
+    if (!/^.*（Studio，失败）/.test(boardDetail)) {
+      const doc = view.locator('.ProseMirror')
+      await doc.getByRole('heading', { name: '模型能力榜' }).scrollIntoViewIfNeeded()
+      await doc.getByRole('heading', { name: '代码' }).waitFor()
+      assert((await doc.locator('table').count()) >= 1)
+      const board = JSON.parse(await readFile(join(space, '科技日报', '榜单.json'), 'utf8'))
+      console.log('榜单.json tasks: ' + Object.keys(board.tasks).join(', '))
+      await page.screenshot({ path: join(shots, 'R5-leaderboard.png') })
+      step('模型能力榜 tables from the public pages are in the report and 榜单.json')
+    }
   } else {
-    const failed = await view.locator('.techdaily-step.failed').first().innerText()
+    const failed = await line.locator('.techdaily-chip.failed').first().getAttribute('title')
     assert(/AI|JSON|Agent|超时|未就绪|登录/.test(failed), failed)
-    const searchDone = await view.getByLabel('第 3 步 按领域搜索并过滤').getAttribute('class')
+    const searchDone = await line
+      .getByRole('button', { name: '第 3 步 按领域搜索并过滤' })
+      .getAttribute('class')
     assert(searchDone.includes('done'), searchDone)
     console.log('AI step failed in the isolated profile: ' + failed.replace(/\s+/g, ' '))
     step('no usable local AI here: the failure is shown on its step, earlier steps stay done')

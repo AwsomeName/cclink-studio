@@ -105,7 +105,7 @@ describe('report markdown', () => {
       ],
       trendHint: '',
       funnel: { raw: 100, kept: 40, candidates: 30, selected: 0 },
-      notes: ['模型能力榜尚未接入'],
+      notes: [],
     })
     expect(report.funnel.selected).toBe(2)
     const md = renderMarkdown(report)
@@ -121,9 +121,7 @@ describe('report markdown', () => {
       '## 论文前沿\n\n- **中文译题** · 贡献（原题：X） [→](https://arxiv.org/abs/1)',
     )
     expect(md).toContain('**今日趋势**：趋势一句话')
-    expect(md).toContain(
-      '原始 100 → 过滤后 40 → 候选 30 → 精选 2（run 20261125-061000）；模型能力榜尚未接入',
-    )
+    expect(md).toContain('原始 100 → 过滤后 40 → 候选 30 → 精选 2（run 20261125-061000）*')
   })
 })
 
@@ -176,6 +174,7 @@ taste:
       // GitHub/arXiv unreachable: the quick lists are skipped, the report is not blocked.
       fetchImpl: (async () => new Response('', { status: 503 })) as unknown as typeof fetch,
       fetchPage: async () => '原文正文',
+      sleep: async () => {},
       ai,
     })
     return service
@@ -232,14 +231,17 @@ taste:
       'done',
       'done',
       'done',
-      'skipped',
+      'failed',
       'done',
     ])
     expect(run.steps.find((x) => x.id === 'search')!.detail).toMatch(
       /2 次搜索 → 原始 12 条，过滤后留下 12 篇/,
     )
     expect(run.steps.find((x) => x.id === 'select')!.detail).toBe('入选 2 条；同事件归并 2 条')
-    expect(run.steps.find((x) => x.id === 'leaderboard')!.detail).toMatch(/尚未接入/)
+    // Board sites unreachable and no earlier 榜单.json: the step says so, the report is still saved.
+    expect(run.steps.find((x) => x.id === 'leaderboard')!.detail).toMatch(
+      /0 个榜单今日更新；失败：代码：HTTP 503/,
+    )
     const md = await readFile(join(root, '科技日报/2026/11/1125.md'), 'utf8')
     expect(md).toContain('## 甲\n\n解读甲')
     expect(md).toContain('（3 个来源）')

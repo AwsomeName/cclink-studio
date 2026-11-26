@@ -4,6 +4,7 @@ import {
   TECHDAILY_PROVIDER_LABELS,
   type TechDailyRun,
   type TechDailyStatus,
+  type TechDailyStepId,
 } from '@shared/techdaily/techdaily-types'
 import { MarkdownEditor } from '../../components/workbench/MarkdownEditor'
 import { useWorkspaceStore } from '../../stores/workspace-store'
@@ -19,12 +20,32 @@ const time = (iso?: string): string =>
 const seconds = (from?: string, to?: string): string =>
   from && to ? `${Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 1000))} 秒` : ''
 
-const STATE_MARK: Record<TechDailyRun['steps'][number]['state'], string> = {
+type Step = TechDailyRun['steps'][number]
+const STATE_MARK: Record<Step['state'], string> = {
   pending: '○',
   running: '◐',
   done: '✓',
   failed: '✗',
   skipped: '–',
+}
+const STATE_TEXT: Record<Step['state'], string> = {
+  pending: '未开始',
+  running: '进行中',
+  done: '完成',
+  failed: '失败',
+  skipped: '跳过',
+}
+const SHORT: Record<TechDailyStepId, string> = {
+  check: '检查',
+  read: '设置',
+  search: '搜索',
+  frontier: '前沿',
+  merge: '入库',
+  candidates: '候选',
+  select: '精选',
+  render: '成稿',
+  leaderboard: '榜单',
+  save: '保存',
 }
 const RUN_STATUS: Record<TechDailyRun['status'], string> = {
   running: '正在生成',
@@ -35,49 +56,82 @@ const RUN_STATUS: Record<TechDailyRun['status'], string> = {
   stopped: '已停止',
 }
 
-/** Real step states from TechDailyService; nothing here is inferred from time. */
-export function TechDailySteps({ run }: { run: TechDailyRun }): React.ReactElement {
+/**
+ * One line under the report: run status, the 10 steps as chips (scrolls sideways), the
+ * chosen step's detail and the run action. States come only from TechDailyService.
+ */
+export function TechDailyRunLine({
+  run,
+  idle,
+  action,
+}: {
+  run: TechDailyRun | null
+  /** Shown when there is no run for the day. */
+  idle: string
+  action?: React.ReactNode
+}): React.ReactElement {
+  const [chosen, setChosen] = useState<TechDailyStepId | null>(null)
+  const runId = run?.runId
+  useEffect(() => setChosen(null), [runId])
+  const focus =
+    run?.steps.find((s) => s.id === chosen) ??
+    run?.steps.find((s) => s.state === 'running') ??
+    run?.steps.find((s) => s.state === 'failed')
+  const summary = run
+    ? [
+        `${time(run.startedAt)} 开始`,
+        run.endedAt ? `用时 ${seconds(run.startedAt, run.endedAt)}` : '',
+        run.itemCount ? `${run.itemCount} 条` : '',
+        run.error && run.status !== 'completed' ? run.error : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : idle
+  const detail = focus
+    ? `${focus.label}（${focus.actor}，${STATE_TEXT[focus.state]}）${focus.detail ? '：' + focus.detail : ''}`
+    : summary
   return (
-    <section className="techdaily-steps" aria-label="执行详情">
-      <header>
-        <strong>执行详情</strong>
-        <span className={`techdaily-run-status ${run.status}`}>{RUN_STATUS[run.status]}</span>
-        <small>
-          run {run.runId} · {time(run.startedAt)} 开始
-          {run.endedAt ? ` · 用时 ${seconds(run.startedAt, run.endedAt)}` : ''}
-        </small>
-      </header>
-      <ol>
-        {run.steps.map((step, index) => (
-          <li
-            key={step.id}
-            className={`techdaily-step ${step.state}`}
-            aria-label={`第 ${index + 1} 步 ${step.label}`}
-          >
-            <span className="techdaily-step-mark" aria-hidden>
-              {STATE_MARK[step.state]}
-            </span>
-            <span className="techdaily-step-body">
-              <span className="techdaily-step-title">
-                {index + 1}. {step.label}
-                <small>{step.actor}</small>
-                {step.endedAt && step.startedAt && (
-                  <small>{seconds(step.startedAt, step.endedAt)}</small>
-                )}
-              </span>
-              {step.detail && <small className="techdaily-step-detail">{step.detail}</small>}
-            </span>
-          </li>
-        ))}
-      </ol>
-      {run.error && run.status !== 'completed' && <p role="alert">{run.error}</p>}
-    </section>
+    <div className="techdaily-runline" role="group" aria-label="执行详情">
+      {run && (
+        <span className={`techdaily-run-status ${run.status}`} title={`run ${run.runId}`}>
+          {RUN_STATUS[run.status]}
+        </span>
+      )}
+      {run && (
+        <ol className="techdaily-chips">
+          {run.steps.map((step, index) => (
+            <li key={step.id}>
+              <button
+                type="button"
+                className={`techdaily-chip ${step.state}`}
+                aria-label={`第 ${index + 1} 步 ${step.label}`}
+                aria-pressed={focus?.id === step.id}
+                title={`${index + 1}. ${step.label} · ${step.actor} · ${STATE_TEXT[step.state]}${
+                  step.startedAt && step.endedAt
+                    ? ' · ' + seconds(step.startedAt, step.endedAt)
+                    : ''
+                }${step.detail ? '\n' + step.detail : ''}`}
+                onClick={() => setChosen((c) => (c === step.id ? null : step.id))}
+              >
+                <span aria-hidden>{STATE_MARK[step.state]}</span>
+                {SHORT[step.id]}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <span className="techdaily-runline-detail" title={detail}>
+        {detail}
+      </span>
+      {action && <span className="techdaily-runline-actions">{action}</span>}
+    </div>
   )
 }
 
 /**
  * 科技日报 page in My Space: the calendar picks a day; a day with a report opens its Markdown
- * in the same editor as diaries (docs/design/techdaily-2026-11-25/v2, view B).
+ * in the same editor as diaries (docs/design/techdaily-2026-11-25/v2, view B). The report is
+ * the page; the run is one line at the bottom.
  */
 export function TechDailyDayView({
   workspaceRef,
@@ -88,7 +142,6 @@ export function TechDailyDayView({
   const { days, selected, today, select, load, refresh, revision } = useTechDailyCalendar()
   const [run, setRun] = useState<TechDailyRun | null>(null)
   const [status, setStatus] = useState<TechDailyStatus | null>(null)
-  const [showSteps, setShowSteps] = useState(false)
   const [error, setError] = useState('')
   const [starting, setStarting] = useState(false)
 
@@ -106,7 +159,6 @@ export function TechDailyDayView({
 
   useEffect(() => {
     setError('')
-    setShowSteps(false)
     void readRun()
     void window.cclinkStudio.techDaily.getStatus({ workspacePath }).then((r) => {
       if (r.success) setStatus(r.data)
@@ -145,12 +197,15 @@ export function TechDailyDayView({
       const result = await window.cclinkStudio.techDaily.generate({ workspacePath, overwrite })
       if (!result.success) throw new Error(result.error)
       setRun(result.data)
-      setShowSteps(true)
     } catch (e) {
       setError((e as Error).message)
     } finally {
       setStarting(false)
     }
+  }
+  const stop = async () => {
+    const result = await window.cclinkStudio.techDaily.stop({ workspacePath })
+    if (!result.success) setError(result.error)
   }
 
   const openSettings = () =>
@@ -177,33 +232,16 @@ export function TechDailyDayView({
       </button>
     </span>
   )
-  const runbar = (
-    <span className="techdaily-runbar">
-      {/* The editor toolbar is narrow: a finished run's time lives in the tooltip. */}
-      {run && run.status !== 'completed' && (
-        <small className={`techdaily-run-status ${run.status}`}>{RUN_STATUS[run.status]}</small>
-      )}
-      {run && (
-        <button
-          type="button"
-          aria-pressed={showSteps}
-          title={
-            run.status === 'completed'
-              ? `${time(run.endedAt)} 生成 · run ${run.runId}`
-              : RUN_STATUS[run.status]
-          }
-          onClick={() => setShowSteps((v) => !v)}
-        >
-          执行详情
-        </button>
-      )}
-      {selected === today && report && (
-        <button type="button" disabled={!canGenerate} onClick={() => void generate(true)}>
-          重新生成
-        </button>
-      )}
-    </span>
-  )
+
+  const action = running ? (
+    <button type="button" onClick={() => void stop()}>
+      停止
+    </button>
+  ) : selected === today && report ? (
+    <button type="button" disabled={!canGenerate} onClick={() => void generate(true)}>
+      重新生成
+    </button>
+  ) : null
 
   const providerHint =
     status && providerState && !providerState.ready ? (
@@ -215,36 +253,41 @@ export function TechDailyDayView({
       </p>
     ) : null
 
+  const idle =
+    selected === today
+      ? report
+        ? '这份日报不是在这台电脑生成的'
+        : '今天还没生成'
+      : report
+        ? '这份日报没有本机生成记录'
+        : '那天没有生成'
+
   return (
     <div className="diary-today techdaily-day">
       <article className="diary-today-entry" aria-label="当天科技日报">
-        {report && !running ? (
-          <>
-            {showSteps && run && <TechDailySteps run={run} />}
-            <div className="diary-today-editor">
-              <MarkdownEditor
-                key={`${report}:${revision}`}
-                filePath={report}
-                tabId={'techdaily:' + report}
-                compact
-                toolbarLead={nav}
-                toolbarExtra={runbar}
-              />
-            </div>
-          </>
+        {report ? (
+          <div className="diary-today-editor">
+            <MarkdownEditor
+              key={`${report}:${revision}`}
+              filePath={report}
+              tabId={'techdaily:' + report}
+              compact
+              toolbarLead={nav}
+            />
+          </div>
         ) : (
           <div className="diary-day-empty techdaily-empty">
-            <div className="diary-day-empty-bar">
-              {nav}
-              {runbar}
-            </div>
-            {running && run ? (
-              <TechDailySteps run={run} />
+            <div className="diary-day-empty-bar">{nav}</div>
+            {running ? (
+              <div className="techdaily-empty-card">
+                <h3>正在生成今天的科技日报</h3>
+                <p className="muted">每一步的进度在下方执行条里，点步骤可看详情。</p>
+              </div>
             ) : selected === today ? (
               <div className="techdaily-empty-card">
                 <h3>今天的科技日报还没生成</h3>
                 <p className="muted">
-                  按设置里的 {status ? '词表' : ''}搜索 → 过滤去重 → 本机 AI 精选成稿，结果写入
+                  按设置里的词表搜索 → 过滤去重 → 本机 AI 精选成稿 → 更新模型能力榜，结果写入
                   <code>
                     {' '}
                     科技日报/{today.slice(0, 4)}/{today.slice(5, 7)}/{today.slice(5, 7)}
@@ -266,7 +309,6 @@ export function TechDailyDayView({
                     科技日报设置
                   </button>
                 </div>
-                {run && <TechDailySteps run={run} />}
               </div>
             ) : (
               <div className="techdaily-empty-card">
@@ -277,12 +319,16 @@ export function TechDailyDayView({
                     : '那天没有生成。'}
                   过去的日子不补生成。
                 </p>
-                {run && <TechDailySteps run={run} />}
               </div>
             )}
-            {error && <p role="alert">{error}</p>}
           </div>
         )}
+        {error && (
+          <p className="techdaily-error" role="alert">
+            {error}
+          </p>
+        )}
+        <TechDailyRunLine run={run} idle={idle} action={action} />
       </article>
     </div>
   )

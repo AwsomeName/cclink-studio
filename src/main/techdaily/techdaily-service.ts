@@ -25,6 +25,7 @@ import {
 } from '../../shared/techdaily/techdaily-types'
 import { callAiJson, type AiText } from './ai-json'
 import { fetchArxivRecent, fetchGithubTrending } from './frontier-sources'
+import { updateLeaderboard } from './leaderboard'
 import { renderPrompt, selectPrompt, tasteBlock, type QuickEntry } from './prompts'
 import {
   buildReport,
@@ -876,7 +877,7 @@ export class TechDailyService {
         quick,
         trendHint: String(selection.trend_hint ?? ''),
         funnel: { raw, kept: searched.articles, candidates: candidates.length, selected: 0 },
-        notes: ['模型能力榜尚未接入'],
+        notes: [],
       })
       if (!report.sections.length) return await failAt('render', 'AI 成稿没有引用任何有效槽位')
       end(
@@ -887,7 +888,34 @@ export class TechDailyService {
 
       // 9 leaderboard
       current = 'leaderboard'
-      end('leaderboard', 'skipped', '模型能力榜尚未接入（下一步实现）')
+      begin('leaderboard', '读取公开榜单页…')
+      try {
+        const board = await updateLeaderboard({
+          root,
+          day: run.day,
+          fetchImpl,
+          sleep: this.deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))),
+          signal,
+          progress: (d) => update('leaderboard', d),
+        })
+        if (signal.aborted) return await failAt('leaderboard', '已停止')
+        report.leaderboard = board.sections
+        if (board.stale) report.notes.push(`模型能力榜 ${board.stale} 个读取失败，沿用旧数据`)
+        const parts = [
+          `${board.fresh} 个榜单今日更新${board.stale ? `，${board.stale} 个沿用旧数据` : ''}`,
+          ...(board.failures.length ? [`失败：${board.failures.join('；')}`] : []),
+          ...(board.fileError
+            ? [board.fileError]
+            : board.fresh
+              ? ['已写入 科技日报/榜单.json']
+              : []),
+        ]
+        end('leaderboard', board.sections.length ? 'done' : 'failed', parts.join('；'))
+      } catch (error) {
+        // The board never blocks the report.
+        end('leaderboard', 'failed', `榜单更新失败：${(error as Error).message}；日报照常保存`)
+        report.notes.push('模型能力榜本次未更新')
+      }
 
       // 10 save
       current = 'save'

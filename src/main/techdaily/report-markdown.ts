@@ -3,6 +3,7 @@
  * URLs, dates and source counts come from candidates; the AI only writes words, and any
  * slot the AI invents is dropped.
  */
+import { renderLeaderboardMarkdown, type LeaderboardSection } from './leaderboard'
 
 export interface PickedItem {
   slot: string
@@ -43,6 +44,8 @@ export interface DailyReport {
   trend: string
   funnel: { raw: number; kept: number; candidates: number; selected: number }
   notes: string[]
+  /** 模型能力 tables; filled by the leaderboard step after rendering. */
+  leaderboard: LeaderboardSection[]
 }
 
 export function buildReport(input: {
@@ -105,6 +108,7 @@ export function buildReport(input: {
     trend: String(input.rendered.trend || input.trendHint || '').trim(),
     funnel: { ...input.funnel, selected },
     notes: input.notes,
+    leaderboard: [],
   }
 }
 
@@ -122,6 +126,7 @@ export function renderMarkdown(report: DailyReport): string {
       lines.push('', `[原文](${headlineItem.url})${sourceNote(headlineItem.sources)}`)
     lines.push('')
   }
+  lines.push(...renderLeaderboardMarkdown(report.leaderboard))
   for (const section of report.sections) {
     const shown = section.items.filter((i) => i.slot !== report.headline?.slot)
     if (!shown.length) continue
