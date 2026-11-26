@@ -4,7 +4,11 @@ import { askProjectClose } from '../../running-work/ProjectCloseDialog'
 import { useAgentStore } from '../../../stores/agent-store'
 import { getRunningProjectCounts } from '../../agent-conversations/project-activity'
 import { openWorkspaceSettings } from '../../workspace-open/WorkspaceSettingsForm'
-import { useFixedSpacesStore, openPersonalSpace } from '../../workspace-open/fixed-spaces-store'
+import {
+  useFixedSpacesStore,
+  openBoundCompany,
+  openPersonalSpace,
+} from '../../workspace-open/fixed-spaces-store'
 import type { Command } from '../../../stores/command-store'
 import { useFsStore } from '../../../stores/fs-store'
 import {
@@ -27,7 +31,16 @@ function pinnableWorkspaceKey(context?: CommandContext): string | null {
   return null
 }
 
+function isFixedProject(path: string | null): boolean {
+  const spaces = useFixedSpacesStore.getState().spaces
+  return (
+    !!path && (path === spaces?.personal?.workspacePath || path === spaces?.company?.workspacePath)
+  )
+}
+
 async function activateProject(path: string): Promise<boolean> {
+  if (path === useFixedSpacesStore.getState().spaces?.company?.workspacePath)
+    return openBoundCompany('overview')
   const active = useWorkspaceStore.getState().activeWorkspaceRef
   if (active.kind === 'local' && active.path === path) return true
   const success = await useFsStore.getState().openRecentWorkspace(path)
@@ -58,7 +71,9 @@ export function createProjectContextCommands(): Command[] {
       enabled: (context) => {
         const path = projectPath(context)
         return {
-          enabled: Boolean(path && useOpenProjectsStore.getState().openProjectPaths.includes(path)),
+          enabled:
+            isFixedProject(path) ||
+            Boolean(path && useOpenProjectsStore.getState().openProjectPaths.includes(path)),
           reason: '项目已关闭',
         }
       },
@@ -73,9 +88,7 @@ export function createProjectContextCommands(): Command[] {
       label: '固定项目',
       contextOnly: true,
       category: '项目',
-      visible: (context) =>
-        pinnableWorkspaceKey(context) !==
-        useFixedSpacesStore.getState().spaces?.personal?.workspacePath,
+      visible: (context) => !isFixedProject(pinnableWorkspaceKey(context)),
       contextLabel: (context) =>
         useOpenProjectsStore
           .getState()
@@ -93,8 +106,7 @@ export function createProjectContextCommands(): Command[] {
       },
       action: (context) => {
         const key = pinnableWorkspaceKey(context)
-        if (key && key !== useFixedSpacesStore.getState().spaces?.personal?.workspacePath)
-          useOpenProjectsStore.getState().toggleWorkspacePinned(key)
+        if (key && !isFixedProject(key)) useOpenProjectsStore.getState().toggleWorkspacePinned(key)
       },
     },
     {
@@ -137,8 +149,7 @@ export function createProjectContextCommands(): Command[] {
       category: '项目',
       enabled: (context) => {
         const path = projectPath(context)
-        const fixed = useFixedSpacesStore.getState().spaces
-        const isFixed = path === fixed?.personal?.workspacePath
+        const isFixed = isFixedProject(path)
         return {
           enabled: Boolean(
             path && !isFixed && useOpenProjectsStore.getState().openProjectPaths.includes(path),
@@ -149,8 +160,7 @@ export function createProjectContextCommands(): Command[] {
       action: async (context) => {
         const path = projectPath(context)
         if (!path) throw new Error('项目目标已失效')
-        const fixed = useFixedSpacesStore.getState().spaces
-        if (path === fixed?.personal?.workspacePath) throw new Error('固定入口不能关闭')
+        if (isFixedProject(path)) throw new Error('固定入口不能关闭')
         const running =
           getRunningProjectCounts(useAgentStore.getState().conversations).get(path) ?? 0
         const work = await inspectWorkspaceWork(path)
@@ -188,7 +198,7 @@ export function createProjectContextCommands(): Command[] {
 
         const group = (key: string) => workspaceStripGroup(key, projectsStore.pinnedWorkspaceKeys)
         const visiblePaths = projectsStore.openProjectPaths
-          .filter((item) => item !== fixed?.personal?.workspacePath)
+          .filter((item) => !isFixedProject(item))
           .sort((left, right) => group(left) - group(right))
         const nextPath = getProjectCloseSuccessor(visiblePaths, path)
         if (nextPath) {

@@ -1,4 +1,5 @@
 import type { Editor, JSONContent } from '@tiptap/core'
+import { protectMarkdownHtml } from './markdown-html-blocks'
 import { prepareMarkdownEditorInput } from './markdown-codec'
 
 /**
@@ -13,10 +14,18 @@ export function parseMarkdownEditorDocument(editor: Editor, source: string): JSO
     throw new Error('Markdown 解析器未初始化')
   }
 
+  const literal = editor.schema.nodes.markdownLiteralBlock ? protectMarkdownHtml(source) : null
+  const parsed = editor.markdown.parse(prepareMarkdownEditorInput(literal?.source ?? source))
+  if (literal?.blocks.length && parsed.content) {
+    parsed.content = parsed.content.map((node) => {
+      if (node.type !== 'codeBlock' || node.attrs?.language !== literal.language) return node
+      const raw = literal.blocks[Number(node.content?.[0]?.text)]
+      if (raw === undefined) throw new Error('HTML 原文块未能还原')
+      return { type: 'markdownLiteralBlock', content: [{ type: 'text', text: raw }] }
+    })
+  }
   const repaired = splitTableCellImages(
-    liftParagraphOnlyImages(
-      repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source))),
-    ),
+    liftParagraphOnlyImages(repairEmptyMarkdownListItems(parsed)),
   )
   // Editors built without the inline image node (some tests, other surfaces) keep block images.
   return editor.schema.nodes.inlineImage ? inlineParagraphImages(repaired) : repaired

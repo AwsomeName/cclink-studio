@@ -390,7 +390,7 @@ export class LocalClaudeCodeBackend implements IAgentBackend {
         '- 用户让你写文档、报告、笔记时，用 editor_write 将 Markdown 写入编辑器',
         '- 逐步构建文档时用 editor_append 追加内容',
         '- 编辑器支持常用 Markdown：标题、粗体/斜体/删除线、行内代码、列表、任务列表、引用、代码块、表格、链接、图片',
-        '- 图片需要指定显示宽度时只用 <img src="路径" alt="说明" width="像素">（仅这三个属性）；其他原始 HTML、Frontmatter、脚注会让文档只能按源码编辑',
+        '- 图片需要指定显示宽度时只用 <img src="路径" alt="说明" width="像素">（仅这三个属性）；其他原始 HTML 所在的块按原文编辑；避免 Frontmatter 和脚注',
         '',
       )
     }

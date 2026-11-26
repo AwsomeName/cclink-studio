@@ -68,7 +68,8 @@ export async function openBoundCompany(section: CompanySection): Promise<boolean
 /** The fixed label does not override the project's explicit type. */
 export async function openCompanySpaceHome(): Promise<void> {
   if (await openBoundCompany('overview')) {
+    const ref = useWorkspaceStore.getState().activeWorkspaceRef
     await useWorkspaceStore.getState().refreshSettings()
-    showWorkspaceHome(useWorkspaceStore.getState().activeWorkspaceRef)
+    showWorkspaceHome(ref)
   }
 }

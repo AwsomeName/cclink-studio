@@ -1,6 +1,5 @@
 import { useDiaryNavigation } from '../../features/workspace-open/personal-diary-navigation'
 import { showWorkspaceHome } from '../../features/workspace-open/workspace-home-navigation'
-import { openWorkspaceSettings } from '../../features/workspace-open/WorkspaceSettingsForm'
 import { openCompanyWorkspace } from '../../features/company-workspace/company-workspace-commands'
 import React, { useEffect, useState } from 'react'
 import {
@@ -22,7 +21,6 @@ import {
   IconList,
   IconUser,
   IconSend,
-  IconSettings,
 } from '../common/Icons'
 import type { ActivityPanel } from '../../types'
 import {
@@ -297,25 +295,10 @@ export function ActivityBar(): React.ReactElement {
                   </button>
                 )
               })}
-              {/* Diary homes have no header row, so 项目设置 sits here. */}
-              {activeRef.kind === 'local' && (
-                <button
-                  aria-current={
-                    activeTab?.type === 'workspace-home' && activeTab.settingsSection
-                      ? 'page'
-                      : undefined
-                  }
-                  className={`activity-bar-icon ${activeTab?.type === 'workspace-home' && activeTab.settingsSection ? 'active' : ''}`}
-                  onClick={openWorkspaceSettings}
-                >
-                  <IconSettings size={18} />
-                  项目设置
-                </button>
-              )}
             </>
           ) : (
             <button
-              className={`activity-bar-icon ${activePanel !== 'files' && activeTab?.type === 'workspace-home' ? 'active' : ''}`}
+              className={`activity-bar-icon ${activePanel !== 'files' && activeTab?.type === 'workspace-home' && !activeTab.settingsSection ? 'active' : ''}`}
               onClick={() => handleClick('workspace-home')}
             >
               <ActivityProjectsIcon size={18} />

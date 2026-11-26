@@ -112,10 +112,8 @@ async function navigation() {
   if (await back.isVisible()) await back.click()
 }
 async function settings() {
-  await navigation()
-  await page.locator('.activity-bar').getByRole('button', { name: '项目首页', exact: true }).click()
   await page
-    .locator('.project-home-header')
+    .locator('#workspace-sidebar')
     .getByRole('button', { name: '项目设置', exact: true })
     .click()
 }
@@ -289,15 +287,13 @@ try {
   await page.getByLabel('公司显示名称', { exact: true }).fill('模拟公司')
   await page.getByRole('button', { name: '开始使用', exact: true }).click()
   await page.getByRole('heading', { name: '公司总览', exact: true }).waitFor()
-  const companyTab = page
-    .locator('.project-strip')
-    .getByRole('button', { name: '模拟公司', exact: true })
+  const companyTab = page.locator(`.project-strip-item[data-project-path="${company}"]`)
   assert.equal(
     await page
       .locator('.project-strip')
       .getByRole('button', { name: '我的公司', exact: true })
       .count(),
-    0,
+    1,
   )
   await companyTab.click({ button: 'right' })
   await page.getByRole('menuitem', { name: '关闭项目', exact: true }).click()
@@ -311,6 +307,15 @@ try {
   await page.getByRole('dialog').getByText('模拟公司', { exact: true }).click()
   await page.locator('.fixed-space-dialog footer button').last().click()
   await companyTab.waitFor()
+  assert.equal(await companyTab.innerText(), '我的公司')
+  assert.equal(await companyTab.evaluate((button) => button.draggable), false)
+  await companyTab.click({ button: 'right' })
+  assert.equal(
+    await page.getByRole('menuitem', { name: /关闭项目/ }).getAttribute('aria-disabled'),
+    'true',
+  )
+  assert.equal(await page.getByRole('menuitem', { name: /解除固定|固定项目/ }).count(), 0)
+  await page.keyboard.press('Escape')
   await navigation()
   await page.getByRole('button', { name: '业务项目', exact: true }).first().click()
   await page.getByRole('button', { name: '创建业务项目', exact: true }).click()
@@ -547,7 +552,7 @@ try {
   page = await launch()
   const strip = page.locator('.project-strip')
   await strip.getByRole('button', { name: '我的空间', exact: true }).waitFor()
-  assert.equal(await strip.getByRole('button', { name: '我的公司', exact: true }).count(), 0)
+  assert.equal(await strip.getByRole('button', { name: '我的公司', exact: true }).count(), 1)
   await settings()
   await page.getByLabel('项目显示名称', { exact: true }).fill('我的日常')
   await page.getByRole('button', { name: '保存项目设置', exact: true }).click()
@@ -720,7 +725,7 @@ try {
       'running-work summary returns to the original task',
       'main process refuses source detachment while linked task is enabled',
       'renamed default project remains first after restart',
-      'ordinary company closes, reconnects under its project name, and retains business records across type changes',
+      'ordinary company closes, reconnects through the fixed company project, and retains business records across type changes',
       'original diary, attachments, plans and local task bytes unchanged',
     ],
     scope:

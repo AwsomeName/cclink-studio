@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>逐字稿粗剪 · CCLink Studio 方案示意</title>
+<style>
+:root{color-scheme:dark;--base:#1e2023;--panel:#24272b;--line:#3d4147;--muted:#abb2bd;--text:#eef0f3;--blue:#8cc7ff;--primary:#305d88;--amber:#f0c280;--green:#89d5ba}
+*{box-sizing:border-box}body{margin:0;background:var(--base);color:var(--text);font:14px/1.52 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}h1,h2,h3,p,figure{margin:0}button,input{font:inherit}button{cursor:pointer;color:var(--text);background:#32363c;border:1px solid #4b515a;border-radius:5px;padding:6px 12px}button:hover{background:#3b434e}button:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}button:disabled{opacity:.53;cursor:default}.primary{background:var(--primary);border-color:#437bb2}.primary:hover{background:#386e9e}.mono,time{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}.muted,small{color:var(--muted)}.small,small{font-size:12px}.orange{color:var(--amber)}.green{color:var(--green)}.blue{color:var(--blue)}
+header{height:35px;background:#292c30;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #151619;padding:0 18px;color:#c7ccd3;font-size:12px}.lights{display:inline-flex;gap:6px;margin-right:13px}.lights i{width:9px;height:9px;background:#d9827e;border-radius:100%}.lights i:nth-child(2){background:#dfb866}.lights i:last-child{background:#82b38b}.shell{display:grid;grid-template-columns:185px minmax(0,1fr);min-height:calc(100vh - 62px)}aside{background:#242629;border-right:1px solid var(--line);padding:23px 14px}aside h2{font-size:15px;letter-spacing:.07em;margin-bottom:26px}.sidehead{margin:22px 5px 8px;color:#a3abb5;font-size:12px}.file{padding:7px 6px;font-size:13px}.selected{border-left:2px solid var(--blue);background:#303d49;padding:9px 8px}.folder{margin-top:5px;color:#c4c9d0}.file:before{content:"▤";margin-right:7px;color:#8893a0}.sidefoot{border-top:1px solid var(--line);margin-top:26px;padding-top:12px;font-size:12px;color:#b9c0c8}
+main{min-width:0}.tab{height:32px;background:#24262a;border-bottom:1px solid var(--line);font-size:12px;color:#c2c8cf;padding:5px 25px}.work{max-width:1680px;margin:auto;padding:20px 26px 22px}.heading,.row,.toolrow,.timelineTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.crumb{font-size:12px;color:#a8b1bb;margin-bottom:3px}h1{font-size:27px;line-height:1.3;letter-spacing:.03em}.heading{margin-bottom:16px}.version{font-size:12px;color:#c6cbd2;border:1px solid var(--line);border-radius:5px;padding:4px 9px}.columns{display:grid;grid-template-columns:minmax(0,1.24fr) minmax(0,.92fr);gap:16px}.panel{border:1px solid var(--line);background:var(--panel);border-radius:6px;overflow:hidden}.panelHead{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;border-bottom:1px solid var(--line);gap:10px}.panelHead h2,.timelineTitle h2{font-size:15px}.source{position:relative;background:#e4e5e5;height:clamp(160px,17vw,232px);overflow:hidden;text-align:center}.source img{height:100%;width:100%;object-fit:contain;background:#eeefed}.source span{position:absolute;bottom:9px;left:12px;color:white;font:12px ui-monospace,Menlo,monospace;background:#25272de6;padding:4px 7px;border-radius:3px}.data{padding:12px 15px}.data p{margin:5px 0}.data .small{margin:5px 0;color:#b8c0ca}.cliprow{display:grid;grid-template-columns:98px 1fr;gap:10px;border-bottom:1px solid #35393f;padding:10px 14px;align-items:start}.jump{align-self:start;text-align:left;padding:1px 0;border:0;background:transparent;color:var(--blue);font:12px/1.5 Menlo,monospace}.jump:hover,.jump[aria-pressed=true]{text-decoration:underline;background:transparent}.credit{font-size:10px;color:var(--muted)}.credit a{color:inherit}.cliprow time{font-size:12px;color:#b5c1ce;padding-top:2px}.cliprow p{font-size:15px}.cliprow .small{font-size:12px;margin-top:2px;color:#a7afb9}.cliprow.flag{border-left:3px solid var(--amber);background:#363128;padding-left:11px}.cliprow.keep{border-left:3px solid var(--green);background:#283632;padding-left:11px}.cliprow.skip{opacity:.68}.skip .quote{text-decoration:line-through}.actions{padding:12px 14px}.actions p{margin:0 0 8px}.toolrow{justify-content:flex-start;flex-wrap:wrap;gap:7px}.info{background:#2b3137;border-top:1px solid #424b54;padding:9px 14px;font-size:13px;color:#cbd8e4}.note{margin-top:11px;border:1px solid #505047;background:#302e2a;padding:11px 14px;border-radius:5px}.note strong{font-size:14px}.note p{font-size:12px;color:#c6c1b7;margin:4px 0 8px}.note button{font-size:12px;padding:4px 9px}.timeline{margin-top:16px;padding:13px 16px}.timelineTitle{margin-bottom:12px}.ruler{display:flex;justify-content:space-between;margin:0 0 5px 53px;font:11px Menlo,monospace;color:#abb5c1}.lane{display:flex;align-items:stretch;margin-top:5px;gap:5px}.laneName{min-width:49px;align-self:center;color:#c2cad2;font-size:12px}.track{flex:1;display:flex;min-width:0;gap:3px}.seg{display:flex;align-items:center;justify-content:center;text-align:center;background:#334251;border-top:2px solid #7193ae;min-width:0;padding:6px 1px;color:#d4e3f2;font-size:12px}.seg.warn{background:#473d2f;border-color:#bc9764;color:#fae1b8}.seg.lock{background:#294438;border-color:#70a68a;color:#d8ecde}.thin .seg{padding:2px 1px;background:#363a44;border-color:#737d95;color:#d6d9e3}.notice{padding-top:9px;font-size:12px;color:#c1cbd5}.status{height:27px;background:#284665;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:12px;color:#e1ebf5}dialog{max-width:min(410px,94vw);background:#2c3035;color:var(--text);border:1px solid #697584;border-radius:7px;padding:20px}dialog::backdrop{background:#0008}dialog input{width:100%;padding:8px 9px;margin:12px 0;border:1px solid #6e7985;background:#21252a;color:var(--text)}dialog .toolrow{justify-content:flex-end}
+@media(max-width:1050px){.shell{grid-template-columns:144px 1fr}.work{padding:15px}.columns{grid-template-columns:1.14fr .86fr;gap:9px}.cliprow{grid-template-columns:76px 1fr;font-size:12px}.cliprow p{font-size:14px}.toolrow button{font-size:12px}}
+@media(max-width:760px){aside{display:none}.shell{display:block}.columns{display:flex;flex-direction:column}.work{padding:12px}.source{height:185px}.cliprow{grid-template-columns:85px 1fr}.seg{font-size:10px}.status{height:auto;padding:5px 10px;gap:10px;flex-wrap:wrap}.tab{padding-left:12px}.heading{align-items:flex-end}.version{font-size:10px}.timeline{padding:10px 6px}.timelineTitle{align-items:flex-start;flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<header><span><span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>CCLink Studio</span><span>视频制作 · 方案示意</span></header>
+<div class="shell">
+<aside aria-label="视频侧栏"><h2>视频工作台</h2><div class="sidehead">当前作品</div><div class="selected">佩戴前的检查<br><small>中文售后说明</small></div><div class="sidehead">制作步骤</div><div class="file">稿件与口播</div><div class="file blue">分镜与素材</div><div class="file">声音与字幕</div><div class="file">预览与导出</div><div class="sidehead">已导入的素材</div><div class="folder">⌄　现场记录</div><div class="file">演示主机位.mov</div><div class="file">镜腿近景.mov</div><div class="file">解说逐字稿.srt</div><div class="sidefoot">本地工作空间<br>素材随作品保存</div></aside>
+<main><div class="tab">视频　/　佩戴前的检查</div><article class="work">
+<div class="heading"><div><div class="crumb">分镜与素材　/　粗剪审阅</div><h1>按逐字稿粗剪</h1></div><div class="version" id="version">剪辑 v4 · 本机</div></div>
+<div class="columns"><section class="panel" aria-labelledby="transcriptTitle">
+<div class="panelHead"><h2 id="transcriptTitle">原片逐字稿</h2><small>演示主机位.mov · 源时间</small></div>
+<div class="cliprow"><button class="jump" data-idx="0" aria-label="定位原片 00:11 至 00:17">00:11–00:17</button><div><p>拿起眼镜前，先看这个位置。</p><p class="small">保留开场说明</p></div></div>
+<div class="cliprow flag" id="firstTake"><button class="jump" data-idx="1" aria-label="定位原片 00:17 至 00:21">00:17–00:21</button><div><p class="quote">先看镜腿朝……我重说一遍。</p><p class="small" id="firstLabel">重说候选 · 下一句是完整表述</p></div></div>
+<div class="cliprow"><button class="jump" data-idx="2" aria-label="定位原片 00:21 至 00:27">00:21–00:27</button><div><p id="correctLine">先看清镜腿的方向，再拿起眼镜。</p><p class="small">保留这一遍 · 可单独更正字幕</p></div></div>
+<div class="cliprow keep"><button class="jump" data-idx="3" aria-label="定位原片 00:27 至 00:34">00:27–00:34</button><div><p>接下来，请看完整的手部动作。</p><p class="small">已保护 · 保留动作、等待及同期声</p></div></div>
+<div class="actions"><p class="small" id="decision">拟剪掉原片 00:17–00:21，声画与对应字幕一起移除。</p><div class="toolrow"><button class="primary" id="cut">采用剪点 · 移除 4 秒</button><button id="correct">更正保留句字幕</button></div></div>
+<div class="info" aria-live="polite" id="feedback">采用前可对照原片范围，已保护的 7 秒保持连续。</div>
+</section>
+<div><section class="panel"><div class="panelHead"><h2>来源画面</h2><small>构图占位 · 方案示意</small></div><figure class="source"><img src="reference-main.jpg" alt="历史眼镜产品的实物摄影，用于演示构图"><span id="sourceStamp">演示主机位.mov　00:21.000</span></figure><div class="data"><div class="row"><strong id="sourceTitle">第二遍完整表述</strong><span class="small green">关联原片</span></div><p class="small"><span id="sourceRange">源 00:21–00:27</span> <span aria-hidden="true"> → </span><span id="mapped">成片 00:15–00:21</span></p><div class="credit">占位摄影　<a href="https://commons.wikimedia.org/wiki/File:Google_Glass_Main.jpg">Tim.Reckmann</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a></div></div></section>
+<section class="note"><strong><span class="orange">待补实拍</span>　包装上的适用型号</strong><p>本段缺少清晰可读的型号标签。拍一段标签特写后绑定到片尾。</p><button id="reshoot">加入补拍单</button></section></div></div>
+<section class="panel timeline"><div class="timelineTitle"><h2>成片时间线</h2><span class="small" id="duration">当前 42 秒　·　采用后 38 秒</span></div><div class="ruler" id="ruler"></div><div class="lane"><span class="laneName">声画</span><div id="videoTrack" class="track"></div></div><div class="lane thin"><span class="laneName">字幕</span><div id="captionTrack" class="track"></div></div><p class="notice" id="timelineNote">黄色为待决定的重说，绿色为已锁定的连续动作。原片保留全部内容。</p></section>
+</article></main></div><div class="status"><span id="state">粗剪建议待审阅</span><span>本页交互仅用于方案讨论</span></div>
+<dialog id="editor"><form method="dialog"><h3>更正保留句字幕</h3><p class="small">修改文字后，原片范围、声音和成片时长均保留。</p><input id="caption" maxlength="90" aria-label="保留句字幕" required><div class="toolrow"><button value="cancel" formnovalidate>取消</button><button class="primary" value="save">保存字幕</button></div></form></dialog>
+<script>
+const byId = id => document.getElementById(id);
+let removed = false;
+let revision = 4;
+let onReshootList = false;
+const scenes = [
+  {name:"开场", seconds:5}, {name:"定位", seconds:6}, {name:"重说", seconds:4, css:"warn"},
+  {name:"保留句", seconds:6}, {name:"连续动作", seconds:7, css:"lock"}, {name:"说明与片尾", seconds:14}
+];
+function stamp(sec) { return "00:" + String(sec).padStart(2,"0"); }
+let selectedRange = 2;
+const rows = [
+  {start:11,end:17,at:5,title:"开场说明"},
+  {start:17,end:21,at:11,title:"第一遍中断的口播"},
+  {start:21,end:27,at:15,title:"第二遍完整表述"},
+  {start:27,end:34,at:21,title:"已保护的连续动作"}
+];
+function updateSource() {
+  const row = rows[selectedRange];
+  const at = row.at - (removed && selectedRange > 1 ? 4 : 0);
+  byId("sourceTitle").textContent = row.title;
+  byId("sourceStamp").textContent = "演示主机位.mov　" + stamp(row.start) + ".000";
+  byId("sourceRange").textContent = "源 " + stamp(row.start) + "–" + stamp(row.end);
+  byId("mapped").textContent = removed && selectedRange === 1 ? "已从成片移除" : "成片 " + stamp(at) + "–" + stamp(at + row.end - row.start);
+  for(const jump of document.querySelectorAll(".jump")) jump.setAttribute("aria-pressed", String(Number(jump.dataset.idx)===selectedRange));
+}
+for(const jump of document.querySelectorAll(".jump")) jump.onclick = () => { selectedRange=Number(jump.dataset.idx); updateSource(); };
+function sync() {
+  const active = scenes.filter(scene => !(removed && scene.name === "重说"));
+  const total = active.reduce((sum,scene) => sum + scene.seconds,0);
+  byId("version").textContent = "剪辑 v" + revision + " · 本机";
+  byId("firstTake").classList.toggle("skip",removed);
+  byId("firstLabel").textContent = removed ? "已从成片移除 · 源片仍可定位" : "重说候选 · 下一句是完整表述";
+  byId("decision").textContent = removed ? "原片 00:17–00:21 已从本版移除。撤销可完整恢复这次剪点。" : "拟剪掉原片 00:17–00:21，声画与对应字幕一起移除。";
+  byId("cut").textContent = removed ? "撤销剪点 · 恢复 4 秒" : "采用剪点 · 移除 4 秒";
+  updateSource();
+  byId("duration").textContent = removed ? "当前 38 秒　·　已移除 4 秒" : "当前 42 秒　·　采用后 38 秒";
+  byId("state").textContent = removed ? "本版剪点已采用" : "粗剪建议待审阅";
+  byId("ruler").replaceChildren(...[0,0.25,0.5,0.75,1].map(fraction => {const tick=document.createElement("span"); tick.textContent=stamp(Math.round(total*fraction)); return tick;}));
+  for (const id of ["videoTrack","captionTrack"]) {
+    byId(id).replaceChildren(...active.map(scene => { const segment=document.createElement("span"); segment.className="seg " + (scene.css || ""); segment.style.flex=scene.seconds + " 1 0%"; segment.textContent=id==="videoTrack" ? scene.name : scene.seconds + "s"; return segment; }));
+  }
+}
+byId("cut").onclick = () => { removed=!removed; revision++; sync(); byId("feedback").textContent=removed?"已移除 4 秒。保留句前移到 00:11，完整动作与同期声仍为 7 秒。":"已撤销剪点，原来的声画和字幕顺序已恢复。"; };
+byId("correct").onclick = () => { byId("caption").value=byId("correctLine").textContent; byId("editor").showModal(); };
+byId("editor").onclose = () => { const value=byId("caption").value.trim(); if(byId("editor").returnValue==="save" && value && value!==byId("correctLine").textContent){ byId("correctLine").textContent=value; revision++; sync(); byId("feedback").textContent="字幕已更正。本版剪点、声音和总时长保留，整片预览待更新。"; } byId("editor").returnValue=""; };
+byId("reshoot").onclick = () => { onReshootList=!onReshootList; byId("reshoot").textContent=onReshootList?"撤回补拍项":"加入补拍单"; byId("feedback").textContent=onReshootList?"已登记补拍「包装上的适用型号」。收到真实特写后可绑定到片尾。":"已撤回补拍项，该段仍缺少型号特写。"; };
+sync();
+</script></body></html>

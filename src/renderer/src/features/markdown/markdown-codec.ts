@@ -1,5 +1,6 @@
 import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
 import { replaceMarkdownSizedImages } from '@shared/markdown-sized-image'
+import { protectMarkdownHtml } from './markdown-html-blocks'
 import MarkdownIt from 'markdown-it'
 import { marked } from 'marked'
 
@@ -97,7 +98,7 @@ const TABLE_DELIMITER = /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/
 const BLOCKQUOTE = /^ {0,3}>/
 const BLOCK_HTML = /^\s*<(?:!--|\/?[A-Za-z][A-Za-z0-9:-]*(?:\s|>|\/))/
 const AUTOLINK_START = /^\s*<[A-Za-z][A-Za-z0-9+.-]{1,31}:[^ <>\n]*>/
-const RAW_HTML = /(?<!\\)(?:<!--[\s\S]*?-->|<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*?)?\s*\/?>)/m
+const RAW_HTML = /(?<!\\)(?:<!--[\s\S]*?-->|<(\/?[A-Za-z][A-Za-z0-9:-]*)(?:\s[^<>]*?)?\s*\/?>)/m
 const MDX_IMPORT_EXPORT = /^\s*(?:import|export)\s+.+(?:from\s+)?['"][^'"]+['"]/m
 const MDX_COMPONENT = /^\s*<[A-Z][A-Za-z0-9.]*(?:\s|\/?>)/m
 const FOOTNOTE = /^\s*\[\^[^\]]+\]:/m
@@ -236,10 +237,15 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
   const htmlMatch = RAW_HTML.exec(proseSource)
   if (htmlMatch) {
     const htmlLine = proseSource.slice(0, htmlMatch.index).split('\n').length
+    // Only report the tag name. Attributes and comment bodies can contain private diary text.
+    const tag = htmlMatch[1]
+    const syntax = tag
+      ? `HTML 标签 <${tag.length > 64 ? tag.slice(0, 64) + '…' : tag}>`
+      : 'HTML 注释'
     diagnostics.push({
       code: 'unsupported-html',
       severity: 'error',
-      message: '当前版本不支持编辑包含原始 HTML 的 Markdown 文件。',
+      message: `正文第 ${htmlLine} 行含有${syntax}，富文本编辑器暂不支持此语法。`,
       startLine: htmlLine,
       endLine: htmlLine + htmlMatch[0].split('\n').length - 1,
     })
@@ -293,6 +299,21 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
 
   const safeToEdit = !diagnostics.some((item) => item.severity === 'error')
   return { blocks, diagnostics, safeToEdit, safeToSave: safeToEdit }
+}
+
+/** The full editor can isolate HTML-bearing blocks before giving Markdown to Tiptap. */
+export function analyzeEditableMarkdown(source: string, serialized?: string): MarkdownAnalysis {
+  if (!source.includes('<') && !serialized?.includes('<'))
+    return analyzeMarkdown(source, serialized)
+  const literal = protectMarkdownHtml(source, serialized)
+  const original = analyzeMarkdown(source, serialized)
+  if (!literal.blocks.length) return original
+  // Other unsupported syntax keeps its original protection and source line numbers.
+  if (original.diagnostics.some((d) => d.severity === 'error' && d.code !== 'unsupported-html')) {
+    return original
+  }
+  const checked = analyzeMarkdown(literal.source, literal.reference)
+  return { ...checked, blocks: original.blocks }
 }
 
 function maskFencedBlocks(source: string, blocks: MarkdownSourceBlock[]): string {
@@ -864,6 +885,16 @@ function expandSameLineListHeadings(source: string): string {
 }
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
+  if (source.includes('<') || referenceSource?.includes('<')) {
+    const literal = protectMarkdownHtml(source, referenceSource)
+    if (literal.blocks.length) {
+      return literal.restore(normalizeEditorOutput(literal.source, literal.reference))
+    }
+  }
+  return normalizeEditorOutput(source, referenceSource)
+}
+
+function normalizeEditorOutput(source: string, referenceSource?: string): string {
   const body = normalizeEditorOutputBody(source, referenceSource)
   const output =
     referenceSource === undefined ? body : restoreUntouchedMarkdownBlocks(body, referenceSource)

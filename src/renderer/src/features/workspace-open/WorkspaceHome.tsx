@@ -1,7 +1,6 @@
 import { showWorkspaceHome } from './workspace-home-navigation'
-import { WorkspaceSettingsForm, openWorkspaceSettings } from './WorkspaceSettingsForm'
+import { WorkspaceSettingsForm } from './WorkspaceSettingsForm'
 import { workspaceTypeLabels } from '@shared/workspace-settings'
-import { IconSettings } from '../../components/common/Icons'
 import { HardwareProductionSection } from '../../components/sidebar/HardwareProductionSection'
 import { CompanyWorkbench } from '../company-workspace/CompanyWorkbench'
 import { useUIStore } from '../../stores/ui-store'
@@ -41,17 +40,11 @@ export function WorkspaceHome({ settings = false }: { settings?: boolean }): Rea
   const diary = config?.type === 'diary' || (isPersonal && !config)
   return (
     <div className="project-home-shell">
-      {/* Diary homes have no header row: 项目设置 lives in the left sidebar. */}
       {!diary && (
         <header className="project-home-header">
           <h1>{name}</h1>
           <small>{config && workspaceTypeLabels[config.type]}</small>
-          {ref.kind === 'local' && (
-            <button onClick={() => (settings ? showWorkspaceHome(ref) : openWorkspaceSettings())}>
-              <IconSettings size={14} />
-              {settings ? '返回首页' : '项目设置'}
-            </button>
-          )}
+          {settings && <button onClick={() => showWorkspaceHome(ref)}>返回首页</button>}
         </header>
       )}
       {settings ? (

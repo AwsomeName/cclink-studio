@@ -72,12 +72,7 @@ export function reorderOpenProjectPaths(
   return next
 }
 
-export function workspaceStripGroup(
-  key: string,
-  pinnedKeys: string[],
-  personalPath?: string,
-): number {
-  if (key === personalPath) return 0
+export function workspaceStripGroup(key: string, pinnedKeys: string[]): number {
   return pinnedKeys.includes(key) ? 1 : 2
 }
 

@@ -28,7 +28,7 @@ import { useEscapeDismiss } from '../common/dismissable-layer'
 import { useFloatingSurfaceRegistration } from '../common/floating-surface-registry'
 import { EditorToolbar } from './EditorToolbar'
 import {
-  analyzeMarkdown,
+  analyzeEditableMarkdown,
   hashMarkdownSnapshot,
   mapTopLevelSelectionToSource,
   normalizeMarkdownEditorOutput,
@@ -56,6 +56,7 @@ import {
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
+import { MarkdownLiteralBlock } from '../../features/markdown/markdown-literal-block'
 import { parseMarkdownEditorDocument } from '../../features/markdown/markdown-editor-document'
 import { inspectMarkdownEditorBeforeSave } from '../../features/markdown/markdown-save-guard'
 import {
@@ -226,6 +227,7 @@ export function MarkdownEditor({
       }),
       Markdown,
       MarkdownListItem,
+      MarkdownLiteralBlock,
       CodeBlockLowlight.configure({
         lowlight,
         defaultLanguage: 'plaintext',
@@ -332,7 +334,7 @@ export function MarkdownEditor({
         const reference = useEditorStore.getState().files[fileKeyRef.current]?.currentContent
         const markdown = normalizeMarkdownEditorOutput(currentEditor.getMarkdown(), reference)
         useEditorStore.getState().updateContent(fileKeyRef.current, markdown)
-        const analysis = analyzeMarkdown(markdown)
+        const analysis = analyzeEditableMarkdown(markdown)
         useEditorStore.getState().setDiagnostics(fileKeyRef.current, analysis.diagnostics)
       },
       onSelectionUpdate: () => {
@@ -595,7 +597,7 @@ export function MarkdownEditor({
     setParseBlockedReason(null)
     setProtectedPreviewAvailable(false)
     setMarkdownEditorEditable(editor, false)
-    const analysis = analyzeMarkdown(fileState.currentContent)
+    const analysis = analyzeEditableMarkdown(fileState.currentContent)
     const initialDiagnostics = analysis.diagnostics
     useEditorStore.getState().setDiagnostics(fileKey, initialDiagnostics)
     if (!analysis.safeToEdit) {
@@ -668,7 +670,7 @@ export function MarkdownEditor({
     } finally {
       hydratingRef.current = false
     }
-    const roundTrip = analyzeMarkdown(fileState.currentContent, serialized)
+    const roundTrip = analyzeEditableMarkdown(fileState.currentContent, serialized)
     useEditorStore.getState().setDiagnostics(fileKey, roundTrip.diagnostics)
     if (!roundTrip.safeToSave) {
       const reason =
@@ -715,7 +717,7 @@ export function MarkdownEditor({
     if (!editor) return
     setMarkdownEditorEditable(editor, !parseBlockedReason)
   }, [editor, parseBlockedReason])
-  // Content the rich editor cannot round-trip (e.g. raw HTML) opens in source mode instead of
+  // Content the rich editor cannot round-trip opens in source mode instead of
   // being refused, so the user can still edit the original Markdown (my-space design §8).
   const switchedToSourceRef = useRef(false)
   useEffect(() => {
@@ -1152,7 +1154,7 @@ export function MarkdownEditor({
   }
 
   // Embedded (My Space) pages have no 打开方式 switch: content the rich editor cannot round-trip,
-  // such as raw HTML, is edited as source right here instead of being shown as read-only.
+  // such as footnotes, is edited as source right here instead of being shown as read-only.
   if (compact && filePath && parseBlockedReason) {
     return (
       <div className="markdown-editor-wrapper compact-source">

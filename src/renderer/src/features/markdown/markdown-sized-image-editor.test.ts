@@ -7,6 +7,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { analyzeMarkdown, inspectMarkdownRoundTrip } from './markdown-codec'
+import { MarkdownLiteralBlock } from './markdown-literal-block'
 import { parseMarkdownEditorDocument } from './markdown-editor-document'
 import { MarkdownImage } from './MarkdownImage'
 import { inspectMarkdownEditorBeforeSave } from './markdown-save-guard'
@@ -34,6 +35,7 @@ beforeEach(() => {
     extensions: [
       StarterKit.configure({ link: false }),
       Markdown,
+      MarkdownLiteralBlock,
       MarkdownImage.configure({ inline: false }),
       Table,
       TableRow,

@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/core'
 import {
   analyzeMarkdown,
+  analyzeEditableMarkdown,
   normalizeMarkdownEditorOutput,
   type MarkdownAnalysis,
   type MarkdownDiagnostic,
@@ -17,7 +18,10 @@ export function inspectMarkdownEditorBeforeSave(
   referenceSource?: string,
 ): MarkdownSaveInspection {
   const markdown = normalizeMarkdownEditorOutput(editor.getMarkdown(), referenceSource)
-  const initial = analyzeMarkdown(markdown)
+  const analyze = editor.schema.nodes.markdownLiteralBlock
+    ? analyzeEditableMarkdown
+    : analyzeMarkdown
+  const initial = analyze(markdown)
   if (!initial.safeToSave) return { ...initial, markdown }
 
   if (!editor.markdown) {
@@ -31,7 +35,7 @@ export function inspectMarkdownEditorBeforeSave(
       markdown,
     )
     return {
-      ...analyzeMarkdown(markdown, reparsedMarkdown),
+      ...analyze(markdown, reparsedMarkdown),
       markdown,
       reparsedMarkdown,
     }

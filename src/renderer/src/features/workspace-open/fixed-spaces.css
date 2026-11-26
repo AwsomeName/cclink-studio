@@ -364,10 +364,19 @@
   flex-direction: column;
   background: var(--bg-sidebar);
 }
+.workspace-sidebar-shell > .diary-inline-files,
+.workspace-sidebar-shell > .activity-bar {
+  flex: 1;
+  min-height: 0;
+}
+.project-sidebar-footer {
+  flex: none;
+  padding: 6px;
+  border-top: 1px solid var(--border-color);
+}
 .workspace-sidebar-shell > .activity-bar {
   width: 100%;
   min-width: 0;
-  height: 100%;
   box-sizing: border-box;
   background: var(--bg-sidebar);
   padding: 10px 6px;

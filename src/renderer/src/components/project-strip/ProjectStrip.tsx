@@ -23,6 +23,7 @@ import {
   useFixedSpacesStore,
   refreshFixedSpaces,
   openPersonalSpace,
+  openCompanySpaceHome,
 } from '../../features/workspace-open/fixed-spaces-store'
 
 type DropPlacement = 'before' | 'after'
@@ -51,16 +52,28 @@ function buildProjectLabels(paths: string[]): Map<string, string> {
   )
 }
 
+function ProjectRunCount({ count = 0 }: { count?: number }): React.ReactElement | null {
+  if (!count) return null
+  return (
+    <span
+      className="project-strip-run-status"
+      title={`${count} 个任务运行中`}
+      aria-label={`${count} 个任务运行中`}
+    >
+      <span className="project-strip-run-dot" />
+      {count}
+    </span>
+  )
+}
+
 export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): React.ReactElement {
   const spaces = useFixedSpacesStore((state) => state.spaces)
   const allOpenProjectPaths = useOpenProjectsStore((state) => state.openProjectPaths)
   const personalPath = spaces?.personal?.workspacePath
+  const companyPath = spaces?.company?.workspacePath
   const openProjectPaths = useMemo(
-    () =>
-      personalPath
-        ? [personalPath, ...allOpenProjectPaths.filter((path) => path !== personalPath)]
-        : allOpenProjectPaths,
-    [personalPath, allOpenProjectPaths],
+    () => allOpenProjectPaths.filter((path) => path !== personalPath && path !== companyPath),
+    [allOpenProjectPaths, personalPath, companyPath],
   )
   useEffect(() => {
     void refreshFixedSpaces().catch(() => {})
@@ -70,9 +83,9 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
   const pinnedWorkspaceKeys = useOpenProjectsStore((state) => state.pinnedWorkspaceKeys)
   const stripEntries = useMemo(() => {
     const entries = [...openProjectPaths.map(localWorkspaceRef), ...openRemoteWorkspaceRefs]
-    const group = (key: string) => workspaceStripGroup(key, pinnedWorkspaceKeys, personalPath)
+    const group = (key: string) => workspaceStripGroup(key, pinnedWorkspaceKeys)
     return entries.sort((a, b) => group(workspaceRefKey(a)!) - group(workspaceRefKey(b)!))
-  }, [openProjectPaths, openRemoteWorkspaceRefs, personalPath, pinnedWorkspaceKeys])
+  }, [openProjectPaths, openRemoteWorkspaceRefs, pinnedWorkspaceKeys])
   const recentWorkspaceRefs = useOpenProjectsStore((state) => state.recentWorkspaceRefs)
   const removeRemoteProject = useOpenProjectsStore((state) => state.removeRemoteProject)
   const switchingPath = useFsStore((state) => state.switchingPath)
@@ -138,21 +151,19 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
           openProjectPaths.filter((other) => projectNames[other] === name).length > 1
         fallback.set(path, duplicates ? `${name} · ${getParentName(path)}` : name)
       }
-    // My Space keeps its own name whatever directory backs it.
-    if (personalPath) fallback.set(personalPath, '我的空间')
     return fallback
-  }, [openProjectPaths, projectNames, personalPath])
+  }, [openProjectPaths, projectNames])
   const runningProjectCounts = useMemo(
     () => getRunningProjectCounts(conversations),
     [conversations],
   )
   const historyWorkspaceRefs = useMemo(() => {
-    const openLocalPaths = new Set(openProjectPaths)
+    const openLocalPaths = new Set([...openProjectPaths, personalPath, companyPath])
     const openKeys = new Set(openRemoteWorkspaceRefs.map(workspaceRefKey))
     return recentWorkspaceRefs.filter((ref) =>
       ref.kind === 'local' ? !openLocalPaths.has(ref.path) : !openKeys.has(workspaceRefKey(ref)),
     )
-  }, [openProjectPaths, openRemoteWorkspaceRefs, recentWorkspaceRefs])
+  }, [openProjectPaths, openRemoteWorkspaceRefs, recentWorkspaceRefs, personalPath, companyPath])
 
   useEffect(() => {
     if (!activePath) return
@@ -272,6 +283,25 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
     if (event.clientX > scrollRect.right - 28) scrollElement.scrollLeft += 18
   }
 
+  const projectMenuHandlers = (target: ContextTarget) => ({
+    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      setHistoryOpen(false)
+      showContextMenu({
+        target,
+        x: event.clientX,
+        y: event.clientY,
+        focusReturn: event.currentTarget,
+      })
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
+      event.preventDefault()
+      setHistoryOpen(false)
+      showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))
+    },
+  })
+
   return (
     <div className="project-strip">
       <CompanySpaceDialog />
@@ -288,17 +318,36 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
           }}
         >
           <div className="project-strip-list">
-            {!personalPath && (
-              <button
-                className="project-strip-item"
-                disabled={workspaceBusy}
-                onClick={() =>
-                  void openPersonalSpace().catch((error) => showToast(String(error), 'error'))
-                }
-              >
-                <IconProjects size={13} /> 我的空间
-              </button>
-            )}
+            {(
+              [
+                ['我的空间', personalPath, openPersonalSpace],
+                ['我的公司', companyPath, openCompanySpaceHome],
+              ] as const
+            ).map(([label, path, open]) => {
+              const active = !!path && path === activePath
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  className={`project-strip-item ${active ? 'active' : ''}`}
+                  data-project-path={path}
+                  title={path ? `固定项目 · ${path}` : label}
+                  aria-current={active ? 'page' : undefined}
+                  disabled={workspaceBusy}
+                  ref={(element) => {
+                    if (!path) return
+                    if (element) projectRefs.current.set(path, element)
+                    else projectRefs.current.delete(path)
+                  }}
+                  {...(path && projectMenuHandlers({ kind: 'project', workspaceKey: path, path }))}
+                  onClick={() => void open().catch((error) => showToast(String(error), 'error'))}
+                >
+                  <IconBookmark size={13} />
+                  <span className="project-strip-label">{label}</span>
+                  <ProjectRunCount count={path ? runningProjectCounts.get(path) : undefined} />
+                </button>
+              )
+            })}
             {stripEntries.map((ref) => {
               const key = workspaceRefKey(ref)!
               const pinned = pinnedWorkspaceKeys.includes(key)
@@ -306,24 +355,7 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                 ref.kind === 'local'
                   ? { kind: 'project', workspaceKey: key, path: ref.path }
                   : { kind: 'remote-workspace', workspaceKey: key }
-              const menuHandlers = {
-                onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => {
-                  event.preventDefault()
-                  setHistoryOpen(false)
-                  showContextMenu({
-                    target,
-                    x: event.clientX,
-                    y: event.clientY,
-                    focusReturn: event.currentTarget,
-                  })
-                },
-                onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
-                  if (!isContextMenuKeyboardEvent(event.nativeEvent)) return
-                  event.preventDefault()
-                  setHistoryOpen(false)
-                  showContextMenu(buildKeyboardContextMenuInput(target, event.currentTarget))
-                },
-              }
+              const menuHandlers = projectMenuHandlers(target)
               if (ref.kind === 'remote') {
                 const active = key === activeWorkspaceKey
                 return (
@@ -370,16 +402,14 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                     else projectRefs.current.delete(path)
                   }}
                   className={`project-strip-item ${active ? 'active' : ''} ${draggingPath === path ? 'dragging' : ''} ${dropClass}`}
-                  draggable={path !== personalPath}
+                  draggable
                   data-project-path={path}
                   title={pinned ? `已固定 · ${path}` : path}
                   aria-current={active ? 'page' : undefined}
                   disabled={workspaceBusy}
                   onClick={() => {
                     if (suppressClickRef.current) return
-                    if (path === personalPath)
-                      void openPersonalSpace().catch((error) => showToast(String(error), 'error'))
-                    else void activateProject(path)
+                    void activateProject(path)
                   }}
                   {...menuHandlers}
                   onDragStart={(event) => {
@@ -389,7 +419,7 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                     event.dataTransfer.effectAllowed = 'move'
                     event.dataTransfer.setData('text/project-path', path)
                   }}
-                  onDragOver={(event) => path !== personalPath && handleDragOver(event, path)}
+                  onDragOver={(event) => handleDragOver(event, path)}
                   onDrop={(event) => {
                     event.preventDefault()
                     const sourcePath =
@@ -397,7 +427,7 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                     const rect = event.currentTarget.getBoundingClientRect()
                     const placement: DropPlacement =
                       event.clientX < rect.left + rect.width / 2 ? 'before' : 'after'
-                    if (sourcePath && path !== personalPath) {
+                    if (sourcePath) {
                       reorderProject(sourcePath, path, placement)
                     }
                     setDraggingPath(null)
@@ -413,26 +443,11 @@ export function ProjectStrip({ openButton }: { openButton: React.ReactNode }): R
                     })
                   }}
                 >
-                  {path === personalPath || pinned ? (
-                    <IconBookmark size={13} />
-                  ) : (
-                    <IconProjects size={13} />
-                  )}
+                  {pinned ? <IconBookmark size={13} /> : <IconProjects size={13} />}
                   <span className="project-strip-label">
-                    {active && settingsSnapshot && path !== personalPath
-                      ? settingsSnapshot.settings.name
-                      : labels.get(path)}
+                    {active && settingsSnapshot ? settingsSnapshot.settings.name : labels.get(path)}
                   </span>
-                  {runningCount > 0 && (
-                    <span
-                      className="project-strip-run-status"
-                      title={`${runningCount} 个任务运行中`}
-                      aria-label={`${runningCount} 个任务运行中`}
-                    >
-                      <span className="project-strip-run-dot" />
-                      {runningCount}
-                    </span>
-                  )}
+                  <ProjectRunCount count={runningCount} />
                 </button>
               )
             })}

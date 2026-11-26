@@ -115,15 +115,17 @@ try {
   await calendar.getByRole('gridcell', { name: '2026-07-15 有日记' }).click()
   await home.getByLabel('切换日期').getByText(/^0715/).waitFor()
 
-  // A file with raw HTML opens in source mode instead of being refused.
+  // An HTML fragment stays inside the editable diary.
   for (let i = 0; i < 12 && !(await calendar.getByText('2026 年 11 月').isVisible()); i++)
     await calendar.getByRole('button', { name: '下个月' }).click()
   await calendar.getByRole('gridcell', { name: '2026-11-17 有日记' }).click()
-  // The day opens right here, editable as source (no 继续写 step, no read-only notice).
-  const source = home.getByRole('article', { name: '当天日记' }).locator('textarea').first()
-  await source.waitFor()
-  assert.match(await source.inputValue(), /原始 HTML/)
-  assert(await source.isEditable())
+  const dayEditor = home
+    .getByRole('article', { name: '当天日记' })
+    .locator('.tiptap[contenteditable=true]')
+  const literal = dayEditor.locator('.markdown-literal-block')
+  await literal.waitFor()
+  assert.equal(await literal.textContent(), '<div align="center">原始 HTML</div>')
+  assert.equal(await dayEditor.locator('h1').textContent(), '周二')
   assert.equal(await page.getByText('文档未被改写').count(), 0)
   await page.screenshot({ path: join(shots, 'v2-html-source.png') })
 

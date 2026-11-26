@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { workspaceRefKey } from '../../shared/workspace-ref'
 import { useCommandStore, useFsStore, useTabStore, useUIStore, useWorkspaceStore } from './stores'
 import { useThemeStore } from './stores/theme-store'
+import { openWorkspaceSettings } from './features/workspace-open/WorkspaceSettingsForm'
 import { ActivityBar } from './components/activity-bar/ActivityBar'
 import { Sidebar } from './components/sidebar/Sidebar'
 import { Workbench } from './components/workbench/Workbench'
@@ -83,6 +84,7 @@ function MainLayout(): React.ReactElement {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const workspaceLoading = useFsStore((s) => s.loading)
   const workspacePicking = useFsStore((s) => s.picking)
+  const workspaceSwitching = useFsStore((s) => s.switchingPath !== null)
   const workspaceError = useFsStore((s) => s.error)
   // The relocation dialog explains a moved personal folder; skip the raw path error behind it.
   const executeCommand = useCommandStore((s) => s.executeCommand)
@@ -134,6 +136,10 @@ function MainLayout(): React.ReactElement {
       setTabLayout(activeTabId, 'standard')
   }
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
+  const projectSettingsActive =
+    !agentInCenter &&
+    activeTab?.type === 'workspace-home' &&
+    activeTab.settingsSection === 'workspace'
   const panelLayout = usePanelLayout(
     workspaceRefKey(activeWorkspaceRef),
     {
@@ -456,6 +462,20 @@ function MainLayout(): React.ReactElement {
                 </button>
                 <Sidebar />
               </>
+            )}
+            {activeWorkspaceRef.kind === 'local' && (
+              <footer className="project-sidebar-footer">
+                <button
+                  type="button"
+                  className={`activity-bar-icon ${projectSettingsActive ? 'active' : ''}`}
+                  aria-current={projectSettingsActive ? 'page' : undefined}
+                  disabled={workspaceLoading || workspacePicking || workspaceSwitching}
+                  onClick={openWorkspaceSettings}
+                >
+                  <IconSettings size={18} />
+                  项目设置
+                </button>
+              </footer>
             )}
           </ErrorBoundary>
         </div>

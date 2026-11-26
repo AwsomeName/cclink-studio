@@ -1,7 +1,29 @@
 import { describe, expect, it } from 'vitest'
+import { analyzeMarkdown } from './markdown-codec'
 import { createMarkdownDiagnosticReport } from './markdown-diagnostic-report'
 
 describe('createMarkdownDiagnosticReport', () => {
+  it.each([
+    ['<br />', 'HTML 标签 <br>'],
+    ['<span title="private-attribute">private-text</span>', 'HTML 标签 <span>'],
+    ['</span>', 'HTML 标签 </span>'],
+    ['<!-- private-comment\ncontinued -->', 'HTML 注释'],
+  ])('identifies the first unsupported HTML in the preflight report (%s)', (html, expected) => {
+    const source = '# 日记\n' + '\n'.repeat(75) + `正文里的代码 \`<i>\` 和 ${html}`
+    const { diagnostics } = analyzeMarkdown(source)
+    const report = createMarkdownDiagnosticReport({
+      stage: 'preflight',
+      trigger: 'open',
+      source,
+      diagnostics,
+      dirty: false,
+      reloadGeneration: 0,
+    })
+    expect(report).toContain(`正文第 77 行含有${expected}`)
+    expect(report).toContain('"code": "unsupported-html"')
+    expect(report).not.toMatch(/private-|正文里的代码/)
+  })
+
   it('redacts the home directory and includes actionable round-trip evidence', () => {
     const report = createMarkdownDiagnosticReport({
       filePath: '/Users/private-user/Desktop/work/notes.md',
