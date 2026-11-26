@@ -77,6 +77,33 @@ export const MarkdownImage = Image.extend<MarkdownImageOptions>({
   },
 })
 
+/**
+ * An image written on the same line as text (`文字 ![图](a.png) 文字`, a badge in a README). The
+ * block image cannot live inside that paragraph, so editing it threw; this inline twin keeps the
+ * paragraph valid and writes the same Markdown back. The parser emits only block images; the
+ * document repair at hydration turns images that share a paragraph with text into this node.
+ */
+export const MarkdownInlineImage = MarkdownImage.extend({
+  name: 'inlineImage',
+  addOptions() {
+    const parent = this.parent?.()
+    return {
+      inline: true,
+      allowBase64: parent?.allowBase64 ?? true,
+      HTMLAttributes: parent?.HTMLAttributes ?? {},
+      resize: parent?.resize ?? false,
+      documentPath: parent?.documentPath,
+    }
+  },
+  // HTML pastes stay block images; the sized-image syntax is registered once, by MarkdownImage.
+  parseHTML() {
+    return []
+  },
+  addExtensions() {
+    return []
+  },
+})
+
 export function imageWidthAttribute(value: unknown): number | null {
   const width = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(width) && width >= MIN_MARKDOWN_IMAGE_WIDTH ? Math.round(width) : null
@@ -282,13 +309,16 @@ function MarkdownImageNodeView({
 
   const shownWidth = dragWidth ?? width
 
+  // An image on the same line as text sits inside the paragraph: every element stays inline.
+  const inline = node.type.isInline
+  const Frame = (inline ? 'span' : 'div') as 'div'
   return (
     <NodeViewWrapper
-      as="figure"
-      className={`markdown-image-node${selected ? ' selected' : ''}`}
+      as={inline ? 'span' : 'figure'}
+      className={`markdown-image-node${inline ? ' inline' : ''}${selected ? ' selected' : ''}`}
       data-markdown-image
     >
-      <div ref={frameRef} className="markdown-image-frame" onDoubleClick={openViewer}>
+      <Frame ref={frameRef} className="markdown-image-frame" onDoubleClick={openViewer}>
         {imageSource ? (
           <span
             className="markdown-image-sizer"
@@ -316,21 +346,21 @@ function MarkdownImageNodeView({
             )}
           </span>
         ) : local.phase === 'oversize' ? (
-          <div className="markdown-image-placeholder" data-image-state="oversize">
+          <Frame className="markdown-image-placeholder" data-image-state="oversize">
             <span>图片较大（{formatImageSize(local.size)}），为保持编辑流畅未自动加载</span>
             <button type="button" contentEditable={false} onClick={() => setForced(true)}>
               加载此图片
             </button>
-          </div>
+          </Frame>
         ) : local.phase === 'error' ? (
-          <div className="markdown-image-error">{local.message}</div>
+          <Frame className="markdown-image-error">{local.message}</Frame>
         ) : (
-          <div className="markdown-image-placeholder" data-image-state={local.phase}>
+          <Frame className="markdown-image-placeholder" data-image-state={local.phase}>
             {local.phase === 'loading' ? '正在加载图片...' : '图片将在滚动到附近时加载'}
-          </div>
+          </Frame>
         )}
-      </div>
-      {(alt || title) && (
+      </Frame>
+      {!inline && (alt || title) && (
         <figcaption>
           {alt}
           {alt && title ? ' · ' : ''}

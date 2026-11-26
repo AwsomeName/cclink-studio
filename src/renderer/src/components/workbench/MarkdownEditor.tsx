@@ -40,7 +40,11 @@ import {
   MARKDOWN_REVEAL_RANGE_EVENT,
   type MarkdownRevealRange,
 } from '../../features/markdown/markdown-navigation'
-import { MarkdownImage, resolveMarkdownImageSource } from '../../features/markdown/MarkdownImage'
+import {
+  MarkdownImage,
+  MarkdownInlineImage,
+  resolveMarkdownImageSource,
+} from '../../features/markdown/MarkdownImage'
 import { MarkdownTableControls } from '../../features/markdown/MarkdownTableControls'
 import { markdownTableSelectionToTsv } from '../../features/markdown/markdown-table-ops'
 import {
@@ -225,6 +229,7 @@ export function MarkdownEditor({
       }),
       Placeholder.configure({ placeholder: '开始输入，或让 AI 帮你写...' }),
       MarkdownImage.configure({ documentPath: filePath, inline: false, allowBase64: true }),
+      MarkdownInlineImage.configure({ documentPath: filePath, inline: true, allowBase64: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
       // Markdown has no column widths, so dragging one would be lost on save (design D1).

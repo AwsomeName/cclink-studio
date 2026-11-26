@@ -13,11 +13,31 @@ export function parseMarkdownEditorDocument(editor: Editor, source: string): JSO
     throw new Error('Markdown 解析器未初始化')
   }
 
-  return splitTableCellImages(
+  const repaired = splitTableCellImages(
     liftParagraphOnlyImages(
       repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source))),
     ),
   )
+  // Editors built without the inline image node (some tests, other surfaces) keep block images.
+  return editor.schema.nodes.inlineImage ? inlineParagraphImages(repaired) : repaired
+}
+
+/**
+ * After image-only paragraphs became image blocks and table cells were split, an image still
+ * inside a paragraph shares its line with text. A block image there is invalid content and
+ * breaks every edit of that paragraph, so it becomes the inline image node, which writes the same
+ * Markdown back.
+ */
+export function inlineParagraphImages(document: JSONContent): JSONContent {
+  if (!document.content) return { ...document }
+  const content = document.content.map((child) => inlineParagraphImages(child))
+  if (document.type !== 'paragraph') return { ...document, content }
+  return {
+    ...document,
+    content: content.map((item) =>
+      item.type === 'image' ? { ...item, type: 'inlineImage' } : item,
+    ),
+  }
 }
 
 const TABLE_CELL_TYPES = new Set(['tableCell', 'tableHeader'])

@@ -91,6 +91,8 @@ const SOURCE = [
   // As an earlier version saved a cell holding text, an image and text (U+001F separators).
   '| 外壳 | 喇叭集成\u001f![修角](doc.assets/b.png)\u001f光机外侧修角 |',
   '',
+  '段内配图 ![段内](doc.assets/a.png) 后面的说明文字。',
+  '',
 ].join('\n')
 await writeFile(join(workspace, 'doc.md'), SOURCE)
 const hashA = await sha(join(workspace, 'doc.assets', 'a.png'))
@@ -332,7 +334,34 @@ try {
     { row, newPageErrors: pageErrors.slice(errorsBefore) },
   )
 
-  // 7) Originals untouched.
+  // 7) An image on a line of text shows inline and can be deleted.
+  const inlineErrors = pageErrors.length
+  const inlineNode = page.locator('p .markdown-image-node.inline').first()
+  await inlineNode.scrollIntoViewIfNeeded()
+  const lineText = editor().locator('p', { hasText: '后面的说明文字' })
+  const inlineShown =
+    (await inlineNode.count()) === 1 &&
+    (await lineText.locator('.markdown-image-node').count()) === 1
+  await shot('7-inline-image')
+  await inlineNode.locator('img').click()
+  await page.keyboard.press('Backspace')
+  await sleep(400)
+  await page.keyboard.press('Meta+s')
+  await sleep(1200)
+  const afterInline = await disk()
+  const line = afterInline.split('\n').find((text) => text.includes('后面的说明文字')) ?? ''
+  record(
+    'inline-delete',
+    inlineShown &&
+      pageErrors.length === inlineErrors &&
+      !line.includes('![段内]') &&
+      line.includes('段内配图') &&
+      (await page.locator('p .markdown-image-node.inline').count()) === 0,
+    '段落中与文字同行的图片按行内显示，可删除且文字保留',
+    { line, newPageErrors: pageErrors.slice(inlineErrors) },
+  )
+
+  // 8) Originals untouched.
   const same =
     (await sha(join(workspace, 'doc.assets', 'a.png'))) === hashA &&
     (await sha(join(workspace, 'doc.assets', 'b.png'))) === hashB

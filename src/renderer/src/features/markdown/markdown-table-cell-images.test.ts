@@ -6,7 +6,8 @@ import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
-import { MarkdownImage } from './MarkdownImage'
+import { MarkdownImage, MarkdownInlineImage } from './MarkdownImage'
+import Link from '@tiptap/extension-link'
 import { parseMarkdownEditorDocument } from './markdown-editor-document'
 import { inspectMarkdownRoundTrip, normalizeMarkdownEditorOutput } from './markdown-codec'
 
@@ -26,6 +27,8 @@ beforeEach(() => {
       TableCell,
       TableHeader,
       MarkdownImage.configure({ inline: false }),
+      MarkdownInlineImage,
+      Link,
     ],
   })
 })
@@ -86,5 +89,42 @@ describe('images inside Markdown table cells', () => {
     expect(saved).toContain('| 外壳  | 集成 ![图](./a.jpg) 修角 |')
     // The damaged and repaired text are the same document, so the file still opens editable.
     expect(inspectMarkdownRoundTrip(damaged, saved).equivalent).toBe(true)
+  })
+})
+
+describe('images on a line of text', () => {
+  it.each([
+    ['a paragraph', '段落 ![图](./a.jpg) 后文\n'],
+    ['a sized image mid-line', '段落 <img src="./a.jpg" alt="图" width="120"> 后文\n'],
+    ['a list item', '- 项目 ![图](./a.jpg) 说明\n'],
+  ])('keeps %s valid and writes it back unchanged', (_name, source) => {
+    load(source)
+    expect(() => editor.state.doc.check()).not.toThrow()
+    expect(output(source)).toBe(source)
+  })
+
+  it('deletes an image that shares a paragraph with text', () => {
+    const source = '前文 ![图](./a.jpg) 后文\n'
+    load(source)
+    let imagePos = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'inlineImage') imagePos = pos
+    })
+    expect(imagePos).toBeGreaterThan(0)
+    expect(() => editor.view.dispatch(editor.state.tr.delete(imagePos, imagePos + 1))).not.toThrow()
+    expect(() => editor.state.doc.check()).not.toThrow()
+    const saved = output(source)
+    expect(saved).not.toContain('![图]')
+    expect(saved).toContain('前文')
+    expect(saved).toContain('后文')
+  })
+
+  it('keeps an image alone on its line a block image', () => {
+    load('前文\n\n![图](./a.jpg)\n\n后文\n')
+    const types: string[] = []
+    editor.state.doc.descendants((node) => {
+      if (node.type.name.toLowerCase().includes('image')) types.push(node.type.name)
+    })
+    expect(types).toEqual(['image'])
   })
 })

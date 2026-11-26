@@ -924,6 +924,33 @@
   border-radius: var(--radius-md);
 }
 
+/* An image on a line of text flows with the text instead of taking its own block. */
+.tiptap-editor .tiptap .markdown-image-node.inline {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 1px;
+  vertical-align: middle;
+}
+
+.tiptap-editor .tiptap .markdown-image-node.inline .markdown-image-frame,
+.tiptap-editor .tiptap .markdown-image-node.inline .markdown-image-sizer {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.tiptap-editor .tiptap .markdown-image-node.inline img {
+  display: inline-block;
+  margin: 0;
+}
+
+.tiptap-editor .tiptap .markdown-image-node.inline .markdown-image-placeholder,
+.tiptap-editor .tiptap .markdown-image-node.inline .markdown-image-error {
+  display: inline-flex;
+  min-height: 0;
+  padding: 0 6px;
+  flex-direction: row;
+}
+
 .tiptap-editor .tiptap .markdown-image-node.selected {
   border-color: var(--text-accent);
 }
