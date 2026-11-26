@@ -132,7 +132,7 @@ try {
     await writeFile(join(affair.directory.path, '事务配置.md'), '\n用户手改', { flag: 'a' })
     await page.getByRole('button', { name: '确认约定，开始' }).click()
     await page.locator('[data-owner-phase="pending-save"]').waitFor({ timeout: 30000 })
-    const card = page.locator('.own-call')
+    const card = page.locator('[data-owner-recover]')
     await card.getByRole('button', { name: '重试保存文件' }).waitFor()
     await card.getByRole('button', { name: '⧉ 复制 Owner 诊断' }).click()
     await page

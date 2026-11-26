@@ -96,20 +96,33 @@ function run(a: Affair, mode: string, task: string, question = false) {
 async function sendRun(a: Affair, mode: string, task: string, question: boolean) {
   if (mode !== 'main' && (!current(a.id)?.confirmed || current(a.id)?.directory?.error))
     throw Error('未取得生效约定，不能派工')
-  const { id, created } = await prepareSession(a, mode)
+  const { id, created, why } = await prepareSession(a, mode)
   const ticket = crypto.randomUUID(),
     agent = useAgentStore.getState().conversations[id]
+  if (created && mode === 'main')
+    await change(a.id, (r) => {
+      r.owner = { agent: created, why: why ?? '启动前检查可用' }
+      event(
+        r,
+        'Owner 使用 ' + (created === 'codex' ? 'Codex' : 'Claude Code') + '（' + r.owner.why + '）',
+      )
+    })
   if (created && mode !== 'main')
     await change(a.id, (r) => {
       const w = r.workers?.find((x) => x.key === mode)
-      if (w) w.agent = created
+      if (w) {
+        w.agent = created
+        if (why) w.agentWhy = why
+      }
       event(
         r,
         '执行会话 ' +
           workerLabel(mode) +
           ' 使用 ' +
           (created === 'codex' ? 'Codex' : 'Claude Code') +
-          '（启动前检查可用）',
+          '（' +
+          (why ?? '启动前检查可用') +
+          '）',
       )
     })
   if (agent.loading || agent.activeRunId) throw Error('原会话仍在运行。请等它结束后再继续。')

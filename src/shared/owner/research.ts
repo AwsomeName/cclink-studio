@@ -162,6 +162,8 @@ export const workerSchema = z.object({
   reason: z.string().max(600),
   openedAt: z.number(),
   agent: z.enum(['codex', 'claude-code']).optional(),
+  /** Why this runtime was chosen, as shown on the roster. */
+  agentWhy: z.string().max(200).optional(),
 })
 export type Worker = z.infer<typeof workerSchema>
 export const workerLabel = (key: string) => key.toUpperCase()
@@ -223,6 +225,8 @@ export const researchSchema = z.object({
     .optional(),
   report: reportSchema.nullable(),
   workers: z.array(workerSchema).max(8).optional(),
+  /** Runtime of the Owner's own session and why it was chosen. */
+  owner: z.object({ agent: z.enum(['codex', 'claude-code']), why: z.string().max(200) }).optional(),
   /** Single files approved during the run (or afterwards), read-only, this affair only. */
   files: z
     .array(z.object({ key: z.string().regex(fileKeyPattern), label: z.string().max(600) }))

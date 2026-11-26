@@ -1,4 +1,5 @@
-import { defineIpcInvoke, defineNoArgsIpc } from './contract'
+import { defineIpcInvoke } from './contract'
+import { ownerWorkTypes, type OwnerWorkType } from './owner-preferences'
 
 // Only public repository coordinates cross this boundary. The main process owns all URLs.
 export const publicRepoPattern = /^[a-z\d](?:[a-z\d-]{0,38})\/[a-z\d][a-z\d._-]{0,99}$/i
@@ -24,8 +25,20 @@ export type OwnerAgentChoice =
   | { ok: true; kind: 'codex' | 'claude-code'; reason: string }
   | { ok: false; error: string }
 export const ownerResearchIpc = {
-  /** Startup readiness probe for a new Owner session (ADR 0023); sends no task content. */
-  selectAgent: defineNoArgsIpc<OwnerAgentChoice>('owner-research:select-agent'),
+  /**
+   * Startup readiness probe for a new Owner session (ADR 0023, ordered by the work type's
+   * runtime preference in Owner settings); sends no task content.
+   */
+  selectAgent: defineIpcInvoke<[OwnerWorkType | null], OwnerAgentChoice>(
+    'owner-research:select-agent',
+    (args) => {
+      // null keeps the default Codex-first order for callers outside Owner affairs.
+      const type = args[0] ?? null
+      if (args.length > 1 || (type !== null && !ownerWorkTypes.includes(type as OwnerWorkType)))
+        throw Error('无效的工作类型')
+      return [type as OwnerWorkType | null]
+    },
+  ),
   readReadme: defineIpcInvoke<[string], ReadmeResult>(
     'owner-research:read-public-readme',
     (args) => {

@@ -72,7 +72,7 @@ export const STATE_LABEL: Record<StepState, string> = {
 }
 
 const short = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s)
-const AUTO = '派出时选择：Codex 可用则用 Codex，否则 Claude Code'
+const AUTO = '派出时按 Owner 设置里检索取证的运行时顺序选择'
 
 export function affairSteps(
   a: Affair,
@@ -87,8 +87,11 @@ export function affairSteps(
     title: '写约定和计划',
     who: 'Owner',
     kind: '统筹',
-    runtime: ctx.ownerRuntime ?? (a.confirmed ? '未记录' : '首次对话时选择'),
-    why: '维护事务文件、拆解和判断',
+    runtime:
+      runtimeName(r.owner?.agent) ??
+      ctx.ownerRuntime ??
+      (a.confirmed ? '未记录' : '首次对话时选择'),
+    why: r.owner?.why ?? '维护事务文件、拆解和判断',
     sees: ['你的原话', ...(folders.length || !r.plan ? ['已授权参考目录的名称'] : [])],
     can: ['写事务目录'],
     done: '你确认约定',
@@ -127,9 +130,10 @@ export function affairSteps(
           (!last || d.workerRunId || d.workerReturned ? '未记录（旧事务）' : AUTO)),
       why: fileOnly
         ? '只读文件，不调用模型'
-        : d.workerChoice === 'continue'
-          ? '续用 ' + workerLabel(key) + '，保留它已读过的上下文'
-          : '新开 ' + workerLabel(key) + (w?.purpose ? '，负责' + w.purpose : ''),
+        : (w?.agentWhy ? w.agentWhy + '；' : '') +
+          (d.workerChoice === 'continue'
+            ? '续用 ' + workerLabel(key) + '，保留它已读过的上下文'
+            : '新开 ' + workerLabel(key) + (w?.purpose ? '，负责' + w.purpose : '')),
       sees: fileOnly ? ['请求的文件路径'] : ['事务配置.md', '调度.md · 本步'],
       can: can.length ? can : ['无外部能力'],
       done: d.doneWhen ?? '交回带出处的结果，由 Owner 核对',
@@ -198,8 +202,8 @@ export function affairSteps(
 }
 
 /** Things only the user can settle, all of which are handled in the right-hand panel. */
-export function pendingCount(a: Affair, ready: boolean, permissions: number) {
+export function pendingCount(a: Affair, ready: boolean, permissions: number, recovery = 0) {
   const r = a.research
   const skipped = (r?.skips ?? []).filter((k) => k.status === 'skipped').length
-  return (ready ? 1 : 0) + permissions + skipped
+  return (ready ? 1 : 0) + permissions + skipped + recovery
 }

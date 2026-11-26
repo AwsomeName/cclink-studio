@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, realpath, rename, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { OwnerPreferences } from './owner-preferences'
+import { OwnerPreferences, ownerRuntimeReason } from './owner-preferences'
+import { ownerPreferenceUpdate } from '../../shared/ipc/owner-preferences'
 
 describe('OwnerPreferences', () => {
   let dir: string, picked: string | undefined, prefs: OwnerPreferences
@@ -28,6 +29,27 @@ describe('OwnerPreferences', () => {
       path: join(dir, 'personal', 'Owner 事务'),
       custom: false,
     })
+  })
+
+  it('keeps a runtime order per work type and explains the choice', async () => {
+    expect((await prefs.get()).runtimes).toEqual({
+      coordinate: ['claude-code', 'codex'],
+      research: ['codex', 'claude-code'],
+    })
+    const view = await prefs.update({
+      runtimes: { coordinate: ['codex'], research: ['claude-code', 'codex'] },
+    })
+    expect(view.runtimes.coordinate).toEqual(['codex'])
+    expect(await prefs.runtimeOrder('research')).toEqual(['claude-code', 'codex'])
+    expect(() =>
+      ownerPreferenceUpdate.parse({ runtimes: { coordinate: ['codex', 'codex'], research: [] } }),
+    ).toThrow()
+    expect(ownerRuntimeReason('research', ['claude-code', 'codex'], 'claude-code')).toBe(
+      '检索取证首选 Claude Code',
+    )
+    expect(ownerRuntimeReason('coordinate', ['claude-code', 'codex'], 'codex')).toBe(
+      '统筹首选 Claude Code 未就绪，按顺序改用 Codex',
+    )
   })
 
   it('uses a registered output directory and refuses to fall back when it disappears', async () => {

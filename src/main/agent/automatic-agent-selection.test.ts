@@ -31,6 +31,23 @@ describe('automatic task Agent selection', () => {
     expect(result.binding).toEqual({ kind: 'codex' })
     expect(probe).toHaveBeenCalledWith(expect.any(AbortSignal), '/workspace/task')
   })
+  it('follows a Claude-first order without probing Codex, and falls back to Codex', async () => {
+    probe.mockClear()
+    probe.mockResolvedValue({ state: 'ready', code: 'CODEX_READY' } as never)
+    const signal = new AbortController().signal
+    expect(
+      await selectAutomaticTaskAgent({ claudeConfig, signal, order: ['claude-code', 'codex'] }),
+    ).toEqual({ binding: { kind: 'claude-code' }, reason: 'CLAUDE_READY' })
+    expect(probe).not.toHaveBeenCalled()
+    const noKey = { ...claudeConfig, claudeCode: { ...claudeConfig.claudeCode, apiKey: '' } }
+    expect(
+      await selectAutomaticTaskAgent({
+        claudeConfig: noKey as BackendConfig,
+        signal,
+        order: ['claude-code', 'codex'],
+      }),
+    ).toEqual({ binding: { kind: 'codex' }, reason: 'CLAUDE_UNAVAILABLE' })
+  })
   it('selects configured Claude when Codex is unavailable', async () => {
     expect(
       await selectAutomaticTaskAgent({ claudeConfig, signal: new AbortController().signal }),

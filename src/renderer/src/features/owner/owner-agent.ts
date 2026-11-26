@@ -17,13 +17,15 @@ const label = (mode: OwnerSessionMode) => (mode === 'main' ? 'Owner' : '执行 '
 export async function prepareSession(
   a: Affair,
   mode: OwnerSessionMode,
-): Promise<{ id: string; created?: 'codex' | 'claude-code' }> {
+): Promise<{ id: string; created?: 'codex' | 'claude-code'; why?: string }> {
   const store = useAgentStore.getState(),
     id = session(a, mode),
     c = store.conversations[id]
   if (c?.archivedAt) throw Error('关联会话已归档，请先恢复该会话。')
   if (c) return { id }
-  const choice = await window.cclinkStudio.ownerResearch.selectAgent()
+  const choice = await window.cclinkStudio.ownerResearch.selectAgent(
+    mode === 'main' ? 'coordinate' : 'research',
+  )
   if (!choice.ok) throw Error('没有可用的 Agent：' + choice.error)
   if (useAgentStore.getState().conversations[id]) return { id }
   store.createConversation({
@@ -33,7 +35,7 @@ export async function prepareSession(
     runtimeBinding: { kind: choice.kind },
   })
   store.renameConversation(id, label(mode) + ' · ' + a.title)
-  return { id, created: choice.kind }
+  return { id, created: choice.kind, why: choice.reason }
 }
 export function ensureSession(a: Affair, mode: OwnerSessionMode) {
   const store = useAgentStore.getState(),

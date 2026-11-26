@@ -1,6 +1,18 @@
 import { useState } from 'react'
-import type { OwnerPreferencesView } from '@shared/ipc/owner-preferences'
+import {
+  defaultRuntimeOrder,
+  ownerRuntimeKinds,
+  type OwnerPreferencesView,
+  type OwnerRuntimeKind,
+  type OwnerWorkType,
+} from '@shared/ipc/owner-preferences'
 import { useOwnerPrefs } from './owner-status'
+
+const RUNTIME: Record<OwnerRuntimeKind, string> = { 'claude-code': 'Claude Code', codex: 'Codex' }
+const WORK: [OwnerWorkType, string, string][] = [
+  ['coordinate', '统筹', 'Owner 自己：维护事务文件、拆解、判断'],
+  ['research', '检索取证', '执行会话 A、B…：读资料、查源码、记出处'],
+]
 
 /** Owner-wide defaults. Nothing here grants a read permission. */
 export function OwnerSettings() {
@@ -29,6 +41,8 @@ export function OwnerSettings() {
         {loadError ? <p role="alert">{loadError}</p> : <p>读取中…</p>}
       </div>
     )
+  // An older main process may not report runtimes yet; show the defaults it would use.
+  const runtimes = prefs.runtimes ?? defaultRuntimeOrder()
   const references = prefs.roots.filter((r) => r.purpose === 'reference')
   const outputs = prefs.roots.filter((r) => r.purpose === 'output')
   return (
@@ -104,6 +118,72 @@ export function OwnerSettings() {
           </button>
           <small>
             登记后只出现在授权时的候选列表；要在具体事务里选择并确认授权后才能读取。移除登记不撤销已有授权。
+          </small>
+        </div>
+      </section>
+
+      <section className="own-set" data-owner-runtimes>
+        <h3>运行时分工</h3>
+        <div>
+          {WORK.map(([type, title, hint]) => {
+            const order = runtimes[type]
+            const save = (next: OwnerRuntimeKind[]) =>
+              void run(() => api.update({ runtimes: { ...runtimes, [type]: next } }))
+            return (
+              <div className="own-box" key={type} data-owner-work-type={type}>
+                <span>
+                  <b>{title}</b>
+                  <small>{hint}</small>
+                </span>
+                <span className="own-flex" />
+                <label>
+                  首选{' '}
+                  <select
+                    aria-label={title + '首选运行时'}
+                    value={order[0]}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const first = e.target.value as OwnerRuntimeKind
+                      save([first, ...order.filter((k) => k !== first)].slice(0, order.length))
+                    }}
+                  >
+                    {ownerRuntimeKinds.map((k) => (
+                      <option key={k} value={k}>
+                        {RUNTIME[k]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  备选{' '}
+                  <select
+                    aria-label={title + '备选运行时'}
+                    value={order[1] ?? ''}
+                    disabled={busy}
+                    onChange={(e) =>
+                      save(
+                        e.target.value
+                          ? [order[0], e.target.value as OwnerRuntimeKind]
+                          : [order[0]],
+                      )
+                    }
+                  >
+                    <option value="">不用备选</option>
+                    {ownerRuntimeKinds
+                      .filter((k) => k !== order[0])
+                      .map((k) => (
+                        <option key={k} value={k}>
+                          {RUNTIME[k]}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+            )
+          })}
+          <small>
+            新开会话时按顺序取第一个就绪的运行时，原因写进事务的分工和工作记录；已有会话不换运行时。没有备选且首选未就绪时，这一步会报错等你处理。独立构思、写作文案、审查核对和
+            Gemini CLI 会在后续接入。
           </small>
         </div>
       </section>

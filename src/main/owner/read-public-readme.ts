@@ -1,4 +1,5 @@
 import type { OwnerAgentChoice } from '../../shared/ipc/owner-research'
+import type { OwnerWorkType } from '../../shared/ipc/owner-preferences'
 import { sourceWindow } from './source-window'
 import {
   ownerResearchIpc,
@@ -173,7 +174,7 @@ async function read(repo: string, path?: string, anchor = '', ref = ''): Promise
 }
 export function registerOwnerReadme(
   guard: TrustedRendererGuard,
-  selectAgent: () => Promise<OwnerAgentChoice> = async () => ({
+  selectAgent: (type?: OwnerWorkType) => Promise<OwnerAgentChoice> = async () => ({
     ok: false,
     error: 'Agent 服务未就绪',
   }),
@@ -186,7 +187,9 @@ export function registerOwnerReadme(
       return null
     }
   }
-  registerTrustedIpcContract(ownerResearchIpc.selectAgent, guard, () => selectAgent())
+  registerTrustedIpcContract(ownerResearchIpc.selectAgent, guard, (_e, type) =>
+    selectAgent(type ?? undefined),
+  )
   registerTrustedIpcContract(ownerResearchIpc.readReadme, guard, (_e, repo) => read(repo))
   registerTrustedIpcContract(ownerResearchIpc.readFile, guard, (_e, repo, path, anchor, ref) =>
     read(repo, path === '@README' ? undefined : path, anchor, ref),

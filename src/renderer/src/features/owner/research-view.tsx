@@ -149,7 +149,13 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   })
   const mine = perms.filter((p) => !!p.conversationId?.startsWith('owner-' + a.id + '-'))
   const canConfirm = ready && !a.directory?.error
-  const waiting = pendingCount(a, canConfirm, mine.length)
+  const resumable = (r.phase === 'error' || waitingForReentry) && !a.directory?.error && !active
+  const needsRecovery = !!a.directory?.error || resumable
+  const needsUpgrade =
+    !!a.directory &&
+    !a.directory.error &&
+    (!a.directory.files.includes('调度.md') || !a.directory.files.includes('事务配置.md'))
+  const waiting = pendingCount(a, canConfirm, mine.length, needsRecovery ? 1 : 0)
   const steps = affairSteps(a, {
     ownerRuntime: runtimeName(ownerRuntime),
     active,
@@ -229,33 +235,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             <span className="own-flex" />
             <CopyOwnerDiagnostics a={a} active={active} workerLoading={!!workerLoading} />
           </div>
-          {a.directory?.error && (
-            <p role="alert">
-              {a.directory.error}{' '}
-              {hasDirectoryConflict(a.id) && (
-                <button
-                  onClick={() => void useSavedDirectory(a.id).catch((e) => setNotice(String(e)))}
-                >
-                  放弃本次未保存修改，载入目录版本
-                </button>
-              )}
-            </p>
-          )}
-          {a.directory &&
-            !a.directory.error &&
-            (!a.directory.files.includes('调度.md') ||
-              !a.directory.files.includes('事务配置.md')) && (
-              <button
-                onClick={() =>
-                  void window.cclinkStudio.ownerDirectories
-                    .upgrade(a.id, a.directory!.revision)
-                    .then(acceptDirectory)
-                    .catch((e) => setNotice(String(e)))
-                }
-              >
-                补齐配置与调度文档
-              </button>
-            )}
+          {a.directory?.error && <p role="alert">{a.directory.error} </p>}
           <StatusChips a={a} active={active} workerLoading={!!workerLoading} />
           {waiting > 0 && (
             <p className="own-pointer" role="status">
@@ -277,17 +257,6 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                         ? '取证中 · 已取得 ' + r.docs.length + ' 份原文'
                         : detail)}
               </h2>
-              <div className="own-card-actions">
-                {a.directory?.error && (
-                  <button
-                    className="own-primary"
-                    onClick={() => void retryDirectory(a.id).catch((e) => setNotice(String(e)))}
-                  >
-                    重试保存文件
-                  </button>
-                )}
-                <CopyOwnerDiagnostics a={a} active={active} workerLoading={!!workerLoading} />
-              </div>
             </div>
           )}
           {!a.confirmed && (
@@ -411,20 +380,6 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               ))}
             </details>
           )}
-          {(r.phase === 'error' || waitingForReentry) && !a.directory?.error && !active && (
-            <button
-              onClick={() =>
-                void (a.confirmed
-                  ? research(a.id)
-                  : discuss(a.id, '请根据刚才的要求重新提出调研约定。'))
-              }
-            >
-              {unfinishedWorker(r) ? '核对原委托并继续' : '从这里继续'}
-            </button>
-          )}
-          {r.phase === 'error' && !a.directory?.error && !active && unfinishedWorker(r) && (
-            <button onClick={() => void research(a.id, true)}>结束等待，授权 Owner 重新取证</button>
-          )}
         </article>
       </main>
       <aside data-owner-officer>
@@ -510,6 +465,71 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             ))}
           </div>
         ))}
+        {(needsRecovery || needsUpgrade) && (
+          <div className="own-perm own-act" data-owner-recover>
+            <b>
+              {a.directory?.error
+                ? r.report
+                  ? '引文已核对，报告待保存'
+                  : '事务文件待保存'
+                : needsRecovery
+                  ? waitingForReentry
+                    ? '上次操作中断，未自动重派'
+                    : '运行出错，等你决定怎么继续'
+                  : '这件事务缺少配置与调度文档'}
+            </b>
+            {a.directory?.error && <small>{a.directory.error}</small>}
+            <div className="own-card-actions">
+              {a.directory?.error && (
+                <button
+                  className="own-primary"
+                  onClick={() => void retryDirectory(a.id).catch((e) => setNotice(String(e)))}
+                >
+                  重试保存文件
+                </button>
+              )}
+              {a.directory?.error && hasDirectoryConflict(a.id) && (
+                <button
+                  onClick={() => void useSavedDirectory(a.id).catch((e) => setNotice(String(e)))}
+                >
+                  放弃本次未保存修改，载入目录版本
+                </button>
+              )}
+              {resumable && (
+                <button
+                  className="own-primary"
+                  onClick={() =>
+                    void (a.confirmed
+                      ? research(a.id)
+                      : discuss(a.id, '请根据刚才的要求重新提出调研约定。'))
+                  }
+                >
+                  {unfinishedWorker(r) ? '核对原委托并继续' : '从这里继续'}
+                </button>
+              )}
+              {resumable && r.phase === 'error' && unfinishedWorker(r) && (
+                <button onClick={() => void research(a.id, true)}>
+                  结束等待，授权 Owner 重新取证
+                </button>
+              )}
+              {needsUpgrade && (
+                <button
+                  onClick={() =>
+                    void window.cclinkStudio.ownerDirectories
+                      .upgrade(a.id, a.directory!.revision)
+                      .then(acceptDirectory)
+                      .catch((e) => setNotice(String(e)))
+                  }
+                >
+                  补齐配置与调度文档
+                </button>
+              )}
+              {needsRecovery && (
+                <CopyOwnerDiagnostics a={a} active={active} workerLoading={!!workerLoading} />
+              )}
+            </div>
+          </div>
+        )}
         <SkippedCard
           a={a}
           busy={active}

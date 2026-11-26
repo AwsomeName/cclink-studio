@@ -185,8 +185,8 @@ export function RosterCard({ steps }: { steps: AffairStep[] }) {
         </tbody>
       </table>
       <small>
-        当前按启动检查自动选择运行时（Codex 可用则用 Codex，否则 Claude
-        Code）。按工作类型偏好、独立意见和复核换模型尚未接入。
+        运行时按 Owner 设置里每种工作类型的顺序选择，新开会话时生效。独立意见、复核和 Gemini CLI
+        尚未接入。
       </small>
     </div>
   )

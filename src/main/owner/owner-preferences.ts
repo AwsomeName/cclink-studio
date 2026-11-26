@@ -3,10 +3,13 @@ import { access, lstat, mkdir, open, realpath, rename, unlink, writeFile } from 
 import { basename, dirname, join, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type {
-  OwnerPreferenceUpdate,
-  OwnerPreferencesView,
-  OwnerRootPurpose,
+import {
+  defaultRuntimeOrder,
+  ownerRuntimeOrder,
+  type OwnerPreferenceUpdate,
+  type OwnerPreferencesView,
+  type OwnerRootPurpose,
+  type OwnerWorkType,
 } from '../../shared/ipc/owner-preferences'
 
 const rootSchema = z.object({
@@ -24,6 +27,7 @@ const fileSchema = z.object({
   defaultParentId: z.string().uuid().nullable(),
   sources: z.object({ github: z.boolean(), docs: z.boolean(), thirdParty: z.boolean() }),
   reminders: z.object({ topbarCount: z.boolean() }),
+  runtimes: ownerRuntimeOrder.optional(),
 })
 type Prefs = z.infer<typeof fileSchema>
 export type OwnerRootRecord = z.infer<typeof rootSchema>
@@ -127,11 +131,17 @@ export class OwnerPreferences {
       saveLocation,
       sources: p.sources,
       reminders: p.reminders,
+      runtimes: p.runtimes ?? defaultRuntimeOrder(),
     }
   }
 
   async get() {
     return this.view(await this.load())
+  }
+
+  /** Runtime order for a work type; read fresh for every new session. */
+  async runtimeOrder(type: OwnerWorkType) {
+    return ((await this.load()).runtimes ?? defaultRuntimeOrder())[type]
   }
 
   /** Where the next affair folder is created. Never falls back silently from a chosen parent. */
@@ -219,8 +229,27 @@ export class OwnerPreferences {
       const p = await this.load()
       if (change.sources) p.sources = change.sources
       if (change.reminders) p.reminders = change.reminders
+      if (change.runtimes) p.runtimes = change.runtimes
       await this.store(p)
       return this.view(p)
     })
   }
+}
+
+const runtimeTitle = { 'claude-code': 'Claude Code', codex: 'Codex' } as const
+const workTitle: Record<OwnerWorkType, string> = { coordinate: '统筹', research: '检索取证' }
+/** Why a new session got this runtime, in the words shown on the roster. */
+export function ownerRuntimeReason(
+  type: OwnerWorkType,
+  order: readonly (keyof typeof runtimeTitle)[],
+  chosen: keyof typeof runtimeTitle,
+) {
+  const first = order[0]
+  return chosen === first
+    ? workTitle[type] + '首选 ' + runtimeTitle[chosen]
+    : workTitle[type] +
+        '首选 ' +
+        runtimeTitle[first] +
+        ' 未就绪，按顺序改用 ' +
+        runtimeTitle[chosen]
 }

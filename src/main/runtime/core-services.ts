@@ -58,7 +58,7 @@ import {
   registerOwnerPreferences,
   registerOwnerSources,
 } from '../owner/directory-ipc'
-import { OwnerPreferences } from '../owner/owner-preferences'
+import { OwnerPreferences, ownerRuntimeReason } from '../owner/owner-preferences'
 import { OwnerSourceDirectories } from '../owner/source-directories'
 import { OwnerSourceFiles } from '../owner/source-files'
 import { registerOwnerReadme } from '../owner/read-public-readme'
@@ -415,16 +415,21 @@ export async function bootstrapMainProcessServices(
   console.log('[CCLink Studio] 定时任务 IPC 已注册')
   registerOwnerReadme(
     runtime.trustedRendererGuard,
-    async () => {
+    async (type) => {
       const bridge = runtime.agentBridge
       if (!bridge) return { ok: false, error: 'Agent 服务未就绪' }
       try {
-        const selected = await bridge.selectAgentForNewSession()
+        const order = type ? await ownerPreferences.runtimeOrder(type) : undefined
+        const selected = await bridge.selectAgentForNewSession(order)
         const kind = selected.binding.kind
         if (kind !== 'codex' && kind !== 'claude-code')
           return { ok: false, error: '不支持的 Agent：' + kind }
-        console.info('[Owner] 新会话选用 Agent', { kind, reason: selected.reason })
-        return { ok: true, kind, reason: selected.reason }
+        console.info('[Owner] 新会话选用 Agent', { type, order, kind, reason: selected.reason })
+        return {
+          ok: true,
+          kind,
+          reason: type && order ? ownerRuntimeReason(type, order, kind) : selected.reason,
+        }
       } catch (e) {
         return { ok: false, error: e instanceof Error ? e.message : String(e) }
       }

@@ -67,7 +67,7 @@ import {
   type AgentSkillRef,
 } from '../../shared/agent-role'
 import { SUPPORTED_AGENT_API_FORMATS } from '../../shared/settings-constants'
-import { selectAutomaticTaskAgent } from './automatic-agent-selection'
+import { selectAutomaticTaskAgent, type LocalTaskRuntime } from './automatic-agent-selection'
 
 interface AgentRunPreparation {
   runId: string
@@ -1748,12 +1748,15 @@ export class AgentBridge {
    * Same probe as automatic tasks; it only picks the engine for a conversation that has no
    * native session yet and never moves an existing one.
    */
-  async selectAgentForNewSession(): Promise<{ binding: AgentRuntimeBinding; reason: string }> {
+  async selectAgentForNewSession(
+    order?: readonly LocalTaskRuntime[],
+  ): Promise<{ binding: AgentRuntimeBinding; reason: string }> {
     const controller = new AbortController()
     return selectAutomaticTaskAgent({
       workspacePath: this.getWorkspacePath?.() || undefined,
       claudeConfig: this.defaultAgentConfig,
       signal: controller.signal,
+      order,
     })
   }
 

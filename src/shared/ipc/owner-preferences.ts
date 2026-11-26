@@ -16,6 +16,25 @@ export type OwnerRoot = {
 }
 export type OwnerSourcePreferences = { github: boolean; docs: boolean; thirdParty: boolean }
 export type OwnerReminders = { topbarCount: boolean }
+/** Local runtimes Owner can route steps to; ACP runtimes join this list later. */
+export const ownerRuntimeKinds = ['claude-code', 'codex'] as const
+export type OwnerRuntimeKind = (typeof ownerRuntimeKinds)[number]
+/** Work types that pick a runtime today: coordinate = Owner itself, research = execution sessions. */
+export const ownerWorkTypes = ['coordinate', 'research'] as const
+export type OwnerWorkType = (typeof ownerWorkTypes)[number]
+export type OwnerRuntimeOrder = Record<OwnerWorkType, OwnerRuntimeKind[]>
+export const defaultRuntimeOrder = (): OwnerRuntimeOrder => ({
+  coordinate: ['claude-code', 'codex'],
+  research: ['codex', 'claude-code'],
+})
+const runtimeList = z
+  .array(z.enum(ownerRuntimeKinds))
+  .min(1)
+  .max(ownerRuntimeKinds.length)
+  .refine((l) => new Set(l).size === l.length, '运行时不能重复')
+export const ownerRuntimeOrder = z
+  .object({ coordinate: runtimeList, research: runtimeList })
+  .strict()
 export type OwnerPreferencesView = {
   roots: OwnerRoot[]
   defaultParentId: string | null
@@ -23,6 +42,7 @@ export type OwnerPreferencesView = {
   saveLocation: { path: string; custom: boolean; error?: string }
   sources: OwnerSourcePreferences
   reminders: OwnerReminders
+  runtimes: OwnerRuntimeOrder
 }
 export const ownerPreferenceUpdate = z
   .object({
@@ -31,6 +51,7 @@ export const ownerPreferenceUpdate = z
       .strict()
       .optional(),
     reminders: z.object({ topbarCount: z.boolean() }).strict().optional(),
+    runtimes: ownerRuntimeOrder.optional(),
   })
   .strict()
 export type OwnerPreferenceUpdate = z.infer<typeof ownerPreferenceUpdate>
