@@ -7,7 +7,7 @@ import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { chromium } from 'playwright-core'
 import { createSmokeRuntime } from './smoke-runtime.mjs'
-import { checkBrowserToolbar } from './browser-toolbar-check.mjs'
+import { checkBrowserToolbar, showBrowserToolbar } from './browser-toolbar-check.mjs'
 
 const { rootDir, runDir, logFile, rendererOrigin, runRestart } = createSmokeRuntime(import.meta.url)
 const workspaceFixtureRoot = join(
@@ -2402,7 +2402,7 @@ async function main() {
       ).tabId
     }, webFixtureOrigin)
     assert(ordinarySourceTabId, 'ordinary source tab was not created')
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
     await waitForAsyncFunction(
       page,
       async ({ tabId, expectedUrl }) =>
@@ -2450,6 +2450,7 @@ async function main() {
       },
       { timeout: 10_000 },
     )
+    await showBrowserToolbar(page)
     const ordinarySiblingRuntime = await page.evaluate(
       (tabId) => window.cclinkStudio.browser.getRuntimeDiagnostics(tabId),
       ordinarySiblingTabId,
@@ -2536,7 +2537,7 @@ async function main() {
       return tab?.type === 'browser' ? tab.id : null
     })
     assert(ordinaryAgentTabId, 'Agent link did not open an ordinary browser tab')
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
     await waitForAsyncFunction(
       page,
       async (tabId) =>
@@ -2606,7 +2607,7 @@ async function main() {
         : null
     })
     assert(draftBrowser, 'ordinary browser did not create a saveable login session')
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
     assert(
       (await page.locator('.browser-account-button').getAttribute('data-mode')) === 'account-draft',
       'ordinary saveable browser mode was not visible in the toolbar',
@@ -2697,6 +2698,7 @@ async function main() {
       ),
       'login marker cookie was not present before saving',
     )
+    await showBrowserToolbar(page)
     const saveLoginButton = page.getByRole('button', {
       name: '保存账号和登录状态',
     })
@@ -2817,7 +2819,7 @@ async function main() {
     }, accountLabel)
     if (!accountAlreadyExists) {
       await page.getByRole('button', { name: '添加网站与账号' }).click()
-      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      await showBrowserToolbar(page)
       assert(
         (await page.locator('.web-resources-form:not(.web-resources-import-form)').count()) === 0,
         'adding a website account opened a sidebar form',
@@ -2857,6 +2859,7 @@ async function main() {
         accountFixtureUrl,
         { timeout: 10_000 },
       )
+      await showBrowserToolbar(page)
       await page.getByRole('button', { name: '保存账号和登录状态' }).click()
       const accountNameInput = page.getByLabel('账号手机号或平台用户名')
       await accountNameInput.fill('')
@@ -2907,7 +2910,7 @@ async function main() {
     await primaryRow()
       .locator('.web-resource-row-open')
       .evaluate((element) => element.click())
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
     await page.getByRole('button', { name: '更多浏览器操作', exact: true }).click()
     const zoomInput = page.getByLabel('浏览器缩放百分比')
     await zoomInput.waitFor({ state: 'visible', timeout: 10_000 })
@@ -3208,7 +3211,7 @@ async function main() {
     await primaryRow()
       .locator('.web-resource-row-open')
       .evaluate((element) => element.click())
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
     assert(
       (await page.locator('.tab').count()) === tabCountWithDraft,
       'reopening one website account created a duplicate Browser Tab',
@@ -3261,7 +3264,7 @@ async function main() {
       await primaryRow()
         .locator('.web-resource-row-open')
         .evaluate((element) => element.click())
-      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      await showBrowserToolbar(page)
       const secondProjection = await page.evaluate(async () => {
         const { useTabStore } = await import('/src/stores/tab-store.ts')
         const state = useTabStore.getState()
@@ -3504,7 +3507,7 @@ async function main() {
         .locator('.web-affair-resource-card', { hasText: '账号与登录环境' })
         .getByRole('button', { name: /UI Smoke Account/ })
         .click()
-      await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+      await showBrowserToolbar(page)
       assert(
         (await page.locator('.web-resource-detail').count()) === 0,
         'affair resource opened a detail tab instead of the Browser Tab',
@@ -3761,6 +3764,8 @@ async function main() {
       { timeout: 10_000 },
     )
 
+    await page.getByRole('tab', { selected: true, expanded: false }).waitFor()
+    await showBrowserToolbar(page)
     const navigationFailureUrl = 'http://[::1/navigation-failure'
     await page.locator('.url-input').fill(navigationFailureUrl)
     await page.locator('.url-input').press('Enter')
@@ -3781,6 +3786,7 @@ async function main() {
       { tabId: activeBrowserTabId, url: navigationFailureUrl },
       { timeout: 10_000 },
     )
+    await page.getByRole('toolbar', { name: '浏览器工具栏' }).waitFor({ state: 'visible' })
     const navigationFailure = page.locator('.browser-navigation-status')
     await navigationFailure.waitFor({ state: 'visible', timeout: 10_000 })
     await navigationFailure
@@ -3809,7 +3815,7 @@ async function main() {
       { tabId: activeBrowserTabId, previousUrl: recentUrl },
       { timeout: 10_000 },
     )
-    await page.locator('.browser-toolbar').waitFor({ state: 'visible', timeout: 10_000 })
+    await showBrowserToolbar(page)
 
     await page.locator('[title="检查和下载 CCLink Studio 更新"]').click()
     const browserUpdatePanel = page.locator('.update-panel')

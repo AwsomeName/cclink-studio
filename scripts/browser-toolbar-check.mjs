@@ -5,6 +5,15 @@ const assert = (condition, message) => {
   if (!condition) throw new Error(message)
 }
 
+// Loaded pages collapse the address bar. Use the active tab just as a user would.
+export async function showBrowserToolbar(page) {
+  const toolbar = page.getByRole('toolbar', { name: '浏览器工具栏' })
+  const collapsedTab = page.getByRole('tab', { selected: true, expanded: false })
+  await toolbar.or(collapsedTab).first().waitFor({ state: 'visible', timeout: 10_000 })
+  if (!(await toolbar.isVisible())) await collapsedTab.click()
+  await toolbar.waitFor({ state: 'visible', timeout: 10_000 })
+}
+
 // Runs only against the smoke runtime's isolated profile and local HTTP fixture.
 export async function checkBrowserToolbar({
   page,
@@ -79,6 +88,8 @@ export async function checkBrowserToolbar({
     await handle.dispose()
     return layout
   }
+  await page.getByRole('tab', { selected: true, expanded: false }).waitFor()
+  await showBrowserToolbar(page)
   // Merely inspecting the current percentage must not turn off automatic fit.
   await page.evaluate((id) => window.cclinkStudio.browser.fitWidth(id), browserTabId)
   const summary = page.getByRole('button', { name: '网页缩放与显示选项', exact: true })
