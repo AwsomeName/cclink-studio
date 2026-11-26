@@ -1,0 +1,882 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>棱光眼镜 · 公司经营方案示意</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #f7f8fa;
+      color: #202a38;
+      font:
+        14px/1.55 Inter,
+        -apple-system,
+        'PingFang SC',
+        'Microsoft YaHei',
+        sans-serif;
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+    button:focus-visible {
+      outline: 3px solid #3385da;
+      outline-offset: 2px;
+    }
+    header {
+      height: 44px;
+      background: #252c37;
+      color: #ced4df;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 0 22px;
+      font-size: 13px;
+    }
+    .brand {
+      color: white;
+      font-weight: 650;
+      letter-spacing: 0.3px;
+    }
+    .grow {
+      flex: 1;
+    }
+    header strong {
+      height: 44px;
+      line-height: 43px;
+      border-bottom: 2px solid #69c5fa;
+      color: white;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 198px minmax(0, 1fr) 296px;
+      min-height: calc(100vh - 72px);
+    }
+    nav {
+      background: #e9edf1;
+      border-right: 1px solid #d1d7dd;
+      padding: 24px 14px;
+    }
+    nav b {
+      display: block;
+      margin: 0 12px 18px;
+      font-size: 16px;
+    }
+    nav small {
+      display: block;
+      margin: 20px 12px 7px;
+      color: #536376;
+    }
+    button.nav {
+      display: block;
+      text-align: left;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: #394655;
+      padding: 9px 13px;
+      border-radius: 4px;
+      margin: 2px 0;
+    }
+    .nav span {
+      display: inline-block;
+      width: 25px;
+      color: #536782;
+    }
+    .nav.active {
+      background: #d3e6f7;
+      color: #0e5186;
+      font-weight: 650;
+      box-shadow: inset 3px 0 #1174bf;
+    }
+    nav hr {
+      border: 0;
+      border-top: 1px solid #cdd5de;
+      margin: 22px 8px;
+    }
+    main {
+      min-width: 0;
+    }
+    .tab,
+    .ptitle {
+      height: 40px;
+      border-bottom: 1px solid #d1d8df;
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      font-size: 12px;
+      background: #eef1f4;
+      color: #526173;
+    }
+    .tab strong {
+      color: #145a8c;
+    }
+    .inner {
+      max-width: 1120px;
+      margin: auto;
+      padding: 24px 30px 32px;
+    }
+    .crumb,
+    .hint,
+    small {
+      color: #566574;
+    }
+    .crumb {
+      font-size: 12px;
+      margin-bottom: 11px;
+    }
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.3;
+      letter-spacing: -1.1px;
+      margin: 0;
+    }
+    p {
+      margin: 6px 0;
+    }
+    .sub {
+      margin: 8px 0 20px;
+      color: #51606f;
+      font-size: 14px;
+    }
+    h2 {
+      margin: 19px 0 9px;
+      font-size: 18px;
+      letter-spacing: -0.2px;
+    }
+    h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+    .panel {
+      background: white;
+      border: 1px solid #d5dce4;
+      border-radius: 7px;
+      margin: 10px 0 16px;
+      overflow: hidden;
+    }
+    .panel.pad {
+      padding: 16px 19px;
+    }
+    .sectionhead,
+    .row,
+    .stats,
+    .flex {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sectionhead {
+      justify-content: space-between;
+    }
+    .sectionhead small {
+      font-size: 12px;
+    }
+    .stats {
+      margin: 12px 0 19px;
+      padding: 15px 0;
+      gap: 0;
+      background: white;
+      border: 1px solid #d5dce4;
+      border-radius: 7px;
+    }
+    .stats > div {
+      flex: 1;
+      min-width: 0;
+      padding: 0 16px;
+      border-right: 1px solid #e0e4e9;
+    }
+    .stats > div:last-child {
+      border: 0;
+    }
+    .stats label {
+      font-size: 12px;
+      color: #576574;
+      display: block;
+    }
+    .number {
+      font-variant-numeric: tabular-nums;
+      display: block;
+      font-size: clamp(18px, 2.04vw, 29px);
+      font-weight: 610;
+      letter-spacing: -0.8px;
+      line-height: 1.48;
+    }
+    .number.teal {
+      color: #0b6e66;
+    }
+    .row {
+      padding: 13px 16px;
+      min-height: 61px;
+      border-bottom: 1px solid #e1e6eb;
+    }
+    .row:last-child {
+      border-bottom: 0;
+    }
+    .row strong {
+      font-weight: 610;
+    }
+    .row small {
+      display: block;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .row .end {
+      margin-left: auto;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .chip {
+      color: #315b74;
+      background: #eaf2f7;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .warn {
+      color: #805318;
+      background: #fff2d9;
+    }
+    .ok {
+      color: #146858;
+      background: #e4f3ed;
+    }
+    .link,
+    .btn {
+      border: 0;
+      background: none;
+      color: #1265a4;
+      font-weight: 550;
+      font-size: 13px;
+      padding: 5px 0;
+    }
+    .btn {
+      padding: 7px 13px;
+      border: 1px solid #c8d1dc;
+      background: white;
+      border-radius: 4px;
+      color: #253447;
+    }
+    .primary {
+      background: #1268a7;
+      color: white;
+      border-color: #1268a7;
+    }
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .lead {
+      border-left: 3px solid #188382;
+    }
+    .foot {
+      font-size: 12px;
+      color: #5b6978;
+    }
+    .callout {
+      font-size: 13px;
+      background: #eff5fa;
+      padding: 10px 13px;
+      border-radius: 5px;
+      color: #34516b;
+    }
+    aside {
+      background: #f0f3f5;
+      border-left: 1px solid #cfd6de;
+    }
+    .ptitle {
+      font-weight: 650;
+      letter-spacing: 0.5px;
+    }
+    .side {
+      padding: 24px 19px;
+    }
+    .side h3 {
+      font-size: 19px;
+      margin: 7px 0 11px;
+    }
+    .side p {
+      color: #526271;
+      line-height: 1.7;
+    }
+    .side hr {
+      border: 0;
+      border-top: 1px solid #d3dce4;
+      margin: 21px 0;
+    }
+    dl {
+      font-size: 13px;
+    }
+    dt {
+      color: #596878;
+      margin: 12px 0 2px;
+    }
+    dd {
+      margin: 0;
+      font-weight: 540;
+    }
+    .mono {
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px;
+    }
+    .status {
+      min-height: 28px;
+      padding: 5px 16px;
+      display: flex;
+      gap: 20px;
+      background: #125882;
+      color: white;
+      font-size: 11px;
+    }
+    .badge {
+      color: #dbf2fc;
+      background: #3b5060;
+      font-size: 11px;
+      padding: 1px 7px;
+      border: 1px solid #607585;
+      border-radius: 4px;
+    }
+    .tick {
+      height: 8px;
+      width: 8px;
+      background: #2b7c73;
+      border-radius: 100%;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .note {
+      padding: 14px 16px;
+      margin: 9px 0;
+      background: #e7f1f1;
+      color: #264d50;
+      border-radius: 5px;
+    }
+    .alt {
+      color: #667587;
+    }
+    .group {
+      margin-top: 12px;
+    }
+    a {
+      color: #1265a4;
+    }
+    button:hover:not(:disabled) {
+      filter: brightness(0.95);
+    }
+    @media (max-width: 1100px) {
+      .app {
+        grid-template-columns: 155px minmax(0, 1fr) 235px;
+      }
+      .inner {
+        padding: 22px 20px;
+      }
+      .stats > div {
+        padding: 0 10px;
+      }
+    }
+    @media (max-width: 860px) {
+      .app {
+        grid-template-columns: 145px minmax(0, 1fr);
+      }
+      aside {
+        grid-column: 2;
+        border-top: 1px solid #cfd6de;
+      }
+      .side {
+        padding: 16px 20px;
+      }
+      nav {
+        grid-row: span 2;
+      }
+      .app {
+        min-height: 0;
+      }
+      .side hr {
+        margin: 12px 0;
+      }
+      header {
+        gap: 12px;
+      }
+    }
+    @media (max-width: 620px) {
+      header .optional,
+      nav hr,
+      nav .folder,
+      nav b,
+      nav small {
+        display: none;
+      }
+      .app {
+        display: block;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        padding: 5px;
+      }
+      button.nav {
+        width: auto;
+        font-size: 12px;
+        padding: 6px;
+      }
+      .nav span {
+        display: none;
+      }
+      .inner {
+        padding: 16px;
+      }
+      .row {
+        flex-wrap: wrap;
+      }
+      .row .end {
+        white-space: normal;
+      }
+      .stats {
+        flex-wrap: wrap;
+      }
+      .stats > div {
+        min-width: 30%;
+      }
+      .status {
+        flex-wrap: wrap;
+      }
+      .title {
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 26px;
+      }
+    }
+    .formgrid {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr 2fr;
+      gap: 12px;
+      margin: 12px 0;
+    }
+    .formgrid label {
+      font-size: 12px;
+      color: #4a5d70;
+    }
+    .formgrid input,
+    .formgrid select {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 7px;
+      border: 1px solid #c3ccd7;
+      border-radius: 3px;
+      font: inherit;
+      background: white;
+    }
+    @media (max-width: 620px) {
+      .formgrid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <header>
+    <span class="brand">CCLink Studio</span><span class="optional">我的空间</span
+    ><strong>棱光眼镜</strong><span class="optional">G1 电子开发</span><span class="grow"></span
+    ><span class="badge">方案示意 · 虚构数据</span>
+  </header>
+  <div class="app">
+    <nav>
+      <b>棱光眼镜</b><small>公司经营</small>
+      <div id="nav"></div>
+      <hr />
+      <small class="folder">关联工程</small>
+      <div class="folder" style="margin: 9px 12px">⌁　G1 电子开发</div>
+    </nav>
+    <main>
+      <div class="tab"><strong id="tab"></strong></div>
+      <div class="inner" id="content"></div>
+    </main>
+    <aside>
+      <div class="ptitle">记录详情</div>
+      <div class="side" id="side" aria-live="polite"></div>
+    </aside>
+  </div>
+  <footer class="status">
+    <span>本地工作空间　/　棱光眼镜</span><span class="grow"></span
+    ><span>演示数据仅在本页内变更</span>
+  </footer>
+  <script>
+    const sections = {
+      biz: ['▤', '业务项目'],
+      accounts: ['￥', '公司账目'],
+      cases: ['♧', '客户与售后'],
+      promote: ['↗', '推广'],
+      decide: ['◇', '经营决策'],
+    }
+    const addedCases = []
+    let draftOpen = false
+    let page = 'biz',
+      replied = false,
+      confirmed = false,
+      matched = false,
+      adopted = false,
+      sideKey = ''
+    const btn = (name, action, primary = false) =>
+      '<button class="btn ' +
+      (primary ? 'primary' : '') +
+      '" onclick="' +
+      action +
+      '">' +
+      name +
+      '</button>'
+    const link = (name, action) =>
+      '<button class="link" onclick="' + action + '">' + name + '</button>'
+    const go = (name) => "openPage('" + name + "')"
+    const info = (name) => "detail('" + name + "')"
+    const chip = (s, variant = '') => '<span class="chip ' + variant + '">' + s + '</span>'
+    const row = (title, sub, end) =>
+      '<div class="row"><div><strong>' +
+      title +
+      '</strong><small>' +
+      sub +
+      '</small></div><div class="end">' +
+      end +
+      '</div></div>'
+    const panel = (...rows) => '<div class="panel">' + rows.join('') + '</div>'
+    const stats = (arr) =>
+      '<div class="stats">' +
+      arr
+        .map(
+          ([k, v, c]) =>
+            '<div><label>' + k + '</label><b class="number ' + (c || '') + '">' + v + '</b></div>',
+        )
+        .join('') +
+      '</div>'
+    const title = (section, h, sub) =>
+      '<div class="crumb">棱光眼镜　/　' +
+      section +
+      '</div><div class="title"><h1>' +
+      h +
+      '</h1></div><p class="sub">' +
+      sub +
+      '</p>'
+    const fields = (arr) =>
+      '<dl>' + arr.map(([k, v]) => '<dt>' + k + '</dt><dd>' + v + '</dd>').join('') + '</dl>'
+    function safeText(value) {
+      const holder = document.createElement('span')
+      holder.textContent = value
+      return holder.innerHTML
+    }
+    function caseForm() {
+      if (!draftOpen) return ''
+      return '<form class="panel pad" id="case-form" onsubmit="saveCase(event)"><h3>记一条客户记录</h3><p class="foot">归属：AI 眼镜 · G1 首批直售</p><div class="formgrid"><label>类型<select name="kind"><option>售后</option><option>意向</option></select></label><label>称呼或昵称<input name="person" required maxlength="40" autocomplete="off"></label><label>问题或需求<input name="issue" required maxlength="100" autocomplete="off"></label></div><button type="submit" class="btn primary">保存到本业务</button> <button type="button" class="btn" onclick="draftOpen=false;render()">取消</button></form>'
+    }
+    function saveCase(event) {
+      event.preventDefault()
+      const data = new FormData(event.currentTarget)
+      const person = data.get('person').trim(),
+        issue = data.get('issue').trim()
+      if (!person || !issue) return
+      addedCases.push({ kind: data.get('kind'), person, issue, waiting: true })
+      draftOpen = false
+      render()
+    }
+    function addedRows(onlyWaiting) {
+      return addedCases.flatMap((item, index) => {
+        if (onlyWaiting && !item.waiting) return []
+        const action = onlyWaiting ? go('cases') : 'toggleCase(' + index + ')'
+        const label = onlyWaiting ? '处理记录' : item.waiting ? '已回复，等对方' : '对方回复了'
+        return [
+          row(
+            safeText(item.person) + ' · ' + safeText(item.issue),
+            item.kind + ' · ' + (item.waiting ? '等我回复' : '等对方'),
+            btn(label, action),
+          ),
+        ]
+      })
+    }
+    function toggleCase(index) {
+      addedCases[index].waiting = !addedCases[index].waiting
+      render()
+    }
+    function newCase() {
+      draftOpen = true
+      render()
+      document.querySelector('[name=person]').focus()
+    }
+    const cards = {
+      biz: () =>
+        title(
+          '业务项目',
+          'AI 眼镜 · G1 首批直售',
+          '交付条件为完成首批订单交付，并给每个佩戴问题一个可追溯的处理结果。',
+        ) +
+        caseForm() +
+        '<div class="panel pad lead"><div class="sectionhead"><h3>本批交付版本</h3>' +
+        chip('业务进行中', 'ok') +
+        '</div><p>G1 / Rev B　·　镜腿结构与固件联调</p>' +
+        link('查看关联工程与版本页　↗', info('eng')) +
+        '</div><div class="sectionhead"><h2>今天要处理</h2><span>' +
+        btn('记售后 / 意向', 'newCase()') +
+        '</span></div>' +
+        panel(
+          ...addedRows(true),
+          ...(replied
+            ? []
+            : [
+                row(
+                  '回复买家 A 的佩戴问题',
+                  '售后 · 右侧镜腿夹耳，等你回复',
+                  btn('处理售后', go('cases')),
+                ),
+              ]),
+          ...(matched
+            ? []
+            : [
+                row(
+                  '核对十月平台结算',
+                  '结算批次 J-1031 · 2 笔订单，1 笔净打款',
+                  btn('查看月度对账', go('accounts')),
+                ),
+              ]),
+          ...(matched && replied && !addedCases.some((item) => item.waiting)
+            ? [row('当前没有待处理项', '可从下方打开历史记录。', '')]
+            : []),
+        ) +
+        '<h2>这项业务的原记录</h2>' +
+        panel(
+          row(
+            '十月已确认打样支出',
+            confirmed ? '镜腿打样及运费 · ¥1,306.50' : '镜腿打样 · ¥1,280.50，另有运费待确认',
+            link('公司账目　›', go('accounts')),
+          ),
+          row('G1 佩戴体验手记', '文章已保存草稿 · 等待原任务处理', link('推广　›', go('promote'))),
+          row(
+            '下一轮先改镜腿还是增加销售渠道？',
+            adopted ? '已记为决策' : 'Owner 建议已返回，等你决定',
+            link('经营决策　›', go('decide')),
+          ),
+        ),
+      accounts: () =>
+        title(
+          '公司账目',
+          '十月月度对账',
+          '2026 年 10 月　·　人民币　·　结算账户：公司银行（示例）',
+        ) +
+        stats([
+          ['订单实付 · 业务参考', '¥1,798.00'],
+          ['银行净打款 · 已确认', '¥1,568.00', 'teal'],
+          ['全月已确认净流入', confirmed ? '¥261.50' : '¥287.50'],
+        ]) +
+        '<div class="sectionhead"><h2>订单与结算核验</h2>' +
+        chip(matched ? '已核对' : '待人工核对', matched ? 'ok' : 'warn') +
+        '</div>' +
+        panel(
+          row(
+            '批次 J-1031 · 两笔直售套装',
+            'G1-000781、G1-000782　各 ¥899.00',
+            link('查看结算单　›', info('settle')),
+          ),
+          row(
+            '订单实付 − 退款 − 手续费',
+            '¥1,798.00 − ¥199.00 − ¥31.00',
+            '<strong>¥1,568.00</strong>',
+          ),
+          row(
+            '银行流水 B-1031 · 已确认',
+            '10 月 31 日到账　差额 ¥0.00',
+            matched ? chip('人工已核对', 'ok') : btn('核对这组来源', info('settle'), true),
+          ),
+        ) +
+        '<div class="sectionhead"><h2>支出与交付</h2><small>仅人工确认的流水计入交付包</small></div>' +
+        panel(
+          row('镜腿打样 · ¥1,280.50', '银行原流水 B-1028 · 归属 G1', chip('已确认', 'ok')),
+          row(
+            '运费 · ¥26.00',
+            '银行原流水 B-1029 · 归属 G1',
+            confirmed ? chip('已确认', 'ok') : btn('核对流水', info('freight')),
+          ),
+          row(
+            '十月代账资料',
+            '核对确认明细、原始凭证和待补资料',
+            btn('预览交付包', info('package')),
+          ),
+        ),
+      cases: () =>
+        title('客户与售后', '客户与售后', '业务范围：AI 眼镜 · G1 首批直售') +
+        (addedCases.length ? '<h2>本次新增记录</h2>' + panel(...addedRows(false)) : '') +
+        '<h2>买家 A · 右侧镜腿夹耳</h2>' +
+        panel(
+          row(
+            '来自订单售后',
+            '手工录入 · 订单引用 G1-000781',
+            chip(replied ? '等对方' : '等我回复', replied ? '' : 'warn'),
+          ),
+          row(
+            '下一步',
+            '请对方补充佩戴时长和接触位置，核对样机批次。',
+            link('查看样机版本　↗', info('eng')),
+          ),
+        ) +
+        '<div class="callout">在原沟通渠道回复之后，再在这里记录进展。</div><div class="group">' +
+        btn(replied ? '对方回复了' : '已回复，等对方', 'replied=!replied;render()', true) +
+        '</div>',
+      promote: () =>
+        title('推广', '推广', '关联业务：G1 首批直售　·　稿件、账号与平台结果可各自回查') +
+        panel(
+          row('G1 佩戴体验手记', 'CSDN · 品牌账号（示例）', chip('已存草稿')),
+          row('可用内容', '镜腿 Rev B 实装照片 · 授权仅限本稿', link('查看资料范围', info('eng'))),
+          row('平台回执', '尚无公开作品链接', btn('查原任务状态', info('pub'))),
+        ) +
+        '<div class="callout">稿件要由原发布任务保存、提交和核验。此演示不会访问平台。</div>',
+      decide: () =>
+        title(
+          '经营决策',
+          '先改镜腿，还是增加销售渠道？',
+          '按本次勾选的业务资料、售后摘要和已确认支出形成建议。',
+        ) +
+        panel(
+          row('依据 · 来自这项业务', '委托时有一条佩戴问题，样本量 1。', chip('已记录')),
+          row(
+            '方案 A · 先复核镜腿',
+            '先找同批样机复现，拿到报价再决定是否改模。',
+            chip('Owner 建议'),
+          ),
+          row('方案 B · 增加销售渠道', '可扩大触达，新增渠道费用与备货需求待询价。', chip('估算')),
+        ) +
+        '<div class="note">重想条件：同批样机不能复现，或买家反馈原因与镜腿无关。</div>' +
+        (adopted ? chip('已记为决策', 'ok') : btn('采纳先复核镜腿', 'adopted=true;render()', true)),
+    }
+    function detail(key) {
+      sideKey = key
+      paintSide()
+    }
+    function paintSide() {
+      let key =
+        sideKey ||
+        { biz: 'eng', accounts: 'settle', cases: 'case', promote: 'pub', decide: 'dec' }[page]
+      let side = document.querySelector('#side')
+      const data = {
+        eng: [
+          '关联工程',
+          'G1 电子开发',
+          '工程记录由电子开发项目保存。',
+          [
+            ['工程身份', 'G1 电子开发 · 已关联'],
+            ['样机版本', 'PCB Rev B / 外壳 B2'],
+            ['源文件', '打样/Rev-B/试装记录.md'],
+            ['资料用途', '售后排查 · 宣发前核对照片授权'],
+          ],
+        ],
+        settle: [
+          '结算核验',
+          '批次 J-1031',
+          '将结算单和银行打款逐项比对。',
+          [
+            ['订单行', '000781、000782 · ¥1,798.00'],
+            ['平台明细', '退款 ¥199.00 / 手续费 ¥31.00'],
+            ['流水 B-1031', '10 月 31 日 · ¥1,568.00'],
+            ['核验差额', '¥0.00 · 人工对照两份原件'],
+          ],
+        ],
+        freight: [
+          '流水核对',
+          'B-1029 · 运费',
+          '交易来源与辅助凭证分别展示。',
+          [
+            ['交易来源', '十月银行流水.csv · B-1029'],
+            ['辅助凭证', '加工结算单 · 运费行'],
+            ['金额与方向', 'CNY 26.00 · 支出'],
+            ['归属', 'AI 眼镜 · G1 首批直售'],
+          ],
+        ],
+        package: [
+          '交付包预览',
+          '2026 年 10 月',
+          '交付副本只含所选月份。',
+          [
+            ['已确认账目.csv', confirmed ? '3 条 · 净流入 ¥261.50' : '2 条 · 净流入 ¥287.50'],
+            ['另附', '确认与修改记录、月度汇总、凭证、交付说明'],
+            ['待补资料', confirmed ? '无待确认流水' : '运费 ¥26.00 待确认'],
+            ['代账回执', '待代账反馈'],
+          ],
+        ],
+        pub: [
+          'WebAffair 原记录',
+          'G1 佩戴体验手记',
+          '本页只读呈现原事务进度。',
+          [
+            ['当前动作', '等待核验发布账号与版本'],
+            ['已取得证据', '原任务保存草稿回执'],
+            ['公开结果', '尚未提交'],
+            ['允许的下一步', '回原任务核对账号及本稿范围'],
+          ],
+        ],
+        case: [
+          '售后原记录',
+          '订单售后',
+          '客户昵称仅在业务处理时显示。',
+          [
+            ['样机', 'G1 / PCB Rev B / 外壳 B2'],
+            ['来源', '订单售后 · 手动'],
+            ['关联业务', 'AI 眼镜 · G1 首批直售'],
+          ],
+        ],
+        dec: [
+          '决策资料范围',
+          '本次 Owner 委托',
+          '仅提供勾选资料的精简摘要。',
+          [
+            ['已选', '已确认账目、业务、售后摘要'],
+            ['网上公开资料', '未勾选'],
+            ['采纳动作', '只写公司决策记录'],
+          ],
+        ],
+      }[key]
+      side.innerHTML =
+        '<span class="chip">' +
+        data[0] +
+        '</span><h3>' +
+        data[1] +
+        '</h3><p>' +
+        data[2] +
+        '</p><hr>' +
+        fields(data[3]) +
+        (key === 'settle' && !matched
+          ? '<hr>' + btn('记为已核对', 'matched=true;render()', true)
+          : key === 'freight' && !confirmed
+            ? '<hr>' + btn('人工确认入账', 'confirmed=true;render()', true)
+            : '')
+    }
+    function openPage(key) {
+      page = key
+      sideKey = ''
+      render()
+    }
+    function render() {
+      document.querySelector('#nav').innerHTML = Object.entries(sections)
+        .map(
+          ([k, [icon, label]]) =>
+            '<button class="nav ' +
+            (k === page ? 'active' : '') +
+            '" onclick="' +
+            go(k) +
+            '"><span>' +
+            icon +
+            '</span>' +
+            label +
+            '</button>',
+        )
+        .join('')
+      document.querySelector('#tab').textContent = '▤　' + sections[page][1]
+      document.querySelector('#content').innerHTML = cards[page]()
+      paintSide()
+    }
+    openPage(Object.hasOwn(sections, location.hash.slice(1)) ? location.hash.slice(1) : 'biz')
+  </script>
+</html>
