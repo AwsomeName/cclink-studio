@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>表格控件留白</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 28px;
+        background: #141414;
+        color: #ccc;
+        font:
+          14px -apple-system,
+          'PingFang SC',
+          sans-serif;
+      }
+      h1 {
+        margin: 0 0 4px;
+        color: #fff;
+        font-size: 20px;
+      }
+      h2 {
+        margin: 36px 0 6px;
+        color: #fff;
+        font-size: 16px;
+      }
+      .note {
+        max-width: 1100px;
+        margin: 0 0 16px;
+        color: #999;
+        line-height: 1.7;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+        max-width: 1240px;
+      }
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .panel {
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #1e1e1e;
+        padding: 14px 18px 18px;
+      }
+      .panel > .tag {
+        display: inline-block;
+        margin-bottom: 10px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+      }
+      .tag.bad {
+        background: rgba(244, 135, 113, 0.15);
+        color: #f48771;
+      }
+      .tag.good {
+        background: rgba(78, 201, 176, 0.15);
+        color: #4ec9b0;
+      }
+      .doc h3 {
+        margin: 0;
+        color: #fff;
+        font-size: 17px;
+      }
+      .doc p {
+        margin: 0;
+        color: #ccc;
+        line-height: 1.7;
+      }
+      /* Table block: the reserved bands belong to the table, nothing else is drawn there. */
+      .tblock {
+        position: relative;
+      }
+      .tblock.old {
+        margin: 10px 0 12px;
+      }
+      .tblock.new {
+        margin: 6px 0 6px;
+        padding: 22px 26px 26px 28px; /* top band · right band · bottom band · left band */
+      }
+      .band {
+        position: absolute;
+        border: 1px dashed rgba(78, 201, 176, 0.35);
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      .band.top {
+        top: 2px;
+        left: 28px;
+        right: 26px;
+        height: 18px;
+      }
+      .band.bottom {
+        bottom: 2px;
+        left: 28px;
+        right: 26px;
+        height: 22px;
+      }
+      .band.left {
+        top: 22px;
+        bottom: 26px;
+        left: 4px;
+        width: 22px;
+      }
+      .band.right {
+        top: 22px;
+        bottom: 26px;
+        right: 4px;
+        width: 20px;
+      }
+      .hide-bands .band {
+        display: none;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td,
+      th {
+        padding: 6px 12px;
+        border: 1px solid #3a3a3a;
+        text-align: left;
+        vertical-align: top;
+        line-height: 1.6;
+      }
+      th {
+        background: rgba(255, 255, 255, 0.04);
+        font-weight: 600;
+      }
+      td.hover {
+        background: rgba(0, 122, 204, 0.08);
+      }
+      .ctl {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #444;
+        border-radius: 5px;
+        background: #2a2a2a;
+        color: #bbb;
+        font-size: 11px;
+      }
+      .old .ctl.grip {
+        top: -16px;
+        width: 30px;
+        height: 18px;
+      }
+      .old .ctl.append-row {
+        left: 0;
+        right: 0;
+        bottom: -26px;
+        height: 22px;
+        font-size: 12px;
+      }
+      .old .ctl.append-col {
+        top: 0;
+        bottom: 0;
+        right: -24px;
+        width: 20px;
+      }
+      .new .ctl.grip {
+        top: 7px;
+        width: 22px;
+        height: 9px;
+        font-size: 8px;
+        letter-spacing: 1px;
+        opacity: 0.85;
+      }
+      .new .ctl.rowgrip {
+        left: 9px;
+        width: 9px;
+        height: 22px;
+        font-size: 8px;
+        writing-mode: vertical-rl;
+      }
+      .new .ctl.append-row {
+        left: 28px;
+        right: 26px;
+        bottom: 6px;
+        height: 16px;
+        border-style: dashed;
+        background: rgba(0, 122, 204, 0.08);
+        color: #8ab4f8;
+        font-size: 11px;
+      }
+      .new .ctl.append-col {
+        top: 22px;
+        bottom: 26px;
+        right: 6px;
+        width: 14px;
+        border-style: dashed;
+        background: rgba(0, 122, 204, 0.08);
+        color: #8ab4f8;
+      }
+      .cursor {
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 12px solid #fff;
+        transform: rotate(-30deg);
+        filter: drop-shadow(0 1px 1px #000);
+      }
+      .overlap {
+        position: absolute;
+        border: 2px solid #f48771;
+        border-radius: 4px;
+        pointer-events: none;
+      }
+      .cap {
+        margin: 12px 0 0;
+        color: #aaa;
+        font-size: 13px;
+        line-height: 1.7;
+      }
+      ol,
+      ul {
+        max-width: 1100px;
+        line-height: 1.8;
+        padding-left: 22px;
+      }
+      code {
+        color: #ce9178;
+      }
+      .legend {
+        display: inline-block;
+        width: 22px;
+        height: 10px;
+        margin-right: 4px;
+        border: 1px dashed rgba(78, 201, 176, 0.6);
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Markdown 表格控件：留白与按需出现</h1>
+    <p class="note">
+      目标：表格四周有属于表格自己的留白，手柄和“+”只画在留白里，从不盖住上下文的标题、段落；
+      鼠标在正文上时控件不出现，靠近哪里才出现哪里的控件。
+      <span class="legend"></span>虚线框是预留区，仅设计图可见，实际不显示。
+    </p>
+
+    <h2>1 · 现状与方案对比</h2>
+    <div class="grid">
+      <section class="panel">
+        <span class="tag bad">现状：鼠标在“Chatcc”标题上</span>
+        <div class="doc">
+          <h3>Chatcc</h3>
+          <div class="tblock old">
+            <span class="ctl grip" style="left: 40px">···</span>
+            <span class="ctl grip" style="left: 47%">···</span>
+            <span class="ctl grip" style="left: 90%">···</span>
+            <div class="overlap" style="left: -4px; top: -40px; width: 130px; height: 34px"></div>
+            <table>
+              <tr>
+                <th style="width: 22%">事项</th>
+                <th>进展记录</th>
+                <th style="width: 20%">计划</th>
+              </tr>
+              <tr>
+                <td>Agent</td>
+                <td>需要升级，支持 terminal</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>需要尽快推进</td>
+                <td></td>
+              </tr>
+            </table>
+            <span class="ctl append-col">+</span>
+            <span class="ctl append-row">+ 新增一行</span>
+            <div
+              class="overlap"
+              style="left: -4px; bottom: -64px; width: 120px; height: 34px"
+            ></div>
+          </div>
+          <h3 style="margin-top: 14px">其他项目</h3>
+        </div>
+        <p class="cap">
+          列手柄压在标题上（红框），“新增一行”压在下一个标题上；悬停判定比表格大 24–30px，
+          所以鼠标还在标题上控件就出现，标题点不进去。所有列手柄、追加条同时亮出。
+        </p>
+      </section>
+
+      <section class="panel">
+        <span class="tag good">方案：鼠标在标题上 → 不出现任何控件</span>
+        <div class="doc">
+          <h3>Chatcc</h3>
+          <div class="tblock new">
+            <span class="band top"></span><span class="band bottom"></span
+            ><span class="band left"></span><span class="band right"></span>
+            <table>
+              <tr>
+                <th style="width: 22%">事项</th>
+                <th>进展记录</th>
+                <th style="width: 20%">计划</th>
+              </tr>
+              <tr>
+                <td>Agent</td>
+                <td>需要升级，支持 terminal</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>需要尽快推进</td>
+                <td></td>
+              </tr>
+            </table>
+          </div>
+          <h3>其他项目</h3>
+        </div>
+        <p class="cap">
+          表格自带上 22 · 下 26 · 左 28 · 右 26 px 的留白，控件只画在这四条带里。
+          悬停判定只到留白外沿为止，标题和段落区域完全不触发、不遮挡。
+        </p>
+      </section>
+    </div>
+
+    <h2>2 · 方案的三种悬停状态</h2>
+    <div class="grid">
+      <section class="panel">
+        <span class="tag good">鼠标在某个单元格里</span>
+        <div class="doc hide-bands">
+          <div class="tblock new">
+            <span class="ctl grip" style="left: calc(28px + 22% + 28%)">···</span>
+            <span class="ctl rowgrip" style="top: 62px">···</span>
+            <table>
+              <tr>
+                <th style="width: 22%">事项</th>
+                <th>进展记录</th>
+                <th style="width: 20%">计划</th>
+              </tr>
+              <tr>
+                <td>Agent</td>
+                <td class="hover">需要升级，支持 terminal</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>需要尽快推进</td>
+                <td></td>
+              </tr>
+            </table>
+            <span class="cursor" style="left: 52%; top: 70px"></span>
+          </div>
+        </div>
+        <p class="cap">
+          只出现<b>这一列</b>的列手柄和<b>这一行</b>的行手柄（细条，低对比），其余列不亮。
+          “新增一行”和右侧“+”不出现。
+        </p>
+      </section>
+
+      <section class="panel">
+        <span class="tag good">鼠标移到最后一行下沿 / 下方留白</span>
+        <div class="doc hide-bands">
+          <div class="tblock new">
+            <table>
+              <tr>
+                <th style="width: 22%">事项</th>
+                <th>进展记录</th>
+                <th style="width: 20%">计划</th>
+              </tr>
+              <tr>
+                <td>Agent</td>
+                <td>需要升级，支持 terminal</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>需要尽快推进</td>
+                <td></td>
+              </tr>
+            </table>
+            <span class="ctl append-row">+ 新增一行</span>
+            <span class="cursor" style="left: 48%; bottom: 6px"></span>
+          </div>
+        </div>
+        <p class="cap">
+          离表格下边 12px 以内或进入下方留白时，才出现虚线“+ 新增一行”，且只占下方留白。
+          靠近右边同理出现窄的“+”加列条。
+        </p>
+      </section>
+
+      <section class="panel">
+        <span class="tag good">正在输入</span>
+        <div class="doc hide-bands">
+          <div class="tblock new">
+            <table>
+              <tr>
+                <th style="width: 22%">事项</th>
+                <th>进展记录</th>
+                <th style="width: 20%">计划</th>
+              </tr>
+              <tr>
+                <td>Agent</td>
+                <td>需要升级，支持 terminal｜</td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>统一账号</td>
+                <td>需要尽快推进</td>
+                <td></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        <p class="cap">
+          在表格里打字时所有控件隐藏，鼠标再移动 4px 以上才恢复，避免光标和手柄抢位置。
+        </p>
+      </section>
+
+      <section class="panel">
+        <span class="tag good">能力不丢失</span>
+        <div class="doc">
+          <p>
+            控件变少后，原有操作都还在：右键菜单（插入 / 删除行列、对齐、删除表格）、 最后一行按
+            Enter 新增一行、拖动手柄排序、框选复制与清空。
+          </p>
+        </div>
+        <p class="cap">只改“什么时候出现、画在哪里”，不改任何表格操作和 Markdown 写法。</p>
+      </section>
+    </div>
+
+    <h2>3 · 产品逻辑</h2>
+    <ol>
+      <li>
+        <b>留白属于表格</b>：表格外层预留上 22 / 下 26 / 左 28 / 右 26 px（替换现在的
+        <code>margin: 1.4em 0 1.8em</code>），所有控件坐标都限制在留白内。
+      </li>
+      <li>
+        <b>悬停判定 = 表格 + 留白</b>：<code>GUTTER</code> 与留白一致，不再向标题、段落外扩；
+        鼠标在别的块上时控件一律不渲染、不接收点击。
+      </li>
+      <li>
+        <b>按距离分层出现</b>：在单元格内 → 当前行、列手柄；靠近行/列边界的左侧/上方留白 →
+        对应位置的插入“+”；靠近下边或右边 → 追加行/列条。其余时刻不显示。
+      </li>
+      <li><b>输入时让位</b>：键入期间隐藏全部控件，鼠标移动后恢复。</li>
+      <li>
+        <b>视觉减重</b>：列手柄 22×9、行手柄 9×22，静止时低对比，悬停变高亮；追加条改为 16px
+        虚线条。
+      </li>
+    </ol>
+
+    <h2>4 · 需要你确认的点</h2>
+    <ol>
+      <li>
+        <b>D1 追加条出现时机</b>：建议“靠近下边/右边才出现”；另一选项是“鼠标进表格就出现，
+        但只画在下方留白里”（更容易发现，但更常亮）。
+      </li>
+      <li><b>D2 列手柄</b>：建议只显示当前列；另一选项是表格悬停时全部列都显示（现状）。</li>
+      <li><b>D3 留白代价</b>：每个表格上下各多约 8–10px，表格多的文档会稍长。可接受吗？</li>
+    </ol>
+  </body>
+</html>

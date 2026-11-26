@@ -57,7 +57,15 @@ interface MarkdownTableControlsProps {
   onOpenMenu: (x: number, y: number, anchor: HTMLElement) => void
 }
 
-const GUTTER = { left: 30, top: 24, right: 30, bottom: 30 }
+/**
+ * The room around a table that belongs to it (top/bottom are the table's CSS margin,
+ * `--markdown-table-band-*`; left/right fit the editor's horizontal padding). Handles are drawn
+ * only inside these bands and the pointer counts as "on the table" only up to their outer edge,
+ * so nothing ever covers, or reacts over, the heading or paragraph next to a table.
+ */
+const BAND = { left: 28, top: 24, right: 24, bottom: 28 }
+/** How close to the bottom/right edge the pointer must be before the append bars appear. */
+const EDGE_REACH = 12
 const BORDER_HIT = 7
 const DRAG_THRESHOLD = 4
 
@@ -113,10 +121,10 @@ function toLocal(event: { clientX: number; clientY: number }, container: HTMLDiv
 
 function within(point: Pointer, box: Box): boolean {
   return (
-    point.x >= box.left - GUTTER.left &&
-    point.x <= box.left + box.width + GUTTER.right &&
-    point.y >= box.top - GUTTER.top &&
-    point.y <= box.top + box.height + GUTTER.bottom
+    point.x >= box.left - BAND.left &&
+    point.x <= box.left + box.width + BAND.right &&
+    point.y >= box.top - BAND.top &&
+    point.y <= box.top + box.height + BAND.bottom
   )
 }
 
@@ -168,12 +176,17 @@ export function MarkdownTableControls({
 }: MarkdownTableControlsProps): React.ReactElement | null {
   const [geometry, setGeometry] = useState<TableGeometry | null>(null)
   const [pointer, setPointer] = useState<Pointer | null>(null)
+  /** Where the pointer was when the user started typing; handles stay hidden until it moves. */
+  const [typingAt, setTypingAt] = useState<Pointer | null>(null)
+  const typingAtRef = useRef<Pointer | null>(null)
   const [drag, setDrag] = useState<DragState | null>(null)
   const [, setSelectionVersion] = useState(0)
   const geometryRef = useRef<TableGeometry | null>(null)
+  const pointerRef = useRef<Pointer | null>(null)
   const dragRef = useRef<DragState | null>(null)
   geometryRef.current = geometry
   dragRef.current = drag
+  pointerRef.current = pointer
 
   const refresh = useCallback(
     (element: HTMLTableElement | null) => {
@@ -189,6 +202,12 @@ export function MarkdownTableControls({
     const onMove = (event: MouseEvent): void => {
       if (dragRef.current || !editor.isEditable) return
       const point = toLocal(event, container)
+      const typed = typingAtRef.current
+      if (typed) {
+        if (Math.hypot(point.x - typed.x, point.y - typed.y) <= DRAG_THRESHOLD) return
+        typingAtRef.current = null
+        setTypingAt(null)
+      }
       const current = geometryRef.current
       if (current?.element.isConnected && within(point, current.table)) {
         setPointer(point)
@@ -213,6 +232,20 @@ export function MarkdownTableControls({
       container.removeEventListener('mouseleave', onLeave)
     }
   }, [container, editor, refresh])
+
+  // Typing hands the space back to the text: hide every handle until the mouse moves again.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (dragRef.current || event.metaKey || event.ctrlKey || event.altKey) return
+      if (['Shift', 'Meta', 'Control', 'Alt', 'CapsLock'].includes(event.key)) return
+      const at = pointerRef.current ?? { x: -Infinity, y: -Infinity }
+      typingAtRef.current = at
+      setTypingAt(at)
+    }
+    const dom = editor.view.dom
+    dom.addEventListener('keydown', onKeyDown)
+    return () => dom.removeEventListener('keydown', onKeyDown)
+  }, [editor])
 
   // Re-measure after edits (insert, move, typing that wraps) and keep grip highlights current.
   useEffect(() => {
@@ -293,7 +326,7 @@ export function MarkdownTableControls({
     }
   }, [container, drag, finishDrag])
 
-  if (!geometry || !pointer || !editor.isEditable) return null
+  if (!geometry || !pointer || !editor.isEditable || (typingAt && !drag)) return null
 
   const target = markdownTableTarget(editor.state)
   const selectedTable = selectedMarkdownTable(editor.state)
@@ -314,12 +347,24 @@ export function MarkdownTableControls({
     )
 
   const { table } = geometry
+  // Only the row and column under the pointer (plus a selected or dragged one) show a grip.
   const hoveredRow = indexAt(geometry.rows, pointer.y, 'y')
   const visibleRowGrips = new Set<number>()
   if (hoveredRow !== null) visibleRowGrips.add(hoveredRow)
   geometry.rows.forEach((_, row) => {
     if (selectedRow(row)) visibleRowGrips.add(row)
   })
+  if (drag?.kind === 'row') visibleRowGrips.add(drag.from)
+  const hoveredColumn = indexAt(geometry.columns, pointer.x, 'x')
+  const visibleColumnGrips = new Set<number>()
+  if (hoveredColumn !== null) visibleColumnGrips.add(hoveredColumn)
+  geometry.columns.forEach((_, column) => {
+    if (selectedColumn(column)) visibleColumnGrips.add(column)
+  })
+  if (drag?.kind === 'column') visibleColumnGrips.add(drag.from)
+  // The append bars wait until the pointer reaches the bottom or right edge.
+  const nearBottom = pointer.y >= table.top + table.height - EDGE_REACH
+  const nearRight = pointer.x >= table.left + table.width - EDGE_REACH
 
   const rowsB = rowBorders(geometry)
   const columnsB = columnBorders(geometry)
@@ -361,20 +406,23 @@ export function MarkdownTableControls({
 
   return (
     <div className="markdown-table-controls">
-      {geometry.columns.map((column, index) => (
-        <button
-          key={`col-${index}`}
-          type="button"
-          className={`markdown-table-grip column${selectedColumn(index) ? ' active' : ''}`}
-          style={{ left: column.left + column.width / 2 - 12, top: table.top - 13 }}
-          aria-label={`选择第 ${index + 1} 列`}
-          title="点击选择整列并打开菜单，拖动调整列顺序"
-          onPointerDown={startGrip('column', index)}
-          onMouseDown={keepFocus}
-        >
-          <span aria-hidden="true">⋯</span>
-        </button>
-      ))}
+      {[...visibleColumnGrips].map((index) => {
+        const column = geometry.columns[index]
+        return (
+          <button
+            key={`col-${index}`}
+            type="button"
+            className={`markdown-table-grip column${selectedColumn(index) ? ' active' : ''}`}
+            style={{ left: column.left + column.width / 2 - 11, top: table.top - BAND.top / 2 - 5 }}
+            aria-label={`选择第 ${index + 1} 列`}
+            title="点击选择整列并打开菜单，拖动调整列顺序"
+            onPointerDown={startGrip('column', index)}
+            onMouseDown={keepFocus}
+          >
+            <span aria-hidden="true">⋯</span>
+          </button>
+        )
+      })}
       {[...visibleRowGrips].map((index) => {
         const row = geometry.rows[index]
         return (
@@ -382,7 +430,7 @@ export function MarkdownTableControls({
             key={`row-${index}`}
             type="button"
             className={`markdown-table-grip row${selectedRow(index) ? ' active' : ''}`}
-            style={{ left: table.left - 20, top: row.top + row.height / 2 - 12 }}
+            style={{ left: table.left - BAND.left / 2 - 5, top: row.top + row.height / 2 - 11 }}
             aria-label={index === 0 ? '选择表头行' : `选择第 ${index} 行`}
             title={index === 0 ? '表头行：点击打开菜单' : '点击选择整行并打开菜单，拖动调整行顺序'}
             onPointerDown={startGrip('row', index)}
@@ -401,7 +449,7 @@ export function MarkdownTableControls({
           <button
             type="button"
             className="markdown-table-insert"
-            style={{ left: table.left - 24, top: rowsB[rowInsert] - 8 }}
+            style={{ left: table.left - BAND.left + 2, top: rowsB[rowInsert] - 8 }}
             aria-label="在此处插入一行"
             onMouseDown={keepFocus}
             onClick={() => insertMarkdownTableRowAt(editor, geometry.tablePos, rowInsert)}
@@ -424,7 +472,7 @@ export function MarkdownTableControls({
           <button
             type="button"
             className="markdown-table-insert"
-            style={{ left: columnsB[columnInsert] - 8, top: table.top - 22 }}
+            style={{ left: columnsB[columnInsert] - 8, top: table.top - BAND.top + 2 }}
             aria-label="在此处插入一列"
             onMouseDown={keepFocus}
             onClick={() => insertMarkdownTableColumnAt(editor, geometry.tablePos, columnInsert)}
@@ -433,33 +481,31 @@ export function MarkdownTableControls({
           </button>
         </>
       )}
-      {!drag && (
-        <>
-          <button
-            type="button"
-            className="markdown-table-append row"
-            style={{ left: table.left, top: table.top + table.height + 3, width: table.width }}
-            aria-label="新增一行"
-            onMouseDown={keepFocus}
-            onClick={() =>
-              insertMarkdownTableRowAt(editor, geometry.tablePos, geometry.rows.length)
-            }
-          >
-            + 新增一行
-          </button>
-          <button
-            type="button"
-            className="markdown-table-append column"
-            style={{ left: table.left + table.width + 4, top: table.top, height: table.height }}
-            aria-label="新增一列"
-            onMouseDown={keepFocus}
-            onClick={() =>
-              insertMarkdownTableColumnAt(editor, geometry.tablePos, geometry.columns.length)
-            }
-          >
-            +
-          </button>
-        </>
+      {!drag && nearBottom && (
+        <button
+          type="button"
+          className="markdown-table-append row"
+          style={{ left: table.left, top: table.top + table.height + 6, width: table.width }}
+          aria-label="新增一行"
+          onMouseDown={keepFocus}
+          onClick={() => insertMarkdownTableRowAt(editor, geometry.tablePos, geometry.rows.length)}
+        >
+          + 新增一行
+        </button>
+      )}
+      {!drag && nearRight && (
+        <button
+          type="button"
+          className="markdown-table-append column"
+          style={{ left: table.left + table.width + 5, top: table.top, height: table.height }}
+          aria-label="新增一列"
+          onMouseDown={keepFocus}
+          onClick={() =>
+            insertMarkdownTableColumnAt(editor, geometry.tablePos, geometry.columns.length)
+          }
+        >
+          +
+        </button>
       )}
       {dropLine && <div className="markdown-table-drop-line" style={dropLine} />}
     </div>

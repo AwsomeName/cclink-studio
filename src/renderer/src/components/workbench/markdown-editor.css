@@ -395,6 +395,9 @@
   overflow-y: auto;
   padding: 24px 32px;
   min-height: 0;
+  /* Table handle bands (MarkdownTableControls BAND): the handles live only in this room. */
+  --markdown-table-band-top: 24px;
+  --markdown-table-band-bottom: 28px;
 }
 
 .tiptap-editor.protected {
@@ -1054,8 +1057,9 @@
 .tiptap-editor .tiptap table {
   border-collapse: collapse;
   width: 100%;
-  /* Room above and below for the column grips and the 新增一行 bar. */
-  margin: 1.4em 0 1.8em;
+  /* Room above and below for the column grips and the 新增一行 bar; the side handles sit in the
+     editor's horizontal padding. */
+  margin: var(--markdown-table-band-top) 0 var(--markdown-table-band-bottom);
   overflow: hidden;
 }
 
@@ -1123,13 +1127,13 @@
 }
 
 .markdown-table-grip.column {
-  width: 24px;
-  height: 12px;
+  width: 22px;
+  height: 10px;
 }
 
 .markdown-table-grip.row {
-  width: 14px;
-  height: 24px;
+  width: 10px;
+  height: 22px;
   letter-spacing: -3px;
 }
 
@@ -1175,11 +1179,11 @@
 }
 
 .markdown-table-append.row {
-  height: 20px;
+  height: 16px;
 }
 
 .markdown-table-append.column {
-  width: 18px;
+  width: 14px;
 }
 
 .markdown-table-append:hover {

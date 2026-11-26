@@ -1012,7 +1012,7 @@
   margin: 0;
 }
 .diary-today-editor .tiptap-editor .tiptap table {
-  margin: 0.2em 0 0.4em;
+  margin: var(--markdown-table-band-top) 0 var(--markdown-table-band-bottom);
 }
 .diary-today-editor .tiptap-editor .tiptap table td,
 .diary-today-editor .tiptap-editor .tiptap table th {

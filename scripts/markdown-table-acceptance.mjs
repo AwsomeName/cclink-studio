@@ -186,32 +186,94 @@ try {
   await openTable()
   await page.keyboard.press('Escape')
 
-  // ① Hover shows grips, insert points and append bars; leaving hides them.
+  // ① Handles appear only where the pointer is, inside the table's own bands; the text next to
+  // the table is never covered and stays clickable; typing hides them until the mouse moves.
   await step('T1', async () => {
+    const controls = () => page.locator('.markdown-table-controls')
     await page.mouse.move(5, 5)
     await sleep(150)
-    const hiddenBefore = await page.locator('.markdown-table-controls').count()
+    const hiddenBefore = await controls().count()
     await hoverCell(2, 1)
     const columnGrips = await page.getByRole('button', { name: /^选择第 \d+ 列$/ }).count()
+    const hoveredColumnGrip = await page.getByRole('button', { name: '选择第 2 列' }).isVisible()
     const rowGrip = await page.getByRole('button', { name: '选择第 2 行' }).isVisible()
+    const appendWhileInCell = await page.getByRole('button', { name: /^新增一(行|列)$/ }).count()
+    await shot('T1-hover-cell')
+    const tableBox = await box(table())
+    await page.mouse.move(tableBox.x + tableBox.width / 2, tableBox.y + tableBox.height + 10)
+    await sleep(150)
     const appendRow = await page.getByRole('button', { name: '新增一行' }).isVisible()
+    await shot('T1-near-bottom')
+    await page.mouse.move(tableBox.x + tableBox.width + 8, tableBox.y + tableBox.height / 2)
+    await sleep(150)
     const appendColumn = await page.getByRole('button', { name: '新增一列' }).isVisible()
-    await shot('T1-hover')
+    // Every handle stays inside the bands, clear of the paragraphs above and below.
+    const before = await box(editor().getByText('前言段落，保持不变。'))
+    const after = await box(editor().getByText('结尾段落，保持不变。'))
+    await hoverCell(1, 0)
+    await page.mouse.move(tableBox.x + tableBox.width / 2, tableBox.y + tableBox.height + 10)
+    await sleep(150)
+    const handleBoxes = await controls()
+      .locator('button')
+      .evaluateAll((buttons) =>
+        buttons.map((b) => {
+          const r = b.getBoundingClientRect()
+          return { top: r.top, bottom: r.bottom }
+        }),
+      )
+    const clearOfText = handleBoxes.every(
+      (b) => b.top >= before.y + before.height && b.bottom <= after.y,
+    )
+    // Over the paragraph just above the table nothing appears, and a click lands in the text.
+    await page.mouse.move(before.x + 30, before.y + before.height / 2)
+    await sleep(150)
+    const hiddenOverText = (await controls().count()) === 0
+    await page.mouse.click(before.x + 30, before.y + before.height / 2)
+    const caretInText = await page.evaluate(
+      () => window.getSelection()?.anchorNode?.parentElement?.textContent ?? '',
+    )
+    // Typing in a cell hides everything; moving the mouse brings the handles back.
+    await hoverCell(1, 1)
+    await page.mouse.click(
+      (await box(rows().nth(1).locator('td').nth(1))).x + 30,
+      (await box(rows().nth(1))).y + 12,
+    )
+    await page.keyboard.type('x')
+    await sleep(150)
+    const hiddenWhileTyping = (await controls().count()) === 0
+    const cell = await box(rows().nth(1).locator('td').nth(1))
+    await page.mouse.move(cell.x + 60, cell.y + cell.height / 2)
+    await sleep(150)
+    const backAfterMove = (await controls().count()) === 1
+    await page.keyboard.press('Backspace')
     await page.mouse.move(5, 5)
     await sleep(200)
-    const hiddenAfter = await page.locator('.markdown-table-controls').count()
+    const hiddenAfter = await controls().count()
     const ok =
       hiddenBefore === 0 &&
-      columnGrips === 3 &&
+      columnGrips === 1 &&
+      hoveredColumnGrip &&
       rowGrip &&
+      appendWhileInCell === 0 &&
       appendRow &&
       appendColumn &&
+      clearOfText &&
+      hiddenOverText &&
+      caretInText.includes('前言段落') &&
+      hiddenWhileTyping &&
+      backAfterMove &&
       hiddenAfter === 0
-    record('T1', ok ? 'PASS' : 'FAIL', '悬停出现行列手柄与追加入口，移开后消失', {
+    record('T1', ok ? 'PASS' : 'FAIL', '控件只在表格留白内、按位置出现，不遮挡上下文，输入时让位', {
       columnGrips,
       rowGrip,
+      appendWhileInCell,
       appendRow,
       appendColumn,
+      clearOfText,
+      hiddenOverText,
+      caretInText,
+      hiddenWhileTyping,
+      backAfterMove,
       hiddenBefore,
       hiddenAfter,
     })
@@ -230,7 +292,9 @@ try {
     await plusRow.click()
     await sleep(200)
     const afterRowInsert = await grid()
-    await hoverCell(1, 0)
+    const grown = await box(table())
+    await page.mouse.move(grown.x + grown.width / 2, grown.y + grown.height + 10)
+    await sleep(150)
     await page.getByRole('button', { name: '新增一行' }).click()
     await sleep(200)
     const afterAppend = await grid()
@@ -289,7 +353,10 @@ try {
     await save()
     const saved = await disk()
     const delimiter = saved.split('\n').find((line) => /^\| *:?-/.test(line)) ?? ''
-    const cells = delimiter.split('|').slice(1, -1).map((cell) => cell.trim())
+    const cells = delimiter
+      .split('|')
+      .slice(1, -1)
+      .map((cell) => cell.trim())
     // Reopen: close the tab and open the file again.
     await page.keyboard.press('Meta+w')
     await sleep(500)
