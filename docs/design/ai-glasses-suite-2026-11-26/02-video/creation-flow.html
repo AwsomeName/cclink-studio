@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CCLink Studio · 视频制作方案示意</title>
+<style>
+:root{color-scheme:dark;--base:#1e1f21;--panel:#27292c;--line:#414448;--muted:#b0b5bb;--active:#64b8f1;--light:#ecedef;--blue:#126a9c;--amber:#ffd197}*{box-sizing:border-box}body{margin:0;background:var(--base);color:var(--light);font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}button,input,textarea{font:inherit}button{cursor:pointer;background:#34373b;color:var(--light);border:1px solid #51565a;border-radius:4px;padding:5px 10px}button:hover{border-color:var(--active)}button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--active);outline-offset:2px}button:disabled{opacity:.6;cursor:default}a{color:#95d1ff}h1,h2,h3,p{margin:0}h1{font-size:24px;letter-spacing:.02em}h2{font-size:17px}h3{font-size:14px}small,.muted{color:var(--muted);font-size:12px}.row,.top,.title,.bar,.status,.editor-tab{display:flex;align-items:center;gap:10px}.split{justify-content:space-between}.top{background:#323437;height:35px;padding:0 15px;border-bottom:1px solid #18191a;font-size:12px;color:#d9dadd}.lights{display:flex;gap:5px;margin-right:7px}.lights i{width:9px;height:9px;border-radius:50%;background:#9f7674}.lights i:nth-child(2){background:#b69d70}.lights i:last-child{background:#80a48b}.divider{color:#81878e}.right{margin-left:auto}.shell{display:grid;grid-template-columns:45px 197px minmax(0,1fr);min-height:calc(100vh - 60px)}.rail{background:#303235;border-right:1px solid #18191a;padding-top:12px;color:#adb1b6;text-align:center}.rail span{display:block;font:21px/43px system-ui}.rail .on{border-left:2px solid var(--active);background:#353c42;color:#e7f4ff}.sidebar{background:#252628;border-right:1px solid #414346;padding:18px 12px}.sidebar h2{font-size:14px;margin:0 5px 20px}.side-title{font-size:12px;color:#b7babc;margin:15px 4px 6px}.project{padding:9px 8px;background:#343b41;border-left:3px solid var(--active);margin-bottom:19px}.project small,.film small{display:block}.files{list-style:none;margin:0;padding:0 4px}.files li{padding:4px 0;overflow-wrap:anywhere}.files .sub{padding-left:14px;color:#b0b4b9;font-size:12px}.sidebar .tip{border-top:1px solid var(--line);padding-top:11px;margin-top:21px}.editor{min-width:0}.editor-tab{background:#292a2c;height:31px;padding:0 19px;color:#c5c9ce;font-size:12px;border-bottom:1px solid var(--line)}.title{justify-content:space-between;padding:14px 19px}.crumb{font-size:11px;color:#a3acb5;margin-bottom:1px}.title small{display:block}.version{text-align:right;font:12px/1.7 ui-monospace,Menlo,monospace;color:#b7c0c7}nav{display:grid;grid-template-columns:repeat(4,1fr);border-block:1px solid var(--line)}nav button{border:0;border-radius:0;border-bottom:2px solid transparent;background:transparent;color:#c3c5c7;font-weight:600;padding:9px 3px}nav button[aria-selected=true]{background:#29323a;border-bottom-color:#398dcc;color:#8bcaff}.page{padding:16px 19px 14px}.page[hidden]{display:none}.page-intro{margin-bottom:11px}.cols{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(235px,1fr);gap:12px}.panel,.timeline{background:var(--panel);border:1px solid var(--line);border-radius:5px;overflow:hidden;min-width:0}.panel-pad{padding:14px}.panel-top{height:37px;padding:0 12px;border-bottom:1px solid #3a3d41}.stage{height:200px;background:#141517;position:relative;display:grid;place-items:center}.stage{overflow:hidden}.stage img{position:absolute;inset:0;height:100%;width:100%;object-fit:contain}.stage span{position:absolute;left:10px;top:10px;background:#222a30da;color:white;padding:2px 6px;border-radius:3px;font-size:11px}.credits{padding:4px 10px;font-size:10px;color:#b9bec1;background:#222426}.prompt{padding:9px 11px;color:#e4e6e9;font-size:13px}.prompt b{color:#8bcaff;margin-right:5px}.time,output{font:13px/1.55 ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.time-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 5px}.time-pair label,.field{display:block;color:var(--muted);font-size:12px}.time-pair input,textarea{width:100%;background:#1e2022;border:1px solid #54595e;border-radius:4px;color:#eef1f4;padding:5px 8px}.time-pair input{margin-top:4px;font:15px/1.4 ui-monospace,Menlo,monospace}.bar{height:11px;display:block;background:#1b2024;margin:10px 0 6px;border-radius:2px;position:relative}.bar i{position:absolute;height:100%;background:#387fae;border-inline:3px solid #a0d5f5}.ticks{display:flex;justify-content:space-between;font-size:11px;color:#b3bdc4}.line{border-top:1px solid #3d4145;margin:11px 0}.chip{font-size:11px;color:#b8d6c7;background:#293b33;border:1px solid #456050;border-radius:3px;padding:1px 5px}.amber{color:var(--amber)}.primary{background:var(--blue);border-color:#3780aa;color:white}.alert{background:#3a3025;color:var(--amber);padding:10px;border-left:2px solid #bb905b;margin:10px 0}.timeline{padding:11px 12px;margin-top:12px}.lanes{display:grid;grid-template-columns:46px minmax(0,1fr);align-items:center;gap:5px 7px;margin-top:8px}.lanes>small{font-size:11px}.track{display:flex;gap:2px;min-width:0}.track button{flex-basis:0;min-width:0;background:#384653;border:1px solid #536578;border-radius:2px;padding:3px 5px;text-align:left;font-size:12px}.track button[aria-pressed=true]{border:1px solid #91c8ff;background:#305975}.track button small{display:block;color:#d0dbe3;font:10px/1.5 ui-monospace,Menlo,monospace}.audio-lane,.text-lane{border-radius:2px;padding:1px 7px;font-size:11px;line-height:17px}.audio-lane{background:#29413e;color:#b9dcd3}.text-lane{background:#413c4b;color:#d6cddd}.status{min-height:25px;padding:3px 13px;background:#185b87;color:white;font-size:11px}.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}.actions button{font-size:13px}.stage-note{min-height:18px;color:#d8c59f;font-size:12px}.list{list-style:none;padding:0;margin:10px 0}.list li{padding:8px 0;border-top:1px solid #414448}.list li strong{display:block}.list .time{color:var(--active);margin-right:8px}.summary{display:grid;grid-template-columns:auto 1fr;gap:7px 10px}.summary dt{color:#b3b6ba}.summary dd{margin:0;text-align:right}.status-stack{padding:8px;border-left:3px solid #599aca;background:#26323a;margin:8px 0}.status-stack b{display:block}.status-stack small{display:block}.status-stack.history{border-color:#718274;background:#2b332e}.actions .right{margin-left:auto}textarea{min-height:61px;resize:vertical;margin:4px 0 0}.vis{font-size:12px}.hint{color:var(--muted);font-size:12px;margin:6px 0}.warn-text{color:#f2c68c}
+@media(min-width:1450px){.stage{height:245px}.shell{grid-template-columns:48px 222px minmax(0,1fr)}.page{padding:20px 24px}}@media(max-width:980px){.shell{grid-template-columns:36px minmax(0,1fr)}.sidebar{display:none}}@media(max-width:640px){.shell{display:block}.rail{display:none}.cols{grid-template-columns:1fr}.page,.title{padding:12px}.top{padding:0 10px}.version,.divider,.top .workspace{display:none}.stage{height:170px}nav button{font-size:12px}.actions .right{margin-left:0}.track button{font-size:10px;padding:3px 2px}.status{flex-wrap:wrap}.lanes{grid-template-columns:29px minmax(0,1fr)}h1{font-size:21px}}
+.aligned{background:#26372f;color:#c6e6d4;border-color:#64967b}.review-still{position:relative;background:#141517;height:144px;text-align:center}.review-still img{height:100%;max-width:100%;object-fit:contain}.review-still small{position:absolute;left:8px;top:7px;background:#253039;color:#dce8ef;padding:1px 5px}.review-controls{display:flex;align-items:center;gap:10px;background:#212326;padding:5px 9px;font:11px ui-monospace,Menlo,monospace;color:#c3cbd2}.review-controls i{height:3px;flex:1;background:linear-gradient(to right,#64a7d0 30%,#4c545b 30%)}.monitor{margin:10px 0;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+</style></head><body>
+<header class="top"><div class="lights" aria-hidden="true"><i></i><i></i><i></i></div><b>CCLink Studio</b><span class="divider">/</span><span class="workspace">眼镜产品工作空间</span><span class="right">视频制作 · 方案示意</span></header>
+<div class="shell"><div class="rail" aria-hidden="true"><span>▱</span><span>▤</span><span class="on">▣</span><span>⌘</span></div>
+<aside class="sidebar"><h2>视频制作</h2><div class="side-title">工作空间作品</div><div class="project"><b>眼镜收纳说明</b><small>使用教学　·　横版</small></div><div class="side-title">该作品的资料</div><ul class="files"><li>▾　收纳说明.md</li><li class="sub">4 段口播</li><li>▾　实拍镜头</li><li class="sub">01　样机与配套盒</li><li class="sub">02　收起镜腿</li><li class="sub">03　放入与合盖</li><li class="sub">04　适用型号</li><li>▾　声音与字幕</li><li class="sub">真人解说 · 后配</li><li class="sub">简体中文</li></ul><div class="tip"><small>本地工作空间<br>素材与剪辑记录随作品保存</small></div></aside>
+<main class="editor"><div class="editor-tab">▣　眼镜收纳说明</div><div class="title"><div><div class="crumb">视频制作　/　产品使用教学</div><h1>眼镜收纳说明</h1><small>给第一次收纳眼镜的用户　·　16∶9　·　目标 40 秒</small></div><div class="version">当前剪辑　<span id="version">v4</span><br>上次导出　<span id="latest-export">v3</span></div></div>
+<nav aria-label="制作步骤"><button data-nav="0">稿件与口播</button><button data-nav="1">分镜与素材</button><button data-nav="2">声音与字幕</button><button data-nav="3">预览与导出</button></nav>
+<section class="page" hidden><div class="page-intro"><h2>确认演示中要说的四句话</h2><small>选择说明书的适用型号，逐段修改口播。采用后的文字可用于剪辑。</small></div><div class="cols"><div class="panel panel-pad"><h3>口播正文</h3><ol class="list"><li><strong>01　展示样机</strong>今天用桌上的这副眼镜，演示怎样收进它的配套盒。</li><li><label class="field" for="script">02　收起镜腿</label><textarea id="script">请看镜腿的折叠位置，按说明书顺序收起镜腿。</textarea></li><li><strong>03　放入与合盖</strong>对齐盒内的摆放方向，轻轻合上盒盖。</li><li><strong>04　说明适用型号</strong>请按本次演示型号对应的说明书操作。</li></ol></div><div class="panel panel-pad"><h3>本片依据</h3><dl class="summary"><dt>原稿快照</dt><dd>收纳说明.md</dd><dt>听众</dt><dd>首次使用的买家</dd><dt>口播方式</dt><dd>真人后配解说</dd></dl><div class="line"></div><p class="hint">若修改第 2 段，系统标出关联录音与字幕，原录音保留供试听。</p><div class="actions"><button id="confirm-script" class="primary">确认当前口播</button></div><p id="script-note" class="stage-note" role="status"></p></div></div></section>
+<section class="page" hidden><div class="row split page-intro"><div><h2>分镜与素材</h2><small>选中时间线里的镜头，设置使用哪段原片。</small></div><span class="chip">本地素材</span></div>
+<div class="cols"><article class="panel"><div class="row split panel-top"><h3>原片构图</h3><small id="source-name"></small></div><div class="stage"><img id="scene-photo" src="reference-main.jpg" alt="眼镜构图占位"><span>参考照片 · 构图示意</span></div><div class="credits">Google Glass 历史照片，Tim.Reckmann · CC BY-SA 3.0</div><div class="prompt"><b>关联口播</b><span id="spoken"></span></div></article>
+<article class="panel panel-pad"><div class="row split"><h3 id="shot-title"></h3><small id="ordinal"></small></div><p class="hint">原片剪辑点（秒）</p><div class="time-pair"><label>入点<input id="start" type="number" min="0" step="1"></label><label>出点<input id="end" type="number" min="1" step="1"></label></div><div class="bar"><i id="portion"></i></div><div class="ticks"><span>原片 0 秒</span><span id="src-duration"></span></div><div class="line"></div><dl class="summary"><dt>选取时长</dt><dd id="length"></dd><dt>成片位置</dt><dd id="position" class="time"></dd></dl><div class="actions"><button class="primary" id="apply-trim">应用剪点</button></div><div id="trim-note" class="stage-note" role="status"></div></article></div>
+<div class="timeline"><div class="row split"><h3>成片时间线</h3><small id="total"></small></div><div class="lanes"><small>画面</small><div class="track" id="track"></div><small>声音</small><div class="audio-lane" id="audio-lane"></div><small>字幕</small><div class="text-lane">简体中文　·　按句校对起止时间</div></div></div></section>
+<section class="page" hidden><div class="page-intro"><h2>声音与字幕</h2><small>试听每句话，校对设备名称、型号和用词。</small></div><div class="cols"><article class="panel panel-pad"><h3>段落 02　·　字幕校对</h3><ul class="list"><li><span class="time" id="cue-one"></span>请看镜腿的折叠位置，</li><li><span class="time" id="cue-two"></span>按说明书顺序收起镜腿。</li></ul><label class="field" for="caption">第二句字幕</label><textarea id="caption">按说明书顺序收起镜腿。</textarea><div class="actions"><button id="accept-caption">采用这句字幕</button></div><p id="caption-note" class="stage-note" role="status"></p></article><article class="panel panel-pad"><h3>画面与解说对齐</h3><dl class="summary"><dt>当前画面</dt><dd id="picture-length"></dd><dt>已选解说</dt><dd id="sound-length"></dd></dl><div id="sound-warning" class="alert"></div><div class="actions"><button id="use-take" class="primary">选用已重录末句的音轨（40 秒）</button></div><p class="hint">也可回到分镜页，延长有余量的原片。</p></article></div></section>
+<section class="page" hidden><div class="page-intro"><h2>预览与导出</h2><small>检查本轮剪辑与上次导出的差异。</small></div><div class="cols"><article class="panel panel-pad"><h3>本地版本</h3><div class="monitor" id="monitor" hidden><div class="review-still"><img src="reference-main.jpg" alt="低清预览界面的构图参考"><small>低清整片预览 · 方案示意</small></div><div class="review-controls" aria-label="播放器布局示意"><span>▶</span><i></i><span id="play-time"></span></div></div><div class="status-stack"><b id="current-heading"></b><small id="preview-status"></small></div><div id="new-output" class="status-stack history" hidden></div><div class="status-stack history"><b>v3　历史成片</b><small>已归档 · 可在 Studio 播放原版本</small></div><div id="preflight" class="alert"></div><div class="actions"><button id="return-sound" data-nav="2">返回声音与字幕</button><button id="review-preview" class="primary">生成本版预览</button></div></article><article class="panel panel-pad"><h3>文件交付</h3><dl class="summary"><dt>画幅</dt><dd>1920 × 1080</dd><dt>帧率</dt><dd>30 fps</dd><dt>声画编码</dt><dd>H.264 / AAC</dd><dt>随附文件</dt><dd>UTF-8 SRT、素材来源清单</dd></dl><div class="line"></div><p id="export-note" class="hint" role="status">导出文件使用独立版本目录，修改后仍可找到上次交付的原件。</p></article></div></section>
+</main></div><footer class="status"><b>本地工作空间</b><span>眼镜产品工作空间</span><span class="right">交互方案示意　·　操作仅在本页生效</span></footer>
+<script>
+const el = id => document.getElementById(id);
+const shots = [
+  {name:'样机全景',file:'样机与配套盒.mov',image:'reference-package.jpg',source:16,start:1,end:9,text:'今天用桌上的这副眼镜，演示怎样收进它的配套盒。'},
+  {name:'收起镜腿',file:'镜腿近景.mov',image:'reference-main.jpg',source:22,start:4,end:18,text:el('script').value},
+  {name:'放入与合盖',file:'收纳俯拍.mov',image:'reference-package.jpg',source:19,start:2,end:14,text:'对齐盒内的摆放方向，轻轻合上盒盖。'},
+  {name:'适用型号',file:'型号标签.mov',image:'reference-front.jpg',source:14,start:0,end:6,text:'请按本次演示型号对应的说明书操作。'}
+];
+let selected=1, version=4, voice=43, needsListen=false, needsCaption=false;
+let proxyVersion=null,reviewedVersion=null,outputVersion=3;
+const durations=()=>shots.map(s=>s.end-s.start);
+const sum=arr=>arr.reduce((a,b)=>a+b,0);
+const pad=n=>String(n).padStart(2,'0');
+const stamp=s=>pad(Math.floor(s/60))+':'+pad(s%60);
+function show(page){
+  const valid=Number.isInteger(page)&&page>=0&&page<4?page:1;
+  document.querySelectorAll('.page').forEach((s,i)=>s.hidden=i!==valid);
+  document.querySelectorAll('nav button').forEach((b,i)=>b.setAttribute('aria-selected',String(i===valid)));
+  history.replaceState(null,'','#'+(valid+1));
+}
+function paint(){
+  const s=shots[selected],d=durations(),total=sum(d),offset=sum(d.slice(0,selected));
+  el('version').textContent='v'+version;
+  el('shot-title').textContent=s.name;el('ordinal').textContent='镜头 '+pad(selected+1)+' / 04';
+  el('source-name').textContent=s.file;el('scene-photo').src=s.image;el('spoken').textContent=s.text;
+  el('start').value=s.start;el('end').value=s.end;el('src-duration').textContent=s.source+' 秒';
+  el('portion').style.left=s.start/s.source*100+'%';el('portion').style.width=d[selected]/s.source*100+'%';
+  el('length').textContent=d[selected]+' 秒';el('position').textContent=stamp(offset)+' — '+stamp(offset+d[selected]);
+  el('total').textContent='总长 '+stamp(total)+'　/　30 fps';
+  let position=0;
+  el('track').replaceChildren(...shots.map((shot,i)=>{
+    const b=document.createElement('button');b.style.flexGrow=d[i];b.textContent=shot.name;
+    const t=document.createElement('small');t.textContent=position+'–'+(position+d[i])+' 秒';position+=d[i];b.append(t);
+    b.setAttribute('aria-pressed',String(i===selected));b.onclick=()=>{selected=i;el('trim-note').textContent='';paint();el('track').children[i].focus()};return b
+  }));
+  el('audio-lane').textContent='真人后配解说　·　'+voice+' 秒';
+  el('picture-length').textContent=total+' 秒';el('sound-length').textContent=voice+' 秒';
+  el('cue-one').textContent='00:08–00:13';el('cue-two').textContent='00:13–00:22';
+  const gap=voice-total;
+  const timing=gap>0?'解说超出画面 '+gap+' 秒。可换用更短的录音，或延长片尾。':gap<0?'片尾有 '+(-gap)+' 秒没有解说。可在分镜页缩短尾镜，或由制作人确认留白。':'解说与画面结尾对齐。';
+  el('sound-warning').classList.toggle('aligned',gap===0&&!needsListen);
+  el('preflight').classList.toggle('aligned',gap===0&&!needsListen&&!needsCaption);
+  el('monitor').hidden=proxyVersion!==version;
+  el('play-time').textContent='00:12 / '+stamp(total);
+  el('sound-warning').textContent=timing+(needsListen?' 改稿或剪点后，请复听。':'');
+  el('use-take').textContent=voice===40?'确认已复听当前解说':'选用已重录末句的音轨（40 秒）';
+  el('current-heading').textContent='v'+version+'　当前剪辑';
+  el('preview-status').textContent=reviewedVersion===version?'当前版已经审阅。':proxyVersion===version?'本版预览已就绪，等待审阅。':'本版还没有预览。';
+  el('new-output').hidden=outputVersion===3;
+  el('new-output').textContent='v'+outputVersion+'　已导出 · MP4、SRT、来源清单';
+  el('latest-export').textContent='v'+outputVersion;
+  el('review-preview').textContent=outputVersion===version?'本版文件已归档':reviewedVersion===version?'导出本地成片':proxyVersion===version?'确认本版已审阅':'生成本版预览';
+  el('preflight').textContent=[timing,needsListen?'改动后的声音待复听。':'',needsCaption?'相关字幕待复核。':''].filter(Boolean).join(' ');
+  el('review-preview').disabled=gap>0||needsListen||needsCaption||outputVersion===version;
+}
+document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>show(Number(b.dataset.nav)));
+el('apply-trim').onclick=()=>{
+  const s=shots[selected],a=el('start').valueAsNumber,b=el('end').valueAsNumber;
+  if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||a>=b||b>s.source){el('trim-note').textContent='请在 0–'+s.source+' 秒内选择入点，出点须晚于入点。';return}
+  if(a!==s.start||b!==s.end){s.start=a;s.end=b;version++;needsListen=needsCaption=true}
+  paint();el('trim-note').textContent='剪点已应用，时间线已更新。';
+};
+el('confirm-script').onclick=()=>{
+  const value=el('script').value.trim();
+  if(!value){el('script-note').textContent='请输入第 2 段口播。';return}
+  if(value!==shots[1].text){shots[1].text=value;version++;needsListen=needsCaption=true}
+  paint();el('script-note').textContent='口播已确认，可在分镜页查看关联段落。';
+};
+el('accept-caption').onclick=()=>{
+  const t=el('caption').value.trim();if(!t){el('caption-note').textContent='请输入字幕。';return}
+  const line=el('cue-two').parentElement;const old=line.lastChild.textContent;
+  if(old!==t){line.lastChild.textContent=t;version++}needsCaption=false;paint();
+  el('caption-note').textContent='当前字幕已采用。';
+};
+el('use-take').onclick=()=>{if(voice!==40){voice=40;version++}needsListen=false;paint()};
+el('review-preview').onclick=()=>{
+  if(proxyVersion!==version){proxyVersion=version;el('export-note').textContent='方案示意 · 此处进入本版低清审片。正式界面支持播放、暂停和定位到剪点。'}
+  else if(reviewedVersion!==version){reviewedVersion=version;el('export-note').textContent='本版已确认画面、解说和字幕。可另存独立成片。'}
+  else{outputVersion=version;el('export-note').textContent='方案示意 · 此处展示已导出的文件组。产品实现须通过文件探测和解码后才进入此状态。'}
+  paint();
+};
+paint();show(Number(location.hash.slice(1)||2)-1);
+</script></body></html>

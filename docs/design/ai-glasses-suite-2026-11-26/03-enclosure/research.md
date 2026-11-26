@@ -17,9 +17,23 @@
 | **CadQuery 2.8.0** | Python/OCP 参数脚本、STEP 输入输出和装配导出，适合自有支架、孔距变体和夹具。自家脚本是可重建源；输入 STEP 提供形体，不会产生原历史。在本轮重复一套基于相似内核的生产编辑链，增加装包与数值回归。 | Apache 2.0；OCP 等依赖各有许可。官方说明有 macOS 二进制轮包及 conda 路径，须按具体 Python/架构锁定。备选作受审模板，当前未本机安装或试跑。[发布](https://github.com/CadQuery/cadquery/releases/tag/v2.8.0) · [官方仓库及安装/许可](https://github.com/CadQuery/cadquery) · [装配和交换](https://cadquery.readthedocs.io/en/latest/importexport.html) |
 | **build123d 0.13.0** | Python 构建器/代数建模、STEP 导入导出及有层级的零件；适合从已知尺寸新建参数件或关节示意。运动对象仍依赖人为指定关节轴和配合。对现有未知壳体，没有消除重新选基准与验证的成本。 | Apache 2.0；该 tag 指定 Python ≥3.11 且 <3.15、cadquery-ocp-novtk 8.0 系列。另设环境，不能把该 OCP 直接塞入当前 FreeCAD。候选与 CadQuery 二选一；本轮未验证 Mac 轮包组合。[发布](https://github.com/gumyr/build123d/releases/tag/v0.13.0) · [依赖](https://github.com/gumyr/build123d/blob/v0.13.0/pyproject.toml) · [仓库及许可](https://github.com/gumyr/build123d) · [交换说明](https://build123d.readthedocs.io/en/latest/how_to/import_export.html) |
 | **OpenSCAD** | .scad 文本 CSG 与二维拉伸适合参数化小夹具并输出打印网格。官方稳定版资料列出的常用三维交换为 STL/OFF；此链路缺乏本任务所需的既有 STEP 精确曲面往返、装配关系与固定区域证据。暂不做壳体编辑后端。 | GitHub latest 稳定标签 openscad-2021.01；官网另列开发版/候选，不混用功能说明。GPL v2 系列及 COPYING 中的例外；提供 macOS 分发，但本机未跑。可在后续打印定位治具时独立使用。[官方仓库/发行](https://github.com/openscad/openscad/releases/tag/openscad-2021.01) · [建模与格式](https://openscad.org/about.html) · [Mac 包](https://openscad.org/downloads.html) · [许可](https://github.com/openscad/openscad/blob/openscad-2021.01/COPYING) |
-| **Blender 5.3 系列** | 网格、修改器、材质、动画和渲染适合整机爆炸图、造型和宣传。对 STEP 转网格再导入的模型，几何节点/修改器记录的是后续造型过程；不能作原机加工曲面、孔销配合或验收量测凭据。排除出首轮精确改版。 | 官方有 macOS 构建，具体机型依官方要求；本机未跑。代码 GNU GPL，第三方附带资源各自有许可。可从确认版本导出可视化副本给视频专题。[官方源代码镜像](https://github.com/blender/blender) · [5.3 源码](https://github.com/blender/blender/tree/v5.3.0) · [I/O 模块](https://github.com/blender/blender/tree/v5.3.0/source/blender/io) · [许可](https://github.com/blender/blender/blob/v5.3.0/COPYING) · [Mac 要求](https://www.blender.org/download/requirements/) |
+| **Blender 5.3 系列** | Python 与修改器可驱动实际造型迭代，保留可编辑 .blend；网格、材质和动画还可用于整机演示。对 STEP 转网格再导入的模型，几何节点/修改器记录的是后续造型过程；不能作原机加工曲面、孔销配合或验收量测凭据。已有供应商 STEP 精确改版默认仍走 FreeCAD；从参考图创作镜框和镜腿外形，优先评估 Blender。 | 官方有 macOS 构建，具体机型依官方要求；本机未跑。代码 GNU GPL，第三方附带资源各自有许可。可从确认版本导出可视化副本给视频专题。[官方源代码镜像](https://github.com/blender/blender) · [5.3 源码](https://github.com/blender/blender/tree/v5.3.0) · [I/O 模块](https://github.com/blender/blender/tree/v5.3.0/source/blender/io) · [许可](https://github.com/blender/blender/blob/v5.3.0/COPYING) · [Mac 要求](https://www.blender.org/download/requirements/) |
 
 上述开源软件可依各自条款用于商业设计；交付工具二进制、改版源代码、元件模型、图纸或生成的数据分别适用相应授权。首轮只调用本地已有工具。本机检测范围为标准 Applications 目录、CLI 与默认 Python 导入，不将未探测到推断为整台机器所有环境都未安装。未比较各工具的运行速度。
+
+## 补查：用模型直接在 Blender 里做设计
+
+2026-11-26 复核。先前的比较漏掉了“模型直接操纵 Blender 做造型”这个用途。以下是作者发表的结果和提供的资产；本机尚未在同一眼镜任务上比较 Blender 与 FreeCAD 的成功率、用时或所需人工修改。
+
+| 工作 | 模型和 Blender 的关系 | 对眼镜外壳能借用什么 |
+| --- | --- | --- |
+| BlenderLLM | 专用的开放权重模型（模型卡标 Apache 2.0），根据文字生成 Blender Python 脚本。作者将内部结构细节列作其限制。 | 可测试从文字生成初始外形和后续脚本编辑；配套工程需自行验证。[模型卡](https://huggingface.co/FreedomIntelligence/BlenderLLM) · [作者仓库](https://github.com/FreedomIntelligence/BlenderLLM) |
+| LL3M，2025 | 多 Agent 系统编写、调试并修改 Blender Python，使用网格、修改器与材质节点生成可编辑几何和外观。 | 值得用于试镜框轮廓、镜腿粗细和多个外观变体；不是现成的眼镜专用模型。[作者论文](https://arxiv.org/abs/2508.08228) |
+| Qwen 团队 BlenderWorld，2026 | 223 项任务的评测，接收描述、可用参考媒体和规格，交付可编辑 .blend；评分结合重新渲染和场景检查。 | 是选择造型 Agent 的评测参考，不能当作一套可下载的造型模型，或用其总分代表这副眼镜的镜片配合误差。[作者仓库及评分说明](https://github.com/QwenLM/BlenderWorld) |
+
+**选择取决于交付物。** 让 AI 根据草图调整整副眼镜的轮廓与曲面，优先评估 Blender，原生交付 .blend；只需试戴外形时，可由检查后的网格导出 3MF/STL。要按真实料号改孔、镜片槽或定位面并给供应商 STEP，则选 FreeCAD，保留工程源与 STEP。Blender 也能按尺寸和约束建模；例如 CAD Sketcher 将受约束的草图通过修改器生成网格实体，圆弧的离散精度可调。这一路径导出的表面需另查是否保留工程所需表达。[CAD Sketcher 官方集成说明](https://hlorus.github.io/CAD_Sketcher/integration/) · [FreeCAD Part 工作台](https://github.com/FreeCAD/FreeCAD-documentation/blob/main/wiki/Part_Workbench.md)
+
+两条路径交接时，保持相同的单位、中心面、镜片边界及铰链基准；Blender 候选造型可以用剖面/轮廓作工程参照。在 FreeCAD 中重建必要的工程曲面和接口，叠回原造型检查偏差。该步骤有重建成本。已有可编辑工程源或只改一处接口时，直接在原 CAD 中修改。要决定后续 Studio 接哪一个智能造型后端，应用同一套前框轮廓、镜片边形和铰链定位做对照，分别检查造型可编辑性与外形修改后固定接口是否保持。
 
 ## 外部零件、板文件与 AI 辅助
 

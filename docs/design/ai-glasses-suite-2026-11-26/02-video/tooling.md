@@ -1,6 +1,6 @@
 # 工具、模型与运行路径
 
-核验日期 **2026-11-26（Asia/Shanghai）**。下面列出可独立复查的上游项目或具体 checkpoint。版本号用于复现本次判断。上游 README 的显存下限只适用于其给定命令；本次本机记录见[验证记录](./validation.md)。
+核验日期 **2026-11-26（Asia/Shanghai）**。下面列出可独立复查的上游项目或具体 checkpoint。版本号用于复现本次判断。上游 README 的显存下限只适用于其给定命令；本表的 CPU、显存和许可条件以各行上游资料为依据；目标设备未经验证的路径单独注明。
 
 ## 剪辑、时间线、渲染
 
@@ -20,7 +20,7 @@
 | 路径 | 模型、运行环境、许可 | 适合程度与取舍 |
 |---|---|---|
 | 真人口播 + 手动字幕 | 导入自录 WAV/M4A，保留说话人和使用范围；本机无模型也能工作。音色、口音、型号读法由团队决定 | **首个用户闭环**。用实际录音时长定剪点，人工听写/改字和敲入出点。现场实录、后配解说分别标注。 |
-| Whisper + whisper.cpp | OpenAI Whisper 多语权重与代码 MIT；whisper.cpp 为 MIT 推理实现，支持 Apple Silicon、Metal、CPU，可选 Core ML。官方普通 base 为 142 MiB 磁盘、约 388 MB 运行内存，small 为 466 MiB、约 852 MB。选择多语言版。官方仓库最新事件与本机二进制版本见验证记录 | **P2 首选 Mac ASR**。先将旁白另解码为 16 kHz 单声道，再转写中文、保留分段时间戳。不把段级估算描述为逐字对齐。先比 base/small 的专有词错误与校对分钟数；未安装时可继续手工打轴。[模型与许可](https://github.com/openai/whisper) · [实现与资源表](https://github.com/ggml-org/whisper.cpp) · [发布 v1.9.6](https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.6) |
+| Whisper + whisper.cpp | OpenAI Whisper 多语权重与代码 MIT；whisper.cpp 为 MIT 推理实现，支持 Apple Silicon、Metal、CPU，可选 Core ML。官方普通 base 为 142 MiB 磁盘、约 388 MB 运行内存，small 为 466 MiB、约 852 MB。选择多语言版。base/small 须使用多语权重 | **P2 首选 Mac ASR**。先将旁白另解码为 16 kHz 单声道，再转写中文、保留分段时间戳。不把段级估算描述为逐字对齐。先比 base/small 的专有词错误与校对分钟数；未安装时可继续手工打轴。[模型与许可](https://github.com/openai/whisper) · [实现与资源表](https://github.com/ggml-org/whisper.cpp) · [发布 v1.9.6](https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.6) |
 | faster-whisper 1.2.1 | MIT 实现，CTranslate2，CPU INT8 或 NVIDIA CUDA/cuDNN；支持词时间戳与 VAD，权重来源另记；中文沿用相应多语 checkpoint | 保留作团队 GPU 批转写外部对照；引入 Python/CUDA 环境对一条 30 秒作品收益有限。不能把官方对指定长录音的加速倍率直接用于 M1。[官方实现与基准](https://github.com/SYSTRAN/faster-whisper) |
 | SenseVoiceSmall | 支持普通话、粤语等。代码与官方权重条款分列；权重适用 FunASR Model License，有署名、模型命名要求，维护方说明遵守条款可商用。切分、VAD 和对齐需配套 | 若粤语/噪声样本的人工修正负担明显高，再对比同段录音；逐字时间线不能由识别文本直接推定。[具体模型](https://huggingface.co/FunAudioLLM/SenseVoiceSmall) · [模型许可](https://github.com/modelscope/FunASR/blob/58830eca4012644aac0c3218c3ccc7d98f003fda/MODEL_LICENSE) · [维护方澄清](https://github.com/QwenAudio/SenseVoice/issues/334) |
 | Qwen3-ASR-0.6B + Qwen3-ForcedAligner-0.6B | 开放权重、Apache-2.0；中文、方言和中英混读；强制对齐将已知文本与语音映射到词/字级时间，需要另一个模型。官方 Transformers / vLLM 实例 | P2 的对照组。只有人工修订后的字幕经对齐后明显少拖动，才值得携带第二套推理依赖。目标 Mac 的端到端资源与质量未测。[ASR 模型卡](https://huggingface.co/Qwen/Qwen3-ASR-0.6B) · [对齐模型卡](https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B) |
@@ -39,4 +39,4 @@
 | LTX-2.3 | 音视频联合生成，官方管线还需文本编码器等配套权重。模型用 LTX-2 Community License；年收入达 1,000 万美元的实体适用单独商业许可条件。另核所用文本编码器。中文清晰口播、镜腿形状稳定性与 M1 吞吐未在本机测量 | 展示概念片时才值得试。生成声画会让「设备现场收音」与「后配声音」更难辨认；公司样机评测优先使用实录。[模型卡](https://huggingface.co/Lightricks/LTX-2.3) · [官方实现](https://github.com/Lightricks/LTX-2) · [许可原文](https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2) |
 | 旧版火山即梦 | 仓库有签名、提交、轮询、下载与采用流程。它是按服务条款访问的云 API，使用权、保留期和费用以该账户合同与提交页为准。代码中的模型名只代表适配目标 | 保留既有兼容入口。本次未提交、未计费，当前账号可用性待实际开通后核实。先显示外发字段、目的地及用量，按场景确认；提交后断线先查原任务。[仓库适配器](../../../../src/main/media-production/providers/jimeng-video-provider.ts) |
 
-**同素材比对协议。** 先录三种各约 40 秒的自有样本：安静普通话，街道噪声加设备名，中文夹英语/数字。两位同事先订人工文本和切点，分别记录字错率（统一繁简/标点策略，同时保留原文）、型号/单位漏错数、字幕起点误差中位与 P95、校对用时。TTS 匿名听三遍，标记每个误读、断句、听成另一型号的位置。渲染用相同源及帧表比 CPU / 可选硬编的总耗时、峰值内存、磁盘余量、中文缺字和剪点误差。GPU 生成再记录显卡/显存、offload、模型 SHA、生成秒数、废片率。任何模型即使速度胜出，若会让错误规格随成片输出，仍维持人工确认。
+**采用门槛。** 识别工具要让同事少改型号、数字和单位。合成声音要能正确念出同一组词并支持单句重做。外部生成只有在抽象过场确有需求、参考素材允许外发且公司能记录费用时才进入制作。
