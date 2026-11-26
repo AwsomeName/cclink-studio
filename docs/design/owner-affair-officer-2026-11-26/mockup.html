@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Owner 事务官设计稿</title>
+<style>
+*{box-sizing:border-box}
+:root{color-scheme:dark;--bg:#191b1e;--pane:#202226;--pane2:#25282d;--edge:#383c42;--ink:#eceef1;--muted:#a6aeb9;--dim:#7d8590;--blue:#79bfff;--bluebg:#1f3347;--amber:#f2c786;--amberbg:#3a3020;--green:#8ed4af;--greenbg:#1e3329;--red:#f29a9a;--redbg:#3d2224;--violet:#c3b5ff;--violetbg:#2c2843}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;background:var(--pane2);border:1px solid var(--edge);border-radius:5px;padding:4px 10px}
+button:hover{border-color:#566070}
+button.pri{background:#2b6cb0;border-color:#3b82c4;color:#fff}
+button.on{background:var(--bluebg);border-color:#43627f;color:#cfe6ff}
+.top{height:46px;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--edge);background:var(--pane)}
+.brand{font-weight:600}
+.ex{display:flex;gap:6px}
+.ex button{font-size:12px}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr) 310px;height:calc(100vh - 46px);min-height:720px}
+.side{border-right:1px solid var(--edge);padding:14px 12px;overflow:auto;background:var(--pane)}
+.main{overflow:auto;padding:18px 26px 40px}
+.chat{border-left:1px solid var(--edge);display:flex;flex-direction:column;background:var(--pane)}
+.k{font-size:11px;letter-spacing:.08em;color:var(--dim);margin:14px 0 6px}
+.k:first-child{margin-top:0}
+.file{display:flex;gap:6px;align-items:center;width:100%;text-align:left;border:0;background:none;padding:4px 6px;border-radius:4px;font-size:13px;color:#d6dae0}
+.file:hover,.file.sel{background:#2c3138}
+.file small{margin-left:auto;color:var(--dim);font-size:11px}
+.h1{font-size:22px;font-weight:600;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:13px}
+.stages{display:flex;gap:0;margin:14px 0 16px;border-bottom:1px solid var(--edge)}
+.stages button{border:0;background:none;border-radius:0;padding:6px 14px 8px;color:var(--muted);border-bottom:2px solid transparent}
+.stages button.on{color:#cfe6ff;border-bottom-color:#56aff8}
+.card{background:var(--pane);border:1px solid var(--edge);border-radius:8px;padding:14px 16px;margin:0 0 12px}
+.card h3{margin:0 0 8px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+.tag{display:inline-block;font-size:11px;padding:0 7px;border-radius:9px;border:1px solid var(--edge);color:var(--muted);white-space:nowrap}
+.t-direct{background:var(--greenbg);border-color:#2f5a45;color:var(--green)}
+.t-ask{background:var(--amberbg);border-color:#5e4c2c;color:var(--amber)}
+.t-never{background:var(--redbg);border-color:#5e3236;color:var(--red)}
+.t-blue{background:var(--bluebg);border-color:#43627f;color:#a8d7ff}
+.t-violet{background:var(--violetbg);border-color:#4a4275;color:var(--violet)}
+.auth{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.col{background:var(--pane2);border-radius:6px;padding:10px}
+.col .hd{font-weight:600;font-size:13px;margin-bottom:2px}
+.col .ds{font-size:11px;color:var(--dim);margin-bottom:8px}
+.cap{display:block;width:100%;text-align:left;margin:0 0 6px;font-size:12px;padding:6px 8px;background:var(--pane)}
+.cap b{font-weight:600;display:block}
+.cap span{color:var(--muted)}
+.cap.lock{cursor:default;opacity:.85}
+.cap.lock:hover{border-color:var(--edge)}
+.unused{font-size:12px;color:var(--dim);margin-top:8px}
+.steps{list-style:none;margin:0;padding:0}
+.step{border:1px solid var(--edge);border-radius:6px;margin:0 0 6px;background:var(--pane)}
+.step .row{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer}
+.step .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:#30353c;color:var(--muted);flex:none}
+.st-done .n{background:var(--greenbg);color:var(--green)}
+.st-run .n{background:var(--bluebg);color:#a8d7ff}
+.st-ask .n,.st-wait .n{background:var(--amberbg);color:var(--amber)}
+.st-skip .n{background:var(--redbg);color:var(--red)}
+.step .tt{flex:1;min-width:0}
+.step .who{font-size:12px;color:var(--muted);white-space:nowrap}
+.step .det{display:none;border-top:1px solid var(--edge);padding:8px 10px 10px 40px;font-size:12px}
+.step.open .det{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px}
+.det .l{color:var(--dim)}
+.stx{font-size:11px;white-space:nowrap}
+.prompt{border:1px solid #5e4c2c;background:#2a251c;border-radius:8px;padding:12px 14px;margin:0 0 12px}
+.prompt .bar{height:4px;background:#3a3326;border-radius:2px;margin:8px 0}
+.prompt .bar i{display:block;height:4px;background:var(--amber);border-radius:2px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.decide{border-color:#5e3236;background:#2a1e20}
+.ok{border-color:#2f5a45;background:#1c2a23}
+.note{font-size:12px;color:var(--muted)}
+pre.doc{white-space:pre-wrap;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--pane);border:1px solid var(--edge);border-radius:8px;padding:16px 18px;margin:0;color:#d9dde3}
+.msgs{flex:1;overflow:auto;padding:14px}
+.m{margin:0 0 12px;font-size:13px}
+.m .who{font-size:11px;color:var(--dim);margin-bottom:2px}
+.m .bd{background:var(--pane2);border-radius:6px;padding:8px 10px}
+.m.me .bd{background:var(--bluebg)}
+.inp{border-top:1px solid var(--edge);padding:10px 12px;color:var(--dim);font-size:13px}
+table.set{width:100%;border-collapse:collapse;font-size:13px}
+table.set td,table.set th{border-top:1px solid var(--edge);padding:8px 6px;text-align:left;vertical-align:top}
+table.set th{color:var(--dim);font-weight:500;font-size:12px;border-top:0}
+select{background:var(--pane2);color:var(--ink);border:1px solid var(--edge);border-radius:5px;padding:3px 6px;font:inherit;font-size:12px}
+.banner{background:var(--greenbg);border:1px solid #2f5a45;color:var(--green);border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:12px}
+@media(max-width:1100px){.app{grid-template-columns:180px minmax(0,1fr) 280px}}
+@media(max-width:760px){.app{grid-template-columns:minmax(0,1fr) 260px}.side{display:none}.auth{grid-template-columns:1fr}.main{padding:16px}.top{flex-wrap:wrap;height:auto;padding:8px 16px}}
+.chat{position:sticky;top:0;height:calc(100vh - 46px);min-height:0}
+.chead{height:40px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--edge);font-size:13px}
+.inp input{width:calc(100% - 58px);background:var(--pane2);border:1px solid var(--edge);border-radius:5px;color:var(--ink);padding:6px 8px;font:inherit;font-size:13px}
+.inp button{width:52px;margin-left:4px}
+.act{border:1px solid #5e4c2c;background:#2a251c;border-radius:6px;padding:8px 10px;margin-top:8px}
+.act .bar{height:4px;background:#3a3326;border-radius:2px;margin:8px 0}.act .bar i{display:block;height:4px;background:var(--amber);border-radius:2px}
+.pointer{display:flex;justify-content:space-between;background:var(--amberbg);border:1px solid #5e4c2c;color:var(--amber);border-radius:6px;padding:8px 12px;font-size:13px;margin:0 0 12px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin:0 0 8px}
+</style>
+</head>
+<body>
+<div class="top">
+  <span class="brand">Owner</span>
+  <span class="sub">示例事务</span>
+  <div class="ex" id="ex"></div>
+  <button id="setBtn" style="margin-left:auto;font-size:12px">Owner 设置</button>
+</div>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="main" id="main"></main>
+  <aside class="chat"><div class="chead" id="chead"></div><div class="msgs" id="msgs"></div><div class="inp"><input id="say" placeholder="和事务官说：改约定、补要求、问进度…" /><button id="sendBtn">发送</button><div class="note" style="margin-top:4px">说的话会写进事务文件，不只留在对话里</div></div></aside>
+</div>
+<script>
+const LV={direct:'直接做',ask:'先问我',never:'不做'};
+const LVD={direct:'确认约定后，不再逐项问你',ask:'运行到这里停下问你；60 秒无回应就跳过这一步，其余继续',never:'这件事里不会做'};
+const ROLE={Owner:'t-blue','执行':'','独立意见':'t-violet','复核':'t-violet','Studio 核验':'t-direct'};
+const A={
+ibex:{name:'对比笔记与 Ibex',title:'对比我本地的设计笔记和 Ibex 的实现',
+ goal:'逐条说明笔记里 5 条流水线假设在 Ibex 中是否成立，每条结论带源码行号。',
+ req:['5 条假设逐条有结论','每条结论引用 Ibex 源码或笔记原文'],
+ auth:[{c:'读本地资料',s:'chip-notes 目录（只读）',l:'direct'},{c:'查公开资料',s:'GitHub lowRISC/ibex',l:'direct'},{c:'写事务目录',s:'本事务目录',l:'direct',lock:1},{c:'读约定外的本地文件',s:'逐个文件问你',l:'ask'},{c:'修改本地资料',s:'chip-notes',l:'never'},{c:'对外发布或发送',s:'任何内容',l:'never',lock:1}],
+ unused:'这件事用不到：网站账号、运行命令',
+ steps:[
+  {t:'写约定和计划',who:'Owner',rt:'Claude Code',sees:['你的原话'],can:['写事务目录'],done:'你确认约定 v1',out:'事务配置.md、调度.md',s:['wait','done','done']},
+  {t:'只看目标，独立出一份对比方案',who:'独立意见',rt:'Gemini CLI',sees:['事务.md · 目标','来源清单（只有名称）'],can:['无外部能力'],done:'交回方案；Owner 合并时采纳了"先锁定配置"',out:'资料/方案-独立意见.md',s:['done','done','done'],note:'不给 Owner 的草稿和倾向'},
+  {t:'锁定 Ibex 版本和配置参数',who:'执行',rt:'Codex',sees:['事务配置.md','调度.md · 本步'],can:['查公开资料 · lowRISC/ibex'],done:'记下 commit 和 WritebackStage 等参数',out:'资料/配置快照.md',s:['todo','done','done'],note:'来自独立意见'},
+  {t:'逐条核对 5 条假设',who:'执行',rt:'Codex',sees:['事务配置.md','资料/配置快照.md','chip-notes/流水线设计笔记.md'],can:['读本地资料 · chip-notes','查公开资料 · lowRISC/ibex'],done:'每条结论带行号，引用片段存为快照',out:'资料/',s:['todo','run','done']},
+  {t:'读取笔记提到的 decoder-review.md',who:'执行',rt:'Codex',sees:['笔记里写的绝对路径'],can:['读约定外的本地文件 · 先问你'],done:'读到第 4、5 条假设的依据',out:'资料/',s:['todo','ask','skip'],req:1,ask:1},
+  {t:'用证据复核报告草稿',who:'复核',rt:'Gemini CLI',sees:['交付物/草稿.md','资料/'],can:['无外部能力'],done:'阻断意见都有核实过的引用；最多 2 轮',out:'资料/复核意见.md',s:['todo','todo','done'],note:'与写报告的运行时不同'},
+  {t:'核验引用并交付',who:'Studio 核验',rt:'—',sees:['交付物/草稿.md','资料/'],can:['写事务目录'],done:'每条引用都能在快照里找到原文',out:'交付物/对照报告.md',s:['todo','todo','wait']}],
+ prompt:{text:'第 5 步：读取 /Users/apple/Desktop/cclink-dev/owner-acceptance-2026-11-22/ibex-review/decoder-review.md',why:'笔记说第 4、5 条假设的依据在这个文件里。它不在约定的 chip-notes 目录中。',grant:'只读、仅此文件、仅本事务',req:1}},
+article:{name:'写文章存草稿',title:'写一篇 Ibex 入门文章，存为博客园草稿',
+ goal:'面向刚接触 RISC-V 的读者，2000 字左右，基于我的设计笔记和 Ibex 源码。只存草稿，不发布。',
+ req:['正文写完并通过事实复核','草稿出现在博客园草稿箱'],
+ auth:[{c:'读本地资料',s:'chip-notes 目录（只读）',l:'direct'},{c:'查公开资料',s:'公开网页、lowRISC/ibex',l:'direct'},{c:'写事务目录',s:'本事务目录',l:'direct',lock:1},{c:'使用网站账号',s:'博客园 · 存草稿',l:'direct'},{c:'使用网站账号',s:'博客园 · 上传图片',l:'ask'},{c:'对外发布或发送',s:'博客园公开发布（本事务未点名授权）',l:'never',lock:1},{c:'删除',s:'平台上已有的文章',l:'never',lock:1}],
+ unused:'这件事用不到：运行命令、约定外的本地文件',
+ steps:[
+  {t:'写约定和计划',who:'Owner',rt:'Claude Code',sees:['你的原话'],can:['写事务目录'],done:'你确认约定 v1',out:'事务配置.md、调度.md',s:['wait','done','done']},
+  {t:'收集素材',who:'执行',rt:'Codex',sees:['事务配置.md'],can:['读本地资料 · chip-notes','查公开资料'],done:'每条素材记下出处',out:'资料/素材.md',s:['todo','done','done']},
+  {t:'写初稿',who:'执行',rt:'Claude Code',sees:['事务配置.md','资料/素材.md'],can:['无外部能力'],done:'约 2000 字，结构符合约定',out:'交付物/初稿.md',s:['todo','done','done']},
+  {t:'以新读者身份读初稿、提意见',who:'独立意见',rt:'Gemini CLI',sees:['事务.md · 目标','交付物/初稿.md'],can:['无外部能力'],done:'列出读不懂和想知道的地方',out:'资料/读者意见.md',s:['todo','done','done'],note:'不给素材和提纲，模拟真实读者'},
+  {t:'按采纳的意见改稿',who:'执行',rt:'Claude Code',sees:['交付物/初稿.md','资料/读者意见.md','调度.md · 采纳清单'],can:['无外部能力'],done:'Owner 采纳的 3 条都已处理',out:'交付物/定稿.md',s:['todo','done','done']},
+  {t:'核对文中的技术断言',who:'复核',rt:'Codex',sees:['交付物/定稿.md','资料/'],can:['查公开资料 · lowRISC/ibex'],done:'每个技术断言都有出处；最多 2 轮',out:'资料/复核意见.md',s:['todo','done','done']},
+  {t:'上传 2 张示意图',who:'执行',rt:'Studio 浏览器',sees:['交付物/图/'],can:['使用网站账号 · 博客园上传图片 · 先问你'],done:'图片链接写回定稿',out:'交付物/定稿.md',s:['todo','ask','skip'],ask:1},
+  {t:'存为博客园草稿',who:'执行',rt:'WebAffair 执行计划',sees:['交付物/定稿.md'],can:['使用网站账号 · 博客园存草稿'],done:'由 WebAffair 推进并核验，Owner 只引用结果',out:'WebAffair 执行记录',s:['todo','todo','done']},
+  {t:'核验草稿',who:'Studio 核验',rt:'—',sees:['WebAffair 核验证据','交付物/定稿.md'],can:['写事务目录'],done:'草稿箱里的标题和正文与定稿一致',out:'交付物/草稿核验.md',s:['todo','todo','done']}],
+ prompt:{text:'第 7 步：向博客园上传 2 张示意图',why:'约定里图片上传设为"先问我"。',grant:'仅本事务、仅这 2 张图',req:0}},
+quick:{name:'快问',title:'Ibex 默认配置是几级流水线？',quick:1,
+ goal:'回答问题，并给出源码依据。',req:['答案带源码行号'],
+ auth:[{c:'查公开资料',s:'GitHub lowRISC/ibex',l:'direct'},{c:'写事务目录',s:'Owner 事务 / 快问 / 2026-11',l:'direct',lock:1}],
+ unused:'全部在你的默认授权内，Owner 已直接开始',
+ steps:[
+  {t:'记下问题',who:'Owner',rt:'Claude Code',sees:['你的原话'],can:['写事务目录'],done:'事务.md 已建',out:'事务.md',s:['done','done','done']},
+  {t:'查源码',who:'执行',rt:'Codex',sees:['事务.md · 问题'],can:['查公开资料 · lowRISC/ibex'],done:'找到默认参数和对应行',out:'资料/',s:['run','run','done']},
+  {t:'核验引用后回答',who:'Studio 核验',rt:'—',sees:['资料/'],can:['写事务目录'],done:'引用的行能在快照里找到',out:'交付物/回答.md',s:['todo','todo','done']}]}
+};
+const DEF=[{c:'读本地资料',s:'已登记的目录，按事务勾选',l:'direct',r:'约定外的文件逐个先问'},{c:'写事务目录',s:'本事务目录',l:'direct',lock:1,r:'固定开启'},{c:'查公开资料',s:'公开网页、公开仓库',l:'direct',r:'只读'},{c:'使用网站账号',s:'约定里点名账号和动作',l:'ask',r:'点名后可改为直接做'},{c:'对外发布或发送',s:'约定里点名账号和具体内容',l:'never',r:'点名后最多改为先问我，永远不能直接做'},{c:'运行命令',s:'某个工作区',l:'ask',lock:1,r:'锁定，永远先问'},{c:'删除、付款',s:'—',l:'never',lock:1,r:'锁定'}];
+let cur='ibex',stage=0,view='board',open=-1,outcome={},granted={},timer=null,left=60;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function stOf(a,i){const s=a.steps[i];if(stage<2)return s.s[stage];
+ if(cur==='ibex'&&granted.ibex)return 'done';
+ const o=outcome[cur]||'timeout';if(o==='allow')return 'done';
+ return s.s[2]}
+const STX={todo:'待开始',run:'进行中',wait:'等你',ask:'等你批准',skip:'已跳过',done:'完成'};
+const STC={todo:'',run:'t-blue',wait:'t-ask',ask:'t-ask',skip:'t-never',done:'t-direct'};
+function ex(){$('ex').innerHTML=Object.keys(A).map(k=>`<button class="${k===cur&&view!=='settings'?'on':''}" data-k="${k}">${A[k].name}</button>`).join('');
+ $('ex').querySelectorAll('button').forEach(b=>b.onclick=()=>{cur=b.dataset.k;stage=A[cur].quick?1:0;view='board';open=-1;stop();render()})}
+function side(){const a=A[cur];const f=[['事务.md','从这里开始'],['事务配置.md','约定与授权'],['调度.md','每一步'],['工作记录.md','发生过什么'],['资料/','快照与意见'],['交付物/','成品']];
+ $('side').innerHTML=`<div class="k">事务</div><div style="font-size:13px;margin-bottom:4px">${esc(a.title)}</div><div>${endTag(a)}</div>
+ <div class="k">事务文件 · 唯一事实</div>${f.map(([n,d])=>`<button class="file ${view==='file:'+n?'sel':''}" data-f="${n}">${n}<small>${d}</small></button>`).join('')}
+ <button class="file ${view==='board'?'sel':''}" data-f="board" style="margin-top:8px">看板<small>由文件生成</small></button>
+ <div class="k">授权摘要</div>${['direct','ask','never'].map(l=>`<div style="font-size:12px;margin:0 0 4px"><span class="tag t-${l}">${LV[l]}</span> ${a.auth.filter(x=>x.l===l).length} 项</div>`).join('')}
+ <div class="note" style="margin-top:12px">看板、对话、诊断读的都是这几份文件。手改文件不会扩大授权或重新派工。</div>`;
+ $('side').querySelectorAll('.file').forEach(b=>b.onclick=()=>{view=b.dataset.f==='board'?'board':'file:'+b.dataset.f;render()})}
+function endTag(a){if(stage===0&&!a.quick)return '<span class="tag t-ask">待你确认约定</span>';if(stage===1)return '<span class="tag t-blue">进行中</span>';
+ if(cur==='ibex'&&outcome.ibex!=='allow'&&!granted.ibex)return '<span class="tag t-never">待你决定 · 未交付</span>';return '<span class="tag t-direct">已交付</span>'}
+function authCards(a,editable){return `<div class="auth">${['direct','ask','never'].map(l=>`<div class="col"><div class="hd"><span class="tag t-${l}">${LV[l]}</span></div><div class="ds">${LVD[l]}</div>
+ ${a.auth.map((x,i)=>x.l!==l?'':`<button class="cap ${x.lock||!editable?'lock':''}" data-i="${i}" title="${x.lock?'锁定，不能更改':editable?'点击切换档位':''}"><b>${esc(x.c)}${x.lock?' · 锁定':''}</b><span>${esc(x.s)}</span></button>`).join('')}</div>`).join('')}</div>
+ <div class="unused">${esc(a.unused)}</div>`}
+function stepList(a){return `<div class="legend"><span>点一步查看：给它看的文件、它能用的能力、完成条件、写回哪里</span></div><ul class="steps">${a.steps.map((s,i)=>{const st=stOf(a,i);return `<li class="step st-${st} ${open===i?'open':''}" data-i="${i}">
+ <div class="row"><span class="n">${st==='done'?'✓':i+1}</span><span class="tt">${esc(s.t)} ${s.req?'<span class="tag">必需</span>':''}${s.ask&&!s.req?'<span class="tag">可选</span>':''}${s.note?` <span class="tag t-violet">${esc(s.note)}</span>`:''}</span>
+ <span class="who"><span class="tag ${ROLE[s.who]||''}">${s.who}</span> ${esc(s.rt)}</span><span class="tag stx ${STC[st]}">${STX[st]}</span></div>
+ <div class="det"><span class="l">给它看</span><span>${s.sees.map(esc).join('、')}</span><span class="l">能用的能力</span><span>${s.can.map(esc).join('、')}</span><span class="l">完成条件</span><span>${esc(s.done)}</span><span class="l">写回</span><span>${esc(s.out)}</span></div></li>`}).join('')}</ul>`}
+function pending(){const a=A[cur];if(a.quick)return 0;if(stage===0)return 1;if(stage===1&&a.prompt&&!outcome[cur])return 1;if(stage===2&&cur==='ibex'&&outcome.ibex!=='allow'&&!granted.ibex)return 1;return 0}
+function board(){const a=A[cur];let h=`<div class="sub">Owner 事务</div><div class="h1">${esc(a.title)}</div><div class="sub">${esc(a.goal)}</div>
+ <div class="stages">${(a.quick?['已直接开始','进行中','结果']:['约定与授权','运行中','结果']).map((t,i)=>`<button class="${stage===i?'on':''}" data-s="${i}">${t}</button>`).join('')}</div>`;
+ if(pending())h+=`<div class="pointer">有 1 件事等你，在右侧对话里处理 <span>→</span></div>`;
+ if(stage===0&&a.quick)h+=`<div class="banner">全部在默认授权内，没有弹出确认。约定已写进 事务配置.md，可以随时查看。</div>`;
+ if(stage===0&&!a.quick){h+=`<div class="card"><h3>必需结果</h3>${a.req.map(r=>`<div style="font-size:13px">· ${esc(r)}</div>`).join('')}</div>
+ <div class="card"><h3>这件事的授权 <span class="note" style="font-weight:400">约定草案；点能力可切换档位，也可以在右侧直接说</span></h3>${authCards(a,1)}</div>
+ <div class="card"><h3>计划 <span class="note" style="font-weight:400">每一步只领它需要的文件和能力</span></h3>${stepList(a)}</div>`}
+ if(stage===1)h+=`<div class="card"><h3>执行进度 <span class="note" style="font-weight:400">状态来自真实回执和核验，不按计时推测</span></h3>${stepList(a)}${(a.quick||outcome[cur])?`<div class="btns"><button id="toEnd" style="font-size:12px">演示：跳到结果</button></div>`:''}</div>`;
+ if(stage===2)h+=result(a)+`<div class="card"><h3>步骤</h3>${stepList(a)}</div>`;
+ return h}
+function result(a){if(cur==='ibex'){const o=outcome.ibex||'timeout';
+ if(o!=='allow'&&!granted.ibex)return `<div class="card decide"><h3><span class="tag t-never">待你决定 · 未交付</span></h3><div style="font-size:13px">第 5 步是必需步骤，${o==='skip'?'你选择了跳过':'60 秒无回应，已跳过'}。第 4、5 条假设缺少依据，报告草稿已保存在 交付物/草稿.md，没有交付。</div>
+ <div class="note" style="margin-top:6px">其余步骤照常完成：第 3、4 步的证据已核对，复核提出 1 项阻断，已按证据修正。</div></div>`;
+ return `<div class="card ok"><h3><span class="tag t-direct">已交付</span> 交付物/对照报告.md</h3><div style="font-size:13px">5 条假设：3 条成立，1 条部分成立，1 条不成立。引用：本地 7 · GitHub 9 · 覆盖全部 3 个来源。</div>
+ ${granted.ibex?'<div class="note" style="margin-top:6px">补查：只重跑了第 5、6、7 步；第 3、4 步的证据保持有效，没有重新读取。</div>':''}
+ <div class="note" style="margin-top:6px">谁做了什么：Owner · Claude Code；独立意见 · Gemini CLI；执行 · Codex；复核 · Gemini CLI（2 轮，1 项阻断已修正）。</div></div>`}
+ if(cur==='article'){const o=outcome.article||'timeout';return `<div class="card ok"><h3><span class="tag t-direct">已交付</span> 已存为博客园草稿，未发布</h3><div style="font-size:13px">《Ibex 入门：从两级流水线说起》，2140 字。草稿箱里的标题和正文与 交付物/定稿.md 一致。</div>
+ <div class="note" style="margin-top:6px">读者意见 5 条，Owner 采纳 3 条，理由写在 调度.md。复核 1 轮通过。</div>
+ ${o!=='allow'?'<div class="note" style="margin-top:6px">未完成项：2 张示意图没有上传（可选步骤，'+(o==='skip'?'你选择了跳过':'你没有回应')+'），草稿里保留了图片占位说明。</div>':''}</div>`}
+ return `<div class="card ok"><h3><span class="tag t-direct">已回答</span></h3><div style="font-size:13px">默认是两级流水线（取指、译码执行）。写回级由参数 WritebackStage 控制，默认关闭，打开后是三级。</div><div class="note" style="margin-top:6px">依据：lowRISC/ibex rtl/ibex_core.sv 中 WritebackStage 参数的默认值（快照已存入 资料/）。这次没有派独立意见和复核：问题明确，单一来源可以直接核验。</div></div>`}
+function doc(n){const a=A[cur];const L=x=>a.auth.filter(y=>y.l===x).map(y=>`- ${y.c}：${y.s}${y.lock?'（锁定）':''}`).join('\n')||'- 无';
+ if(n==='事务配置.md')return `# 事务配置\n\n约定 v1 · ${stage===0&&!a.quick?'待确认草案':'已生效'}\n\n## 目标\n${a.goal}\n\n## 必需结果\n${a.req.map(r=>'- '+r).join('\n')}\n\n## 授权\n### 直接做（确认后不再逐项问）\n${L('direct')}\n\n### 先问我（60 秒无回应就跳过这一步，其余继续）\n${L('ask')}\n\n### 不做\n${L('never')}\n\n${a.unused}\n\n## 保存位置\n我的空间 / Owner 事务 / ${a.title}`;
+ if(n==='调度.md')return `# 调度\n\n`+a.steps.map((s,i)=>`## 第 ${i+1} 步 · ${s.t}${s.req?'（必需）':''}\n- 谁做：${s.who} · ${s.rt}\n- 给它看：${s.sees.join('、')}\n- 能用的能力：${s.can.join('、')}\n- 完成条件：${s.done}\n- 写回：${s.out}\n- 状态：${STX[stOf(a,i)]}`).join('\n\n');
+ if(n==='事务.md'){const st=endTag(a).replace(/<[^>]+>/g,'');return `# ${a.title}\n\n状态：${st}\n\n## 目标\n${a.goal}\n\n## 现在\n${a.steps.map((s,i)=>`${i+1}. ${s.t} — ${STX[stOf(a,i)]}`).join('\n')}\n\n## 待你决定\n${st.includes('待你决定')?'- 第 5 步被跳过：是否允许读取 decoder-review.md':st.includes('待你确认')?'- 确认约定 v1':'- 无'}`}
+ if(n==='工作记录.md'){const r=['你交办了这件事','Owner 写出约定草案和计划'];if(cur==='ibex')r.push('独立意见（Gemini CLI）只拿到目标和来源名称，交回方案；输入清单 sha256:3f9c…','Owner 合并：采纳"先锁定配置"，记入第 3 步');
+ if(stage>0)r.push(a.quick?'全部在默认授权内，直接开始':'你确认了约定 v1，授权生效');if(stage>0&&a.prompt)r.push(a.prompt.text.split('：')[0]+' 请求批准'+(outcome[cur]?'：'+({allow:'你允许了',skip:'你选择跳过',timeout:'60 秒无回应，已跳过'})[outcome[cur]]:''));
+ if(stage===2)r.push(cur==='ibex'&&outcome.ibex!=='allow'?'必需步骤被跳过，报告保存为草稿，未交付':'核验通过，已交付');if(granted.ibex)r.push('你事后允许读取 decoder-review.md；只重跑第 5、6、7 步');
+ return `# 工作记录\n\n`+r.map(x=>'- '+x).join('\n')}
+ if(n==='资料/')return `资料/\n├── 方案-独立意见.md\n├── 配置快照.md\n├── 快照/ibex_core.sv@<commit>#L…\n├── 快照/流水线设计笔记.md  sha256 …\n└── 复核意见.md\n\n每份快照记下读取时的位置和哈希，报告里的引用都指向这里。`;
+ return `交付物/\n${stage===2?'└── '+(cur==='article'?'定稿.md、草稿核验.md':cur==='quick'?'回答.md':(granted.ibex||outcome.ibex==='allow'?'对照报告.md':'草稿.md（未交付）')):'（尚无）'}`}
+function settings(){return `<div class="sub">Owner 设置</div><div class="h1">默认授权与分工</div><div class="sub">这里只放默认值。每件事务的约定会把它们实例化成具体范围，你确认后才生效。</div>
+ <div class="card" style="margin-top:16px"><h3>能力类别的默认档 <span class="note" style="font-weight:400">点档位切换；锁定项不能改</span></h3><table class="set"><tr><th>能力</th><th>范围</th><th>默认档</th><th>规则</th></tr>
+ ${DEF.map((d,i)=>`<tr><td>${d.c}</td><td class="note">${d.s}</td><td><button class="cap ${d.lock?'lock':''}" data-d="${i}" style="width:auto;margin:0"><span class="tag t-${d.l}">${LV[d.l]}</span></button></td><td class="note">${d.r}</td></tr>`).join('')}</table></div>
+ <div class="card"><h3>职能由谁担任 <span class="note" style="font-weight:400">按顺序选第一个可用的运行时</span></h3><table class="set"><tr><th>职能</th><th>首选</th><th>备选</th><th>规则</th></tr>
+ ${[['Owner','Claude Code','Codex','维护事务文件、做判断、和你对话'],['执行','Codex','Claude Code','按步骤领文件和能力去做'],['独立意见','Gemini CLI','Codex','尽量与产出方不同；只看给它的文件'],['复核','Gemini CLI','Codex','必须与被复核的产出方不同；凑不齐时在调度里注明']].map(r=>`<tr><td>${r[0]}</td><td><select><option>${r[1]}</option><option>Claude Code</option><option>Codex</option><option>Gemini CLI</option></select></td><td><select><option>${r[2]}</option><option>Claude Code</option><option>Gemini CLI</option></select></td><td class="note">${r[3]}</td></tr>`).join('')}</table></div>
+ <div class="card"><h3>运行时 <span class="note" style="font-weight:400">全局设置，Agent 面板共用</span></h3><table class="set">${[['Claude Code','已就绪','t-direct','本机'],['Codex','已就绪','t-direct','本机'],['Gemini CLI','已就绪','t-direct','经 ACP 接入'],['OpenCode','未安装','','经 ACP 接入']].map(r=>`<tr><td>${r[0]}</td><td><span class="tag ${r[2]}">${r[1]}</span></td><td class="note">${r[3]}</td></tr>`).join('')}</table></div>`}
+let said={};
+function chat(){const a=A[cur];let m=[['me',a.title]];const ask=(t,b)=>m.push(['o',t,b]);
+ if(cur==='ibex')m.push(['o','我先让另一个模型只看你的目标独立出了一份方案，合并时采纳了它的"先锁定 Ibex 配置"。约定草案在中间，授权分三档，确认后约定内的读取不会再问你。']);
+ if(cur==='article')m.push(['o','这件事会用到博客园账号：存草稿列为直接做，上传图片先问你，公开发布不做。约定草案在中间。']);
+ if(cur==='quick')m.push(['o','在你的默认授权内，我直接开始查了。']);
+ (said[cur]||[]).forEach(t=>{m.push(['me',t]);m.push(['o','记下了。我把它写进 事务配置.md 的待确认草案，中间的约定已更新，你确认时一并生效。'])});
+ if(stage===0&&!a.quick)ask('请确认约定 v1。',`<div class="act"><div style="font-weight:600">确认约定 v1</div><div class="note">直接做 ${a.auth.filter(x=>x.l==='direct').length} 项 · 先问我 ${a.auth.filter(x=>x.l==='ask').length} 项 · 不做 ${a.auth.filter(x=>x.l==='never').length} 项；共 ${a.steps.length} 步。确认即授权。</div><div class="btns"><button class="pri" data-a="confirm">确认并开始</button><button data-a="file">打开 事务配置.md</button></div></div>`);
+ if(stage>=1&&!a.quick)m.push(['me','确认']);
+ if(stage>=1&&a.prompt&&!outcome[cur])ask('第 '+(cur==='ibex'?5:7)+' 步要做一件约定外的事，需要你批准。我先继续做其余步骤。',`<div class="act"><div style="font-weight:600">${esc(a.prompt.text)}</div><div class="note">${esc(a.prompt.why)}授权范围：${esc(a.prompt.grant)}。${a.prompt.req?'这是必需步骤。':'这是可选步骤。'}</div><div class="bar"><i id="bar" style="width:${left/60*100}%"></i></div><div class="note"><span id="left">${left}</span> 秒后无回应就跳过这一步</div><div class="btns"><button class="pri" data-a="allow">允许</button><button data-a="skip">跳过</button><button data-a="ff" style="margin-left:auto;font-size:11px">演示：快进</button></div></div>`);
+ if(outcome[cur]==='allow')m.push(['me','允许']);
+ if(outcome[cur]==='skip')m.push(['me','跳过']);
+ if(outcome[cur]==='skip'||outcome[cur]==='timeout'){if(cur==='ibex'){ask((outcome.ibex==='skip'?'':'你没有回应，')+'第 5 步已跳过，其余步骤做完了。它是必需步骤，所以报告存成草稿，没有交付。',granted.ibex||stage<2?'':`<div class="act"><div style="font-weight:600">待你决定：第 5 步被跳过</div><div class="note">允许后只读这一个文件，只重跑第 5、6、7 步，第 3、4 步的证据保持有效。</div><div class="btns"><button class="pri" data-a="grant">允许读取此文件并补查</button><button data-a="file2">打开 事务.md</button></div></div>`)}
+  else m.push(['o','示意图跳过了。它是可选步骤，不影响交付，我会写进未完成项。'])}
+ if(granted.ibex)m.push(['me','允许读取此文件并补查'],['o','只读入了 decoder-review.md，重跑了第 5、6、7 步，已交付。']);
+ if(stage===2&&cur==='article')ask('草稿已存好，没有发布。',`<div class="act"><div class="btns" style="margin-top:0">${outcome.article!=='allow'?'<button data-a="lateImg">现在允许上传示意图</button>':''}<button data-a="pub">我要发布这篇</button></div><div class="note" id="pubNote"></div></div>`);
+ if(stage===2&&cur==='quick')m.push(['o','默认两级，写回级默认关闭。依据已存进 资料/，回答写在 交付物/回答.md。']);
+ const n=pending();$('chead').innerHTML=`<b>事务官</b><span class="note" style="margin-left:6px">${esc(a.name)}</span>${n?`<span class="tag t-ask" style="margin-left:auto">等你 ${n}</span>`:'<span class="tag" style="margin-left:auto">无待办</span>'}`;
+ $('msgs').innerHTML=m.map(([w,t,c])=>`<div class="m ${w==='me'?'me':''}"><div class="who">${w==='me'?'你':'Owner'}</div><div class="bd">${esc(t)}${c||''}</div></div>`).join('');
+ $('msgs').scrollTop=1e5;
+ $('msgs').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(b.dataset.a))}
+function act(k){if(k==='confirm'){stage=1;left=60;view='board';render()}
+ if(k==='allow'||k==='skip')decideP(k);if(k==='ff')left=1;
+ if(k==='file'){view='file:事务配置.md';render()}if(k==='file2'){view='file:事务.md';render()}
+ if(k==='grant'){granted.ibex=1;render()}if(k==='lateImg'){outcome.article='allow';render()}
+ if(k==='pub')$('pubNote').textContent='这件事没有发布授权。我会起草约定 v2：点名博客园账号和这篇文章，把"对外发布"改为先问我。你确认 v2 后，发布前还会再问你一次。'}
+function send(){const v=$('say').value.trim();if(!v)return;(said[cur]=said[cur]||[]).push(v);$('say').value='';chat()}
+function stop(){if(timer){clearInterval(timer);timer=null}}
+function tick(){if(stage!==1||!A[cur].prompt||outcome[cur]){stop();return}if(timer)return;timer=setInterval(()=>{left--;if($('left'))$('left').textContent=left;if($('bar'))$('bar').style.width=(left/60*100)+'%';if(left<=0){decideP('timeout')}},1000)}
+function decideP(o){stop();outcome[cur]=o;left=60;stage=2;render()}
+function render(){ex();side();chat();const M=$('main');
+ tick();if(view==='settings'){M.innerHTML=settings();M.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const d=DEF[+b.dataset.d];if(d.lock)return;d.l={direct:'ask',ask:'never',never:'direct'}[d.l];render()});return}
+ if(view.startsWith('file:')){const n=view.slice(5);M.innerHTML=`<div class="sub">事务文件</div><div class="h1">${n}</div><div class="sub" style="margin-bottom:14px">由 Owner 写入；看板就是从这里生成的。</div><pre class="doc">${esc(doc(n))}</pre>`;return}
+ M.innerHTML=board();
+ M.querySelectorAll('.stages button').forEach(b=>b.onclick=()=>{stage=+b.dataset.s;render()});
+ M.querySelectorAll('.step').forEach(li=>li.querySelector('.row').onclick=()=>{const i=+li.dataset.i;open=open===i?-1:i;render()});
+ M.querySelectorAll('.cap[data-i]').forEach(b=>b.onclick=()=>{if(stage!==0)return;const x=A[cur].auth[+b.dataset.i];if(x.lock)return;x.l={direct:'ask',ask:'never',never:'direct'}[x.l];render()});
+ const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
+ on('toEnd',()=>{stage=2;render()});
+ tick()}
+$('sendBtn').onclick=send;$('say').onkeydown=e=>{if(e.key==='Enter')send()};
+$('setBtn').onclick=()=>{view='settings';render()};
+render();
+</script>
+</body>
+</html>
