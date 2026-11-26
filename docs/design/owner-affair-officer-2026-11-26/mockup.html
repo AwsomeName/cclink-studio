@@ -151,6 +151,29 @@ quick:{name:'快问',title:'Ibex 默认配置是几级流水线？',quick:1,
 };
 const DEF=[{c:'读本地资料',s:'已登记的目录，按事务勾选',l:'direct',r:'约定外的文件逐个先问'},{c:'写事务目录',s:'本事务目录',l:'direct',lock:1,r:'固定开启'},{c:'查公开资料',s:'公开网页、公开仓库',l:'direct',r:'只读'},{c:'使用网站账号',s:'约定里点名账号和动作',l:'ask',r:'点名后可改为直接做'},{c:'对外发布或发送',s:'约定里点名账号和具体内容',l:'never',r:'点名后最多改为先问我，永远不能直接做'},{c:'运行命令',s:'某个工作区',l:'ask',lock:1,r:'锁定，永远先问'},{c:'删除、付款',s:'—',l:'never',lock:1,r:'锁定'}];
 let cur='ibex',stage=0,view='board',open=-1,outcome={},granted={},timer=null,left=60;
+const RT={'Claude Code':{via:'原生后端',auth:'Studio API Key',bill:'按 API 用量',models:['Opus 5.5','Sonnet 5.5'],model:'Opus 5.5',ok:1},
+ 'Codex':{via:'原生后端',auth:'本机 ChatGPT 登录',bill:'计入你的订阅',models:['账号默认模型'],model:'账号默认模型',ok:1},
+ 'Gemini CLI':{via:'ACP',auth:'Google 账号',bill:'计入你的 Google 配额',models:['账号默认模型'],model:'账号默认模型',ok:1},
+ 'OpenCode':{via:'ACP',auth:'—',bill:'取决于所接的模型',models:['—'],model:'—',ok:0,missing:1}};
+const WT={'统筹':['Claude Code','Codex'],'独立构思':['Gemini CLI','Codex','Claude Code'],'写作文案':['Claude Code','Gemini CLI'],'检索取证':['Codex','Claude Code'],'代码实现':['Codex','Claude Code'],'界面视觉':['Claude Code','Gemini CLI'],'审查核对':['Codex','Gemini CLI','Claude Code']};
+const WTD={'统筹':'维护事务文件、拆解、合并、判断','独立构思':'只看目标，独立出方案或意见','写作文案':'写正文、改文案','检索取证':'读资料、查源码、记出处','代码实现':'写代码、跑测试（第二阶段）','界面视觉':'页面、交互、视觉（第二阶段）','审查核对':'挑错，只认带证据的问题'};
+let weakMode='run';
+const META={ibex:[{wt:'统筹'},{wt:'独立构思',vs:[0]},{wt:'检索取证'},{wt:'检索取证'},{wt:'检索取证'},{wt:'审查核对',vs:[0,3]},null],
+ article:[{wt:'统筹'},{wt:'检索取证'},{wt:'写作文案'},{wt:'独立构思',vs:[2]},{wt:'写作文案'},{wt:'审查核对',vs:[4]},null,null,null],
+ quick:[{wt:'统筹'},{wt:'检索取证'},null]};
+Object.keys(META).forEach(k=>META[k].forEach((m,i)=>{if(m)Object.assign(A[k].steps[i],m)}));
+const over={};
+function R(a,i,seen){const s=a.steps[i];if(!s.wt)return {rt:s.rt,model:'',why:'Studio 固定执行，不调用模型'};
+ const key=cur+':'+i;const ok=n=>RT[n]&&RT[n].ok;
+ if(over[key])return {rt:over[key],model:RT[over[key]].model,why:'你在本事务里指定'};
+ const prefs=WT[s.wt],avail=prefs.filter(ok);
+ const bad=(s.vs||[]).map(j=>R(a,j).rt);
+ const good=avail.filter(n=>!bad.includes(n));
+ if(good.length){const n=good[0];let why=s.wt+' 首选 '+prefs[0];if(n!==prefs[0])why+=(!ok(prefs[0])?'，但 '+prefs[0]+' 不可用':'，但 '+prefs[0]+' 产出了要被'+(s.who==='复核'?'复核':'评价')+'的内容')+'，按顺序改用 '+n;return {rt:n,model:RT[n].model,why}}
+ const n=avail[0]||'—';return {rt:n,model:RT[n]?RT[n].model:'',why:'凑不齐不同的运行时：'+(weakMode==='run'?'照常运行，只做到信息隔离':'停下问你'),weak:1}}
+function rtUse(a){const c={};a.steps.forEach((s,i)=>{if(!s.wt)return;const r=R(a,i).rt;c[r]=(c[r]||0)+1});return Object.entries(c).map(([k,v])=>k+' '+v+' 步').join(' · ')}
+function roster(a){return `<table class="set"><tr><th>步骤</th><th>工作类型</th><th>运行时 · 模型</th><th>为什么</th></tr>${a.steps.map((s,i)=>{if(!s.wt)return '';const r=R(a,i);return `<tr><td>${i+1}. ${esc(s.t)}<div class="note">${s.who}</div></td><td><span class="tag">${s.wt}</span></td><td><select data-ov="${i}">${Object.keys(RT).filter(n=>RT[n].ok).map(n=>`<option ${n===r.rt?'selected':''}>${n}</option>`).join('')}</select><div class="note">${esc(r.model)}</div></td><td class="note">${esc(r.why)}${r.weak?' <span class="tag t-ask">独立性打折</span>':''}</td></tr>`}).join('')}</table><div class="note" style="margin-top:6px">本次用到：${rtUse(a)}。也可以在右侧说"第 4 步换成 Codex"。</div>`}
+
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 function stOf(a,i){const s=a.steps[i];if(stage<2)return s.s[stage];
@@ -175,8 +198,8 @@ function authCards(a,editable){return `<div class="auth">${['direct','ask','neve
  <div class="unused">${esc(a.unused)}</div>`}
 function stepList(a){return `<div class="legend"><span>点一步查看：给它看的文件、它能用的能力、完成条件、写回哪里</span></div><ul class="steps">${a.steps.map((s,i)=>{const st=stOf(a,i);return `<li class="step st-${st} ${open===i?'open':''}" data-i="${i}">
  <div class="row"><span class="n">${st==='done'?'✓':i+1}</span><span class="tt">${esc(s.t)} ${s.req?'<span class="tag">必需</span>':''}${s.ask&&!s.req?'<span class="tag">可选</span>':''}${s.note?` <span class="tag t-violet">${esc(s.note)}</span>`:''}</span>
- <span class="who"><span class="tag ${ROLE[s.who]||''}">${s.who}</span> ${esc(s.rt)}</span><span class="tag stx ${STC[st]}">${STX[st]}</span></div>
- <div class="det"><span class="l">给它看</span><span>${s.sees.map(esc).join('、')}</span><span class="l">能用的能力</span><span>${s.can.map(esc).join('、')}</span><span class="l">完成条件</span><span>${esc(s.done)}</span><span class="l">写回</span><span>${esc(s.out)}</span></div></li>`}).join('')}</ul>`}
+ <span class="who"><span class="tag ${ROLE[s.who]||''}">${s.who}</span> ${esc(R(a,i).rt)}${R(a,i).weak?' <span class="tag t-ask">同运行时</span>':''}</span><span class="tag stx ${STC[st]}">${STX[st]}</span></div>
+ <div class="det"><span class="l">运行时</span><span>${esc(R(a,i).rt)}${R(a,i).model?' · '+esc(R(a,i).model):''}<span class="note"> — ${esc(R(a,i).why)}</span></span><span class="l">给它看</span><span>${s.sees.map(esc).join('、')}</span><span class="l">能用的能力</span><span>${s.can.map(esc).join('、')}</span><span class="l">完成条件</span><span>${esc(s.done)}</span><span class="l">写回</span><span>${esc(s.out)}</span></div></li>`}).join('')}</ul>`}
 function pending(){const a=A[cur];if(a.quick)return 0;if(stage===0)return 1;if(stage===1&&a.prompt&&!outcome[cur])return 1;if(stage===2&&cur==='ibex'&&outcome.ibex!=='allow'&&!granted.ibex)return 1;return 0}
 function board(){const a=A[cur];let h=`<div class="sub">Owner 事务</div><div class="h1">${esc(a.title)}</div><div class="sub">${esc(a.goal)}</div>
  <div class="stages">${(a.quick?['已直接开始','进行中','结果']:['约定与授权','运行中','结果']).map((t,i)=>`<button class="${stage===i?'on':''}" data-s="${i}">${t}</button>`).join('')}</div>`;
@@ -184,6 +207,7 @@ function board(){const a=A[cur];let h=`<div class="sub">Owner 事务</div><div c
  if(stage===0&&a.quick)h+=`<div class="banner">全部在默认授权内，没有弹出确认。约定已写进 事务配置.md，可以随时查看。</div>`;
  if(stage===0&&!a.quick){h+=`<div class="card"><h3>必需结果</h3>${a.req.map(r=>`<div style="font-size:13px">· ${esc(r)}</div>`).join('')}</div>
  <div class="card"><h3>这件事的授权 <span class="note" style="font-weight:400">约定草案；点能力可切换档位，也可以在右侧直接说</span></h3>${authCards(a,1)}</div>
+ <div class="card"><h3>分工 <span class="note" style="font-weight:400">按 Owner 设置里的工作类型偏好自动排好；这件事里可以逐步改</span></h3>${roster(a)}</div>
  <div class="card"><h3>计划 <span class="note" style="font-weight:400">每一步只领它需要的文件和能力</span></h3>${stepList(a)}</div>`}
  if(stage===1)h+=`<div class="card"><h3>执行进度 <span class="note" style="font-weight:400">状态来自真实回执和核验，不按计时推测</span></h3>${stepList(a)}${(a.quick||outcome[cur])?`<div class="btns"><button id="toEnd" style="font-size:12px">演示：跳到结果</button></div>`:''}</div>`;
  if(stage===2)h+=result(a)+`<div class="card"><h3>步骤</h3>${stepList(a)}</div>`;
@@ -193,14 +217,14 @@ function result(a){if(cur==='ibex'){const o=outcome.ibex||'timeout';
  <div class="note" style="margin-top:6px">其余步骤照常完成：第 3、4 步的证据已核对，复核提出 1 项阻断，已按证据修正。</div></div>`;
  return `<div class="card ok"><h3><span class="tag t-direct">已交付</span> 交付物/对照报告.md</h3><div style="font-size:13px">5 条假设：3 条成立，1 条部分成立，1 条不成立。引用：本地 7 · GitHub 9 · 覆盖全部 3 个来源。</div>
  ${granted.ibex?'<div class="note" style="margin-top:6px">补查：只重跑了第 5、6、7 步；第 3、4 步的证据保持有效，没有重新读取。</div>':''}
- <div class="note" style="margin-top:6px">谁做了什么：Owner · Claude Code；独立意见 · Gemini CLI；执行 · Codex；复核 · Gemini CLI（2 轮，1 项阻断已修正）。</div></div>`}
+ <div class="note" style="margin-top:6px">谁做了什么：${rtUse(a)}。复核 2 轮，1 项阻断已修正。</div></div>`}
  if(cur==='article'){const o=outcome.article||'timeout';return `<div class="card ok"><h3><span class="tag t-direct">已交付</span> 已存为博客园草稿，未发布</h3><div style="font-size:13px">《Ibex 入门：从两级流水线说起》，2140 字。草稿箱里的标题和正文与 交付物/定稿.md 一致。</div>
  <div class="note" style="margin-top:6px">读者意见 5 条，Owner 采纳 3 条，理由写在 调度.md。复核 1 轮通过。</div>
  ${o!=='allow'?'<div class="note" style="margin-top:6px">未完成项：2 张示意图没有上传（可选步骤，'+(o==='skip'?'你选择了跳过':'你没有回应')+'），草稿里保留了图片占位说明。</div>':''}</div>`}
  return `<div class="card ok"><h3><span class="tag t-direct">已回答</span></h3><div style="font-size:13px">默认是两级流水线（取指、译码执行）。写回级由参数 WritebackStage 控制，默认关闭，打开后是三级。</div><div class="note" style="margin-top:6px">依据：lowRISC/ibex rtl/ibex_core.sv 中 WritebackStage 参数的默认值（快照已存入 资料/）。这次没有派独立意见和复核：问题明确，单一来源可以直接核验。</div></div>`}
 function doc(n){const a=A[cur];const L=x=>a.auth.filter(y=>y.l===x).map(y=>`- ${y.c}：${y.s}${y.lock?'（锁定）':''}`).join('\n')||'- 无';
- if(n==='事务配置.md')return `# 事务配置\n\n约定 v1 · ${stage===0&&!a.quick?'待确认草案':'已生效'}\n\n## 目标\n${a.goal}\n\n## 必需结果\n${a.req.map(r=>'- '+r).join('\n')}\n\n## 授权\n### 直接做（确认后不再逐项问）\n${L('direct')}\n\n### 先问我（60 秒无回应就跳过这一步，其余继续）\n${L('ask')}\n\n### 不做\n${L('never')}\n\n${a.unused}\n\n## 保存位置\n我的空间 / Owner 事务 / ${a.title}`;
- if(n==='调度.md')return `# 调度\n\n`+a.steps.map((s,i)=>`## 第 ${i+1} 步 · ${s.t}${s.req?'（必需）':''}\n- 谁做：${s.who} · ${s.rt}\n- 给它看：${s.sees.join('、')}\n- 能用的能力：${s.can.join('、')}\n- 完成条件：${s.done}\n- 写回：${s.out}\n- 状态：${STX[stOf(a,i)]}`).join('\n\n');
+ if(n==='事务配置.md')return `# 事务配置\n\n约定 v1 · ${stage===0&&!a.quick?'待确认草案':'已生效'}\n\n## 目标\n${a.goal}\n\n## 必需结果\n${a.req.map(r=>'- '+r).join('\n')}\n\n## 授权\n### 直接做（确认后不再逐项问）\n${L('direct')}\n\n### 先问我（60 秒无回应就跳过这一步，其余继续）\n${L('ask')}\n\n### 不做\n${L('never')}\n\n${a.unused}\n\n## 分工\n${a.steps.map((s,i)=>s.wt?`- 第 ${i+1} 步 ${s.t}：${s.wt} → ${R(a,i).rt}`:'').filter(Boolean).join('\n')}\n\n## 保存位置\n我的空间 / Owner 事务 / ${a.title}`;
+ if(n==='调度.md')return `# 调度\n\n`+a.steps.map((s,i)=>`## 第 ${i+1} 步 · ${s.t}${s.req?'（必需）':''}\n- 谁做：${s.who} · ${R(a,i).rt}${R(a,i).model?' · '+R(a,i).model:''}（${R(a,i).why}）\n- 给它看：${s.sees.join('、')}\n- 能用的能力：${s.can.join('、')}\n- 完成条件：${s.done}\n- 写回：${s.out}\n- 状态：${STX[stOf(a,i)]}`).join('\n\n');
  if(n==='事务.md'){const st=endTag(a).replace(/<[^>]+>/g,'');return `# ${a.title}\n\n状态：${st}\n\n## 目标\n${a.goal}\n\n## 现在\n${a.steps.map((s,i)=>`${i+1}. ${s.t} — ${STX[stOf(a,i)]}`).join('\n')}\n\n## 待你决定\n${st.includes('待你决定')?'- 第 5 步被跳过：是否允许读取 decoder-review.md':st.includes('待你确认')?'- 确认约定 v1':'- 无'}`}
  if(n==='工作记录.md'){const r=['你交办了这件事','Owner 写出约定草案和计划'];if(cur==='ibex')r.push('独立意见（Gemini CLI）只拿到目标和来源名称，交回方案；输入清单 sha256:3f9c…','Owner 合并：采纳"先锁定配置"，记入第 3 步');
  if(stage>0)r.push(a.quick?'全部在默认授权内，直接开始':'你确认了约定 v1，授权生效');if(stage>0&&a.prompt)r.push(a.prompt.text.split('：')[0]+' 请求批准'+(outcome[cur]?'：'+({allow:'你允许了',skip:'你选择跳过',timeout:'60 秒无回应，已跳过'})[outcome[cur]]:''));
@@ -208,12 +232,18 @@ function doc(n){const a=A[cur];const L=x=>a.auth.filter(y=>y.l===x).map(y=>`- ${
  return `# 工作记录\n\n`+r.map(x=>'- '+x).join('\n')}
  if(n==='资料/')return `资料/\n├── 方案-独立意见.md\n├── 配置快照.md\n├── 快照/ibex_core.sv@<commit>#L…\n├── 快照/流水线设计笔记.md  sha256 …\n└── 复核意见.md\n\n每份快照记下读取时的位置和哈希，报告里的引用都指向这里。`;
  return `交付物/\n${stage===2?'└── '+(cur==='article'?'定稿.md、草稿核验.md':cur==='quick'?'回答.md':(granted.ibex||outcome.ibex==='allow'?'对照报告.md':'草稿.md（未交付）')):'（尚无）'}`}
-function settings(){return `<div class="sub">Owner 设置</div><div class="h1">默认授权与分工</div><div class="sub">这里只放默认值。每件事务的约定会把它们实例化成具体范围，你确认后才生效。</div>
- <div class="card" style="margin-top:16px"><h3>能力类别的默认档 <span class="note" style="font-weight:400">点档位切换；锁定项不能改</span></h3><table class="set"><tr><th>能力</th><th>范围</th><th>默认档</th><th>规则</th></tr>
- ${DEF.map((d,i)=>`<tr><td>${d.c}</td><td class="note">${d.s}</td><td><button class="cap ${d.lock?'lock':''}" data-d="${i}" style="width:auto;margin:0"><span class="tag t-${d.l}">${LV[d.l]}</span></button></td><td class="note">${d.r}</td></tr>`).join('')}</table></div>
- <div class="card"><h3>职能由谁担任 <span class="note" style="font-weight:400">按顺序选第一个可用的运行时</span></h3><table class="set"><tr><th>职能</th><th>首选</th><th>备选</th><th>规则</th></tr>
- ${[['Owner','Claude Code','Codex','维护事务文件、做判断、和你对话'],['执行','Codex','Claude Code','按步骤领文件和能力去做'],['独立意见','Gemini CLI','Codex','尽量与产出方不同；只看给它的文件'],['复核','Gemini CLI','Codex','必须与被复核的产出方不同；凑不齐时在调度里注明']].map(r=>`<tr><td>${r[0]}</td><td><select><option>${r[1]}</option><option>Claude Code</option><option>Codex</option><option>Gemini CLI</option></select></td><td><select><option>${r[2]}</option><option>Claude Code</option><option>Gemini CLI</option></select></td><td class="note">${r[3]}</td></tr>`).join('')}</table></div>
- <div class="card"><h3>运行时 <span class="note" style="font-weight:400">全局设置，Agent 面板共用</span></h3><table class="set">${[['Claude Code','已就绪','t-direct','本机'],['Codex','已就绪','t-direct','本机'],['Gemini CLI','已就绪','t-direct','经 ACP 接入'],['OpenCode','未安装','','经 ACP 接入']].map(r=>`<tr><td>${r[0]}</td><td><span class="tag ${r[2]}">${r[1]}</span></td><td class="note">${r[3]}</td></tr>`).join('')}</table></div>`}
+function settings(){return `<div class="sub">Owner 设置</div><div class="h1">默认授权与分工</div><div class="sub">这里只放默认值。每件事务的约定会把它们实例化成具体范围和分工，你确认后才生效。</div>
+ <div class="card" style="margin-top:16px"><h3>运行时 <span class="note" style="font-weight:400">全局登记，Agent 面板和 Owner 共用</span></h3><table class="set"><tr><th>运行时</th><th>接入</th><th>登录与计费</th><th>默认模型</th><th>状态</th><th></th></tr>
+ ${Object.entries(RT).map(([n,r])=>`<tr><td>${n}</td><td class="note">${r.via}</td><td class="note">${r.auth}<br>${r.bill}</td><td>${r.missing?'—':`<select data-m="${n}">${r.models.map(m=>`<option ${m===r.model?'selected':''}>${m}</option>`).join('')}</select>`}</td><td>${r.missing?'<span class="tag">未安装</span>':r.ok?'<span class="tag t-direct">已就绪</span>':'<span class="tag t-ask">未登录</span>'}</td><td>${r.missing?'<button style="font-size:12px">安装说明</button>':`<button style="font-size:12px" data-tg="${n}">${r.ok?'模拟：登出':'模拟：登录'}</button>`}</td></tr>`).join('')}</table>
+ <div class="btns"><button style="font-size:12px">添加 ACP 运行时</button><span class="note">填启动命令后，Studio 探测版本和登录状态；测试连接只发一条不含事务内容的探测消息。凭证留在运行时自己的登录里，Studio 不使用系统钥匙串。</span></div></div>
+ <div class="card"><h3>按工作类型分工 <span class="note" style="font-weight:400">按顺序取第一个可用的；对应参考用例里"在合适的任务上用合适的人"</span></h3><table class="set"><tr><th>工作类型</th><th>做什么</th><th>首选</th><th>备选</th><th>再备选</th></tr>
+ ${Object.entries(WT).map(([t,l])=>`<tr><td>${t}</td><td class="note">${WTD[t]}</td>${[0,1,2].map(k=>`<td><select data-wt="${t}" data-k="${k}"><option value="">—</option>${Object.keys(RT).filter(n=>!RT[n].missing).map(n=>`<option ${l[k]===n?'selected':''}>${n}</option>`).join('')}</select></td>`).join('')}</tr>`).join('')}</table></div>
+ <div class="card"><h3>分工规则</h3><table class="set"><tr><td>独立意见、复核</td><td class="note">必须与被评价或被复核内容的产出方不是同一个运行时（锁定）</td></tr>
+ <tr><td>凑不齐不同的运行时</td><td><label><input type="radio" name="wk" value="run" ${weakMode==='run'?'checked':''}> 照常运行，在约定和调度里标明"独立性打折"</label><br><label><input type="radio" name="wk" value="ask" ${weakMode==='ask'?'checked':''}> 停下，在右侧问我</label></td></tr>
+ <tr><td>运行中运行时不可用</td><td class="note">按备选顺序换一个，写进工作记录；都不可用时这一步变成"等你"，在右侧问你</td></tr>
+ <tr><td>每件事务的模型运行上限</td><td><input value="20" style="width:60px;background:var(--pane2);border:1px solid var(--edge);color:var(--ink);border-radius:5px;padding:3px 6px"> 次，超出前在右侧问我</td></tr></table></div>
+ <div class="card"><h3>能力类别的默认档 <span class="note" style="font-weight:400">点档位切换；锁定项不能改</span></h3><table class="set"><tr><th>能力</th><th>范围</th><th>默认档</th><th>规则</th></tr>
+ ${DEF.map((d,i)=>`<tr><td>${d.c}</td><td class="note">${d.s}</td><td><button class="cap ${d.lock?'lock':''}" data-d="${i}" style="width:auto;margin:0"><span class="tag t-${d.l}">${LV[d.l]}</span></button></td><td class="note">${d.r}</td></tr>`).join('')}</table></div>`}
 let said={};
 function chat(){const a=A[cur];let m=[['me',a.title]];const ask=(t,b)=>m.push(['o',t,b]);
  if(cur==='ibex')m.push(['o','我先让另一个模型只看你的目标独立出了一份方案，合并时采纳了它的"先锁定 Ibex 配置"。约定草案在中间，授权分三档，确认后约定内的读取不会再问你。']);
@@ -244,12 +274,13 @@ function stop(){if(timer){clearInterval(timer);timer=null}}
 function tick(){if(stage!==1||!A[cur].prompt||outcome[cur]){stop();return}if(timer)return;timer=setInterval(()=>{left--;if($('left'))$('left').textContent=left;if($('bar'))$('bar').style.width=(left/60*100)+'%';if(left<=0){decideP('timeout')}},1000)}
 function decideP(o){stop();outcome[cur]=o;left=60;stage=2;render()}
 function render(){ex();side();chat();const M=$('main');
- tick();if(view==='settings'){M.innerHTML=settings();M.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const d=DEF[+b.dataset.d];if(d.lock)return;d.l={direct:'ask',ask:'never',never:'direct'}[d.l];render()});return}
+ tick();if(view==='settings'){M.innerHTML=settings();M.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{RT[b.dataset.tg].ok=!RT[b.dataset.tg].ok;render()});M.querySelectorAll('[data-m]').forEach(x=>x.onchange=()=>{RT[x.dataset.m].model=x.value;render()});M.querySelectorAll('[data-wt]').forEach(x=>x.onchange=()=>{const l=WT[x.dataset.wt];l[+x.dataset.k]=x.value;WT[x.dataset.wt]=l.filter(Boolean);render()});M.querySelectorAll('[name=wk]').forEach(x=>x.onchange=()=>{weakMode=x.value;render()});M.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const d=DEF[+b.dataset.d];if(d.lock)return;d.l={direct:'ask',ask:'never',never:'direct'}[d.l];render()});return}
  if(view.startsWith('file:')){const n=view.slice(5);M.innerHTML=`<div class="sub">事务文件</div><div class="h1">${n}</div><div class="sub" style="margin-bottom:14px">由 Owner 写入；看板就是从这里生成的。</div><pre class="doc">${esc(doc(n))}</pre>`;return}
  M.innerHTML=board();
  M.querySelectorAll('.stages button').forEach(b=>b.onclick=()=>{stage=+b.dataset.s;render()});
  M.querySelectorAll('.step').forEach(li=>li.querySelector('.row').onclick=()=>{const i=+li.dataset.i;open=open===i?-1:i;render()});
  M.querySelectorAll('.cap[data-i]').forEach(b=>b.onclick=()=>{if(stage!==0)return;const x=A[cur].auth[+b.dataset.i];if(x.lock)return;x.l={direct:'ask',ask:'never',never:'direct'}[x.l];render()});
+ M.querySelectorAll('[data-ov]').forEach(x=>{x.onclick=e=>e.stopPropagation();x.onchange=()=>{over[cur+':'+x.dataset.ov]=x.value;render()}});
  const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
  on('toEnd',()=>{stage=2;render()});
  tick()}
