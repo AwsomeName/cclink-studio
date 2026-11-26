@@ -20,6 +20,7 @@ import {
   stripCclinkMarkdownMetadata,
 } from '@shared/markdown-document'
 import type { MarkdownDiagnostic } from '../features/markdown/markdown-codec'
+import type { MarkdownTableColumnWidths } from '../features/markdown/markdown-table-widths'
 import { runEditorSaveGuard } from '../features/editor-save-guard'
 import {
   getWorkspaceStateKey,
@@ -60,6 +61,8 @@ export interface EditorFileState {
 export interface MarkdownViewState {
   /** Markdown 滚动容器相对文档顶部的位置。 */
   scrollTop: number
+  /** 用户拖出的表格列宽；Markdown 存不下，只记在本机，不写入文件。 */
+  tableColumnWidths?: MarkdownTableColumnWidths[]
   /** 用于限制持久化条目数量，避免长期使用后无界增长。 */
   updatedAt: number
 }
@@ -132,6 +135,7 @@ interface EditorState {
 
   /** 记录 Markdown 阅读位置；正文生命周期不拥有该视图状态。 */
   updateMarkdownViewState: (fileKey: string, scrollTop: number) => void
+  updateMarkdownTableColumnWidths: (fileKey: string, tables: MarkdownTableColumnWidths[]) => void
 }
 
 function normalizeMarkdownDiagnostics(diagnostics: MarkdownDiagnostic[]): MarkdownDiagnostic[] {
@@ -212,9 +216,11 @@ function normalizeEditorWorkspaceSnapshot(value: unknown): EditorWorkspaceSnapsh
   for (const [key, viewState] of Object.entries(parsed.markdownViewStates ?? {})) {
     if (!viewState || typeof viewState !== 'object') continue
     if (!Number.isFinite(viewState.scrollTop) || viewState.scrollTop < 0) continue
+    const tableColumnWidths = parseTableColumnWidths(viewState.tableColumnWidths)
     markdownViewStates[key] = {
       scrollTop: viewState.scrollTop,
       updatedAt: Number.isFinite(viewState.updatedAt) ? viewState.updatedAt : 0,
+      ...(tableColumnWidths.length ? { tableColumnWidths } : {}),
     }
   }
   return { files, markdownViewStates }
@@ -408,6 +414,38 @@ function rebasePath(
   if (path === oldPrefix) return newPrefix
   if (path.startsWith(oldPrefix + '/')) return newPrefix + path.slice(oldPrefix.length)
   return path
+}
+
+/** Keep the 200 most recently used documents' view states. */
+function withViewState(
+  states: Record<string, MarkdownViewState>,
+  fileKey: string,
+  next: MarkdownViewState,
+): Record<string, MarkdownViewState> {
+  return Object.fromEntries(
+    Object.entries({ ...states, [fileKey]: next })
+      .sort(([, left], [, right]) => right.updatedAt - left.updatedAt)
+      .slice(0, 200),
+  )
+}
+
+function parseTableColumnWidths(value: unknown): MarkdownTableColumnWidths[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(
+      (entry): entry is MarkdownTableColumnWidths =>
+        Boolean(entry) &&
+        typeof entry === 'object' &&
+        Number.isInteger(entry.index) &&
+        typeof entry.header === 'string' &&
+        Array.isArray(entry.widths) &&
+        entry.widths.length <= 64 &&
+        entry.widths.every(
+          (width: unknown) =>
+            width === null || (typeof width === 'number' && width > 0 && width < 10_000),
+        ),
+    )
+    .slice(0, 50)
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -859,14 +897,28 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((state) => {
       const previous = state.markdownViewStates[fileKey]
       if (previous && Math.abs(previous.scrollTop - scrollTop) < 1) return state
-      const entries = Object.entries({
-        ...state.markdownViewStates,
-        [fileKey]: { scrollTop, updatedAt: Date.now() },
-      })
-      const markdownViewStates = Object.fromEntries(
-        entries.sort(([, left], [, right]) => right.updatedAt - left.updatedAt).slice(0, 200),
-      )
-      return { markdownViewStates }
+      return {
+        markdownViewStates: withViewState(state.markdownViewStates, fileKey, {
+          ...previous,
+          scrollTop,
+          updatedAt: Date.now(),
+        }),
+      }
+    })
+  },
+
+  updateMarkdownTableColumnWidths: (fileKey, tables) => {
+    set((state) => {
+      const previous = state.markdownViewStates[fileKey]
+      if (JSON.stringify(previous?.tableColumnWidths ?? []) === JSON.stringify(tables)) return state
+      const { tableColumnWidths: _dropped, ...rest } = previous ?? { scrollTop: 0, updatedAt: 0 }
+      return {
+        markdownViewStates: withViewState(state.markdownViewStates, fileKey, {
+          ...rest,
+          ...(tables.length ? { tableColumnWidths: tables } : {}),
+          updatedAt: Date.now(),
+        }),
+      }
     })
   },
 }))

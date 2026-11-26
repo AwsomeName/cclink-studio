@@ -1018,6 +1018,8 @@ export function collapseSerializerBlankLines(markdown: string): string {
     if (marker && (fence === null || (marker[0] === fence[0] && marker.length >= fence.length))) {
       fence = fence === null ? marker : null
     }
+    // A document that starts with a table is serialized with a leading blank line.
+    if (fence === null && line.trim() === '' && out.length === 0) continue
     if (fence === null && line.trim() === '' && out.length > 0 && out[out.length - 1].trim() === '')
       continue
     out.push(line)

@@ -552,6 +552,51 @@ try {
       saved,
     })
   })
+
+  // ⑨ Dragging a column border resizes it; the width is remembered on this machine across a
+  // restart and never written to the file or marked as an unsaved change (design D1, revised).
+  await step('T9', async () => {
+    await save()
+    await sleep(1500)
+    const diskBefore = await disk()
+    const header = rows().first().locator('th, td')
+    const first = await box(header.nth(0))
+    const before = first.width
+    const borderX = first.x + first.width - 1
+    const y = first.y + first.height / 2
+    await page.mouse.move(borderX - 30, y)
+    await page.mouse.move(borderX, y, { steps: 4 })
+    await sleep(200)
+    const cursorReady = await editor().evaluate((el) => el.classList.contains('resize-cursor'))
+    await page.mouse.down()
+    await page.mouse.move(borderX + 140, y, { steps: 10 })
+    await page.mouse.up()
+    await sleep(600)
+    const after = (await box(header.nth(0))).width
+    const dirty = await page.locator('.tab.active .tab-dirty-dot').count()
+    await sleep(2500)
+    const diskAfter = await disk()
+    await shot('T9-resized')
+    await app.close()
+    app = null
+    await launch()
+    await openTable()
+    const reopened = (await box(rows().first().locator('th, td').nth(0))).width
+    await shot('T9-reopened')
+    const ok =
+      after > before + 80 &&
+      dirty === 0 &&
+      diskAfter === diskBefore &&
+      Math.abs(reopened - after) <= 12
+    record('T9', ok ? 'PASS' : 'FAIL', '拖动列边框调整列宽，重启后仍在，文件不变且不算未保存修改', {
+      cursorReady,
+      widthBefore: Math.round(before),
+      widthAfterDrag: Math.round(after),
+      widthAfterRestart: Math.round(reopened),
+      markedDirty: dirty > 0,
+      fileUnchanged: diskAfter === diskBefore,
+    })
+  })
 } finally {
   await writeFile(
     join(evidence, 'results.json'),

@@ -88,6 +88,11 @@ import {
   resolveBrowserLinkClick,
 } from '../../features/browser/browser-link-navigation'
 import { registerMarkdownViewStateFlusher } from '../../features/markdown/markdown-view-state-lifecycle'
+import {
+  applyMarkdownTableColumnWidths,
+  isMarkdownTableWidthOnlyChange,
+  readMarkdownTableColumnWidths,
+} from '../../features/markdown/markdown-table-widths'
 import { getWorkspaceStateKey } from '../../utils/workspace-state'
 import { useEditorPersistenceStatus } from '../../features/markdown/EditorPersistenceStatus'
 import { openAs } from './ContentPresentationBar'
@@ -232,8 +237,9 @@ export function MarkdownEditor({
       MarkdownInlineImage.configure({ documentPath: filePath, inline: true, allowBase64: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      // Markdown has no column widths, so dragging one would be lost on save (design D1).
-      Table.configure({ resizable: false }),
+      // Markdown has no column widths: a dragged width is remembered by Studio on this machine
+      // for this document and never written to the file (design D1, revised 2026-11-26).
+      Table.configure({ resizable: true, cellMinWidth: 48 }),
       TableRow,
       TableCell,
       TableHeader,
@@ -312,6 +318,16 @@ export function MarkdownEditor({
         },
       },
       onUpdate: ({ editor: currentEditor, transaction }) => {
+        // A column drag is view state: remember it, but the document text did not change.
+        if (!hydratingRef.current && isMarkdownTableWidthOnlyChange(transaction)) {
+          useEditorStore
+            .getState()
+            .updateMarkdownTableColumnWidths(
+              fileKeyRef.current,
+              readMarkdownTableColumnWidths(currentEditor.state.doc),
+            )
+          return
+        }
         if (!shouldApplyMarkdownDocumentUpdate(hydratingRef.current, transaction.docChanged)) return
         const reference = useEditorStore.getState().files[fileKeyRef.current]?.currentContent
         const markdown = normalizeMarkdownEditorOutput(currentEditor.getMarkdown(), reference)
@@ -613,6 +629,12 @@ export function MarkdownEditor({
       editor.commands.setContent(parseMarkdownEditorDocument(editor, fileState.currentContent), {
         emitUpdate: false,
       })
+      const rememberedWidths =
+        useEditorStore.getState().markdownViewStates[fileKey]?.tableColumnWidths ?? []
+      const widthTransaction = editor.state.tr
+      if (applyMarkdownTableColumnWidths(widthTransaction, rememberedWidths)) {
+        editor.view.dispatch(widthTransaction.setMeta('addToHistory', false))
+      }
       serialized = normalizeMarkdownEditorOutput(editor.getMarkdown(), fileState.currentContent)
     } catch (error) {
       const parserDiagnostics: MarkdownDiagnostic[] = [
