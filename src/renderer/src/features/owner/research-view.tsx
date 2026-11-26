@@ -25,13 +25,16 @@ import { OwnerDocument } from './owner-document'
 import { CopyOwnerDiagnostics } from './owner-diagnostics-button'
 import {
   AgreementCard,
+  AuthorizationCard,
   DeliveryCard,
+  RosterCard,
   SessionsCard,
   SkippedCard,
   StatusChips,
-  StepCard,
-  Timeline,
+  StepsCard,
 } from './owner-board'
+import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
+import { affairSteps, authorization, pendingCount, runtimeName } from './affair-plan'
 import { currentWorker } from './owner-status'
 import { BOARD, ownerView, tabKey, tabTitle, useOwnerView } from './owner-view-store'
 import { session } from './owner-agent'
@@ -139,6 +142,20 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
   const workerLoading = useAgentStore((s) => s.conversations[session(a, workerKey)]?.loading)
   const sourceGrants = useSourceGrantCount(a.id, !!a.directory && !a.directory.error)
   const perms = useAgentStore((s) => s.pendingConfirmations)
+  // A conversation without an explicit binding runs on Studio's default runtime.
+  const ownerRuntime = useAgentStore((s) => {
+    const c = s.conversations[session(a, 'main')]
+    return c ? (c.runtimeBinding ?? DEFAULT_AGENT_RUNTIME_BINDING).kind : undefined
+  })
+  const mine = perms.filter((p) => !!p.conversationId?.startsWith('owner-' + a.id + '-'))
+  const canConfirm = ready && !a.directory?.error
+  const waiting = pendingCount(a, canConfirm, mine.length)
+  const steps = affairSteps(a, {
+    ownerRuntime: runtimeName(ownerRuntime),
+    active,
+    workerRun: active && r.phase === 'reading' ? (workerRun ?? undefined) : undefined,
+  })
+  const tiers = authorization(a).caps
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: 'nearest' })
   }, [r.chat.length, questionId])
@@ -240,6 +257,11 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
               </button>
             )}
           <StatusChips a={a} active={active} workerLoading={!!workerLoading} />
+          {waiting > 0 && (
+            <p className="own-pointer" role="status">
+              有 {waiting} 件事等你，在右侧事务官对话里处理 <span aria-hidden>→</span>
+            </p>
+          )}
           {['待保存', '需要处理', '待恢复'].includes(label) && (
             <div className="own-call">
               <small>{label}</small>
@@ -269,24 +291,14 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             </div>
           )}
           {!a.confirmed && (
-            <AgreementCard
-              a={a}
-              ready={ready && !a.directory?.error}
-              sourceGrants={sourceGrants}
-              confirm={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
-            />
+            <>
+              <AgreementCard a={a} sourceGrants={sourceGrants} />
+              <AuthorizationCard a={a} />
+              <RosterCard steps={steps} />
+            </>
           )}
-          <SkippedCard
-            a={a}
-            busy={active}
-            grant={(skipId) => void grantSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
-            decline={(skipId) => void declineSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
-          />
+          <StepsCard steps={steps} />
           <SessionsCard a={a} running={workerLoading ? workerKey : undefined} />
-          <StepCard
-            a={a}
-            workerRun={active && r.phase === 'reading' ? (workerRun ?? undefined) : undefined}
-          />
           <DeliveryCard
             a={a}
             openReport={() => openFile(a.directory!.reportFile!)}
@@ -296,7 +308,6 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                 .catch((e) => setNotice(String(e)))
             }
           />
-          <Timeline a={a} active={active} />
           {r.report && !a.directory?.error && (
             <section>
               <h3>调研简报</h3>
@@ -348,8 +359,10 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           )}
           {a.confirmed && (
             <details className="own-more">
-              <summary>已确认的调研约定</summary>
-              <AgreementCard a={a} ready={false} sourceGrants={sourceGrants} confirm={() => {}} />
+              <summary>已确认的约定、授权与分工</summary>
+              <AgreementCard a={a} sourceGrants={sourceGrants} />
+              <AuthorizationCard a={a} />
+              <RosterCard steps={steps} />
             </details>
           )}
           {!!r.decisions?.length && (
@@ -414,9 +427,14 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           )}
         </article>
       </main>
-      <aside>
-        <h2>Owner 主对话</h2>
-        <small>当前事务 · {title}</small>
+      <aside data-owner-officer>
+        <div className="own-officer-head">
+          <h2>事务官</h2>
+          <span className={'own-st ' + (waiting ? 'wait' : 'done')} data-owner-waiting={waiting}>
+            {waiting ? '等你 ' + waiting : '无待办'}
+          </span>
+        </div>
+        <small>当前事务 · {title} · 你说的话会写进事务文件</small>
         {a.directory?.error && <strong role="status">待保存 · 请在看板重试保存文件</strong>}
         <div className="own-thread">
           {r.chat.map((m, i) => (
@@ -454,53 +472,66 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           ))}
           <div ref={bottom} />
         </div>
-        {perms
-          .filter((p) => !!p.conversationId?.startsWith('owner-' + a.id + '-'))
-          .map((p) => (
-            <div key={p.id} className="own-perm" data-owner-permission={p.toolName}>
-              <b>
+        {mine.map((p) => (
+          <div key={p.id} className="own-perm" data-owner-permission={p.toolName}>
+            <b>
+              {p.toolName === 'owner_read_local_file'
+                ? 'Owner 想读取一个不在参考目录中的文件'
+                : p.toolName + ' · ' + p.riskLevel}
+            </b>
+            {p.toolName === 'owner_read_local_file' && (
+              <small>只读、仅此文件、仅本事务；60 秒无回应将跳过，其余步骤继续。</small>
+            )}
+            {p.summary.map((s, i) => (
+              <p key={i}>
+                {s.label}：{s.value}
+              </p>
+            ))}
+            {[false, true].map((v) => (
+              <button
+                key={String(v)}
+                onClick={async () => {
+                  try {
+                    await window.cclinkStudio.agent.resolveToolConfirmation(p.id, v, false)
+                    useAgentStore.getState().removePendingConfirmation(p.id)
+                  } catch (e) {
+                    setNotice(String(e))
+                  }
+                }}
+              >
                 {p.toolName === 'owner_read_local_file'
-                  ? 'Owner 想读取一个不在参考目录中的文件'
-                  : p.toolName + ' · ' + p.riskLevel}
-              </b>
-              {p.toolName === 'owner_read_local_file' && (
-                <small>只读、仅此文件、仅本事务；60 秒无回应将跳过，其余步骤继续。</small>
-              )}
-              {p.summary.map((s, i) => (
-                <p key={i}>
-                  {s.label}：{s.value}
-                </p>
-              ))}
-              {[false, true].map((v) => (
-                <button
-                  key={String(v)}
-                  onClick={async () => {
-                    try {
-                      await window.cclinkStudio.agent.resolveToolConfirmation(p.id, v, false)
-                      useAgentStore.getState().removePendingConfirmation(p.id)
-                    } catch (e) {
-                      setNotice(String(e))
-                    }
-                  }}
-                >
-                  {p.toolName === 'owner_read_local_file'
-                    ? v
-                      ? '允许读取'
-                      : '跳过'
-                    : v
-                      ? '仅允许这次'
-                      : '拒绝'}
-                </button>
-              ))}
-            </div>
-          ))}
-        {ready && !a.directory?.error && (
-          <button
-            className="own-primary"
-            onClick={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
-          >
-            确认范围和交付物，开始调研
-          </button>
+                  ? v
+                    ? '允许读取'
+                    : '跳过'
+                  : v
+                    ? '仅允许这次'
+                    : '拒绝'}
+              </button>
+            ))}
+          </div>
+        ))}
+        <SkippedCard
+          a={a}
+          busy={active}
+          grant={(skipId) => void grantSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
+          decline={(skipId) => void declineSkip(a.id, skipId).catch((e) => setNotice(String(e)))}
+        />
+        {canConfirm && (
+          <div className="own-perm own-act" data-owner-confirm>
+            <b>确认约定</b>
+            <small>
+              直接做 {tiers.filter((c) => c.tier === 'direct').length} 项 · 先问我{' '}
+              {tiers.filter((c) => c.tier === 'ask').length} 项 · 不做{' '}
+              {tiers.filter((c) => c.tier === 'never').length}{' '}
+              项。确认即授权，约定内的步骤不再逐项问你。
+            </small>
+            <button
+              className="own-primary"
+              onClick={() => void confirmResearch(a).catch((e) => setNotice(String(e)))}
+            >
+              确认约定，开始
+            </button>
+          </div>
         )}
         {notice && <p role="status">{notice}</p>}
         <textarea

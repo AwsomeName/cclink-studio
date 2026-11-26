@@ -1,4 +1,5 @@
 import type { Affair } from './affair'
+import { authorization, STATE_LABEL, TIER_HINT, TIER_LABEL, type AffairStep } from './affair-plan'
 import { sessionStatus, statusChips } from './owner-status'
 import {
   citationCounts,
@@ -8,8 +9,6 @@ import {
   workerLabel,
   workersOf,
 } from './research-model'
-
-const short = (s: string, n = 90) => (s.length > n ? s.slice(0, n) + '…' : s)
 
 export function StatusChips({
   a,
@@ -40,17 +39,7 @@ export function StatusChips({
 }
 
 /** The terms Owner proposes; confirmed once before any dispatch. */
-export function AgreementCard({
-  a,
-  ready,
-  confirm,
-  sourceGrants,
-}: {
-  a: Affair
-  ready: boolean
-  confirm: () => void
-  sourceGrants: number
-}) {
+export function AgreementCard({ a, sourceGrants }: { a: Affair; sourceGrants: number }) {
   const plan = a.research?.plan
   if (!plan)
     return (
@@ -121,15 +110,132 @@ export function AgreementCard({
           </>
         )}
       </dl>
-      {!a.confirmed && (
-        <div className="own-card-actions">
-          <button className="own-primary" disabled={!ready} onClick={confirm}>
-            确认约定，开始
-          </button>
-          <small>也可以在右侧继续讨论修改；已写入 事务配置.md（待确认草案）</small>
-        </div>
-      )}
+      {!a.confirmed && <small>在右侧确认，或继续讨论修改；已写入 事务配置.md（待确认草案）</small>}
     </div>
+  )
+}
+
+/** The agreement's authorization in three tiers; derived from the plan, grants nothing itself. */
+export function AuthorizationCard({ a }: { a: Affair }) {
+  if (!a.research?.plan) return null
+  const { caps, unused } = authorization(a)
+  return (
+    <div className="own-card" data-owner-authorization>
+      <h3>
+        这件事的授权
+        <small>{a.confirmed ? '已随约定生效；变更需重新确认' : '确认约定即授权'}</small>
+      </h3>
+      <div className="own-tiers">
+        {(['direct', 'ask', 'never'] as const).map((tier) => (
+          <div key={tier} className="own-tier" data-owner-tier={tier}>
+            <span className={'own-tier-tag ' + tier}>{TIER_LABEL[tier]}</span>
+            <small>{TIER_HINT[tier]}</small>
+            {caps
+              .filter((c) => c.tier === tier)
+              .map((c, i) => (
+                <div key={i} className="own-cap">
+                  <b>
+                    {c.name}
+                    {c.locked ? ' · 锁定' : ''}
+                  </b>
+                  <span>{c.scope}</span>
+                </div>
+              ))}
+          </div>
+        ))}
+      </div>
+      <small>这件事用不到：{unused.join('、')}</small>
+    </div>
+  )
+}
+
+/** Who does each step and why; runtime routing by work type is the next increment. */
+export function RosterCard({ steps }: { steps: AffairStep[] }) {
+  const used = steps.filter((s) => s.who !== 'Studio 核验')
+  if (!used.length) return null
+  return (
+    <div className="own-card" data-owner-roster>
+      <h3>
+        分工
+        <small>每一步由谁做、用哪个运行时</small>
+      </h3>
+      <table className="own-sess">
+        <thead>
+          <tr>
+            <th>步骤</th>
+            <th>工作类型</th>
+            <th>运行时</th>
+            <th>为什么</th>
+          </tr>
+        </thead>
+        <tbody>
+          {used.map((s) => (
+            <tr key={s.key}>
+              <td>
+                {s.title}
+                <small>{s.who}</small>
+              </td>
+              <td>{s.kind}</td>
+              <td>{s.runtime}</td>
+              <td>
+                <small>{s.why}</small>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <small>
+        当前按启动检查自动选择运行时（Codex 可用则用 Codex，否则 Claude
+        Code）。按工作类型偏好、独立意见和复核换模型尚未接入。
+      </small>
+    </div>
+  )
+}
+
+/** Every step with what it sees, what it may use, when it is done and where it writes. */
+export function StepsCard({ steps }: { steps: AffairStep[] }) {
+  const current = steps.find((s) => s.state === 'run' || s.state === 'wait')?.key
+  return (
+    <section className="own-steps" data-owner-steps>
+      <h3>
+        计划与进度<small>点一步查看：给它看的文件、能用的能力、完成条件、写回哪里</small>
+      </h3>
+      <ol>
+        {steps.map((s, i) => (
+          <li key={s.key} className={'own-step ' + s.state} data-owner-step-state={s.state}>
+            <details open={s.key === current}>
+              <summary>
+                <span className="own-step-n">{s.state === 'done' ? '✓' : i + 1}</span>
+                <span className="own-step-t">
+                  {s.title}
+                  {s.required !== undefined && (
+                    <span className={'own-tool' + (s.required ? ' required' : '')}>
+                      {s.required ? '必需' : '可选'}
+                    </span>
+                  )}
+                  {s.note && <small>{s.note}</small>}
+                </span>
+                <span className="own-step-who">
+                  {s.who} · {s.runtime}
+                </span>
+                <span className={'own-st ' + s.state}>{STATE_LABEL[s.state]}</span>
+                {s.run && <span data-owner-worker-run={s.run} />}
+              </summary>
+              <dl className="own-kv">
+                <dt>给它看</dt>
+                <dd>{s.sees.join('、')}</dd>
+                <dt>能用的能力</dt>
+                <dd>{s.can.join('、')}</dd>
+                <dt>完成条件</dt>
+                <dd>{s.done}</dd>
+                <dt>写回</dt>
+                <dd>{s.out}</dd>
+              </dl>
+            </details>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
@@ -184,79 +290,6 @@ export function SessionsCard({ a, running }: { a: Affair; running?: string }) {
           })}
         </tbody>
       </table>
-    </div>
-  )
-}
-
-/** The current dispatch decision: which session and why, plus the dispatch sheet. */
-export function StepCard({ a, workerRun }: { a: Affair; workerRun?: string }) {
-  const r = a.research!
-  const d = r.decisions?.at(-1)
-  if (!a.confirmed || !d || r.phase === 'done') return null
-  if (d.kind === 'deliver')
-    return (
-      <div className="own-card blue" data-owner-step>
-        <h3>当前步骤 · 写入交付物</h3>
-        <p>{d.reason}</p>
-      </div>
-    )
-  const key = decisionWorker(d)
-  const label = workerLabel(key)
-  const worker = workersOf(r).find((w) => w.key === key)
-  const looking = d.workerFiles?.length
-    ? d.workerFiles.map((f) => f.repo + ' · ' + f.path + '：' + f.purpose)
-    : (d.requests?.map((q) => q.repo + (q.terms.length ? ' · 检索 ' + q.terms.join('、') : '')) ??
-      [])
-  const progress = d.workerReturned ? '已交回' : workerRun || d.workerRunId ? '执行中' : '尚未派出'
-  return (
-    <div className="own-card blue" data-owner-step>
-      <h3>
-        派工判断 · 第 {r.decisions!.length} 次
-        <small>{d.choiceReason ? '已写入 调度.md' : ''}</small>
-      </h3>
-      {d.workerChoice && (
-        <div className="own-pick" data-owner-choice={d.workerChoice}>
-          <b>{d.workerChoice === 'new' ? '✓ 新开 ' + label : '✓ 续用 ' + label}</b>
-          <span>{d.choiceReason}</span>
-        </div>
-      )}
-      <dl className="own-kv">
-        <dt>交给</dt>
-        <dd>
-          执行会话 {label}
-          {worker ? '（负责：' + worker.purpose + '）' : ''}
-          {worker?.agent ? ' · ' + (worker.agent === 'codex' ? 'Codex' : 'Claude Code') : ''}
-        </dd>
-        <dt>本步问题</dt>
-        <dd>{d.ask ?? d.reason}</dd>
-        {d.deliverable && (
-          <>
-            <dt>要交回</dt>
-            <dd>{d.deliverable}</dd>
-          </>
-        )}
-        {d.doneWhen && (
-          <>
-            <dt>完成标准</dt>
-            <dd>{d.doneWhen}</dd>
-          </>
-        )}
-        {looking.length > 0 && (
-          <>
-            <dt>本轮查找</dt>
-            <dd>
-              {looking.map((l, i) => (
-                <div key={i}>{short(l, 140)}</div>
-              ))}
-            </dd>
-          </>
-        )}
-        <dt>进度</dt>
-        <dd>
-          {progress}
-          {workerRun && <span data-owner-worker-run={workerRun} />}　· 已存证据 {r.docs.length} 份
-        </dd>
-      </dl>
     </div>
   )
 }
@@ -390,83 +423,5 @@ export function SkippedCard({
         </small>
       )}
     </div>
-  )
-}
-
-type Step = { state: 'ok' | 'now' | 'todo' | 'skip'; title: string; hint?: string }
-export function Timeline({ a, active }: { a: Affair; active: boolean }) {
-  const r = a.research!
-  const steps: Step[] = [{ state: 'ok', title: '交办并建档', hint: a.directory?.path }]
-  steps.push(
-    !r.plan
-      ? { state: active ? 'now' : 'todo', title: 'Owner 整理约定' }
-      : !a.confirmed
-        ? { state: 'now', title: '等你确认约定' }
-        : { state: 'ok', title: '约定已确认', hint: '写入 事务配置.md' },
-  )
-  const decisions = r.decisions ?? []
-  decisions.forEach((d, i) => {
-    const last = i === decisions.length - 1
-    const done = d.kind === 'deliver' ? r.phase === 'done' : !!d.workerReturned || !last
-    steps.push({
-      state: done ? 'ok' : 'now',
-      title:
-        d.kind === 'deliver'
-          ? '写入交付物并逐条核对引用'
-          : !d.requests?.length && d.localFiles?.length
-            ? '读取本地文件：' + d.localFiles.join('、')
-            : (d.workerChoice === 'new' || (d.kind === 'read' && !d.workerChoice)
-                ? '新开 '
-                : '续用 ') +
-              workerLabel(decisionWorker(d)) +
-              '：' +
-              short(d.ask ?? d.reason, 60),
-      hint:
-        d.kind === 'deliver'
-          ? short(d.reason)
-          : [
-              d.choiceReason && short(d.choiceReason, 80),
-              d.verdict &&
-                (d.verdict.met
-                  ? 'Owner 核对通过'
-                  : 'Owner 核对未通过：' + short(d.verdict.note, 60)),
-            ]
-              .filter(Boolean)
-              .join(' · ') || short(d.reason),
-    })
-  })
-  for (const k of r.skips ?? [])
-    steps.push({
-      state: k.status === 'read' ? 'ok' : 'skip',
-      title: (k.status === 'read' ? '补查：读取 ' : '已跳过：读取 ') + k.path,
-      hint:
-        k.status === 'read'
-          ? '你允许后只重跑了这一步'
-          : (k.why === 'timeout' ? '60 秒无回应' : '你拒绝了') +
-            '，其余步骤继续' +
-            (k.affects ? ' · 影响：' + k.affects : ''),
-    })
-  if (r.phase === 'decide')
-    steps.push({ state: 'now', title: '待你决定', hint: '必需步骤补查后才交付' })
-  if (a.confirmed && !decisions.some((d) => d.kind === 'deliver'))
-    steps.push({ state: 'todo', title: '写入交付物并逐条核对引用' })
-  if (r.phase === 'done')
-    steps.push({
-      state: a.directory?.error ? 'now' : 'ok',
-      title: a.directory?.error ? '交付物待保存' : '已交付',
-      hint: r.report ? r.report.items.length + ' 条引文已核对' : undefined,
-    })
-  return (
-    <section>
-      <h3>事务进度</h3>
-      <ul className="own-tl">
-        {steps.map((s, i) => (
-          <li key={i} className={s.state}>
-            <b>{s.title}</b>
-            {s.hint && <small>{s.hint}</small>}
-          </li>
-        ))}
-      </ul>
-    </section>
   )
 }

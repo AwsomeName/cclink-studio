@@ -241,7 +241,7 @@ try {
       .getByPlaceholder('帮我调研开源芯片项目', { exact: true })
       .fill('调研 lowRISC/ibex，用官方 README 写一张项目定位卡，附一条原文出处。')
     await click('交给 Owner')
-    const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
+    const confirm = page.getByRole('button', { name: '确认约定，开始' })
     await confirm.waitFor({ timeout: 150000 })
     const state = () =>
       page.evaluate(async () => (await window.cclinkStudio.ownerDirectories.list()).items[0])
@@ -298,9 +298,7 @@ try {
     await page.locator('.own-row').click()
     await page.getByText('待恢复', { exact: true }).waitFor()
     await click('从这里继续')
-    await page
-      .getByRole('button', { name: '确认范围和交付物，开始调研' })
-      .waitFor({ timeout: 150000 })
+    await page.getByRole('button', { name: '确认约定，开始' }).waitFor({ timeout: 150000 })
     console.log(
       'PASS interrupted planning → restart → pending badge and list → manual resume → plan ready',
     )
@@ -327,7 +325,7 @@ try {
         '开源芯片 Ibex 调研。请交付一张中文《Ibex 源码入门卡》，用这个标题。先从项目定位和默认流水线各级职责中选出适合初读的一级，再沿你选的级追到一处真实寄存器，用 RTL 中的更新条件和赋值解释它何时更新。',
       )
     await click('交给 Owner')
-    const confirm = page.getByRole('button', { name: '确认范围和交付物，开始调研' })
+    const confirm = page.getByRole('button', { name: '确认约定，开始' })
     await page.waitForFunction(
       () =>
         ['ready', 'error'].includes(
