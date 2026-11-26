@@ -225,6 +225,10 @@ interface ViewEntry {
   manualZoom: number
   /** 当前实际生效的缩放系数 */
   effectiveZoom: number
+  /** 页面是否在加载；只用于地址栏收起时的进度提示，不参与缩放。 */
+  loading: boolean
+  /** 用户在网页内按下鼠标的次数；renderer 据此收起临时展开的地址栏。 */
+  pagePointerSequence: number
   /** 缩放重算代次；用于阻止旧的异步适宽结果覆盖新操作。 */
   zoomRequestGeneration: number
   /** 当前主框架代次内，在 100% 下连续稳定采样后得到的适宽测量。 */
@@ -895,6 +899,8 @@ export class BrowserManager {
       zoomMode: opts?.restore?.zoomMode ?? this.defaultZoomMode,
       manualZoom: opts?.restore?.manualZoom ?? 1,
       effectiveZoom: 1,
+      loading: false,
+      pagePointerSequence: 0,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
       httpAuthNavigationOrigin: null,
@@ -954,8 +960,14 @@ export class BrowserManager {
     }
     wc.on('blur', () => sendShortcutHelpInput('release'))
     wc.on('input-event', (_event, input) => {
-      if (input.type === 'mouseDown') sendShortcutHelpInput('cancel')
+      if (input.type !== 'mouseDown') return
+      sendShortcutHelpInput('cancel')
+      if (this.views.get(tabId) !== entry) return
+      entry.pagePointerSequence += 1
+      this.emitState(tabId)
     })
+    wc.on('did-start-loading', () => this.setEntryLoading(tabId, entry, true))
+    wc.on('did-stop-loading', () => this.setEntryLoading(tabId, entry, false))
     // Pinch-out below 1 expands Chromium layout viewport independently of the visible pane.
     // Keep shrinking in Electron page zoom; visual zoom only magnifies, and is reset by main.
     void wc
@@ -1276,6 +1288,8 @@ export class BrowserManager {
       zoomMode: sourceEntry.zoomMode,
       manualZoom: sourceEntry.manualZoom,
       effectiveZoom: sourceEntry.effectiveZoom,
+      loading: sourceEntry.loading,
+      pagePointerSequence: 0,
       zoomRequestGeneration: 0,
       fitWidthMeasurement: null,
       httpAuthNavigationOrigin: null,
@@ -2182,6 +2196,12 @@ export class BrowserManager {
     })
   }
 
+  private setEntryLoading(tabId: string, entry: ViewEntry, loading: boolean): void {
+    if (this.views.get(tabId) !== entry || entry.loading === loading) return
+    entry.loading = loading
+    this.emitState(tabId)
+  }
+
   /** 获取指定视图状态 */
   getState(tabId: string): BrowserViewState | null {
     const entry = this.views.get(tabId)
@@ -2190,6 +2210,8 @@ export class BrowserManager {
       viewMode: entry.viewMode,
       zoomMode: entry.zoomMode,
       zoomFactor: entry.effectiveZoom,
+      loading: entry.loading,
+      pagePointerSequence: entry.pagePointerSequence,
     }
   }
 

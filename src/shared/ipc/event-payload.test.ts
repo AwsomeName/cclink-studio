@@ -258,6 +258,13 @@ describe('preload event payload parsers', () => {
         extra: 'x'.repeat(1_000_001),
       }),
     ).toBeNull()
+    const viewState = { tabId: 'tab-1', viewMode: 'desktop', zoomMode: 'fit', zoomFactor: 1 }
+    const withSignals = { ...viewState, loading: true, pagePointerSequence: 2 }
+    expect(parseBrowserViewStateChangedPayload(withSignals)).toBe(withSignals)
+    expect(parseBrowserViewStateChangedPayload({ ...viewState, loading: 'yes' })).toBeNull()
+    expect(
+      parseBrowserViewStateChangedPayload({ ...viewState, pagePointerSequence: -1 }),
+    ).toBeNull()
   })
 
   it('checks the remaining CCLink, Window, Filesystem and workspace change events', () => {

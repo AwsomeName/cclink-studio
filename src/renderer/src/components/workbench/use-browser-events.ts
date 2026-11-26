@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useBrowserStore } from '../../stores/browser-store'
+import { useBrowserAddressBarStore } from '../../features/browser/browser-address-bar-store'
 
 /** 将主进程浏览器事件分发到 per-tab browser store。 */
 export function useBrowserEvents(): void {
@@ -13,6 +14,10 @@ export function useBrowserEvents(): void {
     const offViewStateChanged = window.cclinkStudio.browser.onViewStateChanged((state) => {
       if (state?.tabId) {
         useBrowserStore.getState().setViewState(state.tabId, state)
+        useBrowserAddressBarStore.getState().applyPageSignals(state.tabId, {
+          loading: state.loading,
+          pagePointerSequence: state.pagePointerSequence,
+        })
       }
     })
     return () => {

@@ -1388,6 +1388,25 @@ export function SettingsPage({
                 </div>
               </SettingsRow>
 
+              <SettingsRow
+                settingKey="browserAddressBarAutoHide"
+                settings={settings}
+                onReset={resetOne}
+              >
+                <div className="settings-label">
+                  <span>自动收起地址栏</span>
+                  <span className="settings-description">
+                    默认收起，点击当前浏览器标签或按 ⌘L 显示；关闭后地址栏始终显示。
+                  </span>
+                </div>
+                <div className="settings-control">
+                  <Toggle
+                    checked={settings.browserAddressBarAutoHide}
+                    onChange={(checked) => update({ browserAddressBarAutoHide: checked })}
+                  />
+                </div>
+              </SettingsRow>
+
               <SettingsRow settingKey="defaultDeviceMode" settings={settings} onReset={resetOne}>
                 <div className="settings-label">
                   <span>默认设备模式</span>

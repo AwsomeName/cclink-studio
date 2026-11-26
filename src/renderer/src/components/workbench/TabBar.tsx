@@ -13,6 +13,7 @@ import type { Tab } from '../../types'
 import {
   IconArrowLeft,
   IconArrowRight,
+  IconChevronDown,
   IconClose,
   IconFile,
   IconGlobe,
@@ -26,6 +27,7 @@ import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
 import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detach-drag'
 import { RemoteDesktopTabControls } from '../../features/remote-desktop/desktop-controls'
+import type { BrowserAddressBarMode } from '../../features/browser/browser-address-bar-store'
 import {
   isDesktopSessionLive,
   useDesktopSessionStore,
@@ -80,6 +82,26 @@ interface TabBarProps {
   conversationDropActive: boolean
   /** Only My Space's home tab is open: the strip folds away (its buttons move to the page). */
   folded?: boolean
+  /** 当前浏览器标签的地址栏状态；收起时在标签上提示箭头、HTTP 和加载进度。 */
+  browserAddressBar?: BrowserAddressBarIndicator | null
+  /** 再次点击当前浏览器标签：显示或收起地址栏。 */
+  onToggleBrowserAddressBar?: (tabId: string) => void
+}
+
+export interface BrowserAddressBarIndicator {
+  tabId: string
+  mode: BrowserAddressBarMode
+  plainHttp: boolean
+  loading: boolean
+}
+
+/** 当前浏览器标签的地址栏提示文字；非当前浏览器标签返回 null。 */
+export function getBrowserAddressBarTabHint(
+  indicator: BrowserAddressBarIndicator | null | undefined,
+  tabId: string,
+): string | null {
+  if (!indicator || indicator.tabId !== tabId || indicator.mode === 'pinned') return null
+  return indicator.mode === 'revealed' ? '点击收起地址栏' : '点击显示地址栏'
 }
 
 export function TabBar({
@@ -99,6 +121,8 @@ export function TabBar({
   onShowMenu,
   conversationDropActive,
   folded,
+  browserAddressBar = null,
+  onToggleBrowserAddressBar,
 }: TabBarProps): React.ReactElement {
   const setAgentMode = useUIStore((state) => state.setAgentPanelMode)
   const layout = tabs.find((tab) => tab.id === activeTabId)?.workbenchLayout
@@ -300,16 +324,30 @@ export function TabBar({
       tab.type === 'browser'
         ? getBrowserDisplayTitle(tab.title, browserTabs[tab.id]?.title)
         : tab.title
+    const addressBarHint = onToggleBrowserAddressBar
+      ? getBrowserAddressBarTabHint(browserAddressBar, tab.id)
+      : null
+    const addressBar = addressBarHint ? browserAddressBar : null
+    const addressBarHidden = addressBar?.mode === 'hidden'
     const label = `${title}${tab.pinned ? '（已固定）' : ''}${tab.dirty ? '（未保存）' : ''}`
+    const httpNote = addressBarHidden && addressBar?.plainHttp ? ' · HTTP 未加密' : ''
+    const tooltip = addressBarHint ? `${label}${httpNote}\n${addressBarHint}` : label
     return (
       <div
         key={tab.id}
         data-workbench-tab-id={tab.id}
         data-home-tab={tab.type === 'workspace-home' || undefined}
-        className={`tab ${tab.pinned ? 'pinned' : ''} ${isLiveDesktop(tab) ? 'remote-desktop-live' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}`}
+        className={`tab ${tab.pinned ? 'pinned' : ''} ${isLiveDesktop(tab) ? 'remote-desktop-live' : ''} ${activeTabId === tab.id ? 'active' : ''} ${draggingId === tab.id ? 'dragging' : ''} ${dragOverId === tab.id ? 'drop-target' : ''}${addressBar ? ' has-address-toggle' : ''}`}
         role="tab"
-        title={tab.type === 'workspace-home' ? '项目首页' : label}
-        aria-label={tab.type === 'workspace-home' ? '项目首页' : label}
+        title={tab.type === 'workspace-home' ? '项目首页' : tooltip}
+        aria-label={
+          tab.type === 'workspace-home'
+            ? '项目首页'
+            : addressBarHint
+              ? `${label}${httpNote}，${addressBarHint}`
+              : label
+        }
+        aria-expanded={addressBar ? addressBar.mode === 'revealed' : undefined}
         tabIndex={activeTabId === tab.id ? 0 : -1}
         aria-selected={activeTabId === tab.id}
         onPointerDown={(event) => handlePointerDown(event, tab)}
@@ -322,6 +360,10 @@ export function TabBar({
             event.preventDefault()
             return
           }
+          if (addressBar && onToggleBrowserAddressBar) {
+            onToggleBrowserAddressBar(tab.id)
+            return
+          }
           onActivate(tab.id)
         }}
         onContextMenu={(event) => {
@@ -329,6 +371,15 @@ export function TabBar({
           onShowMenu(tab.id, event.clientX, event.clientY, event.currentTarget)
         }}
         onKeyDown={(event) => {
+          if (
+            addressBar &&
+            onToggleBrowserAddressBar &&
+            (event.key === 'Enter' || event.key === ' ')
+          ) {
+            event.preventDefault()
+            onToggleBrowserAddressBar(tab.id)
+            return
+          }
           if (['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', ' '].includes(event.key)) {
             event.preventDefault()
             const index = tabs.findIndex((item) => item.id === tab.id)
@@ -368,7 +419,21 @@ export function TabBar({
       >
         <span className="tab-icon">
           <WorkbenchTabIcon tab={tab} />
+          {addressBarHidden && addressBar?.plainHttp && (
+            <span className="tab-address-http-dot" aria-hidden="true" />
+          )}
         </span>
+        {addressBar && (
+          <span
+            className={`tab-address-chevron${addressBar.mode === 'revealed' ? ' open' : ''}`}
+            aria-hidden="true"
+          >
+            <IconChevronDown size={10} />
+          </span>
+        )}
+        {addressBarHidden && addressBar?.loading && (
+          <span className="tab-address-loading" aria-hidden="true" />
+        )}
         {!tab.pinned && <span className="tab-title">{title}</span>}
         {tab.type === 'remote-desktop' && <RemoteDesktopTabControls tab={tab} />}
         {tab.dirty && <span className="tab-dirty-dot" aria-hidden="true" />}

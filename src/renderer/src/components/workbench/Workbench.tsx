@@ -36,6 +36,12 @@ import {
 import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
 import { normalizeBrowserAddress } from '../../features/browser/browser-address'
 import { ShortcutHelp, type ShortcutHelpContext } from '../../features/shortcuts/ShortcutHelp'
+import {
+  resolveBrowserAddressBarMode,
+  useBrowserAddressBarStore,
+} from '../../features/browser/browser-address-bar-store'
+import { useBrowserFindStore } from '../../features/browser/browser-find-store'
+import { useSettingsStore } from '../../stores/settings-store'
 
 export function Workbench({
   shortcutHelp = null,
@@ -78,6 +84,40 @@ export function Workbench({
     isBrowserTab &&
     !activeBrowserState?.navigation &&
     isBrowserNewTabUrl(activeBrowserState?.url ?? activeTab?.initialUrl)
+
+  const addressBarAutoHide = useSettingsStore((s) => s.settings.browserAddressBarAutoHide)
+  const addressBarRevealedTabId = useBrowserAddressBarStore((s) => s.revealedTabId)
+  const addressBarPanelOpenTabId = useBrowserAddressBarStore((s) => s.panelOpenTabId)
+  const activePageSignals = useBrowserAddressBarStore((s) =>
+    activeTabId ? s.pages[activeTabId] : undefined,
+  )
+  const toggleAddressBar = useBrowserAddressBarStore((s) => s.toggle)
+  const collapseAddressBar = useBrowserAddressBarStore((s) => s.collapse)
+  const activeFindOpen = useBrowserFindStore((s) =>
+    activeTabId ? Boolean(s.sessions[activeTabId]?.open) : false,
+  )
+  const addressBarMode = resolveBrowserAddressBarMode({
+    autoHide: addressBarAutoHide,
+    revealed: addressBarRevealedTabId !== null && addressBarRevealedTabId === activeTabId,
+    newTabPage: showBrowserNewTab,
+    navigationFailed: activeBrowserState?.navigation?.status === 'failed',
+    findOpen: activeFindOpen,
+    panelOpen: addressBarPanelOpenTabId !== null && addressBarPanelOpenTabId === activeTabId,
+  })
+  const browserAddressBarIndicator =
+    isBrowserTab && activeTabId
+      ? {
+          tabId: activeTabId,
+          mode: addressBarMode,
+          plainHttp: /^http:/i.test(activeBrowserState?.url ?? ''),
+          loading: Boolean(activePageSignals?.loading),
+        }
+      : null
+
+  // 切换或切回浏览器标签时地址栏回到收起；展开只对当前这一次查看有效。
+  useEffect(() => {
+    useBrowserAddressBarStore.getState().collapseAll()
+  }, [activeTabId])
 
   useWorkbenchBounds(contentRef, tabBarRef)
   useBrowserEvents()
@@ -152,6 +192,7 @@ export function Workbench({
       const url = normalizeBrowserAddress(value)
       if (!url) return
       beginBrowserNavigation(activeTabId, url)
+      collapseAddressBar(activeTabId)
       void window.cclinkStudio.browser
         .navigate(activeTabId, url)
         .then(() => completeBrowserNavigation(activeTabId, url))
@@ -164,6 +205,7 @@ export function Workbench({
     [
       activeTabId,
       beginBrowserNavigation,
+      collapseAddressBar,
       completeBrowserNavigation,
       failBrowserNavigation,
       showToast,
@@ -347,6 +389,8 @@ export function Workbench({
         onShowMenu={(tabId, x, y, focusReturn) => void handleShowTabMenu(tabId, x, y, focusReturn)}
         conversationDropActive={conversationDropActive}
         folded={foldStrip}
+        browserAddressBar={browserAddressBarIndicator}
+        onToggleBrowserAddressBar={toggleAddressBar}
       />
 
       {/* Markdown editors and browser tabs carry their open-as switch in their own toolbar. */}
@@ -364,6 +408,8 @@ export function Workbench({
           onUrlInputChange={setBrowserUrlInput}
           onNavigate={handleNavigate}
           onOpenUrl={openBrowserUrl}
+          hidden={addressBarMode === 'hidden'}
+          onRequestCollapse={() => collapseAddressBar(activeTabId)}
         />
       )}
 

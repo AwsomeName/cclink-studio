@@ -5,6 +5,10 @@
   border-bottom: 1px solid var(--border-color);
 }
 
+.browser-toolbar-shell[hidden] {
+  display: none;
+}
+
 .browser-toolbar {
   display: flex;
   align-items: center;

@@ -5740,6 +5740,80 @@ body.is-resizing-panels .main-area > div {
   gap: 0;
 }
 
+.tab-icon {
+  position: relative;
+}
+
+.tab.pinned.has-address-toggle {
+  gap: 1px;
+}
+
+.tab-address-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  transition: transform 120ms ease;
+}
+
+.tab-address-chevron.open {
+  transform: rotate(180deg);
+}
+
+.tab.active .tab-address-chevron svg {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.tab-address-http-dot {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-warning, #cca35b);
+  box-shadow: 0 0 0 2px var(--bg-tab-active);
+}
+
+.tab-address-loading {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tab-address-loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: var(--text-accent);
+  animation: tab-address-loading 1s ease-in-out infinite;
+}
+
+@keyframes tab-address-loading {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-address-loading::before {
+    left: 0;
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 .tab.pinned .tab-dirty-dot {
   position: absolute;
   top: 5px;

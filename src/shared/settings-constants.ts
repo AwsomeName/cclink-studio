@@ -122,6 +122,8 @@ export interface AppSettings {
   codexAcpPath: string
   /** 新浏览器 Tab 默认缩放模式 */
   defaultZoomMode: ZoomMode
+  /** 浏览器地址栏默认收起，点击当前浏览器标签或 ⌘L 时显示。 */
+  browserAddressBarAutoHide: boolean
   /** 新浏览器 Tab 默认设备模式 */
   defaultDeviceMode: DeviceMode
 
@@ -272,6 +274,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeManagedVersion: '',
   codexAcpPath: '',
   defaultZoomMode: 'fit',
+  browserAddressBarAutoHide: true,
   defaultDeviceMode: 'desktop',
 
   provider: 'anthropic',

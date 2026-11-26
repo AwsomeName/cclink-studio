@@ -10,6 +10,10 @@ export interface BrowserViewState {
   viewMode: BrowserViewModeType
   zoomMode: BrowserZoomModeType
   zoomFactor: number
+  /** 页面是否正在加载（瞬态，不持久化）。 */
+  loading?: boolean
+  /** 网页内鼠标按下计数；只增不减，用于收起临时展开的地址栏。 */
+  pagePointerSequence?: number
 }
 
 export interface BrowserFindShortcutSyncInput {
@@ -673,7 +677,11 @@ export function parseBrowserViewStateChangedPayload(
     ['desktop', 'mobile'].includes(String(payload['viewMode'])) &&
     ['fit', 'manual'].includes(String(payload['zoomMode'])) &&
     typeof payload['zoomFactor'] === 'number' &&
-    Number.isFinite(payload['zoomFactor'])
+    Number.isFinite(payload['zoomFactor']) &&
+    (payload['loading'] === undefined || typeof payload['loading'] === 'boolean') &&
+    (payload['pagePointerSequence'] === undefined ||
+      (Number.isSafeInteger(payload['pagePointerSequence']) &&
+        (payload['pagePointerSequence'] as number) >= 0))
     ? (value as BrowserViewStateChangedPayload)
     : null
 }

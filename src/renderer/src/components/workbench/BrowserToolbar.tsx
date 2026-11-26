@@ -29,6 +29,8 @@ import {
 } from '../../features/browser/browser-find-controller'
 import { useEscapeDismiss } from '../common/dismissable-layer'
 import { getBrowserTabMode } from '../../features/browser/browser-tab-mode'
+import { useBrowserAddressBarStore } from '../../features/browser/browser-address-bar-store'
+import { useSettingsStore } from '../../stores/settings-store'
 import './browser-toolbar.css'
 
 interface BrowserToolbarProps {
@@ -40,6 +42,10 @@ interface BrowserToolbarProps {
   onUrlInputChange: (tabId: string, value: string) => void
   onNavigate: (value: string) => void
   onOpenUrl: (url: string) => void
+  /** 自动收起时地址栏不可见；保持挂载以保留查找、缩放草稿等局部状态。 */
+  hidden?: boolean
+  /** 地址栏内按 Esc：收起临时展开的地址栏。 */
+  onRequestCollapse?: () => void
 }
 
 export function shouldNavigateBrowserAddress(input: {
@@ -108,6 +114,8 @@ export function BrowserToolbar({
   onUrlInputChange,
   onNavigate,
   onOpenUrl,
+  hidden = false,
+  onRequestCollapse,
 }: BrowserToolbarProps): React.ReactElement {
   const [expandedPanel, setExpandedPanel] = useState<'save' | 'options' | null>(null)
   const panelTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -131,6 +139,9 @@ export function BrowserToolbar({
   const cancelZoomCommitRef = useRef(false)
   const zoomEditedRef = useRef(false)
   const draftId = tab.webResourceDraftRef?.draftId
+  const addressBarAutoHide = useSettingsStore((state) => state.settings.browserAddressBarAutoHide)
+  const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const setAddressBarPanelOpen = useBrowserAddressBarStore((state) => state.setPanelOpen)
   const environmentLabel = getBrowserEnvironmentLabel(tab, accountLabel)
 
   const closePanel = (): void => {
@@ -165,6 +176,11 @@ export function BrowserToolbar({
     : /^http:/i.test(browserState?.url ?? '')
       ? 'HTTP'
       : null
+
+  useEffect(() => {
+    setAddressBarPanelOpen(tabId, expandedPanel !== null)
+  }, [expandedPanel, setAddressBarPanelOpen, tabId])
+  useEffect(() => () => setAddressBarPanelOpen(tabId, false), [setAddressBarPanelOpen, tabId])
 
   useEffect(() => {
     setExpandedPanel(null)
@@ -355,7 +371,7 @@ export function BrowserToolbar({
   }
 
   return (
-    <div className="browser-toolbar-shell">
+    <div className="browser-toolbar-shell" hidden={hidden}>
       <div className="browser-toolbar" role="toolbar" aria-label="浏览器工具栏">
         <button
           type="button"
@@ -517,6 +533,20 @@ export function BrowserToolbar({
                 ) {
                   event.preventDefault()
                   onNavigate(event.currentTarget.value)
+                  return
+                }
+
+                if (
+                  event.key === 'Escape' &&
+                  !event.nativeEvent.defaultPrevented &&
+                  !event.nativeEvent.isComposing &&
+                  !urlCompositionActiveRef.current &&
+                  onRequestCollapse
+                ) {
+                  event.preventDefault()
+                  onUrlInputChange(tabId, browserState?.url ?? event.currentTarget.value)
+                  event.currentTarget.blur()
+                  onRequestCollapse()
                 }
               }}
               placeholder="输入网址"
@@ -780,6 +810,17 @@ export function BrowserToolbar({
               前进
             </button>
             <BrowserHistoryMenu onOpenUrl={onOpenUrl} showLabel />
+            <button
+              type="button"
+              className={addressBarAutoHide ? '' : 'active'}
+              aria-pressed={!addressBarAutoHide}
+              title="关闭后地址栏不再自动收起"
+              onClick={() =>
+                void updateSettings({ browserAddressBarAutoHide: !addressBarAutoHide })
+              }
+            >
+              始终显示地址栏
+            </button>
             <span className="browser-environment-badge" title={`当前登录环境：${environmentLabel}`}>
               {environmentLabel}
             </span>

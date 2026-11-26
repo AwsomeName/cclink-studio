@@ -39,6 +39,7 @@ const settingsUpdateSchema = z
       .regex(/^$|^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
     codexAcpPath: pathString,
     defaultZoomMode: z.enum(['fit', 'manual']),
+    browserAddressBarAutoHide: z.boolean(),
     defaultDeviceMode: z.enum(['desktop', 'mobile']),
     provider: z.enum(SUPPORTED_AGENT_PROVIDERS),
     apiFormat: z.literal('anthropic'),

@@ -1,6 +1,7 @@
 import type { Command } from '../../stores/command-store'
 import { useBrowserStore } from '../../stores/browser-store'
 import { useTabStore } from '../../stores/tab-store'
+import { useBrowserAddressBarStore } from '../../features/browser/browser-address-bar-store'
 
 export function createBrowserCommands(): Command[] {
   return [
@@ -15,9 +16,14 @@ export function createBrowserCommands(): Command[] {
         defaultBindings: [{ code: 'KeyL', modifiers: ['primary'] }],
       },
       action: () => {
-        const input = document.querySelector('.url-input') as HTMLInputElement | null
-        input?.focus()
-        input?.select()
+        const tab = useTabStore.getState().getActiveTab()
+        if (tab?.type === 'browser') useBrowserAddressBarStore.getState().reveal(tab.id)
+        // 地址栏可能刚从收起状态显示出来，等这一帧布局完成再聚焦。
+        requestAnimationFrame(() => {
+          const input = document.querySelector('.url-input') as HTMLInputElement | null
+          input?.focus()
+          input?.select()
+        })
       },
     },
     {
