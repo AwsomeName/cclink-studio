@@ -49,9 +49,8 @@ describe('inspectMarkdownEditorBeforeSave', () => {
 
     expect(inspection.safeToSave).toBe(true)
     expect(inspection.diagnostics).toEqual([])
-    expect(inspection.markdown).toBe(
-      ['1. ', '2. ', '3. ', '', '- [ ] ', '- [ ] ', '- [ ] '].join('\n'),
-    )
+    // Untouched placeholders keep the document's own spelling instead of the serializer's.
+    expect(inspection.markdown).toBe(source)
   })
 
   it('accepts a representative document after a second parse and serialization', () => {

@@ -11,6 +11,7 @@ import {
   sourceRangeFromOffsets,
   collapseSerializerBlankLines,
   restoreUntouchedMarkdownTables,
+  restoreUntouchedMarkdownBlocks,
 } from './markdown-codec'
 
 describe('markdown-codec', () => {
@@ -677,5 +678,86 @@ describe('editor output keeps untouched Markdown text', () => {
       ['```', 'a', '', '', 'b', '| x | y |', '| - | - |', '```', '', 'c'].join('\n'),
     )
     expect(restoreUntouchedMarkdownTables(fenced, '| x | y |\n| - | - |')).toBe(fenced)
+  })
+})
+
+describe('inline formatting is part of the fidelity gate', () => {
+  it('flags a lost or moved bold, italic, strikethrough or inline code', () => {
+    const source = '正文 **粗体**、*斜体*、~~删除~~ 和 `代码`，以及 **外层 *内层***。\n'
+    for (const lossy of [
+      '正文 粗体、*斜体*、~~删除~~ 和 `代码`，以及 **外层 *内层***。\n',
+      '正文 **粗体**、斜体、~~删除~~ 和 `代码`，以及 **外层 *内层***。\n',
+      '正文 **粗体**、*斜体*、删除 和 `代码`，以及 **外层 *内层***。\n',
+      '正文 **粗体**、*斜体*、~~删除~~ 和 代码，以及 **外层 *内层***。\n',
+      '正文 **粗体**、*斜体*、~~删除~~ 和 `代码`，以及 **外层 内层**。\n',
+      '正文 **粗**体、*斜体*、~~删除~~ 和 `代码`，以及 **外层 *内层***。\n',
+    ]) {
+      const inspection = inspectMarkdownRoundTrip(source, lossy)
+      expect(inspection.equivalent, lossy).toBe(false)
+      expect(inspection.differences.map((d) => d.key)).toContain('inlineMarks')
+    }
+  })
+
+  it('accepts equivalent spellings of the same formatting', () => {
+    expect(
+      inspectMarkdownRoundTrip(
+        '__粗体__ 与 _斜体_ 与 ***两者***\n',
+        '**粗体** 与 *斜体* 与 ***两者***\n',
+      ).equivalent,
+    ).toBe(true)
+  })
+})
+
+describe('untouched blocks keep their original spelling', () => {
+  const reference = [
+    '标题',
+    '====',
+    '',
+    '这段用 __下划线粗体__ 和 _下划线斜体_。',
+    '',
+    '* 星号列表一',
+    '* 星号列表二',
+    '',
+    '要修改的段落。',
+    '',
+  ].join('\n')
+
+  it('restores every block the user did not change', () => {
+    const serialized = [
+      '# 标题',
+      '',
+      '这段用 **下划线粗体** 和 *下划线斜体*。',
+      '',
+      '- 星号列表一',
+      '- 星号列表二',
+      '',
+      '要修改的段落。改过',
+    ].join('\n')
+    expect(normalizeMarkdownEditorOutput(serialized, reference)).toBe(
+      [
+        '标题',
+        '====',
+        '',
+        '这段用 __下划线粗体__ 和 _下划线斜体_。',
+        '',
+        '* 星号列表一',
+        '* 星号列表二',
+        '',
+        '要修改的段落。改过',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('keeps the serializer spelling for a block whose content changed', () => {
+    const serialized = '# 标题\n\n这段用 **下划线粗体** 和 *斜体改了*。\n'
+    expect(restoreUntouchedMarkdownBlocks(serialized, reference)).toBe(
+      '标题\n====\n\n这段用 **下划线粗体** 和 *斜体改了*。\n',
+    )
+  })
+
+  it('does not reorder: a moved block keeps the serializer text', () => {
+    const before = '甲段。\n\n乙段。\n'
+    expect(restoreUntouchedMarkdownBlocks('乙段。\n\n甲段。\n', before)).toBe('乙段。\n\n甲段。\n')
   })
 })

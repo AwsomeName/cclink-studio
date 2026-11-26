@@ -63,6 +63,7 @@ export type MarkdownCriticalStructureName =
   | 'imageWidths'
   | 'links'
   | 'mathExpressions'
+  | 'inlineMarks'
   | 'textContent'
 
 export interface MarkdownRoundTripDifference {
@@ -327,6 +328,7 @@ interface MarkdownCriticalStructureSignature {
   imageWidths: number[]
   links: Array<{ destination: string; title: string }>
   mathExpressions: Array<{ display: boolean; content: string }>
+  inlineMarks: string[]
   textContent: string[]
 }
 
@@ -347,6 +349,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
   const images: Array<{ source: string; alt: string; title: string }> = []
   const links = extractMarkdownLinks(normalized)
   const textContent: string[] = []
+  const inlineMarks: string[] = []
   let activeTableRows: number | null = null
   let activeTableAlignments: string[] | null = null
   let blockquotes = 0
@@ -410,6 +413,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
       // an otherwise lossless document read-only, while whitespace inside real
       // content remains part of the critical signature.
       if (visibleText.trim().length > 0) textContent.push(visibleText)
+      inlineMarks.push(...markdownInlineMarks(token.children ?? []))
     }
 
     for (const child of token.children ?? []) {
@@ -442,6 +446,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
     mathExpressions: extractMathExpressions(
       maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized))),
     ),
+    inlineMarks,
     textContent,
   }
 }
@@ -479,6 +484,46 @@ function markdownInlineText(tokens: Array<{ type: string; content: string }>): s
       return ''
     })
     .join('')
+}
+
+const INLINE_MARKS: Record<string, string> = {
+  strong_open: 'strong',
+  strong_close: 'strong',
+  em_open: 'em',
+  em_close: 'em',
+  s_open: 'strike',
+  s_close: 'strike',
+}
+
+/**
+ * Bold, italic, strikethrough and inline code with the text each one covers, nesting included
+ * (`strong>em:x`). Equivalent spellings (`**x**` / `__x__`) give the same entry; losing or moving
+ * a mark does not. Runs of text under the same marks are merged so tokenizer splits do not count.
+ */
+function markdownInlineMarks(tokens: Array<{ type: string; content: string }>): string[] {
+  const runs: Array<[string, string]> = []
+  const stack: string[] = []
+  for (const token of tokens) {
+    const mark = INLINE_MARKS[token.type]
+    if (mark && token.type.endsWith('_open')) stack.push(mark)
+    else if (mark) {
+      const index = stack.lastIndexOf(mark)
+      if (index >= 0) stack.splice(index, 1)
+    } else if (token.type === 'code_inline') {
+      runs.push(['code', token.content])
+    } else if (stack.length > 0) {
+      const text = token.type === 'text' ? token.content : token.type.endsWith('break') ? ' ' : ''
+      if (!text) continue
+      const key = stack.join('>')
+      const last = runs.at(-1)
+      if (last && last[0] === key) last[1] += text
+      else runs.push([key, text])
+    }
+  }
+  return runs
+    .map(([key, text]) => [key, text.replace(/\s+/g, ' ').trim()] as const)
+    .filter(([, text]) => text.length > 0)
+    .map(([key, text]) => `${key}:${text}`)
 }
 
 function stripTaskMarkerFromInlineText(value: string): string {
@@ -537,6 +582,7 @@ export function inspectMarkdownRoundTrip(
     imageWidths: '图片宽度',
     links: '链接',
     mathExpressions: '数学公式',
+    inlineMarks: '行内格式',
     textContent: '正文内容',
   }
   const keys = Object.keys(labels) as MarkdownCriticalStructureName[]
@@ -805,7 +851,9 @@ function expandSameLineListHeadings(source: string): string {
 }
 
 export function normalizeMarkdownEditorOutput(source: string, referenceSource?: string): string {
-  const output = normalizeEditorOutputBody(source, referenceSource)
+  const body = normalizeEditorOutputBody(source, referenceSource)
+  const output =
+    referenceSource === undefined ? body : restoreUntouchedMarkdownBlocks(body, referenceSource)
   // The serializer never ends with a newline; a file that had one keeps it, so saving an edit
   // does not also rewrite the last line.
   return referenceSource?.endsWith('\n') && output !== '' && !output.endsWith('\n')
@@ -868,6 +916,75 @@ function normalizeEditorOutputBody(source: string, referenceSource?: string): st
   }
   restored += restorePlainMarkdownDollars(normalized, masked, cursor, normalized.length)
   return restored
+}
+
+/**
+ * Top-level block line ranges as the Markdown parser itself sees them (a list with lazy
+ * continuation lines is one block), 1-based and inclusive, trailing blank lines excluded.
+ */
+function topLevelMarkdownBlocks(source: string): Array<{ startLine: number; endLine: number }> {
+  const lines = source.split('\n')
+  const blocks: Array<{ startLine: number; endLine: number }> = []
+  for (const token of markdownStructureParser.parse(source, {})) {
+    if (token.level !== 0 || !token.map || token.nesting === -1) continue
+    let end = token.map[1]
+    while (end > token.map[0] && (lines[end - 1] ?? '').trim() === '') end -= 1
+    if (end > token.map[0]) blocks.push({ startLine: token.map[0] + 1, endLine: end })
+  }
+  return blocks
+}
+
+const blockRenderCache = new Map<string, string>()
+const BLOCK_RENDER_CACHE_LIMIT = 4000
+
+/** What a block shows: its HTML with whitespace collapsed (memoized; runs on every edit). */
+function renderedBlockKey(text: string): string {
+  const cached = blockRenderCache.get(text)
+  if (cached !== undefined) return cached
+  const key = markdownStructureParser.render(text).replace(/\s+/g, ' ').trim()
+  if (blockRenderCache.size >= BLOCK_RENDER_CACHE_LIMIT) blockRenderCache.clear()
+  blockRenderCache.set(text, key)
+  return key
+}
+
+/**
+ * The serializer writes its own spelling for everything it touches: `__x__` becomes `**x**`,
+ * `*` bullets become `-`, Setext headings become `#`. A top-level block that renders exactly as
+ * a block of the document on disk keeps that block's original text, in document order, so saving
+ * one edit leaves every block the user did not change byte-for-byte as it was.
+ */
+export function restoreUntouchedMarkdownBlocks(markdown: string, reference: string): string {
+  const referenceSource = normalizeMarkdownSource(stripCclinkMarkdownMetadata(reference))
+  const referenceLines = referenceSource.split('\n')
+  const referenceBlocks = topLevelMarkdownBlocks(referenceSource).map((block) => {
+    const text = referenceLines.slice(block.startLine - 1, block.endLine).join('\n')
+    return { text, key: renderedBlockKey(text) }
+  })
+  if (referenceBlocks.length === 0) return markdown
+  const lines = markdown.split('\n')
+  const replacements: Array<{ start: number; end: number; text: string }> = []
+  let cursor = 0
+  for (const block of topLevelMarkdownBlocks(markdown)) {
+    const text = lines.slice(block.startLine - 1, block.endLine).join('\n')
+    const key = renderedBlockKey(text)
+    if (!key) continue
+    const match = referenceBlocks.findIndex(
+      (candidate, index) => index >= cursor && candidate.key === key,
+    )
+    if (match < 0) continue
+    cursor = match + 1
+    if (referenceBlocks[match].text !== text) {
+      replacements.push({
+        start: block.startLine - 1,
+        end: block.endLine,
+        text: referenceBlocks[match].text,
+      })
+    }
+  }
+  for (const { start, end, text } of replacements.reverse()) {
+    lines.splice(start, end - start, ...text.split('\n'))
+  }
+  return lines.join('\n')
 }
 
 const FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})/
