@@ -5,8 +5,11 @@ import {
   healthLedger,
   mergeRows,
   parseAmount,
+  parseBowel,
   parseDiaryRows,
+  parseExercise,
   parseRecordFile,
+  parseSleep,
   parseWeight,
   shiftDate,
 } from './diary-ledger'
@@ -88,6 +91,18 @@ describe('record file', () => {
     )
   })
 
+  it('adds a column the page gained later instead of dropping its value', () => {
+    const old =
+      '# 健康\n\n| 日期 | 体重 | 睡眠 |\n| --- | --- | --- |\n| 2026-11-20 | 70 |  |\n\n备注\n'
+    const next = appendRecord(old, healthLedger, '2026-11-25', { 大便: '1 次' })
+    expect(next).toBe(
+      '# 健康\n\n| 日期 | 体重 | 睡眠 | 大便 |\n| --- | --- | --- | --- |\n| 2026-11-20 | 70 |  |  |\n' +
+        '| 2026-11-25 |  |  | 1 次 |\n\n备注\n',
+    )
+    expect(parseRecordFile(next, healthLedger.fields).rows[1].cells).toEqual({ 大便: '1 次' })
+    expect(appendRecord(old, healthLedger, '2026-11-25', { 体重: '70' })).not.toContain('大便')
+  })
+
   it('keeps one row per source on the same day, newest first', () => {
     const own = { date: '2026-11-25', source: { kind: 'own' as const }, cells: { 运动: '跑步' } }
     const fromDiary = parseDiaryRows(diary, '2026-11-25', healthLedger.fields)
@@ -114,5 +129,59 @@ describe('chart values', () => {
     expect(parseAmount('11/23 买 iPhone15 壳 39')).toBe(39)
     expect(parseAmount('没花钱')).toBeNull()
     expect(parseAmount('打了 9 折')).toBeNull()
+  })
+})
+
+describe('health charts', () => {
+  it('reads going to sleep, waking and getting up', () => {
+    expect(parseSleep('12点睡的，7点醒的，又迷糊到8:10左右才起。')).toEqual({
+      bed: 0,
+      wake: 7,
+      up: 8 + 10 / 60,
+      hours: 7,
+    })
+    expect(parseSleep('11点半睡，7点起')).toEqual({ bed: 23.5, wake: 7, up: null, hours: 7.5 })
+    expect(parseSleep('23:40 上床，凌晨1点才睡着，6:30 醒')).toMatchObject({
+      bed: 23 + 40 / 60,
+      wake: 6.5,
+    })
+    expect(parseSleep('十一点睡，六点半醒')).toMatchObject({ bed: 23, wake: 6.5, hours: 7.5 })
+    expect(parseSleep('睡得不错')).toBeNull()
+    expect(parseSleep('7点睡')).toBeNull()
+    expect(parseSleep('1点睡，2点醒')).toBeNull()
+  })
+
+  it('places exercise by clock time, time of day, or nowhere', () => {
+    expect(parseExercise('7点半快走 40 分钟')).toEqual([
+      { start: 7.5, minutes: 40, exact: true, text: '7点半快走 40 分钟' },
+    ])
+    expect(parseExercise('19:00-20:00 羽毛球')).toEqual([
+      { start: 19, minutes: 60, exact: true, text: '19:00-20:00 羽毛球' },
+    ])
+    expect(parseExercise('晚上跑步 5 公里')).toEqual([
+      { start: 20, minutes: 30, exact: false, text: '晚上跑步 5 公里' },
+    ])
+    expect(parseExercise('下午3点游泳1小时')).toEqual([
+      { start: 15, minutes: 60, exact: true, text: '下午3点游泳1小时' },
+    ])
+    expect(parseExercise('快走 30 分钟，强度不大')).toEqual([
+      { start: null, minutes: 30, exact: false, text: '快走 30 分钟' },
+    ])
+    expect(parseExercise('早上拉伸，晚上跑步半小时').map((s) => [s.start, s.minutes])).toEqual([
+      [7, 30],
+      [20, 30],
+    ])
+    expect(parseExercise('爬山')).toEqual([{ start: null, minutes: 0, exact: false, text: '爬山' }])
+    expect(parseExercise('没运动')).toEqual([])
+  })
+
+  it('counts bowel movements', () => {
+    expect(parseBowel('早上一次，下午一次，偏稀')).toBe(2)
+    expect(parseBowel('1 次')).toBe(1)
+    expect(parseBowel('两次')).toBe(2)
+    expect(parseBowel('没有')).toBe(0)
+    expect(parseBowel('无')).toBe(0)
+    expect(parseBowel('正常')).toBe(1)
+    expect(parseBowel('')).toBeNull()
   })
 })

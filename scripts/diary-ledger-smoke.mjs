@@ -1,4 +1,5 @@
-// Real Electron: My Space 财务 / 健康 pages (docs/design/my-space-finance-health-2026-11-25/mockup-v3.html).
+// Real Electron: My Space 财务 / 健康 pages (docs/design/my-space-finance-health-2026-11-25/mockup-v3.html,
+// mockup-v5.html for the sleep / exercise / bowel charts and the folded details).
 // Isolated home/profile and simulated diaries; nothing touches the real My Space.
 //   pnpm exec electron-vite build --outDir .cache/diary-build && node scripts/diary-ledger-smoke.mjs
 import assert from 'node:assert/strict'
@@ -30,7 +31,7 @@ await writeDiary(
   rel(d0),
   header({
     title: d0.iso,
-    body: '今日体重：没称\n昨日睡眠：12点睡的，7点醒的，又迷糊到8:10左右才起。\n昨日花销：记有喇叭 25 元，与 23 日晚记录是否为同一笔待确认。\nAI 剩余额度：codex还有13%',
+    body: '今日体重：没称\n昨日睡眠：12点睡的，7点醒的，又迷糊到8:10左右才起。\n昨日花销：记有喇叭 25 元，与 23 日晚记录是否为同一笔待确认。\nAI 剩余额度：codex还有13%\n今日大便：早上一次，下午一次',
   }),
 )
 await writeDiary(
@@ -54,9 +55,12 @@ try {
   const space = await firstUse(s, { importFrom: project })
   const bar = page.getByRole('group', { name: '项目功能' })
 
-  // 健康: diary rows, weight line, and a record of my own.
+  // 健康: details folded until asked, diary rows, weight line, and a record of my own.
   await bar.getByRole('button', { name: '健康', exact: true }).click()
   const health = page.getByLabel('健康', { exact: true }).and(page.locator('.diary-ledger'))
+  await health.getByRole('figure', { name: /体重/ }).waitFor()
+  assert.equal(await health.getByRole('table', { name: '明细' }).count(), 0)
+  await health.getByRole('button', { name: /展开最近一周/ }).click()
   await health.getByText('12点睡的，7点醒的', { exact: false }).waitFor()
   assert.equal(await health.getByText('正文里的不算').count(), 0)
   await health.getByRole('figure', { name: /体重/ }).locator('circle').nth(1).waitFor()
@@ -65,16 +69,46 @@ try {
   await health.getByRole('button', { name: '记一条' }).click()
   await health.getByRole('button', { name: '手记' }).waitFor()
   const healthFile = await readFile(join(space, '健康.md'), 'utf8')
-  assert(healthFile.includes(`| ${d0.iso} |  |  | 晚上跑步 5 公里 |  |`), healthFile)
+  assert(healthFile.includes(`| ${d0.iso} |  |  | 晚上跑步 5 公里 |  |  |`), healthFile)
   const plot = health.getByRole('figure', { name: /体重/ }).locator('svg')
   const box = await plot.boundingBox()
   await page.mouse.move(box.x + box.width - 20, box.y + 60)
   await health.getByRole('status').filter({ hasText: '70.6 kg' }).waitFor()
   await page.screenshot({ path: join(shots, 'health.png') })
 
+  // 睡眠: last night's bar from the diary's 昨日睡眠, with the lie-in after waking.
+  const sleep = health.getByRole('figure', { name: /睡眠/ })
+  await sleep.locator('rect.series-1:not(.estimate)').first().waitFor()
+  assert.equal(await sleep.locator('rect.series-1.estimate').count(), 1)
+  const night = await sleep.locator('rect.series-1:not(.estimate)').first().boundingBox()
+  await page.mouse.move(night.x + night.width / 2, night.y + night.height / 2)
+  await health
+    .getByRole('status')
+    .filter({ hasText: '0:00 睡 → 7:00 醒，睡了 7 小时，8:10 起' })
+    .waitFor()
+  // 运动: today's own record is placed at 晚上 as an estimate; 快走 30 分钟 has no time, a dot.
+  const exercise = health.getByRole('figure', { name: /运动/ })
+  await exercise.locator('rect.series-1.estimate').first().waitFor()
+  assert.equal(await exercise.locator('circle.dot').count(), 1)
+  const run = await exercise.locator('rect.series-1.estimate').first().boundingBox()
+  await page.mouse.move(run.x + run.width / 2, run.y + 1)
+  await health.getByRole('status').filter({ hasText: '约 20:00，时长没写' }).waitFor()
+  // 大便: today's cell reads 2 次 from 早上一次，下午一次.
+  const bowel = health.getByRole('figure', { name: /大便/ })
+  await bowel.getByRole('img', { name: `${d0.iso} 2 次` }).hover()
+  await health.getByRole('status').filter({ hasText: '2 次' }).waitFor()
+  await page.screenshot({ path: join(shots, 'health-bowel.png') })
+  assert.match(await bowel.locator('figcaption').innerText(), /记了 1 天/)
+  await sleep.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: join(shots, 'health-charts.png') })
+  // Folding back hides the details again.
+  await health.getByRole('button', { name: '收起' }).click()
+  assert.equal(await health.getByRole('table', { name: '明细' }).count(), 0)
+
   // 财务: bars from diary amounts, hover shows the day's text, a record of my own.
   await bar.getByRole('button', { name: '财务', exact: true }).click()
   const finance = page.locator('.diary-ledger[aria-label="财务"]')
+  await finance.getByRole('button', { name: /展开最近一周/ }).click()
   await finance.getByText('午饭 32，打车 46，晚上喇叭 25').waitFor()
   const chart = finance.getByRole('figure', { name: /花销/ })
   await chart.locator('path.series-1').nth(1).waitFor()
@@ -97,6 +131,7 @@ try {
   await bar.getByRole('button', { name: '健康', exact: true }).click()
   await bar.getByRole('button', { name: '财务', exact: true }).click()
   await finance.getByText('财务.md 有 1 行没读出来').waitFor()
+  await finance.getByRole('button', { name: /展开最近一周/ }).click()
 
   // A diary tag opens that diary on the 日记 page.
   await finance
