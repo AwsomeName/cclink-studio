@@ -86,6 +86,11 @@ const SOURCE = [
   '',
   '结论待定。',
   '',
+  '| 部件 | 记录 |',
+  '| --- | --- |',
+  // As an earlier version saved a cell holding text, an image and text (U+001F separators).
+  '| 外壳 | 喇叭集成\u001f![修角](doc.assets/b.png)\u001f光机外侧修角 |',
+  '',
 ].join('\n')
 await writeFile(join(workspace, 'doc.md'), SOURCE)
 const hashA = await sha(join(workspace, 'doc.assets', 'a.png'))
@@ -110,6 +115,7 @@ await writeFile(
 
 let app
 let page
+const pageErrors = []
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const disk = () => readFile(join(workspace, 'doc.md'), 'utf8')
 const editor = () => page.locator('.tiptap[contenteditable="true"]')
@@ -134,7 +140,10 @@ async function launch() {
   page.on('console', (message) => {
     if (message.type() === 'error') console.log('[renderer error]', message.text().slice(0, 300))
   })
-  page.on('pageerror', (error) => console.log('[page error]', String(error).slice(0, 300)))
+  page.on('pageerror', (error) => {
+    pageErrors.push(String(error).slice(0, 300))
+    console.log('[page error]', String(error).slice(0, 300))
+  })
   await page.waitForSelector('.main-window')
   const wizard = page.getByRole('dialog', { name: '设置我的空间' })
   if (await wizard.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -298,7 +307,32 @@ try {
     { chips, toast },
   )
 
-  // 6) Originals untouched.
+  // 6) Delete an image that shares a table cell with text (it used to throw on every edit).
+  const errorsBefore = pageErrors.length
+  const cellImage = page.locator('td .markdown-image-node img').nth(1)
+  await cellImage.scrollIntoViewIfNeeded()
+  await cellImage.click()
+  await page.keyboard.press('Backspace')
+  await sleep(400)
+  const goneInView = (await page.locator('td .markdown-image-node').count()) === 1
+  await page.keyboard.press('Meta+s')
+  await sleep(1200)
+  const afterDelete = await disk()
+  const row = afterDelete.split('\n').find((line) => line.includes('外壳')) ?? ''
+  await shot('6-cell-image-deleted')
+  record(
+    'cell-delete',
+    goneInView &&
+      pageErrors.length === errorsBefore &&
+      !row.includes('修角](') &&
+      row.includes('喇叭集成') &&
+      row.includes('光机外侧修角') &&
+      !afterDelete.includes('\u001f'),
+    '表格单元格中与文字同格的图片可删除，保存后不再写入 U+001F',
+    { row, newPageErrors: pageErrors.slice(errorsBefore) },
+  )
+
+  // 7) Originals untouched.
   const same =
     (await sha(join(workspace, 'doc.assets', 'a.png'))) === hashA &&
     (await sha(join(workspace, 'doc.assets', 'b.png'))) === hashB

@@ -108,6 +108,17 @@ const markdownStructureParser = new MarkdownIt({
   typographer: false,
 })
 
+/**
+ * Tiptap joins the blocks of one table cell (text, an image, more text) with U+001F when it writes
+ * the row, and nothing reads that character back: it lands on disk as an invisible letter and the
+ * next load puts the image block inside a paragraph, which breaks every later edit of that cell.
+ * Markdown table cells are one line, so the separator is a space, on the way out and when reading
+ * a file an earlier version already wrote that way.
+ */
+export function replaceTableCellLineSeparators(source: string): string {
+  return source.includes('\u001f') ? source.replace(/\u001f/g, ' ') : source
+}
+
 export function normalizeMarkdownSource(source: string): string {
   return source.replace(/\r\n?/g, '\n')
 }
@@ -334,7 +345,7 @@ interface MarkdownCriticalStructureSignature {
 
 function criticalStructureSignature(source: string): MarkdownCriticalStructureSignature {
   const sized = replaceMarkdownSizedImages(
-    normalizeMarkdownSource(stripCclinkMarkdownMetadata(source)),
+    replaceTableCellLineSeparators(normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))),
   )
   const normalized = sized.source
   const tokens = markdownStructureParser.parse(normalized, {})
@@ -675,7 +686,9 @@ const MATH_MARKDOWN_PUNCTUATION = new Set([...`!"#%&'()*+,-./:;<=>?@[]^_\`{|}~`]
 export function prepareMarkdownEditorInput(source: string): string {
   const normalized = normalizeEmptyTaskListItems(
     expandSameLineListHeadings(
-      normalizeMarkdownTaskListIndentation(normalizeMarkdownSource(source)),
+      normalizeMarkdownTaskListIndentation(
+        replaceTableCellLineSeparators(normalizeMarkdownSource(source)),
+      ),
     ),
   )
   const masked = maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized)))
@@ -863,7 +876,7 @@ export function normalizeMarkdownEditorOutput(source: string, referenceSource?: 
 
 function normalizeEditorOutputBody(source: string, referenceSource?: string): string {
   const normalized = restoreUntouchedMarkdownTables(
-    collapseSerializerBlankLines(normalizeMarkdownSource(source)),
+    collapseSerializerBlankLines(replaceTableCellLineSeparators(normalizeMarkdownSource(source))),
     referenceSource === undefined ? undefined : normalizeMarkdownSource(referenceSource),
   )
   // This pass only restores math and escapes literal dollars. Most documents need neither.

@@ -13,9 +13,54 @@ export function parseMarkdownEditorDocument(editor: Editor, source: string): JSO
     throw new Error('Markdown 解析器未初始化')
   }
 
-  return liftParagraphOnlyImages(
-    repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source))),
+  return splitTableCellImages(
+    liftParagraphOnlyImages(
+      repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source))),
+    ),
   )
+}
+
+const TABLE_CELL_TYPES = new Set(['tableCell', 'tableHeader'])
+
+function isBlankText(item: JSONContent): boolean {
+  return item.type === 'text' && !item.text?.trim()
+}
+
+/**
+ * A table cell holds one line of Markdown, so text and an image share one paragraph after
+ * parsing — invalid, because images are blocks, and any edit there (deleting the image included)
+ * throws. Inside table cells the paragraph becomes its text runs and image blocks; the table
+ * serializer writes them back onto one line.
+ */
+export function splitTableCellImages(document: JSONContent, inCell = false): JSONContent {
+  const cell = TABLE_CELL_TYPES.has(document.type ?? '')
+  if (!document.content) return { ...document }
+  const content = document.content.flatMap((child): JSONContent[] => {
+    const next = splitTableCellImages(child, cell || inCell)
+    if (!(cell && next.type === 'paragraph' && next.content?.some((i) => i.type === 'image')))
+      return [next]
+    const blocks: JSONContent[] = []
+    let run: JSONContent[] = []
+    const flush = (): void => {
+      while (run.length && isBlankText(run[0])) run.shift()
+      while (run.length && isBlankText(run[run.length - 1])) run.pop()
+      // The serializer puts one space between the blocks of a cell; edge spaces would double it.
+      if (run[0]?.type === 'text') run[0] = { ...run[0], text: run[0].text?.trimStart() }
+      const last = run.length - 1
+      if (run[last]?.type === 'text') run[last] = { ...run[last], text: run[last].text?.trimEnd() }
+      if (run.length) blocks.push({ ...next, content: run })
+      run = []
+    }
+    for (const item of next.content ?? []) {
+      if (item.type === 'image') {
+        flush()
+        blocks.push(item)
+      } else run.push(item)
+    }
+    flush()
+    return blocks.length ? blocks : [{ type: 'paragraph' }]
+  })
+  return { ...document, content }
 }
 
 /**
