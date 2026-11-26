@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>标签图标区分 · 设计图</title>
+<style>
+  :root {
+    --bg-page: #141414;
+    --bg-tab: #2d2d2d;
+    --bg-tab-active: #1e1e1e;
+    --bg-card: #1e1e1e;
+    --border: #3c3c3c;
+    --border-subtle: #333;
+    --text: #cccccc;
+    --text-strong: #f0f0f0;
+    --text-muted: #a8a8a8;
+    --accent: #3794d6;
+    --accent-line: #007acc;
+    --warn: #cca35b;
+    --ok: #4fb87a;
+    /* 身份色：8 个色相，同亮度区间，深色底上都 ≥ 4.5:1 承载白字 */
+    --id-teal: #2a8c8c;
+    --id-orange: #b8692e;
+    --id-purple: #7a5cc4;
+    --id-blue: #2f74c0;
+    --id-pink: #b0507e;
+    --id-green: #3f8a4c;
+    --id-red: #b24a4a;
+    --id-slate: #5c6b7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg-page);
+    color: var(--text);
+    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; display: flex; flex-direction: column; gap: 48px; }
+  h1 { margin: 0; font-size: 26px; color: var(--text-strong); font-weight: 600; }
+  h2 { margin: 0 0 6px; font-size: 18px; color: var(--text-strong); font-weight: 600; }
+  p { margin: 0; }
+  .lead { color: var(--text-muted); margin-top: 6px; max-width: 760px; }
+  .muted { color: var(--text-muted); }
+  .small { font-size: 12px; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ---------- 标签栏 ---------- */
+  .strip-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); color: var(--text-muted); }
+  .chip.new { border-color: #2f5f86; color: #8cc3ea; }
+  .strip {
+    display: flex; height: 38px; background: var(--bg-tab);
+    border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; overflow-y: hidden;
+  }
+  .tab {
+    position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    padding: 0 12px; height: 100%; border-right: 1px solid var(--border-subtle);
+    color: #969696; font-size: 13px; white-space: nowrap;
+  }
+  .tab.pinned { width: 44px; padding: 0; justify-content: center; gap: 1px; }
+  .tab.pinned.wide { width: auto; padding: 0 10px; gap: 6px; }
+  .tab.active { background: var(--bg-tab-active); color: #fff; }
+  .tab.active::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent-line); }
+  .tab svg.ic { width: 16px; height: 16px; flex: 0 0 auto; }
+  .tab .emoji { font-size: 15px; line-height: 1; filter: saturate(0.9); }
+  .tab .short { font-size: 12px; color: var(--text); }
+  .tab.active .short { color: #fff; }
+  .chev { width: 10px; height: 10px; opacity: 0.8; }
+
+  /* 身份图标 */
+  .glyph { position: relative; width: 18px; height: 18px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; }
+  .tile {
+    width: 16px; height: 16px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 10px; font-weight: 600; line-height: 1;
+  }
+  .tile.round { border-radius: 50%; }
+  .monitor-badge { position: relative; width: 22px; height: 20px; }
+  .monitor-badge svg { position: absolute; inset: 0; width: 22px; height: 20px; color: #969696; }
+  .tab.active .monitor-badge svg { color: #cccccc; }
+  .monitor-badge .scr {
+    position: absolute; left: 1px; top: 0; width: 20px; height: 14px; border-radius: 3px;
+    color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 2px var(--bg-tab); }
+  .tab.active .dot { box-shadow: 0 0 0 2px var(--bg-tab-active); }
+  .dot.tr { top: -2px; right: -3px; }
+  .dot.br { bottom: -2px; right: -3px; }
+  .dot.live { background: var(--ok); }
+  .dot.http { background: var(--warn); }
+  .acct {
+    position: absolute; right: -5px; bottom: -4px; width: 11px; height: 11px; border-radius: 50%;
+    font-size: 7px; font-weight: 700; color: #fff; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 1.5px var(--bg-tab);
+  }
+  .tab.active .acct { box-shadow: 0 0 0 1.5px var(--bg-tab-active); }
+  .favicon { width: 16px; height: 16px; border-radius: 3px; }
+
+  /* ---------- 卡片与表 ---------- */
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .card h3 { margin: 0; font-size: 15px; color: var(--text-strong); font-weight: 600; }
+  .card.rec { border-color: #2f5f86; }
+  .rec-tag { font-size: 11px; color: #8cc3ea; border: 1px solid #2f5f86; border-radius: 10px; padding: 0 7px; margin-left: 8px; font-weight: 400; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 400; color: var(--text-muted); font-size: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-card); }
+  td { padding: 12px 14px; border-bottom: 1px solid #262626; vertical-align: top; }
+  td.ex { white-space: nowrap; }
+  .table-box { border: 1px solid var(--border-subtle); border-radius: 10px; overflow-x: auto; }
+  .ex-row { display: flex; align-items: center; gap: 10px; }
+  .mini { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 32px; background: var(--bg-tab); border-radius: 6px; position: relative; }
+  .mini.active { background: var(--bg-tab-active); box-shadow: inset 0 2px 0 var(--accent-line); }
+  .tooltip {
+    background: #3a3a3c; border: 1px solid #4a4a4c; border-radius: 8px; padding: 10px 12px; font-size: 12px; line-height: 19px;
+    color: var(--text-strong); box-shadow: 0 6px 18px rgba(0,0,0,.45); max-width: 320px;
+  }
+  .tooltip .muted { color: #bdbdbd; }
+  .decisions { display: flex; flex-direction: column; gap: 14px; }
+  .decision { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+  .num { width: 24px; height: 24px; border-radius: 50%; background: #3a2f1c; color: #e0b96e; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .palette { display: flex; gap: 8px; flex-wrap: wrap; }
+  .swatch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .swatch span { width: 16px; height: 16px; border-radius: 4px; display: inline-block; }
+  ul { margin: 0; padding-left: 18px; }
+  li + li { margin-top: 4px; }
+  @media (max-width: 760px) {
+    .grid2 { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 20 20"><path d="M3 8.5 10 3l7 5.5V17H3z" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 22 20"><path d="M8 19h6M11 14v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><rect x="1.5" y="0.75" width="19" height="13" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M3 10h14M10 3c2 2.2 3 4.5 3 7s-1 4.8-3 7c-2-2.2-3-4.5-3-7s1-4.8 3-7z" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v4.2l2.8 1.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+    <symbol id="i-file" viewBox="0 0 20 20"><path d="M5 2.5h7l3.5 3.5v11.5H5z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5V6h3.5" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m6 8 2.5 2L6 12M10.5 12.5h4" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 10 10"><path d="m2 4 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  </defs>
+</svg>
+
+<main>
+  <header>
+    <h1>标签图标：一眼认出是哪一个</h1>
+    <p class="lead">现在同类型的标签用同一个图标（4 个一样的显示器、浏览器全是地球），固定后只剩图标，就分不清是哪台电脑、哪个网站。方案：图标表达「是什么资源」，类型只做底子；emoji 全部换成和工作台一致的线性图标。</p>
+  </header>
+
+  <section>
+    <div>
+      <div class="strip-label">现在 <span class="chip">你截图里的这一行</span></div>
+      <div class="strip" role="img" aria-label="现在的标签栏：首页、4 个相同的显示器 emoji、地球图标、每日起草">
+        <div class="tab pinned"><svg class="ic"><use href="#i-home"/></svg></div>
+        <div class="tab pinned"><span class="emoji">🖥</span></div>
+        <div class="tab pinned"><span class="emoji">🖥</span></div>
+        <div class="tab pinned"><span class="emoji">🖥</span></div>
+        <div class="tab pinned"><span class="emoji">🖥</span></div>
+        <div class="tab pinned active" style="color:#3794d6"><span class="glyph"><svg class="ic"><use href="#i-globe"/></svg><span class="dot tr http"></span></span><svg class="chev"><use href="#i-chev"/></svg></div>
+        <div class="tab"><span class="emoji">🕐</span>每日起草</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="strip-label">改后 <span class="chip new">推荐：方案 A，宽度不变</span></div>
+      <div class="strip" role="img" aria-label="改后的标签栏：每台电脑显示器里有简称和颜色，网页用字母块，定时任务用线性时钟图标">
+        <div class="tab pinned"><svg class="ic"><use href="#i-home"/></svg></div>
+        <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-teal)">家</span><span class="dot br live"></span></span></div>
+        <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-orange)">公</span></span></div>
+        <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-purple)">M1</span></span></div>
+        <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-blue)">测</span></span></div>
+        <div class="tab pinned active"><span class="glyph"><span class="tile" style="background:var(--id-pink)">A</span><span class="dot tr http"></span></span><svg class="chev"><use href="#i-chev"/></svg></div>
+        <div class="tab"><svg class="ic"><use href="#i-clock"/></svg>每日起草</div>
+      </div>
+      <p class="small muted" style="margin-top:8px">显示器屏幕里是设备简称，底色是这台设备固定的颜色；绿点表示已连接。网页没有自带图标（本地 127.0.0.1 服务）时，用网站名首字母 + 站点固定颜色。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>固定标签怎么放下「是哪一个」</h2>
+    <div class="grid2">
+      <div class="card rec">
+        <h3>方案 A · 图标里带身份<span class="rec-tag">推荐</span></h3>
+        <div class="strip" style="width:fit-content">
+          <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-teal)">家</span><span class="dot br live"></span></span></div>
+          <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-orange)">公</span></span></div>
+          <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-purple)">M1</span></span></div>
+          <div class="tab pinned active"><span class="glyph"><span class="tile" style="background:var(--id-pink)">A</span></span><svg class="chev"><use href="#i-chev"/></svg></div>
+        </div>
+        <ul class="small muted">
+          <li>每个固定标签仍是 44px，标签栏能放下的数量不变。</li>
+          <li>简称 1 个汉字或 2 个字母，颜色再帮一次忙；完整名字看悬停提示。</li>
+          <li>缺点：简称太短时两台设备可能同字，靠颜色区分，必要时右键改简称。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>方案 B · 图标 + 短名</h3>
+        <div class="strip" style="width:fit-content">
+          <div class="tab pinned wide"><svg class="ic" style="color:#4fb8b8"><use href="#i-monitor"/></svg><span class="short">家里 Mac</span></div>
+          <div class="tab pinned wide"><svg class="ic" style="color:#d9935a"><use href="#i-monitor"/></svg><span class="short">公司</span></div>
+          <div class="tab pinned wide"><svg class="ic" style="color:#a68ce0"><use href="#i-monitor"/></svg><span class="short">M1</span></div>
+          <div class="tab pinned wide active"><span class="tile" style="background:var(--id-pink)">A</span><span class="short">AIR 产品台</span></div>
+        </div>
+        <ul class="small muted">
+          <li>直接读名字，最容易认。</li>
+          <li>每个固定标签多占 40–80px，4 台电脑 + 几个网站就把普通标签挤进「更多」。</li>
+          <li>和「固定 = 只显示图标」的现有习惯不一样。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>每类标签用什么来区分</h2>
+    <div class="table-box">
+      <table>
+        <thead><tr><th style="width:110px">类型</th><th style="width:200px">样子</th><th>身份从哪来</th><th>拿不到时怎么办</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>远程桌面</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-teal)">家</span><span class="dot br live"></span></span></span>
+              <span class="mini"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-orange)">公</span></span></span>
+            </div></td>
+            <td>设备名的首字（中文 1 字 / 英文 2 字母），颜色由设备 ID 固定算出；可在右键菜单「改简称和颜色」。绿点 = 已连接。</td>
+            <td>还没选设备：空白显示器；只有地址：用 IP 末段，如「.23」。</td>
+          </tr>
+          <tr>
+            <td>网页</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini"><svg class="favicon" viewBox="0 0 16 16" aria-label="网站自带图标示意"><rect width="16" height="16" rx="3" fill="#e9eef5"/><path d="M4 11.5 8 4l4 7.5z" fill="#2f74c0"/></svg></span>
+              <span class="mini"><span class="tile" style="background:var(--id-pink)">A</span></span>
+            </div></td>
+            <td>优先用网站自带图标；没有时用网站名或域名首字母 + 按域名固定的颜色（本地端口不同算不同站点）。</td>
+            <td>空白新标签页：地球线性图标。</td>
+          </tr>
+          <tr>
+            <td>同站不同账号</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini"><span class="glyph"><svg class="favicon" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#e9eef5"/><path d="M4 11.5 8 4l4 7.5z" fill="#2f74c0"/></svg><span class="acct" style="background:var(--id-green)">张</span></span></span>
+              <span class="mini"><span class="glyph"><svg class="favicon" viewBox="0 0 16 16"><rect width="16" height="16" rx="3" fill="#e9eef5"/><path d="M4 11.5 8 4l4 7.5z" fill="#2f74c0"/></svg><span class="acct" style="background:var(--id-red)">李</span></span></span>
+            </div></td>
+            <td>已保存的网站账号：右下角圆形小徽标，显示账号名首字，颜色按账号固定。</td>
+            <td>未保存的账号草稿：不加徽标。</td>
+          </tr>
+          <tr>
+            <td>文档 / 文件</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini" style="color:#7fb0e0"><svg class="ic" style="width:16px;height:16px"><use href="#i-file"/></svg></span>
+              <span class="mini"><span class="tile" style="background:var(--id-slate);font-size:8px">MD</span></span>
+            </div></td>
+            <td>按扩展名换图标（Markdown、表格、PDF、代码…），普通标签本来就有文件名。</td>
+            <td>未知类型：通用文件图标。</td>
+          </tr>
+          <tr>
+            <td>Terminal</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini" style="color:#9fd39f"><svg class="ic" style="width:16px;height:16px"><use href="#i-terminal"/></svg></span>
+            </div></td>
+            <td>标签名显示工作目录末级（如「cclink-studio」）；固定后图标颜色按目录固定。</td>
+            <td>没有目录：默认颜色。</td>
+          </tr>
+          <tr>
+            <td>其余（定时任务、设置、会话…）</td>
+            <td class="ex"><div class="ex-row">
+              <span class="mini" style="color:#cccccc"><svg class="ic" style="width:16px;height:16px"><use href="#i-clock"/></svg></span>
+            </div></td>
+            <td>只把 emoji 换成同风格线性图标，靠标签名区分。</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>悬停提示补全名字</h2>
+    <div class="ex-row" style="align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div class="strip" style="width:fit-content">
+        <div class="tab pinned"><span class="monitor-badge"><svg><use href="#i-monitor"/></svg><span class="scr" style="background:var(--id-teal)">家</span><span class="dot br live"></span></span></div>
+      </div>
+      <div class="tooltip">
+        <div>远程桌面 · 家里 Mac mini</div>
+        <div class="muted">192.168.1.23 · 已连接</div>
+      </div>
+      <div class="strip" style="width:fit-content">
+        <div class="tab pinned active"><span class="glyph"><span class="tile" style="background:var(--id-pink)">A</span><span class="dot tr http"></span></span><svg class="chev"><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="tooltip">
+        <div>AIR 产品台 · 15.4 登录和授权</div>
+        <div class="muted">127.0.0.1:8765 · <span style="color:#e0b96e">HTTP 未加密</span></div>
+        <div class="muted">点击显示地址栏</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>身份色</h2>
+    <p class="muted small">8 个颜色，按名字或 ID 算出，同一台设备 / 同一个网站每次都是同一个颜色。白字在每个底色上都达到 4.5:1，亮度也拉开，色弱也能分。</p>
+    <div class="palette">
+      <div class="swatch"><span style="background:var(--id-teal)"></span>青</div>
+      <div class="swatch"><span style="background:var(--id-orange)"></span>橙</div>
+      <div class="swatch"><span style="background:var(--id-purple)"></span>紫</div>
+      <div class="swatch"><span style="background:var(--id-blue)"></span>蓝</div>
+      <div class="swatch"><span style="background:var(--id-pink)"></span>粉</div>
+      <div class="swatch"><span style="background:var(--id-green)"></span>绿</div>
+      <div class="swatch"><span style="background:var(--id-red)"></span>红</div>
+      <div class="swatch"><span style="background:var(--id-slate)"></span>灰蓝</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>需要你拍板</h2>
+    <div class="card decisions">
+      <div class="decision"><span class="num">1</span><div><div>固定标签用方案 A（图标里带简称）还是方案 B（图标 + 短名）？</div><div class="small muted">建议 A：宽度不变，完整名字看悬停。</div></div></div>
+      <div class="decision"><span class="num">2</span><div><div>远程桌面的简称和颜色允许手动改吗？</div><div class="small muted">建议允许，放在标签右键菜单；默认自动取设备名首字。</div></div></div>
+      <div class="decision"><span class="num">3</span><div><div>同站不同账号要不要加账号小徽标？</div><div class="small muted">建议要，只对已保存账号显示。</div></div></div>
+      <div class="decision"><span class="num">4</span><div><div>这次只改远程桌面和网页，还是连文档、Terminal、emoji 一起换？</div><div class="small muted">建议先做远程桌面 + 网页 + 换掉 emoji，文档按扩展名和 Terminal 着色放第二步。</div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>实现时要注意</h2>
+    <ul class="small muted">
+      <li>远程桌面的设备名现在只在连接中可读（会话视图），标签本身只存地址；要让断开后也能显示简称，需要把「简称 + 颜色」存进标签（随工作空间恢复），状态仍归标签存储一处所有。</li>
+      <li>网页字母块用页面已有的地址和标题算，不新增网络请求；网站自带图标加载失败时自动退回字母块。</li>
+      <li>账号徽标用已有的网站账号名称，不读取任何登录凭证。</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

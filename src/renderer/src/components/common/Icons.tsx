@@ -131,6 +131,22 @@ export function IconProjects(p: IconProps = defaults): React.ReactElement {
   )
 }
 
+/** 立体模型 / 硬件文件 */
+export function IconCube(p: IconProps = defaults): React.ReactElement {
+  return I(
+    p,
+    <>
+      <path
+        d="M8 1.75 13.75 5v6L8 14.25 2.25 11V5z"
+        stroke="currentColor"
+        strokeWidth="1.15"
+        strokeLinejoin="round"
+      />
+      <path d="M2.5 5.1 8 8.25l5.5-3.15M8 8.25v5.8" stroke="currentColor" strokeWidth="1.15" />
+    </>,
+  )
+}
+
 /** 搜索 */
 export function IconSearch(p: IconProps = defaults): React.ReactElement {
   return I(

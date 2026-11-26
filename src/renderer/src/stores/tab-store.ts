@@ -15,6 +15,7 @@ import { workspaceRefFromKey } from '../utils/conversation-workspace'
 import { workspaceRefKey, type WorkspaceRef } from '@shared/workspace-ref'
 import { isHtmlFilePath } from '../utils/html-files'
 import { isValidBrowserTabMode } from '../features/browser/browser-tab-mode'
+import { isTabIdentityColor, normalizeTabShortName } from '../features/tab-identity/tab-identity'
 
 /** 自增 ID 计数器 */
 let nextId = 1
@@ -30,6 +31,24 @@ function getExtension(filePath?: string): string | undefined {
   const fileName = filePath.split('/').pop() ?? ''
   const index = fileName.lastIndexOf('.')
   return index >= 0 ? fileName.slice(index).toLowerCase() : undefined
+}
+
+/** 恢复时只保留合法的远程桌面简称和颜色，非法旧值直接丢弃。 */
+export function normalizeDesktopIdentity(value: unknown): Tab['desktopIdentity'] | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const raw = value as { shortName?: unknown; color?: unknown }
+  const shortName = typeof raw.shortName === 'string' ? normalizeTabShortName(raw.shortName) : ''
+  const color = isTabIdentityColor(raw.color) ? raw.color : undefined
+  if (!shortName && !color) return undefined
+  return { ...(shortName ? { shortName } : {}), ...(color ? { color } : {}) }
+}
+
+function normalizeDesktopIdentityTab(tab: Tab): Tab {
+  if (tab.desktopIdentity === undefined) return tab
+  const desktopIdentity =
+    tab.type === 'remote-desktop' ? normalizeDesktopIdentity(tab.desktopIdentity) : undefined
+  const { desktopIdentity: _discarded, ...rest } = tab
+  return desktopIdentity ? { ...rest, desktopIdentity } : rest
 }
 
 function normalizeFileTab(tab: Tab): Tab {
@@ -131,6 +150,7 @@ function normalizeTabsSnapshot(value: unknown): Pick<TabState, 'tabs' | 'activeT
           Boolean(tab.articlePublishing.affairId)),
     )
     .map(normalizeFileTab)
+    .map(normalizeDesktopIdentityTab)
 
   const home =
     restored.find((tab) => tab.type === 'workspace-home') ??
@@ -289,6 +309,8 @@ interface TabState {
   setEditorPresentation: (id: string, mode: 'markdown' | 'source') => void
   setDesktopTarget: (id: string, title: string, target: NonNullable<Tab['desktopTarget']>) => void
   setDesktopView: (id: string, view: NonNullable<Tab['desktopView']>) => void
+  /** 改远程桌面标签的简称 / 颜色；传 null 恢复自动。 */
+  setDesktopIdentity: (id: string, identity: Tab['desktopIdentity'] | null) => void
   updateTabTitle: (id: string, title: string) => void
   /** 更新 Tab dirty 状态 */
   updateTabDirty: (id: string, dirty: boolean) => void
@@ -746,6 +768,15 @@ export const useTabStore = create<TabState>((set, get) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === id && tab.type === 'remote-desktop' ? { ...tab, desktopView: view } : tab,
       ),
+    })),
+  setDesktopIdentity: (id, identity) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) => {
+        if (tab.id !== id || tab.type !== 'remote-desktop') return tab
+        const desktopIdentity = identity ? normalizeDesktopIdentity(identity) : undefined
+        const { desktopIdentity: _previous, ...rest } = tab
+        return desktopIdentity ? { ...rest, desktopIdentity } : rest
+      }),
     })),
   setDesktopTarget: (id, title, target) =>
     set((state) => ({

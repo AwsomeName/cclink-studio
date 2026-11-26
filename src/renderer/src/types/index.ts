@@ -6,6 +6,7 @@ import type { WorkspaceRef } from '@shared/workspace-ref'
 import type { TerminalSessionSnapshot } from '@shared/ipc/terminal'
 import type { TerminalCommandConfirmationRequest, TerminalTabRef } from '@shared/terminal'
 import type { AgentSkillRef } from '@shared/agent-role'
+import type { TabIdentityColor } from '../features/tab-identity/tab-identity'
 
 export type { LocalIdentity } from '@shared/ipc/identity'
 
@@ -163,6 +164,8 @@ export interface WebAffairDraftState {
 export interface Tab {
   /** Remote desktop Tabs reference a Studio-local device; host/port are legacy, migrated on open. */
   desktopTarget?: { deviceId?: string; host?: string; port?: number }
+  /** 远程桌面标签上手动设的简称和颜色；缺省时按设备名和设备 ID 自动算。 */
+  desktopIdentity?: { shortName?: string; color?: TabIdentityColor }
   /** Remote desktop scaling, persisted per Tab. Fullscreen is session-only and never persisted. */
   desktopView?: 'fit' | 'original'
   /** Local presentation preference, persisted by the existing Tab owner. */

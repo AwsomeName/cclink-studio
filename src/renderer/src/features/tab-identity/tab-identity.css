@@ -1,0 +1,97 @@
+.tab-identity-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.tab-identity-desktop {
+  position: relative;
+  display: inline-flex;
+  width: 22px;
+  height: 20px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.tab.active .tab-identity-desktop {
+  color: var(--text-primary);
+}
+
+.tab .tab-identity-desktop svg,
+.tab.active .tab-identity-desktop svg {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  color: inherit;
+}
+
+.tab-identity-screen {
+  position: absolute;
+  left: 1px;
+  top: 0;
+  width: 20px;
+  height: 14px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.2px;
+}
+
+.tab-identity-live-dot {
+  position: absolute;
+  right: -3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-success, #4fb87a);
+  box-shadow: 0 0 0 2px var(--bg-tab);
+}
+
+.tab.active .tab-identity-live-dot {
+  box-shadow: 0 0 0 2px var(--bg-tab-active);
+}
+
+.tab-identity-browser {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.tab-identity-account {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  min-width: 11px;
+  height: 11px;
+  padding: 0 1px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px var(--bg-tab);
+}
+
+.tab.active .tab-identity-account {
+  box-shadow: 0 0 0 1.5px var(--bg-tab-active);
+}

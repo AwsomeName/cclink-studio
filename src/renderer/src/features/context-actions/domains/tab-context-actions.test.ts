@@ -265,3 +265,51 @@ it('does not offer file opening conversions for an unnamed draft', () => {
   )!
   expect(command.enabled?.({ source: 'palette' })).toBe(false)
 })
+
+describe('remote desktop identity actions', () => {
+  const command = (id: string) => {
+    const found = createTabContextCommands().find((item) => item.id === id)
+    if (!found) throw new Error(`missing ${id}`)
+    return found
+  }
+
+  it('sets a short name, cycles the color and resets to automatic', async () => {
+    useTabStore.getState().openTab({
+      type: 'remote-desktop',
+      title: '家里 Mac',
+      icon: '🖥',
+      forceNew: true,
+    })
+    const tab = useTabStore.getState().tabs[0]
+    const context = { target: { kind: 'tab', tabId: tab.id } } as never
+
+    await command('workbench.setDesktopShortName').action({
+      ...(context as object),
+      inputValue: ' 卧室电脑 ',
+    } as never)
+    expect(useTabStore.getState().tabs[0].desktopIdentity).toEqual({ shortName: '卧室' })
+
+    await command('workbench.cycleDesktopColor').action(context)
+    const color = useTabStore.getState().tabs[0].desktopIdentity?.color
+    expect(color).toBeDefined()
+    await command('workbench.cycleDesktopColor').action(context)
+    expect(useTabStore.getState().tabs[0].desktopIdentity?.color).not.toBe(color)
+
+    expect(command('workbench.resetDesktopIdentity').visible?.(context)).toBe(true)
+    await command('workbench.resetDesktopIdentity').action(context)
+    expect(useTabStore.getState().tabs[0].desktopIdentity).toBeUndefined()
+    expect(command('workbench.resetDesktopIdentity').visible?.(context)).toBe(false)
+  })
+
+  it('only shows the identity entries on remote desktop tabs', () => {
+    useTabStore.getState().openTab({ type: 'browser', title: '浏览器', icon: '🌐', forceNew: true })
+    const tab = useTabStore.getState().tabs[0]
+    const context = { target: { kind: 'tab', tabId: tab.id } } as never
+    expect(command('workbench.setDesktopShortName').visible?.(context)).toBe(false)
+    const ids = tabMenuContributions
+      .filter((item) => item.when?.(context) ?? true)
+      .map((item) => item.id)
+    expect(ids).not.toContain('tab.desktop-short-name')
+    expect(ids).not.toContain('tab.desktop-color')
+  })
+})

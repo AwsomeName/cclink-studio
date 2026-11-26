@@ -17,11 +17,9 @@ import {
   IconClose,
   IconFile,
   IconGlobe,
-  IconHome,
   IconTerminal,
   IconMonitor,
 } from '../common/Icons'
-import { BrowserFavicon } from '../common/BrowserFavicon'
 import { useBrowserStore } from '../../stores/browser-store'
 import { getBrowserDisplayTitle } from '../sidebar/browser-sidebar-view-model'
 import { isContextMenuKeyboardEvent } from '../../features/context-actions/context-menu-trigger'
@@ -29,21 +27,18 @@ import { hasExceededTabDragThreshold, shouldRequestTabDetach } from './tab-detac
 import { RemoteDesktopTabControls } from '../../features/remote-desktop/desktop-controls'
 import type { BrowserAddressBarMode } from '../../features/browser/browser-address-bar-store'
 import {
+  BrowserIdentityIcon,
+  DesktopIdentityIcon,
+  TabTypeIcon,
+  accountBadgeFor,
+  useWebAccountLabels,
+} from '../../features/tab-identity/TabIdentityIcon'
+import { browserMonogram, desktopIdentity } from '../../features/tab-identity/tab-identity'
+import { isBrowserNewTabUrl } from '../../features/browser/browser-new-tab'
+import {
   isDesktopSessionLive,
   useDesktopSessionStore,
 } from '../../features/remote-desktop/desktop-session-store'
-
-const TAB_ICONS: Record<string, string> = {
-  browser: '🌐',
-  editor: '📄',
-  settings: '⚙️',
-  preview: '👁️',
-  android: '📱',
-  model: '🧊',
-  conversation: '🤖',
-  'remote-conversation': '☁️',
-  terminal: '⌨️',
-}
 
 function getPointerDropTabId(clientX: number, clientY: number): string | null {
   if (clientX < 0 || clientY < 0 || clientX >= window.innerWidth || clientY >= window.innerHeight) {
@@ -55,13 +50,52 @@ function getPointerDropTabId(clientX: number, clientY: number): string | null {
   return tab?.dataset.homeTab ? null : (tab?.dataset.workbenchTabId ?? null)
 }
 
-function WorkbenchTabIcon({ tab }: { tab: Tab }): React.ReactElement {
-  const faviconUrl = useBrowserStore((state) =>
-    tab.type === 'browser' ? state.tabs[tab.id]?.faviconUrl : null,
+function WorkbenchTabIcon({
+  tab,
+  live,
+  accountLabels,
+}: {
+  tab: Tab
+  live: boolean
+  accountLabels: Record<string, string>
+}): React.ReactElement {
+  const browserTab = useBrowserStore((state) =>
+    tab.type === 'browser' ? state.tabs[tab.id] : undefined,
   )
-  if (tab.type === 'workspace-home') return <IconHome size={16} />
-  if (tab.type === 'browser') return <BrowserFavicon src={faviconUrl} size={14} />
-  return <>{tab.icon || TAB_ICONS[tab.type]}</>
+  if (tab.type === 'remote-desktop') {
+    return (
+      <DesktopIdentityIcon
+        live={live}
+        identity={desktopIdentity({
+          tabId: tab.id,
+          title: tab.title,
+          target: tab.desktopTarget,
+          override: tab.desktopIdentity,
+        })}
+      />
+    )
+  }
+  if (tab.type === 'browser') {
+    const url = browserTab?.url ?? tab.initialUrl
+    const accountId = tab.webResourceRef?.accountId
+    const accountLabel = accountId ? accountLabels[accountId] : undefined
+    return (
+      <BrowserIdentityIcon
+        faviconUrl={browserTab?.faviconUrl}
+        monogram={
+          isBrowserNewTabUrl(url)
+            ? null
+            : browserMonogram({
+                url,
+                pageTitle: browserTab?.title,
+                siteName: tab.webResourceRef ? tab.title : null,
+              })
+        }
+        account={accountId && accountLabel ? accountBadgeFor(accountId, accountLabel) : null}
+      />
+    )
+  }
+  return <TabTypeIcon tab={tab} />
 }
 
 interface TabBarProps {
@@ -137,6 +171,7 @@ export function TabBar({
   const [overflow, setOverflow] = useState({ before: false, after: false })
   const pinned = tabs.filter((tab) => tab.pinned)
   const desktopSessions = useDesktopSessionStore((state) => state.sessions)
+  const accountLabels = useWebAccountLabels(tabs)
   const isLiveDesktop = (tab: Tab): boolean =>
     tab.type === 'remote-desktop' && isDesktopSessionLive(desktopSessions[tab.id])
   const ordinary = tabs.filter((tab) => !tab.pinned)
@@ -418,7 +453,7 @@ export function TabBar({
         }}
       >
         <span className="tab-icon">
-          <WorkbenchTabIcon tab={tab} />
+          <WorkbenchTabIcon tab={tab} live={isLiveDesktop(tab)} accountLabels={accountLabels} />
           {addressBarHidden && addressBar?.plainHttp && (
             <span className="tab-address-http-dot" aria-hidden="true" />
           )}
@@ -465,7 +500,15 @@ export function TabBar({
             title={activeExtraPin ? `更多固定标签 · ${activeExtraPin.title}` : '更多固定标签'}
           >
             <span aria-hidden="true">
-              {activeExtraPin ? <WorkbenchTabIcon tab={activeExtraPin} /> : '•••'}
+              {activeExtraPin ? (
+                <WorkbenchTabIcon
+                  tab={activeExtraPin}
+                  live={isLiveDesktop(activeExtraPin)}
+                  accountLabels={accountLabels}
+                />
+              ) : (
+                '•••'
+              )}
             </span>
             <select
               aria-label="更多固定标签"

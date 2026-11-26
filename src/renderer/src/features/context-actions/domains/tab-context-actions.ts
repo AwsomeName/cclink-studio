@@ -17,6 +17,12 @@ import {
   isHtmlFilePath,
 } from '../../../utils/html-files'
 import type { CommandContext } from '../context-target'
+import {
+  desktopIdentity,
+  identityColorFor,
+  nextIdentityColor,
+  normalizeTabShortName,
+} from '../../tab-identity/tab-identity'
 import type { MenuContribution } from '../menu-contribution-registry'
 
 function tabIdFromContext(context?: CommandContext): string | null {
@@ -48,6 +54,23 @@ export async function renameWorkbenchTab(
     useAgentStore.getState().renameConversation(conversation.conversationId, title)
   }
   return true
+}
+
+function desktopTabFromContext(context?: CommandContext) {
+  const tabId = tabIdFromContext(context)
+  const tab = useTabStore.getState().tabs.find((item) => item.id === tabId)
+  return tab?.type === 'remote-desktop' ? tab : null
+}
+
+function currentDesktopIdentity(context?: CommandContext) {
+  const tab = desktopTabFromContext(context)
+  if (!tab) return null
+  return desktopIdentity({
+    tabId: tab.id,
+    title: tab.title,
+    target: tab.desktopTarget,
+    override: tab.desktopIdentity,
+  })
 }
 
 function renameTabLabel(context?: CommandContext): string {
@@ -172,6 +195,52 @@ export function createTabContextCommands(): Command[] {
               : '标签页已不存在或名称为空',
           )
         }
+      },
+    },
+    {
+      id: 'workbench.setDesktopShortName',
+      label: '改简称',
+      contextOnly: true,
+      category: 'Tab',
+      risk: 'local-write',
+      visible: (context) => Boolean(desktopTabFromContext(context)),
+      action: (context) => {
+        const tab = desktopTabFromContext(context)
+        if (!tab) throw new Error('远程桌面标签已不存在')
+        const shortName = normalizeTabShortName(context?.inputValue ?? '')
+        if (!shortName) throw new Error('简称不能为空')
+        useTabStore.getState().setDesktopIdentity(tab.id, { ...tab.desktopIdentity, shortName })
+      },
+    },
+    {
+      id: 'workbench.cycleDesktopColor',
+      label: '换一个颜色',
+      contextOnly: true,
+      category: 'Tab',
+      risk: 'local-write',
+      visible: (context) => Boolean(desktopTabFromContext(context)),
+      action: (context) => {
+        const tab = desktopTabFromContext(context)
+        if (!tab) throw new Error('远程桌面标签已不存在')
+        const current =
+          currentDesktopIdentity(context)?.color ??
+          identityColorFor(tab.desktopTarget?.deviceId ?? tab.desktopTarget?.host ?? tab.id)
+        useTabStore
+          .getState()
+          .setDesktopIdentity(tab.id, { ...tab.desktopIdentity, color: nextIdentityColor(current) })
+      },
+    },
+    {
+      id: 'workbench.resetDesktopIdentity',
+      label: '恢复默认简称和颜色',
+      contextOnly: true,
+      category: 'Tab',
+      risk: 'local-write',
+      visible: (context) => Boolean(desktopTabFromContext(context)?.desktopIdentity),
+      action: (context) => {
+        const tab = desktopTabFromContext(context)
+        if (!tab) throw new Error('远程桌面标签已不存在')
+        useTabStore.getState().setDesktopIdentity(tab.id, null)
       },
     },
     {
@@ -337,6 +406,37 @@ export const tabMenuContributions: MenuContribution[] = [
         return useTabStore.getState().tabs.find((item) => item.id === tabId)?.title ?? ''
       },
     },
+  },
+  {
+    id: 'tab.desktop-short-name',
+    targetKinds: ['tab'],
+    group: '20-edit',
+    order: 30,
+    commandId: 'workbench.setDesktopShortName',
+    icon: '✎',
+    when: (context) => Boolean(desktopTabFromContext(context)),
+    inlineInput: {
+      ariaLabel: '远程桌面简称（最多 2 个字）',
+      initialValue: (context) => currentDesktopIdentity(context)?.text ?? '',
+    },
+  },
+  {
+    id: 'tab.desktop-color',
+    targetKinds: ['tab'],
+    group: '20-edit',
+    order: 31,
+    commandId: 'workbench.cycleDesktopColor',
+    icon: '◐',
+    when: (context) => Boolean(desktopTabFromContext(context)),
+  },
+  {
+    id: 'tab.desktop-identity-reset',
+    targetKinds: ['tab'],
+    group: '20-edit',
+    order: 32,
+    commandId: 'workbench.resetDesktopIdentity',
+    icon: '↺',
+    when: (context) => Boolean(desktopTabFromContext(context)?.desktopIdentity),
   },
   {
     id: 'tab.duplicate',
