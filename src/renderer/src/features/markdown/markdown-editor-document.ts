@@ -13,7 +13,31 @@ export function parseMarkdownEditorDocument(editor: Editor, source: string): JSO
     throw new Error('Markdown 解析器未初始化')
   }
 
-  return repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source)))
+  return liftParagraphOnlyImages(
+    repairEmptyMarkdownListItems(editor.markdown.parse(prepareMarkdownEditorInput(source))),
+  )
+}
+
+/**
+ * Images are block nodes, but an image alone in a table cell (or alone on its line) is parsed
+ * into a paragraph. That paragraph is invalid content, so any later change to the image, such as
+ * a width, throws. A paragraph that holds nothing but images becomes those image blocks; mixed
+ * text-and-image paragraphs are left as parsed.
+ */
+export function liftParagraphOnlyImages(document: JSONContent): JSONContent {
+  if (!document.content) return { ...document }
+  const content = document.content.flatMap((child): JSONContent[] => {
+    const lifted = liftParagraphOnlyImages(child)
+    if (lifted.type !== 'paragraph' || !lifted.content?.length) return [lifted]
+    const images = lifted.content.filter((item) => item.type === 'image')
+    const onlyImages =
+      images.length > 0 &&
+      lifted.content.every(
+        (item) => item.type === 'image' || (item.type === 'text' && !item.text?.trim()),
+      )
+    return onlyImages ? images : [lifted]
+  })
+  return { ...document, content }
 }
 
 export function repairEmptyMarkdownListItems(document: JSONContent): JSONContent {

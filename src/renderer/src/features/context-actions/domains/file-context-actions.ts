@@ -13,6 +13,11 @@ import {
 import type { CommandContext, ContextTarget } from '../context-target'
 import { confirmDiaryPathChange } from '../../workspace-open/diary-files'
 import type { MenuContribution } from '../menu-contribution-registry'
+import { isMarkdownDocumentPath } from '@shared/markdown-document'
+import {
+  attachMarkdownImages,
+  describeMarkdownImageAttach,
+} from '../../agent-conversations/markdown-image-attachments'
 
 type FileTarget = Extract<ContextTarget, { kind: 'file' }>
 type TabTarget = Extract<ContextTarget, { kind: 'tab' }>
@@ -192,7 +197,7 @@ export function createFileContextCommands(): Command[] {
       label: '发送到当前会话',
       contextOnly: true,
       category: '文件',
-      action: (context) => {
+      action: async (context) => {
         const target = requireFileTarget(context)
         const kind = target.fileType === 'directory' ? 'folder' : 'file'
         const resource: AgentMountedResource = {
@@ -203,8 +208,27 @@ export function createFileContextCommands(): Command[] {
           ref: { type: kind, path: target.path },
         }
         const agentStore = useAgentStore.getState()
-        agentStore.addMountedResource(resource, agentStore.activeConversationId)
-        useToastStore.getState().show('已发送到当前会话资源栏', 'success')
+        const conversationId = agentStore.activeConversationId
+        agentStore.addMountedResource(resource, conversationId)
+        if (kind !== 'file' || !isMarkdownDocumentPath(target.path)) {
+          useToastStore.getState().show('已发送到当前会话资源栏', 'success')
+          return
+        }
+        // A Markdown file's local pictures go along as images (first ones within the limit).
+        const file = await window.cclinkStudio.fs.readFile(target.path)
+        const images =
+          file.encoding === 'utf-8'
+            ? await attachMarkdownImages({
+                conversationId,
+                markdown: file.content,
+                documentPath: target.path,
+                workspaceRoot: target.workspaceKey,
+              })
+            : null
+        const extra = images ? describeMarkdownImageAttach(images) : ''
+        useToastStore
+          .getState()
+          .show(extra ? `已发送到当前会话资源栏，${extra}` : '已发送到当前会话资源栏', 'success')
       },
     },
     {

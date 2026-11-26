@@ -21,6 +21,11 @@ import { getEditorContextSurface } from '../editor-context-surface'
 import type { MenuContribution } from '../menu-contribution-registry'
 import type { MarkdownTableTarget } from '../../markdown/markdown-table-ops'
 import { MARKDOWN_TABLE_COMMANDS } from './markdown-table-commands'
+import { isMarkdownDocumentPath } from '@shared/markdown-document'
+import {
+  attachMarkdownImages,
+  describeMarkdownImageAttach,
+} from '../../agent-conversations/markdown-image-attachments'
 
 type EditorTarget = Extract<ContextTarget, { kind: 'editor' | 'markdown-selection' }>
 
@@ -119,7 +124,18 @@ async function mountSelection(context?: CommandContext): Promise<void> {
   }
   useAgentStore.getState().addMountedResource(resource, conversationId)
   useUIStore.getState().setAgentPanelMode('right', 'user')
-  useToastStore.getState().show('已添加到会话', 'success')
+  // Pictures in the selection go along as images, not just as paths in the text.
+  const images =
+    target.filePath && isMarkdownDocumentPath(target.filePath)
+      ? await attachMarkdownImages({
+          conversationId,
+          markdown: range.sourceSnapshot,
+          documentPath: target.filePath,
+          workspaceRoot: target.workspaceKey,
+        })
+      : null
+  const extra = images ? describeMarkdownImageAttach(images) : ''
+  useToastStore.getState().show(extra ? `已添加到会话，${extra}` : '已添加到会话', 'success')
   requestAnimationFrame(focusAgentComposer)
 }
 

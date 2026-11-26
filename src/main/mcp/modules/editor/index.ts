@@ -55,7 +55,7 @@ const EDITOR_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'editor_write',
     description:
-      '写入完整 Markdown 文档。必须指定 filePath，内容持久化到磁盘并自动创建父目录。若用户正在编辑器中修改该文件且尚未保存，会拒绝写入并返回 EDITOR_SESSION_DIRTY，不覆盖任何一方。',
+      '写入完整 Markdown 文档。必须指定 filePath，内容持久化到磁盘并自动创建父目录。若用户正在编辑器中修改该文件且尚未保存，会拒绝写入并返回 EDITOR_SESSION_DIRTY，不覆盖任何一方。图片显示宽度只能写成 <img src="路径" alt="说明" width="像素">；其他原始 HTML 会让文档只能按源码编辑。',
     inputSchema: {
       type: 'object',
       properties: {

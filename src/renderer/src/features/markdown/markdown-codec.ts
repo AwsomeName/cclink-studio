@@ -1,4 +1,5 @@
 import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
+import { replaceMarkdownSizedImages } from '@shared/markdown-sized-image'
 import MarkdownIt from 'markdown-it'
 import { marked } from 'marked'
 
@@ -59,6 +60,7 @@ export type MarkdownCriticalStructureName =
   | 'orderedStarts'
   | 'taskItems'
   | 'images'
+  | 'imageWidths'
   | 'links'
   | 'mathExpressions'
   | 'textContent'
@@ -203,7 +205,11 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
   const normalized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))
   const blocks = scanMarkdownBlocks(normalized)
   const diagnostics: MarkdownDiagnostic[] = []
-  const proseSource = maskInlineCode(maskFencedBlocks(normalized, blocks))
+  // The strict `<img src alt width>` form is a supported image, not raw HTML. Only the syntax
+  // checks see it rewritten; the round-trip comparison below keeps the widths.
+  const proseSource = replaceMarkdownSizedImages(
+    maskInlineCode(maskFencedBlocks(normalized, blocks)),
+  ).source
 
   const frontmatter = blocks.find((block) => block.kind === 'frontmatter')
   if (frontmatter) {
@@ -318,13 +324,17 @@ interface MarkdownCriticalStructureSignature {
   orderedStarts: number[]
   taskItems: string[]
   images: Array<{ source: string; alt: string; title: string }>
+  imageWidths: number[]
   links: Array<{ destination: string; title: string }>
   mathExpressions: Array<{ display: boolean; content: string }>
   textContent: string[]
 }
 
 function criticalStructureSignature(source: string): MarkdownCriticalStructureSignature {
-  const normalized = normalizeMarkdownSource(stripCclinkMarkdownMetadata(source))
+  const sized = replaceMarkdownSizedImages(
+    normalizeMarkdownSource(stripCclinkMarkdownMetadata(source)),
+  )
+  const normalized = sized.source
   const tokens = markdownStructureParser.parse(normalized, {})
   const lines = normalized.split('\n')
   const headings: number[] = []
@@ -427,6 +437,7 @@ function criticalStructureSignature(source: string): MarkdownCriticalStructureSi
       .map(markdownTaskItemState)
       .filter((value): value is string => value !== undefined),
     images,
+    imageWidths: sized.widths,
     links,
     mathExpressions: extractMathExpressions(
       maskInlineCode(maskFencedBlocks(normalized, scanMarkdownBlocks(normalized))),
@@ -523,6 +534,7 @@ export function inspectMarkdownRoundTrip(
     orderedStarts: '有序列表起始序号',
     taskItems: '任务列表',
     images: '图片',
+    imageWidths: '图片宽度',
     links: '链接',
     mathExpressions: '数学公式',
     textContent: '正文内容',
