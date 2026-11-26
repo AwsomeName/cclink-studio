@@ -1049,8 +1049,8 @@ async function main() {
       'remaining empty ordered items were lost',
     )
     assert(
-      saved.split('\n').filter((line) => /^- \[ \] $/.test(line)).length === 3,
-      'empty task items were not preserved on disk',
+      saved.split('\n').filter((line) => line === '- [ ]').length === 3,
+      'untouched empty task items did not retain their original spelling on disk',
     )
 
     const tab = page.locator('.tab', { hasText: 'empty-lists.md' }).first()

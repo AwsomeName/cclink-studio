@@ -760,4 +760,12 @@ describe('untouched blocks keep their original spelling', () => {
     const before = '甲段。\n\n乙段。\n'
     expect(restoreUntouchedMarkdownBlocks('乙段。\n\n甲段。\n', before)).toBe('乙段。\n\n甲段。\n')
   })
+
+  it('saves whitespace edits even when the unedited paragraph has the same rendered appearance', () => {
+    const plain = 'quote shortcut\n'
+    const indented = '  quote shortcut\n'
+    expect(normalizeMarkdownEditorOutput(indented, plain)).toBe(indented)
+    expect(normalizeMarkdownEditorOutput(plain, indented)).toBe(plain)
+    expect(normalizeMarkdownEditorOutput('quote  shortcut\n', plain)).toBe('quote  shortcut\n')
+  })
 })

@@ -950,11 +950,14 @@ function topLevelMarkdownBlocks(source: string): Array<{ startLine: number; endL
 const blockRenderCache = new Map<string, string>()
 const BLOCK_RENDER_CACHE_LIMIT = 4000
 
-/** What a block shows: its HTML with whitespace collapsed (memoized; runs on every edit). */
+/** Compare rendered markup without discarding edits to whitespace (memoized on every edit). */
 function renderedBlockKey(text: string): string {
   const cached = blockRenderCache.get(text)
   if (cached !== undefined) return cached
-  const key = markdownStructureParser.render(text).replace(/\s+/g, ' ').trim()
+  const html = markdownStructureParser.render(text)
+  // Markdown ignores up to three leading spaces in a paragraph, but Tab edits them in Studio.
+  const indent = html.startsWith('<p>') ? (text.match(/^[ \t]+/)?.[0] ?? '') : ''
+  const key = indent + html
   if (blockRenderCache.size >= BLOCK_RENDER_CACHE_LIMIT) blockRenderCache.clear()
   blockRenderCache.set(text, key)
   return key
