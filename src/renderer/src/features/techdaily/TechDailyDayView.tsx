@@ -179,13 +179,21 @@ export function TechDailyDayView({
   )
   const runbar = (
     <span className="techdaily-runbar">
-      {run && (
-        <small className={`techdaily-run-status ${run.status}`}>
-          {run.status === 'completed' ? `${time(run.endedAt)} 生成` : RUN_STATUS[run.status]}
-        </small>
+      {/* The editor toolbar is narrow: a finished run's time lives in the tooltip. */}
+      {run && run.status !== 'completed' && (
+        <small className={`techdaily-run-status ${run.status}`}>{RUN_STATUS[run.status]}</small>
       )}
       {run && (
-        <button type="button" aria-pressed={showSteps} onClick={() => setShowSteps((v) => !v)}>
+        <button
+          type="button"
+          aria-pressed={showSteps}
+          title={
+            run.status === 'completed'
+              ? `${time(run.endedAt)} 生成 · run ${run.runId}`
+              : RUN_STATUS[run.status]
+          }
+          onClick={() => setShowSteps((v) => !v)}
+        >
           执行详情
         </button>
       )}
