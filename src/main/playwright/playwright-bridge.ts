@@ -157,6 +157,8 @@ export class PlaywrightBridge {
   private downloadIds = new WeakMap<Download, string>()
   /** 已安装监听器的页面，避免 claim/register 重复绑定 */
   private listenedPages = new WeakSet<Page>()
+  /** 已安装对话框守卫的页面（含工作台 renderer 等非自动化页面）。 */
+  private dialogGuardedPages = new WeakSet<Page>()
   /** 已安装 popup 监听器的 CDP Context；账号 Profile 可能在运行时增加多个 Context。 */
   private observedContexts = new WeakSet<BrowserContext>()
   /** Electron WebContents → 逻辑 Tab；Session 下载事件以此确定 owner。 */
@@ -360,8 +362,28 @@ export class PlaywrightBridge {
    */
   private refreshContexts(generation = this.connectionGeneration): BrowserContext[] {
     const contexts = this.browser?.contexts() ?? (this.context ? [this.context] : [])
-    for (const context of contexts) this.observeContext(context, generation)
+    for (const context of contexts) {
+      this.observeContext(context, generation)
+      for (const page of context.pages()) this.guardPageDialogs(page)
+    }
     return contexts
+  }
+
+  /**
+   * Playwright 会自动取消（dismiss）任何没有 'dialog' 监听的 Page 上的对话框。通过 CDP 连接时，
+   * 工作台 renderer 本身也是一个 Page，于是工作台里的 confirm() 不显示就直接返回 false。
+   * 给每个页面挂一个只记日志的监听，让未被自动化接管的对话框交给 Electron 原生弹窗处理；
+   * 已认领的浏览器页面仍由 setupPageListeners 的自动处理策略决定。
+   */
+  private guardPageDialogs(page: Page): void {
+    if (this.dialogGuardedPages.has(page)) return
+    this.dialogGuardedPages.add(page)
+    page.on('dialog', (dialog: Dialog) => {
+      if (this.listenedPages.has(page) && this.dialogAutoAction) return
+      console.log(
+        `[PlaywrightBridge] 对话框交给原生弹窗处理: type=${dialog.type()}, page=${describePageOrigin(page.url())}`,
+      )
+    })
   }
 
   private observeContext(context: BrowserContext, generation: number): void {
@@ -369,6 +391,7 @@ export class PlaywrightBridge {
     this.observedContexts.add(context)
     const handler = async (newPage: Page): Promise<void> => {
       if (generation !== this.connectionGeneration || this.stopping) return
+      this.guardPageDialogs(newPage)
       for (const existing of this.pages.values()) {
         if (existing === newPage) {
           console.log(`[CCLink Studio] 新页面已在注册表，跳过自动注册: url=${newPage.url()}`)
@@ -1264,4 +1287,14 @@ function detectPageChallenges(text: string): string[] {
     ],
   ]
   return signals.flatMap(([label, pattern]) => (pattern.test(normalized) ? [label] : []))
+}
+
+/** 诊断只记录页面来源，不记录路径、查询参数或对话框正文。 */
+function describePageOrigin(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'file:' ? 'file:' : parsed.origin
+  } catch {
+    return 'unknown'
+  }
 }

@@ -373,6 +373,32 @@ describe('PlaywrightBridge diagnostics', () => {
     await bridge.disconnect()
   })
 
+  it('leaves workbench dialogs to the native prompt instead of auto-dismissing them', async () => {
+    const workbench = eventPage('http://localhost:5173/', 'CCLink Studio')
+    const dialogListeners: Array<(value: unknown) => void> = []
+    const originalOn = workbench.on.bind(workbench)
+    ;(workbench as unknown as { on: (event: string, listener: never) => void }).on = (
+      event,
+      listener,
+    ) => {
+      if (event === 'dialog') dialogListeners.push(listener)
+      originalOn(event as never, listener)
+    }
+    vi.spyOn(chromium, 'connectOverCDP').mockResolvedValue(
+      fakeBrowser([fakeContext([workbench])]) as unknown as Browser,
+    )
+    const bridge = new PlaywrightBridge()
+    await bridge.connect(9555)
+
+    // Playwright only auto-dismisses dialogs on pages without a 'dialog' listener.
+    expect(dialogListeners).toHaveLength(1)
+    const dialog = { type: () => 'confirm', accept: vi.fn(), dismiss: vi.fn() }
+    dialogListeners[0](dialog)
+    expect(dialog.accept).not.toHaveBeenCalled()
+    expect(dialog.dismiss).not.toHaveBeenCalled()
+    await bridge.disconnect()
+  })
+
   it('ignores a late close callback from an older generation', () => {
     const bridge = new PlaywrightBridge()
     const oldPage = eventPage('https://old.example/', 'Old')

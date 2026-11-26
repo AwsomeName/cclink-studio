@@ -494,6 +494,9 @@ export class ScheduledTaskService {
         this.activationFile.activations[activationKey(context.workspaceId, definition.id)] =
           activation
         await this.writeActivationFile()
+        console.log(
+          `[ScheduledTaskService] 本机启用状态已写入: task=${shortId(definition.id)}, source=${definition.source}, enabled=${activation.enabled}, revision=${definition.revision}, digest=${shortDigest(definition.executionDigest)}`,
+        )
         await this.catchUpTodayDraft(definition, context.workspaceId, activation)
         this.armScheduler()
         this.notifyChanged(context.workspacePath)
@@ -1642,6 +1645,7 @@ export class ScheduledTaskService {
           activation.nextRunAt !== null ||
           activation.suspensionReason !== 'definition-changed'
         ) {
+          logDefinitionChangeSuspension('读取定义', activation, definition)
           activation.enabled = false
           activation.nextRunAt = null
           activation.suspensionReason = 'definition-changed'
@@ -1711,6 +1715,7 @@ export class ScheduledTaskService {
     activation: ScheduledTaskActivation,
     definition: ScheduledTaskDefinition,
   ): Promise<void> {
+    logDefinitionChangeSuspension('调度/运行前复验', activation, definition)
     activation.enabled = false
     activation.nextRunAt = null
     activation.suspensionReason = 'definition-changed'
@@ -1971,6 +1976,25 @@ function parseActivationFile(value: unknown): { file: ActivationFile; migrated: 
     activations[key] = activation
   }
   return { file: { schemaVersion: 2, activations }, migrated }
+}
+
+function shortId(id: string): string {
+  return id.slice(0, 8)
+}
+
+function shortDigest(digest: string | null): string {
+  return digest ? digest.slice(0, 10) : '无'
+}
+
+/** Why this device paused a shared task: ids and digest prefixes only, never task content. */
+function logDefinitionChangeSuspension(
+  stage: string,
+  activation: ScheduledTaskActivation,
+  definition: ScheduledTaskDefinition,
+): void {
+  console.warn(
+    `[ScheduledTaskService] 共享任务本机暂停(definition-changed): stage=${stage}, task=${shortId(definition.id)}, wasEnabled=${activation.enabled}, previousReason=${activation.suspensionReason ?? '无'}, confirmedDigest=${shortDigest(activation.confirmedExecutionDigest)}, currentDigest=${shortDigest(definition.executionDigest)}, revision=${definition.revision}`,
+  )
 }
 
 function isActivationRunnable(

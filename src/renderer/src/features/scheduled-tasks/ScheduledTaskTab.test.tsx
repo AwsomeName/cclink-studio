@@ -6,10 +6,12 @@ import type {
   ScheduledTaskSnapshot,
 } from '@shared/scheduled-task/scheduled-task-types'
 import {
+  confirmScheduledTaskAction,
   draftSaveKeepsEnabled,
   ScheduledTaskRunActions,
   SharedTaskActivationNote,
 } from './ScheduledTaskTab'
+import { getRendererDiagnosticLogSnapshot } from '../diagnostics/renderer-diagnostic-log'
 
 describe('ScheduledTaskTab', () => {
   beforeEach(() => {
@@ -36,6 +38,23 @@ describe('ScheduledTaskTab', () => {
     )
 
     expect(markup).not.toContain('>复制日志</button>')
+  })
+
+  it('flags a confirm that returned cancel before anyone could read it', () => {
+    const times = [0, 12]
+    const confirmed = confirmScheduledTaskAction(
+      'enable-on-device',
+      '12345678-aaaa',
+      '在此设备启用？',
+      () => false,
+      () => times.shift() ?? 0,
+    )
+    expect(confirmed).toBe(false)
+    const entry = findLastLog('[ScheduledTask]')
+    expect(entry).toMatchObject({ level: 'warn' })
+    expect(entry?.message).toContain('疑似未显示')
+    expect(entry?.message).toContain('12345678')
+    expect(entry?.message).not.toContain('在此设备启用？')
   })
 
   it('keeps an enabled shared task enabled on plain save', () => {
@@ -103,4 +122,10 @@ function createRun(): ScheduledTaskRun {
       recovery: '检查 Agent 配置与网络后重试',
     },
   }
+}
+
+function findLastLog(prefix: string) {
+  return getRendererDiagnosticLogSnapshot()
+    .entries.filter((entry) => entry.message.includes(prefix))
+    .at(-1)
 }

@@ -24,6 +24,7 @@ import {
   collectScheduledTaskRunDiagnosticReport,
   shouldOfferScheduledTaskRunLog,
 } from './scheduled-task-run-diagnostic-report'
+import { recordRendererDiagnosticLog } from '../diagnostics/renderer-diagnostic-log'
 import './scheduled-tasks.css'
 
 interface TaskForm {
@@ -206,7 +207,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
           form.definitionSource === 'shared' &&
           enable &&
           !task?.activation.enabled &&
-          !window.confirm('在此设备启用这个任务？其他设备需各自启用。')
+          !confirmScheduledTaskAction(
+            'save-and-enable',
+            task?.definition.id,
+            '在此设备启用这个任务？其他设备需各自启用。',
+          )
         ) {
           return false
         }
@@ -294,7 +299,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
     if (
       task.definition.source === 'shared' &&
       !task.activation.enabled &&
-      !window.confirm(`在此设备启用“${task.definition.title}”？`)
+      !confirmScheduledTaskAction(
+        'enable-on-device',
+        task.definition.id,
+        `在此设备启用“${task.definition.title}”？`,
+      )
     ) {
       return
     }
@@ -328,7 +337,13 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
   const handleDelete = async (): Promise<void> => {
     if (!task) return
     const sharedWarning = task.definition.source === 'shared' ? '同步后其他设备也会删除。' : ''
-    if (!window.confirm(`删除“${task.definition.title}”？${sharedWarning}运行历史会保留。`)) {
+    if (
+      !confirmScheduledTaskAction(
+        'delete',
+        task.definition.id,
+        `删除“${task.definition.title}”？${sharedWarning}运行历史会保留。`,
+      )
+    ) {
       return
     }
     setSaving(true)
@@ -545,7 +560,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 onChange={() => {
                   if (
                     task?.definition.source !== 'shared' ||
-                    window.confirm('改为仅本机后，其他设备同步后将不再有这个任务。继续吗？')
+                    confirmScheduledTaskAction(
+                      'switch-to-local',
+                      task?.definition.id,
+                      '改为仅本机后，其他设备同步后将不再有这个任务。继续吗？',
+                    )
                   ) {
                     setForm({ ...form, definitionSource: 'local' })
                   }
@@ -562,7 +581,11 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
                 checked={form.definitionSource === 'shared'}
                 onChange={() => {
                   if (
-                    window.confirm('任务内容会随项目同步到其他设备，请勿写入密码或 Token。继续吗？')
+                    confirmScheduledTaskAction(
+                      'switch-to-shared',
+                      task?.definition.id,
+                      '任务内容会随项目同步到其他设备，请勿写入密码或 Token。继续吗？',
+                    )
                   ) {
                     setForm({ ...form, definitionSource: 'shared' })
                   }
@@ -762,6 +785,32 @@ export function ScheduledTaskTab({ tab }: { tab: Tab }): React.ReactElement {
       </main>
     </div>
   )
+}
+
+/** A person needs well over half a second to read and answer a native confirm dialog. */
+const UNSEEN_CONFIRM_THRESHOLD_MS = 500
+
+/**
+ * Runs a native confirm and records the outcome to the framework log, so a dialog that something
+ * dismissed before it was ever shown (e.g. CDP automation) is visible in diagnostics instead of
+ * looking like a button that does nothing. Logs the action and task id prefix only, never content.
+ */
+export function confirmScheduledTaskAction(
+  action: string,
+  taskId: string | undefined,
+  message: string,
+  confirm: (message: string) => boolean = (text) => window.confirm(text),
+  now: () => number = () => performance.now(),
+): boolean {
+  const startedAt = now()
+  const confirmed = confirm(message)
+  const elapsedMs = Math.round(now() - startedAt)
+  const suspectedUnseen = !confirmed && elapsedMs < UNSEEN_CONFIRM_THRESHOLD_MS
+  recordRendererDiagnosticLog(suspectedUnseen ? 'warn' : 'info', [
+    suspectedUnseen ? '[ScheduledTask] 确认框疑似未显示就被取消' : '[ScheduledTask] 确认框已作答',
+    { action, taskId: taskId?.slice(0, 8) ?? null, confirmed, elapsedMs },
+  ])
+  return confirmed
 }
 
 /**
