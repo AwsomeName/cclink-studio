@@ -44,8 +44,14 @@ export function rowMeta(a: Affair, active: boolean): string {
     return a.directory.reportFile + ' · ' + (r.report?.items.length ?? 0) + ' 条引文已核对'
   const runs = workerRuns(a).length
   if (!a.confirmed) return r.plan ? '确认后 Owner 才会派工' : 'Owner 正在整理约定'
-  if (groupOf(a, active) !== 'active') return runs ? '执行会话 A 已运行 ' + runs + ' 次' : ''
-  return runs ? '执行会话 A · 第 ' + runs + ' 次运行' : '尚未派工'
+  const sessions = workersOf(r).length
+  if (groupOf(a, active) !== 'active')
+    return runs
+      ? (sessions > 1 ? sessions + ' 个执行会话' : '执行会话') + '已运行 ' + runs + ' 次'
+      : ''
+  return runs
+    ? '执行会话 ' + workerLabel(currentWorker(a)) + ' · 共 ' + runs + ' 次运行'
+    : '尚未派工'
 }
 
 type Research = NonNullable<Affair['research']>

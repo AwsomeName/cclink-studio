@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Affair } from './affair'
 import { freshResearch } from './research-model'
-import { groupOf, sessionStatus, statusChips, waitsForMe } from './owner-status'
+import { groupOf, rowMeta, sessionStatus, statusChips, waitsForMe } from './owner-status'
 
 const base = (patch: Partial<Affair> = {}, research = {}): Affair => ({
   id: '11111111-1111-4111-8111-111111111111',
@@ -37,6 +37,30 @@ describe('Owner list groups and status chips', () => {
     )
     expect(groupOf(pending, false)).toBe('attention')
     expect(groupOf(base({ confirmed: true }, { plan, phase: 'done' }), false)).toBe('done')
+  })
+
+  it('names the session that actually ran instead of always A', () => {
+    const decisions = [
+      {
+        kind: 'read' as const,
+        reason: 'r',
+        worker: 'a',
+        workerRunId: 'run-1',
+        workerReturned: true,
+      },
+      {
+        kind: 'more' as const,
+        reason: 'r',
+        worker: 'b',
+        workerRunId: 'run-2',
+        workerReturned: true,
+      },
+    ]
+    const running = base({ confirmed: true }, { plan, phase: 'reading', decisions })
+    expect(rowMeta(running, true)).toBe('执行会话 B · 共 2 次运行')
+    const workers = ['a', 'b'].map((key) => ({ key, purpose: 'p', reason: 'r', openedAt: 0 }))
+    const stopped = base({ confirmed: true }, { plan, phase: 'error', decisions, workers })
+    expect(rowMeta(stopped, false)).toBe('2 个执行会话已运行 2 次')
   })
 
   it('keeps affair state, Owner action and worker run separate', () => {

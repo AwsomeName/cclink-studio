@@ -45,7 +45,7 @@ export function formatOwnerDiagnostics(input: OwnerDiagnosticInput): string {
     out.push(
       '- 事务状态：' + c.state,
       '- Owner 当前动作：' + c.owner,
-      '- 执行会话 A：' + c.worker,
+      '- 当前执行会话：' + c.worker,
       '- 阶段：' + r.phase + ' · 已确认：' + (a.confirmed ? '是' : '否'),
       '- 本窗口正在执行：' + (active ? '是' : '否'),
     )

@@ -295,6 +295,7 @@ export async function discuss(id: string, text: string) {
       '你是负责开源项目调研的 Owner。根据用户原话和讨论提出或修订一份可执行约定，不开始调研。' +
         localPlanning(grants) +
         webPlanning(web) +
+        sourceFit +
         '选择 0 至 4 个真实公开 GitHub 仓库的规范 owner/repo 名，若用户没指定，主动建议。用户只需定目标和交付物。由你决定选哪些项目、查阅概览、官方仓库文档或源码以及证据标准，不向用户索要材料或检索步骤。能力是只读公开 GitHub 仓库，不承诺实跑。若用户给了具体目标就保留其粒度，不擅自扩张交付。若关键信息不足可先提问并令 plan=null。返回 {reply:"简短说明建议和要用户确认的地方",plan:{scope:"具体范围和比较维度",output:"交付物和判断标准",timing:"仅在用户提出时记录时间要求，否则省略；说明只支持按回执推进",repos:["组织/项目"],folders:["需要读取的本地目录 key，可省略"],outcomes:[{text:"交付必须达成或可选的一项结果",required:true}],web:"需要联网查公开网页时为 true，否则省略"}}。outcomes 列 1 至 6 项：用户明确要求的结果 required=true，锦上添花的 required=false。用户询问不等于批准。\n' +
         JSON.stringify({
           previous: r.plan,
@@ -331,11 +332,17 @@ function webPlanning(web: WebAccess) {
   return web.ready
     ? '可以联网查公开网页：由 Studio 经 DeepSeek 搜索和读取并存档快照，每次搜索或读取一页各算 1 次，本事务最多 ' +
         web.limit +
-        ' 次，搜索词和网址会发给 DeepSeek。目标需要 GitHub 仓库以外的公开资料（社区评价、新闻、官方文档站、博客、论坛）时令 plan.web=true，并在 reply 中说明为什么要联网；不需要就省略。'
+        ' 次，搜索词和网址会发给 DeepSeek。目标需要 GitHub 仓库以外的公开资料（学术论文与医学文献、社区评价、新闻、官方文档站、博客、论坛）时令 plan.web=true，并在 reply 中说明为什么要联网；不需要就省略。'
     : '本机未开放联网查公开网页（' +
         (web.reason ?? '未启用') +
         '），只能用公开 GitHub 仓库和本地目录；若目标离不开网页资料，在 reply 中说明，并建议用户在 Studio 设置里启用联网搜索。'
 }
+/**
+ * An agreement must be completable from its own sources: a required outcome that only papers or
+ * other outside material can settle is not made reachable by picking loosely related repos.
+ */
+const sourceFit =
+  '每项 required=true 的结果都必须能由约定来源直接取得证据。若某项结果依赖论文、临床或学术文献、统计数据等仓库和本地目录以外的资料：能联网就令 plan.web=true；不能联网就在 reply 中明说这项无法完成，改为 required=false 或请用户调整目标。不得用只与题目沾边的软件仓库代替文献来源。'
 /** Owner only asks for the web; the cap comes from the user's settings, never from the model. */
 function withWeb(raw: unknown, web: WebAccess) {
   if (!raw || typeof raw !== 'object') return raw
@@ -647,7 +654,8 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
       dispatch.workerReturned = true
       dispatch.workerFiles = selected
       for (const file of files)
-        if (!selected.includes(file)) event(r, 'A 选择的路径未在该来源的候选中找到：' + file.path)
+        if (!selected.includes(file))
+          event(r, workerLabel(key) + ' 选择的路径未在该来源的候选中找到：' + file.path)
     })
     return selected
   }
@@ -659,7 +667,7 @@ async function collect(a: Affair, order: Instruction, prior?: Decision) {
     const where = web
       ? '公开网页 ' + file.path
       : sourceLabel(plan, file.repo) + '/' + file.path.replace('@README', 'README')
-    await remember(a.id, 'A 查 ' + where + ' · ' + file.purpose)
+    await remember(a.id, workerLabel(key) + ' 查 ' + where + ' · ' + file.purpose)
     const got = web
       ? await readWeb(a, key, file.path, file.anchor ?? '')
       : isFolderKey(file.repo)
@@ -765,7 +773,12 @@ async function finishCollection(id: string) {
     const order = r.decisions?.at(-1)
     if (order && order.kind !== 'deliver') order.collectionClosed = true
     r.phase = 'checking'
-    event(r, 'Owner 按交付目标复核 A 取得的资料')
+    event(
+      r,
+      'Owner 按交付目标复核' +
+        (order?.workerRunId ? '执行会话 ' + workerLabel(decisionWorker(order)) : '') +
+        '取得的资料',
+    )
   })
 }
 
