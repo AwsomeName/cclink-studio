@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Owner 联网取证设计稿</title>
+<style>
+*{box-sizing:border-box}
+:root{color-scheme:dark;--bg:#191b1e;--pane:#202226;--pane2:#25282d;--edge:#383c42;--ink:#eceef1;--muted:#a6aeb9;--dim:#7d8590;--blue:#a8d7ff;--bluebg:#1f3347;--amber:#f2c786;--amberbg:#3a3020;--green:#8ed4af;--greenbg:#1e3329;--red:#f29a9a;--redbg:#3d2224}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;background:var(--pane2);border:1px solid var(--edge);border-radius:5px;padding:4px 10px}
+button:hover{border-color:#566070}
+button.pri{background:#2b6cb0;border-color:#3b82c4;color:#fff}
+button.on{background:var(--bluebg);border-color:#43627f;color:#cfe6ff}
+.top{min-height:46px;display:flex;align-items:center;gap:12px;padding:6px 16px;border-bottom:1px solid var(--edge);background:var(--pane);flex-wrap:wrap}
+.brand{font-weight:600}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr) 310px;height:calc(100vh - 46px);min-height:700px}
+.side{border-right:1px solid var(--edge);padding:14px 12px;overflow:auto;background:var(--pane)}
+.main{overflow:auto;padding:18px 26px 40px}
+.chat{border-left:1px solid var(--edge);display:flex;flex-direction:column;background:var(--pane);min-height:0}
+.k{font-size:11px;letter-spacing:.08em;color:var(--dim);margin:14px 0 6px}
+.k:first-child{margin-top:0}
+.file{display:flex;gap:6px;align-items:center;width:100%;text-align:left;border:0;background:none;padding:4px 6px;border-radius:4px;font-size:13px;color:#d6dae0}
+.file:hover,.file.sel{background:#2c3138}
+.file small{margin-left:auto;color:var(--dim);font-size:11px}
+.file.sub{padding-left:20px;font-size:12px}
+.h1{font-size:21px;font-weight:600;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:13px}
+.stages{display:flex;margin:14px 0 16px;border-bottom:1px solid var(--edge)}
+.stages button{border:0;background:none;border-radius:0;padding:6px 14px 8px;color:var(--muted);border-bottom:2px solid transparent}
+.stages button.on{color:#cfe6ff;border-bottom-color:#56aff8}
+.card{background:var(--pane);border:1px solid var(--edge);border-radius:8px;padding:14px 16px;margin:0 0 12px}
+.card h3{margin:0 0 8px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 small{font-weight:400;color:var(--muted);font-size:12px}
+.tag{display:inline-block;font-size:11px;padding:0 7px;border-radius:9px;border:1px solid var(--edge);color:var(--muted);white-space:nowrap}
+.g{background:var(--greenbg);border-color:#2f5a45;color:var(--green)}
+.a{background:var(--amberbg);border-color:#5e4c2c;color:var(--amber)}
+.r{background:var(--redbg);border-color:#5e3236;color:var(--red)}
+.b{background:var(--bluebg);border-color:#43627f;color:var(--blue)}
+.auth{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.col{background:var(--pane2);border-radius:6px;padding:10px}
+.col .ds{font-size:11px;color:var(--dim);margin:4px 0 8px}
+.cap{border:1px solid var(--edge);border-radius:5px;padding:6px 8px;margin:0 0 6px;font-size:12px;background:var(--pane)}
+.cap b{display:block;font-weight:600}
+.cap span{color:var(--muted)}
+.cap.new{border-color:#43627f}
+.note{font-size:12px;color:var(--muted)}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t td,table.t th{border-top:1px solid var(--edge);padding:7px 6px;text-align:left;vertical-align:top}
+table.t th{color:var(--dim);font-weight:500;font-size:12px;border-top:0}
+table.t tr.click{cursor:pointer}
+table.t tr.click:hover td{background:#262a30}
+.meter{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.meter .bar{flex:1;height:6px;background:#30353c;border-radius:3px}
+.meter .bar i{display:block;height:6px;border-radius:3px;background:#56aff8}
+.meter .bar i.full{background:var(--amber)}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:flex;gap:10px;align-items:center;border:1px solid var(--edge);border-radius:6px;padding:7px 10px;margin:0 0 6px;font-size:13px}
+.steps li .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:#30353c;flex:none}
+.steps li .tt{flex:1}
+.steps li .tt small{display:block;color:var(--muted)}
+pre.doc{white-space:pre-wrap;font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--pane);border:1px solid var(--edge);border-radius:8px;padding:16px 18px;margin:0;color:#d9dde3}
+mark{background:#4a3d1c;color:#ffe2a8;padding:0 2px;border-radius:2px}
+.chead{height:40px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--edge);font-size:13px;gap:8px}
+.chead b{flex:1}
+.msgs{flex:1;overflow:auto;padding:14px}
+.m{margin:0 0 12px;font-size:13px}
+.m .who{font-size:11px;color:var(--dim);margin-bottom:2px}
+.m .bd{background:var(--pane2);border-radius:6px;padding:8px 10px}
+.m.me .bd{background:var(--bluebg)}
+.act{border:1px solid #5e4c2c;background:#2a251c;border-radius:6px;padding:8px 10px;margin-top:8px}
+.act .bar{height:4px;background:#3a3326;border-radius:2px;margin:8px 0}
+.act .bar i{display:block;height:4px;background:var(--amber);border-radius:2px}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.inp{border-top:1px solid var(--edge);padding:10px 12px;font-size:12px;color:var(--dim)}
+.pointer{display:flex;justify-content:space-between;background:var(--amberbg);border:1px solid #5e4c2c;color:var(--amber);border-radius:6px;padding:8px 12px;font-size:13px;margin:0 0 12px}
+.demo{border:1px dashed #4b525c;border-radius:6px;padding:8px 10px;margin:0 0 12px;font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ok{border-color:#2f5a45;background:#1c2a23}
+.bad{border-color:#5e3236;background:#2a1e20}
+@media(max-width:1100px){.app{grid-template-columns:180px minmax(0,1fr) 270px}}
+@media(max-width:760px){.app{grid-template-columns:minmax(0,1fr) 250px}.side{display:none}.auth{grid-template-columns:1fr}.main{padding:16px}}
+</style>
+</head>
+<body>
+<div class="top">
+  <span class="brand">Owner</span>
+  <span class="sub">对比 Ibex 和 PicoRV32 的社区评价和维护状况</span>
+  <span class="tag">设计稿 · 网页内容为示例</span>
+  <button id="setBtn" style="margin-left:auto;font-size:12px">Owner 设置</button>
+</div>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="main" id="main"></main>
+  <aside class="chat"><div class="chead" id="chead"></div><div class="msgs" id="msgs"></div><div class="inp">和事务官说：改上限、补要求、问进度…</div></aside>
+</div>
+<script>
+const EV=[
+ {t:'search',q:'Ibex RISC-V core maintenance activity',n:10},
+ {t:'fetch',url:'https://github.com/lowRISC/ibex/pulse',title:'lowRISC/ibex · Pulse',chars:3180,sha:'9c1e4a07',quote:'过去一个月合并了 23 个拉取请求，关闭了 17 个问题。',body:'lowRISC/ibex 的活跃度概览。\n\n本月概况：\n过去一个月合并了 23 个拉取请求，关闭了 17 个问题。\n有 9 位作者提交了代码。\n……'},
+ {t:'search',q:'PicoRV32 maintained status',n:10},
+ {t:'fetch',url:'https://github.com/YosysHQ/picorv32',title:'YosysHQ/picorv32',chars:9840,sha:'51b7d2ce',quote:'PicoRV32 是一个面向面积优化的 RISC-V 实现。',body:'PicoRV32 - A Size-Optimized RISC-V CPU\n\nPicoRV32 是一个面向面积优化的 RISC-V 实现。\n它可以配置为 RV32E、RV32I、RV32IC、RV32IM 或 RV32IMC 核心。\n……'},
+ {t:'clue',url:'https://example-blog.dev/picorv32-in-2026',why:'执行 A 凭记忆给出的网址'},
+ {t:'search',q:'Ibex PicoRV32 comparison community review',n:10},
+ {t:'fetch',url:'https://forum.example.org/t/ibex-vs-picorv32',title:'Ibex vs PicoRV32 讨论帖',chars:14200,sha:'e30f9b11',quote:'如果要做带调试和安全特性的产品，大家更倾向 Ibex。',body:'讨论帖：Ibex 和 PicoRV32 怎么选？\n\n回复 1：做教学和极小面积，PicoRV32 很合适。\n回复 2：如果要做带调试和安全特性的产品，大家更倾向 Ibex。\n……'},
+ {t:'fetch',url:'https://docs.example.org/ibex/verification',title:'Ibex 验证说明',chars:61200,sha:'a8d40c3e',trunc:1,quote:'Ibex 使用 UVM 测试平台进行持续验证。',body:'Ibex 验证说明\n\nIbex 使用 UVM 测试平台进行持续验证。\n每晚运行回归测试……\n\n（正文超过 6 万字，后面部分已截断，不能被引用）'}
+];
+let view='board',stage=0,step=0,cap=20,used=0,capAsk=null,capOut=null,left=60,timer=null,tamper=0,stopWeb=0,defCap=20;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const dom=u=>new URL(u).hostname;
+const done=()=>EV.slice(0,step);
+const pages=()=>done().filter(e=>e.t==='fetch');
+const cost=n=>'$'+(n*0.00075).toFixed(4);
+function side(){$('side').innerHTML=`<div class="k">事务</div><div style="font-size:13px">对比 Ibex 和 PicoRV32 的社区评价和维护状况</div>
+ <div class="k">事务文件</div>${['事务.md','事务配置.md','调度.md','工作记录.md'].map(f=>`<button class="file">${f}</button>`).join('')}
+ <button class="file">资料/</button><button class="file sub" id="webDir">网页/<small>${pages().length} 份快照</small></button>
+ ${pages().map((p,i)=>`<button class="file sub ${view==='snap:'+i?'sel':''}" data-snap="${i}" style="padding-left:34px">${esc(dom(p.url))}-${p.sha}.md</button>`).join('')}
+ <button class="file">交付物/</button>
+ <button class="file ${view==='board'?'sel':''}" data-board style="margin-top:8px">看板</button>
+ <div class="k">联网</div><div class="note">已用 ${used} / ${cap} 次 · 约 ${cost(used)}</div>`;
+ $('side').querySelectorAll('[data-snap]').forEach(b=>b.onclick=()=>{view='snap:'+b.dataset.snap;render()});
+ $('side').querySelector('[data-board]').onclick=()=>{view='board';render()}}
+function authCard(){return `<div class="card"><h3>这件事的授权 <small>确认约定即授权</small></h3><div class="auth">
+ <div class="col"><span class="tag g">直接做</span><div class="ds">确认约定后，不再逐项问你</div>
+  <div class="cap new"><b>查公开网页 · 最多 ${cap} 次 <span class="tag b">新</span></b><span>搜索和抓取各算 1 次；搜索词和网址会发给 DeepSeek；最多约 ${cost(cap)}</span></div>
+  <div class="cap"><b>查公开资料</b><span>GitHub lowRISC/ibex、YosysHQ/picorv32</span></div>
+  <div class="cap"><b>写事务目录 · 锁定</b><span>本事务目录</span></div></div>
+ <div class="col"><span class="tag a">先问我</span><div class="ds">在右侧问你；60 秒无回应就跳过，其余继续</div>
+  <div class="cap"><b>超过联网上限</b><span>每次追加 10 次</span></div>
+  <div class="cap"><b>读约定外的本地文件 · 锁定</b><span>逐个文件问你</span></div></div>
+ <div class="col"><span class="tag r">不做</span><div class="ds">这件事里不会做</div>
+  <div class="cap"><b>把模型自带搜索的结果当引用</b><span>只算线索，Studio 重新抓取存档后才能引用</span></div>
+  <div class="cap"><b>对外发布或发送 · 锁定</b><span>任何内容</span></div></div>
+ </div><div class="note" style="margin-top:8px">这件事用不到：网站账号、运行命令、本地参考目录。事务目标原文和本地资料不会随搜索发出。</div></div>`}
+function plan(){const S=[['写约定和计划','Owner · Claude Code','不联网'],['搜索并读取两项目的维护与社区资料','执行 A · Codex','查公开网页（本事务剩余 '+(cap-used)+' 次）、查公开资料'],['整理对比，写报告草稿','Owner · Claude Code','不联网，只用 资料/ 里的快照'],['核对引用并交付','Studio 核验','网页引用逐条与快照比对']];
+ return `<div class="card"><h3>计划 <small>每一步写明能不能联网</small></h3><ul class="steps">${S.map((s,i)=>`<li><span class="n">${stage===2||(stage===1&&i<1)?'✓':i+1}</span><span class="tt">${s[0]}<small>能用：${s[2]}</small></span><span class="note">${s[1]}</span></li>`).join('')}</ul></div>`}
+function log(){const rows=done().map((e,i)=>{if(e.t==='search')return `<tr><td><span class="tag b">搜索</span></td><td>${esc(e.q)}</td><td class="note">${e.n} 条结果</td><td></td></tr>`;
+ if(e.t==='clue')return `<tr><td><span class="tag">线索</span></td><td>${esc(e.url)}<div class="note">${e.why}</div></td><td class="note">Studio 重新抓取失败</td><td><span class="tag r">未能核实，不进报告</span></td></tr>`;
+ const pi=pages().indexOf(e);return `<tr class="click" data-snap="${pi}"><td><span class="tag g">抓取</span></td><td>${esc(e.title)}<div class="note">${esc(dom(e.url))} · ${e.chars.toLocaleString()} 字 · SHA-256 ${e.sha}…</div></td><td class="note">刚刚</td><td><span class="tag g">已存档</span>${e.trunc?' <span class="tag a">已截断</span>':''}</td></tr>`}).join('');
+ return `<div class="card"><h3>取证记录 <small>每一次联网都由 Studio 执行并计数；点抓取行打开快照</small></h3>
+ <div class="meter"><span class="note">联网 ${used} / ${cap} 次</span><div class="bar"><i class="${used>=cap?'full':''}" style="width:${Math.min(100,used/cap*100)}%"></i></div><span class="note">约 ${cost(used)}</span></div>
+ ${rows?`<table class="t"><tr><th>类型</th><th>内容</th><th>结果</th><th>状态</th></tr>${rows}</table>`:'<div class="note">还没有联网。</div>'}
+ ${stopWeb?'<div class="note" style="margin-top:8px;color:var(--amber)">联网次数已用完且你没有追加，执行 A 停止联网，用已有快照继续。报告会注明这一点。</div>':''}</div>`}
+const CITES=()=>[
+ {k:'网页',w:'github.com/lowRISC/ibex/pulse',q:EV[1].quote,snap:0},
+ {k:'GitHub',w:'lowRISC/ibex README 第 12 行',q:'Ibex 是一个可配置的 32 位 RISC-V CPU 核。'},
+ {k:'网页',w:'github.com/YosysHQ/picorv32',q:EV[3].quote,snap:1},
+ {k:'网页',w:'forum.example.org 讨论帖',q:EV[6].quote,snap:2,bad:tamper},
+ {k:'网页',w:'docs.example.org 验证说明',q:EV[7].quote,snap:3},
+ {k:'GitHub',w:'YosysHQ/picorv32 最近提交',q:'最后一次提交在 8 个月前。'}].filter(x=>x.snap===undefined||x.snap<pages().length);
+function deliver(){const c=CITES(),bad=c.filter(x=>x.bad).length,web=c.filter(x=>x.k==='网页').length;
+ return `<div class="card ${bad?'bad':'ok'}"><h3>${bad?'<span class="tag r">交付被拦下</span> 1 条网页引用与快照不一致':'<span class="tag g">已交付</span> 交付物/对比报告.md'}</h3>
+ <div class="note">引用：网页 ${web} · GitHub ${c.length-web} · 本地 0 · 联网 ${used} / ${cap} 次，约 ${cost(used)}${stopWeb?' · 联网次数已用完，部分问题只基于已有快照':''}</div>
+ ${bad?'<div style="font-size:13px;margin-top:6px">Owner 已自动派执行 A 重新核对这条引用：读回快照，改用原文里确实存在的句子，或删掉这条结论。</div>':''}</div>
+ <div class="card"><h3>引用核对 <small>点网页引用打开快照，引文在快照中高亮</small></h3><table class="t"><tr><th>类型</th><th>出处</th><th>引文</th><th>核对</th></tr>
+ ${c.map(x=>`<tr class="${x.snap!==undefined?'click':''}" ${x.snap!==undefined?`data-snap="${x.snap}"`:''}><td><span class="tag ${x.k==='网页'?'b':''}">${x.k}</span></td><td class="note">${esc(x.w)}</td><td>${esc(x.q)}</td><td>${x.bad?'<span class="tag r">快照中找不到</span>':'<span class="tag g">与原文一致</span>'}</td></tr>`).join('')}</table>
+ <div class="note" style="margin-top:8px">截断部分的正文、未能核实的线索都不能被引用。</div></div>`}
+function board(){let h=`<div class="sub">Owner 事务</div><div class="h1">对比 Ibex 和 PicoRV32 的社区评价和维护状况</div><div class="sub">看维护是否活跃、社区怎么评价、各自适合什么场景；结论都要有出处。</div>
+ <div class="stages">${['约定与授权','运行中','交付核对'].map((t,i)=>`<button class="${stage===i?'on':''}" data-s="${i}">${t}</button>`).join('')}</div>`;
+ if(pending())h+=`<div class="pointer">有 1 件事等你，在右侧事务官对话里处理 <span>→</span></div>`;
+ if(stage===0)h+=authCard()+plan();
+ if(stage===1)h+=`<div class="demo">演示控制：<button id="next">继续运行一步</button><button id="all">运行到结束</button><button id="low">把上限改成 6 次，看用完时怎样</button></div>`+log()+plan();
+ if(stage===2)h+=`<div class="demo">演示控制：<button id="tamper">${tamper?'恢复快照原文':'改动快照里被引用的一句话'}</button></div>`+deliver()+log();
+ return h}
+function snap(i){const p=pages()[i];if(!p)return '<div class="note">没有这份快照。</div>';const c=CITES().find(x=>x.snap===i);
+ let body=esc(p.body);if(c&&!c.bad)body=body.replace(esc(p.quote),'<mark>'+esc(p.quote)+'</mark>');
+ if(tamper&&i===2)body=body.replace(esc(EV[6].quote),'如果要做带调试和安全特性的产品，大家更倾向 <b>PicoRV32</b>。');
+ return `<div class="sub">资料 / 网页</div><div class="h1">${esc(p.title)}</div>
+ <div class="card" style="margin-top:12px"><table class="t"><tr><td class="note">网址</td><td>${esc(p.url)}</td></tr><tr><td class="note">读取时间</td><td>2026-11-27 10:42（由 Studio 经 DeepSeek 读取）</td></tr><tr><td class="note">整页 SHA-256</td><td>${p.sha}…</td></tr><tr><td class="note">字数</td><td>${p.chars.toLocaleString()}${p.trunc?'，超过 6 万字的部分已截断，不能被引用':''}</td></tr></table>
+ <div class="btns"><button>打开原网页</button><span class="note">原网页之后可能变化，核对以这份快照为准</span><button style="margin-left:auto" id="back">返回看板</button></div></div>
+ <pre class="doc">${body}</pre>${c?`<div class="note" style="margin-top:8px">${c.bad?'报告里的引文在这份快照中找不到。':'高亮部分是报告引用的原文。'}</div>`:''}`}
+function settings(){return `<div class="sub">Owner 设置</div><div class="h1">取证通道</div><div class="sub">Owner 只通过这些通道取证；每一次读取都由 Studio 执行、计数并存档，报告里的引用交付前逐条核对。</div>
+ <div class="card" style="margin-top:16px"><h3>通道</h3><table class="t"><tr><th>通道</th><th>能取什么</th><th>状态</th><th>说明</th></tr>
+ <tr><td>公开网页</td><td class="note">搜索、读取任意公开网页</td><td><span class="tag g">已就绪</span></td><td class="note">经 DeepSeek，约 $0.75 / 千次；本月 Owner 已用 132 次，全局上限 2000 次。<button style="font-size:12px;margin-left:4px">去 Studio 设置</button></td></tr>
+ <tr><td>GitHub 仓库文件</td><td class="note">公开仓库的 README、文档和源码</td><td><span class="tag g">已就绪</span></td><td class="note">沿用已保存的 GitHub 凭证提高限额</td></tr>
+ <tr><td>本地参考目录</td><td class="note">已授权给事务的目录</td><td><span class="tag g">已就绪</span></td><td class="note">按事务授权，只读</td></tr>
+ <tr><td>GitHub 讨论与代码搜索</td><td class="note">issue、PR、代码搜索</td><td><span class="tag">后续</span></td><td class="note">待选为第二个接入的通道</td></tr>
+ <tr><td>论文</td><td class="note">arXiv、Semantic Scholar</td><td><span class="tag">后续</span></td><td class="note">待选</td></tr>
+ <tr><td>内嵌浏览器读取</td><td class="note">需要脚本渲染或登录的页面</td><td><span class="tag">后续</span></td><td class="note">用账号时默认先问我</td></tr>
+ <tr><td>本地数据源</td><td class="note">只读查询</td><td><span class="tag">后续</span></td><td class="note">约定里点名的数据源</td></tr></table></div>
+ <div class="card"><h3>联网上限</h3><table class="t"><tr><td>每件事务默认</td><td><input id="defcap" value="${defCap}" style="width:60px;background:var(--pane2);border:1px solid var(--edge);color:var(--ink);border-radius:5px;padding:3px 6px"> 次 <span class="note">约 ${cost(defCap)}；新事务的约定按这个值起草</span></td></tr>
+ <tr><td>用到上限时</td><td class="note">在右侧问你是否追加 10 次；60 秒无回应就停止联网，用已有资料继续</td></tr></table></div>
+ <div class="card"><h3>模型自带的搜索</h3><div class="note">Codex、Claude Code 等运行时自带的搜索，结果只算线索。Studio 会重新抓取它给出的网址并存档，抓取成功后才能被报告引用；抓取失败就标为"线索未能核实"。</div></div>`}
+function pending(){return (stage===0?1:0)+(capAsk&&!capOut?1:0)}
+function chat(){const m=[['me','对比 Ibex 和 PicoRV32 的社区评价和维护状况'],['o','这件事需要查公开网页。我在约定里列了"查公开网页 · 最多 '+cap+' 次"，搜索词和网址会发给 DeepSeek，事务目标原文和本地资料不会发出。']];let card='';
+ if(stage===0)card=`<div class="act"><b>确认约定</b><div class="note">直接做 3 项（含联网最多 ${cap} 次，约 ${cost(cap)}）· 先问我 2 项 · 不做 2 项</div><div class="btns"><button class="pri" data-a="confirm">确认约定，开始</button></div></div>`;
+ if(stage>=1){m.push(['me','确认']);if(step>0)m.push(['o','执行 A 开始联网取证，已存档 '+pages().length+' 份网页快照。'+(done().some(e=>e.t==='clue')?'有一个网址是它凭记忆给的，重新抓取失败，不会进报告。':'')])}
+ if(capAsk&&!capOut)card=`<div class="act"><b>联网次数已用完（${used} / ${cap}）</b><div class="note">执行 A 还想查 2 项：PicoRV32 的最新提交和社区评价。追加 10 次，约 ${cost(10)}。</div><div class="bar"><i id="bar" style="width:${left/60*100}%"></i></div><div class="note"><span id="left">${left}</span> 秒后无回应就停止联网，用已有资料继续</div><div class="btns"><button class="pri" data-a="more">追加 10 次</button><button data-a="no">不追加</button><button data-a="ff" style="margin-left:auto;font-size:11px">演示：快进</button></div></div>`;
+ if(capOut==='more')m.push(['me','追加 10 次'],['o','上限改为 '+cap+' 次，已写进 事务配置.md，继续取证。']);
+ if(capOut==='no'||capOut==='timeout')m.push(['o',(capOut==='no'?'好的，':'你没有回应，')+'停止联网，用已有快照继续。报告里会注明联网次数已用完。']);
+ if(stage===2)m.push(['o',tamper?'交付前核对发现 1 条网页引用在快照中找不到，没有交付，已让执行 A 重新核对。':'报告已交付。网页引用 4 条，都与快照一致。']);
+ if(card)m.push(['o',stage===0?'请确认约定。':'需要你决定一件事。',card]);
+ const n=pending();$('chead').innerHTML=`<b>事务官</b>${n?`<span class="tag a">等你 ${n}</span>`:'<span class="tag">无待办</span>'}`;
+ $('msgs').innerHTML=m.map(([w,t,c])=>`<div class="m ${w==='me'?'me':''}"><div class="who">${w==='me'?'你':'Owner'}</div><div class="bd">${esc(t)}${c||''}</div></div>`).join('');
+ $('msgs').scrollTop=1e5;$('msgs').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(b.dataset.a))}
+function costOf(e){return e.t==='clue'?0:1}
+function advance(){if(step>=EV.length){stage=2;render();return}
+ if(stopWeb||capAsk&&!capOut){render();return}
+ const e=EV[step];if(used+costOf(e)>cap){capAsk=1;capOut=null;left=60;render();return}
+ used+=costOf(e);step++;render()}
+function act(k){if(k==='confirm'){stage=1;render()}
+ if(k==='more'){capOut='more';cap+=10;capAsk=0;stopT();render()}
+ if(k==='no'||k==='timeout'){capOut=k;stopWeb=1;capAsk=0;stopT();render()}
+ if(k==='ff')left=1}
+function stopT(){if(timer){clearInterval(timer);timer=null}}
+function tick(){if(!(capAsk&&!capOut)){stopT();return}if(timer)return;timer=setInterval(()=>{left--;if($('left'))$('left').textContent=left;if($('bar'))$('bar').style.width=left/60*100+'%';if(left<=0)act('timeout')},1000)}
+function render(){side();chat();const M=$('main');
+ if(view==='settings'){M.innerHTML=settings();const d=$('defcap');d.onchange=()=>{const v=Math.max(1,Math.min(200,Math.round(+d.value||20)));defCap=v;if(stage===0)cap=v;render()};tick();return}
+ if(view.startsWith('snap:')){M.innerHTML=snap(+view.slice(5));$('back').onclick=()=>{view='board';render()};tick();return}
+ M.innerHTML=board();
+ M.querySelectorAll('.stages button').forEach(b=>b.onclick=()=>{stage=+b.dataset.s;if(stage===2&&step<EV.length&&!stopWeb){while(step<EV.length&&used+costOf(EV[step])<=cap){used+=costOf(EV[step]);step++}}render()});
+ M.querySelectorAll('[data-snap]').forEach(r=>r.onclick=()=>{view='snap:'+r.dataset.snap;render()});
+ const on=(id,f)=>{const e=$(id);if(e)e.onclick=f};
+ on('next',advance);on('all',()=>{let g=0;while(g++<20&&step<EV.length&&!stopWeb&&!(capAsk&&!capOut)){const e=EV[step];if(used+costOf(e)>cap){capAsk=1;capOut=null;left=60;break}used+=costOf(e);step++}if(step>=EV.length)stage=2;render()});
+ on('low',()=>{cap=6;capOut=null;stopWeb=0;render()});on('tamper',()=>{tamper=tamper?0:1;render()});
+ tick()}
+$('setBtn').onclick=()=>{view='settings';render()};
+render();
+</script>
+</body>
+</html>
