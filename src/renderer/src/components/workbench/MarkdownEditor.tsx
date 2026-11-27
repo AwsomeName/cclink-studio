@@ -56,6 +56,8 @@ import {
 } from '../../features/markdown/markdown-editor-shortcuts'
 import { createMarkdownDiagnosticReport } from '../../features/markdown/markdown-diagnostic-report'
 import { MarkdownListItem } from '../../features/markdown/markdown-list-item'
+import { MarkdownCode } from '../../features/markdown/markdown-code-mark'
+import { MarkdownCellBreak } from '../../features/markdown/markdown-table-breaks'
 import { MarkdownLiteralBlock } from '../../features/markdown/markdown-literal-block'
 import { parseMarkdownEditorDocument } from '../../features/markdown/markdown-editor-document'
 import { inspectMarkdownEditorBeforeSave } from '../../features/markdown/markdown-save-guard'
@@ -224,7 +226,11 @@ export function MarkdownEditor({
         listItem: false,
         link: false,
         underline: false,
+        // Replaced by MarkdownCode, which can share text with bold, italic, strike and links.
+        code: false,
       }),
+      MarkdownCode,
+      MarkdownCellBreak,
       Markdown,
       MarkdownListItem,
       MarkdownLiteralBlock,

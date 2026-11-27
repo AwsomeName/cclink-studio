@@ -1,6 +1,7 @@
 import type { Editor, JSONContent } from '@tiptap/core'
 import { protectMarkdownHtml } from './markdown-html-blocks'
 import { prepareMarkdownEditorInput } from './markdown-codec'
+import { maskTableCellBreaks, restoreTableCellBreaks } from './markdown-table-breaks'
 
 /**
  * Tiptap 3.25 parses a valid empty ordered item (`1.`) as a listItem without a
@@ -15,7 +16,12 @@ export function parseMarkdownEditorDocument(editor: Editor, source: string): JSO
   }
 
   const literal = editor.schema.nodes.markdownLiteralBlock ? protectMarkdownHtml(source) : null
-  const parsed = editor.markdown.parse(prepareMarkdownEditorInput(literal?.source ?? source))
+  const cellBreaks = maskTableCellBreaks(literal?.source ?? source)
+  const parsed = restoreTableCellBreaks(
+    editor.markdown.parse(prepareMarkdownEditorInput(cellBreaks.source)),
+    cellBreaks.breaks,
+    Boolean(editor.schema.nodes.cellBreak),
+  )
   if (literal?.blocks.length && parsed.content) {
     parsed.content = parsed.content.map((node) => {
       if (node.type !== 'codeBlock' || node.attrs?.language !== literal.language) return node

@@ -44,6 +44,19 @@ const SOURCE = [
   '',
 ].join('\n')
 await writeFile(join(workspace, 'table.md'), SOURCE)
+// T10: an AI-drafted table whose cells break lines with <br>, and inline code inside bold/link.
+const BREAKS_SOURCE = [
+  '# 眼镜项目',
+  '',
+  '| 事项 | 进展记录 |',
+  '| --- | --- |',
+  '| 外壳 | 还有一些问题：喇叭集成<br>光机外侧修角<br/>螺丝内沉 |',
+  '| 统一账号 | 已开始推进。 |',
+  '',
+  '验证 **`npm test`** 与 [`日志`](https://example.com) 都通过。',
+  '',
+].join('\n')
+await writeFile(join(workspace, 'breaks.md'), BREAKS_SOURCE)
 
 await writeFile(
   join(profile, 'settings.json'),
@@ -596,6 +609,49 @@ try {
       markedDirty: dirty > 0,
       fileUnchanged: diskAfter === diskBefore,
     })
+  })
+
+  await step('T10', async () => {
+    const errors = []
+    page.on('pageerror', (error) => errors.push(String(error).slice(0, 200)))
+    await page.locator('.file-tree-name').getByText('breaks.md', { exact: true }).click()
+    const breaksTable = editor().locator('table').first()
+    await breaksTable.waitFor()
+    await sleep(500)
+    const literalBlocks = await editor().locator('.markdown-literal-block').count()
+    const lineBreaks = await breaksTable.locator('br.markdown-cell-break').count()
+    await shot('T10-opened')
+    // Option+Enter at the end of the 已开始推进 cell adds a line inside the cell.
+    const cell = breaksTable.locator('td', { hasText: '已开始推进' })
+    const cellBox = await box(cell)
+    await page.mouse.click(cellBox.x + cellBox.width - 8, cellBox.y + cellBox.height / 2)
+    await page.keyboard.press('End')
+    await page.keyboard.press('Alt+Enter')
+    await page.keyboard.type('周末完成')
+    // Edit inside the bold inline code paragraph (it used to throw on every keystroke).
+    const code = editor().locator('p', { hasText: '都通过' })
+    const codeBox = await box(code)
+    await page.mouse.click(codeBox.x + codeBox.width - 4, codeBox.y + codeBox.height / 2)
+    await page.keyboard.press('End')
+    await page.keyboard.type('已核对')
+    await save()
+    const saved = await readFile(join(workspace, 'breaks.md'), 'utf8')
+    await shot('T10-saved')
+    const ok =
+      literalBlocks === 0 &&
+      lineBreaks === 2 &&
+      errors.length === 0 &&
+      saved.includes('喇叭集成<br>光机外侧修角<br/>螺丝内沉') &&
+      saved.includes('已开始推进。<br>周末完成') &&
+      saved.includes('**`npm test`**') &&
+      saved.includes('[`日志`](https://example.com)') &&
+      saved.includes('都通过。已核对')
+    record(
+      'T10',
+      ok ? 'PASS' : 'FAIL',
+      '含 <br> 的表格按表格显示，Option+Enter 在格内换行；粗体包代码的段落可编辑',
+      { literalBlocks, lineBreaks, pageErrors: errors, saved },
+    )
   })
 } finally {
   await writeFile(

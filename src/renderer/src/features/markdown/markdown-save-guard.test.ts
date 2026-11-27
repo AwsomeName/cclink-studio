@@ -10,6 +10,7 @@ import Link from '@tiptap/extension-link'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { MarkdownLiteralBlock } from './markdown-literal-block'
+import { MarkdownCellBreak } from './markdown-table-breaks'
 import { analyzeEditableMarkdown } from './markdown-codec'
 import { MarkdownListItem } from './markdown-list-item'
 import { parseMarkdownEditorDocument } from './markdown-editor-document'
@@ -27,6 +28,7 @@ beforeEach(() => {
       Markdown,
       MarkdownListItem,
       MarkdownLiteralBlock,
+      MarkdownCellBreak,
       TaskList,
       TaskItem.configure({ nested: true }),
       Table,
@@ -46,7 +48,6 @@ afterEach(() => {
 describe('inspectMarkdownEditorBeforeSave', () => {
   it.each([
     '这里有 <span title="属性">文字</span>。',
-    '| 事项 | 备注 |\n| --- | --- |\n| 早上 | 上行<br />下行 |',
     '<!-- 备注\n\n\n包含 $5、反引号和缩进    \n-->',
     '<script>window.shouldNeverRun = true</script>',
     '<img src="external.png" style="width:50%">',
@@ -66,6 +67,21 @@ describe('inspectMarkdownEditorBeforeSave', () => {
     expect(inspection.markdown).toBe(source.replace('继续写。', '继续写。新增。'))
     expect(inspection.reparsedMarkdown).toBe(inspection.markdown)
     expect(analyzeEditableMarkdown(source, source.replace(raw, '')).safeToSave).toBe(false)
+  })
+
+  it('edits a table whose cells break lines with <br> as a table and keeps each spelling', () => {
+    const table = '| 事项 | 备注 |\n| --- | --- |\n| 早上 | 上行<br />下行<br>再下行 |'
+    const source = ['# 日记', '', table, '', '继续写。', ''].join('\n')
+    const parsed = parseMarkdownEditorDocument(editor, source)
+    editor.commands.setContent(parsed, { emitUpdate: false })
+    expect(parsed.content?.map((node) => node.type)).toEqual(['heading', 'table', 'paragraph'])
+    expect(() => editor.state.doc.check()).not.toThrow()
+    expect(analyzeEditableMarkdown(source).safeToEdit).toBe(true)
+    editor.view.dispatch(editor.state.tr.insertText('新增。', editor.state.doc.content.size - 1))
+    const inspection = inspectMarkdownEditorBeforeSave(editor, source)
+    expect(inspection.safeToSave).toBe(true)
+    expect(inspection.markdown).toBe(source.replace('继续写。', '继续写。新增。'))
+    expect(analyzeEditableMarkdown(source, source.replace(table, '')).safeToSave).toBe(false)
   })
 
   it('detects whitespace loss or a swapped HTML fragment even if both fragments render alike', () => {

@@ -2,6 +2,7 @@ import { stripCclinkMarkdownMetadata } from '@shared/markdown-document'
 import { replaceMarkdownSizedImages } from '@shared/markdown-sized-image'
 import { protectMarkdownHtml } from './markdown-html-blocks'
 import MarkdownIt from 'markdown-it'
+import { withoutTableCellBreaks } from './markdown-table-breaks'
 import { marked } from 'marked'
 
 export type MarkdownBlockKind =
@@ -234,7 +235,7 @@ export function analyzeMarkdown(source: string, serialized?: string): MarkdownAn
       endLine: frontmatter.endLine,
     })
   }
-  const htmlMatch = RAW_HTML.exec(proseSource)
+  const htmlMatch = RAW_HTML.exec(withoutTableCellBreaks(proseSource))
   if (htmlMatch) {
     const htmlLine = proseSource.slice(0, htmlMatch.index).split('\n').length
     // Only report the tag name. Attributes and comment bodies can contain private diary text.

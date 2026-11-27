@@ -144,6 +144,15 @@ export function deleteSelectedMarkdownTableRows(editor: Editor): boolean {
   return false
 }
 
+/**
+ * Option+Enter in a table cell starts a new line inside the cell, written as `<br>`. A plain hard
+ * break there would be flattened into a space when the one-line table row is written.
+ */
+export function insertMarkdownTableCellBreak(editor: Editor): boolean {
+  if (!editor.schema.nodes.cellBreak || !markdownTableContext(editor)) return false
+  return editor.chain().focus().insertContent({ type: 'cellBreak' }).run()
+}
+
 function handleMarkdownTableTab(editor: Editor, direction: 'indent' | 'outdent'): boolean {
   if (direction === 'outdent') {
     // Keep focus in the first cell even when there is no previous cell.
@@ -389,6 +398,8 @@ export const MarkdownKeyboardShortcuts = Extension.create<MarkdownKeyboardShortc
       Space: () => applyMarkdownTaskInputShortcut(this.editor),
       Tab: () => handleMarkdownTabKey(this.editor, 'indent', this.options.tabSize),
       'Shift-Tab': () => handleMarkdownTabKey(this.editor, 'outdent', this.options.tabSize),
+      // Like Excel: Option+Enter starts a new line inside the cell (Enter/Shift+Enter move cells).
+      'Alt-Enter': () => insertMarkdownTableCellBreak(this.editor),
       Backspace: () => deleteSelectedMarkdownTableRows(this.editor),
       Delete: () => deleteSelectedMarkdownTableRows(this.editor),
       Enter: () => moveMarkdownTableCaretVertically(this.editor, 1),

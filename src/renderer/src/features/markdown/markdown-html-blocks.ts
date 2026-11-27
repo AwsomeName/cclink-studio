@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it'
 import { parseMarkdownSizedImage } from '@shared/markdown-sized-image'
+import { isTableCellBreak } from './markdown-table-breaks'
 
 // Tokenization only. HTML from a document is never rendered by this parser.
 const parser = new MarkdownIt({ html: true })
@@ -7,14 +8,21 @@ const parser = new MarkdownIt({ html: true })
 function htmlBlockRanges(source: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = []
   let block: [number, number] | null = null
+  let inTable = false
   for (const token of parser.parse(source, {})) {
-    if (token.level === 0) block = token.map
+    if (token.level === 0) {
+      block = token.map
+      inTable = token.type === 'table_open'
+    }
     if (!block) continue
     const html =
       token.type === 'html_block'
         ? [token]
         : (token.children ?? []).filter((child) => child.type === 'html_inline')
-    if (html.some((item) => !parseMarkdownSizedImage(item.content))) {
+    // A sized image is supported syntax; so is `<br>` as the line break inside a table cell.
+    const unsupported = (item: { content: string }): boolean =>
+      !parseMarkdownSizedImage(item.content) && !(inTable && isTableCellBreak(item.content))
+    if (html.some(unsupported)) {
       ranges.push(block)
       block = null
     }
