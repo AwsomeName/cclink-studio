@@ -1,5 +1,14 @@
 import type { Affair } from './affair'
-import { decisionWorker, isLocalKey, sourceLabel, workerLabel, workersOf } from './research-model'
+import {
+  decisionWorker,
+  isLocalKey,
+  isWebKey,
+  sourceLabel,
+  webLimit,
+  workerLabel,
+  workersOf,
+} from './research-model'
+import { OWNER_WEB_EXTRA } from '@shared/ipc/owner-web'
 
 /**
  * Read-only presentation of an affair as tiered authorization and steps. Everything here is
@@ -28,7 +37,25 @@ export function authorization(a: Affair): { caps: Capability[]; unused: string[]
       scope: 'GitHub ' + repo,
       tier: 'direct' as const,
     })),
+    ...(plan?.web && a.research
+      ? [
+          {
+            name: '查公开网页 · 最多 ' + webLimit(a.research) + ' 次',
+            scope: '搜索和读取一页各算 1 次；搜索词和网址会发给 DeepSeek，由 Studio 存档快照',
+            tier: 'direct' as const,
+          },
+        ]
+      : []),
     { name: '写事务目录', scope: '本事务目录', tier: 'direct', locked: true },
+    ...(plan?.web
+      ? [
+          {
+            name: '超过联网上限',
+            scope: '每次追加 ' + OWNER_WEB_EXTRA + ' 次',
+            tier: 'ask' as const,
+          },
+        ]
+      : []),
     { name: '读约定外的本地文件', scope: '逐个文件问你', tier: 'ask', locked: true },
   ]
   if (folders.length)
@@ -37,8 +64,15 @@ export function authorization(a: Affair): { caps: Capability[]; unused: string[]
       scope: folders.map((f) => f.label).join('、'),
       tier: 'never',
     })
+  if (plan?.web)
+    caps.push({
+      name: '把模型自带搜索的结果当引用',
+      scope: '只算线索，Studio 搜索或读取存档后才能引用',
+      tier: 'never',
+      locked: true,
+    })
   caps.push({ name: '对外发布或发送', scope: '任何内容', tier: 'never', locked: true })
-  return { caps, unused: ['网站账号', '运行命令'] }
+  return { caps, unused: ['网站账号', '运行命令', ...(plan?.web ? [] : ['公开网页'])] }
 }
 
 export const runtimeName = (kind?: string) =>
@@ -108,10 +142,11 @@ export function affairSteps(
     const w = workers.find((x) => x.key === key)
     const can = [
       ...new Set(
-        (d.requests ?? []).map(
-          (q) =>
-            (isLocalKey(q.repo) ? '读本地资料 · ' : '查公开资料 · ') +
-            sourceLabel(r.plan, q.repo, r.files),
+        (d.requests ?? []).map((q) =>
+          isWebKey(q.repo)
+            ? '查公开网页 · 搜索「' + q.terms.join(' ') + '」'
+            : (isLocalKey(q.repo) ? '读本地资料 · ' : '查公开资料 · ') +
+              sourceLabel(r.plan, q.repo, r.files),
         ),
       ),
     ]

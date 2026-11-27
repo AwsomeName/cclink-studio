@@ -8,6 +8,8 @@ import {
   planSchema,
   planSources,
   researchRequest,
+  sourceLabel,
+  webLimit,
   type Research,
 } from './research'
 
@@ -75,11 +77,11 @@ describe('local folders as research sources', () => {
       ],
     })
     expect(report.items.map((i) => i.line)).toEqual([11, 201])
-    expect(citationCounts(report.items)).toEqual({ local: 1, github: 1 })
+    expect(citationCounts(report.items)).toEqual({ local: 1, web: 0, github: 1 })
     expect(citationPlace(r, report.items[0])).toBe('本地 chip-notes/设计/流水线笔记.md 第 11 行')
     expect(citationPlace(r, report.items[1])).toBe(gh + '#L201')
     expect(() =>
-      checkReport(r, {
+      checkReport(r as Research, {
         conclusion: '# 对比',
         items: [
           {
@@ -105,5 +107,66 @@ describe('local folders as research sources', () => {
         ],
       }),
     ).toThrow('本地 chip-notes：引文与标明的来源不匹配')
+  })
+})
+
+describe('public web as a source', () => {
+  const web = { scope: 's', output: 'o', repos: [], web: { limit: 20 } }
+  it('accepts a web-only agreement and labels web citations', () => {
+    expect(planSchema.parse(web).web).toEqual({ limit: 20 })
+    expect(planSources(web)).toEqual(['web'])
+    expect(sourceLabel(web, 'web')).toBe('公开网页')
+    expect(citationCounts([{ repo: 'web' }, { repo: 'lowRISC/ibex' }])).toEqual({
+      local: 0,
+      web: 1,
+      github: 1,
+    })
+    expect(webLimit({ plan: web, web: { extra: 10 } })).toBe(30)
+  })
+  it('does not require a web citation but checks web quotes against the snapshot', () => {
+    const plan = { ...web, repos: ['lowRISC/ibex'] }
+    const r = {
+      phase: 'checking' as const,
+      chat: [],
+      log: [],
+      report: null,
+      plan,
+      docs: [
+        {
+          repo: 'lowRISC/ibex',
+          path: 'README.md',
+          startLine: 1,
+          text: 'Ibex is a small 32 bit RISC-V CPU core',
+          url: 'https://github.com/lowRISC/ibex/blob/' + '1'.repeat(40) + '/README.md',
+          sha: 'a'.repeat(40),
+          at: 1,
+        },
+        {
+          repo: 'web',
+          path: 'forum.example.org/t/1',
+          startLine: 1,
+          text: '大家更倾向 Ibex。',
+          url: 'https://forum.example.org/t/1',
+          sha: 'b'.repeat(64),
+          at: 1,
+        },
+      ],
+    }
+    const gh = { repo: 'lowRISC/ibex', finding: 'f', quote: 'small 32 bit RISC-V CPU core' }
+    expect(() => checkReport(r as Research, { conclusion: 'c', items: [gh] })).not.toThrow()
+    expect(() =>
+      checkReport(r, {
+        conclusion: 'c',
+        items: [
+          gh,
+          {
+            repo: 'web',
+            url: 'https://forum.example.org/t/1',
+            finding: 'f',
+            quote: '大家都认为 Ibex 更好',
+          },
+        ],
+      }),
+    ).toThrow(/公开网页：引文与标明的来源不匹配/)
   })
 })

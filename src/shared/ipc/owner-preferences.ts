@@ -23,6 +23,7 @@ export type OwnerRuntimeKind = (typeof ownerRuntimeKinds)[number]
 export const ownerWorkTypes = ['coordinate', 'research'] as const
 export type OwnerWorkType = (typeof ownerWorkTypes)[number]
 export type OwnerRuntimeOrder = Record<OwnerWorkType, OwnerRuntimeKind[]>
+export const DEFAULT_WEB_LIMIT = 20
 export const defaultRuntimeOrder = (): OwnerRuntimeOrder => ({
   coordinate: ['claude-code', 'codex'],
   research: ['codex', 'claude-code'],
@@ -43,6 +44,8 @@ export type OwnerPreferencesView = {
   sources: OwnerSourcePreferences
   reminders: OwnerReminders
   runtimes: OwnerRuntimeOrder
+  /** Default public-web call cap written into each new agreement. */
+  webLimit: number
 }
 export const ownerPreferenceUpdate = z
   .object({
@@ -52,6 +55,7 @@ export const ownerPreferenceUpdate = z
       .optional(),
     reminders: z.object({ topbarCount: z.boolean() }).strict().optional(),
     runtimes: ownerRuntimeOrder.optional(),
+    webLimit: z.number().int().min(1).max(200).optional(),
   })
   .strict()
 export type OwnerPreferenceUpdate = z.infer<typeof ownerPreferenceUpdate>

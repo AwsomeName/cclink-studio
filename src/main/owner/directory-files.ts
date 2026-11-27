@@ -4,6 +4,7 @@ import {
   decisionTitle,
   isFolderKey,
   isLocalKey,
+  isWebKey,
   planSources,
   researchStatus,
   sourceLabel,
@@ -89,16 +90,21 @@ export function directoryFiles(
       Math.max(3, ...Array.from(d.text.matchAll(/`+/g), (m) => m[0].length + 1)),
     )
     const local = isLocalKey(d.repo)
+    const web = isWebKey(d.repo)
     files[name] =
       [
         '# ' + sourceLabel(r.plan, d.repo, r.files) + ' · ' + (d.path || 'README'),
-        local
-          ? '本地只读目录中的文件，按读取时的快照核对'
-          : '[固定版本的原文](' + d.url + line + ')',
+        web
+          ? '网页快照，由 Studio 经 DeepSeek 联网服务读取；原网页之后可能变化，核对以此快照为准。[原网页](' +
+            d.url +
+            ')'
+          : local
+            ? '本地只读目录中的文件，按读取时的快照核对'
+            : '[固定版本的原文](' + d.url + line + ')',
         '读取时间 ' +
           new Date(d.at).toISOString() +
           '　·　' +
-          (local ? '读取时整个文件的 SHA-256 ' : '文件版本 ') +
+          (web ? '读取时整页正文的 SHA-256 ' : local ? '读取时整个文件的 SHA-256 ' : '文件版本 ') +
           d.sha,
         '片段起始行 ' + (d.startLine ?? '未知'),
         fence + 'text\n' + d.text + '\n' + fence,
@@ -140,12 +146,17 @@ export function directoryFiles(
           ? sourceLabel(r.plan, item.repo, r.files) +
             (isFolderKey(item.repo) ? '/' + (r.docs[hit].path ?? '') : '') +
             (item.line ? ' 第 ' + item.line + ' 行' : '')
-          : '[仓库原文](' + item.url + (item.line ? '#L' + item.line : '') + ')')
+          : isWebKey(item.repo)
+            ? '[原网页](' + item.url + ')（以读取时的快照为准）'
+            : '[仓库原文](' + item.url + (item.line ? '#L' + item.line : '') + ')')
       )
     })
     const unfinished = (r.skips ?? []).filter(
       (k) => k.status === 'skipped' || k.status === 'declined',
     )
+    const webStopped = r.web?.stopped
+      ? '\n\n## 联网\n\n联网次数已用完（' + r.web.used + ' 次），没有追加；部分问题只基于已有资料。'
+      : ''
     files[reportFile] =
       report.conclusion +
       '\n\n## 核对过的出处\n\n' +
@@ -163,6 +174,7 @@ export function directoryFiles(
             )
             .join('\n')
         : '') +
+      webStopped +
       '\n'
   }
   const [status, detail] = researchStatus(r, true)

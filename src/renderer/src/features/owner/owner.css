@@ -1145,3 +1145,36 @@
 .own-act button {
   margin-top: 8px;
 }
+.own-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+}
+.own-meter-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: #30353c;
+}
+.own-meter-bar i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #56aff8;
+}
+.own-meter-bar i.full {
+  background: #e0b36d;
+}
+.own-web-stop {
+  color: #e0b36d;
+}
+.own-tag.ok {
+  color: #7cc8a0;
+  border-color: #2e5a45;
+}
+[data-owner-channels] .own-box small {
+  display: block;
+  color: var(--text-secondary, #9aa3ad);
+}

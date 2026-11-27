@@ -27,6 +27,12 @@ export function configurationDocument(a: AffairRecord, path: string, revision: n
         (r.plan?.repos.join('、') || (r.plan ? '无' : '待拟定')) +
         (a.confirmed ? '（已确认）' : '（尚未授权执行）'),
       '本地参考目录：' + folderLine(r.plan),
+      '公开网页：' +
+        (r.plan?.web
+          ? '最多 ' +
+            (r.plan.web.limit + (r.web?.extra ?? 0)) +
+            ' 次（搜索、抓取各算 1 次；搜索词和网址会发给 DeepSeek，由 Studio 执行并存档快照）'
+          : '不联网。'),
       '## 时间安排',
       r.plan?.timing ?? '未单独约定截止时间或投入上限。',
       '## 实际保存位置',

@@ -18,10 +18,17 @@ export const isFileKey = (key: string) => fileKeyPattern.test(key)
 export const grantOfFile = (key: string) => key.slice('file:'.length)
 /** Any local evidence: a granted folder or a single approved file. */
 export const isLocalKey = (key: string) => isFolderKey(key) || isFileKey(key)
+/** Public web pages searched and fetched by Studio for this affair. */
+export const WEB_KEY = 'web'
+export const isWebKey = (key: string) => key === WEB_KEY
 const sourceKey = z
   .string()
   .refine(
-    (k) => publicRepoPattern.test(k) || folderKeyPattern.test(k) || fileKeyPattern.test(k),
+    (k) =>
+      publicRepoPattern.test(k) ||
+      folderKeyPattern.test(k) ||
+      fileKeyPattern.test(k) ||
+      isWebKey(k),
     '无效的来源',
   )
 /** Local evidence links point at the grant and relative path, never at an absolute path. */
@@ -58,15 +65,23 @@ export const planSchema = z
       .array(z.object({ text: z.string().trim().min(1).max(300), required: z.boolean() }))
       .max(8)
       .optional(),
+    /** Public web search and fetch, at most `limit` calls unless the user approves more. */
+    web: z.object({ limit: z.number().int().min(1).max(200) }).optional(),
   })
-  .refine((p) => p.repos.length + (p.folders?.length ?? 0) > 0, '至少需要一个来源')
+  .refine(
+    (p) => p.repos.length + (p.folders?.length ?? 0) + (p.web ? 1 : 0) > 0,
+    '至少需要一个来源',
+  )
 export type Plan = z.infer<typeof planSchema>
 /** Every source the confirmed agreement covers, GitHub repositories first. */
 export const planSources = (plan: Plan | null | undefined) =>
-  plan ? [...plan.repos, ...(plan.folders ?? []).map((f) => f.key)] : []
+  plan
+    ? [...plan.repos, ...(plan.folders ?? []).map((f) => f.key), ...(plan.web ? [WEB_KEY] : [])]
+    : []
 type ApprovedFile = { key: string; label: string }
 /** Human label for a source key: the folder's name, the approved file, or the repository. */
 export function sourceLabel(plan: Plan | null | undefined, key: string, files?: ApprovedFile[]) {
+  if (isWebKey(key)) return '公开网页'
   if (isFileKey(key)) return '本地文件 ' + (files?.find((f) => f.key === key)?.label ?? '')
   if (!isFolderKey(key)) return key
   return '本地 ' + (plan?.folders?.find((f) => f.key === key)?.label ?? '目录')
@@ -95,7 +110,8 @@ export function citationPlace(
 /** Verified citations by tool, for the deliverable summary. */
 export function citationCounts(items: { repo: string }[]) {
   const local = items.filter((i) => isLocalKey(i.repo)).length
-  return { local, github: items.length - local }
+  const web = items.filter((i) => isWebKey(i.repo)).length
+  return { local, web, github: items.length - local - web }
 }
 /** A step that waited for approval and was skipped, and what the user did about it later. */
 export const skipSchema = z.object({
@@ -146,12 +162,15 @@ export const researchRequest = z.object({
 })
 export const workerFilesSchema = z
   .array(
-    z.object({
-      repo: sourceKey,
-      path: z.string().min(1).max(360),
-      anchor: z.string().max(120).optional(),
-      purpose: z.string().min(1).max(500),
-    }),
+    z
+      .object({
+        repo: sourceKey,
+        /** A file path, or for the web source the page URL taken from search results. */
+        path: z.string().min(1).max(2048),
+        anchor: z.string().max(120).optional(),
+        purpose: z.string().min(1).max(500),
+      })
+      .refine((f) => isWebKey(f.repo) || f.path.length <= 360, '路径过长'),
   )
   .max(4)
 // Execution sessions: lowercase keys map to native conversations owner-<id>-<key>; 'a' is the legacy A.
@@ -225,6 +244,32 @@ export const researchSchema = z.object({
     .optional(),
   report: reportSchema.nullable(),
   workers: z.array(workerSchema).max(8).optional(),
+  /** Public web calls made for this affair; counted against plan.web.limit + extra. */
+  web: z
+    .object({
+      used: z.number().int().min(0),
+      extra: z.number().int().min(0),
+      stopped: z.boolean().optional(),
+      searches: z
+        .array(z.object({ q: z.string().max(128), hits: z.number().int(), at: z.number() }))
+        .max(40),
+      pages: z
+        .array(
+          z.object({
+            url: z.string().url(),
+            title: z.string().max(200),
+            chars: z.number().int(),
+            sha: z.string().regex(/^[a-f0-9]{64}$/i),
+            truncated: z.boolean(),
+            at: z.number(),
+          }),
+        )
+        .max(40),
+      failed: z
+        .array(z.object({ url: z.string().max(2048), why: z.string().max(300), at: z.number() }))
+        .max(20),
+    })
+    .optional(),
   /** Runtime of the Owner's own session and why it was chosen. */
   owner: z.object({ agent: z.enum(['codex', 'claude-code']), why: z.string().max(200) }).optional(),
   /** Single files approved during the run (or afterwards), read-only, this affair only. */
@@ -242,7 +287,9 @@ export function checkReport(r: Research, raw: unknown) {
   const sources = evidenceSources(r)
   if (
     !r.plan ||
-    !planSources(r.plan).every((repo) => report.items.some((item) => item.repo === repo))
+    !planSources(r.plan)
+      .filter((repo) => !isWebKey(repo))
+      .every((repo) => report.items.some((item) => item.repo === repo))
   )
     throw Error('没有覆盖本次研究的所有来源')
   for (const item of report.items) {
@@ -356,3 +403,7 @@ export function assignWorker(
   ]
   return { key, choice: 'new' }
 }
+
+/** Web calls this affair may still make under its agreement and approved extensions. */
+export const webLimit = (r: { plan: Plan | null; web?: { extra: number } }) =>
+  (r.plan?.web?.limit ?? 0) + (r.web?.extra ?? 0)

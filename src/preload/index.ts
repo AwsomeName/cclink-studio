@@ -1,6 +1,7 @@
 import { ownerDirectoryIpc } from '../shared/ipc/owner-directory'
 import { ownerResearchIpc } from '../shared/ipc/owner-research'
 import { ownerSourceIpc } from '../shared/ipc/owner-source'
+import { ownerWebIpc } from '../shared/ipc/owner-web'
 import { ownerPreferencesIpc } from '../shared/ipc/owner-preferences'
 import { contextBridge, ipcRenderer } from 'electron'
 import { desktopApi } from './remote-desktop-api'
@@ -475,6 +476,14 @@ contextBridge.exposeInMainWorld('cclinkStudio', {
       invokeIpcContract(ownerPreferencesIpc.setDefaultParent, id),
     update: (change: import('../shared/ipc/owner-preferences').OwnerPreferenceUpdate) =>
       invokeIpcContract(ownerPreferencesIpc.update, change),
+  },
+  ownerWeb: {
+    status: () => invokeIpcContract(ownerWebIpc.status),
+    search: (id: string, query: string) => invokeIpcContract(ownerWebIpc.search, id, query),
+    fetch: (id: string, url: string, anchor: string) =>
+      invokeIpcContract(ownerWebIpc.fetch, id, url, anchor),
+    more: (id: string, conversationId: string, used: number, limit: number) =>
+      invokeIpcContract(ownerWebIpc.more, id, conversationId, used, limit),
   },
   ownerSources: {
     list: (id: string) => invokeIpcContract(ownerSourceIpc.list, id),

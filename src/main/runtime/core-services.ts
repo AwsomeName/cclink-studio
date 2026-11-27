@@ -59,6 +59,8 @@ import {
   registerOwnerSources,
 } from '../owner/directory-ipc'
 import { OwnerPreferences, ownerRuntimeReason } from '../owner/owner-preferences'
+import { registerOwnerWeb } from '../owner/web-evidence'
+import { OWNER_WEB_EXTRA } from '../../shared/ipc/owner-web'
 import { OwnerSourceDirectories } from '../owner/source-directories'
 import { OwnerSourceFiles } from '../owner/source-files'
 import { registerOwnerReadme } from '../owner/read-public-readme'
@@ -495,6 +497,22 @@ export async function bootstrapMainProcessServices(
       reason: 'Owner 想读取一个不在本事务参考目录中的文件',
     })
   })
+  registerOwnerWeb(
+    runtime.trustedRendererGuard,
+    () => runtime.webSearchService,
+    async (req) => {
+      const permissions = runtime.permissionManager
+      if (!permissions) return 'denied'
+      return permissions.requestDecision({
+        conversationId: req.conversationId,
+        toolName: 'owner_web_more',
+        params: { used: req.used, limit: req.limit, extra: OWNER_WEB_EXTRA },
+        riskLevel: 'read',
+        allowAlways: false,
+        reason: '本事务的联网次数已用完，Owner 想追加 ' + OWNER_WEB_EXTRA + ' 次',
+      })
+    },
+  )
   registerOwnerPreferences(runtime.trustedRendererGuard, ownerPreferences)
   registerModelUsageIpc(runtime.usageLedgerService!.modelUsage, runtime.trustedRendererGuard)
 

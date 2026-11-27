@@ -19,7 +19,8 @@ import {
   grantSkip,
   declineSkip,
 } from './research-work'
-import { citationPlace, freshResearch, isLocalKey, sourceLabel } from './research-model'
+import { citationPlace, freshResearch, isLocalKey, sourceLabel, webLimit } from './research-model'
+import { OWNER_WEB_EXTRA } from '@shared/ipc/owner-web'
 import { OwnerSidebar } from './owner-sidebar'
 import { OwnerDocument } from './owner-document'
 import { CopyOwnerDiagnostics } from './owner-diagnostics-button'
@@ -32,6 +33,7 @@ import {
   SkippedCard,
   StatusChips,
   StepsCard,
+  WebEvidenceCard,
 } from './owner-board'
 import { DEFAULT_AGENT_RUNTIME_BINDING } from '@shared/agent-runtime'
 import { affairSteps, authorization, pendingCount, runtimeName } from './affair-plan'
@@ -267,6 +269,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             </>
           )}
           <StepsCard steps={steps} />
+          <WebEvidenceCard a={a} />
           <SessionsCard a={a} running={workerLoading ? workerKey : undefined} />
           <DeliveryCard
             a={a}
@@ -432,16 +435,24 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
             <b>
               {p.toolName === 'owner_read_local_file'
                 ? 'Owner 想读取一个不在参考目录中的文件'
-                : p.toolName + ' · ' + p.riskLevel}
+                : p.toolName === 'owner_web_more'
+                  ? '联网次数已用完（' + (r.web?.used ?? 0) + ' / ' + webLimit(r) + '）'
+                  : p.toolName + ' · ' + p.riskLevel}
             </b>
             {p.toolName === 'owner_read_local_file' && (
               <small>只读、仅此文件、仅本事务；60 秒无回应将跳过，其余步骤继续。</small>
             )}
-            {p.summary.map((s, i) => (
-              <p key={i}>
-                {s.label}：{s.value}
-              </p>
-            ))}
+            {p.toolName === 'owner_web_more' ? (
+              <small>
+                追加 {OWNER_WEB_EXTRA} 次，仅本事务。60 秒无回应就停止联网，用已有资料继续。
+              </small>
+            ) : (
+              p.summary.map((s, i) => (
+                <p key={i}>
+                  {s.label}：{s.value}
+                </p>
+              ))
+            )}
             {[false, true].map((v) => (
               <button
                 key={String(v)}
@@ -458,9 +469,13 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
                   ? v
                     ? '允许读取'
                     : '跳过'
-                  : v
-                    ? '仅允许这次'
-                    : '拒绝'}
+                  : p.toolName === 'owner_web_more'
+                    ? v
+                      ? '追加 ' + OWNER_WEB_EXTRA + ' 次'
+                      : '不追加'
+                    : v
+                      ? '仅允许这次'
+                      : '拒绝'}
               </button>
             ))}
           </div>

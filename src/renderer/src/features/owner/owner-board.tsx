@@ -6,6 +6,7 @@ import {
   decisionWorker,
   pendingSkips,
   planSources,
+  webLimit,
   workerLabel,
   workersOf,
 } from './research-model'
@@ -335,12 +336,94 @@ export function DeliveryCard({
 }
 
 function citationLine(items: { repo: string }[], sources: number) {
-  const { local, github } = citationCounts(items)
-  if (!local) return null
+  const { local, web, github } = citationCounts(items)
+  if (!local && !web) return null
   return (
     <small>
-      本地 {local} · GitHub {github} · 覆盖全部 {sources} 个来源
+      {web ? '网页 ' + web + ' · ' : ''}
+      {local ? '本地 ' + local + ' · ' : ''}GitHub {github} · 覆盖全部 {sources} 个来源
     </small>
+  )
+}
+
+/** Every public-web call this affair made: what was searched, which pages were archived. */
+export function WebEvidenceCard({ a }: { a: Affair }) {
+  const r = a.research!
+  if (!r.plan?.web) return null
+  const w = r.web ?? { used: 0, extra: 0, searches: [], pages: [], failed: [] }
+  const limit = webLimit(r)
+  const rows = [
+    ...w.searches.map((s) => ({ at: s.at, kind: 'search' as const, s })),
+    ...w.pages.map((p) => ({ at: p.at, kind: 'page' as const, p })),
+    ...w.failed.map((f) => ({ at: f.at, kind: 'failed' as const, f })),
+  ].sort((x, y) => x.at - y.at)
+  return (
+    <div className="own-card" data-owner-web>
+      <h3>
+        取证记录 · 公开网页
+        <small>每一次联网都由 Studio 执行、计数并存档；网页快照在 资料/</small>
+      </h3>
+      <div className="own-meter">
+        <span>
+          联网 {w.used} / {limit} 次
+        </span>
+        <span className="own-meter-bar">
+          <i
+            className={w.used >= limit ? 'full' : ''}
+            style={{ width: Math.min(100, (w.used / Math.max(1, limit)) * 100) + '%' }}
+          />
+        </span>
+      </div>
+      {w.stopped && (
+        <p className="own-web-stop">联网次数已用完且没有追加，已停止联网，用已有资料继续。</p>
+      )}
+      {rows.length ? (
+        <table className="own-sess">
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} data-owner-web-row={row.kind}>
+                <td>
+                  <span
+                    className={
+                      'own-st ' +
+                      (row.kind === 'failed' ? 'skip' : row.kind === 'page' ? 'done' : 'run')
+                    }
+                  >
+                    {row.kind === 'search' ? '搜索' : row.kind === 'page' ? '已存档' : '读取失败'}
+                  </span>
+                </td>
+                <td>
+                  {row.kind === 'search' && (
+                    <>
+                      {row.s.q}
+                      <small>{row.s.hits} 条结果</small>
+                    </>
+                  )}
+                  {row.kind === 'page' && (
+                    <>
+                      {row.p.title}
+                      <small>
+                        {new URL(row.p.url).hostname} · {row.p.chars.toLocaleString()} 字 · SHA-256{' '}
+                        {row.p.sha.slice(0, 8)}…
+                        {row.p.truncated ? ' · 已截断，截断部分不能引用' : ''}
+                      </small>
+                    </>
+                  )}
+                  {row.kind === 'failed' && (
+                    <>
+                      {row.f.url}
+                      <small>{row.f.why}</small>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <small>还没有联网。</small>
+      )}
+    </div>
   )
 }
 

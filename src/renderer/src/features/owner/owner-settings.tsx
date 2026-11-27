@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { OwnerWebStatus } from '@shared/ipc/owner-web'
 import {
+  DEFAULT_WEB_LIMIT,
   defaultRuntimeOrder,
   ownerRuntimeKinds,
   type OwnerPreferencesView,
@@ -21,6 +23,18 @@ export function OwnerSettings() {
   const setPrefs = useOwnerPrefs((s) => s.set)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [web, setWeb] = useState<OwnerWebStatus | null>(null)
+  const [limitDraft, setLimitDraft] = useState('')
+  useEffect(() => {
+    let live = true
+    void window.cclinkStudio.ownerWeb
+      .status()
+      .then((s) => live && setWeb(s))
+      .catch(() => live && setWeb({ ready: false, reason: '联网搜索服务未就绪' }))
+    return () => {
+      live = false
+    }
+  }, [])
   async function run(fn: () => Promise<OwnerPreferencesView | null>) {
     setBusy(true)
     setError('')
@@ -122,6 +136,65 @@ export function OwnerSettings() {
         </div>
       </section>
 
+      <section className="own-set" data-owner-channels>
+        <h3>取证通道</h3>
+        <div>
+          <div className="own-box" data-owner-channel="web">
+            <span>
+              <b>公开网页</b>
+              <small>
+                搜索、读取公开网页；经 DeepSeek，约 0.75 美元 / 千次，用量计入"Owner 调研"
+              </small>
+            </span>
+            <span className="own-flex" />
+            <span className={'own-tag' + (web?.ready ? ' ok' : '')}>
+              {web ? (web.ready ? '已就绪' : '未开放') : '检查中…'}
+            </span>
+          </div>
+          {web && !web.ready && <small role="status">{web.reason}</small>}
+          <div className="own-box">
+            <span>
+              <b>GitHub 仓库文件</b>
+              <small>公开仓库的 README、文档和源码；沿用已保存的 GitHub 凭证</small>
+            </span>
+            <span className="own-flex" />
+            <span className="own-tag ok">已就绪</span>
+          </div>
+          <div className="own-box">
+            <span>
+              <b>本地参考目录</b>
+              <small>按事务授权，只读</small>
+            </span>
+            <span className="own-flex" />
+            <span className="own-tag ok">已就绪</span>
+          </div>
+          <label className="own-check" data-owner-web-limit>
+            每件事务默认联网上限{' '}
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={limitDraft || String(prefs.webLimit ?? DEFAULT_WEB_LIMIT)}
+              disabled={busy}
+              onChange={(e) => setLimitDraft(e.target.value)}
+              onBlur={() => {
+                const v = Math.round(Number(limitDraft))
+                setLimitDraft('')
+                if (Number.isFinite(v) && v >= 1 && v <= 200 && v !== prefs.webLimit)
+                  void run(() => api.update({ webLimit: v }))
+              }}
+              style={{ width: 64 }}
+            />{' '}
+            次
+          </label>
+          <small>
+            搜索和读取一页各算 1 次；新事务的约定按这个值起草。用到上限时在右侧问你是否追加 10
+            次，60 秒无回应就停止联网，用已有资料继续。模型自带的搜索只算线索，Studio
+            搜索或读取存档后才能被引用。
+          </small>
+        </div>
+      </section>
+
       <section className="own-set" data-owner-runtimes>
         <h3>运行时分工</h3>
         <div>
@@ -212,10 +285,7 @@ export function OwnerSettings() {
               {label}
             </label>
           ))}
-          <small>
-            Owner 拟约定时参考这些偏好；具体范围以每件事务确认的约定为准。当前开发版取证仍只读公开
-            GitHub 仓库。
-          </small>
+          <small>Owner 拟约定时参考这些偏好；具体范围以每件事务确认的约定为准。</small>
         </div>
       </section>
 

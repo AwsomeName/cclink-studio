@@ -38,7 +38,7 @@ describe('affair authorization and steps', () => {
     ])
     expect(tier('ask')).toEqual(['读约定外的本地文件:逐个文件问你'])
     expect(tier('never')).toEqual(['修改本地资料:chip-notes', '对外发布或发送:任何内容'])
-    expect(unused).toEqual(['网站账号', '运行命令'])
+    expect(unused).toEqual(['网站账号', '运行命令', '公开网页'])
   })
 
   it('shows each step with its runtime, capabilities and state, including skips', () => {

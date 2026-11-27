@@ -135,6 +135,24 @@ export interface CCLinkStudioAPI {
       change: import('../shared/ipc/owner-preferences').OwnerPreferenceUpdate,
     ) => Promise<import('../shared/ipc/owner-preferences').OwnerPreferencesView>
   }
+  ownerWeb: {
+    status: () => Promise<import('../shared/ipc/owner-web').OwnerWebStatus>
+    search: (
+      id: string,
+      query: string,
+    ) => Promise<import('../shared/ipc/owner-web').OwnerWebSearchResult>
+    fetch: (
+      id: string,
+      url: string,
+      anchor: string,
+    ) => Promise<import('../shared/ipc/owner-web').OwnerWebPage>
+    more: (
+      id: string,
+      conversationId: string,
+      used: number,
+      limit: number,
+    ) => Promise<import('../shared/ipc/owner-web').OwnerWebMoreOutcome>
+  }
   ownerSources: {
     list: (id: string) => Promise<import('../shared/ipc/owner-source').OwnerSourceGrant[]>
     prepare: (

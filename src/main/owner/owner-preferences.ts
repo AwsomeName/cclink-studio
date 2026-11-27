@@ -4,6 +4,7 @@ import { basename, dirname, join, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
+  DEFAULT_WEB_LIMIT,
   defaultRuntimeOrder,
   ownerRuntimeOrder,
   type OwnerPreferenceUpdate,
@@ -28,6 +29,7 @@ const fileSchema = z.object({
   sources: z.object({ github: z.boolean(), docs: z.boolean(), thirdParty: z.boolean() }),
   reminders: z.object({ topbarCount: z.boolean() }),
   runtimes: ownerRuntimeOrder.optional(),
+  webLimit: z.number().int().min(1).max(200).optional(),
 })
 type Prefs = z.infer<typeof fileSchema>
 export type OwnerRootRecord = z.infer<typeof rootSchema>
@@ -132,6 +134,7 @@ export class OwnerPreferences {
       sources: p.sources,
       reminders: p.reminders,
       runtimes: p.runtimes ?? defaultRuntimeOrder(),
+      webLimit: p.webLimit ?? DEFAULT_WEB_LIMIT,
     }
   }
 
@@ -230,6 +233,7 @@ export class OwnerPreferences {
       if (change.sources) p.sources = change.sources
       if (change.reminders) p.reminders = change.reminders
       if (change.runtimes) p.runtimes = change.runtimes
+      if (change.webLimit) p.webLimit = change.webLimit
       await this.store(p)
       return this.view(p)
     })
