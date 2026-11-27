@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>我的空间 · 事务 v2</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #141414; color: #ccc; font: 14px -apple-system, 'PingFang SC', sans-serif; padding: 28px; }
+      h1 { font-size: 20px; color: #fff; margin: 0 0 4px; }
+      h3 { color: #fff; font-size: 15px; margin: 34px 0 8px; }
+      .note { color: #999; margin: 0 0 18px; line-height: 1.7; max-width: 1200px; }
+      .cap { color: #aaa; font-size: 13px; margin: 8px 0 26px; line-height: 1.7; max-width: 1200px; }
+      .cap b { color: #fff; }
+      .win { width: 1200px; display: flex; border: 1px solid #3a3a3a; border-radius: 10px; overflow: hidden; background: #1e1e1e; min-height: 460px; }
+      .side { width: 200px; flex-shrink: 0; background: #252526; border-right: 1px solid #333; padding: 12px 8px; font-size: 15px; }
+      .side .label { color: #999; font-size: 13px; padding: 0 10px 8px; }
+      .side div.item { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 6px; color: #ddd; }
+      .side div.item.on { background: #2a3a4a; box-shadow: inset 3px 0 0 #0e8ae0; }
+      .side div.item.new { outline: 2px dashed #4b8; outline-offset: -2px; }
+      .side .ico { width: 18px; text-align: center; color: #aaa; }
+      .side .badge { margin-left: auto; font-size: 11.5px; color: #999; }
+      .main { flex: 1; min-width: 0; padding: 22px 30px; }
+      .head { display: flex; align-items: baseline; gap: 14px; }
+      .head h2 { margin: 0; color: #fff; font-size: 20px; }
+      .head .gap { flex: 1; }
+      .link { color: #6a9fd4; font-size: 12.5px; }
+      .muted { color: #888; font-size: 12.5px; }
+      .seg { display: inline-flex; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; font-size: 12.5px; }
+      .seg span { padding: 4px 12px; color: #aaa; }
+      .seg span.on { background: #2a3a4a; color: #fff; }
+      .add { display: flex; gap: 8px; align-items: center; margin: 16px 0 18px; padding: 10px 12px; border: 1px solid #333; border-radius: 8px; background: #232323; outline: 2px dashed #4b8; outline-offset: 3px; }
+      .add input, .add .sel { background: #1a1a1a; border: 1px solid #3c3c3c; border-radius: 5px; color: #eee; padding: 5px 8px; font: inherit; font-size: 13px; min-width: 0; }
+      .add input::placeholder { color: #666; }
+      .add .sel { width: 150px; color: #ddd; }
+      .add .date { width: 104px; }
+      .add .grow { flex: 1; }
+      .add .next { width: 230px; }
+      .add button { background: #0e639c; color: #fff; border: 0; border-radius: 5px; padding: 6px 14px; font: inherit; font-size: 13px; white-space: nowrap; }
+      .group { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; color: #fff; font-size: 14px; }
+      .group .muted { font-size: 12px; }
+      .row { display: grid; grid-template-columns: 22px 170px 1fr 220px 90px; gap: 12px; align-items: start; padding: 10px 10px; border-bottom: 1px solid #2e2e2e; font-size: 13px; }
+      .row:hover, .row.hl { background: #242a30; }
+      .row .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; }
+      .dot.run { background: #3987e5; }
+      .dot.pause { background: #8a8a80; }
+      .dot.done { background: #5bb36a; }
+      .row .name { color: #fff; font-weight: 500; }
+      .row .name small { display: block; color: #888; font-weight: 400; font-size: 12px; margin-top: 2px; }
+      .row .last { color: #ddd; line-height: 1.55; }
+      .row .last time { color: #999; margin-right: 6px; }
+      .row .nxt { color: #c9c3a8; line-height: 1.55; }
+      .row .nxt::before { content: '下一步　'; color: #888; }
+      .row .age { text-align: right; color: #999; white-space: nowrap; }
+      .row .age.stale { color: #e0a55a; }
+      .fold { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+      .fold-btn { background: #252525; color: #ddd; border: 1px solid #3a3a3a; border-radius: 6px; padding: 6px 12px; font: inherit; font-size: 13px; }
+      .chip { font-size: 12px; border-radius: 4px; padding: 2px 8px; }
+      .chip.run { color: #8fb8e0; background: rgba(106,159,212,.16); }
+      .chip.pause { color: #c3c2b7; background: rgba(200,200,190,.12); }
+      .chip.done { color: #8fd19e; background: rgba(120,200,140,.16); }
+      .tag { font-size: 11.5px; border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+      .tag.diary { color: #8fb8e0; background: rgba(106,159,212,.16); }
+      .tag.own { color: #8fd19e; background: rgba(120,200,140,.16); }
+      .tag.state { color: #e0c88f; background: rgba(224,200,143,.14); }
+      .crumb { color: #888; font-size: 12.5px; margin-bottom: 8px; }
+      .crumb b { color: #6a9fd4; font-weight: 400; }
+      .meta { display: flex; gap: 14px; align-items: center; margin: 8px 0 4px; font-size: 12.5px; color: #999; }
+      .meta .sel2 { border: 1px solid #3a3a3a; border-radius: 5px; padding: 2px 8px; color: #ddd; }
+      .goal { margin: 10px 0 0; color: #bbb; font-size: 13px; line-height: 1.6; max-width: 760px; }
+      .tl { position: relative; margin: 8px 0 0 6px; padding-left: 22px; border-left: 1px solid #3a3a3a; }
+      .ent { position: relative; padding: 0 0 18px; }
+      .ent::before { content: ''; position: absolute; left: -27px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: #3987e5; border: 2px solid #1e1e1e; }
+      .ent.state::before { background: #e0c88f; }
+      .ent.diary::before { background: #1e1e1e; border: 2px solid #6a9fd4; }
+      .ent .when { display: flex; gap: 8px; align-items: center; color: #999; font-size: 12.5px; margin-bottom: 3px; }
+      .ent .when b { color: #ddd; font-weight: 500; }
+      .ent .txt { color: #eee; font-size: 13.5px; line-height: 1.65; max-width: 820px; }
+      .ent .txt .n { color: #c9c3a8; }
+      .ent .txt img { display: none; }
+      .thumb { display: inline-block; width: 74px; height: 50px; border-radius: 4px; margin: 6px 6px 0 0; background: linear-gradient(135deg,#3b4a55,#2a3238); border: 1px solid #3a3a3a; }
+      .ent.diary .txt { color: #b9c6d4; }
+      .ent .q { border-left: 2px solid #3a4a5a; padding-left: 10px; }
+      .gapline { color: #777; font-size: 12px; margin: -6px 0 14px; }
+      .two { display: flex; gap: 0; }
+      .agent { width: 300px; flex-shrink: 0; border-left: 1px solid #333; background: #212121; padding: 14px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
+      .agent .t { color: #fff; font-size: 13px; }
+      .agent .pill { border: 1px solid #3a3a3a; border-radius: 14px; padding: 4px 10px; color: #ccc; font-size: 12.5px; display: inline-block; margin: 0 6px 6px 0; }
+      .agent .box { margin-top: auto; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px; color: #666; }
+      .day { margin: 0 0 16px; }
+      .day .d { color: #fff; font-size: 14px; margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; }
+      .day .d .muted { font-size: 12px; }
+      .day .it { display: grid; grid-template-columns: 150px 1fr 88px; gap: 12px; padding: 6px 10px; border-bottom: 1px solid #2c2c2c; font-size: 13px; }
+      .day .it .an { color: #6a9fd4; }
+      .day .it .tx { color: #ddd; line-height: 1.55; }
+      .file { width: 1200px; border: 1px solid #3a3a3a; border-radius: 10px; background: #1e1e1e; padding: 14px 20px; font: 12.5px ui-monospace, Menlo, monospace; color: #ccc; line-height: 1.7; white-space: pre; }
+      .file .c { color: #6a8f6a; }
+      .logic { max-width: 1200px; line-height: 1.8; color: #bbb; }
+      .logic li { margin: 3px 0; }
+      .logic b { color: #fff; }
+      .ask li { margin: 6px 0; }
+    </style>
+    <style>
+      .row { grid-template-columns: 22px 150px 1fr 1fr 96px; }
+      .row .last { color: #ddd; }
+      .row .plan { color: #c9c3a8; line-height: 1.55; }
+      .row .plan::before { content: '计划　'; color: #888; }
+      .row .nxt::before { content: ''; }
+      .row .age small { display: block; color: #777; font-size: 11.5px; margin-top: 2px; }
+      .dot.idle { background: transparent; border: 1.5px solid #777; }
+      .src { display: flex; gap: 10px; align-items: center; margin: 12px 0 0; padding: 8px 12px; border: 1px solid #333; border-radius: 8px; background: #222; font-size: 12.5px; color: #aaa; }
+      .src b { color: #ddd; font-weight: 500; }
+      .new { outline: 2px dashed #4b8; outline-offset: 3px; }
+      .chips { display: flex; gap: 8px; margin: 14px 0 0; }
+      .chips span { border: 1px solid #3a3a3a; border-radius: 14px; padding: 3px 11px; font-size: 12.5px; color: #aaa; }
+      .chips span.on { background: #2a3a4a; color: #fff; border-color: #2a3a4a; }
+      ins { text-decoration: none; background: rgba(120, 200, 140, 0.18); color: #b9e8c3; border-radius: 3px; padding: 0 2px; }
+      del { text-decoration: line-through; color: #a77; }
+      .ent .lbl { color: #888; margin-right: 6px; }
+      .ent .plan { color: #c9c3a8; }
+      .ent.same::before { background: #1e1e1e; border: 2px solid #555; }
+      .ent.same .when { color: #777; }
+      .mention { margin: 6px 0 0; padding: 6px 10px; border-left: 2px solid #3a4a5a; color: #b9c6d4; font-size: 13px; line-height: 1.6; max-width: 820px; }
+      .mention .k { color: #8fb8e0; margin-right: 8px; font-size: 12px; }
+      .todo { color: #ddd; }
+      .upd { margin: 16px 0 18px; padding: 12px 14px; border: 1px solid #333; border-radius: 8px; background: #232323; }
+      .upd .f { display: grid; grid-template-columns: 70px 1fr; gap: 8px; align-items: start; margin: 6px 0; font-size: 13px; }
+      .upd .f span { color: #999; padding-top: 6px; }
+      .upd .ta { background: #1a1a1a; border: 1px solid #3c3c3c; border-radius: 5px; color: #eee; padding: 6px 8px; line-height: 1.6; }
+      .upd .bar { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+      .upd .bar .gap { flex: 1; }
+      .btn { background: #0e639c; color: #fff; border: 0; border-radius: 5px; padding: 6px 14px; font: inherit; font-size: 13px; }
+      .btn.q { background: #2d2d2d; color: #ddd; border: 1px solid #3a3a3a; }
+      .diff { border: 1px solid #333; border-radius: 8px; overflow: hidden; font-size: 13px; margin-top: 10px; }
+      .diff .h { background: #262626; padding: 7px 12px; color: #aaa; font-size: 12.5px; }
+      .diff .l { padding: 6px 12px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
+      .diff .l.m { background: rgba(200, 90, 90, 0.12); color: #e0a0a0; }
+      .diff .l.p { background: rgba(120, 200, 140, 0.12); color: #a8dcb4; }
+      .diff .l.c { color: #888; }
+      .warn { color: #e0a55a; }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 v2 · 「事务」直接读日记里的「项目进度与计划」</h1>
+    <p class="note">
+      v1 每件事另存一份文件，和日记是两套记录，要记两遍。看过真实日记后改为：日记里已经每天带着一张「项目进度与计划」表（按 ### 分组，每行“事项 / 进展记录 / 计划”），事务页就把这张表当事实源。它把同一事项在每天日记里的变化串起来，看出哪天真的有进展、多久没动。要更新进展，就写回今天日记表格里的那一行。不新建事务文件，不改日记格式。虚线框是相对现有我的空间新增的部分，内容根据日记结构改写，均为示意。
+    </p>
+
+    <!-- 1. 列表 -->
+    <h3>① 事务总览：今天日记里的表格，加上“上次变化”</h3>
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item on new"><span class="ico">◎</span>事务<span class="badge">3 停</span></div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item"><span class="ico">$</span>财务</div>
+        <div class="item"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <div class="head">
+          <h2>事务</h2>
+          <span class="muted">日记里「项目进度与计划」的每一行</span>
+          <span class="gap"></span>
+          <span class="link">打开今天日记的这一节 ›</span>
+        </div>
+        <div class="src">来源 <b>1127_周五.md › 项目进度与计划</b>　·　读了最近 120 篇日记，其中 38 篇有这一节　·　5 组 31 项</div>
+        <div class="chips">
+          <span class="on">全部 31</span><span>本周有进展 9</span><span>超过 7 天没动 3</span><span>未开始 14</span>
+        </div>
+
+        <div class="group">眼镜项目 <span class="muted">10 项 · 今日待做 4 条，已勾 0</span></div>
+        <div class="row hl">
+          <span class="dot run"></span>
+          <div class="name">硬件—喇叭<small>首次出现 11/12</small></div>
+          <div class="last">有问题的板去掉两个电容可解决接地问题…已采购，一批已到，<ins>另一批预计 27 日到</ins></div>
+          <div class="plan">到齐后统一对比，逐板试听再换型号复核</div>
+          <div class="age">1 天前<small>11/26 改</small></div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">APP 产品-测试台<small>首次出现 11/08</small></div>
+          <div class="last">…<ins>26 日又优化了一轮自动化，梳理了关键步骤</ins>，首个用例尚缺完整验收记录</div>
+          <div class="plan">周五集中跑通首个功能，留下复测记录</div>
+          <div class="age">1 天前<small>11/26 改</small></div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">硬件-PCB<small>首次出现 11/15</small></div>
+          <div class="last">厂家 A、华秋已报价，嘉立创待询价</div>
+          <div class="plan">按同版文件询 50 片，核实两项缺件</div>
+          <div class="age stale">9 天没动<small>11/18 改</small></div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">硬件—A7Z 与供电<small>首次出现 11/10</small></div>
+          <div class="last">供电方案已基本验证，5 V 基本续航一小时</div>
+          <div class="plan">复测充电时开机的条件</div>
+          <div class="age stale">12 天没动<small>11/15 改</small></div>
+        </div>
+        <div class="row">
+          <span class="dot idle"></span>
+          <div class="name">硬件—戒指<small>首次出现 11/10</small></div>
+          <div class="last" style="color: #888">待启动</div>
+          <div class="plan" style="color: #777">—</div>
+          <div class="age">未开始</div>
+        </div>
+        <div class="fold" style="margin-top: 8px"><button class="fold-btn">▸ 眼镜项目还有 5 项</button></div>
+
+        <div class="group">Studio <span class="muted">5 项</span></div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">Owner<small>首次出现 11/05</small></div>
+          <div class="last">…并融入 chat，作为与 chat 平级的入口使用。<ins>26 日晚又梳理了一轮</ins></div>
+          <div class="plan">以文档为核心推进 Owner 事务官设计</div>
+          <div class="age">1 天前<small>11/26 改</small></div>
+        </div>
+        <div class="fold" style="margin-top: 8px"><button class="fold-btn">▸ 芯片与基础研究 4 · Chatcc 2 · 其他项目 10</button><span class="muted">分组和顺序照日记里的 ### 标题</span></div>
+      </div>
+    </div>
+    <p class="cap">
+      <b>总览页。</b>内容就是今天日记里那张表，按日记里的 ### 分组。多出来的是右边一列“上次变化”：拿这一行和前几天日记里的同一行比，进展记录最后一次变是哪天。绿色底是最近一次新增的那句话。进展记录超过 7 天没变的标橙，左侧角标显示“3 停”。进展是“—”“待启动”“待重启”的算未开始。分组标题顺带显示今天日记里这一组的待做条数。
+    </p>
+
+    <!-- 2. 详情 -->
+    <h3>② 单个事项：这一行在每天日记里怎么变的</h3>
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item on"><span class="ico">◎</span>事务<span class="badge">3 停</span></div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item"><span class="ico">$</span>财务</div>
+        <div class="item"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="two" style="flex: 1; min-width: 0">
+        <div class="main">
+          <div class="crumb"><b>事务</b>　›　眼镜项目　›　硬件—喇叭</div>
+          <div class="head">
+            <h2>硬件—喇叭</h2>
+            <span class="chip run">进行中</span>
+            <span class="gap"></span>
+            <span class="btn new" style="padding: 4px 12px">更新今天的进展</span>
+          </div>
+          <div class="meta"><span>11/12 首次出现在日记表格里 · 进展变过 5 次 · 最近 11/26</span></div>
+
+          <div class="tl" style="margin-top: 18px">
+            <div class="ent">
+              <div class="when"><b>11/27 周五</b><span class="tag diary">日记 1127</span><span class="muted">表格这一行和昨天一样</span></div>
+              <div class="mention"><span class="k">今日打卡 12:11</span>喇叭到了，16 点之后先补觉，然后就测试喇叭。</div>
+              <div class="mention"><span class="k">今日待做</span><span class="todo">☐ 看第二批喇叭是否到货。到齐后用同一音源、供电和喇叭逐板试听…</span></div>
+            </div>
+            <div class="ent">
+              <div class="when"><b>11/26 周四</b><span class="tag diary">日记 1126</span></div>
+              <div class="txt"><span class="lbl">进展</span>…已采购，一批已到，<ins>另一批预计 27 日到。</ins><br /><span class="lbl">计划</span><span class="plan">到齐后统一对比。固定音源、供电和喇叭逐板试听，再换型号复核，记录板间差异。</span></div>
+            </div>
+            <div class="ent same">
+              <div class="when"><b>11/22 – 11/25</b><span class="muted">4 篇日记，这一行没变</span></div>
+            </div>
+            <div class="ent">
+              <div class="when"><b>11/21 周六</b><span class="tag diary">日记 1121</span></div>
+              <div class="txt"><span class="lbl">进展</span>现有两种喇叭，大而贵的效果较好，小而便宜的效果较差。<ins>已采购。</ins><br /><span class="lbl">计划</span><span class="plan"><del>先选型</del> <ins>到货后统一对比</ins></span></div>
+            </div>
+            <div class="gapline">… 11/12 – 11/20 还有 3 次变化，<span class="link">展开</span></div>
+            <div class="ent state">
+              <div class="when"><b>11/12 周四</b><span class="tag state">首次出现</span></div>
+              <div class="txt"><span class="lbl">进展</span>有问题的板可去掉两个电容解决接地问题，另有一块板没有这个问题。</div>
+            </div>
+          </div>
+        </div>
+        <div class="agent">
+          <div class="t">Agent · 我的空间</div>
+          <div class="muted">已挂载 事项：眼镜项目 › 硬件—喇叭（38 篇日记中的这一行与相关段落）</div>
+          <div>
+            <span class="pill">喇叭这件事卡在哪</span>
+            <span class="pill">把今天打卡的进展写进表格</span>
+            <span class="pill">这周都做了什么</span>
+          </div>
+          <div class="muted" style="line-height: 1.6">点问题只填入输入框，由你发送。要它改日记时按 8A：先给改动，确认后写入，可撤销。</div>
+          <div class="box">问点什么…</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap">
+      <b>详情页。</b>每个节点是一篇日记里这一行的样子，只在有变化的那天展开；连续没变的日子合成一个灰点。绿色是比前一篇新增的字，红色删除线是去掉的字。节点下面附当天日记里提到这件事的其他地方（今日打卡、今日待做、昨日总结），按事项名里的关键词“喇叭”找，只读引用，点一下打开那篇日记并定位。这样 11/27 表格虽然没改，也能看到“喇叭到了”这条打卡。
+    </p>
+
+    <!-- 3. 写回日记 -->
+    <h3>③ 更新今天的进展：写回今天日记表格里的这一行</h3>
+    <div class="win" style="min-height: 0">
+      <div class="main">
+        <div class="head"><h2>更新「硬件—喇叭」</h2><span class="muted">写入 1127_周五.md › 项目进度与计划 › 眼镜项目</span></div>
+        <div class="upd new">
+          <div class="f"><span>进展记录</span><div class="ta">有问题的板可去掉两个电容解决接地问题，另有一块板没有这个问题。现有两种喇叭，大而贵的效果较好，小而便宜的效果较差。已采购，<ins>两批都已到货，晚上开始逐板试听。</ins></div></div>
+          <div class="f"><span>计划</span><div class="ta">固定音源、供电和喇叭逐板试听，再换型号复核，记录板间差异。</div></div>
+          <div class="diff">
+            <div class="h">将改动 1127_周五.md 第 112 行（只改这一格）</div>
+            <div class="l m">- | 硬件—喇叭 | …已采购，一批已到，另一批预计 27 日到。 | 到齐后统一对比。…</div>
+            <div class="l p">+ | 硬件—喇叭 | …已采购，两批都已到货，晚上开始逐板试听。 | 固定音源、供电和喇叭逐板试听…</div>
+          </div>
+          <div class="bar">
+            <span class="muted">今日打卡 12:11 提到“喇叭到了”，可以 <span class="link">让 AI 按打卡起草这一格</span></span>
+            <span class="gap"></span>
+            <button class="btn q">取消</button><button class="btn">写入日记</button>
+          </div>
+        </div>
+        <p class="muted" style="margin: 0; line-height: 1.7">
+          今天的日记还没生成时：按钮变为「先生成今天的日记」，生成后再写入。这一行在今天日记里不存在（新事项）：在对应 ### 分组表格末尾加一行。日记正在编辑器里打开且有未保存内容：先请你保存，不覆盖。
+        </p>
+      </div>
+    </div>
+    <p class="cap"><b>写回。</b>事务页不存任何东西，改的永远是今天那篇日记里的那一格，所以第二天的起草自然会带上。写入前给出这一格的前后对比，写入后可撤销，和直接在编辑器里改表格是同一份原文。</p>
+
+    <h3>产品逻辑</h3>
+    <ul class="logic">
+      <li><b>事实源只有日记：</b>事务页读取最近 120 篇日记中的「## 项目进度与计划」一节。### 是分组，表格每一行是一个事项：第一列事项名，第二列进展记录，第三列计划。不新建事务文件，不建索引库，每次打开现算。</li>
+      <li><b>同一事项怎么认：</b>同一分组下事项名相同就是同一件事。比较时忽略空格和 “-／—” 的差别（日记里“硬件-PCB”“硬件—喇叭”两种都有）。改名后会被当成一件新事项，旧的显示为“已从表格移出”。</li>
+      <li><b>“上次变化”：</b>拿每篇日记里这一行的进展记录和前一篇比，文字变了就算一次变化。计划列变了也记录，但不算进展。</li>
+      <li><b>状态只读推断，不往日记里加列：</b>进展是 “—”、“待启动”、“待重启” → 未开始；最新日记里没有这一行 → 已移出；其余 → 进行中。超过 7 天没变化标“没动”，只提示，不改日记。</li>
+      <li><b>相关段落：</b>在同一篇日记的「今日打卡」「今日待做」「昨日总结」里找事项名的关键词，只读显示。分组标题旁显示该组今日待做的勾选数。</li>
+      <li><b>写回：</b>只改今天日记里这一行的进展或计划格。写入前给出这一格的前后对比，写入后可撤销，遵守我的空间 8A。不改过去的日记。</li>
+      <li><b>和每日起草的关系：</b>每日起草读前一天日记，表格本来就会被带到新的一天。事务页不需要额外的定时任务。</li>
+      <li><b>和 Owner 无关：</b>这里只呈现你和起草写进日记的文字，不触发执行，不读 Owner 的事务状态。</li>
+      <li><b>没有这一节时：</b>空态说明“日记里还没有『项目进度与计划』”，提供“在今天日记里加这一节”，按现有分组格式插入空表。</li>
+    </ul>
+
+    <h3>需要你拍板的几点</h3>
+    <ol class="logic ask">
+      <li><b>起草时改的算不算进展？</b>01:00 起草会根据前一天的打卡改写表格（例如“26 日原计划提交嘉立创询价，尚无提交记录”）。这算 AI 帮你记的进展，还是只算你自己改的？如果要区分，需要保留起草时的原稿做对比，节点上分别标“起草更新”和“你改的”。我建议区分。</li>
+      <li><b>“没动”阈值：</b>先定 7 天。对“戒指”“小说”这类长期挂着的事项，是否允许单独设成“不提醒”？设置需要存在日记以外的地方（我的空间设置文件）。</li>
+      <li><b>相关段落匹配：</b>默认只用事项名里的词（“硬件—喇叭”→“喇叭”）。“APP 产品-测试台”这类名字会匹配得宽，要不要允许给事项加别名？</li>
+      <li><b>v1 是否保留“按日期看”：</b>v2 用“本周有进展”筛选代替了 v1 的按日期视图，周末回看时够不够用？</li>
+    </ol>
+  </body>
+</html>

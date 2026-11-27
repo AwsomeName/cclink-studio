@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>我的空间 · 事务 v1</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #141414; color: #ccc; font: 14px -apple-system, 'PingFang SC', sans-serif; padding: 28px; }
+      h1 { font-size: 20px; color: #fff; margin: 0 0 4px; }
+      h3 { color: #fff; font-size: 15px; margin: 34px 0 8px; }
+      .note { color: #999; margin: 0 0 18px; line-height: 1.7; max-width: 1200px; }
+      .cap { color: #aaa; font-size: 13px; margin: 8px 0 26px; line-height: 1.7; max-width: 1200px; }
+      .cap b { color: #fff; }
+      .win { width: 1200px; display: flex; border: 1px solid #3a3a3a; border-radius: 10px; overflow: hidden; background: #1e1e1e; min-height: 460px; }
+      .side { width: 200px; flex-shrink: 0; background: #252526; border-right: 1px solid #333; padding: 12px 8px; font-size: 15px; }
+      .side .label { color: #999; font-size: 13px; padding: 0 10px 8px; }
+      .side div.item { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 6px; color: #ddd; }
+      .side div.item.on { background: #2a3a4a; box-shadow: inset 3px 0 0 #0e8ae0; }
+      .side div.item.new { outline: 2px dashed #4b8; outline-offset: -2px; }
+      .side .ico { width: 18px; text-align: center; color: #aaa; }
+      .side .badge { margin-left: auto; font-size: 11.5px; color: #999; }
+      .main { flex: 1; min-width: 0; padding: 22px 30px; }
+      .head { display: flex; align-items: baseline; gap: 14px; }
+      .head h2 { margin: 0; color: #fff; font-size: 20px; }
+      .head .gap { flex: 1; }
+      .link { color: #6a9fd4; font-size: 12.5px; }
+      .muted { color: #888; font-size: 12.5px; }
+      .seg { display: inline-flex; border: 1px solid #3a3a3a; border-radius: 6px; overflow: hidden; font-size: 12.5px; }
+      .seg span { padding: 4px 12px; color: #aaa; }
+      .seg span.on { background: #2a3a4a; color: #fff; }
+      .add { display: flex; gap: 8px; align-items: center; margin: 16px 0 18px; padding: 10px 12px; border: 1px solid #333; border-radius: 8px; background: #232323; outline: 2px dashed #4b8; outline-offset: 3px; }
+      .add input, .add .sel { background: #1a1a1a; border: 1px solid #3c3c3c; border-radius: 5px; color: #eee; padding: 5px 8px; font: inherit; font-size: 13px; min-width: 0; }
+      .add input::placeholder { color: #666; }
+      .add .sel { width: 150px; color: #ddd; }
+      .add .date { width: 104px; }
+      .add .grow { flex: 1; }
+      .add .next { width: 230px; }
+      .add button { background: #0e639c; color: #fff; border: 0; border-radius: 5px; padding: 6px 14px; font: inherit; font-size: 13px; white-space: nowrap; }
+      .group { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; color: #fff; font-size: 14px; }
+      .group .muted { font-size: 12px; }
+      .row { display: grid; grid-template-columns: 22px 170px 1fr 220px 90px; gap: 12px; align-items: start; padding: 10px 10px; border-bottom: 1px solid #2e2e2e; font-size: 13px; }
+      .row:hover, .row.hl { background: #242a30; }
+      .row .dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; }
+      .dot.run { background: #3987e5; }
+      .dot.pause { background: #8a8a80; }
+      .dot.done { background: #5bb36a; }
+      .row .name { color: #fff; font-weight: 500; }
+      .row .name small { display: block; color: #888; font-weight: 400; font-size: 12px; margin-top: 2px; }
+      .row .last { color: #ddd; line-height: 1.55; }
+      .row .last time { color: #999; margin-right: 6px; }
+      .row .nxt { color: #c9c3a8; line-height: 1.55; }
+      .row .nxt::before { content: '下一步　'; color: #888; }
+      .row .age { text-align: right; color: #999; white-space: nowrap; }
+      .row .age.stale { color: #e0a55a; }
+      .fold { display: flex; gap: 10px; align-items: center; margin-top: 14px; }
+      .fold-btn { background: #252525; color: #ddd; border: 1px solid #3a3a3a; border-radius: 6px; padding: 6px 12px; font: inherit; font-size: 13px; }
+      .chip { font-size: 12px; border-radius: 4px; padding: 2px 8px; }
+      .chip.run { color: #8fb8e0; background: rgba(106,159,212,.16); }
+      .chip.pause { color: #c3c2b7; background: rgba(200,200,190,.12); }
+      .chip.done { color: #8fd19e; background: rgba(120,200,140,.16); }
+      .tag { font-size: 11.5px; border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+      .tag.diary { color: #8fb8e0; background: rgba(106,159,212,.16); }
+      .tag.own { color: #8fd19e; background: rgba(120,200,140,.16); }
+      .tag.state { color: #e0c88f; background: rgba(224,200,143,.14); }
+      .crumb { color: #888; font-size: 12.5px; margin-bottom: 8px; }
+      .crumb b { color: #6a9fd4; font-weight: 400; }
+      .meta { display: flex; gap: 14px; align-items: center; margin: 8px 0 4px; font-size: 12.5px; color: #999; }
+      .meta .sel2 { border: 1px solid #3a3a3a; border-radius: 5px; padding: 2px 8px; color: #ddd; }
+      .goal { margin: 10px 0 0; color: #bbb; font-size: 13px; line-height: 1.6; max-width: 760px; }
+      .tl { position: relative; margin: 8px 0 0 6px; padding-left: 22px; border-left: 1px solid #3a3a3a; }
+      .ent { position: relative; padding: 0 0 18px; }
+      .ent::before { content: ''; position: absolute; left: -27px; top: 5px; width: 9px; height: 9px; border-radius: 50%; background: #3987e5; border: 2px solid #1e1e1e; }
+      .ent.state::before { background: #e0c88f; }
+      .ent.diary::before { background: #1e1e1e; border: 2px solid #6a9fd4; }
+      .ent .when { display: flex; gap: 8px; align-items: center; color: #999; font-size: 12.5px; margin-bottom: 3px; }
+      .ent .when b { color: #ddd; font-weight: 500; }
+      .ent .txt { color: #eee; font-size: 13.5px; line-height: 1.65; max-width: 820px; }
+      .ent .txt .n { color: #c9c3a8; }
+      .ent .txt img { display: none; }
+      .thumb { display: inline-block; width: 74px; height: 50px; border-radius: 4px; margin: 6px 6px 0 0; background: linear-gradient(135deg,#3b4a55,#2a3238); border: 1px solid #3a3a3a; }
+      .ent.diary .txt { color: #b9c6d4; }
+      .ent .q { border-left: 2px solid #3a4a5a; padding-left: 10px; }
+      .gapline { color: #777; font-size: 12px; margin: -6px 0 14px; }
+      .two { display: flex; gap: 0; }
+      .agent { width: 300px; flex-shrink: 0; border-left: 1px solid #333; background: #212121; padding: 14px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
+      .agent .t { color: #fff; font-size: 13px; }
+      .agent .pill { border: 1px solid #3a3a3a; border-radius: 14px; padding: 4px 10px; color: #ccc; font-size: 12.5px; display: inline-block; margin: 0 6px 6px 0; }
+      .agent .box { margin-top: auto; border: 1px solid #3a3a3a; border-radius: 8px; padding: 10px; color: #666; }
+      .day { margin: 0 0 16px; }
+      .day .d { color: #fff; font-size: 14px; margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; }
+      .day .d .muted { font-size: 12px; }
+      .day .it { display: grid; grid-template-columns: 150px 1fr 88px; gap: 12px; padding: 6px 10px; border-bottom: 1px solid #2c2c2c; font-size: 13px; }
+      .day .it .an { color: #6a9fd4; }
+      .day .it .tx { color: #ddd; line-height: 1.55; }
+      .file { width: 1200px; border: 1px solid #3a3a3a; border-radius: 10px; background: #1e1e1e; padding: 14px 20px; font: 12.5px ui-monospace, Menlo, monospace; color: #ccc; line-height: 1.7; white-space: pre; }
+      .file .c { color: #6a8f6a; }
+      .logic { max-width: 1200px; line-height: 1.8; color: #bbb; }
+      .logic li { margin: 3px 0; }
+      .logic b { color: #fff; }
+      .ask li { margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>效果图 v1 · 我的空间新增「事务」：像记日记一样记录各件事的进度</h1>
+    <p class="note">
+      定位：自己记、自己看。每件事一份 Markdown，按日期一条条往下记“今天做到哪、下一步是什么”。不交给 AI 执行，不和 Owner 的事务进度共用状态；日记里提到这件事的段落可以引过来看，但不改日记原文。虚线框是相对现有我的空间新增的部分，内容均为示意。
+    </p>
+
+    <!-- 1. 列表 -->
+    <h3>① 事务列表（按事务看，默认）</h3>
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item on new"><span class="ico">◎</span>事务<span class="badge">5</span></div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item"><span class="ico">$</span>财务</div>
+        <div class="item"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="main">
+        <div class="head">
+          <h2>事务</h2>
+          <span class="muted">手头的事各记一份，按日期往下写进度</span>
+          <span class="gap"></span>
+          <span class="seg"><span class="on">按事务</span><span>按日期</span></span>
+          <span class="link">＋ 新事务</span>
+        </div>
+        <div class="add">
+          <span class="sel">厨房装修 ▾</span>
+          <input class="date" value="11/27 周五" />
+          <input class="grow" placeholder="今天做了什么、到哪一步" value="瓷砖定了，600×1200 灰色哑光，周一送货" />
+          <input class="next" placeholder="下一步（可不填）" value="周一在家等送货、验货" />
+          <button>记一条</button>
+        </div>
+
+        <div class="group">进行中 <span class="muted">4 件 · 按最近一次记录排序</span></div>
+        <div class="row hl">
+          <span class="dot run"></span>
+          <div class="name">厨房装修<small>10/12 开始 · 14 条</small></div>
+          <div class="last"><time>11/25</time>水电改完，师傅说周五可以贴砖</div>
+          <div class="nxt">定瓷砖，周四前给师傅尺寸</div>
+          <div class="age">2 天前</div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">学吉他<small>9/03 开始 · 21 条</small></div>
+          <div class="last"><time>11/24</time>F 和弦终于按响了，《平凡之路》前奏能弹下来 <span class="tag diary">日记 1124</span></div>
+          <div class="nxt">练扫弦节奏型</div>
+          <div class="age">3 天前</div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">医保报销<small>11/02 开始 · 4 条</small></div>
+          <div class="last"><time>11/15</time>材料交到社区窗口，说 10 个工作日左右到账</div>
+          <div class="nxt">11/29 前查一下有没有到账</div>
+          <div class="age stale">12 天没动</div>
+        </div>
+        <div class="row">
+          <span class="dot run"></span>
+          <div class="name">护照续签<small>11/20 开始 · 2 条</small></div>
+          <div class="last"><time>11/20</time>网上预约了 12/03 上午 9:30</div>
+          <div class="nxt">提前准备旧护照和照片</div>
+          <div class="age">7 天前</div>
+        </div>
+
+        <div class="group">搁置 <span class="muted">1 件</span></div>
+        <div class="row">
+          <span class="dot pause"></span>
+          <div class="name">整理旧书<small>8/10 开始 · 6 条</small></div>
+          <div class="last"><time>10/05</time>先放一放，等装修完再弄 <span class="tag state">进行中 → 搁置</span></div>
+          <div class="nxt">装修完再说</div>
+          <div class="age">53 天前</div>
+        </div>
+
+        <div class="fold"><button class="fold-btn">▸ 已完成 · 7 件</button><span class="muted">完成的按完成日期倒序，点开才显示</span></div>
+      </div>
+    </div>
+    <p class="cap">
+      <b>列表页。</b>顶部「记一条」先选事务（默认上次记的那件），填日期、做了什么、可选的下一步，写进那件事的文件（新的一条在最上面）；新的一条马上出现在对应行。每行显示最近一条记录和最近写下的「下一步」。超过 10 天没有新记录的标橙色「N 天没动」，只是提醒，不发通知、不自动改状态。点行进入详情。
+    </p>
+
+    <!-- 2. 详情 -->
+    <h3>② 单个事务（点进「厨房装修」）</h3>
+    <div class="win">
+      <div class="side">
+        <div class="label">我的空间</div>
+        <div class="item"><span class="ico">▦</span>今天</div>
+        <div class="item"><span class="ico">✎</span>日记</div>
+        <div class="item"><span class="ico">▤</span>计划</div>
+        <div class="item on"><span class="ico">◎</span>事务<span class="badge">5</span></div>
+        <div class="item"><span class="ico">◷</span>定时整理</div>
+        <div class="item"><span class="ico">$</span>财务</div>
+        <div class="item"><span class="ico">♡</span>健康</div>
+        <div class="item"><span class="ico">↻</span>同步</div>
+        <div class="item"><span class="ico">⚙</span>项目设置</div>
+      </div>
+      <div class="two" style="flex: 1; min-width: 0">
+        <div class="main">
+          <div class="crumb"><b>事务</b>　›　厨房装修</div>
+          <div class="head">
+            <h2>厨房装修</h2>
+            <span class="chip run">进行中</span>
+            <span class="gap"></span>
+            <span class="link">打开原文 事务/厨房装修.md ›</span>
+          </div>
+          <div class="meta">
+            <span>10/12 开始 · 46 天 · 14 条手记 · 3 段日记提到</span>
+            <span class="sel2">状态：进行中 ▾</span>
+            <span class="sel2">显示：手记＋日记 ▾</span>
+          </div>
+          <p class="goal">想要的结果：春节前能在新厨房做饭。预算 4 万以内。</p>
+
+          <div class="add" style="margin-top: 16px">
+            <input class="date" value="11/27 周五" />
+            <input class="grow" placeholder="今天做了什么、到哪一步" />
+            <input class="next" placeholder="下一步（可不填）" />
+            <button>记一条</button>
+          </div>
+
+          <div class="tl">
+            <div class="ent">
+              <div class="when"><b>11/25 周三</b><span class="tag own">手记</span></div>
+              <div class="txt">水电改完，师傅说周五可以贴砖。拍了管线走向留底。<br /><span class="thumb"></span><span class="thumb"></span><br /><span class="n">下一步：定瓷砖，周四前给师傅尺寸</span></div>
+            </div>
+            <div class="ent diary">
+              <div class="when"><b>11/22 周日</b><span class="tag diary">日记 1122</span><span class="muted">日记里提到“厨房”的段落，只读</span></div>
+              <div class="txt q">下午去建材市场看了三家瓷砖，灰色哑光那款最顺眼，就是贵一点，回来再比比价。</div>
+            </div>
+            <div class="ent">
+              <div class="when"><b>11/18 周一</b><span class="tag own">手记</span></div>
+              <div class="txt">水电师傅进场，开槽。插座位置按图纸改了两处。<br /><span class="n">下一步：周三去看一眼进度</span></div>
+            </div>
+            <div class="gapline">… 11/03 – 11/17 还有 9 条，<span class="link">展开</span></div>
+            <div class="ent state">
+              <div class="when"><b>10/12 周六</b><span class="tag state">新建 · 进行中</span></div>
+              <div class="txt">开始弄厨房，先找了两个装修师傅报价。</div>
+            </div>
+          </div>
+        </div>
+        <div class="agent">
+          <div class="t">Agent · 我的空间</div>
+          <div class="muted">已挂载 事务/厨房装修.md</div>
+          <div>
+            <span class="pill">这件事到哪一步了</span>
+            <span class="pill">一共花了多少钱</span>
+            <span class="pill">把日记里提到的整理进来</span>
+          </div>
+          <div class="muted" style="line-height: 1.6">点问题只填入输入框，由你发送。AI 只读这份文件和日记；要它改文件时按我的空间 8A 规则给出改动报告，可撤销。</div>
+          <div class="box">问点什么…</div>
+        </div>
+      </div>
+    </div>
+    <p class="cap">
+      <b>详情页。</b>最新的在上面，像倒着翻日记。实心蓝点是自己记的手记；空心蓝点是日记里提到这件事的段落，只读引用，点「日记 1122」打开那天日记；黄点是状态变化（新建、搁置、完成、重新开始），也是一条记录。图片随 Markdown 写进 <code>事务/厨房装修.assets/</code>。状态下拉改的是文件顶部的状态，并自动追加一条状态记录。右侧沿用我的空间的 Agent 对话。
+    </p>
+
+    <!-- 3. 按日期 -->
+    <h3>③ 按日期看（列表页右上角切换）</h3>
+    <div class="win" style="min-height: 0">
+      <div class="main">
+        <div class="head">
+          <h2>事务</h2>
+          <span class="muted">每天在哪些事上有进展</span>
+          <span class="gap"></span>
+          <span class="seg"><span>按事务</span><span class="on">按日期</span></span>
+          <span class="sel2" style="border: 1px solid #3a3a3a; border-radius: 5px; padding: 2px 8px; font-size: 12.5px">本周 ▾</span>
+        </div>
+        <div style="height: 14px"></div>
+        <div class="day">
+          <div class="d">11/25 周三 <span class="muted">1 件</span></div>
+          <div class="it"><span class="an">厨房装修</span><span class="tx">水电改完，师傅说周五可以贴砖</span><span class="tag own">手记</span></div>
+        </div>
+        <div class="day">
+          <div class="d">11/24 周二 <span class="muted">2 件</span></div>
+          <div class="it"><span class="an">学吉他</span><span class="tx">F 和弦终于按响了，《平凡之路》前奏能弹下来</span><span class="tag diary">日记 1124</span></div>
+          <div class="it"><span class="an">学吉他</span><span class="tx">练了 40 分钟，换和弦还是慢</span><span class="tag own">手记</span></div>
+        </div>
+        <div class="day">
+          <div class="d">11/23 周一 <span class="muted">没有记录</span></div>
+        </div>
+        <div class="day" style="margin-bottom: 0">
+          <div class="d">11/22 周日 <span class="muted">1 件</span></div>
+          <div class="it"><span class="an">厨房装修</span><span class="tx">下午去建材市场看了三家瓷砖，灰色哑光那款最顺眼…</span><span class="tag diary">日记 1122</span></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>按日期看。</b>把所有事务的记录按天合在一起，方便周末回看“这周在哪些事上动了”。只是另一种排列，数据还是各事务文件和日记，不另存一份。点事务名进详情，点标签打开原文。</p>
+
+    <!-- 4. 文件 -->
+    <h3>④ 存成什么样：<code>~/CCLink Studio/我的空间/事务/厨房装修.md</code></h3>
+    <div class="file">---
+状态: 进行中          <span class="c"># 进行中 / 搁置 / 已完成</span>
+开始: 2026-10-12
+关键词: 厨房, 瓷砖, 橱柜   <span class="c"># 在日记里找相关段落时用；不填就只用事务名</span>
+---
+
+# 厨房装修
+
+想要的结果：春节前能在新厨房做饭。预算 4 万以内。
+
+## 2026-11-25 周三
+
+水电改完，师傅说周五可以贴砖。拍了管线走向留底。
+
+![](厨房装修.assets/1125-1.jpg) ![](厨房装修.assets/1125-2.jpg)
+
+下一步：定瓷砖，周四前给师傅尺寸
+
+## 2026-11-18 周一
+
+水电师傅进场，开槽。插座位置按图纸改了两处。
+
+下一步：周三去看一眼进度
+
+## 2026-10-12 周六
+
+<span class="c">&lt;!-- 状态: 新建 · 进行中 --&gt;</span>
+开始弄厨房，先找了两个装修师傅报价。</div>
+    <p class="cap">一件事一个文件，二级标题是日期，新的一条插在最上面。直接在编辑器里改原文也行，事务页按这个结构读。日记引用不写进这个文件，每次打开时现找。整个 <code>事务/</code> 目录随我的空间 Git 同步。</p>
+
+    <h3>产品逻辑</h3>
+    <ul class="logic">
+      <li><b>入口：</b>我的空间左侧栏「计划」下面加「事务」，角标是进行中的件数。</li>
+      <li><b>一件事 = 一个 Markdown：</b>放在 <code>我的空间/事务/</code>，文件名就是事务名。顶部只记状态、开始日期、可选关键词；正文第一段写“想要的结果”（可空），下面按日期一条条记。</li>
+      <li><b>记一条：</b>日期（默认今天，可改成以前的日子补记）、做了什么（必填）、下一步（可选）、可粘贴图片。同一天记两次就追加到当天那一节下面，不新开一节。</li>
+      <li><b>状态：</b>只有进行中 / 搁置 / 已完成三种，由你手动改；每次改动在文件里留一条状态记录。已完成的事务从列表里折起来，文件不动、不归档、不删除。</li>
+      <li><b>「N 天没动」：</b>进行中且超过 10 天没有新记录（手记和日记引用都算）时标橙，只做提示。</li>
+      <li><b>日记引用：</b>打开事务时只读地在日记里找事务名或关键词出现的段落，标「日记 MMDD」显示在时间线里。不复制、不改日记原文；可以在详情页关掉。</li>
+      <li><b>AI：</b>只在你在右侧对话里问的时候参与（问进度、算花费、把日记里提到的整理成手记）。整理进来属于修改文件，走我的空间 8A：先列改动、改完给报告、可撤销。没有定时任务、不自动执行事务里的任何事。</li>
+      <li><b>和 Owner 的关系：</b>两套东西。Owner 里的「事务进度」由 AI 执行事件驱动；这里只有你写下的文字。互不读取、互不同步状态。</li>
+      <li><b>不做：</b>截止日期提醒、优先级、子任务、甘特图、百分比进度、多人共享。</li>
+    </ul>
+
+    <h3>需要你拍板的几点</h3>
+    <ol class="logic ask">
+      <li><b>日记引用要不要做？</b>做了不用重复记一遍；但按名字和关键词匹配会有误报（日记里随口提到“厨房”）。备选：v1 只显示手记，日记引用以后再加。</li>
+      <li><b>「下一步」要不要单独一格？</b>它能让列表一眼看到每件事接下来干什么；不要的话记一条就只有一个文本框，更像纯日记。</li>
+      <li><b>「今天」页要不要露出？</b>比如在今天页底部加一行「进行中的事务 4 件，医保报销 12 天没动」。默认不加，避免今天页变重。</li>
+      <li><b>每日起草要不要参考事务？</b>即 01:00 起草当天日记时，把进行中事务的「下一步」带进草稿的待做里。默认不带。</li>
+    </ol>
+  </body>
+</html>

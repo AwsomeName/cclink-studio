@@ -6,6 +6,7 @@ import { FoldedTabCreateActions } from '../../components/workbench/TabBar'
 import { useDiaryCalendar } from './diary-calendar-store'
 import { DiaryTasksView } from './DiaryTasksView'
 import { TechDailyDayView } from '../techdaily/TechDailyDayView'
+import { DiaryAffairsView } from './DiaryAffairsView'
 import { DiaryLedgerView } from './DiaryLedgerView'
 import { financeLedger, healthLedger } from './diary-ledger'
 import { useFixedSpacesStore } from './fixed-spaces-store'
@@ -116,8 +117,11 @@ export function PersonalDiaryHome(): React.ReactElement {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    // Import, sync, 财务 and 健康 are My Space pages; other diary projects return to 今天.
-    if (['导入历史', 'Git', '财务', '健康', '科技日报'].includes(page) && ownerPath !== fixedPath)
+    // Import, sync, 事务, 财务 and 健康 are My Space pages; other diary projects return to 今天.
+    if (
+      ['导入历史', 'Git', '事务', '财务', '健康', '科技日报'].includes(page) &&
+      ownerPath !== fixedPath
+    )
       setPage('今天')
   }, [page, setPage, ownerPath, fixedPath])
   useEffect(() => {
@@ -584,9 +588,13 @@ export function PersonalDiaryHome(): React.ReactElement {
           : 'personal-diary-home'
       }
     >
-      {page !== '今天' && page !== '日记' && page !== '财务' && page !== '健康' && (
-        <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
-      )}
+      {page !== '今天' &&
+        page !== '日记' &&
+        page !== '事务' &&
+        page !== '财务' &&
+        page !== '健康' && (
+          <h2>{page === 'Git' ? '同步' : page === '导入历史' ? '从历史导入' : page}</h2>
+        )}
       {notice && page !== '日记' && !(page === '今天' && todayFile) && (
         <p role="status">{notice}</p>
       )}
@@ -632,6 +640,15 @@ export function PersonalDiaryHome(): React.ReactElement {
               tasks={tasks}
               onChanged={() => setRevision((value) => value + 1)}
               openTask={openTask}
+              openFile={openFile}
+            />
+          )}
+          {page === '事务' && source && ownerPath === fixedPath && (
+            <DiaryAffairsView
+              diaries={files.diaries}
+              today={`${day.year}-${day.month}-${day.day}`}
+              todayPath={todayFile?.path}
+              revision={revision}
               openFile={openFile}
             />
           )}

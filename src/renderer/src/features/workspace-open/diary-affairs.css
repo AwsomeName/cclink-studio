@@ -1,0 +1,344 @@
+/* 事务 (docs/design/my-space-affairs-2026-11-27/mockup-v2.html) */
+.diary-affairs {
+  --affair-active: #3987e5;
+  --affair-idle: #777;
+  --affair-state: #e0c88f;
+  --affair-state-bg: rgba(224, 200, 143, 0.14);
+  --affair-add: #b9e8c3;
+  --affair-add-bg: rgba(120, 200, 140, 0.18);
+  --affair-del: #c88;
+  --affair-stale: #e0a55a;
+  --affair-plan: #c9c3a8;
+  --affair-hover: rgba(106, 159, 212, 0.08);
+  --affair-quote: #3a4a5a;
+  --ledger-diary: #8fb8e0;
+  --ledger-diary-bg: rgba(106, 159, 212, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 13px;
+}
+[data-theme='light'] .diary-affairs {
+  --affair-active: #2a78d6;
+  --affair-idle: #999;
+  --affair-state: #8a6400;
+  --affair-state-bg: rgba(200, 150, 0, 0.12);
+  --affair-add: #0b5d1e;
+  --affair-add-bg: rgba(0, 131, 0, 0.12);
+  --affair-del: #a33;
+  --affair-stale: #b35c00;
+  --affair-plan: #6b5d2e;
+  --affair-hover: rgba(42, 120, 214, 0.06);
+  --affair-quote: #c6d3e0;
+  --ledger-diary: #1f5fae;
+  --ledger-diary-bg: rgba(42, 120, 214, 0.1);
+}
+.diary-affairs .muted {
+  color: var(--text-secondary);
+}
+.diary-affairs .warn {
+  color: var(--affair-stale);
+}
+.diary-affairs ins {
+  text-decoration: none;
+  color: var(--affair-add);
+  background: var(--affair-add-bg);
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.diary-affairs del {
+  color: var(--affair-del);
+}
+.diary-affairs-source {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.diary-affairs-source b {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.diary-affairs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.diary-affairs .diary-affairs-filters button {
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 3px 11px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.diary-affairs .diary-affairs-filters button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.diary-affairs-group h3 {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+.diary-affairs-group h3 .muted {
+  font-size: 12px;
+  font-weight: 400;
+}
+.diary-affairs .diary-affairs-row {
+  display: grid;
+  grid-template-columns: 14px minmax(110px, 150px) minmax(0, 1.2fr) minmax(0, 1fr) 84px;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.diary-affairs .diary-affairs-row:hover,
+.diary-affairs .diary-affairs-row:focus-visible {
+  background: var(--affair-hover);
+}
+.diary-affairs .diary-affairs-row .dot,
+.diary-affairs-timeline li::before {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--affair-active);
+}
+.diary-affairs .diary-affairs-row .dot {
+  margin-top: 5px;
+}
+.diary-affairs .diary-affairs-row .dot.idle,
+.diary-affairs .diary-affairs-row .dot.removed {
+  background: transparent;
+  border: 1.5px solid var(--affair-idle);
+}
+.diary-affairs .diary-affairs-row .name {
+  font-weight: 500;
+}
+.diary-affairs .diary-affairs-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.diary-affairs .diary-affairs-row .progress,
+.diary-affairs .diary-affairs-row .plan {
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.diary-affairs .diary-affairs-row .plan,
+.diary-affairs-timeline .plan {
+  color: var(--affair-plan);
+}
+.diary-affairs i {
+  font-style: normal;
+  color: var(--text-secondary);
+  margin-right: 6px;
+}
+.diary-affairs .diary-affairs-row.idle .progress,
+.diary-affairs .diary-affairs-row.removed .progress,
+.diary-affairs .diary-affairs-row.idle .plan,
+.diary-affairs .diary-affairs-row.removed .plan {
+  color: var(--text-secondary);
+}
+.diary-affairs .diary-affairs-row .age {
+  text-align: right;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.diary-affairs .diary-affairs-row .age.stale {
+  color: var(--affair-stale);
+}
+.diary-affairs-empty {
+  padding: 14px;
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+}
+.diary-affairs-empty p {
+  margin: 0 0 10px;
+  line-height: 1.7;
+}
+.diary-affairs-crumb {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.diary-affairs-chip {
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  color: var(--ledger-diary);
+  background: var(--ledger-diary-bg);
+}
+.diary-affairs-chip.idle,
+.diary-affairs-chip.removed {
+  color: var(--text-secondary);
+  background: rgba(128, 128, 128, 0.14);
+}
+.diary-affairs-chip.state {
+  color: var(--affair-state);
+  background: var(--affair-state-bg);
+  font-size: 11.5px;
+  padding: 1px 7px;
+}
+.diary-affairs-meta {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+}
+.diary-affairs-timeline {
+  list-style: none;
+  margin: 6px 0 0 6px;
+  padding: 0 0 0 22px;
+  border-left: 1px solid var(--border-color);
+}
+.diary-affairs-timeline li {
+  position: relative;
+  padding: 0 0 16px;
+}
+.diary-affairs-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -27px;
+  top: 5px;
+  border: 2px solid var(--bg-primary, #1e1e1e);
+}
+.diary-affairs-timeline li.appeared::before,
+.diary-affairs-timeline li.missing::before {
+  background: var(--affair-state);
+}
+.diary-affairs-timeline li.same::before,
+.diary-affairs-timeline li.quiet::before {
+  background: var(--bg-primary, #1e1e1e);
+  border-color: var(--affair-idle);
+}
+.diary-affairs-timeline .when {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 3px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.diary-affairs-timeline .when b {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.diary-affairs-timeline li.quiet .when b {
+  color: var(--text-secondary);
+}
+.diary-affairs-timeline .txt {
+  max-width: 860px;
+  line-height: 1.65;
+}
+.diary-affairs-timeline .mention {
+  max-width: 860px;
+  margin: 6px 0 0;
+  padding: 2px 10px;
+  border-left: 2px solid var(--affair-quote);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.diary-affairs-timeline .mention .k {
+  margin-right: 8px;
+  color: var(--ledger-diary);
+  font-size: 12px;
+}
+.diary-affairs-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+.diary-affairs-edit p {
+  margin: 0;
+}
+.diary-affairs-edit label {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+.diary-affairs-edit label span {
+  padding-top: 6px;
+  color: var(--text-secondary);
+}
+.diary-affairs-edit textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  resize: vertical;
+  font: inherit;
+  line-height: 1.6;
+}
+.diary-affairs-edit .bar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.diary-affairs-edit .bar .gap {
+  flex: 1;
+}
+.diary-affairs-diff {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.diary-affairs-diff .h {
+  padding: 6px 12px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border-color);
+}
+.diary-affairs-diff .l {
+  padding: 6px 12px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diary-affairs-diff .l.m {
+  color: var(--affair-del);
+  background: rgba(200, 90, 90, 0.1);
+}
+.diary-affairs-diff .l.p {
+  color: var(--affair-add);
+  background: var(--affair-add-bg);
+}
+.diary-affairs .diary-ledger-tag {
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ledger-diary);
+  background: var(--ledger-diary-bg);
+  font-size: 11.5px;
+}
+.diary-affairs .diary-affairs-crumb button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+}
