@@ -236,6 +236,8 @@ const scheduledTasksApi: ScheduledTasksApiContract = {
   cancelRun: (input) => invokeIpcContract(scheduledTasksIpc.cancelRun, input),
   listRuns: (workspacePath, taskId) =>
     invokeIpcContract(scheduledTasksIpc.listRuns, workspacePath, taskId),
+  readDrafts: (workspacePath, paths) =>
+    invokeIpcContract(scheduledTasksIpc.readDrafts, workspacePath, paths),
   getRuntimeStatus: () => invokeIpcContract(scheduledTasksIpc.getRuntimeStatus),
   onChanged: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, value: unknown): void => {

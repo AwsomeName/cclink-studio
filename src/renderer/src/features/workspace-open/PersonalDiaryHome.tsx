@@ -645,6 +645,7 @@ export function PersonalDiaryHome(): React.ReactElement {
           )}
           {page === '事务' && source && ownerPath === fixedPath && (
             <DiaryAffairsView
+              workspacePath={fixedPath}
               diaries={files.diaries}
               today={`${day.year}-${day.month}-${day.day}`}
               todayPath={todayFile?.path}

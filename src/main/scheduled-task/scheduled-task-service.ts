@@ -35,6 +35,8 @@ import type {
   ScheduledTaskOperationResult,
   ScheduledTaskRun,
   ScheduledTaskRunListResult,
+  ScheduledTaskDraft,
+  ScheduledTaskDraftListResult,
   ScheduledTaskRunResult,
   ScheduledTaskRunTrigger,
   ScheduledTaskRuntimeStatus,
@@ -117,6 +119,8 @@ export class ScheduledTaskService {
   private readonly homePath: string
   private readonly now: () => number
   private readonly runStore: ScheduledTaskRunStore
+  /** `<runId>.md`: what each run wrote, as written; kept while the run is in the ledger. */
+  private readonly draftDirectory: string
   private runExecutor: ScheduledTaskRunExecutor | null
   private activationFile: ActivationFile = { schemaVersion: 2, activations: {} }
   private activationLoadError: Error | null = null
@@ -148,6 +152,7 @@ export class ScheduledTaskService {
     this.homePath = resolve(options.homePath ?? app.getPath('home'))
     this.now = options.now ?? Date.now
     this.runStore = new ScheduledTaskRunStore(join(root, 'runs.json'))
+    this.draftDirectory = join(root, 'drafts')
     this.runExecutor = options.runExecutor ?? null
     this.beforeDiaryDraft = options.beforeDiaryDraft
     this.editorSessionState = options.editorSessionState
@@ -176,6 +181,64 @@ export class ScheduledTaskService {
     } catch (error) {
       this.runStoreLoadError = error instanceof Error ? error : new Error(String(error))
       console.error('[ScheduledTaskService] 运行账本加载失败，调度能力降级:', error)
+    }
+    if (!this.runStoreLoadError) await this.pruneDrafts()
+  }
+
+  /** Drop drafts whose run has left the ledger (it keeps the newest runs only). */
+  private async pruneDrafts(): Promise<void> {
+    const names = await readdir(this.draftDirectory).catch(() => [] as string[])
+    const kept = new Set(this.runStore.list().map((run) => `${run.id}.md`))
+    for (const name of names)
+      if (!kept.has(name)) await unlink(join(this.draftDirectory, name)).catch(() => undefined)
+  }
+
+  private draftPath(runId: string): string {
+    if (!/^[\w-]{1,128}$/.test(runId)) throw new Error('运行 ID 无效')
+    return join(this.draftDirectory, `${runId}.md`)
+  }
+
+  /** Best effort: a draft that cannot be kept only loses the 起草／你改的 distinction. */
+  private async saveDraft(runId: string, markdown: string): Promise<void> {
+    try {
+      await mkdir(this.draftDirectory, { recursive: true, mode: 0o700 })
+      const target = this.draftPath(runId)
+      const temporary = `${target}.${process.pid}.tmp`
+      await writeFile(temporary, markdown, { encoding: 'utf-8', mode: 0o600 })
+      await rename(temporary, target)
+    } catch (error) {
+      console.warn('[ScheduledTaskService] 起草原稿未能保存:', error)
+    }
+  }
+
+  async readDrafts(
+    workspacePath: string,
+    relativePaths: string[],
+  ): Promise<ScheduledTaskDraftListResult> {
+    try {
+      this.assertRunStoreAvailable()
+      const context = await this.resolveWorkspace(workspacePath, false)
+      const wanted = new Set(relativePaths)
+      const latest = new Map<string, ScheduledTaskRun>()
+      // Newest first: the latest run that wrote each path holds that file's draft.
+      for (const run of this.runStore.list(context.workspacePath)) {
+        const path = run.artifact?.relativePath
+        if (path && wanted.has(path) && !latest.has(path)) latest.set(path, run)
+      }
+      const drafts: ScheduledTaskDraft[] = []
+      for (const [relativePath, run] of latest) {
+        const markdown = await readFile(this.draftPath(run.id), 'utf-8').catch(() => null)
+        // Only a snapshot matching what the run recorded writing counts as its draft.
+        if (
+          markdown === null ||
+          createHash('sha256').update(markdown).digest('hex') !== run.artifact?.sha256
+        )
+          continue
+        drafts.push({ relativePath, runId: run.id, markdown })
+      }
+      return { success: true, drafts }
+    } catch (error) {
+      return { success: false, drafts: [], error: toFailure(error) }
     }
   }
 
@@ -1075,6 +1138,7 @@ export class ScheduledTaskService {
         definition,
         scheduledFor: run.scheduledFor,
       })
+      if (result.draft !== undefined) await this.saveDraft(run.id, result.draft)
       const current = this.runStore.get(run.id)
       if (current?.status === 'running') {
         await this.updateRun(current, {

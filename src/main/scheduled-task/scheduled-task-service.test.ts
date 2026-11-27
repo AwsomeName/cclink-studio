@@ -380,6 +380,42 @@ describe('ScheduledTaskService', () => {
     expect(run).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the written draft so later edits can be told apart, and drops it with its run', async () => {
+    const draft =
+      '# 1129\n\n| 事项 | 进展记录 | 计划 |\n| --- | --- | --- |\n| 喇叭 | 到了 | 试听 |\n'
+    const relativePath = 'docs/周报/weekly-2026-07-29.md'
+    const sha256 = createHash('sha256').update(draft).digest('hex')
+    const run = vi.fn(async () => ({
+      artifact: { relativePath, bytes: Buffer.byteLength(draft), sha256 },
+      draft,
+    }))
+    const service = createService({ run, cancel: vi.fn(async () => {}) })
+    await service.load()
+    const saved = await service.save(createInput(false))
+    await service.startRuntime({} as never)
+    await service.runNow({ workspacePath, taskId: saved.task!.definition.id })
+    await vi.waitFor(async () => {
+      const history = await service.listRuns(workspacePath, saved.task!.definition.id)
+      expect(history.runs[0]?.status).toBe('completed')
+    })
+
+    const result = await service.readDrafts(workspacePath, [relativePath, 'docs/none.md'])
+    expect(result).toMatchObject({ success: true, drafts: [{ relativePath, markdown: draft }] })
+
+    // A snapshot that no longer matches the recorded artifact is not offered as the draft.
+    const file = join(userDataPath, 'scheduled-tasks/drafts', `${result.drafts[0].runId}.md`)
+    await writeFile(file, draft + '改过')
+    expect((await service.readDrafts(workspacePath, [relativePath])).drafts).toEqual([])
+
+    // Drafts of runs that left the ledger are removed on load.
+    const orphan = join(userDataPath, 'scheduled-tasks/drafts/gone.md')
+    await writeFile(orphan, 'x')
+    await service.stopRuntime()
+    await service.load()
+    await expect(readFile(orphan, 'utf8')).rejects.toThrow()
+    await expect(readFile(file, 'utf8')).resolves.toBe(draft + '改过')
+  })
+
   it('serves the same task and run facts through the read-only Agent module', async () => {
     const executor: ScheduledTaskRunExecutor = {
       run: vi.fn(async () => ({

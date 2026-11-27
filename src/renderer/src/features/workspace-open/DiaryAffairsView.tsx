@@ -137,13 +137,39 @@ function timeline(affair: DiaryAffair, diaries: AffairDiaryInput[]): TimelineNod
  * 事务 (mockup v2): the 「项目进度与计划」 section of My Space's diaries, read live. Nothing is
  * stored by this page; 更新今天的进展 changes only that row's cells in today's diary.
  */
+/** The 01:00 drafts Studio kept for these diaries; none when the space or ledger is unavailable. */
+async function readDrafts(
+  workspacePath: string | undefined,
+  paths: string[],
+): Promise<Map<string, string>> {
+  const drafts = new Map<string, string>()
+  if (!workspacePath) return drafts
+  const prefix = workspacePath.replace(/\/+$/, '') + '/'
+  const relative = paths
+    .filter((path) => path.startsWith(prefix))
+    .map((path) => path.slice(prefix.length))
+  if (!relative.length) return drafts
+  const result = await window.cclinkStudio.scheduledTasks
+    .readDrafts(workspacePath, relative)
+    .catch(() => null)
+  for (const draft of result?.drafts ?? []) drafts.set(prefix + draft.relativePath, draft.markdown)
+  return drafts
+}
+
+const SOURCE_LABEL = { draft: '起草更新', you: '你改的', both: '起草后你又改了' } as const
+/** A first appearance is an addition, not an edit. */
+const ADDED_LABEL = { draft: '起草加的', you: '你加的', both: '起草加的，你又改了' } as const
+
 export function DiaryAffairsView({
+  workspacePath,
   diaries,
   today,
   todayPath,
   revision,
   openFile,
 }: {
+  /** My Space root, used to find the drafts Studio kept. */
+  workspacePath?: string
   diaries: Array<{ path: string; year: string; month: string; day: string }>
   /** YYYY-MM-DD in the diary's timezone. */
   today: string
@@ -162,17 +188,27 @@ export function DiaryAffairsView({
   useEffect(() => {
     let alive = true
     setError('')
-    void Promise.all(
-      recent.map(async (file) => {
-        const result = await window.cclinkStudio.fs.readFile(file.path)
-        return {
-          date: `${file.year}-${file.month}-${file.day}`,
-          path: file.path,
-          content: result.encoding === 'utf-8' ? result.content : '',
-        }
-      }),
-    )
-      .then((items) => {
+    void Promise.all([
+      Promise.all(
+        recent.map(async (file) => {
+          const result = await window.cclinkStudio.fs.readFile(file.path)
+          return {
+            date: `${file.year}-${file.month}-${file.day}`,
+            path: file.path,
+            content: result.encoding === 'utf-8' ? result.content : '',
+          }
+        }),
+      ),
+      readDrafts(
+        workspacePath,
+        recent.map((file) => file.path),
+      ),
+    ])
+      .then(([read, drafts]) => {
+        const items: AffairDiaryInput[] = read.map((item) => {
+          const draft = drafts.get(item.path)
+          return draft === undefined ? item : { ...item, draft }
+        })
         if (alive) setInputs(items)
       })
       .catch((e) => {
@@ -182,7 +218,7 @@ export function DiaryAffairsView({
       alive = false
     }
     // `key` stands for the diary list.
-  }, [key, revision, ownRevision])
+  }, [key, revision, ownRevision, workspacePath])
   const summary = useMemo(() => (inputs ? summarizeAffairs(inputs) : null), [inputs])
   const openDay = (date: string): void => {
     useDiaryCalendar.getState().select(date)
@@ -422,6 +458,20 @@ function AffairDetail({
                   {node.version?.previous ? '重新出现' : '首次出现'}
                 </span>
               )}
+              {node.version?.source && (node.kind === 'appeared' || node.kind === 'changed') && (
+                <span
+                  className={`diary-affairs-chip source ${node.version.source}`}
+                  title={
+                    node.version.source === 'draft'
+                      ? '01:00 起草时改的，之后没人动过'
+                      : node.version.source === 'you'
+                        ? '起草之后，这一行是你改的'
+                        : '起草改了这一行，你之后又改了'
+                  }
+                >
+                  {(node.kind === 'appeared' ? ADDED_LABEL : SOURCE_LABEL)[node.version.source]}
+                </span>
+              )}
               {node.kind === 'same' && <span className="muted">表格这一行和前一篇一样</span>}
               {node.kind === 'missing' && <span className="muted">这一天的表格里没有这一行</span>}
             </div>
@@ -443,6 +493,15 @@ function AffairDetail({
                     plainText(node.version.plan) || '—'
                   )}
                 </div>
+                {node.version.drafted && (
+                  <p className="drafted">
+                    <span className="k">起草时写的</span>
+                    {plainText(node.version.drafted.progress) || '—'}
+                    {plainText(node.version.drafted.plan) !== plainText(node.version.plan) && (
+                      <>　计划：{plainText(node.version.drafted.plan) || '—'}</>
+                    )}
+                  </p>
+                )}
               </div>
             )}
             {node.mentions.map((mention, index) => (

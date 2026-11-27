@@ -27,6 +27,25 @@ export function parseWorkspacePath(value: unknown): string {
   return value
 }
 
+export const MAX_DRAFT_PATHS = 200
+
+/** Workspace-relative artifact paths; only compared with the run ledger, never opened as given. */
+export function parseArtifactPaths(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_DRAFT_PATHS) throw new Error('产物路径列表无效')
+  return value.map((path) => {
+    if (
+      typeof path !== 'string' ||
+      !path.trim() ||
+      path.length > 1024 ||
+      path.startsWith('/') ||
+      path.includes('\\') ||
+      path.split('/').includes('..')
+    )
+      throw new Error('产物路径无效')
+    return path
+  })
+}
+
 export function parseScheduledTaskId(value: unknown): string {
   if (typeof value !== 'string' || !TASK_ID_PATTERN.test(value)) {
     throw new Error('定时任务 ID 无效')

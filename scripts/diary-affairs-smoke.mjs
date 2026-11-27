@@ -2,7 +2,8 @@
 // Isolated home/profile and simulated diaries; nothing touches the real My Space.
 //   pnpm exec electron-vite build --outDir .cache/diary-build && node scripts/diary-affairs-smoke.mjs
 import assert from 'node:assert/strict'
-import { mkdir, readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { makeRoot, makeHome, writeDiary, firstUse, SPACE_DIARY } from './diary-acceptance-lib.mjs'
 
@@ -17,7 +18,8 @@ const day = (back) => {
 }
 const [d0, d1, d2, d9] = [day(0), day(1), day(2), day(9)]
 const rel = (d) => `${d.iso.slice(0, 4)}/${d.iso.slice(5, 7)}/${d.md}_${d.wd}.md`
-const diary = (title, rows, punch = '') => `# ${title}
+const robot = '| 机器人 | 舵机已到。 | 确认舵机替换。 |'
+const diary = (title, rows, punch = '', other = '| 机器人 | — | 确认舵机替换。 |') => `# ${title}
 
 今日体重：
 
@@ -48,7 +50,7 @@ ${rows}
 
 | 事项 | 进展记录 | 计划 |
 | --- | --- | --- |
-| 机器人 | — | 确认舵机替换。 |
+${other}
 `
 const pcb = '| 硬件-PCB | 厂家 A 已报价，嘉立创待询价。 | 按同版文件询 50 片。 |'
 const ring = '| 硬件—戒指 | 待启动。 | — |'
@@ -64,13 +66,25 @@ await writeDiary(
   rel(d2),
   diary(d2.iso, ['| 硬件—喇叭 | 现有两种喇叭。 | 先选型 |', pcb, ring].join('\n')),
 )
+const legs = '| 硬件—镜腿 | 开始打样。 | — |'
+// d1 as the 01:00 draft wrote it: it updated 喇叭 and 机器人; then you added 一批已到 and 镜腿.
+const d1Draft = diary(
+  d1.iso,
+  ['| 硬件-喇叭 | 现有两种喇叭。已采购。 | 到货后统一对比 |', pcb, ring].join('\n'),
+  '',
+  robot,
+)
 await writeDiary(
   project,
   D,
   rel(d1),
   diary(
     d1.iso,
-    ['| 硬件-喇叭 | 现有两种喇叭。已采购，一批已到。 | 到货后统一对比 |', pcb, ring].join('\n'),
+    ['| 硬件-喇叭 | 现有两种喇叭。已采购，一批已到。 | 到货后统一对比 |', pcb, ring, legs].join(
+      '\n',
+    ),
+    '',
+    robot,
   ),
 )
 await writeDiary(
@@ -79,14 +93,59 @@ await writeDiary(
   rel(d0),
   diary(
     d0.iso,
-    ['| 硬件—喇叭 | 现有两种喇叭。已采购，一批已到。 | 到货后统一对比 |', pcb, ring].join('\n'),
+    ['| 硬件—喇叭 | 现有两种喇叭。已采购，一批已到。 | 到货后统一对比 |', pcb, ring, legs].join(
+      '\n',
+    ),
     '【12:11】喇叭到了，16 点之后测试。',
+    robot,
   ),
 )
 
+/** Records d1 as written by a daily-draft run, the way the scheduled task service keeps it. */
+async function seedDraftRun(spaceRoot) {
+  const dir = join(s.profile, 'scheduled-tasks')
+  await mkdir(join(dir, 'drafts'), { recursive: true })
+  const ledgerPath = join(dir, 'runs.json')
+  const ledger = await readFile(ledgerPath, 'utf8')
+    .then(JSON.parse)
+    .catch(() => ({ schemaVersion: 2, runs: [] }))
+  const id = 'affairs-smoke-draft'
+  const at = Date.now() - 86400000
+  ledger.runs.push({
+    schemaVersion: 2,
+    id,
+    occurrenceKey: `manual:smoke:daily:${id}`,
+    taskId: 'affairs-smoke-daily',
+    taskRevision: 1,
+    taskExecutionDigest: 'legacy-revision:1',
+    workspaceId: 'smoke',
+    workspaceRef: { kind: 'local', path: spaceRoot },
+    conversationId: '',
+    trigger: 'manual',
+    scheduledFor: null,
+    status: 'completed',
+    currentStep: '任务已完成，运行结果已保存',
+    createdAt: at,
+    startedAt: at,
+    finishedAt: at,
+    artifact: {
+      relativePath: `${SPACE_DIARY}/${rel(d1)}`,
+      bytes: Buffer.byteLength(d1Draft),
+      sha256: createHash('sha256').update(d1Draft).digest('hex'),
+    },
+  })
+  await writeFile(ledgerPath, JSON.stringify(ledger))
+  await writeFile(join(dir, 'drafts', `${id}.md`), d1Draft)
+}
+
 try {
-  const page = await s.launch()
+  await s.launch()
   const space = await firstUse(s, { importFrom: project })
+  await s.close()
+  await seedDraftRun(space)
+  const page = await s.launch()
+  if (!(await page.locator('.personal-diary-home').first().isVisible()))
+    await page.getByRole('button', { name: '我的空间', exact: true }).first().click()
   const todayFile = join(space, SPACE_DIARY, rel(d0))
   const original = await readFile(todayFile, 'utf8')
   const bar = page.getByRole('group', { name: '项目功能' })
@@ -114,7 +173,31 @@ try {
   await list.getByText('表格这一行和前一篇一样').waitFor()
   await list.getByText('【12:11】喇叭到了，16 点之后测试。').waitFor()
   assert.equal(await list.locator('ins').first().innerText(), '已采购，一批已到。')
+  // d1's draft is known: the draft wrote 已采购, you added 一批已到 afterwards.
+  const yesterday = list.locator('li', { hasText: `日记 ${d1.md}` })
+  await yesterday.getByText('起草后你又改了').waitFor()
+  assert.match(
+    await yesterday.locator('.drafted').innerText(),
+    /起草时写的\s*现有两种喇叭。已采购。/,
+  )
   await page.screenshot({ path: join(shots, 'detail.png') })
+
+  // Rows the draft changed alone, and rows you added, are told apart too.
+  await view.getByRole('navigation', { name: '位置' }).getByRole('button', { name: '事务' }).click()
+  await view.getByRole('button', { name: /机器人/ }).click()
+  await list
+    .locator('li', { hasText: `日记 ${d1.md}` })
+    .getByText('起草更新')
+    .waitFor()
+  await view.getByRole('navigation', { name: '位置' }).getByRole('button', { name: '事务' }).click()
+  await view.getByRole('button', { name: /硬件—镜腿/ }).click()
+  await list
+    .locator('li', { hasText: `日记 ${d1.md}` })
+    .getByText('你加的')
+    .waitFor()
+  await page.screenshot({ path: join(shots, 'source-you.png') })
+  await view.getByRole('navigation', { name: '位置' }).getByRole('button', { name: '事务' }).click()
+  await speaker.click()
 
   // Write back: only that row of today's diary changes; undo restores the file.
   await view.getByRole('button', { name: '更新今天的进展' }).click()

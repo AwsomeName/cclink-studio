@@ -59,6 +59,7 @@ describe('ScheduledTaskAgentRunner', () => {
       expect(persisted).not.toContain('private details')
       expect(result.generationError).toContain('[1301]')
       expect(result.artifact.bytes).toBe(Buffer.byteLength(persisted))
+      expect(result.draft).toBe(persisted)
       expect(listeners.size).toBe(0)
     },
   )

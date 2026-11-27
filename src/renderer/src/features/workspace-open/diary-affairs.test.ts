@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   affairKey,
+  changeSource,
   affairKeywords,
   diffText,
   findMentions,
@@ -152,6 +153,39 @@ describe('summarizeAffairs', () => {
     expect(isStale(byName('喇叭'), '2026-12-02')).toBe(false)
     expect(isStale(byName('喇叭'), '2026-12-03')).toBe(true)
     expect(isStale(byName('戒指'), '2026-12-30')).toBe(false)
+  })
+})
+
+describe('who changed a row', () => {
+  const row = (progress: string, plan = '') => ({ progress, plan })
+  it('tells the draft, you and both apart', () => {
+    expect(changeSource(row('一'), row('一'), row('一'))).toBeUndefined()
+    expect(changeSource(row('二'), row('一'), row('二'))).toBe('draft')
+    expect(changeSource(row('二'), row('一'), row('一'))).toBe('you')
+    expect(changeSource(row('三'), row('一'), row('二'))).toBe('both')
+    // A row the draft did not have was added by you; a first row the draft wrote is the draft's.
+    expect(changeSource(row('一'), null, undefined)).toBe('you')
+    expect(changeSource(row('一'), null, row('一'))).toBe('draft')
+  })
+
+  it('tags versions only on days whose draft is known', () => {
+    const draft3 = day2.replace('已采购。 | 到货后', '已采购。一批已到。 | 到货后')
+    const today = draft3.replace('一批已到。', '一批已到，另一批 27 日到。')
+    const summary = summarizeAffairs([
+      { date: '2026-11-24', path: 'a.md', content: day1 },
+      { date: '2026-11-25', path: 'b.md', content: day2 },
+      { date: '2026-11-26', path: 'c.md', content: today, draft: draft3 },
+    ])
+    const speaker = summary.affairs.find((affair) => affair.name.endsWith('喇叭'))!
+    expect(speaker.versions.map((version) => version.source)).toEqual([
+      undefined,
+      undefined,
+      'both',
+    ])
+    expect(speaker.versions[2].drafted?.progress).toBe('现有两种喇叭。已采购。一批已到。')
+    // Unchanged rows carry no tag even with a draft.
+    const ring = summary.affairs.find((affair) => affair.name.endsWith('戒指'))!
+    expect(ring.versions[2].source).toBeUndefined()
   })
 })
 

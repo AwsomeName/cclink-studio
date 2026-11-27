@@ -41,6 +41,8 @@ export interface ScheduledTaskAgentRunInput {
 
 export interface ScheduledTaskAgentRunResult {
   artifact: ScheduledTaskArtifact
+  /** The Markdown written, kept so later edits can be told apart from the draft. */
+  draft?: string
   generationError?: string
 }
 
@@ -279,6 +281,7 @@ export class ScheduledTaskAgentRunner implements ScheduledTaskRunExecutor {
     if (persisted !== markdown) throw new Error('Markdown 写后校验失败')
     return {
       ...(generationError === undefined ? {} : { generationError }),
+      draft: persisted,
       artifact: {
         relativePath: relative(workspaceRoot, target).replaceAll('\\', '/'),
         bytes,

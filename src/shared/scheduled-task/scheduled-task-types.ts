@@ -238,6 +238,20 @@ export interface ScheduledTaskRunListResult {
   error?: ScheduledTaskFailure
 }
 
+/** The Markdown a run wrote, as it was right after writing (before anyone edited the file). */
+export interface ScheduledTaskDraft {
+  /** Artifact path relative to the workspace, as in `ScheduledTaskRun.artifact`. */
+  relativePath: string
+  runId: string
+  markdown: string
+}
+
+export interface ScheduledTaskDraftListResult {
+  success: boolean
+  drafts: ScheduledTaskDraft[]
+  error?: ScheduledTaskFailure
+}
+
 export interface ScheduledTaskRuntimeStatus {
   state: 'stopped' | 'ready' | 'degraded' | 'stopping'
   startedAt: number | null
@@ -278,6 +292,8 @@ export interface ScheduledTasksApiContract {
   runNow(input: RunScheduledTaskInput): Promise<ScheduledTaskRunResult>
   cancelRun(input: CancelScheduledTaskRunInput): Promise<ScheduledTaskRunResult>
   listRuns(workspacePath: string, taskId: string): Promise<ScheduledTaskRunListResult>
+  /** Original drafts of these artifact paths (latest run each); paths without one are left out. */
+  readDrafts(workspacePath: string, relativePaths: string[]): Promise<ScheduledTaskDraftListResult>
   getRuntimeStatus(): Promise<ScheduledTaskRuntimeStatus>
   onChanged(callback: (workspacePath: string) => void): () => void
 }

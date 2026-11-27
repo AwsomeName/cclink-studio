@@ -142,7 +142,12 @@ export interface AffairDiaryInput {
   date: string
   path: string
   content: string
+  /** What the 01:00 draft wrote into this file, when Studio kept it; absent means unknown. */
+  draft?: string
 }
+
+/** Who changed a row that day: the draft, you after it, or both (you edited what it wrote). */
+export type AffairChangeSource = 'draft' | 'you' | 'both'
 
 export type AffairStatus = 'active' | 'idle' | 'removed'
 
@@ -157,6 +162,33 @@ export interface AffairVersion {
   planChanged: boolean
   /** The version this one is compared with; null for the first appearance. */
   previous: { progress: string; plan: string } | null
+  /** Set on a change when that day's draft is known. */
+  source?: AffairChangeSource
+  /** The row as the draft wrote it, when you changed it afterwards. */
+  drafted?: { progress: string; plan: string }
+}
+
+const sameRow = (
+  a: { progress: string; plan: string },
+  b: { progress: string; plan: string },
+): boolean =>
+  plainText(a.progress) === plainText(b.progress) && plainText(a.plan) === plainText(b.plan)
+
+/**
+ * Who changed the row: the draft starts from the day before, so a draft row unlike the previous
+ * one is the draft's change, and a file row unlike the draft's is yours. A row the draft lacks
+ * was added by you.
+ */
+export function changeSource(
+  row: { progress: string; plan: string },
+  previous: { progress: string; plan: string } | null,
+  drafted: { progress: string; plan: string } | undefined,
+): AffairChangeSource | undefined {
+  if (previous && sameRow(row, previous)) return undefined
+  if (!drafted) return 'you'
+  const byDraft = !previous || !sameRow(drafted, previous)
+  const byYou = !sameRow(row, drafted)
+  return byDraft && byYou ? 'both' : byYou ? 'you' : 'draft'
 }
 
 export interface DiaryAffair {
@@ -199,6 +231,15 @@ export function summarizeAffairs(diaries: AffairDiaryInput[]): DiaryAffairsSumma
   const lastPresent = new Map<string, boolean>()
   for (const { diary, section } of parsed) {
     const seen = new Set<string>()
+    const draftRows =
+      diary.draft === undefined
+        ? null
+        : new Map(
+            (parseAffairsSection(diary.draft)?.rows ?? []).map((row) => [
+              affairKey(row.group, row.name),
+              row,
+            ]),
+          )
     for (const row of section.rows) {
       const key = affairKey(row.group, row.name)
       if (seen.has(key)) continue
@@ -215,6 +256,14 @@ export function summarizeAffairs(diaries: AffairDiaryInput[]): DiaryAffairsSumma
         progressChanged: !before || plainText(before.progress) !== plainText(row.progress),
         planChanged: !before || plainText(before.plan) !== plainText(row.plan),
         previous: before ? { progress: before.progress, plan: before.plan } : null,
+      }
+      if (draftRows) {
+        const drafted = draftRows.get(key)
+        // A reappearing row is compared with nothing, like a first appearance.
+        const source = changeSource(row, appeared ? null : version.previous, drafted)
+        if (source) version.source = source
+        if (source === 'both' && drafted)
+          version.drafted = { progress: drafted.progress, plan: drafted.plan }
       }
       if (!affair) {
         byKey.set(key, {

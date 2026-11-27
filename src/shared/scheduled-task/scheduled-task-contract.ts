@@ -7,6 +7,7 @@ import {
   parseRunScheduledTaskInput,
   parseCancelScheduledTaskRunInput,
   parseDeleteScheduledTaskInput,
+  parseArtifactPaths,
 } from './scheduled-task-schema'
 import type {
   ScheduledTaskBundleResult,
@@ -20,6 +21,7 @@ import type {
   DeleteScheduledTaskInput,
   ScheduledTaskRunResult,
   ScheduledTaskRunListResult,
+  ScheduledTaskDraftListResult,
   ScheduledTaskRuntimeStatus,
 } from './scheduled-task-types'
 
@@ -47,6 +49,9 @@ export const scheduledTasksIpc = {
     'scheduledTasks:cancelRun',
   ),
   listRuns: defineIpcCall<[string, string], ScheduledTaskRunListResult>('scheduledTasks:listRuns'),
+  readDrafts: defineIpcCall<[string, string[]], ScheduledTaskDraftListResult>(
+    'scheduledTasks:readDrafts',
+  ),
   getRuntimeStatus: defineIpcCall<[], ScheduledTaskRuntimeStatus>(
     'scheduledTasks:getRuntimeStatus',
   ),
@@ -99,6 +104,16 @@ const invalidRunList = async (): Promise<ScheduledTaskRunListResult> => ({
     code: 'SCHEDULED_TASK_INVALID',
     message: '运行历史参数无效',
     recovery: '刷新任务后重试',
+  },
+})
+
+const invalidDraftList = async (): Promise<ScheduledTaskDraftListResult> => ({
+  success: false,
+  drafts: [],
+  error: {
+    code: 'SCHEDULED_TASK_INVALID',
+    message: '原稿查询参数无效',
+    recovery: '刷新页面后重试',
   },
 })
 
@@ -207,6 +222,14 @@ export const scheduledTasksIpcContracts = {
       return ipcArgs(parseWorkspacePath(args[0]), parseScheduledTaskId(args[1]))
     },
     invalidRunList,
+  ),
+  readDrafts: bindIpcParser(
+    scheduledTasksIpc.readDrafts,
+    (args) => {
+      requireArgs(args, 2, scheduledTasksIpc.readDrafts.channel)
+      return ipcArgs(parseWorkspacePath(args[0]), parseArtifactPaths(args[1]))
+    },
+    invalidDraftList,
   ),
   getRuntimeStatus: bindIpcParser(
     scheduledTasksIpc.getRuntimeStatus,

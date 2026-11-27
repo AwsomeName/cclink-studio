@@ -57,6 +57,11 @@ export function registerScheduledTaskIpc(
     trustedRendererGuard,
     (_event, workspacePath, taskId) => service.listRuns(workspacePath, taskId),
   )
+  registerTrustedIpcContract(
+    scheduledTasksIpc.readDrafts,
+    trustedRendererGuard,
+    (_event, workspacePath, paths) => service.readDrafts(workspacePath, paths),
+  )
   registerTrustedIpcContract(scheduledTasksIpc.getRuntimeStatus, trustedRendererGuard, () =>
     service.getRuntimeStatus(),
   )
