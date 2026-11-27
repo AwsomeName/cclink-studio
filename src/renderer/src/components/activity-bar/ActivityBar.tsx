@@ -392,14 +392,12 @@ export function ActivityBar(): React.ReactElement {
               className="activity-bar-icon"
               aria-label="产品造型"
               onClick={() =>
-                useTabStore
-                  .getState()
-                  .openTab({
-                    type: 'product-shape',
-                    title: '新建产品造型',
-                    icon: '◇',
-                    workspaceRef: activeRef,
-                  })
+                useTabStore.getState().openTab({
+                  type: 'product-shape',
+                  title: '新建产品造型',
+                  icon: '◇',
+                  workspaceRef: activeRef,
+                })
               }
             >
               <ActivityProductionIcon size={18} />
