@@ -168,6 +168,12 @@ export function ActivityBar(): React.ReactElement {
         })
       return
     }
+    // Diary spaces show the file tree inline below the navigation, so clicking 文件 again
+    // folds only the tree and keeps the left column (instead of collapsing the whole sidebar).
+    if (id === 'files' && workspaceType === 'diary' && activePanel === 'files' && sidebarVisible) {
+      useUIStore.getState().showPanel('workspace-home')
+      return
+    }
     if (agentPanelMode === 'center') {
       setAgentPanelMode('right', 'user')
       useUIStore.getState().showPanel(id)
