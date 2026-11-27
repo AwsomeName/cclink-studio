@@ -515,7 +515,7 @@ async function main() {
       await bar.getByRole('button', { name: '项目首页', exact: true }).isVisible(),
       'project home missing',
     )
-    assert((await bar.locator('button').count()) === 11, 'navigation entries changed')
+    assert((await bar.locator('button').count()) === 12, 'navigation entries changed')
     assert(
       JSON.stringify(await bar.locator('.activity-bar-group-label').allTextContents()) ===
         JSON.stringify(['工作', '全部工具']),
@@ -525,6 +525,7 @@ async function main() {
       '文件',
       '会话',
       '工具',
+      '产品造型',
       '浏览器',
       '终端',
       '文章发布',
