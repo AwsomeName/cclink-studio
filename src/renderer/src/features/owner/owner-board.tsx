@@ -307,9 +307,11 @@ export function DeliveryCard({
   const r = a.research!
   if (r.phase !== 'done' || !r.report) return null
   const saved = !!a.directory?.reportFile && !a.directory.error
+  // Affairs from before affair directories keep their report only in Studio's local record.
+  const legacy = !a.directory
   return (
-    <div className={'own-card' + (saved ? ' green' : ' amber')} data-owner-delivery>
-      <h3>{saved ? '交付物' : '交付物待保存'}</h3>
+    <div className={'own-card' + (saved ? ' green' : legacy ? '' : ' amber')} data-owner-delivery>
+      <h3>{saved || legacy ? '交付物' : '交付物待保存'}</h3>
       {saved && (
         <div className="own-card-file">
           <span>📄 {a.directory!.reportFile}</span>
@@ -327,9 +329,17 @@ export function DeliveryCard({
           {citationLine(r.report.items, planSources(r.plan).length)}
         </dd>
         <dt>证据快照</dt>
-        <dd>{r.docs.length} 份，保存在 资料/</dd>
+        <dd>
+          {r.docs.length} 份，{legacy ? '保存在 Studio 本地记录里' : '保存在 资料/'}
+        </dd>
         <dt>文件</dt>
-        <dd>{saved ? '写入后已核验' : '报告已核对，尚未写入磁盘；请在上方重试保存文件'}</dd>
+        <dd>
+          {saved
+            ? '写入后已核验'
+            : legacy
+              ? '这件事务早于事务目录，报告只保存在 Studio 本地记录里，没有写成文件'
+              : '报告已核对，尚未写入磁盘；请在右侧事务官里重试保存文件'}
+        </dd>
       </dl>
     </div>
   )

@@ -393,7 +393,7 @@ export function ResearchView({ a, back }: { a: Affair; back: () => void }) {
           </span>
         </div>
         <small>当前事务 · {title} · 你说的话会写进事务文件</small>
-        {a.directory?.error && <strong role="status">待保存 · 请在看板重试保存文件</strong>}
+        {a.directory?.error && <strong role="status">待保存 · 在下方重试保存文件</strong>}
         <div className="own-thread">
           {r.chat.map((m, i) => (
             <div key={m.questionId ?? i}>
