@@ -214,21 +214,17 @@ describe('AgentRuntime session continuity', () => {
     expect(runtime.getStatus('conversation-1').runId).toBeNull()
   })
 
-  it('binds ACP per conversation without changing the Claude default', () => {
+  it('binds Codex per conversation without changing the Claude default', () => {
     const runtime = new AgentRuntime({
       config: { type: 'local-claude-code' },
       deps: {} as never,
     })
     runtime.bindConversationBackend('codex-thread', {
-      type: 'local-acp',
-      acp: {
-        implementationId: 'codex-acp',
-        codexHome: '/tmp/codex-acp-test',
-        requestPermission: async () => false,
-      },
+      type: 'local-codex',
+      codex: { codexHome: '/tmp/codex-test' },
     })
 
-    expect(runtime.getBackendType('codex-thread')).toBe('local-acp')
+    expect(runtime.getBackendType('codex-thread')).toBe('local-codex')
     expect(runtime.getBackendType('claude-thread')).toBe('local-claude-code')
   })
 
@@ -241,40 +237,27 @@ describe('AgentRuntime session continuity', () => {
 
     expect(() =>
       runtime.bindConversationBackend('conversation-1', {
-        type: 'local-acp',
-        acp: {
-          implementationId: 'codex-acp',
-          codexHome: '/tmp/codex-acp-test',
-          requestPermission: async () => false,
-        },
+        type: 'local-codex',
+        codex: { codexHome: '/tmp/codex-test' },
       }),
     ).toThrow('不能切换')
   })
 
-  it('reconfigures ACP conversations without replacing Claude conversations', () => {
+  it('reconfigures Codex conversations without replacing Claude conversations', () => {
     const runtime = new AgentRuntime({
       config: { type: 'local-claude-code' },
       deps: {} as never,
     })
     const claude = runtime.getBackend('claude-thread') as TestBackend
     runtime.bindConversationBackend('codex-thread', {
-      type: 'local-acp',
-      acp: {
-        implementationId: 'codex-acp',
-        codexHome: '/tmp/codex-acp-test',
-        requestPermission: async () => false,
-      },
+      type: 'local-codex',
+      codex: { codexHome: '/tmp/codex-test' },
     })
     const codex = runtime.getBackend('codex-thread') as TestBackend
 
-    runtime.reconfigureBackendType('local-acp', {
-      type: 'local-acp',
-      acp: {
-        implementationId: 'codex-acp',
-        apiKey: 'next-key',
-        codexHome: '/tmp/codex-acp-test',
-        requestPermission: async () => false,
-      },
+    runtime.reconfigureBackendType('local-codex', {
+      type: 'local-codex',
+      codex: { codexHome: '/tmp/codex-test' },
     })
 
     expect(runtime.getBackend('claude-thread')).toBe(claude)

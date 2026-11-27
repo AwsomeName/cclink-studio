@@ -113,7 +113,6 @@ const settingsApi: SettingsApiContract = {
   probeClaudeRuntime: (selection) => invokeIpcContract(settingsIpc.probeClaudeRuntime, selection),
   testClaudeModelConnection: (selection) =>
     invokeIpcContract(settingsIpc.testClaudeModelConnection, selection),
-  probeCodexAcp: (path) => invokeIpcContract(settingsIpc.probeCodexAcp, path),
 }
 
 const authApi: AuthApiContract = {

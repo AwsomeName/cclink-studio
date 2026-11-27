@@ -40,11 +40,11 @@ import type { ClaudeRuntimeProvenance } from '../../shared/claude-runtime'
 import {
   DEFAULT_AGENT_RUNTIME_BINDING,
   NEW_LOCAL_AGENT_RUNTIME_BINDING,
+  RETIRED_ACP_MESSAGE,
   agentRuntimeBindingsEqual,
   normalizeAgentRuntimeBinding,
   type AgentRuntimeBinding,
 } from '../../shared/agent-runtime'
-import { CODEX_ACP_EXPECTED_VERSION } from '../agent-core/backends/local-acp-backend'
 import type { UsageLedgerService } from '../usage/usage-ledger-service'
 import { codexHomeDirectory } from '../usage/model-usage-codex-import'
 import type { CclinkAgentService, CclinkAgentEndpoint } from './cclink-agent-service'
@@ -89,10 +89,6 @@ export interface AgentBridgeOptions {
   sessionCompatibilityFingerprint?: string
   /** 已解析运行时的安全诊断投影，不包含绝对路径。 */
   runtimeProvenance?: ClaudeRuntimeProvenance
-  /** 可选的 Codex ACP runtime；不会参与 Studio 启动门禁。 */
-  codexAcpPath?: string
-  codexApiKey?: string
-  codexHome?: string
   /** API 格式（当前本地 Agent 路径使用 Anthropic-compatible 配置） */
   apiFormat?: 'anthropic' | 'openai'
   /** API 基础地址（Anthropic 格式时注入为 ANTHROPIC_BASE_URL） */
@@ -170,12 +166,10 @@ export class AgentBridge {
   }
   private readonly getWorkspacePath?: () => string
   private readonly claudeConfigDir: string
-  private readonly codexHome: string
   private configurationChangePending = false
   private sessionCompatibilityFingerprint: string | null
   private runtimeProvenance: ClaudeRuntimeProvenance | null
   private defaultAgentConfig: BackendConfig
-  private acpConfig: Extract<BackendConfig, { type: 'local-acp' }>
   private readonly cclinkAgentService: CclinkAgentService | null
   private readonly runtimeListeners = new Set<(event: AgentRuntimeEvent) => void>()
   private readonly rendererSuppressedConversationIds = new Set<string>()
@@ -212,11 +206,9 @@ export class AgentBridge {
     }
     this.getWorkspacePath = options?.getWorkspacePath
     this.claudeConfigDir = options?.claudeConfigDir ?? ''
-    this.codexHome = options?.codexHome ?? ''
     this.sessionCompatibilityFingerprint = options?.sessionCompatibilityFingerprint ?? null
     this.runtimeProvenance = options?.runtimeProvenance ?? null
     this.defaultAgentConfig = this.buildBackendConfig(options)
-    this.acpConfig = this.buildAcpBackendConfig(options)
     this.cclinkAgentService = options?.experimentalCclinkAgent?.service ?? null
 
     this.runtime = new AgentRuntime({
@@ -278,35 +270,6 @@ export class AgentBridge {
     }
   }
 
-  private buildAcpBackendConfig(
-    options?: Pick<AgentBridgeOptions, 'codexAcpPath' | 'codexApiKey' | 'codexHome'>,
-  ): Extract<BackendConfig, { type: 'local-acp' }> {
-    return {
-      type: 'local-acp',
-      acp: {
-        implementationId: 'codex-acp',
-        executablePath: options?.codexAcpPath,
-        apiKey: options?.codexApiKey,
-        codexHome: options?.codexHome ?? this.codexHome,
-        expectedVersion: CODEX_ACP_EXPECTED_VERSION,
-        getWorkspacePath: this.getWorkspacePath,
-        requestPermission: async (request) => {
-          const authorization = await this.deps.toolHost.authorizeClassifiedTool({
-            toolName: request.toolName,
-            params: request.params,
-            riskLevel: request.riskLevel,
-            context: {
-              conversationId: request.conversationId,
-              agentRunId: request.runId,
-            },
-            reason: request.reason,
-          })
-          return authorization.behavior === 'allow'
-        },
-      },
-    }
-  }
-
   /** 发送用户消息 */
   private runObserver: {
     beforeRun(input: {
@@ -336,12 +299,16 @@ export class AgentBridge {
     if (activeRun) {
       throw new Error(`Agent 当前 Thread 已有活动任务: ${activeRun.runId}`)
     }
-    this.bindConversationRuntime(
-      conversationId,
-      context?.automaticRuntime
-        ? this.automaticTaskBinding(conversationId)
-        : context?.runtimeBinding,
+    const requestedRuntime = context?.automaticRuntime
+      ? this.automaticTaskBinding(conversationId)
+      : context?.runtimeBinding
+    if (
+      normalizeAgentRuntimeBinding(
+        requestedRuntime ?? this.conversationRuntimeBindings.get(conversationId),
+      ).kind === 'acp'
     )
+      throw new Error(RETIRED_ACP_MESSAGE)
+    this.bindConversationRuntime(conversationId, requestedRuntime)
     const binding = this.bindConversationConfiguration(conversationId, context?.configuration)
     const resolvedSkills = this.bindConversationSkills(conversationId, context?.skills ?? [])
     const runId = context?.runId?.trim() || `run-${randomUUID()}`
@@ -949,10 +916,11 @@ export class AgentBridge {
   ): void {
     if (this.preparingRuns.has(conversationId))
       throw new Error('Agent 正在启动，不能恢复或切换会话')
-    this.bindConversationRuntime(conversationId, runtimeBinding)
+    const bound = this.bindConversationRuntime(conversationId, runtimeBinding)
     this.bindConversationConfiguration(conversationId, configuration)
     this.bindConversationSkills(conversationId, skills)
-    if (sessionId === null) {
+    // A retired ACP session id must never be handed to another backend.
+    if (sessionId === null || bound.kind === 'acp') {
       this.runtime.restoreConversation(conversationId, null)
       return
     }
@@ -1116,21 +1084,13 @@ export class AgentBridge {
       apiBaseUrl?: string
       apiKey?: string
       modelName?: string
-      codexAcpPath?: string
-      codexApiKey?: string
-      codexHome?: string
       claudeRuntimeError?: string
       sessionCompatibilityFingerprint?: string
       runtimeProvenance?: ClaudeRuntimeProvenance
     },
     options?: { forceResetSessions?: boolean },
   ): void {
-    if (this.defaultAgentConfig.type === 'cclink-agent') {
-      const nextAcpConfig = this.buildAcpBackendConfig(apiSettings)
-      this.runtime.reconfigureBackendType('local-acp', nextAcpConfig, false)
-      this.acpConfig = nextAcpConfig
-      return
-    }
+    if (this.defaultAgentConfig.type === 'cclink-agent') return
     const config = this.buildBackendConfig({
       agentEngine: 'local-claude-code',
       claudeCodePath: apiSettings.claudeCodePath,
@@ -1147,9 +1107,6 @@ export class AgentBridge {
       this.sessionCompatibilityFingerprint !== null &&
       this.sessionCompatibilityFingerprint === nextFingerprint
     this.switchBackend(config, preserveSessions)
-    const nextAcpConfig = this.buildAcpBackendConfig(apiSettings)
-    this.runtime.reconfigureBackendType('local-acp', nextAcpConfig, false)
-    this.acpConfig = nextAcpConfig
     this.sessionCompatibilityFingerprint = nextFingerprint
     this.runtimeProvenance = apiSettings.runtimeProvenance ?? null
   }
@@ -1694,7 +1651,19 @@ export class AgentBridge {
       requestedBinding ?? this.conversationRuntimeBindings.get(conversationId),
     )
     const current = this.conversationRuntimeBindings.get(conversationId)
-    if (current && !agentRuntimeBindingsEqual(current, binding)) {
+    if (binding.kind === 'acp') {
+      // Retired (ADR 0028): keep the label for history, never start codex-acp.
+      if (current && !agentRuntimeBindingsEqual(current, binding))
+        throw new Error('已有原生 Session 或运行中的会话不能切换 Agent，请新建会话')
+      this.conversationRuntimeBindings.set(conversationId, binding)
+      return binding
+    }
+    if (current?.kind === 'acp' && !this.runtimeStateStore.hasActiveRuns(conversationId)) {
+      // Leaving a retired ACP conversation starts a fresh native session; nothing migrates.
+      this.trustedClaudeSessions.delete(conversationId)
+      void this.runtimeStateStore.clearSession(conversationId)
+      this.runtime.resetSession(conversationId)
+    } else if (current && !agentRuntimeBindingsEqual(current, binding)) {
       const status = this.runtime.getStatus(conversationId)
       const preparation = this.preparingRuns.get(conversationId)
       const active = this.runtimeStateStore.getActiveRun(conversationId)
@@ -1725,9 +1694,7 @@ export class AgentBridge {
               codexHome: codexHomeDirectory(),
             },
           }
-        : binding.kind === 'acp'
-          ? this.acpConfig
-          : this.buildBackendConfigFromCurrentAgent(),
+        : this.buildBackendConfigFromCurrentAgent(),
     )
     this.conversationRuntimeBindings.set(conversationId, binding)
     return binding
@@ -1838,7 +1805,7 @@ export class AgentBridge {
     if (binding.kind === 'codex')
       return createHash('sha256').update('codex-app-server|studio-v1').digest('hex')
     return createHash('sha256')
-      .update(`local-acp|${binding.implementationId}|${CODEX_ACP_EXPECTED_VERSION}|protocol-1`)
+      .update(`local-acp|${binding.implementationId}|retired`)
       .digest('hex')
   }
 

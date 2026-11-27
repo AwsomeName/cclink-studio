@@ -10,7 +10,6 @@ import {
   type BrowserAutomationHost,
   type McpConfigComposer,
 } from './local-claude-code-backend.js'
-import { LocalAcpBackend } from './local-acp-backend.js'
 import { LocalCodexBackend } from './local-codex-backend.js'
 import { CclinkAgentBackend } from './cclink-agent-backend.js'
 
@@ -54,16 +53,6 @@ export function createBackend(config: BackendConfig, deps: BackendFactoryDeps): 
           agentDeviceAvailable: deps.agentDeviceAvailable,
         },
       )
-
-    case 'local-acp':
-      return new LocalAcpBackend({
-        executablePath: config.acp.executablePath,
-        apiKey: config.acp.apiKey,
-        codexHome: config.acp.codexHome,
-        expectedVersion: config.acp.expectedVersion,
-        getWorkspacePath: config.acp.getWorkspacePath,
-        requestPermission: config.acp.requestPermission,
-      })
 
     case 'cclink-agent':
       return new CclinkAgentBackend(config.cclinkAgent)

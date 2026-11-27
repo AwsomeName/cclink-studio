@@ -897,6 +897,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     const id = resolveConversationId(get(), conversationId)
     const conversation = get().conversations[id]
     if (!conversation) return false
+    // ADR 0028: Codex ACP is retired; nothing may bind to it again.
+    if (binding.kind === 'acp') return false
     if (!canChangeConversationRuntime(conversation)) return false
     if (
       agentRuntimeBindingsEqual(

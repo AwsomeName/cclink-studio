@@ -37,7 +37,6 @@ const settingsUpdateSchema = z
       .string()
       .max(64)
       .regex(/^$|^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
-    codexAcpPath: pathString,
     defaultZoomMode: z.enum(['fit', 'manual']),
     browserAddressBarAutoHide: z.boolean(),
     defaultDeviceMode: z.enum(['desktop', 'mobile']),
@@ -160,8 +159,4 @@ export function parseSettingsKey(value: unknown): keyof AppSettings {
 
 export function parseClaudeRuntimeSelection(value: unknown) {
   return claudeRuntimeSelectionSchema.parse(value)
-}
-
-export function parseCodexAcpPath(value: unknown): string {
-  return pathString.parse(value)
 }

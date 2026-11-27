@@ -1,3 +1,4 @@
+import { RETIRED_ACP_MESSAGE } from '@shared/agent-runtime'
 import { imageImportBlockReason } from './image-import-jobs'
 import type {
   AgentAbortResult,
@@ -162,11 +163,8 @@ export function createConversationRunController({
       }
     const imageBlock = !queued ? imageImportBlockReason(`local:${conversationId}`, images) : null
     if (imageBlock) return { status: 'failed', error: imageBlock }
-    if (images.length && conversation.runtimeBinding?.kind === 'acp')
-      return {
-        status: 'failed',
-        error: '当前 ACP 运行时暂不支持图片，请使用 Claude Code 或 Codex 会话',
-      }
+    if (conversation.runtimeBinding?.kind === 'acp')
+      return { status: 'failed', error: RETIRED_ACP_MESSAGE }
     const text = content.trim() || (images.length > 0 ? '请查看我发送的图片。' : '')
     if (!text) return { status: 'ignored', reason: 'empty' }
     if (conversation.archivedAt) return { status: 'ignored', reason: 'archived' }

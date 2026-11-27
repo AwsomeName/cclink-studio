@@ -51,10 +51,10 @@ afterEach(() => {
 })
 
 describe('conversation message queue', () => {
-  it('sends the preserved draft immediately after switching away from a failed ACP launch', async () => {
+  it('sends the preserved draft immediately after switching away from a failed launch', async () => {
     const { api, controller } = harness()
-    useAgentStore.getState().setRuntimeBinding({ kind: 'acp', implementationId: 'codex-acp' }, id)
-    api.sendMessage.mockRejectedValueOnce(new Error('Codex ACP requires its own API Key'))
+    useAgentStore.getState().setRuntimeBinding({ kind: 'claude-code' }, id)
+    api.sendMessage.mockRejectedValueOnce(new Error('Claude Code requires a Studio API Key'))
     await expect(controller.send('preserve this request')).resolves.toMatchObject({
       status: 'failed',
     })
@@ -75,7 +75,7 @@ describe('conversation message queue', () => {
 
   it('keeps existing queued messages paused with their original runtime after switching a failed launch', async () => {
     const { api, controller } = harness()
-    useAgentStore.getState().setRuntimeBinding({ kind: 'acp', implementationId: 'codex-acp' }, id)
+    useAgentStore.getState().setRuntimeBinding({ kind: 'claude-code' }, id)
     let reject!: (error: Error) => void
     api.sendMessage.mockImplementationOnce(
       () =>
@@ -87,7 +87,7 @@ describe('conversation message queue', () => {
     await settle()
     await expect(controller.send('queued request')).resolves.toMatchObject({ status: 'queued' })
     const original = conversation().queuedMessages![0]
-    reject(new Error('Codex ACP requires its own API Key'))
+    reject(new Error('Claude Code requires a Studio API Key'))
     await expect(sending).resolves.toMatchObject({ status: 'failed' })
 
     expect(useAgentStore.getState().setRuntimeBinding({ kind: 'codex' }, id)).toBe(true)

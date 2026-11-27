@@ -139,7 +139,8 @@ try {
   await newConversation()
   await menu()
   await detect('启动及本地登录检查通过')
-  await page.getByRole('button', { name: /Codex ACP/ }).click()
+  // Isolated profile has no Studio Claude key, so the first Claude launch fails before a Session.
+  await page.getByRole('button', { name: /Claude Code（备选）/ }).click()
   const failed = await send('只回复 RUNTIME_SWITCH_OK，不调用工具。', 'failed')
   await menu()
   assert(await page.getByRole('button', { name: /Codex（默认）/ }).isEnabled())
@@ -170,7 +171,7 @@ try {
   await page.screenshot({ path: join(runDir, 'recovery-success.png') })
   await frameworkReport('CODEX_READY')
   result.failedFirstSendRecovery =
-    'same conversation switches ACP to Codex after failure and restart, real response succeeds'
+    'same conversation switches from a failed Claude launch to Codex after restart, real response succeeds'
   result.establishedSession = 'runtime selection remains locked'
   result.success = true
 } catch (error) {

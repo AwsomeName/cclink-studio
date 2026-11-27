@@ -199,22 +199,33 @@ describe('AgentBridge main-process Claude session trust', () => {
     },
   )
 
-  it('rebinds a failed ACP launch without a Session and locks after a real Session exists', async () => {
+  it('refuses to run retired Codex ACP and moves a restored ACP conversation to a fresh native session', async () => {
     const bridge = createBridge()
     try {
       await expect(
         bridge.sendMessage('first', 'retry-runtime', {
           runtimeBinding: { kind: 'acp', implementationId: 'codex-acp' },
         }),
-      ).rejects.toThrow('API Key')
-      expect(bridge.getStatus('retry-runtime').sessionId).toBeNull()
-      queryMock.mockImplementationOnce(() => createMockQuery('retry-session'))
-      await bridge.sendMessage('retry', 'retry-runtime', {
-        runtimeBinding: { kind: 'claude-code' },
-      })
-      expect(bridge.getStatus('retry-runtime').sessionId).toBe('retry-session')
+      ).rejects.toThrow('Codex ACP 已停用')
+      bridge.restoreConversation(
+        'old-acp',
+        'acp-session',
+        createDefaultAgentConversationConfiguration(),
+        null,
+        [],
+        { kind: 'acp', implementationId: 'codex-acp' },
+      )
+      expect(bridge.getStatus('old-acp').sessionId).toBeNull()
       await expect(
-        bridge.sendMessage('switch', 'retry-runtime', { runtimeBinding: { kind: 'codex' } }),
+        bridge.sendMessage('again', 'old-acp', {
+          runtimeBinding: { kind: 'acp', implementationId: 'codex-acp' },
+        }),
+      ).rejects.toThrow('Codex ACP 已停用')
+      queryMock.mockImplementationOnce(() => createMockQuery('retry-session'))
+      await bridge.sendMessage('retry', 'old-acp', { runtimeBinding: { kind: 'claude-code' } })
+      expect(bridge.getStatus('old-acp').sessionId).toBe('retry-session')
+      await expect(
+        bridge.sendMessage('switch', 'old-acp', { runtimeBinding: { kind: 'codex' } }),
       ).rejects.toThrow(/不能切换|已有活动任务/)
     } finally {
       await bridge.destroy()

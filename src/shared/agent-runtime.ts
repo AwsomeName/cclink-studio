@@ -3,6 +3,10 @@ export type AgentRuntimeBinding =
   | { kind: 'claude-code' }
   | { kind: 'acp'; implementationId: 'codex-acp' }
 
+/** ADR 0028: conversations bound to the retired Codex ACP runtime keep history but cannot run. */
+export const RETIRED_ACP_MESSAGE =
+  'Codex ACP 已停用。请在运行时菜单切换到 Codex 或 Claude Code 后继续，历史消息会保留。'
+
 export const DEFAULT_AGENT_RUNTIME_BINDING: AgentRuntimeBinding = { kind: 'claude-code' }
 /** Default for new local chats and the preferred engine of automatic tasks. Legacy data remains Claude. */
 export const NEW_LOCAL_AGENT_RUNTIME_BINDING: AgentRuntimeBinding = { kind: 'codex' }

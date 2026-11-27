@@ -66,12 +66,6 @@ export interface ClaudeCodeStatus {
   error?: string
 }
 
-export interface CodexAcpProbeOperationResult {
-  success: boolean
-  error?: string
-  result?: { executable: string; version: string }
-}
-
 export interface ClaudeRuntimeStatusResult {
   success: boolean
   error?: string
@@ -140,7 +134,6 @@ export interface SettingsApiContract {
   testClaudeModelConnection(
     selection: ClaudeRuntimeSelection,
   ): Promise<ClaudeModelConnectionTestOperationResult>
-  probeCodexAcp(path: string): Promise<CodexAcpProbeOperationResult>
 }
 
 export const settingsIpc = {
@@ -169,5 +162,4 @@ export const settingsIpc = {
     [ClaudeRuntimeSelection],
     ClaudeModelConnectionTestOperationResult
   >('settings:testClaudeModelConnection'),
-  probeCodexAcp: defineIpcCall<[string], CodexAcpProbeOperationResult>('settings:probeCodexAcp'),
 } as const

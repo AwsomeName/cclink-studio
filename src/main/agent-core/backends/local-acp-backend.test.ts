@@ -2,11 +2,7 @@ import { join } from 'node:path'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  buildCodexAcpEnvironment,
-  LocalAcpBackend,
-  probeCodexAcpExecutable,
-} from './local-acp-backend'
+import { buildCodexAcpEnvironment, LocalAcpBackend } from './local-acp-backend'
 
 const temporaryDirectories: string[] = []
 
@@ -47,18 +43,6 @@ describe('Codex ACP runtime boundary', () => {
     expect(environment).not.toHaveProperty('OPENAI_API_KEY')
     expect(environment).not.toHaveProperty('ANTHROPIC_API_KEY')
     expect(environment).not.toHaveProperty('CODEX_PATH')
-  })
-
-  it('accepts the pinned repository ACP executable', async () => {
-    const codexHome = await mkdtemp(join(tmpdir(), 'cclink-codex-acp-test-'))
-    temporaryDirectories.push(codexHome)
-
-    await expect(
-      probeCodexAcpExecutable({
-        executablePath: join(process.cwd(), 'node_modules', '.bin', 'codex-acp'),
-        codexHome,
-      }),
-    ).resolves.toMatchObject({ version: '1.3.0' })
   })
 
   it('maps text, tool, permission, session and cancel over stdio', async () => {

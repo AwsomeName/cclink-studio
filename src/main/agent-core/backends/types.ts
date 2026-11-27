@@ -152,20 +152,6 @@ export type BackendConfig =
       }
     }
   | {
-      type: 'local-acp'
-      acp: {
-        implementationId: 'codex-acp'
-        executablePath?: string
-        apiKey?: string
-        codexHome: string
-        expectedVersion?: string
-        getWorkspacePath?: () => string
-        requestPermission: (
-          request: import('./local-acp-backend.js').AcpPermissionDecisionRequest,
-        ) => Promise<boolean>
-      }
-    }
-  | {
       type: 'cclink-agent'
       cclinkAgent: {
         baseUrl: string

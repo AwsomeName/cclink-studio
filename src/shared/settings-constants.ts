@@ -118,8 +118,6 @@ export interface AppSettings {
   claudeCodePath: string
   /** Studio 管理的 Claude Runtime 固定版本；仅在 claudeRuntimeSource=managed 时生效。 */
   claudeManagedVersion: string
-  /** Codex ACP 可执行文件路径；为空时按系统 PATH 探测。 */
-  codexAcpPath: string
   /** 新浏览器 Tab 默认缩放模式 */
   defaultZoomMode: ZoomMode
   /** 浏览器地址栏默认收起，点击当前浏览器标签或 ⌘L 时显示。 */
@@ -137,7 +135,7 @@ export interface AppSettings {
   apiBaseUrl: string
   /** API 密钥 */
   apiKey: string
-  /** Codex ACP 专用 OpenAI API Key；只从本地凭证服务解析。 */
+  /** 已停用的 Codex ACP 旧密钥（ADR 0028）；只用于显示和删除，不再使用。 */
   codexApiKey: string
   /** 模型名称 */
   modelName: string
@@ -272,7 +270,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   claudeRuntimeSource: 'system',
   claudeCodePath: '',
   claudeManagedVersion: '',
-  codexAcpPath: '',
   defaultZoomMode: 'fit',
   browserAddressBarAutoHide: true,
   defaultDeviceMode: 'desktop',

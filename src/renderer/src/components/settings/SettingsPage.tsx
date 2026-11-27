@@ -333,9 +333,6 @@ export function SettingsPage({
   const [connectionBusy, setConnectionBusy] = useState(false)
   const [connectionDirty, setConnectionDirty] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showCodexApiKey, setShowCodexApiKey] = useState(false)
-  const [codexApiKeyInput, setCodexApiKeyInput] = useState('')
-  const [codexProbeBusy, setCodexProbeBusy] = useState(false)
   const [codexMessage, setCodexMessage] = useState<string | null>(null)
   const [secretStatus, setSecretStatus] = useState<SettingsSecretStatus | null>(null)
   const [secretBusy, setSecretBusy] = useState(false)
@@ -453,10 +450,6 @@ export function SettingsPage({
 
   useEffect(() => {
     if (activeSection === 'connections') void refreshClaudeRuntimeStatus()
-    else {
-      setCodexApiKeyInput('')
-      setShowCodexApiKey(false)
-    }
   }, [activeSection, refreshClaudeRuntimeStatus])
 
   const searchResults = useMemo(() => {
@@ -562,27 +555,6 @@ export function SettingsPage({
       .finally(() => setCadChecking(false))
   }
 
-  const saveCodexApiKey = async (): Promise<void> => {
-    if (!codexApiKeyInput.trim()) return
-    setSecretBusy(true)
-    setCodexMessage(null)
-    try {
-      const result = await window.cclinkStudio.settings.setSecret('codexApiKey', codexApiKeyInput)
-      if (!result.success || !result.status) {
-        setCodexMessage(result.error ?? 'Codex API Key 保存失败')
-        return
-      }
-      setCodexApiKeyInput('')
-      setShowCodexApiKey(false)
-      setSecretStatus(result.status)
-      setCodexMessage('Codex API Key 已保存到本地凭证文件')
-    } catch (nextError: unknown) {
-      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setSecretBusy(false)
-    }
-  }
-
   const clearCodexApiKey = async (): Promise<void> => {
     setSecretBusy(true)
     setCodexMessage(null)
@@ -592,30 +564,12 @@ export function SettingsPage({
         setCodexMessage(result.error ?? 'Codex API Key 清除失败')
         return
       }
-      setCodexApiKeyInput('')
       setSecretStatus(result.status)
-      setCodexMessage('Codex API Key 已清除')
+      setCodexMessage('旧版 Codex ACP 的 API Key 已删除')
     } catch (nextError: unknown) {
       setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
     } finally {
       setSecretBusy(false)
-    }
-  }
-
-  const probeCodexAcp = async (): Promise<void> => {
-    setCodexProbeBusy(true)
-    setCodexMessage(null)
-    try {
-      const response = await window.cclinkStudio.settings.probeCodexAcp(settings.codexAcpPath)
-      if (!response.success || !response.result) {
-        setCodexMessage(response.error ?? 'Codex ACP 检测失败')
-        return
-      }
-      setCodexMessage(`可用 · Codex ACP ${response.result.version} · ${response.result.executable}`)
-    } catch (nextError: unknown) {
-      setCodexMessage(nextError instanceof Error ? nextError.message : String(nextError))
-    } finally {
-      setCodexProbeBusy(false)
     }
   }
 
@@ -684,8 +638,7 @@ export function SettingsPage({
     await refreshCredentialStatus()
   }
 
-  const connectionsBusy =
-    connectionBusy || credentialBusy || secretBusy || claudeRuntimeBusy || codexProbeBusy
+  const connectionsBusy = connectionBusy || credentialBusy || secretBusy || claudeRuntimeBusy
   const navigateSettings = (section: SettingsSectionId, service = connectionService): boolean => {
     if (section === activeSection && (section !== 'connections' || service === connectionService))
       return true
@@ -1056,100 +1009,29 @@ export function SettingsPage({
                     </div>
                   )}
                 </div>
-                <details>
-                  <summary>旧版 Codex ACP（兼容设置）</summary>{' '}
-                  <div className="settings-row">
+                {(secretStatus?.codexApiKeyConfigured || codexMessage) && (
+                  <div className="settings-row settings-secret-row" data-retired-codex-acp-key>
                     <div className="settings-label">
-                      <span>Codex ACP（可选）</span>
+                      <span>旧版 Codex ACP 的 API Key</span>
                       <span className="settings-description">
-                        仅用于旧版 ACP 会话；默认 Codex 直接使用本机 CLI
-                        和已有文件登录，不需要此处的 ACP 配置。
-                      </span>
-                    </div>
-                  </div>
-                  <SettingsRow settingKey="codexAcpPath" settings={settings} onReset={resetOne}>
-                    <div className="settings-label">
-                      <span>Codex ACP 可执行文件</span>
-                      <span className="settings-description">
-                        留空时从系统 PATH 查找；请自行安装
-                        @agentclientprotocol/codex-acp@1.3.0，当前只接受该版本。
-                      </span>
-                    </div>
-                    <div className="settings-control settings-control-inline">
-                      <input
-                        className="settings-input"
-                        value={settings.codexAcpPath}
-                        placeholder="codex-acp"
-                        onChange={(event) => {
-                          setCodexMessage(null)
-                          update({ codexAcpPath: event.target.value })
-                        }}
-                      />
-                      <button
-                        className="settings-secondary-btn"
-                        type="button"
-                        disabled={codexProbeBusy}
-                        onClick={() => void probeCodexAcp()}
-                      >
-                        {codexProbeBusy ? '检测中...' : '检测'}
-                      </button>
-                    </div>
-                  </SettingsRow>
-                  <div className="settings-row settings-secret-row">
-                    <div className="settings-label">
-                      <span>Codex API Key</span>
-                      <span className="settings-description">
-                        {secretStatus?.codexApiKeyConfigured
-                          ? '已独立保存到本地凭证文件。'
-                          : '尚未配置；不会读取 Claude 的 Key 或 Codex 登录状态。'}
+                        Codex ACP 已停用，这把 Key 不再使用。Codex 现在使用本机登录，不需要它。
                       </span>
                     </div>
                     <div className="settings-secret-control">
-                      <div className="settings-control settings-control-inline">
-                        <input
-                          className="settings-input settings-input-apikey"
-                          type={showCodexApiKey ? 'text' : 'password'}
-                          value={codexApiKeyInput}
-                          placeholder={
-                            secretStatus?.codexApiKeyConfigured
-                              ? '输入新 Key 以替换'
-                              : '输入 OpenAI API Key'
-                          }
-                          autoComplete="off"
-                          disabled={secretBusy || secretStatus?.storageAvailable === false}
-                          onChange={(event) => setCodexApiKeyInput(event.target.value)}
-                        />
+                      {secretStatus?.codexApiKeyConfigured && (
                         <button
-                          className="settings-secondary-btn"
+                          className="settings-danger-btn"
                           type="button"
                           disabled={secretBusy}
-                          onClick={() => setShowCodexApiKey((value) => !value)}
+                          onClick={() => void clearCodexApiKey()}
                         >
-                          {showCodexApiKey ? '隐藏' : '显示'}
+                          删除旧版 Codex ACP 的 API Key
                         </button>
-                        <button
-                          className="settings-secondary-btn"
-                          type="button"
-                          disabled={secretBusy || !codexApiKeyInput.trim()}
-                          onClick={() => void saveCodexApiKey()}
-                        >
-                          保存
-                        </button>
-                        {secretStatus?.codexApiKeyConfigured && (
-                          <button
-                            className="settings-danger-btn"
-                            type="button"
-                            disabled={secretBusy}
-                            onClick={() => void clearCodexApiKey()}
-                          >
-                            清除
-                          </button>
-                        )}
-                      </div>
+                      )}
                       {codexMessage && <span className="settings-description">{codexMessage}</span>}
                     </div>
                   </div>
-                </details>
+                )}
               </div>
             }
             storageSettings={

@@ -149,6 +149,15 @@ export const DEFAULT_CONVERSATION_ID = 'agent-default'
 export function canChangeConversationRuntime(
   conversation: AgentConversationState | undefined,
 ): boolean {
+  // ADR 0028: a retired Codex ACP conversation may always move to a native runtime when idle.
+  if (
+    conversation?.runtimeBinding?.kind === 'acp' &&
+    !conversation.loading &&
+    !conversation.activeRunId &&
+    !conversation.streamingMessageId &&
+    !conversation.queuedMessageDispatchId
+  )
+    return true
   if (
     !conversation ||
     conversation.loading ||

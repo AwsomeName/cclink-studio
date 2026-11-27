@@ -35,7 +35,6 @@ import {
   testClaudeModelConnection,
   type ClaudeModelConnectionTestInput,
 } from '../agent/claude-model-connection-test'
-import { probeCodexAcpExecutable } from '../agent-core/backends/local-acp-backend'
 
 /** 合法的 permissionMode 值（唯一声明源：shared/settings-constants） */
 const VALID_PERMISSION_MODES = new Set<string>(PERMISSION_MODES)
@@ -46,7 +45,6 @@ const AGENT_SETTING_KEYS = new Set([
   'claudeRuntimeSource',
   'claudeCodePath',
   'claudeManagedVersion',
-  'codexAcpPath',
   'provider',
   'apiFormat',
   'apiBaseUrl',
@@ -117,6 +115,9 @@ export function registerSettingsIpc(
     async (_event, key, value) => {
       let releaseAgentLock: (() => void) | null = null
       try {
+        // ADR 0028: the retired Codex ACP key can only be cleared, never saved again.
+        if (key === 'codexApiKey')
+          return { success: false, error: 'Codex ACP 已停用，不再保存新的 API Key' }
         if (key === 'meshyApiKey') {
           const status = await settingsService.setSecret(key, value)
           return { success: true, status }
@@ -491,24 +492,6 @@ export function registerSettingsIpc(
       } finally {
         modelConnectionTestPending = false
         release()
-      }
-    },
-  )
-
-  registerTrustedIpcContract(
-    settingsIpc.probeCodexAcp,
-    trustedRendererGuard,
-    async (_event, path) => {
-      try {
-        return {
-          success: true,
-          result: await probeCodexAcpExecutable({
-            executablePath: path,
-            codexHome: join(app.getPath('userData'), 'codex-acp'),
-          }),
-        }
-      } catch (err) {
-        return { success: false, error: settingsIpcError(err) }
       }
     },
   )

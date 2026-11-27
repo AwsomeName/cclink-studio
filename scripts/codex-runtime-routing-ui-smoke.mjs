@@ -80,6 +80,7 @@ try {
   // a choice for a new conversation; existing saved bindings still load honestly.
   const stateDir = join(workspace, '.cclink-studio', 'state')
   let seeded = false
+  let seededId = null
   for (const name of await readdir(stateDir)) {
     if (!name.endsWith('.json')) continue
     const path = join(stateDir, name)
@@ -89,6 +90,7 @@ try {
     if (!conversation) continue
     assert.equal(conversation.runtimeBinding.kind, 'codex')
     conversation.runtimeBinding = { kind: 'acp', implementationId: 'codex-acp' }
+    seededId = conversation.id ?? snapshot.activeConversationId
     await writeFile(path, JSON.stringify(state))
     seeded = true
   }
@@ -103,15 +105,12 @@ try {
     .locator('[data-agent-landmark="composer"] textarea:visible')
     .last()
     .fill('只回复 ACP_RECOVERY_TEST，不使用工具。')
+  const runsBefore = await page.evaluate(() => window.__codexSmoke.runs.length)
   await page.locator('[data-agent-action="send"]:visible').last().click()
-  await page.waitForFunction(
-    () => window.__codexSmoke.runs.some((run) => run.status === 'failed'),
-    null,
-    { timeout: 15000 },
-  )
-  const failed = await page.evaluate(() => window.__codexSmoke)
-  assert(JSON.stringify(failed.runs).includes('API Key'))
-  const conversationId = failed.runs.at(-1)?.conversationId
+  // ADR 0028: retired Codex ACP is blocked before any run starts.
+  await page.waitForTimeout(1500)
+  assert.equal(await page.evaluate(() => window.__codexSmoke.runs.length), runsBefore)
+  const conversationId = seededId
   assert(conversationId)
   const failedStatus = await page.evaluate(
     (id) => window.cclinkStudio.agent.getStatus(id),
@@ -130,7 +129,7 @@ try {
   assert.equal(
     await native.isEnabled(),
     true,
-    'Failed ACP conversation must remain switchable after restart',
+    'Retired ACP conversation must remain switchable after restart',
   )
   await native.click()
   await page.waitForFunction(
@@ -178,7 +177,7 @@ try {
     success: true,
     sourceVersion: JSON.parse(await readFile('package.json', 'utf8')).version,
     newConversation: 'native Codex selected, no ACP option, real response passed',
-    acpWithoutKey: 'reproduced',
+    retiredAcp: 'send blocked before any run, switched to native Codex',
     failedSession: 'none',
     recoveryPath: restart
       ? 'restart then switch, same conversation'

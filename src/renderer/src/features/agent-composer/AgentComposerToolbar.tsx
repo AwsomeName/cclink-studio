@@ -105,13 +105,13 @@ export function AgentComposerToolbar({
     runtimeBinding.kind === 'codex'
       ? 'Codex'
       : runtimeBinding.kind === 'acp'
-        ? 'Codex ACP'
+        ? 'Codex ACP（已停用）'
         : getRuntimeLabel(settings)
   const runtimeDetail =
     runtimeBinding.kind === 'codex'
       ? '本机 Codex'
       : runtimeBinding.kind === 'acp'
-        ? '独立 API Key'
+        ? '已停用'
         : getRuntimeDetail(settings)
   const claudeStatusLabel = getClaudeCodeStatusLabel(claudeStatus)
   const claudeStatusDetail = getClaudeCodeStatusDetail(claudeStatus)
@@ -515,7 +515,7 @@ export function AgentComposerToolbar({
                   {runtimeBinding.kind === 'codex'
                     ? '使用本机 Codex 的 ChatGPT 文件登录，不回退到 API Key'
                     : runtimeBinding.kind === 'acp'
-                      ? '使用设置中独立保存的 Codex API Key'
+                      ? 'Codex ACP 已停用；切换到 Codex 或 Claude Code 后从新会话继续，历史保留'
                       : '仅使用 Studio 配置的 API Key，与本机 Claude 登录隔离'}
                 </em>
               </span>
@@ -548,7 +548,7 @@ export function AgentComposerToolbar({
                   <em>
                     {runtimeBinding.kind === 'codex'
                       ? '自动查找本机 Codex CLI 或桌面端附带的 CLI'
-                      : settings.codexAcpPath.trim() || '从系统 PATH 查找 codex-acp'}
+                      : '已停用，请切换到 Codex 或 Claude Code'}
                   </em>
                 </span>
               </div>
@@ -559,9 +559,7 @@ export function AgentComposerToolbar({
                   {runtimeBinding.kind === 'codex'
                     ? '本机安装'
                     : runtimeBinding.kind === 'acp'
-                      ? settings.codexAcpPath.trim()
-                        ? '自定义路径'
-                        : '系统 PATH'
+                      ? '已停用'
                       : getClaudeCodeSourceLabel(claudeStatus?.source ?? null)}
                 </strong>
                 <em>来源</em>
