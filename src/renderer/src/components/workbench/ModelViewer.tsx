@@ -358,6 +358,8 @@ export function ModelViewer({ filePath }: ModelViewerProps): React.ReactElement 
         }
 
         const originalSize = computeModelBox(model).getSize(new THREE.Vector3())
+        // glTF geometry uses metres; the viewer reports dimensions in millimetres.
+        if (extension === '.glb' || extension === '.gltf') originalSize.multiplyScalar(1000)
         normalizeModel(model)
         modelRef.current = model
         scene.add(model)

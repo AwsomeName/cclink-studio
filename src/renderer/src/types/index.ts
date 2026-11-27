@@ -43,6 +43,7 @@ export type TabType =
   | 'remote-desktop'
   | 'android'
   | 'model'
+  | 'product-shape'
   | 'conversation'
   | 'remote-conversation'
   | 'hardware-gerber'

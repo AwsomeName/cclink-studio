@@ -44,7 +44,7 @@ const planParams = {
 }
 
 describe('CadToolModule', () => {
-  it('exposes the existing diagnostics and only two editing tools', () => {
+  it('exposes the preview, STEP modifications and product shape tools', () => {
     const { module } = createModule()
 
     expect(module.tools.map((tool) => tool.name)).toEqual([
@@ -56,6 +56,9 @@ describe('CadToolModule', () => {
       'cad_clear_cache',
       'cad_plan_modification',
       'cad_modify_step',
+      'cad_create_shape',
+      'cad_revise_shape',
+      'cad_shell_shape',
     ])
   })
 

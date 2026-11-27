@@ -1,10 +1,119 @@
-<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>读懂我的板 · CCLink Studio</title><style>
-*{box-sizing:border-box}body{margin:0;color:#e9edea;background:#171b1e;font:16px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}header{padding:10px 4vw;background:#292e32;border-bottom:1px solid #41494d;font-size:13px;color:#c5ced0;display:flex;justify-content:space-between}main{max-width:1080px;margin:auto;padding:5vh 28px}small, .muted{color:#a4b1af}h1{margin:6px 0;font-size:clamp(25px,4vw,38px)}h2{font-size:21px;margin:0 0 10px}p{margin:0 0 14px}button,a{font:inherit}button{color:#d6e1df;border:1px solid #515d61;background:#242c30;border-radius:5px;padding:7px 15px;cursor:pointer}button[aria-pressed=true]{color:#c2f6df;border-color:#79bc9d;background:#25463b}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #b8e7dc}button:hover{border-color:#b2c5c1}.choices{display:flex;flex-wrap:wrap;gap:8px;margin:23px 0 14px}.panel{padding:22px;background:#202629;border:1px solid #3d4749;border-radius:8px;margin:12px 0}.route{display:grid;grid-template-columns:1fr auto 1.1fr auto 1fr;gap:8px;align-items:center;padding:28px 18px;background:#152421;border:1px solid #345447;border-radius:6px;text-align:center}.route strong{font-size:20px;display:block;color:#c1efda}.route span{display:block;font-size:13px;color:#aec2b9}.arrow{color:#89c4a6;font-size:20px}summary{cursor:pointer;color:#c1e4d4}details p{margin:12px 0 0}a{color:#a8d7ec}.foot{margin-top:20px;font-size:13px}.file{font:13px ui-monospace,monospace;letter-spacing:.02em}.prompt{font-size:18px;color:#c4d4cf}dialog{background:#263034;color:#eef4f0;max-width:580px;border:1px solid #698074;border-radius:8px;padding:25px}dialog::backdrop{background:#0009}dialog p{margin:12px 0}code{color:#c6e8d7}@media(max-width:620px){main{padding:22px 14px}.panel{padding:13px}.route{grid-template-columns:1fr;gap:2px;padding:13px}.arrow{transform:rotate(90deg)}.choices button{padding:6px 10px}}
-</style><header><b>CCLink Studio　 /　电路板设计</b><span>交互方案示意</span></header><main><small class="file">power_audio.SchDoc　 /　音频部分</small><h1>数字声音怎样变成扬声器能用的信号？</h1><p class="prompt">先看两颗芯片各做什么，再回到图纸看引脚。</p><div class="choices" aria-label="选择要读的部分"><button data-id="0" aria-pressed="true">U9 · 转换声音</button><button data-id="1" aria-pressed="false">U5 · 驱动扬声器</button><button data-id="2" aria-pressed="false">它们怎么连？</button></div><section class="panel" aria-live="polite"><h2 id="title"></h2><p id="copy"></p><div class="route" id="route"></div><p class="foot muted" id="note"></p><button id="check">看依据</button></section><details class="panel" id="quiz"><summary>合上讲解后试一试</summary><p>如果要找“数字声音从哪里进来”，你会在原理图里找哪颗芯片、哪个引脚？</p><details><summary>对照答案</summary><p>找 U9（CS4344）的 1 脚 SDIN。旁边的 AOUTL、AOUTR 则是左右声道的模拟输出。</p></details></details><p class="foot muted">按真实元件及引脚记录重绘，布局为教学示意。若只有生产图层，先读板边、连接器和位号；信号去向需对应原理图或引脚表。</p></main><dialog><small>读图依据</small><h2 id="dt"></h2><p id="de"></p><div id="link"></div><p><button id="close">返回讲解</button></p></dialog>
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>带我读懂这块板 · U9 音频导读</title>
+<style>
+*{box-sizing:border-box}html{color-scheme:dark}body{margin:0;background:#11191d;color:#e7efee;font:15px/1.55 "PingFang SC","Microsoft YaHei",sans-serif}button,summary,a{font:inherit}button{cursor:pointer;color:inherit;background:#223035;border:1px solid #405054;border-radius:7px;padding:7px 13px}button:hover,summary:hover{background:#304448}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid #fac879;outline-offset:2px}button[aria-pressed=true]{background:#183e3b;color:#a2f3d7;border-color:#64ac98}header,footer,.bar,.top,.controls,.foot,.tabs{display:flex;align-items:center;gap:12px}header{height:54px;background:#172125;border-bottom:1px solid #354046;padding:0 max(22px,calc((100vw - 1440px)/2));font-size:14px}header strong{letter-spacing:.04em}header .mark{font-size:24px;color:#85dcbf}header .filetag{margin-left:auto}main{max-width:1440px;margin:auto;padding:28px 30px 18px}.top{justify-content:space-between;margin-bottom:21px}h1{font-size:clamp(26px,3vw,37px);letter-spacing:-.045em;line-height:1.2;margin:4px 0}small,.muted,footer{color:#adc0c0}small,.meta{font-size:12px}.shell{display:grid;grid-template-columns:minmax(0,1fr) minmax(292px,31%);border:1px solid #3b494e;border-radius:12px;overflow:hidden;background:#192328}.drawing{min-width:0}.bar{padding:11px 16px;background:#202d32;justify-content:space-between;min-height:49px}.mono,.filetag,.pin{font-family:"SFMono-Regular",Consolas,monospace}.filetag{color:#bed0ce}.sheet{background:#fffef8;color:#25312f;position:relative;border-top:1px solid #adb5ab;border-bottom:1px solid #536264}.sheet svg{display:block;width:100%;height:clamp(300px,34vw,435px)}.sheet caption{color:#142823}aside{border-left:1px solid #3b494e;padding:21px 22px;display:flex;flex-direction:column;align-items:stretch}.eyebrow{color:#8ddcbf;font-size:12px;letter-spacing:.06em}h2{font-size:25px;margin:7px 0;letter-spacing:-.03em;line-height:1.35}.copy{margin:6px 0 14px;color:#d2deda;line-height:1.75}.cue{padding:12px 14px;background:#203430;border-left:3px solid #90dcbf;color:#d7eae3;border-radius:0 6px 6px 0;font-size:14px}.controls{flex-wrap:wrap;gap:7px;margin:18px 0 10px}.primary{background:#9ce4c8;color:#112922;font-weight:650;border-color:#9ce4c8}.primary:hover{background:#c0efdc}.foot{padding:12px 16px;align-items:baseline;color:#c6d5d2;min-height:48px;font-size:13px}.foot b{white-space:nowrap;color:#91d6bd}.tabs{padding:12px 16px;gap:5px;flex-wrap:wrap;border-top:1px solid #334246}.tabs button{font-size:13px;padding:5px 9px}.top .tabs{padding:0;border:0}.meta{color:#b8c9c6}.path{margin:20px 0 0;padding:15px 17px;border:1px solid #35474a;border-radius:9px;background:#182427}.path strong{display:block;font-size:13px;color:#94d8bf;margin-bottom:4px}.path span{font-family:"SFMono-Regular","PingFang SC",monospace}.linkbtn{background:transparent;color:#a5dfce;border:none;padding:5px 0}.evidence{margin-top:12px;border-top:1px solid #35484a;font-size:13px;padding-top:10px;color:#b8cbca}.evidence summary{cursor:pointer}.evidence p{margin:8px 0}.evidence a{color:#a7e3d0}footer{justify-content:space-between;font-size:12px;margin-top:17px;gap:8px;flex-wrap:wrap}.hot{fill:transparent;stroke:transparent;cursor:pointer}.hot:hover,.hot:focus-visible{stroke:#117356;stroke-width:1.5;outline:none}.halo{fill:#38b484;fill-opacity:.09;stroke:#087655;stroke-width:1.4}.trace{fill:none;stroke:#087858;stroke-width:4;stroke-opacity:.60;stroke-linecap:round;stroke-linejoin:round}.pt{fill:#fffef8;stroke:#087655;stroke-width:1.8}.qtext{padding:9px 0;color:#a6e5cc}button[hidden],[hidden]{display:none!important}.quiz-mode #diagram{cursor:crosshair}.quiz-mode .hot{cursor:crosshair}@media(max-width:850px){main{padding:16px}.shell{grid-template-columns:1fr}aside{border-left:0;border-top:1px solid #3b494e}.sheet svg{height:clamp(220px,54vw,380px)}.top{align-items:flex-start;flex-wrap:wrap}.controls{margin-top:12px}.filetag{display:none}}@media(max-width:500px){.bar{flex-wrap:wrap}.top{margin-bottom:12px}.foot{display:block}.foot b{margin-right:8px}main{padding:10px}}
+
+.bar .tools{display:flex;align-items:center;gap:10px}.bar button{padding:3px 8px;font-size:12px}.sheet{overflow:auto}.sheet.zoomed svg{width:200%;height:clamp(420px,54vw,680px)}.ask{display:flex;gap:6px;margin:4px 0}.ask input{min-width:0;flex:1;color:#e7efee;background:#101b1f;border:1px solid #405254;border-radius:6px;padding:8px;font:inherit;font-size:13px}.ask input:focus{outline:2px solid #8ad6ba}.ask button{font-size:13px}.guide-link{color:#a7e3d0}
+</style>
+<header><span class="mark" aria-hidden="true">⌁</span><strong>CCLink Studio</strong><span class="muted">/　电路板设计</span><span class="filetag">本地只读　·　交互方案示意</span></header>
+<main><div class="top"><div><small>工作台　/　原理图导读</small><h1>带我读懂这块板</h1></div><div class="tabs" aria-label="声道"><button id="left">左声道</button><button id="right">右声道</button></div></div>
+<div class="shell"><section class="drawing" aria-label="原图与定位"><div class="bar"><strong class="mono">power_audio.SchDoc</strong><div class="tools"><span class="meta" id="region"></span><button id="zoom" aria-pressed="false">放大原图</button></div></div>
+<div class="sheet"><svg id="diagram" role="group" aria-label="可点选的原理图局部" xmlns="http://www.w3.org/2000/svg"></svg></div>
+<div class="foot"><b id="legend"></b><span id="caption"></span></div>
+<nav class="tabs" id="stops" aria-label="读图位置"></nav></section>
+<aside aria-live="polite"><span class="eyebrow" id="eyebrow"></span><h2 id="title"></h2><p class="copy" id="copy"></p><div class="cue" id="cue"></div><div class="controls"><button class="primary" id="next"></button><button id="back">上一步</button></div><form class="ask" id="ask" hidden><input id="question" maxlength="120" aria-label="向 U9 提问" placeholder="问 U9，例如「声音接下来去了哪里」"><button>提问</button></form><button class="linkbtn" id="branch" hidden></button><div class="qtext" id="feedback" role="status" hidden></div><details class="evidence" id="evidence"><summary>查看这一步的依据</summary><p id="proof"></p><a id="datasheet" target="_blank" rel="noreferrer" hidden>查阅原厂资料 ↗</a></details></aside></div>
+<section class="path" id="trail"><strong>当前路径</strong><span id="path"></span></section>
+<footer><span>底图取自本机 Altium 只读预览，绿色标记为导读叠层。</span><span>U9 音频导读　/　方案示意</span></footer></main>
 <script>
-const cards=[
-{title:'U9 把数字声音转换成模拟音频',copy:'音乐在这里还是一串数字。U9 把它变成左右声道各自连续变化的电信号，供后面的音频电路使用。',steps:[['数字声音','SDIN · 1 脚'],['数模转换','U9 · CS4344'],['左右声道','AOUTL · 7 脚 / AOUTR · 10 脚']],note:'箭头说明这颗芯片的功能。这里画到 U9 的输出脚为止。',evidence:'本地原理图中，U9 的型号记录为 CS4344，对应符号列出 SDIN、AOUTL、AOUTR。Cirrus Logic 手册说明它执行立体声数模转换。',url:'https://statics.cirrus.com/pubs/proDatasheet/CS4344-45-48_F2.pdf',src:'Cirrus Logic 原厂手册'},
-{title:'U5 让音频信号有能力推动扬声器',copy:'扬声器需要电流才能振动发声。U5 是功率放大器，接收模拟音频，再用电源提供的能量驱动负载。下面以左声道为例。',steps:[['模拟输入','INL+ / INL−'],['功率放大','U5 · PAM8404KGR'],['左声道输出','OUTL+ / OUTL−']],note:'输入和输出的“+ / −”各是一对引脚。图上可据此寻找接线。',evidence:'本地原理图的 U5 符号上有 INL+（20 脚）、INL−（19 脚）、OUTL+（2 脚）和 OUTL−（5 脚）。Diodes 将该型号系列列为模拟输入的扬声器功放。',url:'https://www.diodes.com/part/view/PAM8404',src:'Diodes 原厂器件页'},
-{title:'要回答板上怎么接，先沿着一条线看',copy:'先在原图找到 U9 的 AOUTL，再沿导线或同名网络标签，记录它经过的元件和最后到达的引脚。若走到跨页标签，就查对应图页。',steps:[['起点已知','U9 · AOUTL'],['沿原图追线','导线 / 标签 / 中间元件'],['终点待核对','记录元件位号和引脚']],note:'本示意已核对两颗芯片的型号与引脚，尚未验证它们之间的板级连线。',evidence:'原理图能证明哪些引脚相连；原厂手册解释每颗芯片能做什么。当前示意只有元件与引脚级依据。要确认这块板的实际路径，需要在原图核对导线，或取得同一修订的网表。',url:null}];
-const el=id=>document.getElementById(id);let index=0;function show(i){index=i;const c=cards[i];document.querySelectorAll('[data-id]').forEach((b,j)=>b.setAttribute('aria-pressed',String(i===j)));el('title').textContent=c.title;el('copy').textContent=c.copy;el('note').textContent=c.note;el('route').replaceChildren();c.steps.forEach(([a,b],n)=>{if(n){const ar=document.createElement('div');ar.className='arrow';ar.textContent='→';el('route').append(ar)}const d=document.createElement('div'),strong=document.createElement('strong'),s=document.createElement('span');strong.textContent=a;s.textContent=b;d.append(strong,s);el('route').append(d)})}document.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>show(Number(b.dataset.id)));el('check').onclick=()=>{const c=cards[index];el('dt').textContent=c.title;el('de').textContent=c.evidence;el('link').replaceChildren();if(c.url){const a=document.createElement('a');a.href=c.url;a.target='_blank';a.rel='noopener';a.textContent=c.src;el('link').append(a)}document.querySelector('dialog').showModal()};el('close').onclick=()=>document.querySelector('dialog').close();show(0);
+const el=id=>document.getElementById(id);
+const ns='http://www.w3.org/2000/svg', svg=el('diagram');
+const tiles={dac:[160,55,655,230],amp:[1160,64,355,272],jack:[900,140,185,102]};
+const channels={
+ L:{name:'左',out:'AOUTL',no:7,y:180,c:'C83',r:'R49',rX:630,rY:180,br:'R50',bc:'C87',label:'AUDIO_L_O',labelX:730,c2:'C35',ampY:266,ip:'INL+',ino:20,pair:'OUTL+ / OUTL−',pins:'2 / 5',j:'3 / 4',jy:193,plus:'+OUT_L_0',minus:'-OUT_L0',wire:1738,sibling:1378,wn:'NetC83_1',last:'NetC35_2'},
+ R:{name:'右',out:'AOUTR',no:10,y:150,c:'C82',r:'R47',rX:635,rY:75,br:'R48',bc:'C81',label:'AUDIO_R_O',labelX:735,c2:'C22',ampY:176,ip:'INR+',ino:16,pair:'OUTR+ / OUTR−',pins:'14 / 11',j:'1 / 2',jy:213,plus:'+OUT_R_0',minus:'-OUT_R0',wire:1737,sibling:1379,wn:'NetC82_1',last:'NetC22_2'}
+};
+let ch='L',step=0,quiz=false,quizTask='pin',pinFound=false,branched=false; const d=()=>channels[ch];
+const stops=['找到 U9','读懂 U9','沿输出线走','找同名标签','到达功放','找到接口'];
+const urls={u9:'https://statics.cirrus.com/pubs/proDatasheet/CS4344-45-48_F2.pdf',u5:'https://www.diodes.com/part/view/PAM8404'};
+function node(tag,attrs,parent=svg){const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);parent.append(n);return n}
+function box(x,y,w,h){node('rect',{x,y,width:w,height:h,rx:2,class:'halo','pointer-events':'none'})}
+function trace(points){node('polyline',{points,class:'trace','pointer-events':'none'})}
+function point(x,y){node('circle',{cx:x,cy:y,r:2.6,class:'pt','pointer-events':'none'})}
+function hot(x,y,w,h,label,action){const hbox=node('rect',{x,y,width:w,height:h,rx:1,class:'hot',role:'button',tabindex:0,'aria-label':label});const t=node('title',{},hbox);t.textContent=label;hbox.onclick=e=>{e.stopPropagation();action()};hbox.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();action()}}}
+function go(n){setZoom(false);step=n;quiz=false;quizTask='pin';pinFound=false;branched=false;el('evidence').open=false;render()}
+function draw(tile,view){svg.replaceChildren();svg.setAttribute('viewBox',view.join(' '));const [x,y,width,height]=tiles[tile];node('image',{x,y,width,height,href:'u9-crops/'+tile+'.png','pointer-events':'none'})}
+function focusPin(k){const a=d();if(quiz){if(k===a.out){pinFound=true;el('next').textContent='自己找功放输入';el('feedback').textContent='找到了。'+a.out+'（'+a.no+' 脚）是'+a.name+'声道的模拟输出。';point(380,a.y)}else{el('feedback').textContent=k==='SDIN'?'你点到了数字声音的入口。再看芯片另一侧标着 AOUT 的引脚。':'你点到了另一个声道。看引脚名称最后一个字母。'}el('feedback').hidden=false}else{if(k==='SDIN'){el('cue').textContent='你选中了 SDIN（1 脚）。左边标着 IIS_D0 的线把数字音频样本送进 U9。';box(270,145,57,9)}else{ch=k==='AOUTL'?'L':'R';go(2)}}}
+function pinTargets(){hot(268,145,56,9,'SDIN · 1 脚',()=>focusPin('SDIN'));hot(328,175,62,9,'AOUTL · 7 脚',()=>focusPin('AOUTL'));hot(328,145,62,9,'AOUTR · 10 脚',()=>focusPin('AOUTR'))}
+function stageData(a){return [
+ ['在图上点一下 U9','先看黄色矩形。U9 是这颗芯片在这张图里的编号，正下方的 CS4344 是它的型号。','点图里的 U9，看看音乐从哪根脚进、从哪根脚出。','选中 U9','位号与型号来自同一符号记录。','U9 符号记录 244，位号记录 267，型号记录 268。'],
+ ['U9 把数字声音变成模拟信号','左侧 SDIN（1 脚）接收数字音频。右侧 AOUTL（7 脚）和 AOUTR（10 脚）分别送出左、右声道。','你可以点 SDIN 看入口，也可以追问声音接下来去了哪里。','声音接下来去了哪里？','左侧 1 脚是数据入口，右侧 7 和 10 脚是声音出口。','图纸给出 SDIN、AOUTL、AOUTR 以及引脚号。Cirrus Logic 手册第 4 页给出对应功能。'],
+ ['第一站是 '+a.c,'从 U9 的 '+a.out+'（'+a.no+' 脚）沿线向右，先碰到电容 '+a.c+'。越过电容，沿通往功放的方向经过电阻 '+a.r+'，就看到 '+a.label+'。','电容和电阻各有两端。追踪音频时要跨过这些元件，电路图上的网络会随之改变。','去找同名标签','沿绿色标记读导线，电容和电阻的符号保留在两个网络之间。','图纸导线记录 '+a.wire+' 连接 U9.'+a.no+' 与 '+a.c+'.1。LCD.PcbDoc 的两枚焊盘同属 '+a.wn+'。'],
+ ['记住 '+a.label,'这几个字是这段线的名字。在同一张图上，功放输入旁还有一处同名标记，两处表示同一个电气网络。','点原图上的 '+a.label+'，跳到它在 U5 旁出现的位置。','跳到 U5 旁的同名线','圈起的是源端标签。跳转会保留声道和原来的阅读位置。','两个标签均附着在本页导线上。远端标签记录 '+a.sibling+'，PCB 同名网络含 '+a.r+'.2、'+a.bc+'.2、'+a.c2+'.1。'],
+ ['经 '+a.c2+' 进入 U5','从 '+a.label+' 沿线穿过电容 '+a.c2+'，就到 U5 的 '+a.ip+'（'+a.ino+' 脚）。U5 是功率放大器，利用供电把音频变成能驱动扬声器的输出。','看 U5 的另一侧。'+a.name+'声道使用 '+a.pair+' 一对输出（'+a.pins+' 脚）。','跟这对输出到接口','先认出与上一处相同的网络名，再读电容另一侧的输入脚。',a.c2+'.2 与 U5.'+a.ino+' 同属 '+a.last+'。功放的角色可查 Diodes 器件资料。'],
+ ['这对输出到达 J9','U5 的 '+a.pair+' 通过 '+a.plus+' 和 '+a.minus+' 接到 J9 的 '+a.j+' 脚。两根线共同驱动一个声道。','图纸能带你走到板上的连接器。要看装机后接到哪只扬声器，再对照 J9 线束或装配接线表。','收起提示，自己找输出脚','J9 位号在这张原图中设置为隐藏，导读按符号记录定位。','PCB 焊盘网络逐项匹配 U5 的 '+a.pins+' 脚与 J9 的 '+a.j+' 脚；J9 的位号在符号属性中，为记录 1612。']
+]}
+function render(){
+ const a=d(),isL=ch==='L',fields=stageData(a)[step];document.body.classList.toggle('quiz-mode',quiz);
+ for(const [id,val] of [['left','L'],['right','R']])el(id).setAttribute('aria-pressed',ch===val);
+ el('feedback').hidden=true;el('feedback').textContent='';el('evidence').hidden=quiz;el('stops').hidden=quiz;el('trail').hidden=quiz;
+ el('region').textContent=step<4||quiz?'局部　/　数模转换':step===4?'局部　/　功率放大':'局部　/　板上连接器';
+ el('eyebrow').textContent=quiz?'自己读图':(a.name+'声道　/　'+stops[step]);
+ for(const [i,id] of ['title','copy','cue','next','caption','proof'].entries())el(id).textContent=fields[i];
+ el('legend').textContent=quiz?'练习':step===0?'找位号':'读原图';
+ el('ask').hidden=step!==1||quiz;el('back').hidden=!step||quiz;el('branch').hidden=step!==2||quiz;
+ el('branch').textContent=branched?'收起支路':'这两个分叉去了哪里？';
+ el('datasheet').hidden=![1,4].includes(step);el('datasheet').href=step===1?urls.u9:urls.u5;
+ el('path').textContent=['选择原图上的芯片','U9 · SDIN → 数模转换 → '+a.out,'U9.'+a.no+' → '+a.c+' → '+a.r,'U9.'+a.no+' → '+a.c+' → '+a.r+' → '+a.label,'U9.'+a.no+' → '+a.c+' → '+a.r+' → '+a.label+' → '+a.c2+' → U5.'+a.ino,'U9 → '+a.c+' → '+a.r+' → '+a.label+' → '+a.c2+' → U5 → J9（'+a.j+' 脚）'][step];
+ el('stops').replaceChildren(...stops.map((s,i)=>{const b=document.createElement('button');b.textContent=s;b.setAttribute('aria-pressed',i===step);b.onclick=()=>go(i);return b}));
+ if(quiz&&quizTask==='amp'){
+  el('region').textContent='局部　/　功率放大';el('title').textContent='沿同名线，点出功放的输入脚';
+  el('copy').textContent='从 '+a.label+' 开始，越过电容，在 U5 上选择这根线到达的引脚。';
+  el('cue').textContent='看清标签、导线和引脚号，再点引脚。';el('caption').textContent='导读高亮已收起。';el('next').textContent='返回导读';
+  draw('amp',[1164,122,265,178]);
+  for(const [pin,y,num] of [['INL+',266,20],['INL−',286,19],['INR+',176,16],['INR−',196,17]]){
+   hot(1280,y-6,65,12,pin+' · '+num+' 脚',()=>{
+    el('feedback').hidden=false;el('feedback').textContent=num===a.ino?'找到了。'+a.label+' 经过 '+a.c2+' 到达 '+pin+'（'+num+' 脚）。':'请从 '+a.label+' 那一行重新沿线走到芯片边缘。';
+    if(num===a.ino)point(1290,y);
+   });
+  }
+  return;
+ }
+ if(quiz||step<2){
+  draw('dac',[170,115,310,100]);
+  if(quiz){
+   el('title').textContent='请在原图指出'+a.name+'声道输出';el('copy').textContent='在 U9 上点你认为正确的引脚。';el('cue').textContent='也可以用 Tab 选择引脚，按回车确认。';el('next').textContent='返回导读';el('caption').textContent='导读高亮已收起。';pinTargets();return;
+  }
+  if(step===0){box(287,121,86,84);hot(283,117,95,91,'选中图上的 U9',()=>go(1))}
+  else{box(286,139,87,61);point(280,150);point(380,150);point(380,180);pinTargets()}
+ }else if(step===2||step===3){
+  draw('dac',[268,isL?109:56,545,isL?130:149]);
+  if(step===2){
+   trace('380,'+a.y+' 465,'+a.y);trace(isL?'495,180 605,180':'495,150 525,150 525,75 610,75');
+   trace(isL?'655,180 730,180':'660,75 735,75');point(380,a.y);box(472,a.y-7,16,14);box(a.rX-15,a.rY-6,30,12);
+   if(branched){
+    el('cue').textContent=a.br+' 从电容后的节点接地；'+a.bc+' 从 '+a.label+' 接地。继续去 U5 时，仍沿带名字的主线走。';
+    trace(isL?'560,180 560,203':'560,75 560,94');trace(isL?'700,180 700,210':'700,75 700,95');point(560,a.rY);point(700,a.rY);
+   }
+  }else{box(a.labelX-4,a.rY-14,64,17);point(a.labelX,a.rY)}
+  hot(a.labelX-6,a.rY-17,70,25,'跟随 '+a.label,()=>go(step===2?3:4))
+ }else if(step===4){
+  draw('amp',[1164,120,350,isL?178:108]);trace((isL?'1183.84252,266 1233.84252,266':'1179.84252,176 1229.84252,176'));trace((isL?'1253.84252,266 1290,266':'1249.84252,176 1290,176'));point(1290,a.ampY);
+  box(1308,a.ampY-7,33,14);for(const y of [a.ampY,a.ampY+20]){point(1430,y);hot(1374,y-7,124,14,'跟随功放输出到 J9',()=>go(5))}
+ }else{
+  draw('jack',[911,151,161,82]);for(const y of [a.jy,a.jy-10]){trace('971,'+y+' 1013,'+y);point(971,y)}
+ }
+}
+function setZoom(on){
+ const sheet=svg.parentElement;sheet.classList.toggle('zoomed',on);
+ el('zoom').setAttribute('aria-pressed',on);el('zoom').textContent=on?'还原大小':'放大原图';
+ if(!on)sheet.scrollLeft=0;
+}
+el('zoom').onclick=()=>setZoom(!svg.parentElement.classList.contains('zoomed'));
+el('ask').onsubmit=e=>{
+ e.preventDefault();const input=el('question'),q=input.value.trim();if(!q){input.focus();return}
+ if(/入口|输入|哪.*进|从哪.*来|做什么|干什么|作用/.test(q)){
+  el('cue').textContent='U9 从 1 脚 SDIN 接收数字声音，转换后从 7、10 脚分别输出左右声道。点 SDIN 可以看入口。';
+ }else if(/哪里|哪[里儿]|去[向哪]|接下|下一|往哪|接到|流向/.test(q)){
+  if(/[右左]/.test(q))ch=q.includes('右')?'R':'L';
+  input.value='';go(2);
+ }
+ else{el('cue').textContent='本课可以解释 U9 的作用、入口和信号去向。试问「声音接下来去了哪里」，或直接点图中的输出脚。'}
+};
+el('next').onclick=()=>{if(quiz&&quizTask==='pin'&&pinFound){quizTask='amp';render()}else if(quiz)go(1);else if(step===5){quiz=true;quizTask='pin';pinFound=false;render()}else go(step+1)};
+el('back').onclick=()=>go(Math.max(step-1,0));el('branch').onclick=()=>{branched=!branched;render()};
+for(const [id,val] of [['left','L'],['right','R']])el(id).onclick=()=>{ch=val;branched=false;render()};
+svg.onclick=()=>{if(quiz){el('feedback').hidden=false;el('feedback').textContent=quizTask==='amp'?'请在 U5 左边标有 IN 的引脚上点选。':'请点在 U9 符号的引脚名称、引脚号或短线上。'}};
+render();
 </script></html>

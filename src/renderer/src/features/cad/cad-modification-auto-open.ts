@@ -26,7 +26,7 @@ export interface CadAutoOpenStreamEvent {
 }
 
 interface CadModificationResultEnvelope {
-  kind: 'cad-modification-result'
+  kind: 'cad-modification-result' | 'product-shape-result'
   success: true
   outputPath: string
 }
@@ -43,7 +43,9 @@ interface CadAutoOpenRuntime {
 const consumedToolUseIds = new Set<string>()
 
 function isCadModifyToolName(toolName: string | undefined): boolean {
-  return toolName === 'cad_modify_step' || toolName?.endsWith('__cad_modify_step') === true
+  return ['cad_modify_step', 'cad_create_shape', 'cad_revise_shape', 'cad_shell_shape'].includes(
+    toolName?.split('__').at(-1) ?? '',
+  )
 }
 
 function parseJsonString(value: string): unknown {
@@ -67,7 +69,7 @@ function findCadResult(value: unknown, depth = 0): CadModificationResultEnvelope
   if (!value || typeof value !== 'object') return null
   const record = value as Record<string, unknown>
   if (
-    record.kind === 'cad-modification-result' &&
+    (record.kind === 'cad-modification-result' || record.kind === 'product-shape-result') &&
     record.success === true &&
     typeof record.outputPath === 'string'
   ) {

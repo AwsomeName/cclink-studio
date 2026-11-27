@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
 import type { FileService } from '../fs/file-service'
 import type { AppSettings } from '../settings/types'
+import { ProductShapeService } from './product-shape/service'
 import { detectFreeCad } from './freecad-detector'
 import { FREECAD_SECTION_INSERT_SCRIPT } from './freecad-section-insert-script'
 import {
@@ -228,6 +229,7 @@ function validateBopPolicy(
 }
 
 export class CadModificationService {
+  readonly productShape: ProductShapeService
   private readonly children = new Set<ChildProcessWithoutNullStreams>()
   private destroyed = false
 
@@ -235,7 +237,9 @@ export class CadModificationService {
     private readonly getSettings: () => AppSettings,
     private readonly fileService: FileService,
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
-  ) {}
+  ) {
+    this.productShape = new ProductShapeService(fileService, () => this.getBackendStatus())
+  }
 
   async getBackendStatus() {
     return detectFreeCad(this.getSettings().freecadPath)
@@ -397,6 +401,7 @@ export class CadModificationService {
 
   destroy(): void {
     this.destroyed = true
+    this.productShape.destroy()
     for (const child of this.children) child.kill('SIGKILL')
     this.children.clear()
   }

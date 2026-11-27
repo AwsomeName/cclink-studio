@@ -15,6 +15,8 @@ import type {
   ToolModule,
 } from '../../types'
 
+import { shapeTools, type ShapeCommand } from '../../../cad/product-shape/service'
+
 const PLAN_PROPERTIES = {
   inputPath: { type: 'string', description: '当前工作空间内的 STEP/STP 源文件。' },
   operation: {
@@ -171,7 +173,7 @@ function requireLocalContext(context?: ToolExecutionContext): {
 
 export class CadToolModule implements ToolModule {
   readonly name = 'cad'
-  readonly tools = CAD_TOOL_DEFINITIONS
+  readonly tools = [...CAD_TOOL_DEFINITIONS, ...shapeTools]
 
   constructor(
     private readonly cadConversionService: CadConversionService,
@@ -180,6 +182,13 @@ export class CadToolModule implements ToolModule {
   ) {}
 
   getExecutionPolicy(toolName: string): ToolExecutionPolicy | null {
+    if (shapeTools.some((tool) => tool.name === toolName))
+      return {
+        requireConfirmation: true,
+        riskLevel: 'write',
+        allowAlways: false,
+        reason: '核对本次造型、锁定或工程参数后，生成独立新版本。',
+      }
     if (toolName !== 'cad_modify_step') return null
     return {
       requireConfirmation: true,
@@ -205,6 +214,15 @@ export class CadToolModule implements ToolModule {
 
     const trustedWorkspace = requireLocalContext(context)
     return this.fileService.withAccess({ trustedWorkspace }, async () => {
+      if (shapeTools.some((tool) => tool.name === toolName)) {
+        if (!context?.confirmationGranted) throw new Error('请先确认本次造型操作')
+        return this.cadModificationService.productShape.execute(
+          toolName as ShapeCommand,
+          params,
+          trustedWorkspace.rootPath,
+          context.abortSignal,
+        )
+      }
       switch (toolName) {
         case 'cad_get_model_support': {
           const inputPath = await this.fileService.assertReadableFile(

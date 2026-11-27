@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>产品造型 · CCLink Studio 方案示意</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#13171c;color:#edf0f2;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}button{font:inherit;cursor:pointer;color:inherit}button:focus-visible{outline:2px solid #76c6ff;outline-offset:2px}.shell{min-height:100vh;display:grid;grid-template-rows:42px auto 30px}.bar,footer{display:flex;align-items:center;gap:12px;padding:0 19px;color:#b6c0ca;background:#1d232b;font-size:12px}.bar{border-bottom:1px solid #38404b}.dots{color:#78838f;letter-spacing:2px}.brand{margin:0 10px;font-weight:650;color:white}.project{border:1px solid #465360;border-radius:5px;padding:2px 12px;color:#e1e8ef}.right{margin-left:auto}.layout{display:grid;grid-template-columns:148px minmax(0,1fr)}aside{background:#1b2027;border-right:1px solid #333b46;padding:25px 10px;color:#aab6c3;font-size:13px}.sidehead{color:#e4eaf0;font-size:15px;margin:0 8px 22px;font-weight:600}.sidelabel{font-size:11px;color:#8c9baa;margin:20px 9px 7px}.sideitem{padding:7px 10px;border-radius:4px}.sel{background:#293746;color:#b6dcff}.tabs{background:#1b2027;border-bottom:1px solid #38404b;height:37px;display:flex;align-items:stretch;color:#8998a7;font-size:12px}.tabs span{padding:8px 17px}.tabs .current{background:#13171c;color:#dbe6ef;border-top:2px solid #79b7e9;padding-top:6px}.main{max-width:1690px;margin:auto;padding:20px 24px 24px}h1,h2,h3,p{margin:0}h1{font-size:28px;letter-spacing:-1px}h2{font-size:20px}h3{font-size:17px}.heading,.row,.between{display:flex;align-items:center;gap:10px}.between{justify-content:space-between}.muted{color:#9eacb9}.small{font-size:12px}.brief{margin:14px 0 13px;background:#20272f;border-left:3px solid #8bc5ef;border-radius:3px;padding:12px 15px;font-size:17px}.brief small{display:block;margin-bottom:4px;font-size:12px;color:#aab7c3}.filters{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:16px}.filters span{font-size:12px;color:#abb7c3;margin-right:3px}.plain,.chip,.choose,.primary,.back{border:1px solid #414d59;border-radius:5px;background:#232b33;padding:6px 12px}.chip{font-size:12px;padding:4px 10px}.chip[aria-pressed=true]{color:#c4e7ff;background:#263e50;border-color:#5d8eac}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.card,.panel{background:#1d242c;border:1px solid #39434e;border-radius:8px;overflow:hidden}.cardhead{display:flex;align-items:center;gap:10px;padding:12px 14px}.letter{font:600 14px ui-monospace,monospace;border:1px solid #475566;background:#283440;border-radius:5px;padding:4px 7px;color:#bfddf1}.canvasbox{background:radial-gradient(ellipse at center,#21303a,#18222b);border-block:1px solid #35414c;position:relative}.cv{display:block;width:100%;height:auto}.measure{padding:8px 14px 3px}.mrow{display:grid;grid-template-columns:78px 1fr;align-items:center;min-height:31px;border-bottom:1px solid #303a44;font-size:13px;gap:3px}.mrow span{color:#a9b7c4}.mrow.active{background:#244054}.mrow strong{font-weight:540}.cad{margin:8px 14px 11px;min-height:86px}.cad small,.kicker{display:block;color:#a5b3bf;font-size:11px;margin-bottom:3px}.cad b{font-size:15px}.cad p{font-size:12px;color:#bac6d1;margin-top:3px}.cyan{color:#8adac9}.amber{color:#f0bf7f}.lilac{color:#c8b3df}.choose{margin:0 14px 13px;width:calc(100% - 28px);background:#2b3742;color:#d8e7f2}.choose:hover,.plain:hover{background:#374857}.primary{background:#9bd5fd;color:#102939;font-weight:650;border-color:#9bd5fd}.back{padding:4px 9px;font-size:12px}.editgrid{margin-top:15px;display:grid;grid-template-columns:minmax(0,1.5fr) minmax(290px,1fr);gap:14px}.pad{padding:13px 15px}.legend{font-size:12px;display:flex;gap:16px;flex-wrap:wrap;color:#bcc8d2}.legend i{display:inline-block;width:17px;margin-right:5px;vertical-align:middle;border-top:2px solid}.legend .dashed{border-top-style:dashed}.lockopts{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin:8px 0;color:#d2dde6}.lockopts input{accent-color:#8cd4bc}.turn{background:#283643;border-left:2px solid #8ec7ed;padding:10px 12px;margin:10px 0;font-size:15px}.results{width:100%;border-collapse:collapse;font-size:13px}.results td,.results th{text-align:left;border-bottom:1px solid #34404b;padding:6px 3px}.results th{font-size:11px;color:#9facb9;font-weight:500}.callout{margin-top:11px;font-size:12px;color:#aebcca}.edithead{margin-top:12px}.signal{color:#96dac6}.resultbar{margin-top:12px;display:flex;gap:10px;align-items:center}.resultbar output{font-size:12px;color:#b7d6e9}.sep{border-top:1px solid #35404b;margin:12px 0}.summaryline{margin:13px 0 0;font-size:12px;color:#abb8c2}footer{border-top:1px solid #36404a;justify-content:space-between}button:disabled{opacity:.55;cursor:default}@media(max-width:1090px){.layout{grid-template-columns:1fr}aside{display:none}.main{padding:15px}.editgrid{grid-template-columns:1.3fr 1fr}}@media(max-width:760px){.grid,.editgrid{grid-template-columns:1fr}.bar{padding:0 8px;gap:4px}.main{padding:12px}.heading,.between{flex-wrap:wrap}.card{max-width:550px}.tabs span{padding-inline:8px}.bar .right{font-size:10px}.brief{font-size:15px}}
+.priority{background:#202a32;color:#d3e4ee;border:1px solid #41505d;border-radius:4px;padding:4px 7px}.pickpart{font-size:12px;padding:3px 9px;margin-left:8px}.hit{position:absolute;opacity:0;border:1px solid #93d4eb;border-radius:4px;color:#e9f7ff;background:#183448;font:11px sans-serif}.hit:focus-visible,.hit:hover{opacity:1}.fixhit{top:18%;left:42%;width:15%;height:17%}.outhit{top:46%;left:17%;width:14%;height:13%}
+</style>
+<div class="shell"><div class="bar"><span class="dots">● ● ●</span><span class="brand">CCLink Studio</span><span class="project">硬件研发</span><span class="right">界面方案示意 · 模拟几何与读数</span></div><div class="layout"><aside><div class="sidehead">硬件研发</div><div class="sideitem">项目首页</div><div class="sideitem">文件</div><div class="sidelabel">当前设计</div><div class="sideitem sel">◈　拾音器外壳</div><div class="sideitem">　　设计需求.md</div><div class="sidelabel">工作区</div><div class="sideitem">会话</div><div class="sideitem">工具</div></aside><section><div class="tabs"><span>设计需求.md</span><span class="current">◈　拾音器外壳　×</span></div><main class="main" id="app"></main></section></div><footer><span>本地项目　/　产品造型</span><span>设计稿 · 未连接 Agent、Blender 或 FreeCAD</span></footer></div>
+<script>
+const items=[
+ {name:'折面连桥',hold:'后折钩',gap:36,ang:8,cad:'可尝试整件重建',reason:'单件主壳由闭合直线轮廓拉伸。',tone:'cyan'},
+ {name:'分体双舱',hold:'独立后夹座',gap:44,ang:10,cad:'预计夹座能转，两侧曲壳需补',reason:'夹座有拉伸记录；双舱使用多截面过渡。',tone:'amber'},
+ {name:'一体弯翼',hold:'一体夹唇',gap:32,ang:14,cad:'整片外皮预计需人工重建',reason:'夹唇与翼面连续形变，可交等比参照。',tone:'lilac'}
+];
+const fields=['上沿挂点','摄像头净宽','拾音口朝向','整机总宽'];
+const sentence='挂在显示器上沿，给居中摄像头留至少 30 mm 净宽，两端朝向我，总宽 160 mm。';
+let chosen=1,focus=-1,editing=false,comparison=false,saved=false;
+let lockPart=true,editPart=true,stepFirst=false;
+const locks=[true,true,false],app=document.querySelector('#app');
+const label=i=>String.fromCharCode(65+i);
+const values=i=>[items[i].hold+' · 待补屏厚',items[i].gap+' mm ≥ 30 mm','两侧朝前，内偏 '+items[i].ang+'°','160 mm'];
+function selectPage(){
+ editing=false;document.title='选款 · 产品造型方案示意';
+ app.innerHTML='<div class="between"><h1>比较三个外形</h1><label class="muted small">生成偏好　<select class="priority" id="priority"><option value="shape">优先探索外形</option><option value="step">需要接着出 STEP</option></select></label></div><div class="brief"><small>我的描述 · 显示器拾音器</small>'+sentence+'</div><div class="filters"><span>同时定位三款</span>'+['全部要求',...fields].map((x,i)=>'<button class="chip" data-f="'+(i-1)+'" aria-pressed="'+(focus===i-1)+'">'+x+'</button>').join('')+'</div><div class="grid">'+items.map((x,i)=>'<article class="card"><div class="cardhead"><span class="letter">'+label(i)+'</span><h3>'+x.name+'</h3></div><div class="canvasbox"><canvas class="cv" data-i="'+i+'" aria-label="'+x.name+'俯视示意"></canvas></div><div class="measure">'+fields.map((f,j)=>'<div class="mrow '+(focus===j?'active':'')+'"><span>'+f+'</span><strong>'+values(i)[j]+'</strong></div>').join('')+'</div><div class="cad"><small>选前 CAD 预判 · 尚待 FreeCAD 试建</small><b class="'+x.tone+'">'+x.cad+'</b><p>'+x.reason+'</p></div><button class="choose" data-pick="'+i+'">选 '+label(i)+' 款并继续修改　→</button></article>').join('')+'</div><p class="summaryline">'+(stepFirst?'本组示意中仅 A 款的主壳预计能整件试建；B、C 可作备选。实际生成将优先用有 CAD 对应操作的形状。':'三图共用比例、正面和安装基准。')+'蓝框标示摄像头避让区，箭头指示拾音口朝向。挂钩适配需核对实际屏厚。</p>';
+ document.querySelector('#priority').value=stepFirst?'step':'shape';
+ document.querySelector('#priority').onchange=e=>{stepFirst=e.target.value==='step';selectPage()};
+ document.querySelectorAll('[data-f]').forEach(el=>el.onclick=()=>{focus=+el.dataset.f;selectPage()});
+ document.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{chosen=+el.dataset.pick;comparison=false;saved=false;lockPart=false;editPart=false;locks.splice(0,3,false,false,false);editPage()});
+ drawAll();
+}
+function editPage(){
+ editing=true;const x=items[chosen],a=x.ang,b=a+10;
+ const rows=[['左右拾音口内偏角',a+'°',b+'°','各 +10°'],...(locks[0]?[['挂点形状 · 最大面差','父版基准','0.00 mm','锁内']]:[]),...(locks[1]?[['挂点位置 · 位移 / 转角','安装基准','0 mm / 0°','锁内']]:[]),...(locks[2]?[['挂点夹口 · 宽度','8 mm','8 mm','锁内']]:[]),['摄像头最窄净宽',x.gap+' mm',x.gap+' mm','≥ 30 mm'],['外形总宽','160 mm','160 mm','保持']];
+ app.innerHTML='<div class="between"><div class="heading"><button class="back" id="back">‹ 返回三款</button><h1>'+x.name+' · 局部追改</h1></div><span class="muted small">'+label(chosen)+' 款　/　父版 v1'+(comparison?' → 子版 v2':'')+'</span></div><div class="editgrid"><section class="panel"><div class="pad between"><h3>'+(comparison?'前后叠图':'选定外形')+'</h3><span class="small muted">俯视 · 同一安装基准</span></div><div class="canvasbox"><canvas class="cv" data-large="1" data-i="'+chosen+'" aria-label="挂点与两侧拾音口朝向对照"></canvas><button class="hit fixhit" data-set="lock" title="选择挂点为锁定部位">选挂点</button><button class="hit outhit" data-set="target" title="选择成对的左右拾音口为修改目标">选拾音口</button></div><div class="pad"><div class="legend"><span><i class="dashed" style="color:#bcc8d5"></i>v1 朝向</span><span><i style="color:#f4b077"></i>'+(comparison?'v2 朝向':'待改拾音口')+'</span><span><i style="color:#84dfc4"></i>'+(locks.some(Boolean)?'挂点已加锁':'挂点未加锁')+'</span></div><div class="sep"></div><div class="between small"><span>参考正面　↓ 使用者</span><span class="muted">位置基准　显示器上沿中心</span></div></div></section><section class="panel pad"><div class="between"><h3>Agent · 基于此版修改</h3><span class="letter">'+label(chosen)+'</span></div><div class="sep"></div><span class="kicker">锁定部位</span><b>'+x.hold+'</b><button class="plain pickpart" data-set="lock">'+(lockPart?'已选挂点':'选为锁定部位')+'</button><div class="lockopts">'+['形状不变','位置不动','锁定尺寸'].map((v,i)=>'<label><input type="checkbox" data-lock="'+i+'" '+(locks[i]?'checked':'')+(lockPart?'':' disabled')+'> '+v+'</label>').join('')+'</div><div class="small muted">'+(locks[2]?'指定尺寸：夹口宽 8 mm。':'位置包含安装原点和姿态。')+'</div><div class="sep"></div><span class="kicker">修改目标</span><b>左右拾音口</b><button class="plain pickpart" data-set="target">'+(editPart?'已选两侧':'选为修改目标')+'</button><div class="turn">只改左右拾音口，各向内多转 10°。</div>'+(comparison?'<span class="kicker">子版对照 · 示例允许面差 / 位移 0.10 mm，角度 0.5°</span><table class="results"><thead><tr><th>核对项目</th><th>父版 v1</th><th>子版 v2</th><th>变化</th></tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map((v,i)=>'<td class="'+(i===3?'signal':'')+'">'+v+'</td>').join('')+'</tr>').join('')+'</tbody></table>':'<p class="small muted">在父版副本上修改，生成后可查看同基准叠图及锁定项差值。</p>')+'<div class="resultbar"><button id="go" class="primary" '+(saved||!editPart||!locks.some(Boolean)?'disabled':'')+'>'+(saved?'已采用 v2':comparison?'采用子版 v2':'查看修改对照')+'</button><output>'+(saved?'父版 v1 仍可回看':comparison?'父版 v1 已保留':(editPart&&locks.some(Boolean)?'示意回放':'选择挂点、勾选锁，再指定修改目标'))+'</output></div></section></div><div class="brief small"><small>当前 CAD 预计范围 · '+label(chosen)+' 款</small>'+x.cad+'。'+x.reason+' 改动后的 v2 需要单独试建。</div>';
+ document.querySelector('#back').onclick=selectPage;
+ document.querySelectorAll('[data-set]').forEach(el=>el.onclick=()=>{if(el.dataset.set==='lock')lockPart=true;else editPart=true;editPage()});
+ document.querySelectorAll('[data-lock]').forEach(el=>el.onchange=()=>{locks[+el.dataset.lock]=el.checked;comparison=false;saved=false;editPage()});
+ document.querySelector('#go').onclick=()=>{if(comparison)saved=true;else comparison=true;editPage()};drawAll();
+}
+function drawAll(){document.querySelectorAll('canvas').forEach(cv=>draw(cv,+cv.dataset.i,!!cv.dataset.large))}
+function draw(cv,i,big){
+ const H=big?226:200,W=360,dpr=window.devicePixelRatio||1,px=Math.max(300,cv.getBoundingClientRect().width);
+ cv.width=Math.round(px*dpr);cv.height=Math.round(px*dpr*H/W);
+ const c=cv.getContext('2d');c.scale(cv.width/W,cv.height/H);
+ const x=items[i],mint='#8be2c4',blue='#84ccff',orange='#ffb47a',white='#d5e2ec',dim='#7890a2';
+ function stroke(pts,color,width=1,dash=[]){c.save();c.strokeStyle=color;c.lineWidth=width;c.setLineDash(dash);c.beginPath();pts.forEach(([x,y],n)=>n?c.lineTo(x,y):c.moveTo(x,y));c.stroke();c.restore()}
+ function txt(x,y,t,color=white,sz=9,align='center'){c.save();c.font='500 '+sz+'px -apple-system,"PingFang SC",sans-serif';c.textAlign=align;c.fillStyle=color;c.fillText(t,x,y);c.restore()}
+ function rect(x,y,w,h,fill,edge){if(fill){c.fillStyle=fill;c.fillRect(x,y,w,h)}if(edge){c.strokeStyle=edge;c.lineWidth=.9;c.strokeRect(x,y,w,h)}}
+ function arrow(x,y,dx,dy,col,dashed=false,w=1.7){const n=Math.hypot(dx,dy),ux=dx/n,uy=dy/n;stroke([[x,y],[x+dx,y+dy]],col,w,dashed?[3,2]:[]);stroke([[x+dx-5*ux+3*uy,y+dy-5*uy-3*ux],[x+dx,y+dy],[x+dx-5*ux-3*uy,y+dy-5*uy+3*ux]],col,w)}
+ function solid(path,base,high){const p=new Path2D(path);c.save();c.translate(0,4);c.fillStyle='#485966';c.fill(p);c.strokeStyle='#202c35';c.stroke(p);c.restore();const g=c.createLinearGradient(0,48,0,133);g.addColorStop(0,high);g.addColorStop(.48,base);g.addColorStop(1,'#8296a5');c.fillStyle=g;c.fill(p);c.strokeStyle='#d5e6ef';c.lineWidth=.8;c.stroke(p)}
+ const hi=j=>!big&&(focus===-1||focus===j);const gap=x.gap*1.75,L=180-gap/2,R=180+gap/2;
+ for(let t=8;t<W;t+=12){for(let y=8;y<H;y+=12){rect(t,y,1,1,'#34444f')}}
+ stroke([[180,29],[180,H-17]],'#435767',.6,[3,4]);
+ txt(10,15,big?'拾音口改动与挂点锁定':'俯视 · 同比例',dim,9,'left');
+ // Screen datum lies behind the microphone faces. The clearance rectangle is in front of the rear bridge.
+ rect(27,74,306,8,'#293944','#4b5a66');
+ if(i===0){
+ solid('M40 112 L50 86 L105 68 L255 68 L310 86 L320 112 L299 129 L247 128 L'+R+' 99 L'+L+' 99 L113 128 L61 129 Z','#b7c7d1','#e3edf4');
+ }else if(i===1){
+ solid('M72 84 L93 70 L267 70 L288 84 L284 92 L76 92 Z','#98afc1','#d5e1ec');
+ for(let side=0;side<2;side++){c.save();if(side){c.translate(360,0);c.scale(-1,1)}solid('M40 110 C40 87 59 76 91 75 C121 74 139 85 '+L+' 100 C'+L+' 116 132 130 108 135 C78 141 42 133 40 116 Z','#b4c7d7','#edf4f8');c.restore()}
+ }else{
+ solid('M40 120 C43 99 67 85 87 76 C119 60 135 53 180 53 C225 53 241 60 273 76 C293 85 317 99 320 120 C316 137 275 137 251 128 C234 122 '+R+' 112 '+R+' 102 Q180 84 '+L+' 102 C'+L+' 112 126 122 109 128 C85 137 44 137 40 120 Z','#b4c9c8','#e4eeee');
+ }
+ const hookStroke=(big?locks.some(Boolean):hi(0))?mint:'#8394a2';
+ if(i<2){solid('M157 57 L161 48 L199 48 L203 57 L203 79 L157 79 Z','#a4b5bd','#e2ebee');rect(163,53,34,13,'#263943',hookStroke)}
+ else{stroke([[158,59],[164,52],[196,52],[202,60]],hookStroke,2)}
+ stroke([[180,54],[193,31],[218,31]],hookStroke,1);
+ txt(219,34,big?(locks.some(Boolean)?'已锁 · ':'')+x.hold:x.hold,hookStroke,9,'left');
+ const zone=(big||hi(1))?blue:'#637e94';c.save();c.strokeStyle=zone;c.fillStyle='#40688548';c.setLineDash([3,2]);c.fillRect(L,104,gap,22);c.strokeRect(L,104,gap,22);c.restore();txt(180,119,x.gap+' mm',big?blue:zone,10);
+ const ang=a=>a*Math.PI/180;
+ [1,-1].forEach(s=>{
+ const sx=s===1?88:272,sy=116,theta=x.ang+(big&&comparison?10:0);
+ c.save();c.translate(sx,sy);c.rotate(-s*ang(theta));c.beginPath();c.roundRect(-18,-6,36,12,4);c.fillStyle='#374752';c.fill();c.strokeStyle='#e0eaf0';c.stroke();for(let k=-12;k<=12;k+=4){stroke([[k,-3],[k,3]],'#a1b6c5',1.3)}c.restore();
+ const n=big?52:38;
+ if(big){stroke([[sx,sy+6],[sx,sy+n+5]],'#698197',.6,[1.5,2]);if(comparison){arrow(sx,sy+6,s*Math.sin(ang(x.ang))*n,Math.cos(ang(x.ang))*n,'#c2d0dd',true,1.2)}}
+ arrow(sx,sy+6,s*Math.sin(ang(theta))*n,Math.cos(ang(theta))*n,big?orange:hi(2)?mint:'#7c9298',false,big?2:1.65);
+ if(big&&comparison)txt(sx,sy+n+17,x.ang+'° → '+theta+'°',orange,9);
+ });
+ const yd=big?201:178,dc=big||hi(3)?'#a2bacb':'#657786';
+ stroke([[40,145],[40,yd+4]],dc,.7);stroke([[320,145],[320,yd+4]],dc,.7);stroke([[40,yd],[151,yd]],dc,.8);stroke([[209,yd],[320,yd]],dc,.8);
+ stroke([[43,yd-3],[40,yd],[43,yd+3]],dc,1);stroke([[317,yd-3],[320,yd],[317,yd+3]],dc,1);txt(180,yd+3,'160 mm',dc,10);txt(350,H-7,'↓ 使用者',dim,9,'right');
+}
+window.addEventListener('resize',drawAll);
+if(new URLSearchParams(location.search).get('view')==='edit'){comparison=true;editPage()}else selectPage();
+</script></html>

@@ -57,6 +57,7 @@ import { ScheduledTaskTab } from '../../features/scheduled-tasks/ScheduledTaskTa
 import { AgentRoleDetailTab } from '../../features/agent-roles/AgentRoleDetailTab'
 import { RemoteFileViewer } from '../../features/cclink-remote/RemoteFileViewer'
 import { RemoteAgentController } from '../../features/cclink-remote/remote-agent-controller'
+import { ProductShapeView, isProductShapeModel } from '../../features/cad/ProductShapeView'
 import { MediaProductionTab } from '../../features/media-production/MediaProductionTab'
 import { CompanyAccountsWorkbench } from '../../features/company-accounts/CompanyAccountsWorkbench'
 import { useToastStore } from '../common/Toast'
@@ -186,9 +187,14 @@ export function WorkbenchContent({
                 workspaceKey={workspaceRefKey(activeTab.workspaceRef ?? activeWorkspaceRef)}
               />
             )}
-            {activeTab.type === 'model' && activeTab.filePath && (
-              <ModelViewer key={activeTab.filePath} filePath={activeTab.filePath} />
-            )}
+            {activeTab.type === 'product-shape' && <ProductShapeView key={activeTab.id} />}
+            {activeTab.type === 'model' &&
+              activeTab.filePath &&
+              (isProductShapeModel(activeTab.filePath) ? (
+                <ProductShapeView key={activeTab.filePath} filePath={activeTab.filePath} />
+              ) : (
+                <ModelViewer key={activeTab.filePath} filePath={activeTab.filePath} />
+              ))}
             {conversationTarget?.kind === 'local-agent' && (
               <WorkbenchAgentConversation
                 key={conversationTarget.conversationId}

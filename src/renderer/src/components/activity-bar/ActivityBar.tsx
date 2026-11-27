@@ -387,6 +387,25 @@ export function ActivityBar(): React.ReactElement {
             <IconTool size={18} />
             <span className="activity-bar-label">工具</span>
           </summary>
+          {activeRef.kind === 'local' && (
+            <button
+              className="activity-bar-icon"
+              aria-label="产品造型"
+              onClick={() =>
+                useTabStore
+                  .getState()
+                  .openTab({
+                    type: 'product-shape',
+                    title: '新建产品造型',
+                    icon: '◇',
+                    workspaceRef: activeRef,
+                  })
+              }
+            >
+              <ActivityProductionIcon size={18} />
+              <span className="activity-bar-label">产品造型</span>
+            </button>
+          )}
           {renderGroup({
             id: 'tools',
             label: '全部工具',

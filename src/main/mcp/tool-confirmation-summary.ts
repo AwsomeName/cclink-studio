@@ -20,6 +20,28 @@ export function summarizeToolConfirmation(
   params: Record<string, unknown>,
   workspaceRoot?: string,
 ): ToolConfirmationSummaryRow[] {
+  if (['cad_create_shape', 'cad_revise_shape', 'cad_shell_shape'].includes(toolName)) {
+    const rows: ToolConfirmationSummaryRow[] = []
+    const add = (label: string, value: unknown) =>
+      rows.push({ label, value: String(value).slice(0, 380) })
+    if (params.brief) add('本次要求', params.brief)
+    if (params.sourceId) add('源版本', params.sourceId)
+    if (toolName === 'cad_create_shape') {
+      add('逆时针顶点 · mm', JSON.stringify(params.points))
+      add('拉伸高度 · mm', params.heightMm)
+    }
+    if (toolName === 'cad_revise_shape') {
+      add('锁定侧面 · 边号', params.lockedEdge)
+      add('移动顶点', params.targetVertex)
+      add('移至 XY · mm', JSON.stringify(params.newPointMm))
+    }
+    if (toolName === 'cad_shell_shape') {
+      add('开口', '顶面（+Z）')
+      add('壁厚 · mm', params.wallMm)
+      add('底厚 · mm', params.floorMm)
+    }
+    return rows
+  }
   if (toolName === 'cad_modify_step') {
     return summarizeCadModification(params, workspaceRoot)
   }
