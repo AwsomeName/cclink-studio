@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文章发布 · 投到知乎</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#172d3e;--mid:#4f6474;--muted:#647786;--line:#d8e0e5;--soft:#f3f6f8;--blue:#175d96;--blue-bg:#eaf3fb;--navy:#172b3d;--green:#24704f;--green-bg:#e5f4ec;--amber:#8a5a10;--amber-bg:#fbf1de;--red:#a23b2f;--red-bg:#fbe9e6;--violet:#5a4a9a;--violet-bg:#efecfa}
+body{margin:0;background:#ecf1f3;color:var(--ink);font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--blue)}
+button{background:#fff;border:1px solid #c5d1d8;border-radius:6px;padding:6px 12px;font-weight:550;cursor:pointer}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+button.warn{background:var(--amber-bg);border-color:#e0c48e;color:var(--amber)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,a:focus-visible,[tabindex]:focus-visible,input:focus-visible{outline:3px solid #79a8d1;outline-offset:2px}
+.frame{min-height:100vh;display:grid;grid-template-rows:40px 1fr 26px;grid-template-columns:minmax(0,1fr)}
+.top{background:#142333;color:#dde7ee;display:flex;align-items:center;gap:14px;padding:0 18px;font-size:12px}
+.top b{font-size:14px}.top .r{margin-left:auto;color:#b7c6d1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dots{display:flex;gap:5px}.dots i{width:8px;height:8px;border-radius:50%;background:#8d9ba6}
+.shell{display:grid;grid-template-columns:184px minmax(0,1fr)}
+aside{background:var(--navy);color:#c6d1d9;padding:20px 12px}
+.co{display:flex;gap:9px;align-items:center;color:#fff;font-weight:650;font-size:16px}
+.mono{width:32px;height:32px;display:grid;place-items:center;border-radius:7px;background:#d1e7de;color:#1b3f38;font-size:18px}
+.cap{font-size:11px;letter-spacing:.12em;color:#91a6b7;margin:24px 9px 8px;font-weight:650}
+.side{display:block;padding:7px 10px;margin:2px 0;color:#c6d1d9;text-decoration:none;border-radius:5px}
+.side.on{background:#30485b;color:#fff}
+.sub{display:block;margin:1px 0 1px 26px;padding:4px 8px;border-left:1px solid #557182;color:#b5c9d6;text-decoration:none;font-size:13px}
+.sub.on{color:#fff;border-color:#94d6ec;font-weight:650}
+.crumb{height:38px;display:flex;align-items:center;gap:8px;padding:0 26px;background:#f9fbfc;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
+.crumb b{color:var(--ink)}
+main{max-width:1480px;margin:0 auto;padding:20px 28px 120px}
+.head{display:flex;align-items:flex-end;gap:16px;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap}
+.head h1{margin:0;font-size:27px;letter-spacing:-.02em;line-height:1.25}
+.head p{margin:4px 0 0;color:var(--mid)}
+.mark{font-size:12px;color:var(--mid);border:1px solid #bac8cf;border-radius:4px;padding:2px 8px;white-space:nowrap}
+.stepper{display:flex;gap:0;margin:0 0 18px;background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.stepper a{flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;text-decoration:none;color:var(--mid);border-right:1px solid var(--line);font-size:13px;min-width:0}
+.stepper a:last-child{border-right:0}
+.stepper a .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--soft);font-size:12px;font-weight:650;flex:none}
+.stepper a .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stepper a .t small{display:block;color:var(--muted);font-size:11px}
+.stepper a.on{background:var(--blue-bg);color:var(--ink);box-shadow:inset 0 -3px var(--blue)}
+.stepper a.on .n{background:var(--blue);color:#fff}
+.stepper a.ok .n{background:var(--green-bg);color:var(--green)}
+.grid{display:grid;gap:16px;align-items:start}
+.g2{grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr)}
+.g3{grid-template-columns:minmax(260px,.8fr) minmax(0,1.6fr) minmax(300px,.95fr)}
+.card{background:#fff;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.card+.card{margin-top:14px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 16px;border-bottom:1px solid var(--line)}
+.bar h2{margin:0;font-size:15px}
+.pad{padding:14px 16px}
+.pad h3{margin:0 0 6px;font-size:15px}
+.muted,small{color:var(--muted);font-size:12px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid #e7ecef;font-size:13px}
+.kv:first-child{border-top:0}
+.kv>span{color:var(--muted);flex:none}
+.kv>b{font-weight:560;text-align:right}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:1px 7px;font-size:12px;font-weight:560;white-space:nowrap;background:var(--soft);color:var(--mid)}
+.chip.g{background:var(--green-bg);color:var(--green)}
+.chip.a{background:var(--amber-bg);color:var(--amber)}
+.chip.r{background:var(--red-bg);color:var(--red)}
+.chip.b{background:var(--blue-bg);color:var(--blue)}
+.chip.v{background:var(--violet-bg);color:var(--violet)}
+.chip.o{background:#fff;border:1px dashed #9fb0bb;color:var(--mid)}
+.callout{border-radius:6px;padding:10px 12px;font-size:13px;margin:10px 0;border:1px solid}
+.callout.a{background:var(--amber-bg);border-color:#ecd3a3;color:#6d4709}
+.callout.r{background:var(--red-bg);border-color:#efc3bc;color:#7e2a20}
+.callout.b{background:var(--blue-bg);border-color:#c4dbee;color:#16476f}
+.callout.g{background:var(--green-bg);border-color:#bfe1cd;color:#1d5a3f}
+.callout b{font-weight:650}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.list-item{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer;background:#fff;width:100%;text-align:left;border-radius:0;border-left:0;border-right:0;border-bottom:0;font-weight:400}
+.list-item:first-child{border-top:0}
+.list-item.sel{background:#eef5fb;box-shadow:inset 3px 0 var(--blue)}
+.list-item.dis{cursor:default;background:#fafbfc}
+.ico{width:36px;height:36px;border-radius:8px;display:grid;place-items:center;font-weight:700;background:var(--blue-bg);color:var(--blue);font-size:16px}
+.ico.md{background:#e7f3f3;color:#316a77;font:600 11px Menlo,monospace}
+.list-item b{display:block;font-size:14px}
+.ident{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px;margin-top:6px}
+.ident span{color:var(--muted)}
+.avatar{width:28px;height:28px;border-radius:50%;display:inline-grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:#3a7cb0;flex:none}
+.avatar.alt{background:#9a6a3a}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px;overflow-x:auto}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:10px 12px;color:var(--mid);font-weight:550;white-space:nowrap}
+.tabs button.on{color:var(--blue);border-color:var(--blue)}
+.tabs button .chip{margin-left:4px}
+/* zhihu-like render */
+.zh{background:#fff;padding:22px 34px 30px;font-size:15px;line-height:1.8;color:#121212}
+.zh h1{font-size:24px;line-height:1.4;margin:0 0 14px;font-weight:700}
+.zh .author{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:13px;color:#444}
+.zh .author b{font-size:14px;color:#121212}
+.zh p{margin:0 0 14px}
+.zh h2{font-size:18px;margin:20px 0 10px}
+.zh ul{margin:0 0 14px;padding-left:22px}
+.zh figure{margin:16px 0 18px;position:relative}
+.zh figure svg{width:100%;height:auto;display:block;border-radius:4px}
+.zh figcaption{text-align:center;color:#8590a6;font-size:13px;margin-top:6px}
+.zh figure.hl{outline:3px solid #f0b54a;outline-offset:4px;border-radius:4px}
+.pin{position:absolute;left:-26px;top:6px;width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;display:grid;place-items:center;font-weight:700}
+.sim-banner{font-size:11px;color:#8a5a10;background:#fff7e6;border-bottom:1px solid #f0dcb4;padding:4px 34px}
+.md{font:12.5px/1.65 Menlo,monospace;background:#fbfcfd;white-space:pre-wrap;padding:14px 16px;margin:0;color:#334a5a;max-height:560px;overflow:auto}
+.md .del{background:#fbe2de;text-decoration:line-through}
+.md .ins{background:#dff3e6}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:8px 10px;border-top:1px solid #e7ecef;vertical-align:top}
+td:first-child{white-space:nowrap}
+th{font-weight:600;color:var(--mid);font-size:12px;background:var(--soft)}
+.imgcard{display:grid;grid-template-columns:150px minmax(0,1fr);gap:14px;padding:14px 16px;border-top:1px solid var(--line)}
+.imgcard:first-child{border-top:0}
+.imgcard svg{width:150px;height:auto;border:1px solid var(--line);border-radius:4px;display:block}
+.choice{display:block;border:1.5px solid #cfd9df;border-radius:8px;padding:12px 14px;margin:10px 0;cursor:pointer;background:#fff}
+.choice:hover{border-color:#8fb4d2}
+.choice.on{border-color:var(--blue);background:#f2f8fd;box-shadow:0 0 0 2px #cfe3f4}
+.choice.off{opacity:.55;cursor:not-allowed}
+.choice input{margin-right:8px}
+.choice b{font-size:14px}
+.choice p{margin:4px 0 0 22px;font-size:12.5px;color:var(--mid)}
+/* plan */
+.group{border-top:1px solid var(--line)}
+.group:first-child{border-top:0}
+.ghead{display:flex;align-items:center;gap:10px;padding:10px 16px;background:#fafbfc;cursor:pointer;user-select:none}
+.ghead b{font-size:13.5px}
+.ghead .cnt{margin-left:auto;font-size:12px;color:var(--muted)}
+.step{display:grid;grid-template-columns:62px minmax(0,1fr) 92px;gap:10px;padding:8px 16px 8px 28px;border-top:1px solid #eef2f4;align-items:start;font-size:13px;cursor:pointer}
+.step:hover{background:#fafcfd}
+.step .act{font-weight:560}
+.step .ev{font-size:12px;color:var(--mid);margin-top:2px}
+.step .ev.w{color:var(--amber)}
+.step .ev.r{color:var(--red)}
+.step .more{display:none;font-size:12px;color:var(--mid);margin-top:6px;background:var(--soft);border-radius:5px;padding:6px 8px}
+.step.open .more{display:block}
+.step .st{text-align:right}
+.step.cur{background:#f2f8fd;box-shadow:inset 3px 0 var(--blue)}
+.owner{font-size:11px;border-radius:4px;padding:1px 6px;text-align:center;font-weight:600}
+.owner.S{background:#e6eef5;color:#2c5677}
+.owner.A{background:var(--violet-bg);color:var(--violet)}
+.owner.U{background:var(--amber-bg);color:var(--amber)}
+.step .inline-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.step .inline-actions button{font-size:12px;padding:3px 9px}
+.big{font-size:22px;font-weight:700;letter-spacing:-.01em;margin:0}
+.result-head{padding:18px 20px;color:#fff}
+.result-head.a{background:#7a5413}
+.result-head.r{background:#7e2a20}
+.result-head.g{background:#1f5f44}
+.result-head.b{background:#1b4a72}
+.result-head small{color:#f3e9d8;font-size:12px}
+.result-head.g small,.result-head.b small{color:#d6ece2}
+.linkcard{display:flex;gap:12px;align-items:center;border:1px solid #bfe1cd;background:var(--green-bg);border-radius:8px;padding:12px 14px;margin:12px 0}
+.linkcard a{font-weight:650;word-break:break-all}
+.timeline{margin:0;padding:0;list-style:none}
+.timeline li{position:relative;padding:0 0 12px 18px;font-size:13px}
+.timeline li:before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:#9fb0bb}
+.timeline li.g:before{background:var(--green)}
+.timeline li.a:before{background:#d69a2d}
+.timeline li.r:before{background:var(--red)}
+.timeline li small{display:block}
+.cand{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+.homerow{display:grid;grid-template-columns:38px minmax(0,1.4fr) minmax(0,1fr) 120px 90px;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);cursor:pointer}
+.homerow:hover{background:#f6fafd}
+.homerow.compact{grid-template-columns:38px minmax(0,1fr) auto}
+.homerow:first-of-type{border-top:0}
+.status{background:#223d51;color:#dbeaf0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;font-size:11px}
+/* demo panel */
+.demo{position:fixed;left:12px;bottom:34px;width:290px;background:#fffdf6;border:1.5px dashed #c99a3a;border-radius:10px;box-shadow:0 8px 30px rgba(20,35,50,.18);font-size:12.5px;z-index:20}
+.demo summary{padding:9px 12px;font-weight:650;color:#7a5413;cursor:pointer;list-style:none}
+.demo summary::-webkit-details-marker{display:none}
+.demo .in{padding:0 12px 12px}
+.demo .in p{margin:6px 0 4px;color:#7a6a4a;font-size:11.5px}
+.demo button{font-size:12px;padding:4px 8px;margin:2px 2px 2px 0}
+.demo .seg{display:flex;flex-wrap:wrap;gap:2px}
+.demo .seg button.on{background:#7a5413;color:#fff;border-color:#7a5413}
+.accept ol{margin:0;padding-left:22px}
+.accept li{margin:0 0 12px}
+.accept li b{display:block}
+.accept .exp{color:var(--green);font-size:12.5px}
+.accept .fail{color:var(--amber);font-size:12.5px}
+.diffline{display:grid;grid-template-columns:1fr 24px 1fr;gap:6px;align-items:start;padding:8px 0;border-top:1px solid #eef2f4;font-size:12.5px}
+.diffline:first-child{border-top:0}
+.diffline code{font:12px Menlo,monospace;background:var(--soft);padding:1px 4px;border-radius:3px;word-break:break-all}
+.toast{position:fixed;left:50%;top:56px;transform:translateX(-50%);background:#142333;color:#fff;padding:8px 14px;border-radius:6px;font-size:13px;z-index:30;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+@media(max-width:1180px){.g3{grid-template-columns:minmax(0,1fr) minmax(300px,.9fr)}.g3>.col-left{grid-column:1/-1}}
+@media(max-width:900px){.top .r{display:none}.shell{grid-template-columns:minmax(0,1fr)}aside{display:none}.g2,.g3{grid-template-columns:minmax(0,1fr)}main{padding:16px 16px 140px}.stepper{overflow-x:auto}.stepper a{min-width:120px}.homerow{grid-template-columns:38px 1fr auto}.homerow .hide-s{display:none}.demo{width:calc(100% - 32px)}.zh{padding:18px 18px}}
+</style>
+</head>
+<body>
+<div class="frame">
+  <header class="top"><span class="dots"><i></i><i></i><i></i></span><b>CCLink Studio</b><span>公司工作空间</span><span class="r">本地模式 · 界面原型（示例账号与稿件，不连接知乎）</span></header>
+  <div class="shell">
+    <aside>
+      <div class="co"><span class="mono">研</span>眼镜研发公司</div>
+      <div class="cap">公司项目</div>
+      <a class="side">⌂　项目首页</a>
+      <a class="side">▦　业务项目</a>
+      <a class="side on" href="#home">↗　推广</a>
+      <a class="sub" href="#home" id="nav-home">推广首页</a>
+      <a class="sub">稿件生成</a>
+      <a class="sub" href="#pick" id="nav-pub">文章发布</a>
+      <a class="sub">账号管理</a>
+      <a class="side">◇　客户与售后</a>
+      <a class="side">¥　公司账目</a>
+      <div class="cap">原型</div>
+      <a class="side" href="#accept">✓　真人验收路径</a>
+    </aside>
+    <div>
+      <div class="crumb" id="crumb"></div>
+      <main id="main"></main>
+    </div>
+  </div>
+  <footer class="status"><span>▦ 公司项目 / AI 眼镜</span><span>发布进度唯一来源：WebAffair 原任务 · 本原型以模拟事件演示</span></footer>
+</div>
+
+<details class="demo" id="demo">
+  <summary>▸ 原型演示控制（不属于产品界面）</summary>
+  <div class="in" id="demo-in"></div>
+</details>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+'use strict'
+/* ---------- 示例数据（全部虚构） ---------- */
+const ART_TITLE = '镜腿改版后，合盖还会顶住吗？一副样机的两天试戴'
+const BLOCKS = [
+  {t:'p', x:'这一轮样机只改了一处：把右镜腿的连接器往内收，让合盖时不再顶到镜框。下面是一副样机、一位同事连续两天试戴的记录，不代表批量表现。'},
+  {t:'img', n:1, file:'改版前-合盖接触.jpg', cap:'改版前：合盖到最后一段，连接器外壳碰到镜框内侧'},
+  {t:'p', x:'改版前，合盖到最后一段会有明显阻力，镜框内侧留下一道浅色压痕。'},
+  {t:'img', n:2, file:'改版后-同角度合盖.jpg', cap:'改版后：同一角度合盖，连接器与镜框之间留出缝隙'},
+  {t:'p', x:'改版后用同一角度合盖，阻力消失；两天试戴里没有出现新的压痕。', alt:'改版后用同一角度合盖，阻力消失，彻底解决了压痕问题。'},
+  {t:'h', x:'戴着是什么感觉'},
+  {t:'p', x:'同事反馈耳后压迫感和旧版接近，左右重量差没有明显变化。每天佩戴约 4 小时，没有覆盖跑步等剧烈运动。', alt:'同事反馈耳后压迫感和旧版接近，左右重量差没有明显变化。每天佩戴约 6 小时，没有覆盖跑步等剧烈运动。'},
+  {t:'img', n:3, file:'试戴第二天-右镜腿近景.jpg', cap:'试戴第二天：右镜腿外侧近景，未见新的磨损'},
+  {t:'h', x:'还没测的'},
+  {t:'ul', x:['反复开合上千次之后的状态','其他头围、其他批次的镜框']},
+  {t:'p', x:'下一批样机到货后，我们会补上这些测试再来更新。'},
+]
+const SOURCES = {
+  reviewed: {name:'镜腿试戴稿.md', path:'运营/原稿/镜腿试戴稿.md', origin:'稿件生成 · 刚审好', note:'审稿人 周编辑 · 今天 10:12 标记“可发布” · 修订 v3', imgs:3, caps:3},
+  existing: {name:'镜腿试戴-手写版.md', path:'运营/原稿/镜腿试戴-手写版.md', origin:'工作空间已有 Markdown', note:'未经过稿件生成审稿；在此逐项核对', imgs:3, caps:2},
+}
+const ACCTS = {
+  lab:   {label:'样机实验室', use:'公司官方号 · 对外发布', token:'sample09', name:'样机实验室', av:'样', lastAt:'今天 10:22'},
+  notes: {label:'研发手记',   use:'研发同事的实验记录号',   token:'lab-notes', name:'研发手记', av:'研', lastAt:'11-26 18:05'},
+}
+const DRAFTS = [
+  {id:'d6604', tail:'…6604', title:'镜腿改版后，合盖还会顶住吗？（占位）', saved:'今天 09:40', body:'占位：正文待填写', imgs:0, ok:true},
+  {id:'d5518', tail:'…5518', title:'Q3 展会回顾：我们带去的三副样机', saved:'11-20 16:12', body:'约 1,800 字 · 4 张图', imgs:4, ok:false},
+]
+const NEW_DRAFT_TAIL = '…4471'
+const PUBLIC_URL = 'https://zhuanlan.zhihu.com/p/2091000000004471'
+
+/* ---------- 状态 ---------- */
+const S = {
+  src: 'reviewed', fixes:{ext:false, cap:false},
+  ver: 'v3',
+  acct: 'lab',
+  checks: {lab:{s:'match', at:'今天 10:22'}, notes:{s:'stale', at:'11-26 18:05'}},
+  tab: 'render', focusImg: 0,
+  anchor: 'new',
+  scope: null, authorizedScope: null, authAt: null,
+  run: null,
+  result: {kind:null, verify:'none', verifyState:'idle', claimed:null, lastReviewCheck:'11:42'},
+  demoOutcome: 'review', demoVerify: 'none',
+}
+const esc = v => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+const $ = s => document.querySelector(s)
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2200)}
+
+/* 稿件版本：v3 已审；working = 工作区文件含 2 处未审改动 */
+const srcIssues = (src=S.src) => src==='existing' ? [
+  !S.fixes.ext && {k:'ext', text:'图 2 引用外链 img.example.com/…，未收为工作空间批准副本', fix:'收为批准副本'},
+  !S.fixes.cap && {k:'cap', text:'图 3 没有图注', fix:'在 Markdown 中补图注'},
+].filter(Boolean) : []
+const verIssues = () => S.src==='reviewed' && S.ver==='working' ? ['第 5 段：“两天试戴里没有出现新的压痕” 改为 “彻底解决了压痕问题”（无对应实测）','第 7 段：每天佩戴 4 小时 改为 6 小时（与试装记录不符）'] : []
+const acctOk = () => S.acct && S.checks[S.acct].s==='match'
+const anchorOk = () => S.anchor==='new' || (DRAFTS.find(d=>d.id===S.anchor)||{}).ok
+const readyToAuth = () => acctOk() && !srcIssues().length && !verIssues().length && anchorOk()
+const verLabel = () => S.src==='reviewed' ? (S.ver==='v3' ? '修订 v3（已审）' : '工作区当前文件（含未审改动）') : (srcIssues().length ? '手写版（待处理 '+srcIssues().length+' 项）' : '手写版 r2（已处理外链与图注）')
+const fp = () => S.src==='reviewed' ? '3f9a…c21' : '8b02…e7d'
+
+/* ---------- 示意配图（非实拍） ---------- */
+function fig(n, w=640){
+  const h = Math.round(w*0.5)
+  const sc = w/640
+  const base = `<rect width="640" height="320" fill="#eef2f4"/><g stroke="#cfd8dd">${Array.from({length:16},(_,i)=>`<line x1="${i*40}" y1="0" x2="${i*40}" y2="320"/>`).join('')}</g>`
+  const frame = `<path d="M60 150 C120 110 250 105 330 120 L560 130 C590 132 600 150 590 162 L340 168 C250 170 120 180 60 185 Z" fill="#3c5566" stroke="#22394a" stroke-width="3"/>`
+  let mark = ''
+  if(n===1) mark = `<rect x="300" y="112" width="58" height="46" rx="6" fill="#d98b3a" stroke="#7a4a14" stroke-width="3"/><circle cx="352" cy="120" r="22" fill="none" stroke="#c0392b" stroke-width="4"/><text x="380" y="92" font-size="18" fill="#a23b2f" font-family="PingFang SC,sans-serif">接触</text>`
+  if(n===2) mark = `<rect x="282" y="112" width="58" height="46" rx="6" fill="#d98b3a" stroke="#7a4a14" stroke-width="3"/><line x1="346" y1="100" x2="346" y2="176" stroke="#24704f" stroke-width="3" stroke-dasharray="6 5"/><text x="356" y="92" font-size="18" fill="#24704f" font-family="PingFang SC,sans-serif">留出缝隙</text>`
+  if(n===3) mark = `<rect x="140" y="70" width="380" height="190" rx="10" fill="#3c5566" stroke="#22394a" stroke-width="3"/><rect x="250" y="130" width="120" height="70" rx="8" fill="#d98b3a" stroke="#7a4a14" stroke-width="3"/><text x="330" y="292" font-size="18" fill="#24704f" font-family="PingFang SC,sans-serif">外侧近景 · 未见新磨损</text>`
+  const lbl = `<text x="16" y="306" font-size="14" fill="#7d8b95" font-family="PingFang SC,sans-serif">图 ${n} · 示意图，非实拍</text>`
+  return `<svg viewBox="0 0 640 320" width="${w}" height="${h}" role="img" aria-label="图 ${n} 示意图">${base}${n===3?'':frame}${mark}${lbl}</svg>`
+}
+
+/* ---------- 渲染工具 ---------- */
+const chip = (t, c='') => `<span class="chip ${c}">${t}</span>`
+const kv = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`
+const card = (title, body, right='') => `<section class="card">${title?`<div class="bar"><h2>${title}</h2>${right}</div>`:''}${body}</section>`
+const STEPS = [['pick','选稿','原稿与版本'],['account','选账号','核对实际身份'],['preview','平台预览','正文·图·字段·草稿'],['authorize','授权','只存草稿或提交一次'],['run','执行计划','随真实事件变化'],['result','结果与恢复','审核·未知·作品链接']]
+function stepper(cur){
+  const idx = STEPS.findIndex(s=>s[0]===cur)
+  return `<nav class="stepper" aria-label="发布步骤">${STEPS.map(([k,t,s],i)=>`<a href="#${k}" class="${k===cur?'on':i<idx?'ok':''}"><span class="n">${i<idx?'✓':i+1}</span><span class="t">${t}<small>${s}</small></span></a>`).join('')}</nav>`
+}
+function header(title, sub, extra=''){
+  return `<div class="head"><div><h1>${title}</h1><p>${sub}</p></div><div class="row">${extra}<span class="mark">设计原型 · 示例数据</span></div></div>`
+}
+function taskChip(){
+  if(!S.run) return chip('本地任务未创建','o')
+  return chip('原任务 ZH-12','b')
+}
+function summaryCard(){
+  const a = S.acct ? ACCTS[S.acct] : null
+  return card('本次发布', `<div class="pad">
+    ${kv('原稿', esc(SOURCES[S.src].name))}
+    ${kv('版本', verLabel())}
+    ${kv('平台', '知乎 · 专栏文章')}
+    ${kv('账号', a ? `${a.label} <small>· ${acctOk()?'url_token '+a.token:'身份未通过'}</small>` : '未选择')}
+    ${kv('远端草稿', S.anchor==='new' ? '新建独立草稿' : '已有草稿 '+DRAFTS.find(d=>d.id===S.anchor).tail)}
+    ${kv('授权', S.authorizedScope ? (S.authorizedScope==='draft'?chip('只存草稿 · 提交上限 0','b'):chip('公开提交 1 次','v')) : chip('尚未授权','o'))}
+  </div>`)
+}
+
+/* ---------- 1. 选稿 ---------- */
+function vPick(){
+  const item = (k) => {
+    const s = SOURCES[k]
+    const issues = srcIssues(k)
+    return `<button class="list-item ${S.src===k?'sel':''}" data-act="src" data-v="${k}">
+      <span class="ico md">MD</span>
+      <span><b>${esc(ART_TITLE)}</b><small>${esc(s.path)} · ${s.imgs} 张图 · 图注 ${k==='existing'&&!S.fixes.cap?2:3}/3</small><br><small>${esc(s.note)}</small></span>
+      <span>${k==='reviewed'?chip('刚审好','g'):issues.length?chip(issues.length+' 项待处理','a'):chip('可发布','g')}</span>
+    </button>`
+  }
+  const left = card('选择要发布的稿件', `
+    <div class="pad" style="padding-bottom:4px"><div class="callout b" style="margin:0"><b>从稿件生成进入：</b>审稿人点“可发布”后，这篇稿出现在最上方，已带好版本 v3 与三张配图。也可以直接选工作空间里任何一份 Markdown。</div></div>
+    ${item('reviewed')}${item('existing')}
+    <div class="list-item dis" style="cursor:default"><span class="ico md">MD</span><span><b>其他 Markdown…</b><small>从工作空间文件树选择；只读取你选中的文件及其引用的图片</small></span><span><button data-act="toast" data-v="原型中不打开文件选择器">浏览</button></span></div>`)
+  const s = SOURCES[S.src]
+  const issues = srcIssues()
+  const right = card('带入发布的内容', `<div class="pad">
+    ${kv('来源', esc(s.origin))}
+    ${kv('文件', esc(s.path))}
+    ${kv('正文', '约 '+charCount()+' 字 · 2 个小标题 · 1 个列表')}
+    ${kv('配图', '3 张，按正文出现顺序')}
+    ${kv('图注', (S.src==='existing'&&!S.fixes.cap?'2':'3')+' / 3')}
+    ${kv('不带入', '素材批注、来源定位、内部日志')}
+    ${issues.length ? `<div class="callout a"><b>发布前要先处理：</b>${issues.map(i=>`<div class="row" style="justify-content:space-between;margin-top:6px"><span>${esc(i.text)}</span><button data-act="fix" data-v="${i.k}">${i.fix}</button></div>`).join('')}</div>` : S.src==='existing' ? `<div class="callout g">外链图已收为 <code>运营/原稿/img/</code> 下的批准副本，图 3 已补图注；手写版保存为 r2。</div>` : ''}
+    <div class="actions"><button class="primary" data-go="account">下一步：选账号</button></div>
+  </div>`)
+  return header('把这篇稿投到知乎', '运营刚收到审好的试戴稿；先确定发哪一份，再选公司知乎账号。', taskChip()) + stepper('pick') + `<div class="grid g2"><div>${left}</div><div>${right}${card('', `<div class="pad"><small>这一步只读文件，不打开浏览器，不需要登录任何账号。稿件生成是否启用不影响这里：选手写 Markdown 也走同一个发布流程。</small></div>`)}</div></div>`
+}
+function charCount(){return BLOCKS.reduce((n,b)=>n+(b.t==='p'||b.t==='h'?b.x.length:b.t==='ul'?b.x.join('').length:0),0)}
+
+/* ---------- 2. 选账号 ---------- */
+function vAccount(){
+  const row = k => {
+    const a = ACCTS[k], c = S.checks[k]
+    const st = c.s==='match' ? chip('身份一致','g') : c.s==='mismatch' ? chip('身份不一致','r') : c.s==='checking' ? chip('核对中…','b') : c.s==='expired' ? chip('需重新登录','a') : chip('待核对','o')
+    return `<div class="list-item ${S.acct===k?'sel':''}" style="cursor:default">
+      <span class="ico">知</span>
+      <span><b>${a.label}</b><small>${a.use}</small>
+        <div class="ident"><span>上次核对的平台身份</span><b>${a.name} · /people/${a.token}</b><span>最近一次核对</span><b>${c.at}</b>
+        ${c.s==='mismatch'?`<span>本次读到的身份</span><b style="color:var(--red)">林** · /people/lin-xx-07</b>`:''}</div>
+      </span>
+      <span style="display:grid;gap:6px;justify-items:end">${st}
+        <button data-act="check" data-v="${k}" ${c.s==='checking'?'disabled':''}>核对实际身份</button>
+        <button class="${S.acct===k?'primary':''}" data-act="acct" data-v="${k}" ${c.s!=='match'?'disabled':''}>${S.acct===k?'已选这个账号':'选这个账号'}</button>
+      </span>
+    </div>`
+  }
+  const sel = S.acct ? ACCTS[S.acct] : null
+  const notes = S.checks.notes
+  const left = card('知乎 · 同一平台的两个账号', `${row('lab')}${row('notes')}
+    <div class="pad" style="border-top:1px solid var(--line)"><small>“核对实际身份”会在该账号自己的浏览器窗口（独立 Profile）读取知乎当前登录者的 url_token 与显示名，只读，不写入任何内容。显示名可能重名，以 url_token 为准。</small></div>`,
+    `<a href="#home" class="muted">管理账号</a>`)
+  const why = notes.s==='mismatch' ? `<div class="callout r"><b>研发手记不能用于本稿：</b>它的窗口里现在登录的是另一个知乎身份（林** · lin-xx-07），与登记的 lab-notes 不一致。不会改用这个身份发布，也不会改挂到样机实验室。请在研发手记自己的窗口重新登录正确账号，再回来核对。<div class="actions"><button data-act="relogin" data-v="notes">打开研发手记的登录窗口</button></div></div>`
+    : notes.s==='expired' ? `<div class="callout a">研发手记的会话已失效。登录只在它自己的窗口完成，Studio 不接触密码和验证码。<div class="actions"><button data-act="relogin" data-v="notes">打开研发手记的登录窗口</button></div></div>` : ''
+  const right = card('账号与授权的关系', `<div class="pad">
+    ${sel ? kv('已选', sel.label) + kv('将绑定的身份', `${sel.name} · /people/${sel.token}`) + kv('核对来源', '知乎页面 · 主进程读取') : '<p class="muted">还没有选账号。</p>'}
+    ${why}
+    <div class="callout b">选定后，这篇稿的任务只属于这个账号：执行时 Studio 会在知乎页面再读一次 url_token，与这里不一致就停止写入。要换号只能另建一个未授权的发布目标，审核中或回执未知的作品不能改挂。</div>
+    <div class="actions"><button data-go="pick">上一步</button><button class="primary" data-go="preview" ${acctOk()?'':'disabled'}>下一步：看知乎上实际呈现</button></div>
+  </div>`)
+  return header('用哪个知乎账号？', '同一平台两个账号：先核对各自窗口里真实登录的是谁，再选。', taskChip()) + stepper('account') + `<div class="grid g2"><div>${left}</div><div>${right}</div></div>`
+}
+
+/* ---------- 3. 平台预览 ---------- */
+function renderZhihu(useAlt){
+  const a = ACCTS[S.acct||'lab']
+  const out = BLOCKS.map(b => {
+    if(b.t==='p') return `<p>${esc(useAlt && b.alt ? b.alt : b.x)}</p>`
+    if(b.t==='h') return `<h2>${esc(b.x)}</h2>`
+    if(b.t==='ul') return `<ul>${b.x.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`
+    const noCap = S.src==='existing' && !S.fixes.cap && b.n===3
+    return `<figure class="${S.focusImg===b.n?'hl':''}" id="zfig${b.n}"><span class="pin">${b.n}</span>${fig(b.n)}${noCap?'<figcaption style="color:#c0392b">（缺图注）</figcaption>':`<figcaption>${esc(b.cap)}</figcaption>`}</figure>`
+  }).join('')
+  return `<div class="sim-banner">按知乎专栏样式模拟的预览；以执行后从知乎回读的结果为准</div><article class="zh"><h1>${esc(ART_TITLE)}</h1><div class="author"><span class="avatar">${a.av}</span><span><b>${a.name}</b><br>知乎 · /people/${a.token}</span></div>${out}</article>`
+}
+function mdSource(){
+  const lines = []
+  lines.push('# '+ART_TITLE, '')
+  BLOCKS.forEach(b=>{
+    if(b.t==='p'){
+      if(S.src==='reviewed' && S.ver==='working' && b.alt) lines.push(`<span class="del">${esc(b.x)}</span>\n<span class="ins">${esc(b.alt)}</span>`,'')
+      else lines.push(esc(b.x),'')
+    }
+    if(b.t==='h') lines.push('## '+esc(b.x),'')
+    if(b.t==='ul') lines.push(...b.x.map(x=>'- '+esc(x)),'')
+    if(b.t==='img'){
+      const ext = S.src==='existing' && b.n===2 && !S.fixes.ext
+      lines.push(`![图 ${b.n}](${ext?'https://img.example.com/u/7c1e.jpg':'img/'+esc(b.file)})`)
+      if(!(S.src==='existing' && b.n===3 && !S.fixes.cap)) lines.push('*'+esc(b.cap)+'*')
+      lines.push('')
+    }
+  })
+  return lines.join('\n')
+}
+function vPreview(){
+  const tabs = [['render','知乎预览'],['diff','正文与转换'],['imgs','配图 3'],['fields','平台字段'],['draft','远端草稿']]
+  const vi = verIssues(), si = srcIssues()
+  const verSel = S.src==='reviewed' ? `<div class="pad" style="border-bottom:1px solid var(--line)">
+      <label class="choice ${S.ver==='v3'?'on':''}"><input type="radio" name="ver" data-act="ver" value="v3" ${S.ver==='v3'?'checked':''}><b>修订 v3 · 已审</b>${chip('推荐','g')}<p>周编辑 今天 10:12 标记可发布；冻结时按这份内容的确切字节记录指纹</p></label>
+      <label class="choice ${S.ver==='working'?'on':''}"><input type="radio" name="ver" data-act="ver" value="working" ${S.ver==='working'?'checked':''}><b>工作区当前文件</b>${chip('2 处未审改动','a')}<p>v3 之后有人改过；未审的改动不能直接冻结发布</p></label>
+    </div>` : `<div class="pad" style="border-bottom:1px solid var(--line)"><b>${esc(SOURCES.existing.name)}</b><br><small>${esc(SOURCES.existing.path)} · ${verLabel()}</small></div>`
+  const left = card('发哪一版', verSel + `<div class="pad">
+      ${vi.length?`<div class="callout a"><b>未审改动：</b><ul style="margin:4px 0 0;padding-left:18px">${vi.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><div class="actions"><button data-act="toast" data-v="回到稿件生成审稿，通过后另存 v4（原型不演示）">回稿件生成审稿</button><button data-act="ver-v3">改发 v3</button></div></div>`:''}
+      ${si.length?`<div class="callout a"><b>原稿待处理 ${si.length} 项</b>，见“选稿”页。</div>`:''}
+      <h3 style="margin-top:6px">检查清单</h3>
+      ${checkRow('正文','约 '+charCount()+' 字，转换差异 5 项', !vi.length)}
+      ${checkRow('配图位置','3 张，各在原段落之后', !si.some(i=>i.k==='ext'))}
+      ${checkRow('图注','知乎图片说明 · '+(S.src==='existing'&&!S.fixes.cap?'2':'3')+'/3', !si.some(i=>i.k==='cap'))}
+      ${checkRow('平台字段','标题由 Studio 写入并回读；其余保持知乎默认', true)}
+      ${checkRow('远端草稿', S.anchor==='new'?'新建独立草稿':'已有草稿 '+DRAFTS.find(d=>d.id===S.anchor).tail, anchorOk())}
+      <div class="actions"><button data-go="account">上一步</button><button class="primary" data-go="authorize" ${readyToAuth()?'':'disabled'}>下一步：授权范围</button></div>
+    </div>`)
+  let body = ''
+  if(S.tab==='render') body = renderZhihu(S.src==='reviewed' && S.ver==='working')
+  if(S.tab==='diff') body = `<div class="pad"><h3>Markdown → 知乎会发生的变化</h3>
+      ${diffLine('<code># 标题行</code>','知乎“标题”字段；不重复进正文')}
+      ${diffLine('<code>## 小标题</code> ×2','知乎小标题，层级保持')}
+      ${diffLine('<code>- 列表</code> ×2 项','知乎无序列表')}
+      ${diffLine('<code>![图 n](img/…)</code> 的替代文字','知乎粘贴时丢弃替代文字；按地址、次数、顺序、位置和加载核验')}
+      ${diffLine('图下 <code>*斜体一行*</code>','知乎图片说明（图注）')}
+      <p class="muted" style="margin-top:10px">没有被删节或改写的段落。若平台截断、压缩或图位偏移，执行计划会标出具体差异，改文需重新冻稿。</p></div>
+      <div class="bar" style="border-top:1px solid var(--line)"><h2>原稿 Markdown${S.ver==='working'?' · 与 v3 的差异':''}</h2><small>${esc(SOURCES[S.src].path)}</small></div><pre class="md">${mdSource()}</pre>`
+  if(S.tab==='imgs') body = BLOCKS.filter(b=>b.t==='img').map(b=>{
+      const ext = S.src==='existing' && b.n===2 && !S.fixes.ext
+      const noCap = S.src==='existing' && b.n===3 && !S.fixes.cap
+      const before = BLOCKS[BLOCKS.indexOf(b)-1]
+      return `<div class="imgcard">${fig(b.n,150)}<div>
+        <div class="row"><b>图 ${b.n}</b>${ext?chip('外链，未收为副本','a'):chip('批准副本','g')}${noCap?chip('缺图注','a'):''}</div>
+        ${kv('文件', ext?'https://img.example.com/u/7c1e.jpg':'运营/原稿/img/'+esc(b.file))}
+        ${kv('位置', '第 '+(BLOCKS.indexOf(b))+' 块之后 · 前文“'+esc((before.x||'').slice(0,14))+'…”')}
+        ${kv('图注', noCap?'<span style="color:var(--red)">无</span>':esc(b.cap))}
+        ${kv('规格', '1600×800 · JPEG · 412 KB（示例）')}
+        <div class="actions" style="margin-top:6px"><button data-act="focus" data-v="${b.n}">在预览中定位</button></div>
+      </div></div>`}).join('') + `<div class="pad" style="border-top:1px solid var(--line)"><small>调图序、换图或改图注都回 Markdown 修改，保存后重新冻结；这里只核对，不在发布页改内容。</small></div>`
+  if(S.tab==='fields') body = `<table><thead><tr><th>字段</th><th>本次值</th><th>谁来处理</th><th>怎么核验</th></tr></thead><tbody>
+      <tr><td>标题</td><td>${esc(ART_TITLE)}</td><td>${chip('Agent 填写','v')}</td><td>Studio 从编辑器与知乎原稿回读，一致才继续</td></tr>
+      <tr><td>正文</td><td>约 ${charCount()} 字 · 3 图</td><td>${chip('Agent 填写','v')}</td><td>全文回读；逐图核地址、次数、顺序、前文位置、加载</td></tr>
+      <tr><td>图注</td><td>3 条图片说明</td><td>${chip('Agent 填写','v')}</td><td>${chip('拟增','o')} 逐图回读图片说明；未实现前显示“图注未自动核验”</td></tr>
+      <tr><td>投稿至专栏</td><td>不投专栏</td><td>${chip('保持默认','')}</td><td>${chip('拟增','o')} 提交前读出发布设置实际值并展示</td></tr>
+      <tr><td>话题 / 封面</td><td>不设置</td><td>${chip('保持默认','')}</td><td>${chip('拟增','o')} 同上；首版不写入</td></tr>
+      <tr><td>可见范围</td><td>公开（知乎文章默认）</td><td>${chip('保持默认','')}</td><td>公开页核验时以平台实际状态为准</td></tr>
+      <tr><td>创作声明 / 原创</td><td>不勾选</td><td>${chip('用户','a')}</td><td>知乎若要求声明，停在可见页面由你处理</td></tr>
+    </tbody></table><div class="pad"><small>当前知乎适配器只写入并核验“标题”。其余字段首版保持知乎默认；标“拟增”的是本设计要求补上的只读核对，不扩展写入范围。</small></div>`
+  if(S.tab==='draft') body = `<div class="pad"><h3>文章写到知乎的哪份草稿？</h3><p class="muted" style="margin:0 0 4px">列表是在 ${ACCTS[S.acct||'lab'].label} 自己的窗口从知乎创作中心只读取得（今天 10:24，示例）。</p>
+      <label class="choice ${S.anchor==='new'?'on':''}"><input type="radio" name="anc" data-act="anchor" value="new" ${S.anchor==='new'?'checked':''}><b>新建独立草稿</b>${chip('推荐','g')}<p>执行时 Studio 打开知乎写文章页，写入冻结标题与短占位并首次保存，取得新草稿 ID 后在管理页复核作者，再写正文。</p></label>
+      ${DRAFTS.map(d=>`<label class="choice ${S.anchor===d.id?'on':''} ${d.ok?'':'off'}"><input type="radio" name="anc" data-act="anchor" value="${d.id}" ${S.anchor===d.id?'checked':''} ${d.ok?'':'disabled'}><b>已有草稿 ${d.tail}</b> ${d.ok?chip('标题与本稿一致','b'):chip('另一篇稿，不可选','r')}<p>${esc(d.title)} · 最后保存 ${d.saved} · ${esc(d.body)}</p></label>`).join('')}
+      ${S.anchor==='d6604'?`<div class="callout b"><b>远端草稿 …6604 当前内容 vs 本次版本</b>${kv('作者','样机实验室 · sample09 = 本次账号 ✓')}${kv('标题','一致（去掉“（占位）”后）')}${kv('正文','远端 8 字占位 → 本次约 '+charCount()+' 字，将被替换')}${kv('图片','远端 0 张 → 本次 3 张')}</div>`:''}
+      <small>不会自动挑“最近一篇”或同名草稿；找不到原 ID 或同名多条时，执行计划停下让你选。</small></div>`
+  const tabBar = `<div class="tabs" role="tablist">${tabs.map(([k,t])=>`<button role="tab" aria-selected="${S.tab===k}" class="${S.tab===k?'on':''}" data-act="tab" data-v="${k}">${t}${k==='imgs'&&si.length?chip('!','a'):''}${k==='draft'&&!anchorOk()?chip('!','a'):''}</button>`).join('')}</div>`
+  return header('知乎上实际会呈现成什么样', '核对版本、全文、每张图的位置与图注、平台字段和要写入的远端草稿。', taskChip()) + stepper('preview') +
+    `<div class="grid g3"><div class="col-left">${left}</div><div>${card('', tabBar+body)}</div><div>${summaryCard()}</div></div>`
+}
+const checkRow = (k, v, ok) => `<div class="kv"><span>${ok?'✓':'!'} ${k}</span><b style="color:${ok?'var(--ink)':'var(--amber)'}">${v}</b></div>`
+const diffLine = (a, b) => `<div class="diffline"><span>${a}</span><span>→</span><span>${b}</span></div>`
+
+/* ---------- 4. 授权 ---------- */
+function vAuthorize(){
+  if(!readyToAuth()) return header('授权范围','') + stepper('authorize') + card('', `<div class="pad"><div class="callout a">还有未完成的核对：${!acctOk()?'账号身份；':''}${srcIssues().length?'原稿问题；':''}${verIssues().length?'未审改动；':''}${!anchorOk()?'远端草稿；':''}</div><button data-go="preview">回到平台预览</button></div>`)
+  const a = ACCTS[S.acct]
+  const upgrading = S.authorizedScope==='draft'
+  const snap = card('授权快照（点击开始即按这份执行）', `<div class="pad">
+    ${kv('网站与体裁','知乎 · 专栏文章')}
+    ${kv('账号', `${a.label} · 知乎 /people/${a.token}`)}
+    ${kv('身份核对', S.checks[S.acct].at+' · 主进程读取知乎页面')}
+    ${kv('原稿', esc(SOURCES[S.src].path))}
+    ${kv('冻结版本', verLabel()+' · 内容指纹 '+fp()+' '+chip('拟增','o'))}
+    ${kv('正文 / 配图', '约 '+charCount()+' 字 · 3 张，顺序 1→2→3')}
+    ${kv('字段', '标题；其余保持知乎默认')}
+    ${kv('远端草稿', S.anchor==='new'?'新建独立草稿（ID 在首次保存后确定）':'已有草稿 '+DRAFTS.find(d=>d.id===S.anchor).tail)}
+    ${kv('可见范围','公开')}
+    ${kv('影响范围','1 个账号 · 1 篇 · '+(S.scope==='publish'?'最多提交 1 次':'不提交'))}
+    <div class="callout b" style="margin-bottom:0">以下任一变化都会让这次授权失效、需要重新确认：换账号、改正文或图、换图序或图注、换远端草稿、改可见范围。</div>
+  </div>`)
+  const choose = card('这次做到哪一步？', `<div class="pad">
+    ${upgrading?`<div class="callout b">同一原任务：平台草稿 ${NEW_DRAFT_TAIL} 已保存且已复核。追加公开授权后从“提交前复核”继续，不会重新上传图片。</div>`:''}
+    <label class="choice ${S.scope==='draft'?'on':''} ${upgrading?'off':''}"><input type="radio" name="scope" data-act="scope" value="draft" ${S.scope==='draft'?'checked':''} ${upgrading?'disabled':''}><b>只存知乎草稿</b><p>写入标题、正文、三张图并核验知乎自动保存。提交次数上限 0。结束后你可以在知乎自己看稿，之后再回来授权公开。</p></label>
+    <label class="choice ${S.scope==='publish'?'on':''}"><input type="radio" name="scope" data-act="scope" value="publish" ${S.scope==='publish'?'checked':''}><b>授权本稿公开提交一次</b><p>做完上面全部动作后，对这一篇点一次知乎“发布”。之后只做只读核验：读回执、看审核、找公开作品。不会第二次点击。</p></label>
+    <p class="muted" style="margin:8px 0 0">两项互斥，默认都不选。</p>
+    <h3 style="margin-top:14px">这些情况会停下来交给你</h3>
+    <ul style="margin:0;padding-left:18px;font-size:13px;color:var(--mid)"><li>知乎登录、验证码、扫码或安全验证</li><li>原创或版权声明、需要勾选的承诺</li><li>页面上的账号与快照不一致，或草稿找不到/有多份同名</li><li>系统无法判断后果的弹窗</li></ul>
+    <div class="actions">
+      <button data-go="preview">上一步</button>
+      <button class="primary" data-act="start" ${S.scope?'':'disabled'}>${!S.scope?'先选一项':S.scope==='draft'?'开始：只存草稿':'授权并开始（提交 1 次）'}</button>
+    </div>
+    <small style="display:block;margin-top:8px">点击即构成本次有界授权；与快照一致的这一次提交不会在末尾再弹确认。</small>
+  </div>`)
+  return header('只存草稿，还是授权公开提交一次？', '确认要执行的确切内容和范围；这一步之后，Studio 才会在知乎页面写入。', taskChip()) + stepper('authorize') + `<div class="grid g2"><div>${snap}</div><div>${choose}</div></div>`
+}
+
+/* ---------- 5. 执行计划 ---------- */
+function buildRows(scope, anchor){
+  const R = []
+  const add = (g,id,o,act,entry,done,next,ev,extra={}) => R.push({g,id,o,act,entry,done,next,ev,st:'todo',note:'',...extra})
+  const G = {
+    open: anchor==='new'?'打开编辑器并建立独立草稿':'从知乎管理页找回原稿',
+    acct:'核验账号与页面', img:'上传并核验正文图片', body:'填写并核验正文', fields:'核验知乎标题与发布设置', save:'核验知乎自动保存', pub:'执行常规单篇发布', ver:'核验文章结果'}
+  add(G.open,'account.resolve','S','解析账号与登录 Profile','任务已保存、账号未归档','账号与唯一 Profile 已解析','取得可见账号 Tab','样机实验室 → 唯一 Profile（脱敏）')
+  add(G.open,'tab.acquire','S','取得当前工作空间的账号 Tab','账号与 Profile 已解析','可见 Tab 与账号、工作空间绑定一致','打开编辑器或管理页','AI 眼镜工作空间 · 账号 Tab 已绑定')
+  if(anchor==='new'){
+    add(G.open,'editor.open','S','打开新建编辑器','本任务没有原 draftId','导航到支持的新建入口','检查账号与编辑区域','zhuanlan.zhihu.com/write 已加载')
+    add(G.open,'initial.title.dispatch','A','派发冻结标题','页面检查通过；一次性副作用已预写','派发闸门通过','读取页面','标题写入已派发')
+    add(G.open,'initial.body.dispatch','A','派发建稿短占位','标题已派发','派发闸门通过','首次保存','占位已派发')
+    add(G.open,'initial.save.dispatch','A','派发首次保存','占位已派发','派发闸门通过；结果待核','核验保存响应；未知不重建','首次保存已派发')
+    add(G.open,'initial.anchor','S','核验首次保存响应与新 draftId','首次保存已派发','保存响应返回数字 ID，管理页复核','准备 Runtime','新草稿 '+NEW_DRAFT_TAIL+'，管理页作者 sample09')
+  } else {
+    add(G.open,'recovery.management','S','打开管理页与草稿箱','原 draftId 存在','读到受支持的管理页','核验管理页账号','creator/manage/creation/draft 已读')
+    add(G.open,'recovery.locate','S','按原 draftId 找到唯一草稿','管理页账号一致','唯一候选 ID 与原稿一致','打开候选草稿','…6604 唯一命中')
+    add(G.open,'recovery.verify','S','复核原稿账号 / ID / 标题 / 保存状态','原稿页面可读','4 项均与任务一致','准备 Runtime','4/4 一致')
+  }
+  add(G.open,'runtime.ready','S','绑定并核对 Runtime','页面就绪','Agent Run / BrowserTask / 页面 / 写入许可一致','首次只读检查','第 1 代绑定一致')
+  add(G.acct,'page.inspect','S','读取当前页面账号与草稿事实','Runtime 已绑定','页面账号、草稿 ID、标题、保存状态已读回','定位正文与字段','url_token = sample09 = 快照；草稿 '+(anchor==='new'?NEW_DRAFT_TAIL:'…6604'))
+  ;[1,2,3].forEach(n=>{
+    add(G.img,`asset.${n}.inspect`,'S',`检查图 ${n}`,'原草稿与页面证据有效','已核验 / 可上传 / 需人工对账','已完成跳过',`图 ${n} 未在草稿中，需上传`)
+    add(G.img,`asset.${n}.open`,'S',`定位正文图片上传控件（图 ${n}）`,'账号、原稿与正文区域通过','唯一文件控件可用','只选该冻结文件','正文上传控件唯一')
+    add(G.img,`asset.${n}.dispatch`,'A',`上传图 ${n}`,'此图缺失已核验，上传授权已预写','仅此图上传已派发','回读对应图片',`上传已派发 1 次`)
+    add(G.img,`asset.${n}.verify`,'S',`核验图 ${n}`,'已上传或结果未知','页面对应图片已读回，或用户确认存在','下一张；未知时请用户判断',`平台图片地址已读回 · 加载成功`)
+  })
+  add(G.body,'body.locate','S','定位正文编辑区域','页面检查通过','唯一正文区域可读','只向该区域写入','正文区域唯一')
+  add(G.body,'body.dispatch','A','填写完整正文','图片已处理；正文区域与许可有效','正文填写已派发','回读与保存','正文已派发')
+  ;[1,2,3].forEach(n=>add(G.body,`asset.${n}.placement`,'S',`核验图 ${n} 的正文位置与加载`,'完整正文已填写','地址、次数、顺序、前文位置一致且加载成功（知乎不保留替代文字）','全部通过后核验保存',`图 ${n} 位于第 ${[1,3,7][n-1]} 块之后 ✓`))
+  add(G.body,'caption.verify','S','核验 3 条图注（图片说明）','正文与图片已核验','每张图的说明与冻结图注一致','核验字段','3/3 一致',{proposed:true})
+  add(G.body,'body.verify','S','回读正文与平台保存','正文已派发','服务端与编辑器正文一致且已保存','检查平台字段','知乎原稿 GET 回读：账号、ID、标题、正文、3 图一致')
+  add(G.fields,'field.title.inspect','S','读取标题','编辑器与账号核验通过','读到唯一标题字段','与冻结字段比较','已读到标题')
+  add(G.fields,'field.title.dispatch','A','填写标题（如需）','标题与冻结值不同','写入已派发','回读同一字段','与冻结值一致，无需改写',{skipWhenSame:true})
+  add(G.fields,'field.title.verify','S','核验标题','已读取或填写','实际值与任务值一致','下一字段','标题一致')
+  add(G.fields,'settings.read','S','读出发布设置实际值','提交面板可读（不点提交）','专栏 / 话题 / 可见范围 / 声明的实际值已记录','提交前展示','不投专栏 · 无话题 · 公开 · 无声明',{proposed:true})
+  add(G.save,'save.dispatch','S','确认自动保存，无需重复点击','字段已核验；无未知保存','已核验自动保存','核验同稿保存结果','知乎已自动保存')
+  add(G.save,'save.verify','S','核验保存结果','保存已派发或需对账','原账号、draftId、标题与 saved 一致','发布前复核；保存不代表发布','草稿 '+(anchor==='new'?NEW_DRAFT_TAIL:'…6604')+' saved ✓')
+  const skip = scope==='draft'
+  add(G.pub,'publish.preflight','S','复核发布目标与有界授权','正文、图片、字段与保存已核验','当前原稿与发布控件通过权限及副作用闸门','只派发一次；人工卡点暂停','授权快照一致 · 发布控件唯一',{skip})
+  add(G.pub,'publish.dispatch','A','提交单篇发布（1 次）','具体账号、文章已获授权；预写凭证有效','发布已派发，结果尚未确认','只核验结果，不再次发布','11:41:07 派发 1 次',{skip})
+  ;[1,2,3].forEach(n=>add(G.ver,`asset.${n}.published`,'S',`核验公开页图 ${n}`,'已派发，只读打开同账号文章','公开正文中该图地址、顺序、位置与加载核验通过','全部通过才完成',`图 ${n} ✓`,{skip}))
+  add(G.ver,'publication.verify','S','核验平台公开结果','发布已派发或结果未知','唯一公开文章的账号、标题和 URL 已核验','完成；未知只查询管理页','公开文章 '+PUBLIC_URL.replace('https://',''),{skip})
+  R.forEach(r=>{ if(r.skip){ r.st='skipped'; r.note='本次授权只存草稿 · 提交上限 0' } })
+  return R
+}
+const ST = {
+  todo:['未开始',''], running:['执行中','b'], verifying:['核验中','b'], done:['已完成','g'], skipped:['本次不执行',''],
+  wait:['等待你处理','a'], unknown:['结果未知','r'], failed:['失败','r'], platform:['等待平台','a'], reconciled:['已对账','g'],
+}
+function curRow(){ if(!S.run) return null; const R=S.run.rows; return R.find(r=>r.st==='wait') || R.find(r=>['running','verifying','unknown','platform'].includes(r.st)) || R.find(r=>r.st==='todo') }
+function vRun(){
+  if(!S.run) return header('执行计划','') + stepper('run') + card('', `<div class="pad"><p>还没有开始执行。完成授权后，这里显示原任务的逐步计划。</p><button data-go="authorize">去授权</button></div>`)
+  const R = S.run.rows
+  const groups = []
+  R.forEach(r=>{ let g = groups.find(x=>x.name===r.g); if(!g){g={name:r.g,rows:[]};groups.push(g)} g.rows.push(r) })
+  const cur = curRow()
+  const gstate = rows => rows.every(r=>r.st==='skipped') ? ['本次不执行',''] : rows.some(r=>r.st==='wait') ? ['等待你处理','a'] : rows.some(r=>r.st==='unknown') ? ['结果未知','r'] : rows.some(r=>r.st==='platform') ? ['等待平台','a'] : rows.every(r=>['done','skipped','reconciled'].includes(r.st)) ? ['已完成','g'] : rows.some(r=>r.st!=='todo'&&r.st!=='skipped') ? ['进行中','b'] : ['未开始','']
+  const stepHtml = r => {
+    const [t,c] = ST[r.st]
+    const ev = r.st==='done'||r.st==='reconciled' ? `<div class="ev">证据：${esc(r.evShown||r.ev)}</div>` : r.note ? `<div class="ev ${['wait','platform'].includes(r.st)?'w':['unknown','failed'].includes(r.st)?'r':''}">${esc(r.note)}</div>` : ''
+    const acts = (r.actions||[]).length ? `<div class="inline-actions">${r.actions.map(a=>`<button data-act="rowact" data-v="${a.k}" class="${a.p?'primary':''}">${a.t}</button>`).join('')}</div>` : ''
+    return `<div class="step ${cur===r?'cur':''}" data-act="toggle-step">
+      <span class="owner ${r.o}">${r.o==='S'?'Studio':r.o==='A'?'Agent':'用户'}</span>
+      <div><div class="act">${esc(r.act)} ${r.proposed?chip('拟增','o'):''}</div>${ev}${acts}
+        <div class="more"><b>进入条件</b>：${esc(r.entry)}<br><b>完成条件</b>：${esc(r.done)}<br><b>允许的下一步</b>：${esc(r.next)}<br><span class="muted">步骤 ID：${r.id}</span></div></div>
+      <span class="st">${chip(t,c)}</span></div>`
+  }
+  const plan = groups.map(g=>{
+    const [t,c] = gstate(g.rows)
+    const doneN = g.rows.filter(r=>['done','reconciled'].includes(r.st)).length
+    const open = !g.rows.every(r=>['done','skipped','reconciled'].includes(r.st)) || g.rows.includes(cur) || S.run.expandAll
+    return `<div class="group"><div class="ghead" data-act="toggle-group" data-v="${esc(g.name)}"><span>${(S.run.collapsed||{})[g.name]===undefined?(open?'▾':'▸'):(S.run.collapsed[g.name]?'▸':'▾')}</span><b>${esc(g.name)}</b>${chip(t,c)}<span class="cnt">${doneN}/${g.rows.filter(r=>r.st!=='skipped').length||g.rows.length}</span></div>
+      ${((S.run.collapsed||{})[g.name]===undefined ? open : !S.run.collapsed[g.name]) ? g.rows.map(stepHtml).join('') : ''}</div>`
+  }).join('')
+  const a = ACCTS[S.acct]
+  const right = card('原任务 ZH-12', `<div class="pad">
+      ${kv('当前操作', cur ? esc(cur.act) : '无')}
+      ${kv('执行者', cur ? (cur.st==='wait'?'等你处理（用户）':cur.o==='S'?'Studio':cur.o==='A'?'Agent':'用户') : '—')}
+      ${kv('运行代次', '第 '+S.run.gen+' 代'+(S.run.gen>1?' · 已重新握手':''))}
+      ${kv('账号', a.label+' · '+a.token)}
+      ${kv('授权', S.run.scope==='draft'?chip('只存草稿','b'):chip('公开提交 1 次','v'))}
+      ${kv('提交派发', `<b style="font-size:15px">${S.run.dispatch} 次</b>`)}
+      ${kv('平台草稿', S.run.rows.find(r=>r.id==='initial.anchor'&&r.st==='done') || S.anchor!=='new' ? (S.anchor==='new'?NEW_DRAFT_TAIL:'…6604') : '尚未取得')}
+      ${S.run.banner?`<div class="callout ${S.run.banner.c}">${S.run.banner.t}</div>`:''}
+      <div class="actions">
+        ${S.run.finished?`<button class="primary" data-go="result">查看结果</button>`:`<button data-act="toast" data-v="暂停：当前动作完成后不再派发新动作（原型演示）">暂停</button><button data-act="toast" data-v="接管：撤销当前 Runtime 写入许可，你在可见页面操作；交还时重新读网页（原型演示）">在可见页面接管</button>`}
+      </div>
+    </div>`) + card('状态从哪里来', `<div class="pad"><small>每一行的状态只由 WebAffair 根据真实执行事件和核验结果写入：Agent 说“做完了”不算，计时不算，界面也不推测。展开一行可看进入条件、完成条件和允许的下一步。标“拟增”的行是本设计要求补上的核验，现有代码尚无。</small></div>`)
+    + `<section class="card" style="margin-top:14px"><div class="bar"><h2>公司推广中的这一行</h2></div>${homeRow(true)}</section>`
+  return header('执行计划 · 知乎 · '+a.label, '每一步：谁做、做什么、何时可以开始、现在怎样、凭什么算完成、卡住时能做什么。', chip('原任务 ZH-12','b')) + stepper('run') +
+    `<div class="grid g2"><div>${card('执行计划（'+R.filter(r=>r.st!=='skipped').length+' 步'+(S.run.scope==='draft'?'，提交与公开核验本次不执行':'')+'）', plan, `<button data-act="expand-all">${S.run.expandAll?'收起已完成':'展开全部'}</button>`)}</div><div>${right}</div></div>`
+}
+
+/* 执行模拟：每次推进一个真实事件 */
+function startRun(){
+  const scope = S.scope
+  if(S.run && S.authorizedScope==='draft' && scope==='publish'){
+    S.run.scope='publish'
+    S.run.rows.forEach(r=>{ if(r.st==='skipped'){ r.st='todo'; r.note='' } })
+    S.run.finished=false
+    S.run.banner={c:'b',t:'已追加公开授权（同一原任务）。从“复核发布目标与有界授权”继续；图片与正文不重做。'}
+    S.authorizedScope='publish'
+  } else {
+    S.run = {rows:buildRows(scope, S.anchor), gen:1, dispatch:0, scope, finished:false, banner:null, collapsed:{}}
+    S.authorizedScope = scope
+  }
+  S.result.kind = null
+  location.hash = 'run'
+}
+function advance(){
+  if(!S.run || S.run.finished) return false
+  const R = S.run.rows
+  const blocking = R.find(r=>['wait','unknown','platform'].includes(r.st))
+  if(blocking){ toast('“'+blocking.act+'” 等待处理，计划不会越过它'); return false }
+  const active = R.find(r=>['running','verifying'].includes(r.st))
+  if(active){
+    if(active.id==='publish.dispatch'){
+      active.st='done'; S.run.dispatch=1
+      applyOutcome(S.demoOutcome); return false
+    }
+    active.st='done'
+    if(active.skipWhenSame) active.evShown = active.ev
+    return true
+  }
+  const next = R.find(r=>r.st==='todo')
+  if(!next){ finishRun(); return false }
+  if(S.run.banner && ['g','b'].includes(S.run.banner.c)) S.run.banner = null
+  next.st = next.o==='A' ? 'running' : 'verifying'
+  return true
+}
+function finishRun(){
+  S.run.finished = true
+  if(S.run.scope==='draft'){ S.result.kind='draft'; S.run.banner={c:'g',t:'平台草稿已保存并复核；提交 0 次。'} }
+  else if(!S.result.kind) S.result.kind='published'
+}
+function applyOutcome(kind){
+  const R = S.run.rows
+  const pubs = R.filter(r=>r.g==='核验文章结果')
+  if(kind==='published'){
+    pubs.forEach(r=>r.st='done'); S.result.kind='published'; S.run.finished=true
+    S.run.banner={c:'g',t:'已找到并核验唯一公开作品。'}
+  } else if(kind==='review'){
+    pubs.forEach(r=>{ r.st='platform'; r.note = r.id==='publication.verify' ? '回执：文章 ID '+NEW_DRAFT_TAIL+'。管理页显示“审核中”（11:42 观察）。公开页尚不可读。' : '审核中，公开页尚不可读' })
+    S.result.kind='review'; S.run.finished=true
+    S.run.banner={c:'a',t:'知乎已收稿，正在审核。提交派发 1 次，不会再次提交。'}
+  } else {
+    pubs.forEach(r=>{ r.st = r.id==='publication.verify' ? 'unknown' : 'todo'; if(r.id==='publication.verify') r.note='点击后页面跳转，没有拿到与本稿匹配的回执。只允许只读核验。' })
+    S.result.kind='unknown'; S.run.finished=true
+    S.run.banner={c:'r',t:'已派发 1 次，回执未知。保留这次提交记录；后续只读核验，不会重发。'}
+  }
+}
+let autoTimer = null
+function autoplay(stopAtPublish=true){
+  clearInterval(autoTimer)
+  autoTimer = setInterval(()=>{
+    const R = S.run && S.run.rows
+    if(!R){clearInterval(autoTimer);return}
+    const nx = R.find(r=>['running','verifying','todo'].includes(r.st))
+    if(stopAtPublish && nx && nx.id==='publish.dispatch' && nx.st==='todo' && !S.run.pubPause){ S.run.pubPause=true; clearInterval(autoTimer); render(); toast('即将执行唯一一次提交。在演示面板选结果后继续'); return }
+    const moved = advance()
+    render()
+    if(!moved) clearInterval(autoTimer)
+  }, 140)
+}
+function inject(kind){
+  if(!S.run || S.run.finished){ toast('先开始执行'); return }
+  const R = S.run.rows
+  clearInterval(autoTimer)
+  if(kind==='login'){
+    const r = R.find(x=>x.id==='page.inspect')
+    if(r.st==='done'){ toast('账号已核验通过；登录失效会在下一次页面检查时出现'); return }
+    R.forEach(x=>{ if(R.indexOf(x)<R.indexOf(r) && x.st!=='done') x.st='done' })
+    r.st='wait'; r.note='知乎显示登录页：样机实验室的会话已失效。只在该账号自己的窗口登录，Studio 不接触密码与验证码。'
+    r.actions=[{k:'open-login',t:'打开样机实验室登录窗口'},{k:'relogged',t:'我已登录，重新核验',p:true}]
+  }
+  if(kind==='crash'){
+    const d = R.find(x=>x.id==='asset.2.dispatch')
+    if(d.st==='done'){ toast('图 2 已核验；请在图 2 上传前演示中断'); return }
+    R.forEach(x=>{ if(R.indexOf(x)<R.indexOf(d)) x.st = x.st==='skipped'?'skipped':'done' })
+    d.st='unknown'; d.note='上传已派发后窗口重建，图 2 是否落到知乎草稿未知。'
+    S.run.gen += 1
+    const v = R.find(x=>x.id==='asset.2.verify')
+    v.st='wait'; v.note='第 '+S.run.gen+' 代：已重新握手、旧写入许可失效；已重读原草稿，账号与图 1 仍一致。自动对账未找到与图 2 唯一对应的图片。请在可见页面的同一草稿里看一下。'
+    v.actions=[{k:'img2-present',t:'草稿里有图 2'},{k:'img2-missing',t:'确认图 2 缺失',p:true}]
+    S.run.banner={c:'a',t:'第 '+(S.run.gen-1)+' 代在图 2 上传时中断。不会盲目重传：先确认图 2 是否已在草稿里。'}
+  }
+  if(kind==='captcha'){
+    const p = R.find(x=>x.id==='publish.preflight')
+    if(p.st==='skipped'){ toast('本次只存草稿，没有提交步骤'); return }
+    if(p.st==='done'){ toast('已过提交前复核'); return }
+    R.forEach(x=>{ if(R.indexOf(x)<R.indexOf(p) && x.st!=='skipped') x.st='done' })
+    p.st='wait'; p.note='知乎弹出安全验证。请在可见页面完成；完成后 Studio 重新读取页面，再派发唯一一次提交。'
+    p.actions=[{k:'captcha-done',t:'我已完成验证',p:true}]
+  }
+  render()
+}
+function rowAction(k){
+  const R = S.run.rows
+  if(k==='open-login'){ toast('打开样机实验室自己的浏览器窗口（原型演示）'); return }
+  if(k==='relogged'){ const r=R.find(x=>x.id==='page.inspect'); r.st='verifying'; r.note=''; r.actions=[]; toast('重新读取知乎页面身份…') }
+  if(k==='img2-present'){ const d=R.find(x=>x.id==='asset.2.dispatch'); d.st='reconciled'; d.evShown='已对账：用户指认后 main 复核平台图片地址与加载，图 2 已在草稿中，不再上传'; const v=R.find(x=>x.id==='asset.2.verify'); v.st='done'; v.evShown='用户指认 + 主进程复核：图 2 地址、顺序、加载一致'; v.actions=[]; v.note=''; S.run.banner={c:'g',t:'图 2 已对账。从图 3 继续；上传派发次数未增加。'} }
+  if(k==='img2-missing'){ const d=R.find(x=>x.id==='asset.2.dispatch'); d.st='todo'; d.note='已确认缺失：允许在第 '+S.run.gen+' 代重新上传图 2 一次'; const v=R.find(x=>x.id==='asset.2.verify'); v.st='todo'; v.actions=[]; v.note=''; S.run.banner={c:'b',t:'确认图 2 缺失后，才重新进入图 2 上传。'} }
+  if(k==='captcha-done'){ const p=R.find(x=>x.id==='publish.preflight'); p.st='verifying'; p.note=''; p.actions=[] }
+  render()
+}
+
+/* ---------- 6. 结果与恢复 ---------- */
+function vResult(){
+  const kind = S.result.kind || 'review'
+  const a = ACCTS[S.acct||'lab']
+  const facts = `${kv('原任务','ZH-12 · 第 '+(S.run?S.run.gen:1)+' 代')}${kv('账号', a.label+' · /people/'+a.token)}${kv('冻结版本', verLabel())}${kv('平台草稿 / 文章 ID', NEW_DRAFT_TAIL)}`
+  let head='', main='', side=''
+  if(kind==='draft'){
+    head = `<div class="result-head b"><small>知乎 · 只存草稿</small><p class="big">平台草稿已保存，提交 0 次</p></div>`
+    main = `<div class="pad">${facts}${kv('保存证据','知乎原稿 GET 回读：账号、ID、标题、正文、3 图一致')}${kv('最近核验','11:36')}
+      <div class="actions"><button data-act="toast" data-v="在样机实验室窗口打开 creator 草稿 ${NEW_DRAFT_TAIL}（原型演示）">在知乎打开这份草稿</button><button class="primary" data-act="upgrade">授权公开提交一次</button></div>
+      <small style="display:block;margin-top:8px">你在知乎里手动改过草稿再回来，Studio 会先重读并标出与冻结版本的差异，不会覆盖你的修改。</small></div>`
+  }
+  if(kind==='review'){
+    head = `<div class="result-head a"><small>知乎 · 已提交 1 次</small><p class="big">知乎已收稿，正在审核</p></div>`
+    main = `<div class="pad">${facts}${kv('提交派发','1 次 · 11:41:07')}${kv('平台回执','文章 ID '+NEW_DRAFT_TAIL+'，与本任务草稿一致')}${kv('管理页状态原文','“审核中”')}${kv('最近一次观察', S.result.lastReviewCheck+' · 来源：知乎创作中心管理页')}
+      <div class="callout a">审核期间公开页暂时打不开是正常的。Studio 只做只读复查；审核通过后才核验公开页全文与三图，拒审时保留原因。</div>
+      <div class="actions"><button class="primary" data-act="recheck-review">复查审核状态（只读）</button><button data-go="run">回原任务看执行计划</button></div></div>`
+  }
+  if(kind==='unknown'){
+    const vs = S.result.verifyState
+    head = `<div class="result-head r"><small>知乎 · 点过提交，没有拿到回执</small><p class="big">结果未知 · 已保留 1 次提交记录</p></div>`
+    let progress = ''
+    if(vs!=='idle'){
+      const steps = [['g','读取管理页（同账号 sample09）','已读 · 11:52'],['g','按文章 ID '+NEW_DRAFT_TAIL+' 查找','—'],['g','按冻结标题 + 提交时间 11:40–11:50 查找','—']]
+      progress = `<h3 style="margin-top:12px">只读核验 · 11:52</h3><ul class="timeline">${steps.map(s=>`<li class="${s[0]}">${s[1]}</li>`).join('')}</ul>`
+      if(vs==='none') progress += `<div class="callout a"><b>没有找到匹配作品。</b>查询无命中不能证明知乎没收到，所以状态仍是“结果未知”，提交记录保持 1 次。可以稍后再查，或你在知乎自己看过后回到这里。</div>`
+      if(vs==='two') progress += `<div class="callout b"><b>找到 2 篇候选，不会自动选最近的一篇。</b>请认领其中一篇，主进程会再按作者、全文和三图复核。</div>
+        ${[['…4471','11:41 · 作者 sample09 · 标题一致 · 3 图','A'],['…3390','11-27 · 作者 sample09 · 标题一致 · 0 图 · 仅自己可见','B']].map(c=>`<div class="cand"><div><b>文章 ${c[0]}</b><br><small>${c[1]}</small></div><button data-act="claim" data-v="${c[2]}">${S.result.claimed===c[2]?'复核中…':'认领这篇'}</button></div>`).join('')}`
+      if(vs==='claimB') progress += `<div class="callout r">候选 …3390 与本稿不符：0 张图，且是 11-27 的旧测试稿。保持“结果未知”，请换一篇或稍后再查。</div>`
+    }
+    main = `<div class="pad">${facts}
+      <h3 style="margin-top:10px">提交记录</h3>
+      <table><tbody><tr><td>11:41:07</td><td>Agent 点击知乎“发布” · 第 ${S.run?S.run.gen:1} 代 · 授权快照 ${fp()}</td><td>${chip('已派发 1 次','v')}</td></tr><tr><td>11:41:09</td><td>页面跳转，未读到与本稿匹配的回执</td><td>${chip('回执未知','r')}</td></tr></tbody></table>
+      ${progress}
+      <div class="actions"><button class="primary" data-act="ro-verify">只读核验远端结果</button><button data-go="run">回原任务看执行计划</button></div>
+      <div class="callout b" style="margin-top:12px">这里没有“重新提交”。即使关闭窗口、重启或换一次运行，这条提交记录都不会被清空，也不会被新的授权抵消。</div></div>`
+  }
+  if(kind==='published'){
+    head = `<div class="result-head g"><small>知乎 · 已提交 1 次</small><p class="big">已公开 · 作品与本稿一致</p></div>`
+    main = `<div class="pad"><div class="linkcard"><span class="ico">知</span><div><a href="#public">${PUBLIC_URL}</a><br><small>示例链接 · 原型中打开模拟公开页</small></div></div>
+      ${facts}
+      ${kv('作者','样机实验室 · sample09 ✓')}
+      ${kv('标题','与冻结版本一致 ✓')}
+      ${kv('正文','全文一致 ✓')}
+      ${kv('图 1 / 2 / 3','地址、顺序、前文位置、加载 ✓')}
+      ${kv('图注', chip('拟增','o')+' 3/3 一致')}
+      ${kv('核验来源', S.result.verifyState!=='idle' ? '由“结果未知”只读找回 · '+(S.result.verifyState==='two'?'用户认领后主进程复核':'主进程唯一匹配')+' · 11:53' : '知乎公开页 · 主进程回读 · 11:44')}
+      <div class="actions"><a href="#public"><button class="primary">打开作品</button></a><button data-act="toast" data-v="链接已复制（原型演示）">复制链接</button><button data-go="run">回原任务</button></div></div>`
+  }
+  side = card('公司推广中的这一行', homeRow(true)) + card('这一页的规则', `<div class="pad"><ul style="margin:0;padding-left:18px;font-size:13px;color:var(--mid)">
+      <li>状态只来自原任务 ZH-12 的平台证据，写明来源与观察时间</li>
+      <li>审核中：看见管理页写着“审核中”才这样显示；之后失联则显示上次事实与时间</li>
+      <li>回执未知：只读核验；不提供重发；多候选交给人认领，主进程复核</li>
+      <li>已公开：找到唯一匹配作品并核完全文与三图，才给链接</li></ul></div>`)
+  const tabs = `<div class="tabs" style="background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:14px">${[['draft','只存草稿'],['review','审核中'],['unknown','回执未知'],['published','已公开']].map(([k,t])=>`<button class="${kind===k?'on':''}" data-act="rkind" data-v="${k}">${t}</button>`).join('')}</div>`
+  return header('结果与恢复', '提交之后的每种结局，都能回到原任务继续核验。', chip('原任务 ZH-12','b')) + stepper('result') + tabs + `<div class="grid g2"><div>${card('', head+main)}</div><div>${side}</div></div>`
+}
+function homeRow(single){
+  const kind = S.result.kind || (S.run ? (S.run.finished?'':'running') : '')
+  const st = {draft:chip('平台草稿已保存','b'), review:chip('平台审核中','a'), unknown:chip('结果待核验','r'), published:chip('已公开','g'), running:chip('执行中','b'), '':chip('未授权','o')}[kind]
+  const when = kind==='review'?S.result.lastReviewCheck:'11:44'
+  const to = kind==='running'?'run':kind?'result':'pick'
+  const r1 = single
+    ? `<div class="homerow compact" data-go="${to}"><span class="ico">知</span><span><b>${esc(ART_TITLE.slice(0,18))}…</b><br><small>知乎 · 样机实验室 · 原任务 ZH-12 · 提交 ${S.run?S.run.dispatch:0} 次 · ${when}</small></span><span>${st}</span></div>`
+    : `<div class="homerow" data-go="${to}"><span class="ico">知</span><span><b>${esc(ART_TITLE.slice(0,18))}…</b><br><small>知乎 · 样机实验室 · 原任务 ZH-12</small></span><span class="hide-s"><small>提交 ${S.run?S.run.dispatch:0} 次</small></span><span>${st}</span><small class="hide-s">${when}</small></div>`
+  if(single) return r1
+  return r1 + `<div class="homerow" data-go="account"><span class="ico">知</span><span><b>${esc(ART_TITLE.slice(0,18))}…</b><br><small>知乎 · 研发手记 · 未绑定任务</small></span><span class="hide-s"><small>提交 0 次</small></span><span>${chip('身份待核对','a')}</span><small class="hide-s">11-26</small></div>
+  <div class="homerow" data-act="toast" data-v="头条原任务 TT-08（历史样例）"><span class="ico" style="background:#ffede9;color:#af493e">头</span><span><b>Q3 展会回顾：三副样机</b><br><small>头条微头条 · 样机实验室 · 原任务 TT-08</small></span><span class="hide-s"><small>提交 1 次</small></span><span>${chip('平台审核中','a')}</span><small class="hide-s">11-27</small></div>`
+}
+
+/* ---------- 推广首页、公开页、验收 ---------- */
+function vHome(){
+  return header('推广', '同一篇稿在不同账号上的任务，按更新时间排列。点一行回到原任务。') +
+    card('文章发布任务', homeRow(false), `<button class="primary" data-go="pick">发布一篇稿</button>`) +
+    card('', `<div class="pad"><small>列表是 WebAffair 原任务的投影；来源不可用时显示最后核验时间与错误，不把空列表当作“全部完成”。</small></div>`)
+}
+function vPublic(){
+  return `<div class="head"><div><h1>知乎公开页（模拟）</h1><p>真实产品中此链接在样机实验室的浏览器窗口打开知乎原页。</p></div><div class="row"><button data-go="result">← 回到结果</button></div></div>` +
+    card('', `<div class="sim-banner">模拟页 · 非真实知乎 · ${PUBLIC_URL}</div>` + renderZhihu(false).replace('<div class="sim-banner">按知乎专栏样式模拟的预览；以执行后从知乎回读的结果为准</div>','').replace('<div class="author">','<div class="author">').replace('</span></div>','</span><span style="margin-left:auto;color:#8590a6">发布于 11-28 11:41</span></div>'))
+}
+function vAccept(){
+  const st = (t,e,f,link) => `<li><b>${t}</b>${link?` <a href="#${link}">打开对应界面</a>`:''}<div class="exp">通过：${e}</div>${f?`<div class="fail">失败或例外：${f}</div>`:''}</li>`
+  return header('真人验收路径', '实施后由运营在真实 Studio、真实知乎账号上执行。原型只演示界面；以下每条都要在真实应用里看到。') + `<div class="grid g2"><div>` +
+  card('准备', `<div class="pad accept"><ol>
+    <li><b>两个已登记的知乎账号</b>（例：公司号 A、另一个号 B），各自在自己的窗口登录过；记录两者的 url_token。</li>
+    <li><b>一篇获准公开的稿</b>：稿件生成审好的 v3（3 张图、3 条图注），以及一份手写 Markdown（含 1 张外链图、1 处缺图注）。</li>
+    <li><b>负责人对“账号 A + 这篇稿”的公开发布授权</b>，口头或书面。没有授权时只做到第 8 步。</li></ol></div>`) +
+  card('从选稿到授权', `<div class="pad accept"><ol>
+    ${st('在稿件生成审稿后点“用这篇稿发布”','发布页顶部是这篇稿，版本 v3，3 图 3 图注；未打开任何浏览器','','pick')}
+    ${st('改选手写 Markdown','外链图、缺图注被逐条列出，“下一步：授权”不可用；处理后保存为新修订才可继续','任何问题被静默忽略即失败','pick')}
+    ${st('在账号 B 的窗口登录成另一个知乎号，回来点 B 的“核对实际身份”','B 显示“身份不一致”并给出本次读到的 url_token，B 不可选；A 仍可选','B 被选中或自动改用 A 即失败','account')}
+    ${st('选 A，进入平台预览，在工作区文件里改一句再回来','“发哪一版”出现未审改动差异，不能冻结；改回 v3 可继续','','preview')}
+    ${st('逐个打开“知乎预览 / 正文与转换 / 配图 / 平台字段 / 远端草稿”','三张图在原段落之后，图注逐条可见；字段表写清谁处理、怎么核；草稿列表只列 A 的草稿，标题不同的草稿不可选','','preview')}
+    ${st('授权页先不选任何一项','开始按钮不可用；两个选项互斥','','authorize')}
+  </ol></div>`) + `</div><div>` +
+  card('执行与结果', `<div class="pad accept"><ol start="7">
+    ${st('选“只存知乎草稿”并开始；中途在图 2 上传时关闭 Studio 窗口再打开','执行计划按真实事件逐行变化；重开后为新代次，图 2 显示“结果未知 → 等你确认”，确认前图 3 不开始','图 2 被直接重传或计划显示全部完成即失败','run')}
+    ${st('等待草稿完成，在知乎创作中心打开该草稿','标题、全文、三图及位置与预览一致；Studio 提交次数为 0；提交与公开核验行显示“本次不执行”','','result')}
+    ${st('（获授权后）在结果页点“授权公开提交一次”','同一原任务从“提交前复核”继续，图片不重传；派发 1 次','','authorize')}
+    ${st('看结果：已公开','给出可打开的作品链接；作者为 A 的 url_token；全文与三图核验通过；来源与时间可见','只有链接、缺全文或图的核验，必须分别标出缺项','result')}
+    ${st('若知乎显示审核中','结果页写明管理页原文“审核中”与观察时间；推广首页该行同样显示；点行回到同一任务；复查是只读的','','result')}
+    ${st('若点过提交却没有回执（可在提交后立刻断网复现）','提交记录保持 1 次；只读核验可重复执行；无命中仍是“结果未知”；整个界面没有重发入口；重启后记录仍在','派发次数增加即失败（严重）','result')}
+  </ol></div>`) +
+  card('记录', `<div class="pad"><small>每次验收记录：Studio 版本、日期、脱敏任务 ID、账号 url_token 尾号、图数、派发次数、人工介入点与耗时、是否有开发者救场。“执行计划随真实事件变化”和“一次提交取得公开证据”分开判定；没经历审核时该分支标“未实测”。</small></div>`) + `</div></div>`
+}
+
+/* ---------- 演示面板 ---------- */
+function demoPanel(route){
+  const seg = (name, cur, opts) => `<div class="seg">${opts.map(([k,t])=>`<button class="${cur===k?'on':''}" data-act="${name}" data-v="${k}">${t}</button>`).join('')}</div>`
+  let h = `<p>快速跳转</p><div class="seg">${[['home','推广首页'],['pick','选稿'],['account','账号'],['preview','预览'],['authorize','授权'],['run','执行'],['result','结果'],['accept','验收']].map(([k,t])=>`<button data-go="${k}">${t}</button>`).join('')}</div>`
+  if(route==='account') h += `<p>研发手记窗口的情况</p>${seg('demo-notes', S.checks.notes.s, [['stale','待核对'],['expired','需重新登录'],['mismatch','登成别人']])}`
+  if(route==='run' && S.run){
+    h += `<p>模拟真实执行事件</p><div class="seg"><button data-act="adv">推进 1 个事件</button><button data-act="auto">连续推进</button></div>`
+    h += `<p>注入异常</p><div class="seg"><button data-act="inj" data-v="login">登录失效</button><button data-act="inj" data-v="crash">图 2 上传时窗口中断</button><button data-act="inj" data-v="captcha">提交前安全验证</button></div>`
+    if(S.run.scope==='publish') h += `<p>提交后的平台结果</p>${seg('demo-outcome', S.demoOutcome, [['published','公开成功'],['review','审核中'],['unknown','无回执']])}`
+  }
+  if(route==='result' && S.result.kind==='unknown') h += `<p>只读核验会找到</p>${seg('demo-verify', S.demoVerify, [['none','无命中'],['two','两篇候选'],['one','唯一匹配']])}`
+  if(route==='pick'||route==='preview') h += `<p>原稿来源</p>${seg('demo-src', S.src, [['reviewed','刚审好的稿'],['existing','手写 Markdown']])}`
+  h += `<p style="margin-top:8px"><button data-act="reset">重置原型</button></p>`
+  $('#demo-in').innerHTML = h
+}
+
+/* ---------- 路由 ---------- */
+const VIEWS = {home:vHome, pick:vPick, account:vAccount, preview:vPreview, authorize:vAuthorize, run:vRun, result:vResult, public:vPublic, accept:vAccept}
+function route(){ const k = location.hash.slice(1); return VIEWS[k] ? k : 'pick' }
+function render(){
+  const r = route()
+  $('#main').innerHTML = VIEWS[r]()
+  const names = {home:'推广首页',pick:'文章发布',account:'文章发布',preview:'文章发布',authorize:'文章发布',run:'文章发布',result:'文章发布',public:'文章发布',accept:'真人验收路径'}
+  $('#crumb').innerHTML = `公司项目 / AI 眼镜 / 推广 / <b>${names[r]}</b>${S.run&&!['home','accept'].includes(r)?' / 原任务 ZH-12':''}`
+  $('#nav-home').classList.toggle('on', r==='home'); $('#nav-pub').classList.toggle('on', !['home','accept'].includes(r))
+  demoPanel(r)
+  if(r==='preview' && S.focusImg){ const el=document.getElementById('zfig'+S.focusImg); if(el) el.scrollIntoView({block:'center'}) }
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-go],[data-act]')
+  if(!t) return
+  if(t.tagName==='INPUT') return
+  if(t.dataset.go){ if(t.dataset.go!==route()) { location.hash = t.dataset.go; window.scrollTo(0,0) } else render(); return }
+  const a = t.dataset.act, v = t.dataset.v
+  if(a==='toast') return toast(v)
+  if(a==='src'){ S.src=v; S.ver='v3' }
+  if(a==='fix'){ S.fixes[v]=true; toast(v==='ext'?'已把外链图下载为工作空间批准副本（原型演示）':'在编辑器补上图 3 图注并保存（原型演示）') }
+  if(a==='check'){ S.checks[v].s='checking'; render(); setTimeout(()=>{ const was = S.checks[v]; S.checks[v] = v==='lab' ? {s:'match',at:'刚刚 · 11:31'} : {s: was.mode||'mismatch', at:'刚刚 · 11:31'}; if(S.acct===v && S.checks[v].s!=='match') S.acct=null; render() }, 700); return }
+  if(a==='acct'){ S.acct=v }
+  if(a==='relogin'){ toast('打开研发手记自己的窗口；登录由你完成（原型演示）') }
+  if(a==='demo-notes'){ S.checks.notes = {s:v, at:'11-26 18:05', mode:v==='stale'?'mismatch':v}; if(S.acct==='notes') S.acct='lab' }
+  if(a==='tab'){ S.tab=v; S.focusImg=0 }
+  if(a==='focus'){ S.tab='render'; S.focusImg=+v }
+  if(a==='ver-v3'){ S.ver='v3' }
+  if(a==='start'){ startRun(); return }
+  if(a==='adv'){ clearInterval(autoTimer); advance() }
+  if(a==='auto'){ autoplay(true); return }
+  if(a==='inj'){ inject(v); return }
+  if(a==='rowact'){ rowAction(v); return }
+  if(a==='toggle-step'){ if(e.target.closest('button')) return; t.classList.toggle('open'); return }
+  if(a==='toggle-group'){ const c=S.run.collapsed; const isOpen=!!t.nextElementSibling && t.nextElementSibling.classList.contains('step'); c[v]=isOpen }
+  if(a==='expand-all'){ S.run.expandAll=!S.run.expandAll; S.run.collapsed={} }
+  if(a==='demo-outcome'){ S.demoOutcome=v; const p=S.run&&S.run.rows.find(r=>r.id==='publish.dispatch'); if(p&&p.st==='done'&&!S.run.finished) applyOutcome(v) }
+  if(a==='demo-verify'){ S.demoVerify=v }
+  if(a==='demo-src'){ S.src=v; S.ver='v3' }
+  if(a==='rkind'){ S.result.kind=v; S.result.verifyState='idle'; S.result.claimed=null; if(!S.run){ S.scope = v==='draft'?'draft':'publish'; S.run={rows:buildRows(S.scope,S.anchor),gen:1,dispatch:v==='draft'?0:1,scope:S.scope,finished:true,collapsed:{}}; S.run.rows.forEach(r=>{ if(r.st==='todo') r.st='done' }); if(v!=='draft'&&v!=='published') applyOutcome(v); S.authorizedScope=S.scope } else if(v!=='draft' && S.run.scope==='publish'){ S.run.dispatch=1; applyOutcome(v) } }
+  if(a==='recheck-review'){ S.result.lastReviewCheck='11:58'; toast('只读复查：管理页仍显示“审核中”（11:58）') }
+  if(a==='ro-verify'){ S.result.verifyState = S.demoVerify==='one' ? 'one' : S.demoVerify; S.result.claimed=null; if(S.demoVerify==='one'){ toast('找到唯一匹配：作者、全文、三图复核通过'); setTimeout(()=>{ S.result.kind='published'; if(S.run) applyOutcome('published'); render() }, 900) } }
+  if(a==='claim'){ S.result.claimed=v; render(); setTimeout(()=>{ if(v==='A'){ S.result.kind='published'; if(S.run) applyOutcome('published') } else { S.result.verifyState='claimB'; S.result.claimed=null } render() }, 900); return }
+  if(a==='upgrade'){ S.scope='publish'; location.hash='authorize'; return }
+  if(a==='reset'){ location.hash='pick'; location.reload(); return }
+  render()
+})
+document.addEventListener('change', e => {
+  const t = e.target
+  if(t.dataset.act==='ver'){ S.ver=t.value; render() }
+  if(t.dataset.act==='anchor'){ S.anchor=t.value; render() }
+  if(t.dataset.act==='scope'){ S.scope=t.value; render() }
+})
+addEventListener('hashchange', render)
+if(innerWidth>1200) $('#demo').open = true
+render()
+</script>
+</body>
+</html>

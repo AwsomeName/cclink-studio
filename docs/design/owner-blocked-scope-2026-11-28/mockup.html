@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Owner 来源不够时的决定 · 设计稿</title>
+<style>
+*{box-sizing:border-box}
+:root{color-scheme:dark;--bg:#191b1e;--pane:#202226;--pane2:#25282d;--edge:#383c42;--ink:#eceef1;--muted:#a6aeb9;--dim:#7d8590;--blue:#a8d7ff;--bluebg:#1f3347;--amber:#f2c786;--amberbg:#3a3020;--green:#8ed4af;--greenbg:#1e3329;--red:#f29a9a;--redbg:#3d2224}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif}
+button{font:inherit;color:inherit;cursor:pointer;background:var(--pane2);border:1px solid var(--edge);border-radius:5px;padding:4px 10px}
+button:hover{border-color:#566070}
+button.pri{background:#2b6cb0;border-color:#3b82c4;color:#fff}
+button.on{background:var(--bluebg);border-color:#43627f;color:#cfe6ff}
+button:disabled{opacity:.45;cursor:not-allowed}
+.top{min-height:46px;display:flex;align-items:center;gap:10px;padding:6px 16px;border-bottom:1px solid var(--edge);background:var(--pane);flex-wrap:wrap}
+.brand{font-weight:600}
+.app{display:grid;grid-template-columns:210px minmax(0,1fr) 330px;height:calc(100vh - 46px);min-height:720px}
+.side{border-right:1px solid var(--edge);padding:14px 12px;overflow:auto;background:var(--pane)}
+.main{overflow:auto;padding:18px 26px 40px}
+.chat{border-left:1px solid var(--edge);display:flex;flex-direction:column;background:var(--pane);min-height:0}
+.k{font-size:11px;letter-spacing:.08em;color:var(--dim);margin:14px 0 6px}
+.k:first-child{margin-top:0}
+.row{display:flex;gap:6px;align-items:center;padding:5px 6px;border-radius:4px;font-size:13px;color:#d6dae0}
+.row.sel{background:#2c3138}
+.row small{margin-left:auto;font-size:11px}
+.file{display:block;width:100%;text-align:left;border:0;background:none;padding:3px 6px;font-size:12px;color:#c9ced5}
+.h1{font-size:20px;font-weight:600;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:13px}
+.card{background:var(--pane);border:1px solid var(--edge);border-radius:8px;padding:14px 16px;margin:0 0 12px}
+.card h3{margin:0 0 8px;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card h3 small{font-weight:400;color:var(--muted);font-size:12px}
+.tag{display:inline-block;font-size:11px;padding:0 7px;border-radius:9px;border:1px solid var(--edge);color:var(--muted);white-space:nowrap}
+.g{background:var(--greenbg);border-color:#2f5a45;color:var(--green)}
+.a{background:var(--amberbg);border-color:#5e4c2c;color:var(--amber)}
+.r{background:var(--redbg);border-color:#5e3236;color:var(--red)}
+.b{background:var(--bluebg);border-color:#43627f;color:var(--blue)}
+.note{font-size:12px;color:var(--muted)}
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+table.t td,table.t th{border-top:1px solid var(--edge);padding:7px 6px;text-align:left;vertical-align:top}
+table.t th{color:var(--dim);font-weight:500;font-size:12px;border-top:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 14px}
+.chip{font-size:12px;border:1px solid var(--edge);border-radius:12px;padding:1px 10px;color:var(--muted)}
+.chip b{font-weight:500;color:var(--ink)}
+.pointer{display:flex;justify-content:space-between;background:var(--amberbg);border:1px solid #5e4c2c;color:var(--amber);border-radius:6px;padding:8px 12px;font-size:13px;margin:0 0 12px}
+.demo{border:1px dashed #4b525c;border-radius:6px;padding:8px 10px;margin:0 0 12px;font-size:12px;color:var(--dim);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.chead{height:40px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--edge);font-size:13px;gap:8px}
+.chead b{flex:1}
+.msgs{flex:1;overflow:auto;padding:14px}
+.m{margin:0 0 12px;font-size:13px}
+.m .who{font-size:11px;color:var(--dim);margin-bottom:2px}
+.m .bd{background:var(--pane2);border-radius:6px;padding:8px 10px}
+.m.me .bd{background:var(--bluebg)}
+.act{border:1px solid #5e4c2c;background:#2a251c;border-radius:6px;padding:10px 12px;margin:0 0 12px;font-size:13px}
+.act.err{border-color:#5e3236;background:#2a1e20}
+.act.blue{border-color:#43627f;background:#1b2735}
+.act > b{display:block;margin-bottom:4px}
+.act ul{margin:6px 0;padding-left:18px}
+.act li{margin:2px 0}
+.opt{border:1px solid var(--edge);border-radius:6px;padding:8px 10px;margin:8px 0 0;background:var(--pane)}
+.opt.rec{border-color:#43627f}
+.opt b{font-weight:600}
+.opt .note{margin:2px 0 6px}
+.diff{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--pane);border:1px solid var(--edge);border-radius:6px;padding:8px 10px;margin:8px 0}
+.diff .add{color:var(--green)}
+.diff .keep{color:var(--dim)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.inp{border-top:1px solid var(--edge);padding:10px 12px;font-size:12px;color:var(--dim)}
+.inp .box{border:1px solid var(--edge);border-radius:6px;padding:7px 9px;background:var(--pane2);color:var(--muted)}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--edge);border-radius:6px;padding:7px 10px;margin:0 0 6px;font-size:13px}
+.steps li .n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:#30353c;flex:none;margin-top:1px}
+.steps li .tt{flex:1}
+.steps li .tt small{display:block;color:var(--muted)}
+.gap{border:1px solid #5e4c2c;background:#2a251c;border-radius:6px;padding:8px 12px;margin:8px 0}
+.strike{text-decoration:line-through;color:var(--dim)}
+@media(max-width:1100px){.app{grid-template-columns:170px minmax(0,1fr) 290px}}
+@media(max-width:780px){.app{grid-template-columns:minmax(0,1fr) 270px}.side{display:none}.main{padding:16px}}
+</style>
+</head>
+<body>
+<div class="top">
+  <span class="brand">Owner</span>
+  <span class="sub">设计稿 · 示例事务取自 2026-11-27 的真实诊断</span>
+  <span style="margin-left:auto" class="note">看哪一步：</span>
+  <span id="nav"></span>
+</div>
+<div class="app">
+  <aside class="side" id="side"></aside>
+  <main class="main" id="main"></main>
+  <aside class="chat"><div class="chead" id="chead"></div><div class="msgs" id="msgs"></div><div class="inp"><div class="box" id="inp">和事务官说：改目标、补要求、问进度…</div></div></aside>
+</div>
+<script>
+const TITLE='基于生物信息学探讨 XXX 在甲状腺乳头状癌中的表达、临床意义及其与 SII 相关性研究'
+const STEPS=[
+ ['before','现状（对照）'],
+ ['blocked','① 来源不够，等你决定'],
+ ['amend','② 扩大来源 · 确认'],
+ ['running','③ 只补缺口'],
+ ['partial','④ 先交付已核实部分'],
+ ['regoal','⑤ 改目标'],
+]
+let s='blocked', web=true
+const $=id=>document.getElementById(id)
+const OUT=[
+ {t:'面向初学者的通俗讲解（筛选、表达差异、临床意义、SII 四个环节）',st:'part',why:'前三个环节有教程原文；SII 一节缺定义出处'},
+ {t:'相关论文推荐表（年份、对象、发现、出处）',st:'miss',why:'只核实到 1 篇（Cell，2014）；近期直接研究这一关联的论文要查医学文献'},
+ {t:'开源项目对照（TCGAbiolinks / cBioPortal）',st:'ok',why:'6 份原文：差异表达教程、亚型资料、临床字段、检验事件格式'},
+ {t:'题目可行性判断',st:'part',why:'表达研究部分可行；SII 部分缺“同一患者有表达量和按时间对应的血常规”的证据'},
+]
+const ST={ok:['g','已有证据'],part:['a','部分'],miss:['r','缺证据'],gap:['a','未完成 · 已注明']}
+const MISS=[
+ ['SII 的定义与计算式','两个软件仓库里没有；需要临床文献原文','必需'],
+ ['近期检验“甲状腺乳头状癌基因表达与 SII”关系的论文','仓库只引用到 2014 年的基因组论文','必需'],
+ ['可按患者配对表达量和血常规的公开队列','仓库只有格式说明和测试样例','可选'],
+]
+function nav(){ $('nav').innerHTML=STEPS.map(([k,t])=>`<button class="${s===k?'on':''}" data-k="${k}" style="font-size:12px;margin-left:4px">${t}</button>`).join('')
+ $('nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{s=b.dataset.k;render()}) }
+function side(){
+ const st={before:['需要处理','a'],blocked:['待你决定','a'],amend:['待你决定','a'],running:['进行中','b'],partial:['已交付 · 有缺口','a'],regoal:['等我确认','a']}[s]
+ $('side').innerHTML=`<div class="k">我的事务</div>
+ <div class="row sel"><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">甲状腺乳头状癌 XXX 与 SII</span><small class="tag ${st[1]}">${st[0]}</small></div>
+ <div class="row note" style="padding-left:6px">${s==='before'?'执行会话 A 已运行 4 次':s==='running'?'执行会话 D · 共 5 次运行':'3 个执行会话已运行 4 次'}</div>
+ <div class="k">事务文件</div>${['事务.md','事务配置.md','调度.md','工作记录.md','资料/（13 份原文）'].map(f=>`<button class="file">${f}</button>`).join('')}
+ ${s==='partial'?'<button class="file">交付物/调研简报.md <span class="tag a">有缺口</span></button>':''}
+ ${s==='running'?'<button class="file">资料/网页/（2 份快照）</button>':''}`
+}
+function outcomes(mark){
+ return `<div class="card"><h3>约定的交付结果 <small>Owner 按每一项逐条判断，不再只给一段停止原因</small></h3>
+ <table class="t"><tr><th>结果</th><th>状态</th><th>依据</th></tr>
+ ${OUT.map(o=>{const k=mark&&o.st!=='ok'?'gap':o.st;return `<tr><td>${o.t} <span class="tag">必需</span></td><td><span class="tag ${ST[k][0]}">${ST[k][1]}</span></td><td class="note">${o.why}</td></tr>`}).join('')}
+ </table></div>`
+}
+function missing(){
+ return `<div class="card"><h3>还缺什么 <small>以及为什么现有来源补不上</small></h3>
+ <table class="t"><tr><th>缺口</th><th>为什么现有来源补不上</th><th></th></tr>
+ ${MISS.map(m=>`<tr><td>${m[0]}</td><td class="note">${m[1]}</td><td><span class="tag ${m[2]==='必需'?'r':''}">${m[2]}</span></td></tr>`).join('')}</table>
+ <div class="note" style="margin-top:8px">已核实的 13 份原文和 4 次核对结论保持有效，后续无论选哪条路都不重做。</div></div>`
+}
+function board(){
+ let h=`<div class="sub">Owner 事务</div><div class="h1">${TITLE}</div>`
+ const chips={
+  before:[['事务','需要处理'],['Owner','已停下'],['执行会话 A','B · 第 2 次运行 · 已完成']],
+  blocked:[['事务','待你决定'],['Owner','来源不够，等你决定'],['执行会话','A、B、C 均已交回']],
+  amend:[['事务','待你决定'],['Owner','等你确认约定修订'],['执行会话','A、B、C 均已交回']],
+  running:[['事务','进行中'],['Owner','只补 2 项缺口'],['执行会话 D','第 1 次运行 · 运行中']],
+  partial:[['事务','已交付 · 有缺口'],['Owner','无后续派工'],['引文','9 条已核对']],
+  regoal:[['事务','等我确认'],['Owner','提出修订后的约定'],['执行会话','A、B、C 均已交回']],
+ }[s]
+ h+=`<div class="chips">${chips.map(c=>`<span class="chip">${c[0]}：<b>${c[1]}</b></span>`).join('')}</div>`
+ if(['before','blocked','amend','regoal'].includes(s)) h+=`<div class="pointer">有 1 件事等你，在右侧事务官处理 <span>→</span></div>`
+ if(s==='before'){
+  h+=`<div class="card"><h3><span class="tag r">需要处理</span> 停止原因</h3>
+  <div style="font-size:13px">建议先将“候选基因表达是否与 SII 相关”保留为待检验假设。TCGAbiolinks 引用的《Integrated Genomic Characterization of Papillary Thyroid Carcinoma》（Cell，2014）可作为……要完成约定简报，仍需可直接引用的 SII 定义，并查阅疾病研究原文以核实近期论文实际检验了哪</div>
+  <div class="note" style="margin-top:8px">问题：只有一段截断的文字；没说哪几项交付受影响；唯一的按钮“从这里继续”按原来源重跑，结论不会变。真实记录里 18:10 和 18:11 连续两次原样停下。</div></div>`
+  h+=`<div class="card"><h3>执行记录（节选）</h3><ul class="steps">
+  <li><span class="n">58</span><span class="tt">Owner 按已确认的交付物核对当前证据</span></li>
+  <li><span class="n">59</span><span class="tt">完整简报仍缺一项必需证据……需要将取证范围扩展到公开医学文献 <small>18:10 停下</small></span></li>
+  <li><span class="n">60</span><span class="tt">Owner 按已确认的交付物核对当前证据</span></li>
+  <li><span class="n">61</span><span class="tt">建议先将……仍需可直接引用的 SII 定义 <small>18:11 再次停下 · 没有新取证</small></span></li></ul></div>`
+  return h
+ }
+ if(s==='blocked'||s==='amend') return h+outcomes()+missing()
+ if(s==='running'){
+  h+=`<div class="card"><h3>约定修订 <small>2026-11-28 10:05 你确认 · 记入事务配置.md</small></h3>
+  <div class="diff"><div class="keep">  来源：BioinformaticsFMRP/TCGAbiolinks、cBioPortal/cbioportal</div><div class="add">+ 来源：公开网页 · 最多 20 次（论文摘要页与期刊页面）</div><div class="keep">  交付结果：4 项，均为必需（未改）</div></div></div>`
+  h+=`<div class="card"><h3>本轮计划 <small>只补缺口，已核实的不重做</small></h3><ul class="steps">
+  <li><span class="n">✓</span><span class="tt">保留已有 13 份原文与 4 次核对<small>不重新读取</small></span><span class="note">Studio</span></li>
+  <li><span class="n" style="background:#1f3347">…</span><span class="tt">查 SII 的定义与计算式<small>联网搜索“systemic immune-inflammation index definition platelet neutrophil lymphocyte”· 已用 2 / 20 次</small></span><span class="note">执行会话 D · 运行中</span></li>
+  <li><span class="n">3</span><span class="tt">查近期甲状腺乳头状癌基因表达与 SII 的研究<small>依赖第 2 步确定的定义写法</small></span><span class="note">待派工</span></li>
+  <li><span class="n">4</span><span class="tt">写简报并核对全部引文</span><span class="note">Owner</span></li></ul></div>`
+  return h+outcomes()
+ }
+ if(s==='partial'){
+  h+=`<div class="card"><h3><span class="tag a">已交付 · 有缺口</span> 交付物/调研简报.md</h3>
+  <div class="note">9 条引文已逐条与原文核对。简报开头写明以下两项未完成，不当作已完成交付。</div>
+  <div class="gap"><b>未完成</b><ul style="margin:4px 0;padding-left:18px;font-size:13px">
+   <li>SII 的定义与计算式：约定来源中没有，未写入简报</li>
+   <li>近期直接研究的论文推荐：只列出 1 篇（Cell，2014），其余待查医学文献</li></ul>
+   <div class="btns"><button class="pri">扩大来源，补齐这两项</button><span class="note">补齐后简报更新为新版本，旧版保留</span></div></div></div>`
+  return h+outcomes(true)
+ }
+ if(s==='regoal'){
+  h+=`<div class="card"><h3>修订后的约定 <small>等你确认，确认前不派工</small></h3>
+  <table class="t"><tr><th>项</th><th>原约定</th><th>修订</th></tr>
+  <tr><td>范围</td><td class="note">表达、临床特征、与 SII 相关性四个环节</td><td>表达、临床特征三个环节；<b>SII 只写成待检验假设和需要的数据</b></td></tr>
+  <tr><td>论文推荐表</td><td class="note">必需</td><td><span class="tag">改为可选</span>：只列仓库引用到的论文</td></tr>
+  <tr><td>可行性判断</td><td class="note">必需</td><td>必需：说明 SII 部分需要什么数据才能做</td></tr>
+  <tr><td>来源</td><td class="note">两个仓库</td><td>不变</td></tr></table>
+  <div class="btns"><button class="pri">确认修订并继续</button><button>继续和事务官讨论</button></div></div>`
+  return h+missing()
+ }
+}
+function chat(){
+ const head={before:'运行出错',blocked:'等你 1',amend:'等你 1',running:'无待办',partial:'无待办',regoal:'等你 1'}[s]
+ $('chead').innerHTML=`<b>事务官</b><span class="tag ${['running','partial'].includes(s)?'g':'a'}">${head}</span>`
+ let h=`<div class="m"><div class="who">Owner</div><div class="bd">已核实表达研究部分的起点：TCGAbiolinks 把甲状腺乳头状癌的 mRNA 和组织学资料对应到《Integrated Genomic Characterization of Papillary Thyroid Carcinoma》（Cell，2014）。</div></div>`
+ if(s==='before'){
+  h+=`<div class="act err"><b>运行出错，等你决定怎么继续</b><div class="note">建议先将“候选基因表达是否与 SII 相关”保留为待检验假设……</div>
+  <div class="btns"><button class="pri">从这里继续</button><button>复制诊断</button></div></div>`
+ }
+ if(s==='blocked'){
+  h+=`<div class="act"><b>约定的来源不够完成 2 项必需结果</b>
+  <div>缺 SII 的定义出处和近期直接研究的论文。这两项要查医学文献，两个软件仓库里没有。照原来源再跑一遍，结论不会变。</div>
+  <div class="opt rec"><b>扩大来源</b> <span class="tag b">Owner 建议</span>
+   <div class="note">加上公开网页（最多 20 次），只补这 2 项缺口；已核实的不重做。</div>
+   ${web?`<button class="pri" id="goAmend">查看约定修订</button>`:`<div class="note" style="color:var(--amber)">本机未启用联网搜索。</div><button>去 Studio 设置启用</button>`}</div>
+  <div class="opt"><b>先交付已核实部分</b>
+   <div class="note">简报写明哪 2 项没完成；事务记为“已交付 · 有缺口”，之后仍可扩大来源补齐。</div>
+   <button id="goPartial">按现有证据交付</button></div>
+  <div class="opt"><b>改目标</b>
+   <div class="note">在下面和事务官说怎么改，例如“SII 部分先只写成假设”。Owner 会提出修订后的约定，你确认后才继续。</div>
+   <button id="goRegoal">示例：改目标</button></div>
+  <div class="btns"><button style="font-size:12px">复制诊断</button></div></div>`
+ }
+ if(s==='amend'){
+  h+=`<div class="act blue"><b>确认约定修订</b>
+  <div class="diff"><div class="keep">  GitHub：TCGAbiolinks、cBioPortal（不变）</div><div class="add">+ 公开网页 · 最多 20 次</div><div class="keep">  交付结果：不变</div></div>
+  <div class="note">搜索和读取各算 1 次。搜索词和网址会发给 DeepSeek，由它读取网页；事务目标原文和本地资料不会随搜索发出。只补：SII 定义与计算式、近期直接研究的论文。</div>
+  <div class="btns"><button class="pri" id="goRun">确认修订并继续</button><button id="goBack">返回</button></div></div>`
+ }
+ if(s==='running'){
+  h+=`<div class="m me"><div class="who">你</div><div class="bd">确认修订：加上公开网页，只补 2 项缺口。</div></div>`
+  h+=`<div class="m"><div class="who">Owner</div><div class="bd">已开执行会话 D 查 SII 的定义与计算式。查清定义写法后再找近期研究。</div></div>`
+ }
+ if(s==='partial'){
+  h+=`<div class="m me"><div class="who">你</div><div class="bd">按现有证据交付。</div></div>`
+  h+=`<div class="m"><div class="who">Owner</div><div class="bd">简报已放在中间看板，9 条引文已核对。开头列出了 2 项未完成的内容：SII 定义、近期论文推荐。需要补齐时，在看板上点“扩大来源”。</div></div>`
+ }
+ if(s==='regoal'){
+  h+=`<div class="m me"><div class="who">你</div><div class="bd">SII 部分先不查了，只写成待检验假设，说明要什么数据才能做。</div></div>`
+  h+=`<div class="m"><div class="who">Owner</div><div class="bd">已修订约定：SII 改为假设与数据需求，论文推荐表改为可选，来源不变。修订见中间看板，确认后继续。</div></div>`
+  h+=`<div class="act"><b>等你确认修订后的约定</b><div class="btns"><button class="pri">确认修订并继续</button></div></div>`
+ }
+ $('msgs').innerHTML=h
+ $('inp').textContent=s==='regoal'?'SII 部分先不查了，只写成待检验假设…':'和事务官说：改目标、补要求、问进度…'
+ const on=(id,f)=>{const e=$(id);if(e)e.onclick=f}
+ on('goAmend',()=>{s='amend';render()});on('goPartial',()=>{s='partial';render()});on('goRegoal',()=>{s='regoal';render()})
+ on('goRun',()=>{s='running';render()});on('goBack',()=>{s='blocked';render()})
+}
+function render(){
+ nav();side()
+ $('main').innerHTML=(s==='blocked'?`<div class="demo">演示：<button id="tw">${web?'切换为本机未启用联网':'切换为已启用联网'}</button></div>`:'')+board()
+ const tw=$('tw');if(tw)tw.onclick=()=>{web=!web;render()}
+ chat()
+}
+render()
+</script>
+</body>
+</html>

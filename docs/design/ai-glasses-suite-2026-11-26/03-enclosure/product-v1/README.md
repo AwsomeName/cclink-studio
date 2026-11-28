@@ -1,5 +1,7 @@
 # 通用产品设计第一版
 
+[开发版入口与 Mac 验收：新描述生成一款外形，锁面改点并导出子版 STEP](first-chain-mac.md)
+
 **当前开发口径**　[实时生成、继续修改、CAD 分流与真人验收](live-design.md)。第一版让用户现场输入新描述，生成可编辑的几何候选。下文记录早期五步界面和本机几何验证。
 
 [当前版面 · 逐款对照与锁定追改](live-workbench.html) · [选款图](live-select.png) · [追改图](live-edit.png)

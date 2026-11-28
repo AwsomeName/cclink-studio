@@ -2,11 +2,14 @@ import { mkdtemp, readFile, rm, appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, it, expect, vi } from 'vitest'
+import { DEFAULT_SETTINGS } from '../../../shared/settings-constants'
+import { CadConversionService } from '../cad-conversion-service'
 import { FileService } from '../../fs/file-service'
 import { detectFreeCad } from '../freecad-detector'
 import { ProductShapeService } from './service'
 import { checkOutline } from '../../../shared/cad/product-shape'
-vi.mock('electron', () => ({ app: { getPath: () => tmpdir() }, shell: {} }))
+const profile = vi.hoisted(() => ({ path: '' }))
+vi.mock('electron', () => ({ app: { getPath: () => profile.path }, shell: {} }))
 describe('product shape', () => {
   it('rejects inverted, self-intersecting and concave profiles', () => {
     for (const points of [
@@ -35,6 +38,7 @@ describe('product shape', () => {
     'reopens the locked revision in Blender and checks its exported open FreeCAD solid',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'studio-shape-real-'))
+      profile.path = root
       const files = new FileService({ getActiveWorkspace: () => root })
       const service = new ProductShapeService(files, () => detectFreeCad())
       try {
@@ -91,6 +95,13 @@ describe('product shape', () => {
             expect(result.outerWidthMm).toBeCloseTo(75, 5)
             expect(result.innerWidthMm).toBeCloseTo(71, 5)
             expect(result.points[2]).toEqual([75, 13])
+            const previewService = new CadConversionService(() => ({
+              ...DEFAULT_SETTINGS,
+              cadBackend: 'local-freecad',
+            }))
+            const preview = await previewService.convertModel({ inputPath: result.outputPath })
+            expect(preview.success, JSON.stringify(preview.error)).toBe(true)
+            expect(preview.metadata?.bounds?.size.x).toBeCloseTo(75, 4)
             await appendFile(child.files[0], 'external change')
             await expect(
               service.execute(

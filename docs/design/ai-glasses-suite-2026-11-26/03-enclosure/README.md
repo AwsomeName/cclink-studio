@@ -1,5 +1,7 @@
 # AI 眼镜外壳设计工作台
 
+[开发版入口与 Mac 验收：新描述生成一款外形，锁面改点并导出子版 STEP](product-v1/first-chain-mac.md)
+
 [当前第一版开发方案：新描述实时生成外形、选中追改与 CAD 交接](product-v1/live-design.md) · [当前界面示意](product-v1/live-workbench.html) · [早期原型与本机验证](product-v1/README.md) · [五步可交互界面](product-v1/workbench.html)
 
 这个功能放在「眼镜研发」工程里。设计者先选择前框、左/右镜腿、盖板或铰链连接件，再决定从已有外壳改，还是按已有器件和尺寸新建零件。目标产物包括可继续修改的设计源、供结构人员交换的 STEP、供打样使用的版本和对应的装配记录。

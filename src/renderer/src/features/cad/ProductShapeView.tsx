@@ -71,7 +71,10 @@ export function ProductShapeView({ filePath }: { filePath?: string }) {
   const [wall, setWall] = useState('2'),
     [floor, setFloor] = useState('2')
   const [message, setMessage] = useState(''),
-    [sending, setSending] = useState(false)
+    [starting, setSending] = useState(false)
+  const [runConversation, setRunConversation] = useState('')
+  const runActive = useAgentStore((s) => Boolean(s.conversations[runConversation]?.loading))
+  const sending = starting || runActive
   useEffect(() => {
     let alive = true
     if (filePath)
@@ -106,6 +109,7 @@ export function ProductShapeView({ filePath }: { filePath?: string }) {
         runtimeBinding: binding?.kind === 'acp' ? undefined : binding,
         activate: true,
       })
+      setRunConversation(id)
       useUIStore.getState().setAgentContentMode('chat')
       useUIStore.getState().setAgentPanelMode('right', 'user')
       const result = await createConversationRunController({ conversationId: id }).send(

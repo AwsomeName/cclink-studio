@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>稿件生成 · 可点击原型</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  --ink:#16222d; --muted:#5b6975; --faint:#8a96a0;
+  --title:#121c26; --side:#1c2d3d; --side-2:#24394c; --side-ink:#c9d5de;
+  --bg:#eef2f4; --paper:#fff; --line:#dbe2e7; --line-2:#e9eef1;
+  --accent:#1f5d78; --accent-2:#174a60; --accent-weak:#e2eef4;
+  --ok:#2c7a52; --ok-weak:#e3f1e9; --warn:#9c640f; --warn-weak:#fbf0da;
+  --bad:#b03a35; --bad-weak:#f9e4e2; --mark:#fff0b8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:13px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+button{font:inherit;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+.app{display:grid;grid-template-rows:36px 1fr 24px;height:100vh}
+.titlebar{background:var(--title);color:#e8eef2;display:flex;align-items:center;gap:14px;padding:0 16px;font-size:12px}
+.dots{display:flex;gap:6px}.dots i{width:9px;height:9px;border-radius:50%;background:#56636e;display:block}
+.titlebar b{font-size:13px;letter-spacing:.2px}
+.titlebar .sep{width:1px;height:14px;background:#3a4955}
+.titlebar .right{margin-left:auto;color:#a9b7c2}
+.statusbar{background:var(--side-2);color:#b9c7d1;font-size:11px;display:flex;align-items:center;gap:14px;padding:0 14px}
+.statusbar .right{margin-left:auto}
+.main{display:grid;grid-template-columns:196px 1fr;min-height:0}
+.side{background:var(--side);color:var(--side-ink);padding:14px 10px;overflow:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 6px 16px}
+.brand span{width:30px;height:30px;border-radius:7px;background:#dfece6;color:#1c3b2e;display:grid;place-items:center;font-weight:700}
+.brand b{color:#fff;font-size:14px}
+.side .lab{font-size:11px;color:#8ea0ae;padding:4px 8px 6px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:6px;color:var(--side-ink);text-decoration:none;cursor:pointer}
+.nav a:hover{background:#26394b}
+.nav a .ic{width:14px;text-align:center;opacity:.8}
+.nav a.on{background:#2d465b;color:#fff;box-shadow:inset 2px 0 0 #7fb6cf}
+.nav .sub a{padding-left:33px;font-size:12.5px}
+.nav .sub a.on{background:#33506a}
+.content{display:flex;flex-direction:column;min-width:0;min-height:0}
+.crumb{height:40px;flex:none;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 22px;color:var(--muted);font-size:12px}
+.crumb b{color:var(--ink)}
+.crumb .steps{margin-left:auto;display:flex;gap:4px;align-items:center}
+.step{display:flex;align-items:center;gap:6px;padding:3px 10px;border-radius:12px;color:var(--faint)}
+.step i{font-style:normal;width:17px;height:17px;border-radius:50%;border:1px solid currentColor;display:grid;place-items:center;font-size:10.5px}
+.step.done{color:var(--ok)}.step.on{color:var(--accent);background:var(--accent-weak);font-weight:600}
+.step-sep{width:14px;height:1px;background:var(--line)}
+.page{flex:1;min-height:0;overflow:auto;padding:22px 26px}
+h1{font-size:21px;margin:0 0 4px;font-weight:650;letter-spacing:.2px}
+.sub-t{color:var(--muted);margin:0}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:6px;padding:6px 12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:#f4f7f9}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.pri:hover{background:var(--accent-2)}
+.btn.pri:disabled{background:#9fb6c2;border-color:#9fb6c2;cursor:default}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+.btn.ghost:hover{background:var(--accent-weak)}
+.btn.sm{padding:3px 9px;font-size:12px}
+.btn.danger{color:var(--bad)}
+kbd{font:11px ui-monospace,Menlo,monospace;border:1px solid #cfd8de;border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#f7f9fa;color:var(--muted)}
+.btn.pri kbd{background:transparent;color:#d8e8ef;border-color:#5f8ea3}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:10px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:1px 8px;border-radius:10px;white-space:nowrap;font-weight:600}
+.chip.ok{background:var(--ok-weak);color:var(--ok)}
+.chip.warn{background:var(--warn-weak);color:var(--warn)}
+.chip.bad{background:var(--bad-weak);color:var(--bad)}
+.chip.info{background:var(--accent-weak);color:var(--accent)}
+.chip.mute{background:#edf0f2;color:var(--muted)}
+.muted{color:var(--muted)}.faint{color:var(--faint)}
+.small{font-size:12px}
+.row{display:flex;align-items:center;gap:10px}
+.sp{flex:1}
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%);background:#14222e;color:#fff;padding:9px 16px;border-radius:8px;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:50;display:none}
+.toast.show{display:block}
+
+/* entry */
+.entry-new{display:grid;grid-template-columns:1fr 330px;gap:0;overflow:hidden;margin-top:18px}
+.entry-new .l{padding:20px 22px}
+.entry-new .r{background:#f6f8f9;border-left:1px solid var(--line);padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-content:center}
+.entry-new .r .th{border-radius:6px;overflow:hidden;border:1px solid var(--line);background:#fff;aspect-ratio:400/260}
+.entry-new .r .th svg{display:block;width:100%;height:100%}
+.folder{font-size:16px;font-weight:650;margin:6px 0 2px}
+.filechips{display:flex;gap:6px;margin:12px 0 16px;flex-wrap:wrap}
+.table{width:100%;border-collapse:collapse}
+.table th{font-weight:500;color:var(--muted);text-align:left;font-size:12px;padding:9px 18px;border-bottom:1px solid var(--line)}
+.table td{padding:11px 18px;border-bottom:1px solid var(--line-2)}
+.table tr:last-child td{border-bottom:0}
+.table tr.click{cursor:pointer}.table tr.click:hover td{background:#f6f9fa}
+
+/* select */
+.sel{display:grid;grid-template-columns:1fr 388px;gap:18px;align-items:start}
+.grp-h{display:flex;align-items:baseline;gap:10px;margin:18px 0 8px}
+.grp-h h3{margin:0;font-size:13.5px}
+.rec{display:grid;grid-template-columns:62px 1fr auto;gap:14px;padding:14px 16px;align-items:start}
+.doc{width:62px;height:76px;border:1px solid var(--line);border-radius:5px;background:#fbfcfd;position:relative;padding:9px 8px}
+.doc i{display:block;height:3px;background:#d6dee4;border-radius:2px;margin:5px 0}
+.doc b{position:absolute;bottom:6px;left:8px;font-size:9.5px;color:var(--accent)}
+.rec h4{margin:0 0 2px;font-size:13.5px}
+.rec ul{margin:8px 0 0;padding-left:16px;color:var(--muted);font-size:12px}
+.rec ul li{margin:2px 0}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.mat{overflow:hidden;position:relative;display:flex;flex-direction:column}
+.mat.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mat.off{opacity:1}
+.mat .pic{aspect-ratio:400/210;background:#eef1f3;position:relative;cursor:pointer}
+.mat .pic svg{display:block;width:100%;height:100%}
+.mat.lock .pic{cursor:not-allowed}
+.cbx{position:absolute;top:8px;left:8px;width:20px;height:20px;border-radius:5px;border:1.5px solid #fff;background:rgba(20,34,46,.35);display:grid;place-items:center;color:#fff;font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.mat.on .cbx{background:var(--accent);border-color:var(--accent)}
+.mat.lock .cbx{background:rgba(120,130,138,.75);border-color:#c5cdd3}
+.mat .body{padding:9px 11px 11px;display:flex;flex-direction:column;gap:5px;flex:1}
+.mat .name{font-weight:600;font-size:12.5px}
+.mat .why{font-size:11.5px;color:var(--muted);line-height:1.45}
+.mat .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:2px}
+.brief{position:sticky;top:0;display:flex;flex-direction:column;max-height:calc(100vh - 160px)}
+.brief .bd{padding:16px 18px;overflow:auto}
+.brief h3{margin:0 0 2px;font-size:15px}
+.fld{margin-top:14px}
+.fld>label{display:block;font-weight:600;font-size:12.5px;margin-bottom:6px}
+.fld>label span{font-weight:400;color:var(--faint);margin-left:6px}
+.ta{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;resize:none;background:#fff;line-height:1.5}
+.ta:focus{outline:2px solid var(--accent-weak);border-color:var(--accent)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 10px;font-size:12px;color:var(--muted)}
+.pill.on{border-color:var(--accent);background:var(--accent-weak);color:var(--accent);font-weight:600}
+.pill.no{background:#f6f1f0;border-color:#ecd9d6;color:#8a4b45}
+.pts{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.pt{display:flex;align-items:center;gap:9px;padding:7px 10px;border-bottom:1px solid var(--line-2);cursor:pointer;font-size:12.5px}
+.pt:last-child{border-bottom:0}
+.pt .box{width:15px;height:15px;border-radius:4px;border:1.5px solid #a9b5bd;display:grid;place-items:center;font-size:10px;color:#fff;flex:none}
+.pt.on .box{background:var(--accent);border-color:var(--accent)}
+.pt.dis{cursor:not-allowed;color:var(--faint)}
+.pt .src{margin-left:auto;font-size:11px;color:var(--faint)}
+.brief .ft{border-top:1px solid var(--line);padding:12px 18px;background:#f8fafb;border-radius:0 0 10px 10px}
+.send{font-size:11.5px;color:var(--muted);margin-bottom:9px;line-height:1.5}
+.send b{color:var(--ink)}
+
+/* review */
+.rv-head{display:flex;align-items:center;gap:12px;padding:12px 22px;background:#fff;border-bottom:1px solid var(--line);flex:none}
+.rv-head .doc-t{font-weight:650;font-size:15px}
+.save-st{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.save-st i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block}
+.save-st.dirty i{background:#d08a1c}
+.checkbar{display:flex;align-items:center;gap:14px;padding:8px 22px;background:#f7f9fa;border-bottom:1px solid var(--line);flex:none;font-size:12.5px}
+.meter{display:flex;height:6px;width:180px;border-radius:3px;overflow:hidden;background:#e3e8ec}
+.meter i{display:block;height:100%}
+.cnt b{font-weight:650}
+.rv{flex:1;min-height:0;display:grid;grid-template-columns:1fr 440px}
+.editor{overflow:auto;padding:26px 0 80px;background:#e9eef1}
+.paper{width:640px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:4px;padding:32px 44px 40px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.paper .tag{font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center;margin-bottom:10px}
+.paper input.title{width:100%;border:0;font-size:22px;font-weight:700;line-height:1.35;padding:2px 0;border-bottom:1px dashed transparent}
+.paper input.title:hover{border-bottom-color:var(--line)}
+.paper input.title:focus{outline:0;border-bottom-color:var(--accent)}
+.paper h2{font-size:16px;margin:24px 0 8px}
+.paper p{font-size:14.5px;line-height:1.9;margin:8px 0;color:#1d2a35}
+.cl{cursor:pointer;border-radius:2px;padding:1px 0;text-decoration-line:underline;text-underline-offset:4px;text-decoration-thickness:1.5px}
+.cl.pending{text-decoration-style:dotted;text-decoration-color:#8c9aa5}
+.cl.ok{text-decoration-style:solid;text-decoration-color:#8cc3a5}
+.cl.bad{text-decoration-style:wavy;text-decoration-color:var(--bad);text-decoration-thickness:1px}
+.cl:hover{background:#f1f5f7}
+.cl.act{background:#fff3c4;box-shadow:0 0 0 2px #fff3c4}
+.cl sup{font-size:10px;color:var(--accent);margin-left:2px;font-weight:600}
+.cl.bad sup{color:var(--bad)}
+.cl.ok sup{color:var(--ok)}
+figure{margin:16px 0;cursor:pointer;border-radius:6px;padding:6px;border:1px solid transparent}
+figure:hover{border-color:var(--line)}
+figure.act{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-weak);background:#fbfdfe}
+figure .im{border-radius:4px;overflow:hidden;width:440px;max-width:100%;margin:0 auto;aspect-ratio:400/220}
+figure .im svg{display:block;width:100%;height:100%}
+figcaption{font-size:12.5px;color:var(--muted);text-align:center;margin-top:7px}
+figcaption .cl{font-size:12.5px}
+.gen{display:flex;flex-direction:column;gap:12px}
+.sk{height:12px;border-radius:6px;background:linear-gradient(90deg,#edf1f4,#f7f9fa,#edf1f4);background-size:200% 100%;animation:sk 1.1s infinite}
+@keyframes sk{to{background-position:-200% 0}}
+.insp{background:#fff;border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 10px;flex:none}
+.tabs button{border:0;background:none;padding:11px 12px 9px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button .n{font-weight:500;color:var(--faint);margin-left:3px}
+.ib{flex:1;overflow:auto;padding:14px 18px 24px}
+.ihead{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:12px;color:var(--muted)}
+.ih{font-size:12px;font-weight:650;color:var(--muted);margin:16px 0 6px;display:flex;align-items:center;gap:8px}
+.ih a{margin-left:auto;font-weight:500;color:var(--accent);cursor:pointer;text-decoration:none}
+.q{border-left:3px solid #e4c45a;background:#fffbea;padding:9px 12px;border-radius:0 6px 6px 0;font-size:13.5px;line-height:1.7}
+.excerpt{border:1px solid var(--line);border-radius:7px;background:#fafbfc;font-size:12.5px;line-height:1.75}
+.excerpt .eh{padding:7px 12px;border-bottom:1px solid var(--line-2);color:var(--muted);font-size:11.5px;display:flex;gap:8px}
+.excerpt .ebody{padding:9px 12px;color:#2a3843}
+.excerpt mark{background:var(--mark);padding:1px 2px;border-radius:2px;color:inherit;box-shadow:inset 0 -2px 0 #e7c950}
+.verdict{margin-top:12px;border-radius:7px;padding:10px 12px;font-size:12.5px;line-height:1.6;display:flex;gap:9px}
+.verdict .vi{font-weight:700;flex:none}
+.verdict.ok{background:var(--ok-weak);color:#1f5c3d}
+.verdict.bad{background:var(--bad-weak);color:#7d2723}
+.verdict.info{background:#f1f4f6;color:#38464f}
+.verdict small{display:block;color:inherit;opacity:.75;margin-top:2px}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.done-note{margin-top:12px;font-size:12px;color:var(--ok);display:flex;gap:8px;align-items:center}
+.clist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.ci{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line-2);cursor:pointer;font-size:12.5px;line-height:1.5}
+.ci:last-child{border-bottom:0}
+.ci:hover{background:#f7f9fa}
+.dot{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;margin-top:2px}
+.dot.ok{background:var(--ok-weak);color:var(--ok)}
+.dot.pending{background:#eef1f3;color:#7b8892;border:1px dashed #a9b4bc}
+.dot.bad{background:var(--bad-weak);color:var(--bad)}
+.ci .meta{font-size:11px;color:var(--faint)}
+.edit-ta{width:100%;min-height:86px;border:1px solid var(--accent);border-radius:6px;padding:8px 10px;resize:vertical;line-height:1.6}
+.bigimg{border-radius:7px;overflow:hidden;border:1px solid var(--line);aspect-ratio:400/220}
+.bigimg svg{display:block;width:100%;height:100%}
+.cands{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.cand{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;padding:0;text-align:left}
+.cand:hover{border-color:var(--accent)}
+.cand .t{aspect-ratio:400/260}.cand svg{display:block;width:100%;height:100%}
+.cand span{display:block;font-size:11px;padding:4px 6px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cand.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ilist{display:flex;flex-direction:column;gap:8px}
+.ii{display:grid;grid-template-columns:86px 1fr 26px;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:7px;cursor:pointer}
+.ii:hover{border-color:#b9c8d2}
+.ii .t{border-radius:4px;overflow:hidden;aspect-ratio:400/260}.ii svg{display:block;width:100%;height:100%}
+.ii .c{font-size:12px;line-height:1.45}
+.ii .c b{display:block;font-size:12px}
+.ord{display:flex;flex-direction:column;gap:2px}
+.ord button{border:1px solid var(--line);background:#fff;border-radius:4px;font-size:10px;line-height:1;padding:3px 0;color:var(--muted)}
+.ord button:disabled{opacity:.35;cursor:default}
+.rec-full{font-size:12.5px;line-height:1.75;color:#2a3843}
+.rec-full h5{font-size:12.5px;margin:14px 0 4px}
+.rec-full mark{background:#fff6d1;border-radius:2px;color:inherit}
+.rec-full mark.hot{background:var(--mark);box-shadow:inset 0 -2px 0 #e7c950}
+.rec-full .internal{color:var(--faint)}
+
+/* drawer */
+.scrim{position:fixed;inset:36px 0 24px 196px;background:rgba(18,28,38,.32);display:none;z-index:20}
+.scrim.show{display:block}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:520px;background:#fff;display:flex;flex-direction:column;box-shadow:-10px 0 30px rgba(0,0,0,.12)}
+.drawer .dh{padding:18px 22px 12px;border-bottom:1px solid var(--line)}
+.drawer .dh h3{margin:0;font-size:16px}
+.drawer .db{flex:1;overflow:auto;padding:14px 22px}
+.drawer .df{border-top:1px solid var(--line);padding:12px 22px;display:flex;gap:8px;justify-content:flex-end;background:#f8fafb}
+.kv{display:grid;grid-template-columns:76px 1fr;gap:6px 12px;font-size:12.5px;margin:10px 0}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.figs{display:flex;flex-direction:column;gap:8px}
+.fg{display:grid;grid-template-columns:24px 104px 1fr;gap:10px;align-items:center;font-size:12.5px}
+.fg .n{width:22px;height:22px;border-radius:50%;background:var(--accent-weak);color:var(--accent);display:grid;place-items:center;font-weight:700;font-size:11.5px}
+.fg .t{border-radius:4px;overflow:hidden;aspect-ratio:400/260;border:1px solid var(--line)}.fg svg{display:block;width:100%;height:100%}
+.notbox{background:#f6f8f9;border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);margin-top:14px;line-height:1.7}
+.notbox b{color:var(--ink)}
+.warnbox{background:var(--warn-weak);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#6d4709;line-height:1.6}
+.badbox{background:var(--bad-weak);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#7d2723;line-height:1.6}
+.badbox ul{margin:6px 0 0;padding-left:18px}
+.secth{font-size:12px;font-weight:650;color:var(--muted);margin:16px 0 8px}
+
+/* received */
+.recv{display:grid;grid-template-columns:1fr 340px;gap:18px;align-items:start;margin-top:16px}
+.recv .card{padding:18px 20px}
+.from{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.recv h2{font-size:19px;margin:10px 0 6px}
+.bodyprev{font-size:13px;line-height:1.85;color:#34424d;max-height:96px;overflow:hidden;position:relative}
+.bodyprev.open{max-height:none}
+.bodyprev:not(.open):after{content:"";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,#fff)}
+.bodyprev h4{margin:10px 0 2px;font-size:13px}
+.recfigs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:10px}
+.recfigs .t{border-radius:6px;overflow:hidden;border:1px solid var(--line);aspect-ratio:400/260}.recfigs svg{display:block;width:100%;height:100%}
+.recfigs p{margin:6px 0 0;font-size:12px;color:var(--muted);line-height:1.5}
+.nextlist{display:flex;flex-direction:column;gap:0;margin:8px 0 14px}
+.nx{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+.nx:last-child{border-bottom:0}
+.nx i{font-style:normal;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:11px;color:var(--muted)}
+.nx.cur i{border-color:var(--accent);color:var(--accent);font-weight:700}
+.banner{display:flex;align-items:center;gap:10px;background:var(--warn-weak);color:#6d4709;border-radius:8px;padding:9px 14px;font-size:12.5px;margin-top:14px}
+.dsg{position:fixed;right:10px;top:42px;z-index:60;font-size:11px;color:var(--muted);background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar"><div class="dots"><i></i><i></i><i></i></div><b>CCLink Studio</b><span class="sep"></span><span>公司工作空间</span><span class="right">● 本地模式 · 未登录 CCLink 也可使用</span></div>
+  <div class="main">
+    <aside class="side">
+      <div class="brand"><span>研</span><b>眼镜研发公司</b></div>
+      <div class="lab">公司项目 · AI 眼镜</div>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+    <section class="content" id="content"></section>
+  </div>
+  <div class="statusbar"><span>■ 公司项目 / AI 眼镜</span><span id="sb-file"></span><span class="right">设计原型 · 示例数据与示意图，非真实样机照片</span></div>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 示意图（SVG，非实拍） ---------- */
+let gid = 0;
+const tagMark = '<text x="392" y="252" text-anchor="end" font-size="11" fill="rgba(255,255,255,.75)" font-family="sans-serif">示意</text>';
+const tagMarkDark = '<text x="392" y="252" text-anchor="end" font-size="11" fill="rgba(0,0,0,.35)" font-family="sans-serif">示意</text>';
+function svgSide(masked){
+  const g='g'+(++gid);
+  let face='';
+  if(masked){
+    const cols=['#b89a86','#c7a58e','#a98a77','#d1b29b','#bfa08b','#b3937f'];
+    for(let y=92;y<196;y+=13)for(let x=236;x<304;x+=13){face+=`<rect x="${x}" y="${y}" width="13" height="13" fill="${cols[(x*7+y*3)%6]}"/>`}
+  }else{
+    face='<rect x="232" y="88" width="76" height="112" fill="none" stroke="#f5b400" stroke-width="2.5" stroke-dasharray="6 4" rx="6"/><rect x="232" y="70" width="52" height="17" rx="3" fill="#f5b400"/><text x="258" y="83" text-anchor="middle" font-size="11" fill="#222" font-family="sans-serif">人脸</text>';
+  }
+  return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="${g}" x1="0" x2="1"><stop offset="0" stop-color="#c3ced4"/><stop offset="1" stop-color="#eef2f3"/></linearGradient></defs>
+  <rect width="400" height="260" fill="url(#${g})"/><rect x="300" y="0" width="100" height="260" fill="#f7f9f9" opacity=".7"/>
+  <path d="M150 260 L152 212 C122 200 106 170 110 130 C113 82 150 46 205 46 C256 46 286 80 289 116 L301 141 C304 147 299 151 293 151 L293 166 C297 171 293 177 289 179 C293 187 287 193 281 193 C277 206 263 213 246 211 L242 260 Z" fill="#d8b49a"/>
+  <path d="M150 132 C138 70 176 37 216 37 C260 37 287 62 291 101 C270 86 240 81 224 93 C212 102 199 112 174 152 Z" fill="#2a2421"/>
+  <ellipse cx="190" cy="136" rx="12" ry="20" fill="#c69c82"/>
+  <rect x="186" y="113" width="96" height="9" rx="4" fill="#1d2023" transform="rotate(-2 230 118)"/>
+  <rect x="226" y="109" width="24" height="15" rx="4" fill="#2b2f33"/>
+  <rect x="268" y="102" width="30" height="34" rx="6" fill="rgba(80,104,124,.45)" stroke="#1d2023" stroke-width="3"/>
+  <circle cx="292" cy="110" r="3" fill="#6b747b"/>
+  ${face}${tagMarkDark}</svg>`;
+}
+function svgHinge(){
+  const g='g'+(++gid);
+  return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="${g}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7a5a42"/><stop offset="1" stop-color="#3d2b20"/></linearGradient></defs>
+  <rect width="400" height="260" fill="url(#${g})"/>
+  <g opacity=".18" stroke="#000"><path d="M0 40 C120 52 260 30 400 46"/><path d="M0 200 C140 214 250 190 400 206"/><path d="M0 120 C100 128 300 110 400 124"/></g>
+  <g transform="rotate(-12 200 130)"><rect x="-20" y="108" width="300" height="46" rx="23" fill="#1d2024"/><rect x="0" y="112" width="260" height="6" rx="3" fill="rgba(255,255,255,.12)"/>
+  <rect x="246" y="96" width="78" height="70" rx="14" fill="#2c3035"/><rect x="318" y="104" width="120" height="54" rx="10" fill="#22262a"/>
+  <circle cx="285" cy="131" r="11" fill="#8a9096"/><rect x="278" y="129.5" width="14" height="3" fill="#4b5157"/>
+  <circle cx="120" cy="131" r="3" fill="#3fa6ff" opacity=".9"/></g>${tagMark}</svg>`;
+}
+function svgPads(){
+  const pair=(x,y,s,fill,stroke)=>`<g transform="translate(${x} ${y}) scale(${s})"><path d="M-14 -24 C-28 -6 -26 18 -12 24 C-4 20 -2 0 -6 -22 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><path d="M14 -24 C28 -6 26 18 12 24 C4 20 2 0 6 -22 Z" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/><path d="M-8 -22 L-4 -40 L4 -40 L8 -22" fill="none" stroke="#8d969c" stroke-width="2"/></g>`;
+  return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"><rect width="400" height="260" fill="#f3f1ec"/><rect y="196" width="400" height="64" fill="#e7e3da"/>
+  <line x1="150" y1="40" x2="150" y2="230" stroke="#d6d0c4" stroke-dasharray="4 4"/>
+  ${pair(78,130,1.5,'#b8bec3','#99a1a7')}
+  ${pair(205,136,1.05,'rgba(226,232,236,.9)','#8f9aa2')}${pair(268,132,1.25,'rgba(226,232,236,.9)','#8f9aa2')}${pair(340,128,1.45,'rgba(226,232,236,.9)','#8f9aa2')}
+  <g font-family="sans-serif" font-size="14" fill="#55606a" text-anchor="middle"><text x="78" y="224">P1</text><text x="205" y="224">S</text><text x="268" y="224">M</text><text x="340" y="224">L</text><text x="272" y="34" font-size="12" fill="#7b858d">P2</text></g>${tagMarkDark}</svg>`;
+}
+function svgThermal(){
+  const a='g'+(++gid),b='g'+(++gid),c='g'+(++gid),d='g'+(++gid);
+  return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice"><defs>
+  <radialGradient id="${a}" cx=".45" cy=".5" r=".8"><stop offset="0" stop-color="#3b1366"/><stop offset="1" stop-color="#12082a"/></radialGradient>
+  <linearGradient id="${b}" x1="0" x2="1"><stop offset="0" stop-color="#3a1f8c"/><stop offset=".55" stop-color="#b8326f"/><stop offset="1" stop-color="#f29a2e"/></linearGradient>
+  <radialGradient id="${c}"><stop offset="0" stop-color="#fffbd0"/><stop offset=".35" stop-color="#ffd23f"/><stop offset=".7" stop-color="#f26b1d" stop-opacity=".7"/><stop offset="1" stop-color="#f26b1d" stop-opacity="0"/></radialGradient>
+  <linearGradient id="${d}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#1a0b3d"/><stop offset=".4" stop-color="#8e2a7d"/><stop offset=".75" stop-color="#f07b22"/><stop offset="1" stop-color="#fffbd0"/></linearGradient></defs>
+  <rect width="400" height="260" fill="url(#${a})"/>
+  <g transform="rotate(-12 200 130)"><rect x="-20" y="108" width="300" height="46" rx="23" fill="url(#${b})"/><rect x="246" y="96" width="78" height="70" rx="14" fill="#f2a334"/><rect x="318" y="104" width="120" height="54" rx="10" fill="#d0602a"/></g>
+  <circle cx="270" cy="104" r="58" fill="url(#${c})"/>
+  <g stroke="#fff" stroke-width="1.6"><line x1="270" y1="90" x2="270" y2="118"/><line x1="256" y1="104" x2="284" y2="104"/></g>
+  <text x="282" y="94" font-size="15" fill="#fff" font-family="sans-serif" font-weight="700">41.2°C</text>
+  <rect x="372" y="34" width="10" height="170" fill="url(#${d})"/><g font-family="sans-serif" font-size="10" fill="#e6e0f0"><text x="368" y="30" text-anchor="end">42</text><text x="368" y="212" text-anchor="end">24</text><text x="40" y="44" font-weight="700">FLIR</text></g>${tagMark}</svg>`;
+}
+function svgDebug(masked){
+  const row=(y,k,v,m)=>`<text x="140" y="${y}" font-size="12" fill="#7a868f">${k}</text><text x="262" y="${y}" font-size="12" fill="#1d2a35" text-anchor="end" font-family="ui-monospace,Menlo,monospace">${v}</text>${m?`<rect x="186" y="${y-12}" width="80" height="16" rx="2" fill="#111"/>`:''}<line x1="138" y1="${y+8}" x2="264" y2="${y+8}" stroke="#edf0f2"/>`;
+  return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" font-family="sans-serif"><rect width="400" height="260" fill="#dfe5e9"/>
+  <rect x="124" y="8" width="152" height="262" rx="18" fill="#fff" stroke="#c9d2d8"/>
+  <text x="200" y="36" text-anchor="middle" font-size="13" font-weight="700" fill="#1d2a35">设备调试</text>
+  ${row(66,'SN','P2-0317',masked)}${row(94,'MAC','3C:A1:…:7F:19',masked)}${row(122,'固件','0.9.3-rc2',false)}${row(150,'电量','71%',false)}${row(178,'外壳温度','41.0℃',false)}
+  <rect x="140" y="204" width="120" height="26" rx="6" fill="#e9f0f4"/><text x="200" y="221" text-anchor="middle" font-size="11" fill="#1f5d78">导出日志</text>${tagMarkDark}</svg>`;
+}
+const IMG = {
+  side:{name:'IMG_2041.jpg',desc:'试戴侧面',svg:m=>svgSide(m)},
+  hinge:{name:'IMG_2043.jpg',desc:'右镜腿铰链特写',svg:()=>svgHinge()},
+  pads:{name:'IMG_2047.jpg',desc:'P1 / P2 鼻托对比',svg:()=>svgPads()},
+  thermal:{name:'FLIR_0112.jpg',desc:'录像 20 分钟后的铰链热像',svg:()=>svgThermal()},
+  debug:{name:'调试页截图_P2-0317.png',desc:'App 设备调试页',svg:m=>svgDebug(m)},
+};
+function pic(id){ if(id==='side') return IMG.side.svg(S.sideMasked); if(id==='debug') return IMG.debug.svg(S.debugMasked); return IMG[id].svg(); }
+function picName(id){ if(id==='side'&&S.sideMasked) return 'IMG_2041（打码副本）.jpg'; if(id==='debug'&&S.debugMasked) return '调试页截图（遮盖副本）.png'; return IMG[id].name; }
+
+/* ---------- 原始试戴记录（研发交付，原件不改） ---------- */
+const REC = {
+  file:'研发交付/P2-第3批试戴/P2 试戴记录 2026-11-20.md',
+  head:'记录人：林舟（研发）· 2026-11-20 · 对外范围：§1–§5 可引用，§6 仅内部',
+  secs:[
+    {id:'s1',t:'§1 试戴安排',html:'<span data-q="q0">第 3 批样机于 11 月 18–20 日试戴，6 位同事各连续佩戴约 2 小时，场景为办公、通勤、食堂午饭。</span>样机 3 台：P2-0317、P2-0318、P2-0322。试戴者：王蕾、陈一帆、赵敏、刘洋、孙可、周航。'},
+    {id:'s2',t:'§2 重量与佩戴',html:'<span data-q="q1">整机 41.5 g，P1 为 46.0 g（同一台电子秤）。</span><span data-q="q2">佩戴满 2 小时，6 人中 5 人鼻梁无明显压痕。</span><span data-q="q3">陈一帆（鼻梁较低）约 60 分钟后感觉镜架下滑，换 M 号鼻托后未再下滑。</span><span data-q="qp">鼻托改为可替换，S / M / L 3 种尺寸。</span>'},
+    {id:'s3',t:'§3 发热',html:'<span data-q="q4">连续录像 20 分钟后，右镜腿铰链附近外壳表面 41.2 °C（FLIR C5 热像仪，室温 24 °C）。</span><span data-q="q5">6 人中 2 人反馈耳前“有点热”。</span><span data-q="q6">下一版计划在铰链内加铝导热片，尚未打样验证。</span>'},
+    {id:'s4',t:'§4 语音唤醒',html:'<span data-q="q7">安静办公室 20 次唤醒 20 次响应；食堂午饭时段 20 次唤醒 14 次响应。</span>'},
+    {id:'s5',t:'§5 电量',html:'<span data-q="q8">连续录像 20 分钟，电量 100% → 71%。未做完整续航测试。</span>'},
+    {id:'s6',t:'§6 内部备注（仅内部）',html:'固件 0.9.3-rc2 下 P2-0318 出现一次蓝牙断连，已提给固件组。',internal:true},
+  ]
+};
+const QSEC = {q0:'s1',q1:'s2',q2:'s2',q3:'s2',qp:'s2',q4:'s3',q5:'s3',q6:'s3',q7:'s4',q8:'s5'};
+function quoteText(q){ const s=REC.secs.find(x=>x.id===QSEC[q]); const m=s.html.match(new RegExp('data-q="'+q+'">([^<]*)<')); return m?m[1]:''; }
+
+/* ---------- 稿件：事实句 ---------- */
+const CLAIMS0 = {
+  c0:{text:'11 月 18 日到 20 日，我们请 6 位同事试戴了第 3 批 P2 样机，每人连续戴 2 小时左右，场景是办公、通勤和食堂午饭。',q:'q0'},
+  c1:{text:'P2 整机 41.5 克，比上一版 P1 的 46 克轻了 4.5 克。',q:'q1',derived:{'4.5':'46.0 − 41.5'}},
+  c2:{text:'6 位试戴者里，有 5 位戴满 2 小时后鼻梁没有明显压痕。',q:'q2'},
+  c3:{text:'另一位鼻梁较低的同事戴了约 1 小时后觉得镜架往下滑，换成中号鼻托后没再出现。',q:'q3',note:'记录里写了这位同事的姓名，稿中写成“一位鼻梁较低的同事”。“约 1 小时”对应记录的“约 60 分钟”，“中号”对应“M 号”。',alias:{'1':'60'}},
+  c4:{text:'连续录像 20 分钟后，右镜腿铰链附近的外壳表面到了 41.2 °C（室温 24 °C）。',q:'q4'},
+  c5:{text:'6 个人里有 2 个说耳朵前面“有点热”。',q:'q5'},
+  c6:{text:'这个问题已经在下一版解决。',q:'q6',fix:'研发计划在下一版的铰链里加一片铝导热片，目前还没有打样验证。'},
+  c7:{text:'在安静的办公室里，20 次唤醒全部有响应；换到午饭时的食堂，20 次里有 14 次响应。',q:'q7'},
+  c8:{text:'这次只记录到连续录像 20 分钟耗电 29%，没有做完整的续航测试，所以这篇不写续航时间。',q:'q8',derived:{'29':'100 − 71'}},
+};
+const ORDER = ['c0','c1','c2','c3','c4','c5','c6','c7','c8'];
+const CAP_SRC = {pads:'qp',thermal:'q4'};
+const SLOT_POS = ['开头导语之后','第一节「轻了 4.5 克」之后','第二节「右镜腿会热」之后'];
+
+/* ---------- 状态 ---------- */
+const TIMES=['14:20','14:32','14:41','14:47','14:55','15:02'];
+let S;
+function fresh(){
+  return {
+    screen:'entry',
+    sel:{rec:true,side:false,hinge:true,pads:true,thermal:true,debug:false},
+    sideMasked:false, debugMasked:false,
+    aud:'普通读者', brief:'这次试戴发现了什么：哪些地方变好了，哪些问题还在；没测的要写明没测。',
+    pts:{wt:true,heat:true,wake:true,batt:true},
+    no:['续航时长','上市时间','价格','和竞品比较'],
+    generated:false, generating:false,
+    title:'6 个人戴了两小时 P2 样机：轻了，右镜腿会热',
+    claims:JSON.parse(JSON.stringify(CLAIMS0)),
+    st:{c0:'pending',c1:'pending',c2:'pending',c3:'pending',c4:'pending',c5:'pending',c6:'bad',c7:'pending',c8:'pending'},
+    when:{},
+    images:[{mat:'side',cap:'试戴中的 P2 样机（面部已打码）',capSt:'na'},{mat:'pads',cap:'P1（左）与 P2（右）的鼻托，P2 改成了可替换的 3 种尺寸',capSt:'pending'},{mat:'hinge',cap:'右镜腿铰链',capSt:'na'}],
+    tab:'check', act:null, editing:null,
+    dirty:true, version:0, saved:null, clock:0,
+    handed:null, drawer:false, bodyOpen:false
+  };
+}
+S = fresh();
+
+/* ---------- 工具 ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function nums(t){ return (String(t).match(/(?<![A-Za-z\d.])\d+(?:\.\d+)?/g)||[]).map(n=>n.replace(/\.0$/,'')); }
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2600); }
+function touch(){ S.dirty=true; }
+function nowT(){ return TIMES[Math.min(S.clock,TIMES.length-1)]; }
+
+/* 原型里的“比对”：数字逐个对照出处；c6 用固定规则模拟语义比对 */
+function verdictFor(id){
+  const c=S.claims[id], q=quoteText(c.q), qn=nums(q);
+  if(id==='c6' && /已经|解决/.test(c.text)) return {k:'bad',msg:'记录写的是“计划……尚未打样验证”，稿中写成“已经解决”。这是把计划写成了结果。'};
+  const miss=[]; const der=[];
+  nums(c.text).forEach(n=>{
+    if(qn.includes(n)) return;
+    if(c.derived&&c.derived[n]){der.push(`${n} = ${c.derived[n]}`);return;}
+    if(c.alias&&c.alias[n]&&qn.includes(c.alias[n])) return;
+    miss.push(n);
+  });
+  if(miss.length) return {k:'bad',msg:`稿中的 ${miss.join('、')} 在这段记录里找不到。`};
+  let msg='数字和说法与这段记录一致。';
+  if(der.length) msg+=` 其中 ${der.join('；')}，由记录里的数相减得出，记录没有直接写。`;
+  return {k:'ok',msg,note:c.note};
+}
+function capVerdict(img){
+  const n=nums(img.cap); const src=CAP_SRC[img.mat];
+  if(!n.length && img.mat!=='pads') return {need:false};
+  if(!src) return {need:true,k:'bad',msg:`图注里有数字 ${n.join('、')}，但这张图没有对应的记录段落。`};
+  const qn=nums(quoteText(src)); const miss=n.filter(x=>!qn.includes(x));
+  if(miss.length) return {need:true,k:'bad',src,msg:`图注里的 ${miss.join('、')} 在记录里找不到。`};
+  return {need:true,k:'ok',src,msg:'图注里的数字与记录一致。'};
+}
+function capStatus(img){ const v=capVerdict(img); if(!v.need) return 'na'; if(img.capSt==='ok') return 'ok'; return v.k==='bad'?'bad':'pending'; }
+function checks(){
+  const list=ORDER.filter(id=>S.claims[id].text).map(id=>({type:'claim',id,st:S.st[id],text:S.claims[id].text}));
+  S.images.forEach((im,i)=>{ const st=capStatus(im); if(st!=='na') list.push({type:'cap',id:im.mat,slot:i,st,text:'图 '+(i+1)+' 图注：'+im.cap}); });
+  return list;
+}
+function counts(){ const l=checks(); return {all:l.length,ok:l.filter(x=>x.st==='ok').length,pending:l.filter(x=>x.st==='pending').length,bad:l.filter(x=>x.st==='bad').length,list:l}; }
+function snapshot(){ return {title:S.title,claims:JSON.parse(JSON.stringify(S.claims)),images:JSON.parse(JSON.stringify(S.images)),version:S.version,at:S.saved,sideMasked:S.sideMasked}; }
+function save(silent){
+  S.version++; S.saved=nowT(); S.clock++; S.dirty=false; S.savedSnap=snapshot();
+  if(!silent) toast(`已保存 v${S.version} · 运营/原稿/2026-11-28 P2 试戴发现/文章.md`);
+}
+
+/* ---------- 渲染：导航 ---------- */
+function renderNav(){
+  const pub = S.screen==='received';
+  const w = ['select','review'].includes(S.screen)||S.screen==='entry';
+  $('#nav').innerHTML = `
+    <a><span class="ic">⌂</span>项目首页</a><a><span class="ic">▦</span>业务项目</a>
+    <a class="${!w&&!pub?'on':''}"><span class="ic">↗</span>推广</a>
+    <div class="sub nav"><a class="${w?'on':''}" onclick="go('entry')">稿件生成</a><a class="${pub?'on':''}" onclick="S.handed&&go('received')">文章发布</a><a>账号管理</a></div>
+    <a><span class="ic">◇</span>客户与售后</a><a><span class="ic">¥</span>公司账目</a>`;
+}
+function steps(cur){
+  const names=['选材料','写稿与核对','交稿'];
+  return '<div class="steps">'+names.map((n,i)=>`${i?'<span class="step-sep"></span>':''}<span class="step ${i<cur?'done':i===cur?'on':''}"><i>${i<cur?'✓':i+1}</i>${n}</span>`).join('')+'</div>';
+}
+function go(s){ S.screen=s; S.drawer=false; render(); }
+
+/* ---------- 入口 ---------- */
+function renderEntry(){
+  const mine = S.handed ? `<tr class="click" onclick="go('review')"><td><b>${esc(S.handed.title)}</b></td><td><span class="chip info">已交给文章发布 · v${S.handed.version}</span></td><td class="muted">今天 ${S.saved}</td></tr>`
+    : S.version ? `<tr class="click" onclick="go('review')"><td><b>${esc(S.title)}</b></td><td><span class="chip mute">草稿 · v${S.version}</span></td><td class="muted">今天 ${S.saved}</td></tr>` : '';
+  return `<div class="crumb">公司项目 / AI 眼镜 / 推广 / <b>稿件生成</b></div>
+  <div class="page">
+    <h1>稿件生成</h1>
+    <p class="sub-t">把研发交来的材料写成一篇可以公开的稿子。写稿和保存都不需要平台账号；要发出去时，再交给文章发布。</p>
+    <div class="card entry-new">
+      <div class="l">
+        <div class="row"><span class="chip warn">新交来 · 还没写过稿</span><span class="faint small">来自「AI 眼镜」业务关联的 研发交付/ 文件夹</span></div>
+        <div class="folder">P2 第 3 批试戴</div>
+        <div class="muted small">研发交付/P2-第3批试戴/ · 林舟 11-21 17:40 放入</div>
+        <div class="filechips"><span class="chip mute">试戴记录 1 份</span><span class="chip mute">实拍照片 4 张</span><span class="chip mute">内部截图 1 张</span></div>
+        <div class="row"><button class="btn pri" id="go-select" onclick="go('select')">用这批材料写稿 →</button><button class="btn">选其他文件…</button></div>
+      </div>
+      <div class="r">${['side','hinge','pads','thermal','debug'].map(id=>`<div class="th">${pic(id)}</div>`).join('')}<div class="th" style="display:grid;place-items:center;background:#fbfcfd"><div class="doc" style="transform:scale(.8)"><i></i><i></i><i></i><i style="width:70%"></i><b>MD</b></div></div></div>
+    </div>
+    <h3 style="margin:26px 0 10px;font-size:14px">我的稿件</h3>
+    <div class="card"><table class="table"><thead><tr><th>稿件</th><th style="width:220px">状态</th><th style="width:140px">最近保存</th></tr></thead><tbody>
+      ${mine}
+      <tr><td><b>P1 样机拆解：镜腿为什么换了铰链</b></td><td><span class="chip info">已交给文章发布 · v3</span></td><td class="muted">11-14 16:05</td></tr>
+      <tr><td><b>展会上被问得最多的 5 个问题</b></td><td><span class="chip mute">草稿 · v2</span></td><td class="muted">11-10 11:42</td></tr>
+    </tbody></table></div>
+    <p class="faint small" style="margin-top:10px">稿件存在工作空间的 运营/原稿/ 下，每篇一个文件夹：文章.md、公开配图、核对记录。关掉 Studio 再打开，从这里继续。</p>
+  </div>`;
+}
+
+/* ---------- 选材料 ---------- */
+function matCard(id){
+  const on=S.sel[id];
+  let chip,why,acts='',lock=false;
+  if(id==='side'){
+    if(S.sideMasked){chip='<span class="chip ok">可公开 · 打码副本</span>';why='原图未改动，另存了一份面部打码的副本，稿子里用副本。';acts='<button class="btn sm ghost" onclick="S.sideMasked=false;S.sel.side=false;render()">撤销打码副本</button>';}
+    else{chip='<span class="chip warn">需处理 · 有可识别的人脸</span>';why='本机识别到 1 张人脸（可能漏报，请看一眼）。记录里没写本人同意对外使用。';acts='<button class="btn sm" id="mask-side" onclick="S.sideMasked=true;S.sel.side=true;render()">用打码副本</button><button class="btn sm ghost">已获本人同意…</button>';lock=true;}
+  }else if(id==='debug'){
+    if(S.debugMasked){chip='<span class="chip ok">可公开 · 遮盖副本</span>';why='设备编号与 MAC 已遮盖。这张图对读者价值不大，默认不选。';}
+    else{chip='<span class="chip bad">仅内部 · 含设备编号</span>';why='画面里有 SN P2-0317 和 MAC 地址，研发标为“内部”。不会发给 AI，也不会进稿。';acts='<button class="btn sm ghost" onclick="S.debugMasked=true;render()">仍要用：生成遮盖副本</button>';lock=true;}
+  }else{
+    chip='<span class="chip ok">可公开</span>'; why=id==='thermal'?'研发标注可对外。热像仪原图，带温标。':'研发标注可对外。没有识别到人脸或编号。';
+  }
+  return `<div class="card mat ${on?'on':''} ${lock?'lock':''}" data-mat="${id}">
+    <div class="pic" onclick="${lock?`toast('先处理这张图，才能选它')`:`S.sel.${id}=!S.sel.${id};render()`}">${pic(id)}<span class="cbx">${on?'✓':lock?'–':''}</span></div>
+    <div class="body"><div class="name">${esc(picName(id))}</div><div class="muted small" style="margin-top:-4px">${IMG[id].desc}</div>${chip?`<div>${chip}</div>`:''}<div class="why">${why}</div><div class="acts">${acts}</div></div></div>`;
+}
+function renderSelect(){
+  const photos=['side','hinge','pads','thermal'].filter(k=>S.sel[k]).length;
+  const PTS=[['wt','重量与鼻托','§2'],['heat','右镜腿发热','§3'],['wake','吵闹环境里的语音唤醒','§4'],['batt','录像耗电（只写测到的）','§5']];
+  const AUD=['普通读者','行业同行','已预约的用户'];
+  return `<div class="crumb">公司项目 / AI 眼镜 / 推广 / 稿件生成 / <b>新稿</b>${steps(0)}</div>
+  <div class="page"><div class="sel"><div>
+    <h1>选材料</h1>
+    <p class="sub-t">研发交付/P2-第3批试戴 里有 6 个文件。勾选的才会交给 AI 写稿；原件不会被改动。</p>
+    <div class="grp-h"><h3>事实依据</h3><span class="faint small">稿中每句结论都要能对回这份记录</span></div>
+    <div class="card rec"><div class="doc"><i></i><i></i><i></i><i style="width:60%"></i><i></i><b>MD</b></div>
+      <div><h4>P2 试戴记录 2026-11-20.md</h4><div class="muted small">林舟（研发）· 6 节 · 2,140 字 · 对外范围：§1–§5 可引用，§6 仅内部</div>
+      <ul><li>交给 AI 的是<b>去敏副本</b>：6 位试戴者姓名换成“试戴者 A–F”</li><li>3 个设备编号（P2-0317 等）不出现在副本里</li><li>§6 内部备注（一次蓝牙断连）不交给 AI</li></ul></div>
+      <div style="text-align:right"><span class="chip info">作为依据</span><br><button class="btn sm ghost" style="margin-top:8px">看去敏副本</button></div></div>
+    <div class="grp-h"><h3>照片与截图</h3><span class="faint small">已选 ${photos} 张可公开图片</span></div>
+    <div class="grid">${['side','hinge','pads','thermal','debug'].map(matCard).join('')}</div>
+    <p class="faint small" style="margin-top:12px">“可公开 / 需处理 / 仅内部”先看研发在文件夹里的标注，再加本机识别（人脸、编号、MAC 等文字）提示。识别可能漏报，以你看过为准。</p>
+  </div>
+  <div class="card brief"><div class="bd">
+    <h3>这篇想写什么</h3><p class="muted small" style="margin:0">用你自己的话说就行，AI 按这里写，不会超出选中的材料。</p>
+    <div class="fld"><label>一句话说清这篇</label><textarea class="ta" rows="3" oninput="S.brief=this.value">${esc(S.brief)}</textarea></div>
+    <div class="fld"><label>写给谁</label><div class="pills">${AUD.map(a=>`<button class="pill ${S.aud===a?'on':''}" onclick="S.aud='${a}';render()">${a}</button>`).join('')}</div></div>
+    <div class="fld"><label>要讲的发现 <span>从记录里找到的，可增减</span></label><div class="pts">
+      ${PTS.map(([k,n,s])=>`<div class="pt ${S.pts[k]?'on':''}" onclick="S.pts.${k}=!S.pts.${k};render()"><span class="box">${S.pts[k]?'✓':''}</span>${n}<span class="src">记录 ${s}</span></div>`).join('')}
+      <div class="pt dis"><span class="box" style="background:#eef1f3"></span>一次蓝牙断连<span class="src">§6 仅内部，不可选</span></div></div></div>
+    <div class="fld"><label>不要写 <span>AI 遇到会跳过，稿中出现会标红</span></label><div class="pills">${S.no.map(n=>`<span class="pill no">✕ ${n}</span>`).join('')}<button class="pill">＋ 添加</button></div></div>
+    <div class="fld"><label>篇幅</label><div class="pills"><button class="pill on">500 字左右</button><button class="pill">1000 字</button><button class="pill">2000 字</button><span class="faint small" style="align-self:center">配图 3 张以内</span></div></div>
+  </div>
+  <div class="ft"><div class="send">将发给本机 Agent（Claude Code）：<b>去敏记录 1 份、图片 ${photos} 张</b>和上面的要求。未勾选和“仅内部”的文件不会发送。</div>
+  <button class="btn pri" id="gen" style="width:100%;justify-content:center" onclick="generate()">生成初稿</button></div></div>
+  </div></div>`;
+}
+function generate(){
+  S.screen='review'; S.generating=true; render();
+  setTimeout(()=>{ S.generating=false; S.generated=true;
+    const pics=['side','pads','hinge','thermal'].filter(k=>S.sel[k]&&(k!=='side'||S.sideMasked));
+    if(!pics.includes('side')){ S.images=S.images.filter(i=>i.mat!=='side'); }
+    render(); }, 1300);
+}
+
+/* ---------- 审稿 ---------- */
+function claimSpan(id){
+  const st=S.st[id]; const c=S.claims[id]; if(!c.text) return ''; const sec=QSEC[c.q].replace('s','§');
+  return `<span class="cl ${st} ${S.act&&S.act.type==='claim'&&S.act.id===id?'act':''}" data-c="${id}" onclick="pickClaim('${id}')">${esc(c.text)}<sup>${st==='ok'?'✓':st==='bad'?'!':''}${sec}</sup></span>`;
+}
+function fig(i){
+  const im=S.images[i]; if(!im) return '';
+  const st=capStatus(im); const a=S.act&&S.act.type==='image'&&S.act.slot===i;
+  const capHtml = st==='na' ? esc(im.cap) : `<span class="cl ${st}" onclick="event.stopPropagation();pickImage(${i})">${esc(im.cap)}<sup>${st==='ok'?'✓':st==='bad'?'!':''}${(CAP_SRC[im.mat]?QSEC[CAP_SRC[im.mat]].replace('s','§'):'?')}</sup></span>`;
+  return `<figure class="${a?'act':''}" data-slot="${i}" onclick="pickImage(${i})"><div class="im">${pic(im.mat)}</div><figcaption>图 ${i+1}　${capHtml}</figcaption></figure>`;
+}
+function articleHtml(){
+  return `<p>${claimSpan('c0')}这篇只写这三天看到的；没测的，文末写明。</p>${fig(0)}
+  <h2>一、轻了 4.5 克，鼻托成了关键</h2><p>${claimSpan('c1')}${claimSpan('c2')}${claimSpan('c3')}</p>${fig(1)}
+  <h2>二、连续录像 20 分钟，右镜腿会热</h2><p>${claimSpan('c4')}${claimSpan('c5')}我们没把它当小问题。${claimSpan('c6')}</p>${fig(2)}
+  <h2>三、食堂里叫它，20 次应了 14 次</h2><p>${claimSpan('c7')}安静的地方基本没问题，吵的地方还要改。</p>
+  <h2>还没测的</h2><p>${claimSpan('c8')}户外强光下能不能看清显示、近视镜片怎么配，这一轮也没有覆盖。</p>`;
+}
+function renderReview(){
+  const c=counts();
+  const saveSt = S.dirty ? `<span class="save-st dirty"><i></i>有未保存的改动${S.version?` · 上次保存 v${S.version} ${S.saved}`:' · 还没保存过'}</span>` : `<span class="save-st"><i></i>已保存 v${S.version} · ${S.saved}</span>`;
+  const head = `<div class="crumb">公司项目 / AI 眼镜 / 推广 / 稿件生成 / <b>P2 试戴发现</b>${steps(1)}</div>
+  <div class="rv-head"><button class="btn sm ghost" onclick="go('select')">‹ 材料</button><span class="doc-t">P2 试戴发现</span>${saveSt}<span class="sp"></span>
+    <span class="faint small">运营/原稿/2026-11-28 P2 试戴发现/</span>
+    <button class="btn" id="save" onclick="save();render()">保存 <kbd>⌘S</kbd></button>
+    <button class="btn pri" id="handoff" onclick="openHandoff()">交给文章发布 →</button></div>`;
+  if(S.generating) return head+`<div class="rv"><div class="editor"><div class="paper"><div class="tag">正在用 1 份去敏记录、${S.images.length} 张图写初稿…</div><div class="gen"><div class="sk" style="height:22px;width:80%"></div><div class="sk"></div><div class="sk"></div><div class="sk" style="width:60%"></div><div class="sk" style="height:160px;margin-top:10px"></div><div class="sk"></div><div class="sk" style="width:70%"></div></div></div></div><div class="insp"></div></div>`;
+  const pct=x=>c.all?(x/c.all*100)+'%':'0';
+  const bar = `<div class="checkbar"><b>事实核对</b><div class="meter"><i style="width:${pct(c.ok)};background:var(--ok)"></i><i style="width:${pct(c.bad)};background:var(--bad)"></i></div>
+    <span class="cnt">共 ${c.all} 处 · <b style="color:var(--ok)">${c.ok} 已核对</b> · <b>${c.pending} 待核对</b> · <b style="color:var(--bad)">${c.bad} 与记录不符</b></span>
+    <span class="sp"></span><span class="faint small">带下划线的是需要核对的事实句；点句子或图注，在右侧对照原记录</span>
+    ${c.pending+c.bad?`<button class="btn sm" id="next" onclick="nextCheck()">下一处 <kbd>⏎</kbd></button>`:`<span class="chip ok">全部核对完</span>`}</div>`;
+  return head+bar+`<div class="rv"><div class="editor" id="editor"><div class="paper">
+    <div class="tag"><span class="chip info">AI 初稿</span><span>按你的要求写了 3 个发现 + 没测的部分 · 约 ${wordCount(snapshot())} 字 · 正文可直接修改</span></div>
+    <input class="title" value="${esc(S.title)}" oninput="S.title=this.value;touch();updHead()">
+    ${articleHtml()}</div></div>
+    <div class="insp"><div class="tabs">
+      <button class="${S.tab==='check'?'on':''}" onclick="S.tab='check';S.act=null;S.editing=null;render()">核对<span class="n">${c.ok}/${c.all}</span></button>
+      <button class="${S.tab==='img'?'on':''}" id="tab-img" onclick="S.tab='img';S.act=null;render()">配图<span class="n">${S.images.length}</span></button>
+      <button class="${S.tab==='rec'?'on':''}" onclick="S.tab='rec';S.act=null;render()">原记录</button></div>
+      <div class="ib" id="ib">${inspector()}</div></div></div>`;
+}
+function updHead(){ const el=document.querySelector('.save-st'); if(el){el.className='save-st dirty';el.innerHTML=`<i></i>有未保存的改动${S.version?` · 上次保存 v${S.version} ${S.saved}`:' · 还没保存过'}`;} }
+function excerpt(q){
+  const sid=QSEC[q]; const s=REC.secs.find(x=>x.id===sid);
+  const html=s.html.replace(/<span data-q="([^"]+)">([^<]*)<\/span>/g,(m,k,t)=>k===q?`<mark>${t}</mark>`:t);
+  return `<div class="excerpt"><div class="eh"><span>P2 试戴记录 2026-11-20.md</span><span>·</span><b>${s.t}</b></div><div class="ebody">${html}</div></div>`;
+}
+function inspector(){
+  if(S.tab==='rec') return recFull();
+  if(S.tab==='img') return S.act&&S.act.type==='image' ? imageDetail(S.act.slot) : imageList();
+  if(S.act&&S.act.type==='claim') return claimDetail(S.act.id);
+  if(S.act&&S.act.type==='cap') return imageDetail(S.act.slot);
+  const c=counts();
+  return `<div class="ihead">逐句对照研发的原始记录。只有你点了“确认一致”才算核对过；AI 的比对只是提示。</div>
+  <div class="clist">${c.list.map(x=>`<div class="ci" onclick="${x.type==='claim'?`pickClaim('${x.id}')`:`pickImage(${x.slot})`}"><span class="dot ${x.st}">${x.st==='ok'?'✓':x.st==='bad'?'!':''}</span><div>${esc(x.text)}<div class="meta">${x.type==='claim'?'记录 '+QSEC[S.claims[x.id].q].replace('s','§'):'图注'} · ${x.st==='ok'?'已核对':x.st==='bad'?'与记录不符':'待核对'}</div></div></div>`).join('')}</div>
+  <div class="notbox">保存不受核对进度限制，随时可存。<b>交给文章发布前</b>，每一处都要“已核对”，或者把那句删掉。</div>`;
+}
+function claimDetail(id){
+  const c=S.claims[id], st=S.st[id], v=verdictFor(id); const idx=ORDER.indexOf(id)+1;
+  const total=counts().all;
+  let body;
+  if(S.editing===id){
+    body=`<div class="ih">改写这句</div><textarea class="edit-ta" id="edit-ta">${esc(c.text)}</textarea>
+    <div class="acts"><button class="btn pri sm" onclick="applyEdit('${id}')">用这句</button><button class="btn sm" onclick="S.editing=null;render()">取消</button></div>`;
+  }else{
+    body=`<div class="ih">稿中这句</div><div class="q">${esc(c.text)}</div>`;
+  }
+  const vbox = `<div class="verdict ${v.k==='bad'?'bad':'info'}"><span class="vi">${v.k==='bad'?'不符':'比对'}</span><div>${esc(v.msg)}${v.note?`<small>${esc(v.note)}</small>`:''}<small>AI 比对，仅供参考 · 是否一致由你决定</small></div></div>`;
+  let acts='';
+  if(S.editing!==id){
+    if(st==='ok') acts=`<div class="done-note">✓ 你在 ${S.when[id]||'—'} 确认了这句与记录一致 <button class="btn sm ghost" onclick="S.st['${id}']='pending';touch();render()">撤销</button></div><div class="acts"><button class="btn sm" onclick="nextCheck()">下一处 <kbd>⏎</kbd></button></div>`;
+    else if(v.k==='bad') acts=`<div class="acts">${c.fix?`<button class="btn pri sm" id="fix" onclick="applyFix('${id}')">改成记录里的说法</button>`:''}<button class="btn sm" onclick="S.editing='${id}';render()">我来改</button><button class="btn sm danger" onclick="delClaim('${id}')">删掉这句</button></div>
+      ${c.fix?`<div class="ih">改后会是</div><div class="q" style="background:#f3faf6;border-color:#8cc3a5">${esc(c.fix)}</div>`:''}`;
+    else acts=`<div class="acts"><button class="btn pri sm" id="confirm" onclick="confirmClaim('${id}')">确认一致 <kbd>⏎</kbd></button><button class="btn sm" onclick="S.editing='${id}';render()">改写</button><button class="btn sm">换一处出处</button><button class="btn sm danger" onclick="delClaim('${id}')">删掉这句</button></div>`;
+  }
+  return `<div class="ihead"><button class="btn sm ghost" onclick="S.act=null;S.editing=null;render()">‹ 核对清单</button><span class="sp"></span>第 ${idx} 处 / 共 ${total} 处</div>
+  ${body}<div class="ih">原始记录<a onclick="S.tab='rec';render()">打开整份记录</a></div>${excerpt(c.q)}${vbox}${acts}`;
+}
+function recFull(){
+  const hot=S.act&&S.act.type==='claim'?S.claims[S.act.id].q:null;
+  return `<div class="ihead">${REC.file}</div><div class="faint small">${REC.head}</div><div class="rec-full">${REC.secs.map(s=>`<h5 class="${s.internal?'internal':''}">${s.t}</h5><div class="${s.internal?'internal':''}">${s.html.replace(/<span data-q="([^"]+)">([^<]*)<\/span>/g,(m,k,t)=>`<mark class="${k===hot?'hot':''}">${t}</mark>`)}</div>`).join('')}</div>
+  <div class="notbox">黄色底的是稿中引用到的段落。原记录只在本机查看，不随稿交出。</div>`;
+}
+function imageList(){
+  return `<div class="ihead">配图按文中位置自动编号。上下移动会连同图注一起换位置。</div><div class="ilist">${S.images.map((im,i)=>`<div class="ii" onclick="pickImage(${i})"><div class="t">${pic(im.mat)}</div><div class="c"><b>图 ${i+1} · ${SLOT_POS[i]}</b>${esc(im.cap)}<div class="faint" style="font-size:11px">${esc(picName(im.mat))}</div></div><div class="ord"><button ${i===0?'disabled':''} onclick="event.stopPropagation();moveImg(${i},-1)">▲</button><button ${i===S.images.length-1?'disabled':''} onclick="event.stopPropagation();moveImg(${i},1)">▼</button></div></div>`).join('')}</div>
+  <div class="notbox">只能从“选材料”里已选、可公开的图片中挑。要用别的图，回到 <a style="color:var(--accent);cursor:pointer" onclick="go('select')">选材料</a>。</div>`;
+}
+function imageDetail(i){
+  const im=S.images[i]; const v=capVerdict(im); const st=capStatus(im);
+  const pool=['side','hinge','pads','thermal'].filter(k=>S.sel[k]&&(k!=='side'||S.sideMasked));
+  const capBox = !v.need ? `<div class="verdict info"><span class="vi">核对</span><div>图注只描述画面，没有数字或结论，不需要核对。</div></div>`
+    : `<div class="ih">图注对应的原始记录</div>${v.src?excerpt(v.src):''}<div class="verdict ${v.k==='bad'?'bad':st==='ok'?'ok':'info'}"><span class="vi">${st==='ok'?'✓':v.k==='bad'?'不符':'比对'}</span><div>${st==='ok'?`你在 ${S.when['cap-'+im.mat]||nowT()} 确认了图注与记录一致。`:esc(v.msg)}<small>图注里的数字和结论，和正文一样要核对</small></div></div>
+      ${st==='ok'?'':v.k==='bad'?'':`<div class="acts"><button class="btn pri sm" id="cap-confirm" onclick="confirmCap(${i})">确认一致 <kbd>⏎</kbd></button></div>`}`;
+  return `<div class="ihead"><button class="btn sm ghost" onclick="S.act=null;S.tab='img';render()">‹ 配图清单</button><span class="sp"></span>图 ${i+1} · ${SLOT_POS[i]}</div>
+  <div class="bigimg" style="aspect-ratio:400/140">${pic(im.mat)}</div><div class="faint small" style="margin-top:6px">${esc(picName(im.mat))} · ${IMG[im.mat].desc}</div>
+  <div class="ih">换一张</div><div class="cands">${pool.map(k=>`<button class="cand ${k===im.mat?'cur':''}" data-cand="${k}" onclick="replaceImg(${i},'${k}')"><div class="t">${pic(k)}</div><span>${k===im.mat?'当前 · ':''}${IMG[k].desc}</span></button>`).join('')}</div>
+  <div class="ih">图注</div><div class="row" style="align-items:flex-start"><span style="padding-top:8px;color:var(--muted);white-space:nowrap">图 ${i+1}</span><textarea class="ta" id="cap-ta" rows="2" oninput="editCap(${i},this.value)">${esc(im.cap)}</textarea></div>
+  <div id="capbox">${capBox}</div>
+  <div class="faint small" style="margin-top:10px">换图不删原图，图注保留，请看一眼是否还对得上新图。调试页截图标为仅内部，不在这里出现。</div>`;
+}
+
+/* ---------- 审稿操作 ---------- */
+function pickClaim(id){ S.resetIb=true; S.tab='check'; S.act={type:'claim',id}; S.editing=null; render(); scrollAct(); }
+function pickImage(i){ S.resetIb=true; S.tab='img'; S.act={type:'image',slot:i}; S.editing=null; render(); scrollAct(); }
+function scrollAct(){ const el=document.querySelector('.cl.act, figure.act'); if(el) el.scrollIntoView({block:'center'}); }
+function confirmClaim(id){ S.st[id]='ok'; S.when[id]=nowT(); touch(); nextCheck(true); }
+function applyFix(id){ S.claims[id].text=S.claims[id].fix; S.st[id]='pending'; touch(); render(); toast('已改成记录里的说法，请确认'); }
+function applyEdit(id){ const t=$('#edit-ta').value.trim(); if(!t) return; S.claims[id].text=t; S.editing=null; const v=verdictFor(id); S.st[id]=v.k==='bad'?'bad':'pending'; touch(); render(); }
+function delClaim(id){ S.claims[id].text=''; S.st[id]='ok'; S.when[id]=nowT(); touch(); toast('已删掉这句'); nextCheck(true); }
+function confirmCap(i){ const im=S.images[i]; im.capSt='ok'; S.when['cap-'+im.mat]=nowT(); touch(); nextCheck(true); }
+function editCap(i,val){ const im=S.images[i]; im.cap=val; im.capSt='pending'; touch(); updHead();
+  const f=document.querySelector(`figure[data-slot="${i}"] figcaption`); if(f){ f.outerHTML=new DOMParser().parseFromString(`<div>${fig(i)}</div>`,'text/html').querySelector('figcaption').outerHTML; }
+  const box=$('#capbox'); if(box){ const tmp=document.createElement('div'); tmp.innerHTML=imageDetail(i); box.innerHTML=tmp.querySelector('#capbox').innerHTML; }
+  refreshBar(); }
+function refreshBar(){ const c=counts(); const tn=document.querySelector('.tabs button .n'); if(tn) tn.textContent=c.ok+'/'+c.all; const el=document.querySelector('.checkbar .cnt'); if(el) el.innerHTML=`共 ${c.all} 处 · <b style="color:var(--ok)">${c.ok} 已核对</b> · <b>${c.pending} 待核对</b> · <b style="color:var(--bad)">${c.bad} 与记录不符</b>`; }
+function replaceImg(i,k){ if(S.images[i].mat===k) return; const j=S.images.findIndex(x=>x.mat===k);
+  if(j>=0){ const t=S.images[j].mat; S.images[j].mat=S.images[i].mat; S.images[i].mat=t; } else S.images[i].mat=k;
+  S.images[i].capSt='pending'; touch(); render(); toast(`图 ${i+1} 已换成 ${IMG[k].desc}，原图未删除`); }
+function moveImg(i,d){ const j=i+d; const a=S.images; [a[i],a[j]]=[a[j],a[i]]; touch(); render(); }
+function nextCheck(fromConfirm){
+  const l=counts().list.filter(x=>x.st!=='ok');
+  if(!l.length){ S.act=null; render(); if(fromConfirm) toast('全部核对完。保存后就可以交给文章发布'); return; }
+  const cur=S.act&&S.act.type==='claim'?ORDER.indexOf(S.act.id):-1;
+  const nxt=l.find(x=>x.type==='claim'&&ORDER.indexOf(x.id)>cur)||l[0];
+  if(nxt.type==='claim') pickClaim(nxt.id); else pickImage(nxt.slot);
+}
+
+/* ---------- 交稿 ---------- */
+function openHandoff(){ S.drawer=true; renderDrawer(); }
+function bodyText(snap){ return ORDER.map(id=>snap.claims[id].text).join('')+'这篇只写这三天看到的；没测的，文末写明。我们没把它当小问题。安静的地方基本没问题，吵的地方还要改。户外强光下能不能看清显示、近视镜片怎么配，这一轮也没有覆盖。'; }
+function wordCount(snap){ return Math.round((bodyText(snap).replace(/\s/g,'').length + 52)/10)*10; }
+function renderDrawer(){
+  const sc=$('#scrim'); if(!S.drawer){ sc.classList.remove('show'); sc.innerHTML=''; return; }
+  const c=counts(); let body, foot;
+  if(c.pending+c.bad){
+    body=`<div class="badbox"><b>还有 ${c.pending+c.bad} 处没核对完，暂时不能交稿。</b>交出去的稿子会被拿去公开，每句结论都要你对过原记录。<ul>${c.list.filter(x=>x.st!=='ok').slice(0,6).map(x=>`<li>${x.st==='bad'?'<b>与记录不符：</b>':''}${esc(x.text.slice(0,34))}${x.text.length>34?'…':''}</li>`).join('')}</ul></div>
+      <div class="notbox">保存不受影响：现在点“保存”仍会存下 v${S.version+1}，可以稍后再来核对。</div>`;
+    foot=`<button class="btn" onclick="S.drawer=false;renderDrawer()">关闭</button><button class="btn pri" onclick="S.drawer=false;renderDrawer();nextCheck()">去核对下一处</button>`;
+  } else {
+    const willSave=S.dirty; const v=willSave?S.version+1:S.version; const snap=willSave?snapshot():S.savedSnap; const at=willSave?nowT():S.saved;
+    body=`${willSave?`<div class="warnbox">编辑器里有未保存的改动。交过去的只能是保存过的版本，所以会<b>先保存为 v${v}</b>，再把 v${v} 交出去。</div>`:''}
+      <p class="muted small" style="margin:${willSave?'12px':'0'} 0 0">交给文章发布的是 <b style="color:var(--ink)">v${v}（${at} 保存）</b>，之后你在这里继续改稿，不会影响已交出的版本。</p>
+      <div class="secth">标题</div><div style="font-weight:650;font-size:14.5px">${esc(snap.title)}</div>
+      <div class="secth">正文</div><div class="small">约 ${wordCount(snap)} 字 · 导语 + 4 节 · Markdown</div>
+      <div class="secth">配图（按文中顺序）与图注</div>
+      <div class="figs">${snap.images.map((im,i)=>`<div class="fg"><span class="n">${i+1}</span><div class="t">${pic(im.mat)}</div><div>${esc(im.cap)}<div class="faint" style="font-size:11px">${esc(picName(im.mat))} 的公开副本</div></div></div>`).join('')}</div>
+      <div class="notbox"><b>不随稿交出：</b>核对记录与出处、原始试戴记录、未选的材料、截图原件、试戴者名单。<br><b>交稿不会</b>登录任何平台，也不会发布。平台、账号和公开授权在文章发布里另选。</div>`;
+    foot=`<button class="btn" onclick="S.drawer=false;renderDrawer()">再改改</button><button class="btn pri" id="do-handoff" onclick="doHandoff()">${willSave?`保存为 v${v} 并交稿`:`交给文章发布`}</button>`;
+  }
+  sc.innerHTML=`<div class="drawer" onclick="event.stopPropagation()"><div class="dh"><h3>交给文章发布</h3><div class="muted small">P2 试戴发现 · 运营/原稿/2026-11-28 P2 试戴发现/文章.md</div></div><div class="db">${body}</div><div class="df">${foot}</div></div>`;
+  sc.classList.add('show'); sc.onclick=()=>{S.drawer=false;renderDrawer();};
+}
+function doHandoff(){ if(S.dirty) save(true); S.handed=JSON.parse(JSON.stringify(S.savedSnap)); S.handedAt=S.saved; S.drawer=false; renderDrawer(); S.screen='received'; render(); toast(`已把 v${S.handed.version} 交给文章发布`); }
+
+/* ---------- 文章发布收稿 ---------- */
+function renderReceived(){
+  const h=S.handed; const newer=S.version>h.version;
+  const body=`<h4>（导语）</h4>${esc(h.claims.c0.text)}这篇只写这三天看到的；没测的，文末写明。<h4>一、轻了 4.5 克，鼻托成了关键</h4>${esc(h.claims.c1.text+h.claims.c2.text+h.claims.c3.text)}<h4>二、连续录像 20 分钟，右镜腿会热</h4>${esc(h.claims.c4.text+h.claims.c5.text)}我们没把它当小问题。${esc(h.claims.c6.text)}<h4>三、食堂里叫它，20 次应了 14 次</h4>${esc(h.claims.c7.text)}安静的地方基本没问题，吵的地方还要改。<h4>还没测的</h4>${esc(h.claims.c8.text)}户外强光下能不能看清显示、近视镜片怎么配，这一轮也没有覆盖。`;
+  return `<div class="crumb">公司项目 / AI 眼镜 / 推广 / 文章发布 / <b>新发布任务</b></div>
+  <div class="page"><h1>新发布任务</h1><p class="sub-t">稿件来自稿件生成。平台、账号和公开授权都在这里选；稿件生成不会登录任何平台。</p>
+  ${newer?`<div class="banner">稿件生成里有更新的 v${S.version}（${S.saved} 保存）。这个任务仍使用 v${h.version}。<span class="sp"></span><button class="btn sm" onclick="S.handed=JSON.parse(JSON.stringify(S.savedSnap));render();toast('已换成 v'+S.version)">换成 v${S.version}</button><button class="btn sm ghost">保持 v${h.version}</button></div>`:''}
+  <div class="recv"><div class="card">
+    <div class="from"><span class="chip info">收到的稿件 · v${h.version}</span><span>运营/原稿/2026-11-28 P2 试戴发现/文章.md</span><span>· ${h.at} 保存 · ${S.handedAt} 交稿</span></div>
+    <h2>${esc(h.title)}</h2>
+    <div class="secth" style="margin-top:6px">正文 · 约 ${wordCount(h)} 字</div>
+    <div class="bodyprev ${S.bodyOpen?'open':''}">${body}</div><button class="btn sm ghost" onclick="S.bodyOpen=!S.bodyOpen;render()">${S.bodyOpen?'收起正文':'展开全文'}</button>
+    <div class="secth">配图（按文中顺序）与图注</div>
+    <div class="recfigs">${h.images.map((im,i)=>`<div><div class="t">${pic(im.mat)}</div><p><b>图 ${i+1}</b>　${esc(im.cap)}</p></div>`).join('')}</div>
+    <div class="notbox">要改稿，回到稿件生成改完保存，再在这里换成新版本。发布任务不会直接修改原稿。 <a style="color:var(--accent);cursor:pointer" onclick="go('review')">回到稿件生成</a></div>
+  </div>
+  <div class="card"><b>接下来在文章发布里做</b>
+    <div class="nextlist"><div class="nx cur"><i>1</i><div><b>选平台和账号</b><div class="muted small">例如知乎专栏 · 样机实验室。没有可用账号时可以先停在这里。</div></div></div>
+    <div class="nx"><i>2</i><div><b>预览平台版本</b><div class="muted small">按平台字数和图片规则，看删节、图序是否要调整。</div></div></div>
+    <div class="nx"><i>3</i><div><b>只存平台草稿，或授权后提交一次</b><div class="muted small">公开提交前单独确认账号与这一篇。</div></div></div></div>
+    <div class="kv"><dt>目标账号</dt><dd>未选择</dd><dt>公开提交</dt><dd>0 次</dd></div>
+    <button class="btn pri" style="width:100%;justify-content:center">选择平台和账号</button>
+    <p class="faint small" style="margin:8px 0 0">此步骤以后的界面属于文章发布设计，本原型不展开。</p></div></div></div>`;
+}
+
+/* ---------- 总渲染 ---------- */
+function render(){
+  renderNav();
+  const m={entry:renderEntry,select:renderSelect,review:renderReview,received:renderReceived}[S.screen];
+  const ed=document.getElementById('editor'); const top=ed?ed.scrollTop:0; const ib=document.getElementById('ib'); const itop=ib?ib.scrollTop:0;
+  $('#content').innerHTML=m();
+  const ed2=document.getElementById('editor'); if(ed2) ed2.scrollTop=top; const ib2=document.getElementById('ib'); if(ib2) ib2.scrollTop=S.resetIb?0:itop; S.resetIb=false;
+  $('#sb-file').textContent = S.screen==='review'&&!S.generating ? `文章.md · ${S.dirty?'未保存':'v'+S.version}` : '';
+  renderDrawer();
+}
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&&e.key==='s'&&S.screen==='review'){ e.preventDefault(); save(); render(); return; }
+  if(e.key==='Enter'&&S.screen==='review'&&!S.drawer&&!/TEXTAREA|INPUT/.test(document.activeElement.tagName)){
+    e.preventDefault(); if(S.act&&S.act.type==='image'&&capStatus(S.images[S.act.slot])==='pending'&&capVerdict(S.images[S.act.slot]).k==='ok') confirmCap(S.act.slot); else if(S.act&&S.act.type==='claim'&&S.st[S.act.id]==='pending'&&verdictFor(S.act.id).k!=='bad') confirmClaim(S.act.id); else nextCheck();
+  }
+  if(e.key==='Escape'&&S.drawer){ S.drawer=false; renderDrawer(); }
+});
+
+/* ---------- 直达某个画面（用于设计图截取） ---------- */
+function preset(name){
+  S=fresh();
+  if(name==='entry'){ S.screen='entry'; }
+  if(name==='select'){ S.screen='select'; }
+  if(['verify','image','handoff','received','newer'].includes(name)){
+    S.screen='review'; S.generated=true; S.sideMasked=true; S.sel.side=true;
+    save(true); /* v1 14:20 */
+    ['c0','c1','c2','c3','c4','c5'].forEach((id,i)=>{S.st[id]='ok';S.when[id]='14:2'+(2+Math.floor(i/2))}); S.dirty=true;
+    S.act={type:'claim',id:'c6'}; S.tab='check';
+  }
+  if(['image','handoff','received','newer'].includes(name)){
+    S.claims.c6.text=S.claims.c6.fix; S.st.c6='ok'; S.when.c6='14:26';
+    S.images[2].mat='thermal'; S.images[2].cap='连续录像 20 分钟后，右镜腿铰链附近表面 41.2 °C（室温 24 °C）'; S.images[2].capSt='pending';
+    S.act={type:'image',slot:2}; S.tab='img';
+  }
+  if(['handoff','received','newer'].includes(name)){
+    ['c7','c8'].forEach(id=>{S.st[id]='ok';S.when[id]='14:29'}); S.images[1].capSt='ok'; S.images[2].capSt='ok'; S.when['cap-pads']='14:30'; S.when['cap-thermal']='14:31';
+    save(true); /* v2 14:32 */ S.act=null; S.tab='check'; S.drawer=true;
+  }
+  if(['received','newer'].includes(name)){ S.handed=JSON.parse(JSON.stringify(S.savedSnap)); S.handedAt='14:33'; S.drawer=false; S.screen='received'; }
+  if(name==='newer'){ S.title='6 个人戴了两小时 P2 样机：轻了 4.5 克，右镜腿会热'; save(true); }
+  render(); setTimeout(scrollAct,0);
+}
+const h=location.hash.replace('#','');
+preset(['entry','select','verify','image','handoff','received','newer'].includes(h)?h:'entry');
+window.addEventListener('hashchange',()=>{const n=location.hash.replace('#','');if(n)preset(n);});
+</script>
+</body>
+</html>

@@ -104,9 +104,7 @@ import FreeCAD as App
 import Import
 import Mesh
 
-input_path = sys.argv[1]
-output_path = sys.argv[2]
-metadata_path = sys.argv[3]
+input_path, output_path, metadata_path = sys.argv[sys.argv.index('--pass') + 1:]
 doc = App.newDocument("CCLinkStudioCadConversion")
 Import.insert(input_path, doc.Name)
 App.ActiveDocument.recompute()
@@ -441,8 +439,6 @@ export class CadConversionService {
     }
 
     await mkdir(cacheDir, { recursive: true })
-    const scriptPath = join(cacheDir, 'cclink-studio-freecad-convert.py')
-    await writeFile(scriptPath, buildFreeCadScript(), 'utf-8')
 
     diagnostics.push({
       level: 'info',
@@ -455,7 +451,6 @@ export class CadConversionService {
 
     try {
       if (settings.cadBackend === 'occt-experimental') {
-        await rm(scriptPath, { force: true }).catch(() => undefined)
         const managedRuntime = await this.resolveManagedOcct()
         try {
           await convertStepWithOpenCascade({
@@ -478,14 +473,21 @@ export class CadConversionService {
             error: cadError('backend-not-found', 'FreeCAD 可执行文件路径不可用。', true),
           }
         }
-        await execFileAsync(
+        const execution = execFileAsync(
           backendStatus.path,
-          [scriptPath, inputPath, previewPath, metadataPath],
+          ['-c', '--pass', inputPath, previewPath, metadataPath],
           {
             timeout: DEFAULT_CONVERSION_TIMEOUT_MS,
             maxBuffer: 4 * 1024 * 1024,
           },
         )
+        // FreeCADCmd accepts adapter source on its Python console; positional .py
+        // arguments are interpreted as documents on macOS.
+        execution.child.stdin?.on('error', () => {
+          /* execution reports process errors */
+        })
+        execution.child.stdin?.end('exec(' + JSON.stringify(buildFreeCadScript()) + ')\n')
+        await execution
       }
       const outputStat = await stat(previewPath).catch(() => null)
       if (!outputStat || outputStat.size <= 0) {
@@ -542,8 +544,6 @@ export class CadConversionService {
           message,
         ),
       }
-    } finally {
-      await rm(scriptPath, { force: true }).catch(() => undefined)
     }
   }
 

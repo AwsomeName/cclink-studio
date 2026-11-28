@@ -26,21 +26,40 @@ export const shellShape = z.strictObject({
   wallMm: z.number().min(0.1).max(250),
   floorMm: z.number().min(0.1).max(250),
 })
-export const shapeRevision = newShape.extend({
-  id: shapeRevisionId,
-  parentId: shapeRevisionId.nullable(),
-  blendHash: z.string().regex(/^[a-f0-9]{64}$/),
-  parentBlendHash: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/)
-    .nullable(),
-  lockedEdge: index.nullable(),
-  targetVertex: index.nullable(),
-  lockedFaceDeviationMm: z.number().nonnegative().max(0.001).nullable(),
-  targetBeforeMm: point.nullable(),
-  targetAfterMm: point.nullable(),
-  backend: z.string(),
-})
+export const shapeRevision = newShape
+  .extend({
+    id: shapeRevisionId,
+    parentId: shapeRevisionId.nullable(),
+    blendHash: z.string().regex(/^[a-f0-9]{64}$/),
+    parentBlendHash: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .nullable(),
+    lockedEdge: index.nullable(),
+    targetVertex: index.nullable(),
+    lockedFaceDeviationMm: z.number().nonnegative().max(0.001).nullable(),
+    targetBeforeMm: point.nullable(),
+    targetAfterMm: point.nullable(),
+    backend: z.string(),
+  })
+  .refine((doc) => {
+    const details = [
+      doc.parentBlendHash,
+      doc.lockedEdge,
+      doc.targetVertex,
+      doc.lockedFaceDeviationMm,
+      doc.targetBeforeMm,
+      doc.targetAfterMm,
+    ]
+    if (!doc.parentId) return details.every((value) => value === null)
+    return (
+      details.every((value) => value !== null) &&
+      doc.lockedEdge! < doc.points.length &&
+      doc.targetVertex! < doc.points.length &&
+      doc.targetVertex !== doc.lockedEdge &&
+      doc.targetVertex !== (doc.lockedEdge! + 1) % doc.points.length
+    )
+  }, '版本缺少有效的父版、锁定面或修改点证据')
 export type ShapeRevision = z.infer<typeof shapeRevision>
 
 /** Every other vertex must lie strictly to the left of each directed edge. */
